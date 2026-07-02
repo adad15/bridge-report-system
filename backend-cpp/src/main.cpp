@@ -1,10 +1,12 @@
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include <drogon/drogon.h>
 
 #include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/http/Cors.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
 
 namespace {
@@ -22,11 +24,28 @@ Json::Value make_cpp_health_body(const bridge_report::config::AppConfig& config)
 }
 
 void register_health_routes(const bridge_report::config::AppConfig& config) {
+    const auto register_options_handler = [](const std::string& path) {
+        drogon::app().registerHandler(
+            path,
+            [](const drogon::HttpRequestPtr&,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+                auto response = drogon::HttpResponse::newHttpResponse();
+                bridge_report::http::apply_local_dev_cors_headers(response);
+                callback(response);
+            },
+            {drogon::Options, "drogon::HttpOptionsMiddleware"}
+        );
+    };
+
+    register_options_handler("/health");
+    register_options_handler("/health/tools");
+
     drogon::app().registerHandler(
         "/health",
         [config](const drogon::HttpRequestPtr&,
                  std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             auto response = drogon::HttpResponse::newHttpJsonResponse(make_cpp_health_body(config));
+            bridge_report::http::apply_local_dev_cors_headers(response);
             callback(response);
         },
         {drogon::Get}
@@ -58,6 +77,7 @@ void register_health_routes(const bridge_report::config::AppConfig& config) {
                         body["tools_status"] = "unavailable";
                         auto response = drogon::HttpResponse::newHttpJsonResponse(body);
                         response->setStatusCode(drogon::k503ServiceUnavailable);
+                        bridge_report::http::apply_local_dev_cors_headers(response);
                         callback(response);
                         return;
                     }
@@ -67,6 +87,7 @@ void register_health_routes(const bridge_report::config::AppConfig& config) {
                     body["tools_http_status"] = static_cast<int>(tools_response->statusCode());
                     body["tools_response_raw"] = std::string(tools_response->body());
                     auto response = drogon::HttpResponse::newHttpJsonResponse(body);
+                    bridge_report::http::apply_local_dev_cors_headers(response);
                     callback(response);
                 }
             );
@@ -80,6 +101,8 @@ void register_health_routes(const bridge_report::config::AppConfig& config) {
 int main(int argc, char* argv[]) {
     const std::string config_path = argc > 1 ? argv[1] : "config/local.json";
     const auto config = bridge_report::config::load_app_config(config_path);
+
+    drogon::app().registerMiddleware(std::make_shared<drogon::HttpOptionsMiddleware>());
 
     register_health_routes(config);
 

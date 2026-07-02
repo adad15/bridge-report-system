@@ -119,6 +119,7 @@ React 前端
 2. 前端不直接调用 Python 工具服务。
 3. 前端不直接访问 PostgreSQL。
 4. 前端上传 Word、模板和附件时，先传给 C++ 主服务。
+5. 前端开发服务运行在 `127.0.0.1:5173`，调用 `127.0.0.1:18080` 时由 C++ 主服务返回本地开发 CORS 头。
 
 C++ 主服务边界：
 
@@ -128,6 +129,7 @@ C++ 主服务边界：
 4. 管理文件归档目录。
 5. 调用 Python 工具服务。
 6. 对 Python 返回结果做校验、状态转换和入库。
+7. 对本地前端开发源 `http://127.0.0.1:5173` 显式开放 CORS。
 
 Python 工具服务边界：
 
@@ -151,7 +153,26 @@ Python 工具服务边界：
 
 端口冲突时，可以通过本地配置文件覆盖，但默认文档和示例脚本使用以上端口。
 
-### 5.4 推荐目录结构
+### 5.4 本地开发 CORS
+
+React/Vite 前端开发服务和 C++ 主服务端口不同：
+
+```text
+http://127.0.0.1:5173
+http://127.0.0.1:18080
+```
+
+浏览器会把二者视为不同源。第一版 C++ 主服务必须给健康检查接口返回本地开发 CORS 响应头，允许 `http://127.0.0.1:5173` 访问：
+
+```text
+Access-Control-Allow-Origin: http://127.0.0.1:5173
+Access-Control-Allow-Methods: GET, OPTIONS
+Access-Control-Allow-Headers: Content-Type
+```
+
+这只用于本地开发骨架。后续如果增加登录、文件上传、生产部署或可配置前端地址，需要把允许来源移入配置文件，并避免无条件放开所有来源。
+
+### 5.5 推荐目录结构
 
 ```text
 bridge-report-system/
@@ -222,7 +243,7 @@ bridge-report-system/
       plans/
 ```
 
-### 5.5 目录职责
+### 5.6 目录职责
 
 `backend-cpp/` 是 C++ 主后端。它负责业务状态、数据库、文件归档、导入任务编排和对外 API。
 
@@ -240,7 +261,7 @@ bridge-report-system/
 
 `docs/` 保存设计文档、模块技术文档和实施计划。
 
-### 5.6 C++ 与 Python API 契约
+### 5.7 C++ 与 Python API 契约
 
 第一版中，C++ 通过 HTTP JSON 调用 Python。
 
@@ -285,7 +306,7 @@ Python 返回示例：
 
 完整的 `BridgeAnnualInspectionData` 字段由第三个模块定义。本模块只规定 C++ 与 Python 使用 JSON 文件和 JSON API 交接。
 
-### 5.7 配置原则
+### 5.8 配置原则
 
 第一版用本地配置文件管理端口、数据库连接和归档目录。
 
@@ -321,6 +342,7 @@ C++ 主服务必须处理：
 6. Python 返回的 JSON 契约版本不匹配。
 7. 文件归档目录不可写。
 8. PostgreSQL 不可用。
+9. 本地前端跨端口访问健康接口时，返回允许 `http://127.0.0.1:5173` 的 CORS 头，并支持 `OPTIONS` 预检。
 
 这些错误必须写入导入任务状态，不能静默失败。
 
@@ -369,6 +391,7 @@ Python 工具服务必须返回结构化错误：
 4. 前端开发服务能启动并调用 C++ `/health`。
 5. C++ 能调用 Python `/health`。
 6. 本地配置文件能覆盖默认端口和归档目录。
+7. 浏览器从 Vite 前端访问 C++ `/health` 不出现 CORS 拦截。
 
 ### 7.2 文档验收
 
@@ -393,6 +416,7 @@ Python 工具服务必须返回结构化错误：
 3. C++ 能调用 Python `/health` 并返回聚合健康状态。
 4. 前端页面能显示 C++ 和 Python 服务状态。
 5. `archive/`、`database/migrations/`、`samples/` 目录存在。
+6. 前端页面不会因跨端口 CORS 问题显示 `Failed to fetch`。
 
 ## 8. 风险与取舍
 
@@ -460,5 +484,6 @@ Drogon 对传统 Visual Studio 工程习惯有学习成本，尤其是 CMake、v
 | 2026-07-02 | 创建第一版技术栈与项目骨架文档 | 用户确认采用 C++ 主后端、CMake + vcpkg + Visual Studio 2022、Drogon、Python 本地 HTTP 工具服务 | 后续所有模块 |
 | 2026-07-02 | Python 依赖管理改为 uv + pyproject.toml | 用户确认本机已有 uv，希望 Python 工具服务使用 uv 管理环境 | `01-tech-stack-and-project-skeleton`、后续 Python 工具服务 |
 | 2026-07-02 | C++ 构建生成器改为 Visual Studio 17 2022 | 当前环境有 VS2022 和 `D:\vcpkg`，但没有 Ninja、`VCPKG_ROOT` 和当前 shell 下的 `cl` | `01-tech-stack-and-project-skeleton`、C++ 后端构建 |
+| 2026-07-02 | 增加本地开发 CORS 约定 | Vite 前端 `5173` 调 C++ 后端 `18080` 属于跨源 fetch，需要 C++ 健康接口显式允许本地前端源 | `01-tech-stack-and-project-skeleton`、前端联调 |
 
 

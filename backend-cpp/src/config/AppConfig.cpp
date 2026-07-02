@@ -1,4 +1,4 @@
-#include "bridge_report/config/AppConfig.hpp"
+﻿#include "bridge_report/config/AppConfig.hpp"
 
 #include <fstream>
 
@@ -35,6 +35,7 @@ AppConfig load_app_config(const std::filesystem::path& path) {
     Json::CharReaderBuilder builder;
     Json::Value root;
     std::string errors;
+    // Json::parseFromStream 读取文件流 input，并将解析好的 JSON 树保存在 root 节点中
     if (!Json::parseFromStream(builder, input, &root, &errors)) {
         return config;
     }

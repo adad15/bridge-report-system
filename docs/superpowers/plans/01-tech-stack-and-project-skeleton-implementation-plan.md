@@ -28,11 +28,15 @@ bridge-report-system/
       bridge_report/
         config/
           AppConfig.hpp
+        http/
+          Cors.hpp
         runtime/
           RuntimePaths.hpp
     src/
       config/
         AppConfig.cpp
+      http/
+        Cors.cpp
       runtime/
         RuntimePaths.cpp
       main.cpp
@@ -563,8 +567,10 @@ Expected: commit succeeds.
 - Create: `backend-cpp/CMakeLists.txt`
 - Create: `backend-cpp/CMakePresets.json`
 - Create: `backend-cpp/include/bridge_report/config/AppConfig.hpp`
+- Create: `backend-cpp/include/bridge_report/http/Cors.hpp`
 - Create: `backend-cpp/include/bridge_report/runtime/RuntimePaths.hpp`
 - Create: `backend-cpp/src/config/AppConfig.cpp`
+- Create: `backend-cpp/src/http/Cors.cpp`
 - Create: `backend-cpp/src/runtime/RuntimePaths.cpp`
 - Create: `backend-cpp/src/main.cpp`
 - Create: `backend-cpp/tests/test_app_config.cpp`
@@ -575,8 +581,10 @@ Create directories:
 
 ```powershell
 New-Item -ItemType Directory -Force backend-cpp/include/bridge_report/config
+New-Item -ItemType Directory -Force backend-cpp/include/bridge_report/http
 New-Item -ItemType Directory -Force backend-cpp/include/bridge_report/runtime
 New-Item -ItemType Directory -Force backend-cpp/src/config
+New-Item -ItemType Directory -Force backend-cpp/src/http
 New-Item -ItemType Directory -Force backend-cpp/src/runtime
 New-Item -ItemType Directory -Force backend-cpp/tests
 ```
@@ -587,9 +595,11 @@ Create `backend-cpp/tests/test_app_config.cpp`:
 #include <filesystem>
 #include <fstream>
 
+#include <drogon/drogon.h>
 #include <gtest/gtest.h>
 
 #include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/http/Cors.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
 
 namespace {
@@ -643,6 +653,16 @@ TEST(RuntimePathsTest, CreatesMissingLogDirectory) {
     EXPECT_TRUE(std::filesystem::is_directory(log_path));
 
     std::filesystem::remove_all(log_path);
+}
+
+TEST(CorsTest, AppliesLocalFrontendCorsHeaders) {
+    auto response = drogon::HttpResponse::newHttpResponse();
+
+    bridge_report::http::apply_local_dev_cors_headers(response);
+
+    EXPECT_EQ(response->getHeader("Access-Control-Allow-Origin"), "http://127.0.0.1:5173");
+    EXPECT_EQ(response->getHeader("Access-Control-Allow-Methods"), "GET, OPTIONS");
+    EXPECT_EQ(response->getHeader("Access-Control-Allow-Headers"), "Content-Type");
 }
 ```
 
@@ -726,6 +746,7 @@ find_package(GTest CONFIG REQUIRED)
 
 add_library(bridge_report_backend_core
     src/config/AppConfig.cpp
+    src/http/Cors.cpp
     src/runtime/RuntimePaths.cpp
 )
 
@@ -857,6 +878,36 @@ AppConfig load_app_config(const std::filesystem::path& path) {
 }  // namespace bridge_report::config
 ```
 
+Create `backend-cpp/include/bridge_report/http/Cors.hpp`:
+
+```cpp
+#pragma once
+
+#include <drogon/drogon.h>
+
+namespace bridge_report::http {
+
+void apply_local_dev_cors_headers(const drogon::HttpResponsePtr& response);
+
+}  // namespace bridge_report::http
+```
+
+Create `backend-cpp/src/http/Cors.cpp`:
+
+```cpp
+#include "bridge_report/http/Cors.hpp"
+
+namespace bridge_report::http {
+
+void apply_local_dev_cors_headers(const drogon::HttpResponsePtr& response) {
+    response->addHeader("Access-Control-Allow-Origin", "http://127.0.0.1:5173");
+    response->addHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+}  // namespace bridge_report::http
+```
+
 Create `backend-cpp/include/bridge_report/runtime/RuntimePaths.hpp`:
 
 ```cpp
@@ -890,11 +941,13 @@ Create `backend-cpp/src/main.cpp`:
 ```cpp
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include <drogon/drogon.h>
 
 #include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/http/Cors.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
 
 namespace {
@@ -912,11 +965,28 @@ Json::Value make_cpp_health_body(const bridge_report::config::AppConfig& config)
 }
 
 void register_health_routes(const bridge_report::config::AppConfig& config) {
+    const auto register_options_handler = [](const std::string& path) {
+        drogon::app().registerHandler(
+            path,
+            [](const drogon::HttpRequestPtr&,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+                auto response = drogon::HttpResponse::newHttpResponse();
+                bridge_report::http::apply_local_dev_cors_headers(response);
+                callback(response);
+            },
+            {drogon::Options, "drogon::HttpOptionsMiddleware"}
+        );
+    };
+
+    register_options_handler("/health");
+    register_options_handler("/health/tools");
+
     drogon::app().registerHandler(
         "/health",
         [config](const drogon::HttpRequestPtr&,
                  std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             auto response = drogon::HttpResponse::newHttpJsonResponse(make_cpp_health_body(config));
+            bridge_report::http::apply_local_dev_cors_headers(response);
             callback(response);
         },
         {drogon::Get}
@@ -948,6 +1018,7 @@ void register_health_routes(const bridge_report::config::AppConfig& config) {
                         body["tools_status"] = "unavailable";
                         auto response = drogon::HttpResponse::newHttpJsonResponse(body);
                         response->setStatusCode(drogon::k503ServiceUnavailable);
+                        bridge_report::http::apply_local_dev_cors_headers(response);
                         callback(response);
                         return;
                     }
@@ -957,6 +1028,7 @@ void register_health_routes(const bridge_report::config::AppConfig& config) {
                     body["tools_http_status"] = static_cast<int>(tools_response->statusCode());
                     body["tools_response_raw"] = std::string(tools_response->body());
                     auto response = drogon::HttpResponse::newHttpJsonResponse(body);
+                    bridge_report::http::apply_local_dev_cors_headers(response);
                     callback(response);
                 }
             );
@@ -970,6 +1042,8 @@ void register_health_routes(const bridge_report::config::AppConfig& config) {
 int main(int argc, char* argv[]) {
     const std::string config_path = argc > 1 ? argv[1] : "config/local.json";
     const auto config = bridge_report::config::load_app_config(config_path);
+
+    drogon::app().registerMiddleware(std::make_shared<drogon::HttpOptionsMiddleware>());
 
     register_health_routes(config);
 
@@ -1071,7 +1145,7 @@ Expected JSON contains:
 Run:
 
 ```powershell
-git add backend-cpp/vcpkg.json backend-cpp/CMakeLists.txt backend-cpp/CMakePresets.json backend-cpp/include/bridge_report/config/AppConfig.hpp backend-cpp/include/bridge_report/runtime/RuntimePaths.hpp backend-cpp/src/config/AppConfig.cpp backend-cpp/src/runtime/RuntimePaths.cpp backend-cpp/src/main.cpp backend-cpp/tests/test_app_config.cpp
+git add backend-cpp/vcpkg.json backend-cpp/CMakeLists.txt backend-cpp/CMakePresets.json backend-cpp/include/bridge_report/config/AppConfig.hpp backend-cpp/include/bridge_report/http/Cors.hpp backend-cpp/include/bridge_report/runtime/RuntimePaths.hpp backend-cpp/src/config/AppConfig.cpp backend-cpp/src/http/Cors.cpp backend-cpp/src/runtime/RuntimePaths.cpp backend-cpp/src/main.cpp backend-cpp/tests/test_app_config.cpp
 git commit -m "feat: add cpp backend health service"
 ```
 

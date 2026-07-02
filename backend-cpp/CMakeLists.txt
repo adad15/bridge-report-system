@@ -11,6 +11,7 @@ find_package(GTest CONFIG REQUIRED)
 
 add_library(bridge_report_backend_core
     src/config/AppConfig.cpp
+    src/http/Cors.cpp
     src/runtime/RuntimePaths.cpp
 )
 

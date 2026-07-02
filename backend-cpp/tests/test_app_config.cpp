@@ -1,9 +1,11 @@
 #include <filesystem>
 #include <fstream>
 
+#include <drogon/drogon.h>
 #include <gtest/gtest.h>
 
 #include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/http/Cors.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
 
 namespace {
@@ -57,4 +59,14 @@ TEST(RuntimePathsTest, CreatesMissingLogDirectory) {
     EXPECT_TRUE(std::filesystem::is_directory(log_path));
 
     std::filesystem::remove_all(log_path);
+}
+
+TEST(CorsTest, AppliesLocalFrontendCorsHeaders) {
+    auto response = drogon::HttpResponse::newHttpResponse();
+
+    bridge_report::http::apply_local_dev_cors_headers(response);
+
+    EXPECT_EQ(response->getHeader("Access-Control-Allow-Origin"), "http://127.0.0.1:5173");
+    EXPECT_EQ(response->getHeader("Access-Control-Allow-Methods"), "GET, OPTIONS");
+    EXPECT_EQ(response->getHeader("Access-Control-Allow-Headers"), "Content-Type");
 }
