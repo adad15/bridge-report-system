@@ -17,6 +17,9 @@ tools-python/*.egg-info/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/vite.config.js
+frontend/vite.config.d.ts
+*.tsbuildinfo
 
 config/local.json
 logs/

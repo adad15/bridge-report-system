@@ -54,6 +54,7 @@ bridge-report-system/
     tsconfig.node.json
     vite.config.ts
     src/
+      vite-env.d.ts
       App.tsx
       main.tsx
       styles.css
@@ -221,6 +222,9 @@ tools-python/*.egg-info/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/vite.config.js
+frontend/vite.config.d.ts
+*.tsbuildinfo
 
 config/local.json
 logs/
@@ -1084,6 +1088,7 @@ Expected: commit succeeds.
 - Create: `frontend/vite.config.ts`
 - Create: `frontend/src/api/health.ts`
 - Create: `frontend/src/api/health.test.ts`
+- Create: `frontend/src/vite-env.d.ts`
 - Create: `frontend/src/App.tsx`
 - Create: `frontend/src/main.tsx`
 - Create: `frontend/src/styles.css`
@@ -1160,6 +1165,7 @@ Create `frontend/package.json`:
     "vite": "^5.4.0"
   },
   "devDependencies": {
+    "@types/node": "^26.1.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "typescript": "^5.5.0",
@@ -1200,10 +1206,11 @@ Create `frontend/tsconfig.json`:
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
     "jsx": "react-jsx"
   },
   "include": ["src"],
@@ -1217,9 +1224,15 @@ Create `frontend/tsconfig.node.json`:
 {
   "compilerOptions": {
     "composite": true,
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "skipLibCheck": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
-    "allowSyntheticDefaultImports": true
+    "moduleResolution": "Bundler",
+    "allowSyntheticDefaultImports": true,
+    "outDir": "./node_modules/.tmp/tsconfig-node",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "types": ["node"]
   },
   "include": ["vite.config.ts"]
 }
@@ -1262,6 +1275,12 @@ export async function fetchBackendHealth(baseUrl: string): Promise<BackendHealth
   }
   return response.json() as Promise<BackendHealth>;
 }
+```
+
+Create `frontend/src/vite-env.d.ts`:
+
+```typescript
+/// <reference types="vite/client" />
 ```
 
 Create `frontend/src/App.tsx`:
@@ -1429,7 +1448,7 @@ Expected: TypeScript and Vite build succeed.
 Run:
 
 ```powershell
-git add frontend/package.json frontend/package-lock.json frontend/index.html frontend/tsconfig.json frontend/tsconfig.node.json frontend/vite.config.ts frontend/src/api/health.ts frontend/src/api/health.test.ts frontend/src/App.tsx frontend/src/main.tsx frontend/src/styles.css
+git add frontend/package.json frontend/package-lock.json frontend/index.html frontend/tsconfig.json frontend/tsconfig.node.json frontend/vite.config.ts frontend/src/api/health.ts frontend/src/api/health.test.ts frontend/src/vite-env.d.ts frontend/src/App.tsx frontend/src/main.tsx frontend/src/styles.css
 git commit -m "feat: add frontend health dashboard"
 ```
 

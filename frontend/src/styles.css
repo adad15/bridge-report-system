@@ -1,0 +1,51 @@
+:root {
+  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+  color: #18202a;
+  background: #f3f5f8;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+}
+
+.status-panel {
+  width: min(680px, 100%);
+  background: #ffffff;
+  border: 1px solid #d9e0e8;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 12px 28px rgba(24, 32, 42, 0.08);
+}
+
+.status-panel h1 {
+  margin: 0 0 24px;
+  font-size: 24px;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e7ecf2;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px 18px;
+  margin-top: 20px;
+  font-size: 14px;
+}
+
+.error-text {
+  margin: 18px 0 0;
+  color: #a43333;
+}
