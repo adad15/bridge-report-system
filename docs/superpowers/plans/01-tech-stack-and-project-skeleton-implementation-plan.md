@@ -1412,7 +1412,7 @@ Run:
 
 ```powershell
 cd frontend
-npm install
+npm install --registry=https://registry.npmmirror.com
 ```
 
 Expected: npm installs React, Vite, TypeScript, and Vitest.
@@ -1536,7 +1536,7 @@ $ErrorActionPreference = "Stop"
 Set-Location frontend
 
 if (-not (Test-Path "node_modules")) {
-  npm install
+  npm install --registry=https://registry.npmmirror.com
 }
 
 $env:VITE_BACKEND_BASE_URL = "http://127.0.0.1:18080"
