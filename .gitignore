@@ -9,6 +9,8 @@ backend-cpp/out/
 
 tools-python/.venv/
 tools-python/__pycache__/
+**/__pycache__/
+*.pyc
 tools-python/.pytest_cache/
 tools-python/*.egg-info/
 
