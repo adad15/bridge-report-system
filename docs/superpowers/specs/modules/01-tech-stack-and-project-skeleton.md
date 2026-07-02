@@ -93,8 +93,8 @@
 | 层级 | 技术选择 | 说明 |
 | --- | --- | --- |
 | C++ 主后端 | Drogon | 提供本地 Web API、文件上传下载、任务接口和前端 API |
-| C++ 构建 | CMake | 作为真实工程源，Visual Studio 读取 CMake 工程 |
-| C++ 依赖管理 | vcpkg | 管理 Drogon、PostgreSQL 客户端、JSON、测试框架等依赖 |
+| C++ 构建 | CMake + Visual Studio 生成器 | 作为真实工程源，Visual Studio 2022 读取和构建 CMake 工程 |
+| C++ 依赖管理 | vcpkg (`D:\vcpkg`) | 管理 Drogon、PostgreSQL 客户端、JSON、测试框架等依赖 |
 | C++ IDE | Visual Studio 2022 | 作为主要开发和调试入口，后续兼容 VS2026 |
 | Python 工具服务 | FastAPI | 提供 Word 解析、图片抽取、AI/Milvus 辅助等本地工具 API |
 | Python 包管理 | uv + pyproject.toml | 管理 Python 工具服务依赖、虚拟环境和锁定文件 |
@@ -459,5 +459,6 @@ Drogon 对传统 Visual Studio 工程习惯有学习成本，尤其是 CMake、v
 | --- | --- | --- | --- |
 | 2026-07-02 | 创建第一版技术栈与项目骨架文档 | 用户确认采用 C++ 主后端、CMake + vcpkg + Visual Studio 2022、Drogon、Python 本地 HTTP 工具服务 | 后续所有模块 |
 | 2026-07-02 | Python 依赖管理改为 uv + pyproject.toml | 用户确认本机已有 uv，希望 Python 工具服务使用 uv 管理环境 | `01-tech-stack-and-project-skeleton`、后续 Python 工具服务 |
+| 2026-07-02 | C++ 构建生成器改为 Visual Studio 17 2022 | 当前环境有 VS2022 和 `D:\vcpkg`，但没有 Ninja、`VCPKG_ROOT` 和当前 shell 下的 `cl` | `01-tech-stack-and-project-skeleton`、C++ 后端构建 |
 
 

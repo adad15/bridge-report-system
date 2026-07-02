@@ -28,9 +28,13 @@ bridge-report-system/
       bridge_report/
         config/
           AppConfig.hpp
+        runtime/
+          RuntimePaths.hpp
     src/
       config/
         AppConfig.cpp
+      runtime/
+        RuntimePaths.cpp
       main.cpp
     tests/
       test_app_config.cpp
@@ -555,7 +559,9 @@ Expected: commit succeeds.
 - Create: `backend-cpp/CMakeLists.txt`
 - Create: `backend-cpp/CMakePresets.json`
 - Create: `backend-cpp/include/bridge_report/config/AppConfig.hpp`
+- Create: `backend-cpp/include/bridge_report/runtime/RuntimePaths.hpp`
 - Create: `backend-cpp/src/config/AppConfig.cpp`
+- Create: `backend-cpp/src/runtime/RuntimePaths.cpp`
 - Create: `backend-cpp/src/main.cpp`
 - Create: `backend-cpp/tests/test_app_config.cpp`
 
@@ -565,7 +571,9 @@ Create directories:
 
 ```powershell
 New-Item -ItemType Directory -Force backend-cpp/include/bridge_report/config
+New-Item -ItemType Directory -Force backend-cpp/include/bridge_report/runtime
 New-Item -ItemType Directory -Force backend-cpp/src/config
+New-Item -ItemType Directory -Force backend-cpp/src/runtime
 New-Item -ItemType Directory -Force backend-cpp/tests
 ```
 
@@ -578,6 +586,7 @@ Create `backend-cpp/tests/test_app_config.cpp`:
 #include <gtest/gtest.h>
 
 #include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/runtime/RuntimePaths.hpp"
 
 namespace {
 
@@ -620,6 +629,17 @@ TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:18081");
     EXPECT_EQ(config.archive_root.generic_string(), "archive");
 }
+
+TEST(RuntimePathsTest, CreatesMissingLogDirectory) {
+    const auto log_path = std::filesystem::temp_directory_path() / "bridge_report_test_logs";
+    std::filesystem::remove_all(log_path);
+
+    bridge_report::runtime::ensure_log_directory(log_path);
+
+    EXPECT_TRUE(std::filesystem::is_directory(log_path));
+
+    std::filesystem::remove_all(log_path);
+}
 ```
 
 - [ ] **Step 2: Run CMake configure to verify it fails**
@@ -654,27 +674,30 @@ Create `backend-cpp/CMakePresets.json`:
   "version": 6,
   "configurePresets": [
     {
-      "name": "windows-msvc-debug",
-      "displayName": "Windows MSVC Debug",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/windows-msvc-debug",
+      "name": "vs2022-x64-debug",
+      "displayName": "Visual Studio 2022 x64 Debug",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/vs-debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_STANDARD": "20",
-        "CMAKE_CXX_STANDARD_REQUIRED": "ON"
+        "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+        "CMAKE_TOOLCHAIN_FILE": "D:/vcpkg/scripts/buildsystems/vcpkg.cmake"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "windows-msvc-debug",
-      "configurePreset": "windows-msvc-debug"
+      "name": "vs2022-x64-debug",
+      "configurePreset": "vs2022-x64-debug",
+      "configuration": "Debug"
     }
   ],
   "testPresets": [
     {
-      "name": "windows-msvc-debug",
-      "configurePreset": "windows-msvc-debug",
+      "name": "vs2022-x64-debug",
+      "configurePreset": "vs2022-x64-debug",
+      "configuration": "Debug",
       "output": {
         "outputOnFailure": true
       }
@@ -699,6 +722,7 @@ find_package(GTest CONFIG REQUIRED)
 
 add_library(bridge_report_backend_core
     src/config/AppConfig.cpp
+    src/runtime/RuntimePaths.cpp
 )
 
 target_include_directories(bridge_report_backend_core
@@ -829,6 +853,34 @@ AppConfig load_app_config(const std::filesystem::path& path) {
 }  // namespace bridge_report::config
 ```
 
+Create `backend-cpp/include/bridge_report/runtime/RuntimePaths.hpp`:
+
+```cpp
+#pragma once
+
+#include <filesystem>
+
+namespace bridge_report::runtime {
+
+void ensure_log_directory(const std::filesystem::path& log_path);
+
+}  // namespace bridge_report::runtime
+```
+
+Create `backend-cpp/src/runtime/RuntimePaths.cpp`:
+
+```cpp
+#include "bridge_report/runtime/RuntimePaths.hpp"
+
+namespace bridge_report::runtime {
+
+void ensure_log_directory(const std::filesystem::path& log_path) {
+    std::filesystem::create_directories(log_path);
+}
+
+}  // namespace bridge_report::runtime
+```
+
 Create `backend-cpp/src/main.cpp`:
 
 ```cpp
@@ -839,6 +891,7 @@ Create `backend-cpp/src/main.cpp`:
 #include <drogon/drogon.h>
 
 #include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/runtime/RuntimePaths.hpp"
 
 namespace {
 
@@ -919,9 +972,12 @@ int main(int argc, char* argv[]) {
     std::cout << "Bridge Report C++ backend listening on "
               << config.host << ":" << config.port << "\n";
 
+    const std::string log_path = "logs";
+    bridge_report::runtime::ensure_log_directory(log_path);
+
     drogon::app()
         .addListener(config.host, config.port)
-        .setLogPath("logs")
+        .setLogPath(log_path)
         .setLogLevel(trantor::Logger::kInfo)
         .run();
 
@@ -931,12 +987,12 @@ int main(int argc, char* argv[]) {
 
 - [ ] **Step 5: Configure and build C++ with vcpkg**
 
-Run from a Visual Studio 2022 Developer PowerShell:
+Run:
 
 ```powershell
 cd backend-cpp
-cmake --preset windows-msvc-debug -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
-cmake --build --preset windows-msvc-debug
+cmake --preset vs2022-x64-debug
+cmake --build --preset vs2022-x64-debug
 ```
 
 Expected: CMake configures, vcpkg installs Drogon and GTest if needed, and `bridge-report-backend` builds.
@@ -947,7 +1003,7 @@ Run:
 
 ```powershell
 cd backend-cpp
-ctest --preset windows-msvc-debug
+ctest --preset vs2022-x64-debug
 ```
 
 Expected:
@@ -962,7 +1018,7 @@ Run:
 
 ```powershell
 cd backend-cpp
-.\build\windows-msvc-debug\bridge-report-backend.exe ..\config\local.example.json
+.\build\vs-debug\Debug\bridge-report-backend.exe ..\config\local.example.json
 ```
 
 In another PowerShell window, run:
@@ -1011,7 +1067,7 @@ Expected JSON contains:
 Run:
 
 ```powershell
-git add backend-cpp/vcpkg.json backend-cpp/CMakeLists.txt backend-cpp/CMakePresets.json backend-cpp/include/bridge_report/config/AppConfig.hpp backend-cpp/src/config/AppConfig.cpp backend-cpp/src/main.cpp backend-cpp/tests/test_app_config.cpp
+git add backend-cpp/vcpkg.json backend-cpp/CMakeLists.txt backend-cpp/CMakePresets.json backend-cpp/include/bridge_report/config/AppConfig.hpp backend-cpp/include/bridge_report/runtime/RuntimePaths.hpp backend-cpp/src/config/AppConfig.cpp backend-cpp/src/runtime/RuntimePaths.cpp backend-cpp/src/main.cpp backend-cpp/tests/test_app_config.cpp
 git commit -m "feat: add cpp backend health service"
 ```
 
@@ -1447,10 +1503,10 @@ $ErrorActionPreference = "Stop"
 
 Set-Location backend-cpp
 
-cmake --preset windows-msvc-debug -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
-cmake --build --preset windows-msvc-debug
+cmake --preset vs2022-x64-debug
+cmake --build --preset vs2022-x64-debug
 
-.\build\windows-msvc-debug\bridge-report-backend.exe ..\config\local.example.json
+.\build\vs-debug\Debug\bridge-report-backend.exe ..\config\local.example.json
 ```
 
 Create `scripts/dev/start-frontend.ps1`:
@@ -1532,7 +1588,7 @@ powershell -ExecutionPolicy Bypass -File scripts/dev/check-layout.ps1
 cd tools-python
 uv run pytest tests/test_health.py -v
 cd ..\backend-cpp
-ctest --preset windows-msvc-debug
+ctest --preset vs2022-x64-debug
 cd ..\frontend
 npm test -- --run
 npm run build
