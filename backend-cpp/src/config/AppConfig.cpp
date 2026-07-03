@@ -1,4 +1,4 @@
-﻿#include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/config/AppConfig.hpp"
 
 #include <fstream>
 
@@ -22,11 +22,12 @@ int get_int_or_default(const Json::Value& object, const char* key, int fallback)
     return object[key].asInt();
 }
 
-}  // namespace
+}  // 匿名命名空间
 
 AppConfig load_app_config(const std::filesystem::path& path) {
     AppConfig config;
 
+    // 配置文件缺失或 JSON 无效时，调用方继续使用结构体默认值。
     std::ifstream input(path);
     if (!input.good()) {
         return config;
@@ -35,7 +36,6 @@ AppConfig load_app_config(const std::filesystem::path& path) {
     Json::CharReaderBuilder builder;
     Json::Value root;
     std::string errors;
-    // Json::parseFromStream 读取文件流 input，并将解析好的 JSON 树保存在 root 节点中
     if (!Json::parseFromStream(builder, input, &root, &errors)) {
         return config;
     }
@@ -72,4 +72,4 @@ AppConfig load_app_config(const std::filesystem::path& path) {
     return config;
 }
 
-}  // namespace bridge_report::config
+}  // 命名空间 bridge_report::config

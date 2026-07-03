@@ -82,6 +82,7 @@ void register_health_routes(const bridge_report::config::AppConfig& config) {
                         return;
                     }
 
+                    // 这里只说明已收到 Python 工具服务响应；是否健康由上游状态码和响应体表达。
                     body["status"] = "ok";
                     body["tools_status"] = "reachable";
                     body["tools_http_status"] = static_cast<int>(tools_response->statusCode());
@@ -96,14 +97,13 @@ void register_health_routes(const bridge_report::config::AppConfig& config) {
     );
 }
 
-}  // namespace
+}  // 匿名命名空间
 
 int main(int argc, char* argv[]) {
     const std::string config_path = argc > 1 ? argv[1] : "config/local.json";
     const auto config = bridge_report::config::load_app_config(config_path);
 
     drogon::app().registerMiddleware(std::make_shared<drogon::HttpOptionsMiddleware>());
-
     register_health_routes(config);
 
     std::cout << "Bridge Report C++ backend listening on "

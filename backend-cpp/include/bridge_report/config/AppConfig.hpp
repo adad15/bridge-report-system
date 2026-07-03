@@ -1,10 +1,13 @@
-﻿#pragma once
-// 主要用于定义桥梁报告系统 (bridge_report) 后端的应用程序配置信息
+#pragma once
+
 #include <filesystem>
 #include <string>
 
 namespace bridge_report::config {
 
+/**
+ * @brief PostgreSQL 数据库连接配置。
+ */
 struct PostgresConfig {
     std::string host{"127.0.0.1"};
     int port{5432};
@@ -13,15 +16,20 @@ struct PostgresConfig {
     std::string password{"bridge_report_dev"};
 };
 
+/**
+ * @brief C++ 后端启动所需的应用配置。
+ */
 struct AppConfig {
     std::string host{"127.0.0.1"};
     int port{18080};
-    // C++ 后端会通过 HTTP 请求去调用另外一个运行在本机的 Python 工具服务
     std::string python_tools_base_url{"http://127.0.0.1:18081"};
     std::filesystem::path archive_root{"archive"};
     PostgresConfig postgres{};
 };
 
+/**
+ * @brief 从 JSON 配置文件加载应用配置；缺失或解析失败时保留默认值。
+ */
 AppConfig load_app_config(const std::filesystem::path& path);
 
-}  // namespace bridge_report::config
+}  // 命名空间 bridge_report::config

@@ -9,6 +9,7 @@ namespace bridge_report::identity {
 
 namespace {
 
+// 与 migration 002 中各业务表的 system_number 前缀保持一致。
 constexpr std::array<std::string_view, 14> kSupportedPrefixes{
     "QL",
     "QLBM",
@@ -26,7 +27,7 @@ constexpr std::array<std::string_view, 14> kSupportedPrefixes{
     "BHDB",
 };
 
-}  // namespace
+}  // 匿名命名空间
 
 std::string format_system_number(std::string_view prefix, int sequence_value) {
     if (sequence_value <= 0) {
@@ -47,4 +48,4 @@ bool is_supported_system_number_prefix(std::string_view prefix) {
     return false;
 }
 
-}  // namespace bridge_report::identity
+}  // 命名空间 bridge_report::identity

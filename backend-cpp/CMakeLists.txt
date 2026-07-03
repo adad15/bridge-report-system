@@ -27,6 +27,10 @@ target_link_libraries(bridge_report_backend_core
         Drogon::Drogon
 )
 
+if(MSVC)
+    target_compile_options(bridge_report_backend_core PUBLIC /utf-8)
+endif()
+
 add_executable(bridge-report-backend
     src/main.cpp
 )
@@ -36,6 +40,10 @@ target_link_libraries(bridge-report-backend
         bridge_report_backend_core
         Drogon::Drogon
 )
+
+if(MSVC)
+    target_compile_options(bridge-report-backend PRIVATE /utf-8)
+endif()
 
 enable_testing()
 
@@ -50,6 +58,10 @@ target_link_libraries(bridge_report_backend_tests
         bridge_report_backend_core
         GTest::gtest_main
 )
+
+if(MSVC)
+    target_compile_options(bridge_report_backend_tests PRIVATE /utf-8)
+endif()
 
 include(GoogleTest)
 gtest_discover_tests(bridge_report_backend_tests)
