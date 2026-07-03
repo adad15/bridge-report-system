@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 820" width="1440" height="820">
+<style>
+text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', SimHei, sans-serif; }
+.title { font-size: 24px; font-weight: 700; fill: #111827; }
+.subtitle { font-size: 13px; fill: #64748b; }
+.lane-title { font-size: 13px; font-weight: 700; fill: #334155; }
+.node-title { font-size: 15px; font-weight: 700; fill: #111827; }
+.node-sub { font-size: 12px; fill: #475569; }
+.tiny { font-size: 11px; fill: #64748b; }
+.mono { font-family: Consolas, 'Microsoft YaHei', monospace; font-size: 12px; fill: #334155; }
+</style>
+<defs>
+<marker id="blue" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#2563eb"/>
+</marker>
+<marker id="green" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#059669"/>
+</marker>
+<marker id="orange" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#ea580c"/>
+</marker>
+<marker id="purple" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#7c3aed"/>
+</marker>
+<marker id="gray" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#64748b"/>
+</marker>
+<marker id="red" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#dc2626"/>
+</marker>
+</defs>
+<rect width="1440" height="820" fill="#f8fafc"/>
+<text x="48" y="46" class="title">模块 03 总览：候选数据契约是中间桥梁</text>
+<text x="48" y="70" class="subtitle">从原始文件到正式事实表，中间统一使用 BridgeAnnualInspectionData</text>
+<rect x="48" y="104" width="226" height="560" rx="16" fill="#eff6ff" stroke="#e2e8f0" stroke-width="1.2"/>
+<text x="66" y="132" class="lane-title">输入来源</text>
+<rect x="322" y="104" width="226" height="560" rx="16" fill="#faf5ff" stroke="#e2e8f0" stroke-width="1.2"/>
+<text x="340" y="132" class="lane-title">Python 工具服务</text>
+<rect x="596" y="104" width="226" height="560" rx="16" fill="#f0fdf4" stroke="#e2e8f0" stroke-width="1.2"/>
+<text x="614" y="132" class="lane-title">03 契约层</text>
+<rect x="870" y="104" width="226" height="560" rx="16" fill="#fff7ed" stroke="#e2e8f0" stroke-width="1.2"/>
+<text x="888" y="132" class="lane-title">C++ 与前端</text>
+<rect x="1144" y="104" width="226" height="560" rx="16" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.2"/>
+<text x="1162" y="132" class="lane-title">正式事实</text>
+<rect x="76" y="160" width="170" height="84" rx="12" fill="#ffffff" stroke="#60a5fa" stroke-width="1.4"/>
+<circle cx="100" cy="185" r="13" fill="#60a5fa"/>
+<text x="100" y="190" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">1</text>
+<text x="124" y="189" text-anchor="start" class="node-title">今年软件 Word</text>
+<text x="92" y="216" class="node-sub">病害表、照片、第四章评分</text>
+<rect x="76" y="278" width="170" height="84" rx="12" fill="#ffffff" stroke="#60a5fa" stroke-width="1.4"/>
+<circle cx="100" cy="303" r="13" fill="#60a5fa"/>
+<text x="100" y="308" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">2</text>
+<text x="124" y="307" text-anchor="start" class="node-title">上一年正式 Word</text>
+<text x="92" y="334" class="node-sub">可选历史基线</text>
+<rect x="76" y="396" width="170" height="84" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.4"/>
+<circle cx="100" cy="421" r="13" fill="#94a3b8"/>
+<text x="100" y="426" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">3</text>
+<text x="124" y="425" text-anchor="start" class="node-title">未来来源</text>
+<text x="92" y="452" class="node-sub">Excel / API / JSON</text>
+<text x="92" y="467" class="node-sub">先预留</text>
+<rect x="350" y="176" width="170" height="92" rx="12" fill="#ffffff" stroke="#c084fc" stroke-width="1.4"/>
+<text x="435.0" y="205" text-anchor="middle" class="node-title">Importer</text>
+<text x="435.0" y="222" text-anchor="middle" class="node-title">适配器</text>
+<text x="366" y="234" class="node-sub">按来源读取、提取、归一化</text>
+<rect x="350" y="340" width="170" height="92" rx="12" fill="#ffffff" stroke="#c084fc" stroke-width="1.4"/>
+<text x="435.0" y="369" text-anchor="middle" class="node-title">解析输出</text>
+<text x="366" y="398" class="node-sub">不写数据库事实，只输出候选 JSON</text>
+<rect x="624" y="150" width="170" height="96" rx="12" fill="#ffffff" stroke="#34d399" stroke-width="1.4"/>
+<text x="709.0" y="179" text-anchor="middle" class="node-title">BridgeAnnualInspectionData</text>
+<text x="640" y="208" class="node-sub">候选数据的统一结构</text>
+<rect x="624" y="294" width="170" height="96" rx="12" fill="#ffffff" stroke="#34d399" stroke-width="1.4"/>
+<text x="709.0" y="323" text-anchor="middle" class="node-title">来源与置信度</text>
+<text x="640" y="352" class="node-sub">source_ref /</text>
+<text x="640" y="367" class="node-sub">confidence /</text>
+<text x="640" y="382" class="node-sub">warnings</text>
+<rect x="624" y="438" width="170" height="96" rx="12" fill="#ffffff" stroke="#34d399" stroke-width="1.4"/>
+<text x="709.0" y="467" text-anchor="middle" class="node-title">校对状态</text>
+<text x="640" y="496" class="node-sub">待确认 / 已确认 / 驳回</text>
+<rect x="898" y="170" width="170" height="86" rx="12" fill="#ffffff" stroke="#fb923c" stroke-width="1.4"/>
+<text x="983.0" y="199" text-anchor="middle" class="node-title">import_records</text>
+<text x="914" y="228" class="node-sub">parsed_result_json</text>
+<text x="914" y="243" class="node-sub">保存候选</text>
+<rect x="898" y="314" width="170" height="86" rx="12" fill="#ffffff" stroke="#fb923c" stroke-width="1.4"/>
+<text x="983.0" y="343" text-anchor="middle" class="node-title">校对工作台</text>
+<text x="914" y="372" class="node-sub">读取、修改、确认</text>
+<rect x="898" y="458" width="170" height="86" rx="12" fill="#ffffff" stroke="#fb923c" stroke-width="1.4"/>
+<text x="983.0" y="487" text-anchor="middle" class="node-title">确认入库逻辑</text>
+<text x="914" y="516" class="node-sub">检查状态和必填字段</text>
+<rect x="1172" y="180" width="170" height="88" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.4"/>
+<text x="1257.0" y="209" text-anchor="middle" class="node-title">defect_observations</text>
+<text x="1188" y="238" class="node-sub">年度病害事实</text>
+<rect x="1172" y="326" width="170" height="88" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.4"/>
+<text x="1257.0" y="355" text-anchor="middle" class="node-title">defect_photos</text>
+<text x="1257.0" y="372" text-anchor="middle" class="node-title">/ ratings</text>
+<text x="1188" y="384" class="node-sub">照片和评分事实</text>
+<rect x="1172" y="472" width="170" height="88" rx="12" fill="#ffffff" stroke="#94a3b8" stroke-width="1.4"/>
+<text x="1257.0" y="501" text-anchor="middle" class="node-title">defect_comparisons</text>
+<text x="1188" y="530" class="node-sub">年度间对比关系</text>
+<path d="M 246,202 L 350,202" fill="none" stroke="#2563eb" stroke-width="2.0" marker-end="url(#blue)"/>
+<rect x="314.0" y="174" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="350" y="190" text-anchor="middle" class="tiny">文件</text>
+<path d="M 246,320 L 304,320 L 304,202 L 350,202" fill="none" stroke="#2563eb" stroke-width="2.0" marker-end="url(#blue)"/>
+<path d="M 520,386 L 572,386 L 572,198 L 624,198" fill="none" stroke="#059669" stroke-width="2.0" marker-end="url(#green)"/>
+<rect x="536.0" y="170" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="572" y="186" text-anchor="middle" class="tiny">候选</text>
+<path d="M 794,198 L 898,213" fill="none" stroke="#059669" stroke-width="2.0" marker-end="url(#green)"/>
+<rect x="862.0" y="185" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="898" y="201" text-anchor="middle" class="tiny">保存</text>
+<path d="M 983,256 L 983,314" fill="none" stroke="#2563eb" stroke-width="2.0" marker-end="url(#blue)"/>
+<rect x="947.0" y="286" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="983" y="302" text-anchor="middle" class="tiny">读取</text>
+<path d="M 983,400 L 983,458" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)"/>
+<rect x="947.0" y="430" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="983" y="446" text-anchor="middle" class="tiny">确认</text>
+<path d="M 1068,501 L 1118,501 L 1118,224 L 1172,224" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)"/>
+<rect x="1082.0" y="196" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="1118" y="212" text-anchor="middle" class="tiny">写入</text>
+<path d="M 1068,501 L 1118,501 L 1118,370 L 1172,370" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)"/>
+<path d="M 1068,501 L 1118,501 L 1118,516 L 1172,516" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)"/>
+<rect x="58" y="700" width="560" height="58" rx="12" fill="#fffbeb" stroke="#f59e0b"/>
+<text x="74" y="723" class="node-sub">03 不负责解析算法和页面实现，它只定义候选 JSON 长什么样。</text>
+<rect x="1110" y="682" width="260" height="96" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="1124" y="704" class="tiny" font-weight="700">图例</text>
+<line x1="1124" y1="728" x2="1166" y2="728" stroke="#2563eb" stroke-width="2" marker-end="url(#blue)"/>
+<text x="1176" y="732" class="tiny">文件/读取</text>
+<line x1="1124" y1="750" x2="1166" y2="750" stroke="#059669" stroke-width="2" marker-end="url(#green)"/>
+<text x="1176" y="754" class="tiny">候选数据</text>
+<line x1="1124" y1="772" x2="1166" y2="772" stroke="#ea580c" stroke-width="2" marker-end="url(#orange)"/>
+<text x="1176" y="776" class="tiny">人工确认后写入</text>
+</svg>

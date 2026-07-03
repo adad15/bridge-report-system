@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 820" width="1320" height="820">
+<style>
+text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', SimHei, sans-serif; }
+.title { font-size: 22px; font-weight: 700; fill: #111827; }
+.subtitle { font-size: 13px; fill: #6b7280; }
+.label { font-size: 14px; font-weight: 600; fill: #111827; }
+.small { font-size: 12px; fill: #374151; }
+.tiny { font-size: 11px; fill: #6b7280; }
+</style>
+<defs>
+<marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+</marker>
+<marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/>
+</marker>
+<marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/>
+</marker>
+<marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/>
+</marker>
+<marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#6b7280"/>
+</marker>
+<marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/>
+</marker>
+</defs>
+<rect width="1320" height="820" fill="#ffffff"/>
+<text x="40" y="42" class="title">模块 03：文件、图片、照片编号引用关系</text>
+<text x="40" y="66" class="subtitle">重点：候选 ID 用于 JSON 内部引用；正式 GDWJ 编号由归档表生成</text>
+<rect x="60" y="100" width="250" height="560" rx="12" ry="12" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="76" y="124" class="small" font-weight="600">原始输入与归档</text>
+<rect x="90" y="160" width="190" height="70" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="185.0" y="187" text-anchor="middle" class="label">原始 Word</text>
+<text x="185.0" y="216" text-anchor="middle" class="small">用户上传文件</text>
+<rect x="90" y="290" width="190" height="70" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="185.0" y="317" text-anchor="middle" class="label">archived_file</text>
+<text x="185.0" y="334" text-anchor="middle" class="label">s</text>
+<text x="185.0" y="346" text-anchor="middle" class="small">GDWJ-000001</text>
+<rect x="90" y="420" width="190" height="70" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="185.0" y="447" text-anchor="middle" class="label">import_record</text>
+<text x="185.0" y="464" text-anchor="middle" class="label">_files</text>
+<text x="185.0" y="476" text-anchor="middle" class="small">DRWJ 关联</text>
+<rect x="390" y="100" width="250" height="560" rx="12" ry="12" fill="#faf5ff" stroke="#d1d5db" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="406" y="124" class="small" font-weight="600">Python 抽取结果</text>
+<rect x="420" y="150" width="190" height="76" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="515.0" y="177" text-anchor="middle" class="label">extracted_fil</text>
+<text x="515.0" y="194" text-anchor="middle" class="label">es</text>
+<text x="515.0" y="206" text-anchor="middle" class="small">图片候选列表</text>
+<rect x="420" y="280" width="190" height="76" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="515.0" y="307" text-anchor="middle" class="label">extracted_fil</text>
+<text x="515.0" y="324" text-anchor="middle" class="label">e_candidate_i</text>
+<text x="515.0" y="341" text-anchor="middle" class="label">d</text>
+<text x="515.0" y="336" text-anchor="middle" class="small">file-cand-001</text>
+<rect x="420" y="410" width="190" height="76" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="515.0" y="437" text-anchor="middle" class="label">raw_extracts</text>
+<text x="515.0" y="466" text-anchor="middle" class="small">页码/段落/表格</text>
+<rect x="720" y="100" width="250" height="560" rx="12" ry="12" fill="#f0fdf4" stroke="#d1d5db" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="736" y="124" class="small" font-weight="600">03 候选 JSON</text>
+<rect x="750" y="145" width="190" height="76" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="845.0" y="172" text-anchor="middle" class="label">photos[]</text>
+<text x="845.0" y="201" text-anchor="middle" class="small">照片编号候选</text>
+<rect x="750" y="275" width="190" height="76" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="845.0" y="302" text-anchor="middle" class="label">photo_number</text>
+<text x="845.0" y="331" text-anchor="middle" class="small">例如 2.1-3</text>
+<rect x="750" y="405" width="190" height="76" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="845.0" y="432" text-anchor="middle" class="label">defects[].pho</text>
+<text x="845.0" y="449" text-anchor="middle" class="label">to_refs</text>
+<text x="845.0" y="461" text-anchor="middle" class="small">引用照片编号/候选文件</text>
+<rect x="1050" y="100" width="230" height="560" rx="12" ry="12" fill="#fff7ed" stroke="#d1d5db" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="1066" y="124" class="small" font-weight="600">确认后正式表</text>
+<rect x="1075" y="155" width="180" height="70" rx="8" ry="8" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.5"/>
+<text x="1165.0" y="182" text-anchor="middle" class="label">defect_photo</text>
+<text x="1165.0" y="199" text-anchor="middle" class="label">s</text>
+<text x="1165.0" y="211" text-anchor="middle" class="small">正式照片事实</text>
+<rect x="1075" y="285" width="180" height="70" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="1165.0" y="312" text-anchor="middle" class="label">archived_fil</text>
+<text x="1165.0" y="329" text-anchor="middle" class="label">es</text>
+<text x="1165.0" y="341" text-anchor="middle" class="small">抽取图片 GDWJ</text>
+<rect x="1075" y="415" width="180" height="70" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="1165.0" y="442" text-anchor="middle" class="label">defect_obser</text>
+<text x="1165.0" y="459" text-anchor="middle" class="label">vations</text>
+<text x="1165.0" y="471" text-anchor="middle" class="small">病害观测事实</text>
+<path d="M 185,230 L 185,290" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="139" y="268" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="185" y="282" text-anchor="middle" class="tiny">归档</text>
+<path d="M 280,325 L 340,325 L 340,188 L 420,188" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<rect x="294" y="166" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="340" y="180" text-anchor="middle" class="tiny">解析读取</text>
+<path d="M 515,226 L 515,280" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<rect x="469" y="258" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="515" y="272" text-anchor="middle" class="tiny">生成临时 ID</text>
+<path d="M 610,318 L 680,318 L 680,183 L 750,183" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="634" y="161" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="680" y="175" text-anchor="middle" class="tiny">候选文件引用</text>
+<path d="M 845,221 L 845,275" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<rect x="799" y="253" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="845" y="267" text-anchor="middle" class="tiny">识别编号</text>
+<path d="M 845,351 L 845,405" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="799" y="383" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="845" y="397" text-anchor="middle" class="tiny">关联病害</text>
+<path d="M 940,443 L 1075,450" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="1029" y="428" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="1075" y="442" text-anchor="middle" class="tiny">确认后关联</text>
+<path d="M 940,313 L 1075,320" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="1029" y="298" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="1075" y="312" text-anchor="middle" class="tiny">确认后归档</text>
+<path d="M 1075,190 L 1030,190 L 1030,443 L 970,443" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-gray)" stroke-dasharray="5 4"/>
+<rect x="984" y="421" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="1030" y="435" text-anchor="middle" class="tiny">引用观测</text>
+<rect x="75" y="690" width="540" height="70" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.2"/>
+<text x="87" y="712" class="small">extracted_file_candidate_id 是候选 JSON 内部临时 ID；GDWJ 是归档入库后的正式文件编号。</text>
+<rect x="950" y="690" width="260" height="112" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+<text x="962" y="710" class="small" font-weight="600">图例</text>
+<line x1="962" y1="732" x2="1004" y2="732" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<text x="1014" y="736" class="tiny">读取原始文件</text>
+<line x1="962" y1="754" x2="1004" y2="754" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<text x="1014" y="758" class="tiny">候选引用</text>
+<line x1="962" y1="776" x2="1004" y2="776" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="1014" y="780" class="tiny">确认入库</text>
+<line x1="962" y1="798" x2="1004" y2="798" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<text x="1014" y="802" class="tiny">解析生成</text>
+</svg>

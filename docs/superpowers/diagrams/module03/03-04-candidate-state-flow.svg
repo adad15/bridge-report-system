@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 780" width="1280" height="780">
+<style>
+text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', SimHei, sans-serif; }
+.title { font-size: 24px; font-weight: 700; fill: #111827; }
+.subtitle { font-size: 13px; fill: #64748b; }
+.lane-title { font-size: 13px; font-weight: 700; fill: #334155; }
+.node-title { font-size: 15px; font-weight: 700; fill: #111827; }
+.node-sub { font-size: 12px; fill: #475569; }
+.tiny { font-size: 11px; fill: #64748b; }
+.mono { font-family: Consolas, 'Microsoft YaHei', monospace; font-size: 12px; fill: #334155; }
+</style>
+<defs>
+<marker id="blue" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#2563eb"/>
+</marker>
+<marker id="green" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#059669"/>
+</marker>
+<marker id="orange" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#ea580c"/>
+</marker>
+<marker id="purple" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#7c3aed"/>
+</marker>
+<marker id="gray" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#64748b"/>
+</marker>
+<marker id="red" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#dc2626"/>
+</marker>
+</defs>
+<rect width="1280" height="780" fill="#f8fafc"/>
+<text x="48" y="46" class="title">候选数据状态流</text>
+<text x="48" y="70" class="subtitle">每条候选记录从机器抽取到正式入库的生命周期</text>
+<rect x="80" y="150" width="175" height="72" rx="12" fill="#eff6ff" stroke="#60a5fa" stroke-width="1.4"/>
+<text x="167.5" y="179" text-anchor="middle" class="node-title">已抽取</text>
+<text x="96" y="204" class="node-sub">机器生成候选值</text>
+<rect x="335" y="150" width="175" height="72" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+<text x="422.5" y="179" text-anchor="middle" class="node-title">待确认</text>
+<text x="351" y="204" class="node-sub">默认进入校对队列</text>
+<rect x="590" y="150" width="175" height="72" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.4"/>
+<text x="677.5" y="179" text-anchor="middle" class="node-title">需人工修正</text>
+<text x="606" y="204" class="node-sub">低置信、冲突或缺失</text>
+<rect x="845" y="150" width="175" height="72" rx="12" fill="#f0fdf4" stroke="#34d399" stroke-width="1.4"/>
+<text x="932.5" y="179" text-anchor="middle" class="node-title">已确认</text>
+<text x="861" y="204" class="node-sub">满足入库条件</text>
+<rect x="335" y="350" width="175" height="72" rx="12" fill="#fef2f2" stroke="#f87171" stroke-width="1.4"/>
+<text x="422.5" y="379" text-anchor="middle" class="node-title">已驳回</text>
+<text x="351" y="404" class="node-sub">不进入事实库</text>
+<rect x="590" y="350" width="175" height="72" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.4"/>
+<text x="677.5" y="379" text-anchor="middle" class="node-title">等待补充来源</text>
+<text x="606" y="404" class="node-sub">缺照片、页码或原文</text>
+<rect x="845" y="350" width="175" height="72" rx="12" fill="#f0fdf4" stroke="#34d399" stroke-width="1.4"/>
+<text x="932.5" y="379" text-anchor="middle" class="node-title">已入库</text>
+<text x="861" y="404" class="node-sub">正式表生成记录</text>
+<rect x="590" y="555" width="175" height="72" rx="12" fill="#faf5ff" stroke="#c084fc" stroke-width="1.4"/>
+<text x="677.5" y="584" text-anchor="middle" class="node-title">修订候选</text>
+<text x="606" y="609" class="node-sub">同桥同年再次导入</text>
+<rect x="845" y="555" width="175" height="72" rx="12" fill="#faf5ff" stroke="#c084fc" stroke-width="1.4"/>
+<text x="932.5" y="584" text-anchor="middle" class="node-title">形成新版事实</text>
+<text x="861" y="609" class="node-sub">旧版标记为已修订</text>
+<path d="M 255,186 L 335,186" fill="none" stroke="#059669" stroke-width="2.0" marker-end="url(#green)"/>
+<rect x="299.0" y="158" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="335" y="174" text-anchor="middle" class="tiny">生成</text>
+<path d="M 510,186 L 590,186" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)"/>
+<rect x="554.0" y="158" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="590" y="174" text-anchor="middle" class="tiny">发现问题</text>
+<path d="M 765,186 L 845,186" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)"/>
+<rect x="809.0" y="158" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="845" y="174" text-anchor="middle" class="tiny">确认</text>
+<path d="M 932,222 L 932,350" fill="none" stroke="#059669" stroke-width="2.0" marker-end="url(#green)"/>
+<rect x="896.0" y="322" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="932" y="338" text-anchor="middle" class="tiny">提交</text>
+<path d="M 422,222 L 422,350" fill="none" stroke="#dc2626" stroke-width="2.0" marker-end="url(#red)"/>
+<rect x="386.0" y="322" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="422" y="338" text-anchor="middle" class="tiny">驳回</text>
+<path d="M 677,222 L 677,350" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)"/>
+<rect x="641.0" y="322" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="677" y="338" text-anchor="middle" class="tiny">来源不足</text>
+<path d="M 765,386 L 845,386" fill="none" stroke="#059669" stroke-width="2.0" marker-end="url(#green)"/>
+<rect x="804.0" y="358" width="82" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="845" y="374" text-anchor="middle" class="tiny">补齐后确认</text>
+<path d="M 677,422 L 677,555" fill="none" stroke="#7c3aed" stroke-width="2.0" marker-end="url(#purple)"/>
+<rect x="641.0" y="527" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="677" y="543" text-anchor="middle" class="tiny">重复导入</text>
+<path d="M 765,591 L 845,591" fill="none" stroke="#7c3aed" stroke-width="2.0" marker-end="url(#purple)"/>
+<rect x="809.0" y="563" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="845" y="579" text-anchor="middle" class="tiny">确认修订</text>
+<path d="M 590,386 L 530,386 L 530,186 L 590,186" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)" stroke-dasharray="6 5"/>
+<rect x="494.0" y="158" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="530" y="174" text-anchor="middle" class="tiny">回到修正</text>
+<rect x="78" y="650" width="570" height="58" rx="12" fill="#fffbeb" stroke="#f59e0b"/>
+<text x="94" y="673" class="node-sub">03 定义这些状态值；模块 5 根据状态组织校对界面，模块 2 只接收已确认的数据。</text>
+<rect x="865" y="642" width="260" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="879" y="664" class="tiny" font-weight="700">图例</text>
+<line x1="879" y1="688" x2="921" y2="688" stroke="#059669" stroke-width="2" marker-end="url(#green)"/>
+<text x="931" y="692" class="tiny">可继续流转</text>
+<line x1="879" y1="710" x2="921" y2="710" stroke="#ea580c" stroke-width="2" marker-end="url(#orange)"/>
+<text x="931" y="714" class="tiny">校对修正</text>
+<line x1="879" y1="732" x2="921" y2="732" stroke="#dc2626" stroke-width="2" marker-end="url(#red)"/>
+<text x="931" y="736" class="tiny">驳回</text>
+<line x1="879" y1="754" x2="921" y2="754" stroke="#7c3aed" stroke-width="2" marker-end="url(#purple)"/>
+<text x="931" y="758" class="tiny">修订版本</text>
+</svg>

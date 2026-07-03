@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 780" width="1180" height="780">
+<style>
+text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', SimHei, sans-serif; }
+.title { font-size: 22px; font-weight: 700; fill: #111827; }
+.subtitle { font-size: 13px; fill: #6b7280; }
+.label { font-size: 14px; font-weight: 600; fill: #111827; }
+.small { font-size: 12px; fill: #374151; }
+.tiny { font-size: 11px; fill: #6b7280; }
+</style>
+<defs>
+<marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+</marker>
+<marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/>
+</marker>
+<marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/>
+</marker>
+<marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/>
+</marker>
+<marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#6b7280"/>
+</marker>
+<marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/>
+</marker>
+</defs>
+<rect width="1180" height="780" fill="#ffffff"/>
+<text x="40" y="42" class="title">模块 03：候选数据状态流</text>
+<text x="40" y="66" class="subtitle">候选 JSON 里的字段和对象如何从机器抽取走到正式入库</text>
+<rect x="70" y="130" width="180" height="70" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="160.0" y="157" text-anchor="middle" class="label">已抽取</text>
+<text x="160.0" y="186" text-anchor="middle" class="small">机器生成候选值</text>
+<rect x="330" y="130" width="180" height="70" rx="8" ry="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="420.0" y="157" text-anchor="middle" class="label">待确认</text>
+<text x="420.0" y="186" text-anchor="middle" class="small">默认校对状态</text>
+<rect x="590" y="130" width="180" height="70" rx="8" ry="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="680.0" y="157" text-anchor="middle" class="label">需人工修正</text>
+<text x="680.0" y="186" text-anchor="middle" class="small">低置信/冲突/缺失</text>
+<rect x="850" y="130" width="180" height="70" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="940.0" y="157" text-anchor="middle" class="label">已确认</text>
+<text x="940.0" y="186" text-anchor="middle" class="small">可写正式表</text>
+<rect x="330" y="330" width="180" height="70" rx="8" ry="8" fill="#fef2f2" stroke="#fecaca" stroke-width="1.5"/>
+<text x="420.0" y="357" text-anchor="middle" class="label">已驳回</text>
+<text x="420.0" y="386" text-anchor="middle" class="small">不进入事实库</text>
+<rect x="590" y="330" width="180" height="70" rx="8" ry="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+<text x="680.0" y="357" text-anchor="middle" class="label">等待补充来源</text>
+<text x="680.0" y="386" text-anchor="middle" class="small">缺照片/缺行号</text>
+<rect x="850" y="330" width="180" height="70" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="940.0" y="357" text-anchor="middle" class="label">已入库</text>
+<text x="940.0" y="386" text-anchor="middle" class="small">生成正式表记录</text>
+<rect x="590" y="535" width="180" height="70" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="680.0" y="562" text-anchor="middle" class="label">修订候选</text>
+<text x="680.0" y="591" text-anchor="middle" class="small">同桥同年新版导入</text>
+<rect x="850" y="535" width="180" height="70" rx="8" ry="8" fill="#faf5ff" stroke="#e9d5ff" stroke-width="1.5"/>
+<text x="940.0" y="562" text-anchor="middle" class="label">形成新版事实</text>
+<text x="940.0" y="591" text-anchor="middle" class="small">旧版标记已修订</text>
+<path d="M 250,165 L 330,165" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="284" y="143" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="330" y="157" text-anchor="middle" class="tiny">生成</text>
+<path d="M 510,165 L 590,165" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="544" y="143" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="590" y="157" text-anchor="middle" class="tiny">发现问题</text>
+<path d="M 770,165 L 850,165" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="804" y="143" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="850" y="157" text-anchor="middle" class="tiny">人工确认</text>
+<path d="M 940,200 L 940,330" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="894" y="308" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="940" y="322" text-anchor="middle" class="tiny">确认提交</text>
+<path d="M 420,200 L 420,330" fill="none" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-red)"/>
+<rect x="374" y="308" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="420" y="322" text-anchor="middle" class="tiny">用户驳回</text>
+<path d="M 680,200 L 680,330" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="634" y="308" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="680" y="322" text-anchor="middle" class="tiny">来源不足</text>
+<path d="M 770,365 L 850,365" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="804" y="343" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="850" y="357" text-anchor="middle" class="tiny">补齐后确认</text>
+<path d="M 680,400 L 680,535" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<rect x="634" y="513" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="680" y="527" text-anchor="middle" class="tiny">重复导入</text>
+<path d="M 770,570 L 850,570" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<rect x="804" y="548" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="850" y="562" text-anchor="middle" class="tiny">确认修订</text>
+<path d="M 590,365 L 540,365 L 540,165 L 510,165" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)" stroke-dasharray="5 4"/>
+<rect x="494" y="143" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="540" y="157" text-anchor="middle" class="tiny">补充后重校</text>
+<rect x="70" y="620" width="490" height="70" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.2"/>
+<text x="82" y="642" class="small">03 要定义状态值，但不决定 UI 长什么样；模块 5 会基于这些状态做校对工作台。</text>
+<rect x="820" y="650" width="260" height="112" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+<text x="832" y="670" class="small" font-weight="600">图例</text>
+<line x1="832" y1="692" x2="874" y2="692" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<text x="884" y="696" class="tiny">可前进的数据流</text>
+<line x1="832" y1="714" x2="874" y2="714" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="884" y="718" class="tiny">校对/修正</text>
+<line x1="832" y1="736" x2="874" y2="736" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-red)"/>
+<text x="884" y="740" class="tiny">驳回</text>
+<line x1="832" y1="758" x2="874" y2="758" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<text x="884" y="762" class="tiny">修订版本</text>
+</svg>

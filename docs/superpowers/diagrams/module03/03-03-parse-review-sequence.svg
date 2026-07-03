@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900">
+<style>
+text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', SimHei, sans-serif; }
+.title { font-size: 24px; font-weight: 700; fill: #111827; }
+.subtitle { font-size: 13px; fill: #64748b; }
+.lane-title { font-size: 13px; font-weight: 700; fill: #334155; }
+.node-title { font-size: 15px; font-weight: 700; fill: #111827; }
+.node-sub { font-size: 12px; fill: #475569; }
+.tiny { font-size: 11px; fill: #64748b; }
+.mono { font-family: Consolas, 'Microsoft YaHei', monospace; font-size: 12px; fill: #334155; }
+</style>
+<defs>
+<marker id="blue" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#2563eb"/>
+</marker>
+<marker id="green" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#059669"/>
+</marker>
+<marker id="orange" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#ea580c"/>
+</marker>
+<marker id="purple" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#7c3aed"/>
+</marker>
+<marker id="gray" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#64748b"/>
+</marker>
+<marker id="red" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="strokeWidth">
+<path d="M 0 0 L 12 4 L 0 8 z" fill="#dc2626"/>
+</marker>
+</defs>
+<rect width="1440" height="900" fill="#f8fafc"/>
+<text x="48" y="46" class="title">导入到确认入库：模块 03 交接时序</text>
+<text x="48" y="70" class="subtitle">解析阶段只保存候选；确认阶段才写正式业务表</text>
+<rect x="36" y="102" width="148" height="46" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+<text x="110.0" y="131" text-anchor="middle" class="node-title">用户</text>
+<line x1="110" y1="154" x2="110" y2="810" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="6 5"/>
+<rect x="236" y="102" width="148" height="46" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+<text x="310.0" y="131" text-anchor="middle" class="node-title">前端</text>
+<line x1="310" y1="154" x2="310" y2="810" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="6 5"/>
+<rect x="446" y="102" width="148" height="46" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+<text x="520.0" y="131" text-anchor="middle" class="node-title">C++ 主服务</text>
+<line x1="520" y1="154" x2="520" y2="810" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="6 5"/>
+<rect x="661" y="102" width="148" height="46" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+<text x="735.0" y="131" text-anchor="middle" class="node-title">文件归档</text>
+<line x1="735" y1="154" x2="735" y2="810" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="6 5"/>
+<rect x="876" y="102" width="148" height="46" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+<text x="950.0" y="131" text-anchor="middle" class="node-title">Python</text>
+<text x="950.0" y="148" text-anchor="middle" class="node-title">工具服务</text>
+<line x1="950" y1="154" x2="950" y2="810" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="6 5"/>
+<rect x="1116" y="102" width="148" height="46" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.4"/>
+<text x="1190.0" y="131" text-anchor="middle" class="node-title">PostgreSQL</text>
+<line x1="1190" y1="154" x2="1190" y2="810" stroke="#cbd5e1" stroke-width="1.2" stroke-dasharray="6 5"/>
+<rect x="54" y="176" width="1270" height="306" rx="16" fill="#f0fdf4" stroke="#e2e8f0" stroke-width="1.2"/>
+<text x="72" y="204" class="lane-title">解析阶段：产生候选 JSON</text>
+<rect x="54" y="514" width="1270" height="290" rx="16" fill="#fff7ed" stroke="#e2e8f0" stroke-width="1.2"/>
+<text x="72" y="542" class="lane-title">校对阶段：人工确认后写正式表</text>
+<path d="M 110,220 L 310,220" fill="none" stroke="#2563eb" stroke-width="2.0" marker-end="url(#blue)"/>
+<rect x="257.0" y="192" width="106" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="310" y="208" text-anchor="middle" class="tiny">选择桥梁/年度</text>
+<path d="M 310,260 L 520,260" fill="none" stroke="#2563eb" stroke-width="2.0" marker-end="url(#blue)"/>
+<rect x="467.0" y="232" width="106" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="520" y="248" text-anchor="middle" class="tiny">上传 Word</text>
+<path d="M 520,300 L 735,300" fill="none" stroke="#059669" stroke-width="2.0" marker-end="url(#green)"/>
+<rect x="688.0" y="272" width="94" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="735" y="288" text-anchor="middle" class="tiny">归档原始文件</text>
+<path d="M 520,340 L 950,340" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)"/>
+<rect x="914.0" y="312" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="950" y="328" text-anchor="middle" class="tiny">请求解析</text>
+<path d="M 950,380 L 1020,380 L 1020,408 L 950,408" fill="none" stroke="#7c3aed" stroke-width="2.0" marker-end="url(#purple)"/>
+<rect x="967.0" y="380" width="106" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="1020" y="396" text-anchor="middle" class="tiny">抽取表格/图片</text>
+<path d="M 950,420 L 520,420" fill="none" stroke="#059669" stroke-width="2.0" marker-end="url(#green)"/>
+<rect x="467.0" y="392" width="106" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="520" y="408" text-anchor="middle" class="tiny">候选 JSON</text>
+<path d="M 520,460 L 1190,460" fill="none" stroke="#059669" stroke-width="2.0" marker-end="url(#green)"/>
+<rect x="1059.0" y="432" width="262" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="1190" y="448" text-anchor="middle" class="tiny">写 parsed_result_json</text>
+<path d="M 310,560 L 520,560" fill="none" stroke="#2563eb" stroke-width="2.0" marker-end="url(#blue)"/>
+<rect x="479.0" y="532" width="82" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="520" y="548" text-anchor="middle" class="tiny">打开校对页</text>
+<path d="M 520,600 L 1190,600" fill="none" stroke="#2563eb" stroke-width="2.0" marker-end="url(#blue)"/>
+<rect x="1125.0" y="572" width="130" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="1190" y="588" text-anchor="middle" class="tiny">读取候选 JSON</text>
+<path d="M 310,646 L 110,646" fill="none" stroke="#2563eb" stroke-width="2.0" marker-end="url(#blue)"/>
+<rect x="63.0" y="618" width="94" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="110" y="634" text-anchor="middle" class="tiny">展示待确认项</text>
+<path d="M 110,700 L 310,700" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)"/>
+<rect x="257.0" y="672" width="106" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="310" y="688" text-anchor="middle" class="tiny">人工修正/确认</text>
+<path d="M 310,742 L 520,742" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)"/>
+<rect x="473.0" y="714" width="94" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="520" y="730" text-anchor="middle" class="tiny">提交确认结果</text>
+<path d="M 520,782 L 1190,782" fill="none" stroke="#ea580c" stroke-width="2.0" marker-end="url(#orange)"/>
+<rect x="1154.0" y="754" width="72" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="1190" y="770" text-anchor="middle" class="tiny">写正式表</text>
+<rect x="1040" y="820" width="260" height="118" rx="12" fill="#ffffff" stroke="#e2e8f0"/>
+<text x="1054" y="842" class="tiny" font-weight="700">图例</text>
+<line x1="1054" y1="866" x2="1096" y2="866" stroke="#2563eb" stroke-width="2" marker-end="url(#blue)"/>
+<text x="1106" y="870" class="tiny">用户/读取</text>
+<line x1="1054" y1="888" x2="1096" y2="888" stroke="#059669" stroke-width="2" marker-end="url(#green)"/>
+<text x="1106" y="892" class="tiny">候选写入</text>
+<line x1="1054" y1="910" x2="1096" y2="910" stroke="#ea580c" stroke-width="2" marker-end="url(#orange)"/>
+<text x="1106" y="914" class="tiny">触发/确认</text>
+<line x1="1054" y1="932" x2="1096" y2="932" stroke="#7c3aed" stroke-width="2" marker-end="url(#purple)"/>
+<text x="1106" y="936" class="tiny">解析处理</text>
+</svg>

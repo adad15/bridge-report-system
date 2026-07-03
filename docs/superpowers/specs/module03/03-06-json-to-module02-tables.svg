@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 840" width="1320" height="840">
+<style>
+text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', SimHei, sans-serif; }
+.title { font-size: 22px; font-weight: 700; fill: #111827; }
+.subtitle { font-size: 13px; fill: #6b7280; }
+.label { font-size: 14px; font-weight: 600; fill: #111827; }
+.small { font-size: 12px; fill: #374151; }
+.tiny { font-size: 11px; fill: #6b7280; }
+</style>
+<defs>
+<marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+</marker>
+<marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/>
+</marker>
+<marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/>
+</marker>
+<marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/>
+</marker>
+<marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#6b7280"/>
+</marker>
+<marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#dc2626"/>
+</marker>
+</defs>
+<rect width="1320" height="840" fill="#ffffff"/>
+<text x="40" y="42" class="title">模块 03 到模块 2：候选 JSON 与正式表映射</text>
+<text x="40" y="66" class="subtitle">候选 JSON 不是表镜像，但必须能覆盖入库所需字段</text>
+<rect x="60" y="100" width="430" height="640" rx="12" ry="12" fill="#f0fdf4" stroke="#d1d5db" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="76" y="124" class="small" font-weight="600">BridgeAnnualInspectionData 候选 JSON</text>
+<rect x="95" y="155" width="320" height="62" rx="8" ry="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="255.0" y="182" text-anchor="middle" class="label">bridge_check</text>
+<text x="255.0" y="211" text-anchor="middle" class="small">桥梁校验候选</text>
+<rect x="95" y="255" width="320" height="62" rx="8" ry="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="255.0" y="282" text-anchor="middle" class="label">inspection</text>
+<text x="255.0" y="311" text-anchor="middle" class="small">年度检测候选</text>
+<rect x="95" y="355" width="320" height="62" rx="8" ry="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="255.0" y="382" text-anchor="middle" class="label">components</text>
+<text x="255.0" y="411" text-anchor="middle" class="small">构件候选</text>
+<rect x="95" y="455" width="320" height="62" rx="8" ry="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="255.0" y="482" text-anchor="middle" class="label">defects + measurements</text>
+<text x="255.0" y="511" text-anchor="middle" class="small">病害和尺寸候选</text>
+<rect x="95" y="555" width="320" height="62" rx="8" ry="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="255.0" y="582" text-anchor="middle" class="label">photos</text>
+<text x="255.0" y="611" text-anchor="middle" class="small">照片候选</text>
+<rect x="95" y="655" width="320" height="62" rx="8" ry="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="255.0" y="682" text-anchor="middle" class="label">ratings</text>
+<text x="255.0" y="711" text-anchor="middle" class="small">评分候选</text>
+<rect x="810" y="100" width="430" height="640" rx="12" ry="12" fill="#fff7ed" stroke="#d1d5db" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="826" y="124" class="small" font-weight="600">模块 2 正式业务表</text>
+<rect x="855" y="145" width="320" height="58" rx="8" ry="8" fill="#ffffff" stroke="#fed7aa" stroke-width="1.5"/>
+<text x="1015.0" y="172" text-anchor="middle" class="label">bridges /</text>
+<text x="1015.0" y="189" text-anchor="middle" class="label">bridge_aliases</text>
+<text x="1015.0" y="201" text-anchor="middle" class="small">桥梁档案与别名</text>
+<rect x="855" y="235" width="320" height="58" rx="8" ry="8" fill="#ffffff" stroke="#fed7aa" stroke-width="1.5"/>
+<text x="1015.0" y="262" text-anchor="middle" class="label">inspection_years</text>
+<text x="1015.0" y="291" text-anchor="middle" class="small">年度检测事实</text>
+<rect x="855" y="325" width="320" height="58" rx="8" ry="8" fill="#ffffff" stroke="#fed7aa" stroke-width="1.5"/>
+<text x="1015.0" y="352" text-anchor="middle" class="label">bridge_components</text>
+<text x="1015.0" y="381" text-anchor="middle" class="small">构件事实</text>
+<rect x="855" y="415" width="320" height="58" rx="8" ry="8" fill="#ffffff" stroke="#fed7aa" stroke-width="1.5"/>
+<text x="1015.0" y="442" text-anchor="middle" class="label">defect_observations</text>
+<text x="1015.0" y="471" text-anchor="middle" class="small">病害观测事实</text>
+<rect x="855" y="505" width="320" height="58" rx="8" ry="8" fill="#ffffff" stroke="#fed7aa" stroke-width="1.5"/>
+<text x="1015.0" y="532" text-anchor="middle" class="label">defect_measurements</text>
+<text x="1015.0" y="561" text-anchor="middle" class="small">尺寸事实</text>
+<rect x="855" y="595" width="320" height="58" rx="8" ry="8" fill="#ffffff" stroke="#fed7aa" stroke-width="1.5"/>
+<text x="1015.0" y="622" text-anchor="middle" class="label">defect_photos</text>
+<text x="1015.0" y="651" text-anchor="middle" class="small">照片事实</text>
+<rect x="855" y="685" width="320" height="58" rx="8" ry="8" fill="#ffffff" stroke="#fed7aa" stroke-width="1.5"/>
+<text x="1015.0" y="712" text-anchor="middle" class="label">condition_ratings</text>
+<text x="1015.0" y="741" text-anchor="middle" class="small">评分事实</text>
+<rect x="555" y="340" width="190" height="92" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="650.0" y="367" text-anchor="middle" class="label">C++ 确认入库逻辑</text>
+<text x="650.0" y="396" text-anchor="middle" class="small">校验契约版本、状态、必填字段</text>
+<path d="M 415,186 L 520,186 L 520,120 L 760,120 L 760,174 L 855,174" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-gray)" stroke-dasharray="5 4"/>
+<rect x="714" y="98" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="760" y="112" text-anchor="middle" class="tiny">只校验</text>
+<path d="M 415,286 L 555,370" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="509" y="348" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="555" y="362" text-anchor="middle" class="tiny">确认后</text>
+<path d="M 415,386 L 555,380" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="509" y="358" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="555" y="372" text-anchor="middle" class="tiny">确认后</text>
+<path d="M 415,486 L 555,395" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="509" y="373" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="555" y="387" text-anchor="middle" class="tiny">确认后</text>
+<path d="M 415,586 L 555,405" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="509" y="383" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="555" y="397" text-anchor="middle" class="tiny">确认后</text>
+<path d="M 415,686 L 555,420" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="509" y="398" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="555" y="412" text-anchor="middle" class="tiny">确认后</text>
+<path d="M 745,365 L 855,264" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="809" y="242" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="855" y="256" text-anchor="middle" class="tiny">写入</text>
+<path d="M 745,380 L 855,354" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="809" y="332" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="855" y="346" text-anchor="middle" class="tiny">写入</text>
+<path d="M 745,395 L 855,444" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="809" y="422" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="855" y="436" text-anchor="middle" class="tiny">写入</text>
+<path d="M 745,410 L 855,534" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="809" y="512" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="855" y="526" text-anchor="middle" class="tiny">写入</text>
+<path d="M 745,425 L 855,624" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="809" y="602" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="855" y="616" text-anchor="middle" class="tiny">写入</text>
+<path d="M 745,440 L 855,714" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="809" y="692" width="92" height="18" rx="9" fill="#ffffff" opacity="0.95"/>
+<text x="855" y="706" text-anchor="middle" class="tiny">写入</text>
+<rect x="500" y="590" width="300" height="70" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.2"/>
+<text x="512" y="612" class="small">bridge_check 不自动覆盖桥梁档案；它只帮助用户确认选中的桥是否与</text>
+<text x="512" y="628" class="small">Word 内容一致。</text>
+<rect x="500" y="700" width="260" height="90" rx="8" fill="#ffffff" stroke="#e5e7eb"/>
+<text x="512" y="720" class="small" font-weight="600">图例</text>
+<line x1="512" y1="742" x2="554" y2="742" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="564" y="746" class="tiny">人工确认后的候选</text>
+<line x1="512" y1="764" x2="554" y2="764" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+<text x="564" y="768" class="tiny">写正式表</text>
+<line x1="512" y1="786" x2="554" y2="786" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-gray)"/>
+<text x="564" y="790" class="tiny">只校验不覆盖</text>
+</svg>
