@@ -58,6 +58,17 @@ AppConfig load_app_config(const std::filesystem::path& path) {
         config.archive_root.generic_string()
     );
 
+    const auto& postgres = root["postgres"];
+    config.postgres.host = get_string_or_default(postgres, "host", config.postgres.host);
+    config.postgres.port = get_int_or_default(postgres, "port", config.postgres.port);
+    config.postgres.database = get_string_or_default(
+        postgres,
+        "database",
+        config.postgres.database
+    );
+    config.postgres.user = get_string_or_default(postgres, "user", config.postgres.user);
+    config.postgres.password = get_string_or_default(postgres, "password", config.postgres.password);
+
     return config;
 }
 

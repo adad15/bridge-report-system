@@ -21,6 +21,13 @@ std::filesystem::path write_config_file() {
   "python_tools": {
     "base_url": "http://127.0.0.1:19081"
   },
+  "postgres": {
+    "host": "127.0.0.1",
+    "port": 15432,
+    "database": "bridge_report_test",
+    "user": "bridge_report_tester",
+    "password": "secret"
+  },
   "archive": {
     "root": "test-archive"
   }
@@ -39,6 +46,11 @@ TEST(AppConfigTest, LoadsConfiguredPortsAndArchiveRoot) {
     EXPECT_EQ(config.port, 19080);
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:19081");
     EXPECT_EQ(config.archive_root.generic_string(), "test-archive");
+    EXPECT_EQ(config.postgres.host, "127.0.0.1");
+    EXPECT_EQ(config.postgres.port, 15432);
+    EXPECT_EQ(config.postgres.database, "bridge_report_test");
+    EXPECT_EQ(config.postgres.user, "bridge_report_tester");
+    EXPECT_EQ(config.postgres.password, "secret");
 }
 
 TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
@@ -48,6 +60,11 @@ TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
     EXPECT_EQ(config.port, 18080);
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:18081");
     EXPECT_EQ(config.archive_root.generic_string(), "archive");
+    EXPECT_EQ(config.postgres.host, "127.0.0.1");
+    EXPECT_EQ(config.postgres.port, 5432);
+    EXPECT_EQ(config.postgres.database, "bridge_report_system");
+    EXPECT_EQ(config.postgres.user, "bridge_report");
+    EXPECT_EQ(config.postgres.password, "bridge_report_dev");
 }
 
 TEST(RuntimePathsTest, CreatesMissingLogDirectory) {
