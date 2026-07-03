@@ -1,0 +1,162 @@
+{
+  "contract": {
+    "name": "BridgeAnnualInspectionData",
+    "version": "1.0",
+    "description": "桥梁年度检查数据交换契约样例"
+  },
+  "import_context": {
+    "source_type": "软件导出Word",
+    "data_scope": "当前年度检测资料",
+    "source_document_name": "绕阳河二号桥2026年度检查报告",
+    "imported_at": "2026-07-03T00:00:00+08:00",
+    "operator": "模块03样例"
+  },
+  "bridge_check": {
+    "bridge_name": "绕阳河二号桥",
+    "inspection_year": 2026,
+    "bridge_code": "RYH-02",
+    "route_name": "示例路线",
+    "source_chapters": [
+      "第二章病害",
+      "第四章总体技术状况评定表"
+    ]
+  },
+  "inspection": {
+    "inspection_type": "年度检查",
+    "inspection_year": 2026,
+    "inspection_date": "2026-05-18",
+    "data_category": "当前年度检测资料",
+    "report_source": "软件导出Word"
+  },
+  "defects": [
+    {
+      "candidate_id": "defect_0001",
+      "observation_system_number": "BHGC-000456",
+      "source_chapter": "第二章病害",
+      "component_name": "主梁",
+      "location_text": "第二跨左幅梁底",
+      "defect_type": "裂缝",
+      "description": "梁底发现纵向裂缝，需现场复核。",
+      "measurement_text": "L=0.8m，W=0.12mm",
+      "measurements": [
+        {
+          "name": "长度",
+          "value": 0.8,
+          "unit": "m"
+        },
+        {
+          "name": "宽度",
+          "value": 0.12,
+          "unit": "mm"
+        }
+      ],
+      "photo_numbers": [
+        "2.1-1"
+      ],
+      "confidence": 0.92,
+      "review_status": "待确认"
+    }
+  ],
+  "photos": [
+    {
+      "photo_id": "photo_0001",
+      "photo_number": "2.1-1",
+      "caption": "主梁梁底裂缝",
+      "source_chapter": "第二章病害",
+      "linked_defect_candidate_id": "defect_0001",
+      "match_status": "高置信候选",
+      "confidence": 0.95,
+      "review_status": "待确认"
+    }
+  ],
+  "ratings": {
+    "overall": {
+      "table_name": "第四章总体技术状况评定表",
+      "total_score": 85.61,
+      "overall_grade": "2类",
+      "confidence": 0.95,
+      "review_status": "待确认"
+    },
+    "structure_parts": [
+      {
+        "structure_part": "上部结构",
+        "structure_score": 86.4,
+        "weight": 0.4,
+        "grade": "2类"
+      },
+      {
+        "structure_part": "下部结构",
+        "structure_score": 88.2,
+        "weight": 0.4,
+        "grade": "2类"
+      },
+      {
+        "structure_part": "桥面系",
+        "structure_score": 81.5,
+        "weight": 0.2,
+        "grade": "2类"
+      }
+    ],
+    "evaluation_parts": [
+      {
+        "evaluation_part": "上部承重构件",
+        "part_score": 84.6,
+        "score_rows": [
+          {
+            "item_name": "主梁",
+            "deduction": 3.2,
+            "score": 84.6,
+            "source_text": "主梁裂缝扣分"
+          }
+        ],
+        "confidence": 0.93,
+        "review_status": "待确认"
+      },
+      {
+        "evaluation_part": "上部一般构件",
+        "part_score": 88.0,
+        "score_rows": [
+          {
+            "item_name": "横隔板",
+            "deduction": 1.0,
+            "score": 88.0,
+            "source_text": "横隔板局部缺损扣分"
+          }
+        ],
+        "confidence": 0.9,
+        "review_status": "待确认"
+      },
+      {
+        "evaluation_part": "支座",
+        "part_score": 86.8,
+        "score_rows": [
+          {
+            "item_name": "板式橡胶支座",
+            "deduction": 2.0,
+            "score": 86.8,
+            "source_text": "支座轻微老化扣分"
+          }
+        ],
+        "confidence": 0.91,
+        "review_status": "待确认"
+      }
+    ]
+  },
+  "comparison_candidates": [],
+  "report_text_candidates": [
+    {
+      "candidate_id": "text_0001",
+      "source_chapter": "第二章病害",
+      "source_table": "病害记录表",
+      "text": "绕阳河二号桥主梁梁底裂缝，L=0.8m，W=0.12mm。"
+    },
+    {
+      "candidate_id": "text_0002",
+      "source_chapter": "第四章总体技术状况评定表",
+      "source_table": "表4.1-2",
+      "text": "总体技术状况评分85.61，等级2类。"
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}
