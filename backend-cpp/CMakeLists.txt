@@ -12,6 +12,7 @@ find_package(GTest CONFIG REQUIRED)
 add_library(bridge_report_backend_core
     src/archive/ArchivePaths.cpp
     src/config/AppConfig.cpp
+    src/contracts/AnnualInspectionContract.cpp
     src/http/Cors.cpp
     src/identity/SystemNumber.cpp
     src/runtime/RuntimePaths.cpp
@@ -48,6 +49,7 @@ endif()
 enable_testing()
 
 add_executable(bridge_report_backend_tests
+    tests/test_annual_inspection_contract.cpp
     tests/test_app_config.cpp
     tests/test_archive_paths.cpp
     tests/test_system_number.cpp
@@ -57,6 +59,11 @@ target_link_libraries(bridge_report_backend_tests
     PRIVATE
         bridge_report_backend_core
         GTest::gtest_main
+)
+
+target_compile_definitions(bridge_report_backend_tests
+    PRIVATE
+        BRIDGE_REPORT_REPOSITORY_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/.."
 )
 
 if(MSVC)
