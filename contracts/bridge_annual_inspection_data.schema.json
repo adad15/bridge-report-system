@@ -1,0 +1,1170 @@
+{
+  "$defs": {
+    "BridgeCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "selected_bridge_system_number": {
+          "title": "Selected Bridge System Number",
+          "type": "string"
+        },
+        "extracted_bridge_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extracted Bridge Name"
+        },
+        "match_status": {
+          "enum": [
+            "匹配",
+            "不匹配",
+            "待人工确认"
+          ],
+          "title": "Match Status",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/WarningItem"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "selected_bridge_system_number",
+        "match_status",
+        "warnings"
+      ],
+      "title": "BridgeCheck",
+      "type": "object"
+    },
+    "ComparisonCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "previous_defect_observation_system_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Previous Defect Observation System Number"
+        },
+        "current_defect_observation_system_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Defect Observation System Number"
+        },
+        "comparison_type": {
+          "enum": [
+            "原病害无明显变化",
+            "原病害发展",
+            "原病害减轻",
+            "原病害修复",
+            "新增病害",
+            "原病害未见",
+            "无法判断"
+          ],
+          "title": "Comparison Type",
+          "type": "string"
+        },
+        "match_basis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComparisonMatchBasis"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "change_summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Change Summary"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "confirmation_status": {
+          "enum": [
+            "待确认",
+            "已确认",
+            "已修改",
+            "已拒绝"
+          ],
+          "title": "Confirmation Status",
+          "type": "string"
+        },
+        "review_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Note"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/WarningItem"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "comparison_type",
+        "confidence",
+        "confirmation_status",
+        "warnings"
+      ],
+      "title": "ComparisonCandidate",
+      "type": "object"
+    },
+    "ComparisonMatchBasis": {
+      "additionalProperties": false,
+      "properties": {
+        "same_component": {
+          "title": "Same Component",
+          "type": "boolean"
+        },
+        "same_defect_type": {
+          "title": "Same Defect Type",
+          "type": "boolean"
+        },
+        "location_similarity": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Location Similarity",
+          "type": "number"
+        },
+        "measurement_change_detected": {
+          "title": "Measurement Change Detected",
+          "type": "boolean"
+        },
+        "photo_number_related": {
+          "title": "Photo Number Related",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "same_component",
+        "same_defect_type",
+        "location_similarity",
+        "measurement_change_detected",
+        "photo_number_related"
+      ],
+      "title": "ComparisonMatchBasis",
+      "type": "object"
+    },
+    "ContractInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "BridgeAnnualInspectionData",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "const": "1.0",
+          "title": "Version",
+          "type": "string"
+        },
+        "generated_at": {
+          "format": "date-time",
+          "title": "Generated At",
+          "type": "string"
+        },
+        "producer": {
+          "title": "Producer",
+          "type": "string"
+        },
+        "parser_name": {
+          "title": "Parser Name",
+          "type": "string"
+        },
+        "parser_version": {
+          "title": "Parser Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "generated_at",
+        "producer",
+        "parser_name",
+        "parser_version"
+      ],
+      "title": "ContractInfo",
+      "type": "object"
+    },
+    "DefectCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "structure_part": {
+          "enum": [
+            "全桥",
+            "上部结构",
+            "下部结构",
+            "桥面系",
+            "其他"
+          ],
+          "title": "Structure Part",
+          "type": "string"
+        },
+        "component_name": {
+          "title": "Component Name",
+          "type": "string"
+        },
+        "component_alias": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Component Alias"
+        },
+        "defect_type": {
+          "title": "Defect Type",
+          "type": "string"
+        },
+        "defect_location": {
+          "title": "Defect Location",
+          "type": "string"
+        },
+        "defect_description": {
+          "title": "Defect Description",
+          "type": "string"
+        },
+        "quantity_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quantity Text"
+        },
+        "measurement_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measurement Text"
+        },
+        "measurements": {
+          "items": {
+            "$ref": "#/$defs/Measurement"
+          },
+          "title": "Measurements",
+          "type": "array"
+        },
+        "photo_numbers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Photo Numbers",
+          "type": "array"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "enum": [
+                "info",
+                "warning",
+                "error"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "remark": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remark"
+        },
+        "source_ref": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "review_status": {
+          "enum": [
+            "待确认",
+            "已确认",
+            "已修改",
+            "已忽略"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        },
+        "review_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Note"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/WarningItem"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "structure_part",
+        "component_name",
+        "defect_type",
+        "defect_location",
+        "defect_description",
+        "measurements",
+        "photo_numbers",
+        "source_ref",
+        "confidence",
+        "review_status",
+        "warnings"
+      ],
+      "title": "DefectCandidate",
+      "type": "object"
+    },
+    "EvaluationPartRating": {
+      "additionalProperties": false,
+      "properties": {
+        "structure_part": {
+          "enum": [
+            "上部结构",
+            "下部结构",
+            "桥面系"
+          ],
+          "title": "Structure Part",
+          "type": "string"
+        },
+        "category_no": {
+          "minimum": 1,
+          "title": "Category No",
+          "type": "integer"
+        },
+        "evaluation_part": {
+          "title": "Evaluation Part",
+          "type": "string"
+        },
+        "part_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Part Score",
+          "type": "number"
+        },
+        "score_rows": {
+          "items": {
+            "$ref": "#/$defs/EvaluationScoreRow"
+          },
+          "title": "Score Rows",
+          "type": "array"
+        },
+        "source_ref": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "review_status": {
+          "enum": [
+            "待确认",
+            "已确认",
+            "已修改",
+            "已忽略"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "structure_part",
+        "category_no",
+        "evaluation_part",
+        "part_score",
+        "score_rows",
+        "source_ref",
+        "confidence",
+        "review_status"
+      ],
+      "title": "EvaluationPartRating",
+      "type": "object"
+    },
+    "EvaluationScoreRow": {
+      "additionalProperties": false,
+      "properties": {
+        "component_count": {
+          "minimum": 0,
+          "title": "Component Count",
+          "type": "integer"
+        },
+        "component_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Component Score",
+          "type": "number"
+        }
+      },
+      "required": [
+        "component_count",
+        "component_score"
+      ],
+      "title": "EvaluationScoreRow",
+      "type": "object"
+    },
+    "ExtractedPhotoFile": {
+      "additionalProperties": false,
+      "properties": {
+        "temporary_file_name": {
+          "title": "Temporary File Name",
+          "type": "string"
+        },
+        "original_caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original Caption"
+        },
+        "archive_relative_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Archive Relative Path"
+        }
+      },
+      "required": [
+        "temporary_file_name"
+      ],
+      "title": "ExtractedPhotoFile",
+      "type": "object"
+    },
+    "ImportContext": {
+      "additionalProperties": false,
+      "properties": {
+        "source_type": {
+          "enum": [
+            "软件导出Word",
+            "正式Word",
+            "Excel病害表",
+            "图片包",
+            "接口同步",
+            "JSON导入"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "file_role": {
+          "enum": [
+            "当前年度检测资料",
+            "历史正式报告",
+            "历史基线资料",
+            "修订资料"
+          ],
+          "title": "File Role",
+          "type": "string"
+        },
+        "archived_file_system_number": {
+          "title": "Archived File System Number",
+          "type": "string"
+        },
+        "import_record_system_number": {
+          "title": "Import Record System Number",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_type",
+        "file_role",
+        "archived_file_system_number",
+        "import_record_system_number"
+      ],
+      "title": "ImportContext",
+      "type": "object"
+    },
+    "InspectionInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "inspection_year": {
+          "maximum": 2200,
+          "minimum": 1900,
+          "title": "Inspection Year",
+          "type": "integer"
+        },
+        "inspection_date": {
+          "format": "date",
+          "title": "Inspection Date",
+          "type": "string"
+        },
+        "report_number": {
+          "title": "Report Number",
+          "type": "string"
+        },
+        "project_name": {
+          "title": "Project Name",
+          "type": "string"
+        },
+        "data_role": {
+          "enum": [
+            "当前年度",
+            "历史基线",
+            "修订版"
+          ],
+          "title": "Data Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "inspection_year",
+        "inspection_date",
+        "report_number",
+        "project_name",
+        "data_role"
+      ],
+      "title": "InspectionInfo",
+      "type": "object"
+    },
+    "Measurement": {
+      "additionalProperties": false,
+      "properties": {
+        "dimension_type": {
+          "title": "Dimension Type",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "source_text": {
+          "title": "Source Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dimension_type",
+        "value",
+        "unit",
+        "source_text"
+      ],
+      "title": "Measurement",
+      "type": "object"
+    },
+    "OverallRating": {
+      "additionalProperties": false,
+      "properties": {
+        "total_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Total Score",
+          "type": "number"
+        },
+        "overall_grade": {
+          "title": "Overall Grade",
+          "type": "string"
+        },
+        "source_ref": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "review_status": {
+          "enum": [
+            "待确认",
+            "已确认",
+            "已修改",
+            "已忽略"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "total_score",
+        "overall_grade",
+        "source_ref",
+        "confidence",
+        "review_status"
+      ],
+      "title": "OverallRating",
+      "type": "object"
+    },
+    "PhotoCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "photo_number": {
+          "title": "Photo Number",
+          "type": "string"
+        },
+        "linked_defect_candidate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Linked Defect Candidate Id"
+        },
+        "extracted_file": {
+          "$ref": "#/$defs/ExtractedPhotoFile"
+        },
+        "match_status": {
+          "enum": [
+            "高置信候选",
+            "待校对",
+            "已确认",
+            "未关联",
+            "已忽略"
+          ],
+          "title": "Match Status",
+          "type": "string"
+        },
+        "source_ref": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "review_status": {
+          "enum": [
+            "待确认",
+            "已确认",
+            "已修改",
+            "已忽略"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/WarningItem"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "photo_number",
+        "extracted_file",
+        "match_status",
+        "source_ref",
+        "confidence",
+        "review_status",
+        "warnings"
+      ],
+      "title": "PhotoCandidate",
+      "type": "object"
+    },
+    "Ratings": {
+      "additionalProperties": false,
+      "properties": {
+        "overall": {
+          "$ref": "#/$defs/OverallRating"
+        },
+        "structure_parts": {
+          "items": {
+            "$ref": "#/$defs/StructurePartRating"
+          },
+          "title": "Structure Parts",
+          "type": "array"
+        },
+        "evaluation_parts": {
+          "items": {
+            "$ref": "#/$defs/EvaluationPartRating"
+          },
+          "title": "Evaluation Parts",
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/WarningItem"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "overall",
+        "structure_parts",
+        "evaluation_parts",
+        "warnings"
+      ],
+      "title": "Ratings",
+      "type": "object"
+    },
+    "ReportTextCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "section_key": {
+          "title": "Section Key",
+          "type": "string"
+        },
+        "section_title": {
+          "title": "Section Title",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage"
+        },
+        "source_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "review_status": {
+          "enum": [
+            "待确认",
+            "已确认",
+            "已修改",
+            "已忽略"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "section_key",
+        "section_title",
+        "text",
+        "review_status"
+      ],
+      "title": "ReportTextCandidate",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "chapter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chapter"
+        },
+        "table_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Table Title"
+        },
+        "table_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Table Index"
+        },
+        "row_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Row Index"
+        },
+        "column_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Column Name"
+        },
+        "raw_row_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Row Text"
+        },
+        "photo_area_caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Area Caption"
+        },
+        "file_role": {
+          "anyOf": [
+            {
+              "enum": [
+                "当前年度检测资料",
+                "历史正式报告",
+                "历史基线资料",
+                "修订资料"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Role"
+        },
+        "paragraph_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Paragraph Index"
+        }
+      },
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "StructurePartRating": {
+      "additionalProperties": false,
+      "properties": {
+        "structure_part": {
+          "enum": [
+            "上部结构",
+            "下部结构",
+            "桥面系"
+          ],
+          "title": "Structure Part",
+          "type": "string"
+        },
+        "structure_score": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Structure Score",
+          "type": "number"
+        },
+        "weight": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Weight",
+          "type": "number"
+        },
+        "grade": {
+          "title": "Grade",
+          "type": "string"
+        },
+        "source_ref": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "review_status": {
+          "enum": [
+            "待确认",
+            "已确认",
+            "已修改",
+            "已忽略"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "structure_part",
+        "structure_score",
+        "weight",
+        "grade",
+        "source_ref",
+        "confidence",
+        "review_status"
+      ],
+      "title": "StructurePartRating",
+      "type": "object"
+    },
+    "WarningItem": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "target_candidate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Candidate Id"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "severity"
+      ],
+      "title": "WarningItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "contract": {
+      "$ref": "#/$defs/ContractInfo"
+    },
+    "import_context": {
+      "$ref": "#/$defs/ImportContext"
+    },
+    "bridge_check": {
+      "$ref": "#/$defs/BridgeCheck"
+    },
+    "inspection": {
+      "$ref": "#/$defs/InspectionInfo"
+    },
+    "defects": {
+      "items": {
+        "$ref": "#/$defs/DefectCandidate"
+      },
+      "title": "Defects",
+      "type": "array"
+    },
+    "photos": {
+      "items": {
+        "$ref": "#/$defs/PhotoCandidate"
+      },
+      "title": "Photos",
+      "type": "array"
+    },
+    "ratings": {
+      "$ref": "#/$defs/Ratings"
+    },
+    "comparison_candidates": {
+      "items": {
+        "$ref": "#/$defs/ComparisonCandidate"
+      },
+      "title": "Comparison Candidates",
+      "type": "array"
+    },
+    "report_text_candidates": {
+      "items": {
+        "$ref": "#/$defs/ReportTextCandidate"
+      },
+      "title": "Report Text Candidates",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "$ref": "#/$defs/WarningItem"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "errors": {
+      "items": {
+        "$ref": "#/$defs/WarningItem"
+      },
+      "title": "Errors",
+      "type": "array"
+    }
+  },
+  "required": [
+    "contract",
+    "import_context",
+    "bridge_check",
+    "inspection",
+    "defects",
+    "photos",
+    "ratings",
+    "comparison_candidates",
+    "report_text_candidates",
+    "warnings",
+    "errors"
+  ],
+  "title": "BridgeAnnualInspectionData",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

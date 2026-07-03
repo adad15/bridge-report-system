@@ -10,8 +10,11 @@ ReviewStatus = Literal["待确认", "已确认", "已修改", "已忽略"]
 ComparisonConfirmationStatus = Literal["待确认", "已确认", "已修改", "已拒绝"]
 Severity = Literal["info", "warning", "error"]
 StructurePart = Literal["全桥", "上部结构", "下部结构", "桥面系", "其他"]
+RatingStructurePart = Literal["上部结构", "下部结构", "桥面系"]
 SourceType = Literal["软件导出Word", "正式Word", "Excel病害表", "图片包", "接口同步", "JSON导入"]
+FileRole = Literal["当前年度检测资料", "历史正式报告", "历史基线资料", "修订资料"]
 DataRole = Literal["当前年度", "历史基线", "修订版"]
+BridgeMatchStatus = Literal["匹配", "不匹配", "待人工确认"]
 PhotoMatchStatus = Literal["高置信候选", "待校对", "已确认", "未关联", "已忽略"]
 ComparisonType = Literal[
     "原病害无明显变化",
@@ -23,153 +26,145 @@ ComparisonType = Literal[
     "无法判断",
 ]
 
-
 class ContractModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class DiagnosticIssue(ContractModel):
+class WarningItem(ContractModel):
     code: str
     message: str
     severity: Severity
-    path: str | None = None
+    target_candidate_id: str | None = None
 
 
 class SourceRef(ContractModel):
-    source_document_id: str | None = None
-    source_document_name: str | None = None
-    source_chapter: str | None = None
-    source_table: str | None = None
-    source_row: int | None = Field(default=None, ge=0)
-    raw_text: str | None = None
+    chapter: str | None = None
+    table_title: str | None = None
+    table_index: int | None = Field(default=None, ge=0)
+    row_index: int | None = Field(default=None, ge=0)
+    column_name: str | None = None
+    raw_row_text: str | None = None
+    photo_area_caption: str | None = None
+    file_role: FileRole | None = None
+    paragraph_index: int | None = Field(default=None, ge=0)
 
 
 class ContractInfo(ContractModel):
     name: Literal["BridgeAnnualInspectionData"]
-    version: str
-    description: str | None = None
+    version: Literal["1.0"]
+    generated_at: datetime
+    producer: str
+    parser_name: str
+    parser_version: str
 
 
 class ImportContext(ContractModel):
     source_type: SourceType
-    data_scope: str
-    source_document_name: str
-    imported_at: datetime
-    operator: str
-    data_role: DataRole | None = None
-
-
-class SourceDocument(ContractModel):
-    source_document_id: str
-    source_type: SourceType
-    data_role: DataRole
-    document_name: str
-    imported_at: datetime | None = None
+    file_role: FileRole
+    archived_file_system_number: str
+    import_record_system_number: str
 
 
 class BridgeCheck(ContractModel):
-    bridge_name: str | None = None
-    inspection_year: int = Field(ge=1900, le=2200)
-    bridge_code: str | None = None
-    route_name: str | None = None
-    source_chapters: list[str] = Field(default_factory=list)
-    selected_bridge_system_number: str | None = None
+    selected_bridge_system_number: str
     extracted_bridge_name: str | None = None
-    match_status: str | None = None
-    warnings: list[DiagnosticIssue] = Field(default_factory=list)
+    match_status: BridgeMatchStatus
+    warnings: list[WarningItem]
 
 
 class InspectionInfo(ContractModel):
-    inspection_type: str
     inspection_year: int = Field(ge=1900, le=2200)
     inspection_date: date
-    data_category: str
-    report_source: SourceType
-    report_number: str | None = None
-    project_name: str | None = None
-    data_role: DataRole | None = None
+    report_number: str
+    project_name: str
+    data_role: DataRole
 
 
 class Measurement(ContractModel):
-    name: str
+    dimension_type: str
     value: float
     unit: str
+    source_text: str
 
 
 class DefectCandidate(ContractModel):
     candidate_id: str
-    observation_system_number: str | None = None
-    source_chapter: str | None = None
+    structure_part: StructurePart
     component_name: str
-    location_text: str
+    component_alias: str | None = None
     defect_type: str
-    description: str
+    defect_location: str
+    defect_description: str
+    quantity_text: str | None = None
     measurement_text: str | None = None
-    measurements: list[Measurement] = Field(default_factory=list)
-    photo_numbers: list[str] = Field(default_factory=list)
+    measurements: list[Measurement]
+    photo_numbers: list[str]
+    severity: Severity | None = None
+    remark: str | None = None
+    source_ref: SourceRef
     confidence: float = Field(ge=0, le=1)
     review_status: ReviewStatus
-    source_ref: SourceRef | None = None
     review_note: str | None = None
-    warnings: list[DiagnosticIssue] = Field(default_factory=list)
+    warnings: list[WarningItem]
+
+
+class ExtractedPhotoFile(ContractModel):
+    temporary_file_name: str
+    original_caption: str | None = None
+    archive_relative_path: str | None = None
 
 
 class PhotoCandidate(ContractModel):
-    photo_id: str
+    candidate_id: str
     photo_number: str
-    caption: str | None = None
-    source_chapter: str | None = None
     linked_defect_candidate_id: str | None = None
+    extracted_file: ExtractedPhotoFile
     match_status: PhotoMatchStatus
+    source_ref: SourceRef
     confidence: float = Field(ge=0, le=1)
     review_status: ReviewStatus
-    source_ref: SourceRef | None = None
-    photo_area_caption: str | None = None
-    review_note: str | None = None
-    warnings: list[DiagnosticIssue] = Field(default_factory=list)
+    warnings: list[WarningItem]
 
 
 class OverallRating(ContractModel):
-    table_name: str
     total_score: float = Field(ge=0, le=100)
     overall_grade: str
+    source_ref: SourceRef
     confidence: float = Field(ge=0, le=1)
     review_status: ReviewStatus
-    source_ref: SourceRef | None = None
 
 
 class StructurePartRating(ContractModel):
-    structure_part: StructurePart
+    structure_part: RatingStructurePart
     structure_score: float = Field(ge=0, le=100)
     weight: float = Field(ge=0, le=1)
     grade: str
-    confidence: float | None = Field(default=None, ge=0, le=1)
-    review_status: ReviewStatus | None = None
-    source_ref: SourceRef | None = None
+    source_ref: SourceRef
+    confidence: float = Field(ge=0, le=1)
+    review_status: ReviewStatus
 
 
 class EvaluationScoreRow(ContractModel):
-    item_name: str
-    deduction: float | None = Field(default=None, ge=0)
-    score: float | None = Field(default=None, ge=0, le=100)
-    component_score: float | None = Field(default=None, ge=0, le=100)
-    source_text: str | None = None
+    component_count: int = Field(ge=0)
+    component_score: float = Field(ge=0, le=100)
 
 
 class EvaluationPartRating(ContractModel):
+    structure_part: RatingStructurePart
+    category_no: int = Field(ge=1)
     evaluation_part: str
     part_score: float = Field(ge=0, le=100)
-    score_rows: list[EvaluationScoreRow] = Field(default_factory=list)
+    score_rows: list[EvaluationScoreRow]
+    source_ref: SourceRef
     confidence: float = Field(ge=0, le=1)
     review_status: ReviewStatus
-    source_ref: SourceRef | None = None
 
 
 class Ratings(ContractModel):
     overall: OverallRating
     structure_parts: list[StructurePartRating]
     evaluation_parts: list[EvaluationPartRating]
-    warnings: list[DiagnosticIssue] = Field(default_factory=list)
+    warnings: list[WarningItem]
 
 
 class ComparisonMatchBasis(ContractModel):
@@ -190,30 +185,28 @@ class ComparisonCandidate(ContractModel):
     confidence: float = Field(ge=0, le=1)
     confirmation_status: ComparisonConfirmationStatus
     review_note: str | None = None
-    warnings: list[DiagnosticIssue] = Field(default_factory=list)
+    warnings: list[WarningItem]
 
 
 class ReportTextCandidate(ContractModel):
     candidate_id: str
-    source_chapter: str | None = None
-    source_table: str | None = None
+    section_key: str
+    section_title: str
     text: str
     usage: str | None = None
     source_ref: SourceRef | None = None
-    confidence: float | None = Field(default=None, ge=0, le=1)
-    review_status: ReviewStatus | None = None
+    review_status: ReviewStatus
 
 
 class BridgeAnnualInspectionData(ContractModel):
     contract: ContractInfo
     import_context: ImportContext
-    source_documents: list[SourceDocument] = Field(default_factory=list)
     bridge_check: BridgeCheck
     inspection: InspectionInfo
     defects: list[DefectCandidate]
     photos: list[PhotoCandidate]
     ratings: Ratings
-    comparison_candidates: list[ComparisonCandidate] = Field(default_factory=list)
-    report_text_candidates: list[ReportTextCandidate] = Field(default_factory=list)
-    warnings: list[DiagnosticIssue] = Field(default_factory=list)
-    errors: list[DiagnosticIssue] = Field(default_factory=list)
+    comparison_candidates: list[ComparisonCandidate]
+    report_text_candidates: list[ReportTextCandidate]
+    warnings: list[WarningItem]
+    errors: list[WarningItem]
