@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT
 
-更新时间：2026-07-01
+更新时间：2026-07-03
 
 ## 项目一句话
 
@@ -12,12 +12,23 @@
 
 - `PROJECT_CONTEXT.md`
 - `docs/superpowers/specs/2026-07-01-bridge-report-system-design.md`
+- `docs/superpowers/specs/2026-07-01-modular-technical-doc-review-design.md`
+- `docs/superpowers/specs/modules/01-tech-stack-and-project-skeleton.md`
+- `docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md`
 
 推荐首条提示：
 
 ```text
-请先读取 PROJECT_CONTEXT.md 和 docs/superpowers/specs/2026-07-01-bridge-report-system-design.md，然后按其中确认的设计继续协助我开发桥梁报告系统。
+请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/2026-07-01-bridge-report-system-design.md、docs/superpowers/specs/modules/01-tech-stack-and-project-skeleton.md、docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md，然后按照 Inline Execution，为第二模块 02-postgresql-schema-and-file-archive 编写实施计划。先不要写代码。
 ```
+
+## 当前进度
+
+- 模块 1 `01-tech-stack-and-project-skeleton` 已完成实施并提交到 GitHub。
+- 模块 2 `02-postgresql-schema-and-file-archive` 已完成实施：数据库迁移、系统编号工具、归档路径工具和数据库 smoke test 已通过。
+- 模块 2 设计文档提交号：`52ee0ab docs: add module 02 schema and archive design`。
+- 下一步建议进入模块 3 `03-bridge-annual-inspection-data-contract`，先设计 C++ 与 Python 之间的年度检测数据 JSON 契约。
+- 当前协作方式采用 Inline Execution，不使用 Subagent-Driven。
 
 ## 已确认方向
 
@@ -44,9 +55,60 @@
 - 以后可扩展 `ExcelInspectionImporter`、`ApiInspectionImporter`、`StructuredJsonImporter`、`DatabaseSyncImporter`、`ManualEntryImporter`。
 - PostgreSQL 是事实主库。
 - Word、图片、模板、附件和生成报告放在文件归档目录。
+- C++ 主服务是唯一事实写入入口，Python 工具服务不直接写 PostgreSQL。
+- Python 工具服务通过本地 HTTP JSON API 被 C++ 调用。
+- 前端只直接调用 C++ 主服务，不直接调用 Python 工具服务。
 - Milvus 只做相似报告段落、相似病害和历史写法检索，不存事实。
 - AI 只能润色文字或给出参考写法，不能创造、修改或判断病害事实。
 - 所有自动抽取和生成内容都要保留来源、置信度和人工确认状态。
+
+## 模块 1 已确认工程底座
+
+- C++ 主后端：Drogon。
+- C++ 构建：CMake + Visual Studio 2022 生成器。
+- C++ 依赖管理：vcpkg，当前使用 `D:\vcpkg`。
+- Python 工具服务：FastAPI。
+- Python 依赖管理：uv + `pyproject.toml`。
+- 前端：React + TypeScript + Vite。
+- 数据库：PostgreSQL。
+- 数据库迁移：第一版使用明确 SQL 文件，不引入 SQLAlchemy/Alembic。
+- 本地端口默认：
+  - C++ 主服务：`127.0.0.1:18080`
+  - Python 工具服务：`127.0.0.1:18081`
+  - Vite 前端：`127.0.0.1:5173`
+  - PostgreSQL：`127.0.0.1:5432`
+- 前端开发服务跨端口调用 C++ 主服务时，需要 C++ 返回本地开发 CORS 头。
+
+## 模块 2 已确认数据原则
+
+- PostgreSQL 核心表第一期共 14 张：
+  - 桥梁表
+  - 桥梁别名表
+  - 年度检测表
+  - 归档文件表
+  - 导入记录表
+  - 导入文件关联表
+  - 桥梁构件表
+  - 构件别名表
+  - 病害观测表
+  - 病害尺寸表
+  - 病害照片表
+  - 技术状况评定表
+  - 病害线索表
+  - 病害对比表
+- 桥梁基本信息以系统数据库为准，Word 不作为桥梁基础档案来源。
+- 第一期导入流程必须先选择已有桥梁，再上传 Word。
+- 桥梁构件表是正式表，但第一期不要求导入前录完整全桥构件清单；Word 中出现病害的构件，经人工确认后逐步沉淀。
+- 第一阶段不单独建候选表，Word 解析结果先存 `导入记录表.解析结果JSON`。
+- 人工校对确认后，C++ 主服务再把候选 JSON 写入正式业务表。
+- 用户导入 Word 前手动全选并按 F9 刷新照片编号域。
+- 病害检查表中的照片编号列作为照片关联主依据，后面照片区编号作为校验依据。
+- 同一座桥同一个检测年度可以有多条导入记录，但只能有一份当前有效的年度检测数据。
+- 同桥同年已确认后再次导入，不自动覆盖；确认修订版后新版本号递增，旧版标为 `已被修订`。
+- 文件归档默认根目录为 `archive/`，后续可配置到项目外路径。
+- 数据库存归档相对路径，不存写死绝对路径。
+- 正式报告文件名可保留科室要求格式，例如 `Q202604001-JZ-019黑山县S213库盘线袁海亮桥定期检测报告-2类.docx`。
+- 第一阶段暂不单独设计维护记录表、章节草稿表、报告模板表、生成报告表。
 
 ## 核心模块
 
@@ -115,6 +177,7 @@
 - `DefectObservation` 是某一年报告里的一条病害观测。
 - `DefectThread` 是跨年份追踪的同一处或同一类持续病害。
 - `DefectComparison` 是上一年和今年病害之间的对比关系。
+- `MaintenanceRecord` 是后续扩展模型，模块 2 第一阶段不单独建维护记录表。
 
 ## 第一阶段必须生成的章节
 
@@ -152,16 +215,15 @@
 
 ## 下一步建议
 
-进入新项目开发窗口后，先做实施计划，不急着写大量代码。
+进入新项目开发窗口后，先做模块 2 实施计划，不急着写代码。
 
 推荐下一步：
 
-1. 确认技术栈。
-2. 设计 PostgreSQL schema 初稿。
-3. 设计文件归档目录。
-4. 定义 `BridgeAnnualInspectionData` 的 TypeScript/Python 数据结构。
-5. 规划第一阶段页面和 API。
-6. 用绕阳河二号桥样例做 Word 解析原型。
+1. 基于 `docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md` 编写实施计划。
+2. 实施计划采用 Inline Execution。
+3. 第二模块实施优先做数据库迁移 SQL、系统编号生成、归档路径工具、基础 seed/test。
+4. 计划写完并经用户确认后，再开始写代码。
+5. 模块 2 完成后，再讨论 `03-bridge-annual-inspection-data-contract`。
 
 ## 设计文档
 
@@ -172,3 +234,11 @@
 分块开发与技术文档评审机制见：
 
 `docs/superpowers/specs/2026-07-01-modular-technical-doc-review-design.md`
+
+模块 1 技术栈与项目骨架见：
+
+`docs/superpowers/specs/modules/01-tech-stack-and-project-skeleton.md`
+
+模块 2 PostgreSQL 核心表与文件归档见：
+
+`docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md`
