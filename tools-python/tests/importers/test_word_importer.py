@@ -323,6 +323,23 @@ def test_parse_rating_tables_rejects_partial_headers_with_numeric_overall_row() 
     assert exc_info.value.code == "rating_table_not_found"
 
 
+def test_parse_rating_tables_requires_standalone_score_header() -> None:
+    table = DocxTable(
+        index=0,
+        title="总体技术状况评定表",
+        chapter="第四章 全桥技术状况综合评定",
+        rows=[
+            ["层级", "结构部位", "类别编号", "评价部件", "权重", "等级", "构件评分"],
+            ["全桥", "全桥", "", "全桥", "", "2类", "3:86.62"],
+        ],
+    )
+
+    with pytest.raises(WordImportError) as exc_info:
+        parse_rating_tables([table])
+
+    assert exc_info.value.code == "rating_table_not_found"
+
+
 def test_parse_rating_tables_skips_malformed_fourth_chapter_rating_candidate() -> None:
     table = DocxTable(
         index=0,
