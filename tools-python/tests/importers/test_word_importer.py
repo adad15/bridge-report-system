@@ -255,7 +255,7 @@ def test_extract_and_match_photos_links_caption_to_defect(tmp_path: Path) -> Non
 
 def test_find_photo_captions_ignores_dates_without_caption_prefix() -> None:
     document = DocxBlocks(
-        paragraph_texts=["检测日期 2026-05-18", "照片2.1-1 主梁裂缝"],
+        paragraph_texts=["检测日期 2026-05-18", "照片 2026-05-18", "照片2.1-1 主梁裂缝"],
         tables=[],
     )
 

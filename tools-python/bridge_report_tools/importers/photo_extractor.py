@@ -15,7 +15,7 @@ DOCUMENT_XML_PATH = "word/document.xml"
 IMAGE_RELATIONSHIP_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
 RELATIONSHIP_NAMESPACE = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 RELATIONSHIP_EMBED_ATTRIBUTE = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
-CAPTION_PATTERN = re.compile(r"(?:照片|图)\s*(?P<number>\d+(?:\.\d+)?-\d+)")
+CAPTION_PATTERN = re.compile(r"(?:照片|图)\s*(?P<number>\d+(?:\.\d+)+-\d+)")
 
 
 def find_photo_captions(document: DocxBlocks) -> list[tuple[str, str]]:
