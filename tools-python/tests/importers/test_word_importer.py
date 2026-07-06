@@ -1,10 +1,12 @@
 from pathlib import Path
 
 import pytest
+from docx import Document
 from pydantic import ValidationError
 
 from bridge_report_tools.contracts.annual_inspection import DataRole, FileRole, SourceType
 from bridge_report_tools.importers.word_context import ImportMode, WordImportRequest
+from tests.importers.docx_fixtures import create_sample_docx, write_png
 
 
 def valid_request(tmp_path: Path) -> WordImportRequest:
@@ -118,3 +120,15 @@ def test_type_aliases_match_contract_literals() -> None:
     assert file_role == "当前年度检测资料"
     assert data_role == "当前年度"
     assert import_mode == "已有桥年度导入"
+
+
+def test_dynamic_docx_fixture_contains_expected_tables(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    docx_path = create_sample_docx(tmp_path / "sample.docx", image_path)
+
+    document = Document(str(docx_path))
+
+    assert len(document.tables) == 2
+    assert document.tables[0].rows[0].cells[0].text == "构件"
+    assert document.tables[1].rows[0].cells[0].text == "层级"
