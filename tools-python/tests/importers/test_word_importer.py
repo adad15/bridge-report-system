@@ -8,8 +8,9 @@ from bridge_report_tools.contracts.annual_inspection import DataRole, FileRole, 
 from bridge_report_tools.importers.defect_tables import parse_defect_tables
 from bridge_report_tools.importers.docx_reader import DocxTable
 from bridge_report_tools.importers.docx_reader import read_docx_blocks
+from bridge_report_tools.importers.photo_extractor import extract_and_match_photos
 from bridge_report_tools.importers.word_context import ImportMode, WordImportRequest
-from tests.importers.docx_fixtures import create_sample_docx, write_png
+from tests.importers.docx_fixtures import add_defect_table, add_photo, add_rating_table, create_sample_docx, write_png
 
 
 def valid_request(tmp_path: Path) -> WordImportRequest:
@@ -228,3 +229,46 @@ def test_parse_defect_tables_keeps_row_level_warnings() -> None:
     warning_codes = [warning.code for warning in defects[0].warnings]
     assert "measurement_parse_low_confidence" in warning_codes
     assert "photo_number_missing" in warning_codes
+
+
+def test_extract_and_match_photos_links_caption_to_defect(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    docx_path = create_sample_docx(tmp_path / "sample.docx", image_path)
+    document = read_docx_blocks(docx_path)
+    defects, _, _ = parse_defect_tables(document.tables)
+    photo_output_dir = tmp_path / "out"
+
+    photos, temporary_files, warnings = extract_and_match_photos(docx_path, document, defects, photo_output_dir)
+
+    assert warnings == []
+    assert temporary_files == ["photo_0001.png"]
+    assert (photo_output_dir / "photo_0001.png").exists()
+    assert len(photos) == 1
+    assert photos[0].photo_number == "2.1-1"
+    assert photos[0].linked_defect_candidate_id == "defect_0001"
+    assert photos[0].match_status == "高置信候选"
+    assert photos[0].extracted_file.temporary_file_name == "photo_0001.png"
+    assert photos[0].extracted_file.original_caption == "照片2.1-1 主梁梁底裂缝"
+
+
+def test_extract_and_match_photos_keeps_unreferenced_photo_warning(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    docx_path = tmp_path / "sample.docx"
+    document_obj = Document()
+    add_defect_table(document_obj)
+    add_photo(document_obj, image_path, "照片2.1-3 桥面铺装局部破损")
+    add_rating_table(document_obj)
+    document_obj.save(docx_path)
+    document = read_docx_blocks(docx_path)
+    defects, _, _ = parse_defect_tables(document.tables)
+
+    photos, temporary_files, warnings = extract_and_match_photos(docx_path, document, defects, tmp_path / "out")
+
+    assert warnings == []
+    assert temporary_files == ["photo_0001.png"]
+    assert photos[0].photo_number == "2.1-3"
+    assert photos[0].linked_defect_candidate_id is None
+    assert photos[0].match_status == "未关联"
+    assert photos[0].warnings[0].code == "photo_not_referenced_by_defect"
