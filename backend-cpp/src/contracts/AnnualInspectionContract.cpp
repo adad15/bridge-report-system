@@ -9,6 +9,7 @@
 namespace bridge_report::contracts {
 namespace {
 
+// 统一生成问题路径，让校验错误可以准确指到 JSON 对象成员。
 std::string member_path(const std::string& base_path, const std::string& member) {
     if (base_path.empty()) {
         return member;
@@ -16,10 +17,12 @@ std::string member_path(const std::string& base_path, const std::string& member)
     return base_path + "." + member;
 }
 
+// 数组元素路径沿用 JSONPath 风格，便于定位第几条病害、照片或评分。
 std::string indexed_path(const std::string& base_path, Json::ArrayIndex index) {
     return base_path + "[" + std::to_string(index) + "]";
 }
 
+// 必填数组必须显式出现，即使为空也要由解析器写出，避免前端区分不了“空”和“漏字段”。
 bool require_array_member(const Json::Value& object, const std::string& base_path, const std::string& member, ContractValidationResult& result) {
     const auto path = member_path(base_path, member);
     if (!object.isObject() || !object.isMember(member)) {
@@ -33,6 +36,7 @@ bool require_array_member(const Json::Value& object, const std::string& base_pat
     return true;
 }
 
+// 必填对象同样要求显式出现，保证候选 JSON 的骨架稳定。
 bool require_object_member(const Json::Value& object, const std::string& base_path, const std::string& member, ContractValidationResult& result) {
     const auto path = member_path(base_path, member);
     if (!object.isObject() || !object.isMember(member)) {
@@ -46,6 +50,7 @@ bool require_object_member(const Json::Value& object, const std::string& base_pa
     return true;
 }
 
+// 自动抽取对象必须带 0 到 1 的置信度，供校对工作台排序和提示风险。
 void require_confidence(const Json::Value& object, const std::string& base_path, ContractValidationResult& result) {
     const auto path = member_path(base_path, "confidence");
     if (!object.isObject() || !object.isMember("confidence") || !object["confidence"].isNumeric()) {
@@ -59,6 +64,7 @@ void require_confidence(const Json::Value& object, const std::string& base_path,
     }
 }
 
+// C++ 先确认契约名和版本，防止旧解析器输出被当成新契约处理。
 void validate_contract_info(const Json::Value& root, ContractValidationResult& result) {
     if (!require_object_member(root, "", "contract", result)) {
         return;
@@ -73,6 +79,7 @@ void validate_contract_info(const Json::Value& root, ContractValidationResult& r
     }
 }
 
+// 病害候选的来源、尺寸数组、照片编号数组和警告数组都是校对流程必需字段。
 void validate_defect(const Json::Value& defect, const std::string& path, ContractValidationResult& result) {
     if (!defect.isObject()) {
         result.add_issue(path, "must be an object");
@@ -86,6 +93,7 @@ void validate_defect(const Json::Value& defect, const std::string& path, Contrac
     require_confidence(defect, path, result);
 }
 
+// 照片候选必须同时保留抽取文件信息和来源证据，后续人工确认后才写正式照片表。
 void validate_photo(const Json::Value& photo, const std::string& path, ContractValidationResult& result) {
     if (!photo.isObject()) {
         result.add_issue(path, "must be an object");
@@ -98,6 +106,7 @@ void validate_photo(const Json::Value& photo, const std::string& path, ContractV
     require_confidence(photo, path, result);
 }
 
+// 对比候选由事实入库后生成，这里只校验通用风险字段和置信度。
 void validate_comparison_candidate(const Json::Value& candidate, const std::string& path, ContractValidationResult& result) {
     if (!candidate.isObject()) {
         result.add_issue(path, "must be an object");
@@ -123,6 +132,7 @@ void validate_evaluation_part(const Json::Value& part, const std::string& path, 
         return;
     }
 
+    // 表 4.1-2 中“评价部件”只有评分，等级最小单元是结构分部。
     if (part.isMember("grade")) {
         result.add_issue(member_path(path, "grade"), "is not allowed");
     }
@@ -131,6 +141,7 @@ void validate_evaluation_part(const Json::Value& part, const std::string& path, 
     require_confidence(part, path, result);
 }
 
+// 第四章评分整体按“全桥、结构分部、评价部件”三层读取，不在这里重新计算评分。
 void validate_ratings(const Json::Value& root, ContractValidationResult& result) {
     if (!require_object_member(root, "", "ratings", result)) {
         return;
@@ -158,6 +169,7 @@ void validate_ratings(const Json::Value& root, ContractValidationResult& result)
     require_array_member(ratings, "ratings", "warnings", result);
 }
 
+// 顶层数组固定写出，保证 Python、C++ 和前端看到的是同一份候选 JSON 骨架。
 void validate_top_level_arrays(const Json::Value& root, ContractValidationResult& result) {
     require_array_member(root, "", "defects", result);
     require_array_member(root, "", "photos", result);
@@ -167,13 +179,14 @@ void validate_top_level_arrays(const Json::Value& root, ContractValidationResult
     require_array_member(root, "", "errors", result);
 }
 
+// 这些顶层对象是导入任务、桥梁校验和年度信息的最低上下文。
 void validate_required_top_level_members(const Json::Value& root, ContractValidationResult& result) {
     require_object_member(root, "", "import_context", result);
     require_object_member(root, "", "bridge_check", result);
     require_object_member(root, "", "inspection", result);
 }
 
-}  // namespace
+}  // 匿名命名空间
 
 void ContractValidationResult::add_issue(std::string path, std::string message) {
     issues_.push_back({std::move(path), std::move(message)});
@@ -208,6 +221,7 @@ ContractValidationResult validate_bridge_annual_inspection_data(const Json::Valu
         return result;
     }
 
+    // 先校验骨架，再深入检查候选数组，便于一次返回多条问题而不是遇错即停。
     validate_contract_info(root, result);
     validate_required_top_level_members(root, result);
     validate_top_level_arrays(root, result);
@@ -237,4 +251,4 @@ ContractValidationResult validate_bridge_annual_inspection_data(const Json::Valu
     return result;
 }
 
-}  // namespace bridge_report::contracts
+}  // 命名空间 bridge_report::contracts

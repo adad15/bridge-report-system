@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT
 
-更新时间：2026-07-03
+更新时间：2026-07-06
 
 ## 项目一句话
 
@@ -15,11 +15,15 @@
 - `docs/superpowers/specs/2026-07-01-modular-technical-doc-review-design.md`
 - `docs/superpowers/specs/modules/01-tech-stack-and-project-skeleton.md`
 - `docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md`
+- `docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md`
 
 推荐首条提示：
 
 ```text
-请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/2026-07-01-bridge-report-system-design.md、docs/superpowers/specs/modules/01-tech-stack-and-project-skeleton.md、docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md，然后按照 Inline Execution，为第二模块 02-postgresql-schema-and-file-archive 编写实施计划。先不要写代码。
+继续 bridge-report-system 项目。仓库路径：D:\vs2022 code\bridge-report-system。
+当前应该在分支 feature/04-word-importer-prototype。
+模块 01、02、03 已完成，现在开始讨论并编写模块 04：Word 导入原型。
+请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/2026-07-01-bridge-report-system-design.md、docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md、docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md，然后开始模块 04 的需求讨论和实施计划。先不要写代码。
 ```
 
 ## 当前进度
@@ -27,8 +31,10 @@
 - 模块 1 `01-tech-stack-and-project-skeleton` 已完成实施并提交到 GitHub。
 - 模块 2 `02-postgresql-schema-and-file-archive` 已完成实施：数据库迁移、系统编号工具、归档路径工具和数据库 smoke test 已通过。
 - 模块 2 设计文档提交号：`52ee0ab docs: add module 02 schema and archive design`。
-- 下一步建议进入模块 3 `03-bridge-annual-inspection-data-contract`，先设计 C++ 与 Python 之间的年度检测数据 JSON 契约。
-- 当前协作方式采用 Inline Execution，不使用 Subagent-Driven。
+- 模块 3 `03-bridge-annual-inspection-data-contract` 已完成实施并推送到 GitHub。
+- 模块 3 已定义并实现 `BridgeAnnualInspectionData` JSON 契约、JSON Schema、Python Pydantic 模型、C++ JsonCpp 校验器和前端 TypeScript 类型/运行时校验。
+- 当前分支已切到 `feature/04-word-importer-prototype`，基点是模块 3 最新提交 `ef27844 docs: add module 03 plan and diagrams`。
+- 下一步进入模块 4 `04-word-importer-prototype`，先讨论需求并编写实施计划。
 
 ## 已确认方向
 
@@ -38,20 +44,22 @@
 - 第一阶段主流程：
   1. 创建或选择桥梁。
   2. 创建年度检测任务。
-  3. 导入今年数据源。
-  4. 导入上一年正式报告，或选择系统已有上一年度数据。
-  5. 抽取病害表、照片和第四章综合评定。
-  6. 人工校对病害事实。
-  7. 生成并确认历史病害对比。
-  8. 生成章节草稿。
-  9. 生成完整正式 Word。
-  10. 归档今年资料，作为下一年历史数据。
+  3. 导入第 N 年 Word 数据源。
+  4. 抽取第 N 年病害表、照片和第四章综合评定。
+  5. 人工校对第 N 年病害事实。
+  6. C++ 主服务写入第 N 年正式事实。
+  7. 从 PostgreSQL 读取第 N-1 年事实，生成历史病害对比候选。
+  8. 人工确认历史病害对比。
+  9. 生成章节草稿。
+  10. 生成完整正式 Word。
+  11. 归档第 N 年资料，作为下一年历史数据。
 
 ## 关键架构原则
 
 - 输入形式可以换，年度结构化数据模型要稳定。
 - 今年数据导入必须通过 `Importers` 适配器抽象。
 - 第一版实现 `SoftwareWordReportImporter` 和 `FormalWordReportImporter`。
+- 模块 4 第一版重点实现 Word 导入原型，不直接写 PostgreSQL，只输出模块 3 的 `BridgeAnnualInspectionData` 候选 JSON。
 - 以后可扩展 `ExcelInspectionImporter`、`ApiInspectionImporter`、`StructuredJsonImporter`、`DatabaseSyncImporter`、`ManualEntryImporter`。
 - PostgreSQL 是事实主库。
 - Word、图片、模板、附件和生成报告放在文件归档目录。
@@ -109,6 +117,37 @@
 - 数据库存归档相对路径，不存写死绝对路径。
 - 正式报告文件名可保留科室要求格式，例如 `Q202604001-JZ-019黑山县S213库盘线袁海亮桥定期检测报告-2类.docx`。
 - 第一阶段暂不单独设计维护记录表、章节草稿表、报告模板表、生成报告表。
+
+## 模块 3 已确认数据契约原则
+
+- `BridgeAnnualInspectionData` 是候选数据，不是事实数据。
+- Python 工具服务负责从 Word 可信区域抽取候选 JSON。
+- C++ 主服务保存候选 JSON，前端校对候选 JSON，用户确认后 C++ 再写入正式业务表。
+- 顶层结构包含 `contract`、`import_context`、`bridge_check`、`inspection`、`defects`、`photos`、`ratings`、`comparison_candidates`、`report_text_candidates`、`warnings`、`errors`。
+- JSON key 使用英文 `snake_case`，业务值和报告原文保留中文。
+- 第一版只读取 Word 中可信结构化区域：第二章结构病害检查表、第四章总体技术状况评定表。
+- 非正式软件报告中的其他正文多为模板文字，第一版不抽取、不作为事实来源，也不作为报告生成参考。
+- 正式报告第一版也先聚焦第二章病害检查表和第四章评定表。
+- 后续可能从正式报告抽取特定章节文本，统一预留在 `report_text_candidates`，但文本候选不能直接创建病害事实、不能覆盖数据库事实。
+- 病害尺寸必须保留原文 `measurement_text`，结构化尺寸 `measurements[]` 尽量解析，解析不稳时写 warning。
+- 照片编号以病害检查表中的照片编号列为主依据，图片区标题或说明作为校验依据。
+- 技术状况评定按表 4.1-2 建模为 `overall`、`structure_parts`、`evaluation_parts`。
+- 评分最小单元是评价部件，例如上部承重构件、上部一般构件、支座、翼墙、耳墙等。
+- 等级最小单元是结构分部，即上部结构、下部结构、桥面系；`evaluation_parts[]` 不设置等级。
+- 对比候选不是 Python 从 Word 抽取的结果，而是在第 N 年事实确认入库后，由 C++ 读取数据库第 N-1 年事实生成。
+
+## 模块 4 待讨论方向
+
+- 模块 4 名称：`04-word-importer-prototype`。
+- 当前分支：`feature/04-word-importer-prototype`。
+- 第一版建议放在 Python 工具层，实现 Word 表格解析原型。
+- 输入可以是软件生成的非正式 Word，也可以是正式 Word。
+- 软件生成 Word 第一版只抽取第二章结构病害检查表、第四章全桥技术状况综合评定。
+- 正式 Word 第一版也先聚焦第二章结构病害检查表和第四章评定表，后续再扩展正式报告特定章节文本抽取。
+- 输出必须是模块 3 的 `BridgeAnnualInspectionData` JSON 契约。
+- 模块 4 不直接写数据库，不负责人工校对页面，不负责历史病害对比算法。
+- 年度常规流程不要求上传上一年正式 Word；上一年事实优先来自 PostgreSQL。
+- 正式 Word 在第一版中的主要用途是首次建档或历史补录：当数据库没有上一年度事实时，从正式报告第二章抽取历史基线病害候选，人工确认后入库。
 
 ## 核心模块
 
@@ -215,15 +254,16 @@
 
 ## 下一步建议
 
-进入新项目开发窗口后，先做模块 2 实施计划，不急着写代码。
+进入新项目开发窗口后，先讨论模块 4 的需求边界并编写实施计划，不急着写代码。
 
 推荐下一步：
 
-1. 基于 `docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md` 编写实施计划。
-2. 实施计划采用 Inline Execution。
-3. 第二模块实施优先做数据库迁移 SQL、系统编号生成、归档路径工具、基础 seed/test。
-4. 计划写完并经用户确认后，再开始写代码。
-5. 模块 2 完成后，再讨论 `03-bridge-annual-inspection-data-contract`。
+1. 读取 `PROJECT_CONTEXT.md` 和模块 3 设计文档。
+2. 讨论模块 4 `04-word-importer-prototype` 的输入 Word 类型、可读区域、输出 JSON、错误警告和验收样例。
+3. 确认第一版是否只处理 `.docx`。
+4. 确认 Word 表格识别策略：按章节标题、表题、表头和列名匹配，而不是按固定表格序号硬编码。
+5. 编写模块 4 实施计划。
+6. 计划经用户确认后，再开始写代码。
 
 ## 设计文档
 
@@ -242,3 +282,7 @@
 模块 2 PostgreSQL 核心表与文件归档见：
 
 `docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md`
+
+模块 3 桥梁年度检测数据 JSON 契约见：
+
+`docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md`

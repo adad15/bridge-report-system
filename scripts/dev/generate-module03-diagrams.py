@@ -1,3 +1,8 @@
+"""生成模块 03 设计文档中的 SVG 图。
+
+脚本使用原生 SVG 字符串而不是依赖外部绘图库，方便在离线开发环境中稳定复现图表。
+"""
+
 from __future__ import annotations
 
 import html
@@ -22,6 +27,8 @@ def lines_for(text: str, width: int) -> list[str]:
 
 
 class Svg:
+    """模块 03 图表的轻量 SVG 画布。"""
+
     def __init__(self, path: Path, width: int, height: int, title: str, subtitle: str) -> None:
         self.path = path
         self.width = width
@@ -430,6 +437,8 @@ def draw_table_mapping() -> None:
 
 
 def generate() -> None:
+    """生成所有模块 03 图表，并用 XML 解析器做一次基本有效性检查。"""
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     for draw in [
         draw_overview,

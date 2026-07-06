@@ -1,3 +1,9 @@
+"""模块 03 的年度检测候选数据契约。
+
+这里的模型是 Word 解析、C++ 保存候选 JSON、前端校对和后续确认入库之间的共同边界。
+它描述的是“候选数据”，不是已经写入 PostgreSQL 的正式事实。
+"""
+
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -27,6 +33,8 @@ ComparisonType = Literal[
 ]
 
 class ContractModel(BaseModel):
+    """所有契约模型默认禁止额外字段，避免解析器悄悄输出未评审的数据。"""
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -38,6 +46,8 @@ class WarningItem(ContractModel):
 
 
 class SourceRef(ContractModel):
+    """候选对象的来源证据，用于人工校对时回到 Word 表格行或段落。"""
+
     chapter: str | None = None
     table_title: str | None = None
     table_index: int | None = Field(default=None, ge=0)
@@ -88,6 +98,8 @@ class Measurement(ContractModel):
 
 
 class DefectCandidate(ContractModel):
+    """第二章结构病害检查表中的一条病害候选记录。"""
+
     candidate_id: str
     structure_part: StructurePart
     component_name: str
@@ -161,6 +173,11 @@ class EvaluationPartRating(ContractModel):
 
 
 class Ratings(ContractModel):
+    """第四章总体技术状况评定表的候选数据。
+
+    等级只放在整体和结构分部层级，评价部件只保存评分，不保存 grade。
+    """
+
     overall: OverallRating
     structure_parts: list[StructurePartRating]
     evaluation_parts: list[EvaluationPartRating]
@@ -176,6 +193,8 @@ class ComparisonMatchBasis(ContractModel):
 
 
 class ComparisonCandidate(ContractModel):
+    """事实入库后生成的历史对比候选，不由 Word 解析器直接产生。"""
+
     candidate_id: str
     previous_defect_observation_system_number: str | None = None
     current_defect_observation_system_number: str | None = None
@@ -189,6 +208,8 @@ class ComparisonCandidate(ContractModel):
 
 
 class ReportTextCandidate(ContractModel):
+    """正式报告文本抽取的预留扩展口，第一版不作为病害事实来源。"""
+
     candidate_id: str
     section_key: str
     section_title: str
@@ -199,6 +220,8 @@ class ReportTextCandidate(ContractModel):
 
 
 class BridgeAnnualInspectionData(ContractModel):
+    """一次导入任务的完整候选 JSON。"""
+
     contract: ContractInfo
     import_context: ImportContext
     bridge_check: BridgeCheck

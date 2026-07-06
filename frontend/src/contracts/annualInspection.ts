@@ -17,6 +17,7 @@ export type ComparisonType =
   | "原病害未见"
   | "无法判断";
 
+// 以下接口与 Python Pydantic 模型保持同名字段，作为前端校对页面的候选数据边界。
 export interface WarningItem {
   code: string;
   message: string;
@@ -154,6 +155,7 @@ export interface Ratings {
   warnings: WarningItem[];
 }
 
+// 对比候选来自已确认事实之间的匹配，不是 Word 解析器直接抽取的内容。
 export interface ComparisonMatchBasis {
   same_component: boolean;
   same_defect_type: boolean;
@@ -199,6 +201,7 @@ export interface BridgeAnnualInspectionData {
   errors: WarningItem[];
 }
 
+// 运行时校验只做前端入口防线，完整契约仍以 JSON Schema 和后端校验为准。
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -207,15 +210,18 @@ function hasOwn(value: Record<string, unknown>, property: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, property);
 }
 
+// 置信度用于校对排序和风险提示，必须是闭区间 0 到 1 的数值。
 function isNumberFromZeroToOne(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
 }
 
+// 必填数组必须显式存在，空数组表示“确认没有”，缺字段表示契约不完整。
 function getRequiredArray(value: Record<string, unknown>, property: string): unknown[] | null {
   const member = value[property];
   return hasOwn(value, property) && Array.isArray(member) ? member : null;
 }
 
+// 必填对象必须显式存在，保证前端拿到的是稳定的候选 JSON 骨架。
 function getRequiredObject(value: Record<string, unknown>, property: string): Record<string, unknown> | null {
   const member = value[property];
   return hasOwn(value, property) && isRecord(member) ? member : null;
@@ -272,6 +278,7 @@ function isValidStructurePartRating(value: unknown): boolean {
 function isValidEvaluationPartRating(value: unknown): boolean {
   return (
     isRecord(value) &&
+    // 评价部件只保存评分，等级放在上部结构、下部结构、桥面系这一级。
     !hasOwn(value, "grade") &&
     hasValidConfidence(value) &&
     getRequiredArray(value, "score_rows") !== null &&
@@ -284,6 +291,7 @@ export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnn
     return false;
   }
 
+  // 契约名和版本先过关，避免旧格式数据进入新校对流程。
   const contract = getRequiredObject(value, "contract");
   if (contract === null) {
     return false;
