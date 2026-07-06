@@ -340,6 +340,25 @@ def test_parse_rating_tables_requires_standalone_score_header() -> None:
     assert exc_info.value.code == "rating_table_not_found"
 
 
+def test_parse_rating_tables_uses_standalone_score_when_component_score_appears_first() -> None:
+    table = DocxTable(
+        index=0,
+        title="总体技术状况评定表",
+        chapter="第四章 全桥技术状况综合评定",
+        rows=[
+            ["层级", "结构部位", "类别编号", "评价部件", "构件评分", "评分", "权重", "等级"],
+            ["全桥", "全桥", "", "全桥", "3:86.62", "85.61", "", "2类"],
+            ["评价部件", "上部结构", "1", "上部承重构件", "3:86.62", "86.62", "", ""],
+        ],
+    )
+
+    ratings, warnings = parse_rating_tables([table])
+
+    assert warnings == []
+    assert ratings.overall.total_score == 85.61
+    assert ratings.evaluation_parts[0].part_score == 86.62
+
+
 def test_parse_rating_tables_skips_malformed_fourth_chapter_rating_candidate() -> None:
     table = DocxTable(
         index=0,

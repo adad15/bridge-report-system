@@ -52,6 +52,13 @@ def header_index(headers: list[str], keywords: list[str]) -> int | None:
     return None
 
 
+def score_header_index(headers: list[str]) -> int | None:
+    for index, header in enumerate(headers):
+        if "评分" in header and "构件评分" not in header:
+            return index
+    return None
+
+
 def get_cell(row: list[str], index: int | None) -> str:
     if index is None or index >= len(row):
         return ""
@@ -98,7 +105,7 @@ def parse_rating_tables(tables: list[DocxTable]) -> tuple[Ratings, list[WarningI
         structure_part_index = header_index(headers, ["结构部位"])
         category_no_index = header_index(headers, ["类别编号"])
         evaluation_part_index = header_index(headers, ["评价部件"])
-        score_index = header_index(headers, ["评分"])
+        score_index = score_header_index(headers)
         weight_index = header_index(headers, ["权重"])
         grade_index = header_index(headers, ["等级"])
         component_score_index = header_index(headers, ["构件评分"])
