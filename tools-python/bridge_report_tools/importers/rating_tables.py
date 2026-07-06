@@ -21,8 +21,12 @@ SCORE_ROW_PATTERN = re.compile(r"(?P<count>\d+)\s*[:：]\s*(?P<score>\d+(?:\.\d+
 
 
 def is_rating_table(table: DocxTable) -> bool:
+    chapter = table.chapter or ""
+    if "第四章" not in chapter:
+        return False
+
     header = table.rows[0] if table.rows else []
-    table_text = " ".join([table.title or "", table.chapter or "", " ".join(header)])
+    table_text = " ".join([table.title or "", chapter, " ".join(header)])
     return any(keyword in table_text for keyword in RATING_TABLE_KEYWORDS)
 
 

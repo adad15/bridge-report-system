@@ -251,6 +251,24 @@ def test_parse_rating_tables_fails_when_fourth_chapter_table_missing(tmp_path: P
         parse_rating_tables(document.tables)
 
     assert exc_info.value.code == "rating_table_not_found"
+    assert exc_info.value.message == "未识别到第四章总体技术状况评定表。"
+
+
+def test_parse_rating_tables_ignores_non_fourth_chapter_rating_like_table() -> None:
+    table = DocxTable(
+        index=0,
+        title="主要病害及技术状况评定表",
+        chapter="第二章 结构病害检查",
+        rows=[
+            ["层级", "结构部位", "类别编号", "评价部件", "评分", "权重", "等级", "构件评分"],
+            ["全桥", "全桥", "", "全桥", "85.61", "", "2类", ""],
+        ],
+    )
+
+    with pytest.raises(WordImportError) as exc_info:
+        parse_rating_tables([table])
+
+    assert exc_info.value.code == "rating_table_not_found"
 
 
 def test_parse_defect_tables_keeps_row_level_warnings() -> None:
