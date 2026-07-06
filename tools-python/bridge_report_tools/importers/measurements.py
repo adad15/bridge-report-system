@@ -18,6 +18,7 @@ DIMENSION_PATTERN = re.compile(
     re.IGNORECASE,
 )
 COUNT_PATTERN = re.compile(r"(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>处|条|个|块)")
+SEPARATOR_PATTERN = re.compile(r"[\s,，;；、.。:：/\\|()\[\]{}（）【】<>《》]+")
 
 
 def normalize_unit(unit: str) -> str:
@@ -32,34 +33,48 @@ def parse_measurements(
     if not measurement_text:
         return [], []
 
-    measurements: list[Measurement] = []
+    measurement_matches: list[tuple[tuple[int, int], Measurement]] = []
     for match in DIMENSION_PATTERN.finditer(measurement_text):
         label = match.group("label").upper()
         source_text = match.group(0).replace("：", "=")
-        measurements.append(
-            Measurement(
-                dimension_type=DIMENSION_LABELS[label],
-                value=float(match.group("value")),
-                unit=normalize_unit(match.group("unit")),
-                source_text=source_text,
+        measurement_matches.append(
+            (
+                match.span(),
+                Measurement(
+                    dimension_type=DIMENSION_LABELS[label],
+                    value=float(match.group("value")),
+                    unit=normalize_unit(match.group("unit")),
+                    source_text=source_text,
+                ),
             )
         )
 
     for match in COUNT_PATTERN.finditer(measurement_text):
         source_text = match.group(0)
-        measurements.append(
-            Measurement(
-                dimension_type="数量",
-                value=float(match.group("value")),
-                unit=match.group("unit"),
-                source_text=source_text,
+        measurement_matches.append(
+            (
+                match.span(),
+                Measurement(
+                    dimension_type="数量",
+                    value=float(match.group("value")),
+                    unit=match.group("unit"),
+                    source_text=source_text,
+                ),
             )
         )
 
-    if measurements:
+    measurement_matches.sort(key=lambda item: item[0][0])
+    measurements = [measurement for _, measurement in measurement_matches]
+
+    remaining_chars = list(measurement_text)
+    for (start, end), _ in measurement_matches:
+        remaining_chars[start:end] = " " * (end - start)
+    has_meaningful_leftover = bool(SEPARATOR_PATTERN.sub("", "".join(remaining_chars)))
+
+    if measurements and not has_meaningful_leftover:
         return measurements, []
 
-    return [], [
+    warnings = [
         WarningItem(
             code="measurement_parse_low_confidence",
             message="尺寸表达未能稳定结构化，请人工确认。",
@@ -67,3 +82,8 @@ def parse_measurements(
             target_candidate_id=candidate_id,
         )
     ]
+
+    if measurements:
+        return measurements, warnings
+
+    return [], warnings

@@ -37,3 +37,26 @@ def test_low_confidence_measurement_keeps_warning() -> None:
             "target_candidate_id": "defect_0003",
         }
     ]
+
+
+def test_mixed_measurement_text_returns_parsed_items_and_warning() -> None:
+    measurements, warnings = parse_measurements("L=0.8m，局部破损，约20cm×30cm", "defect_0004")
+
+    assert [item.dimension_type for item in measurements] == ["长度"]
+    assert measurements[0].value == 0.8
+    assert measurements[0].unit == "m"
+    assert [warning.model_dump() for warning in warnings] == [
+        {
+            "code": "measurement_parse_low_confidence",
+            "message": "尺寸表达未能稳定结构化，请人工确认。",
+            "severity": "warning",
+            "target_candidate_id": "defect_0004",
+        }
+    ]
+
+
+def test_count_before_dimension_preserves_source_order() -> None:
+    measurements, warnings = parse_measurements("3处，L=0.8m", "defect_0005")
+
+    assert warnings == []
+    assert [item.dimension_type for item in measurements] == ["数量", "长度"]
