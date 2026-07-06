@@ -25,11 +25,8 @@ def is_rating_table(table: DocxTable) -> bool:
         return False
 
     header = table.rows[0] if table.rows else []
-    has_level = header_index(header, ["层级"]) is not None
-    has_structure_part = header_index(header, ["结构部位"]) is not None
-    has_score = header_index(header, ["评分"]) is not None
-    has_grade = header_index(header, ["等级"]) is not None
-    return has_level and has_structure_part and has_score and has_grade
+    required_headers = ["层级", "结构部位", "类别编号", "评价部件", "评分", "权重", "等级", "构件评分"]
+    return all(any(required in column for column in header) for required in required_headers)
 
 
 def header_index(headers: list[str], keywords: list[str]) -> int | None:
