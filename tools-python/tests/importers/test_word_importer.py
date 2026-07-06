@@ -5,6 +5,7 @@ from docx import Document
 from pydantic import ValidationError
 
 from bridge_report_tools.contracts.annual_inspection import DataRole, FileRole, SourceType
+from bridge_report_tools.importers.defect_tables import parse_defect_tables
 from bridge_report_tools.importers.docx_reader import read_docx_blocks
 from bridge_report_tools.importers.word_context import ImportMode, WordImportRequest
 from tests.importers.docx_fixtures import create_sample_docx, write_png
@@ -148,3 +149,27 @@ def test_read_docx_blocks_keeps_table_titles(tmp_path: Path) -> None:
     assert document.tables[0].rows[0] == ["构件", "位置", "病害", "数量", "尺寸", "照片编号"]
     assert document.tables[1].title == "总体技术状况评定表"
     assert document.tables[1].chapter == "第四章 全桥技术状况综合评定"
+
+
+def test_parse_defect_tables_extracts_defect_candidate(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    docx_path = create_sample_docx(tmp_path / "sample.docx", image_path)
+    document = read_docx_blocks(docx_path)
+
+    defects, warnings, errors = parse_defect_tables(document.tables)
+
+    assert warnings == []
+    assert errors == []
+    assert len(defects) == 1
+    defect = defects[0]
+    assert defect.candidate_id == "defect_0001"
+    assert defect.structure_part == "上部结构"
+    assert defect.component_name == "主梁"
+    assert defect.defect_location == "第二跨左幅梁底"
+    assert defect.defect_type == "裂缝"
+    assert defect.quantity_text == "1处"
+    assert defect.measurement_text == "L=0.8m，W=0.12mm"
+    assert [item.dimension_type for item in defect.measurements] == ["长度", "宽度"]
+    assert defect.photo_numbers == ["2.1-1"]
+    assert defect.source_ref.table_title == "上部结构病害检查表"
