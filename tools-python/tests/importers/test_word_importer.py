@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from bridge_report_tools.contracts.annual_inspection import DataRole, FileRole, SourceType
 from bridge_report_tools.importers.defect_tables import parse_defect_tables
+from bridge_report_tools.importers.docx_reader import DocxTable
 from bridge_report_tools.importers.docx_reader import read_docx_blocks
 from bridge_report_tools.importers.word_context import ImportMode, WordImportRequest
 from tests.importers.docx_fixtures import create_sample_docx, write_png
@@ -173,3 +174,57 @@ def test_parse_defect_tables_extracts_defect_candidate(tmp_path: Path) -> None:
     assert [item.dimension_type for item in defect.measurements] == ["长度", "宽度"]
     assert defect.photo_numbers == ["2.1-1"]
     assert defect.source_ref.table_title == "上部结构病害检查表"
+
+
+def test_parse_defect_tables_ignores_non_defect_table_with_disease_title() -> None:
+    table = DocxTable(
+        index=0,
+        title="主要病害及技术状况评定表",
+        chapter="第四章 全桥技术状况综合评定",
+        rows=[
+            ["层级", "结构部位", "类别编号", "评价部件", "评分", "权重", "等级", "构件评分"],
+            ["全桥", "全桥", "", "全桥", "85.61", "", "2类", ""],
+        ],
+    )
+
+    defects, warnings, errors = parse_defect_tables([table])
+
+    assert defects == []
+    assert warnings == []
+    assert len(errors) == 1
+    assert errors[0].code == "defect_tables_not_found"
+
+
+def test_parse_defect_tables_reports_missing_defect_table(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    docx_path = create_sample_docx(tmp_path / "sample.docx", image_path)
+    document = read_docx_blocks(docx_path)
+
+    defects, warnings, errors = parse_defect_tables(document.tables[1:])
+
+    assert defects == []
+    assert warnings == []
+    assert len(errors) == 1
+    assert errors[0].code == "defect_tables_not_found"
+
+
+def test_parse_defect_tables_keeps_row_level_warnings() -> None:
+    table = DocxTable(
+        index=0,
+        title="上部结构病害检查表",
+        chapter="第二章 结构病害检查",
+        rows=[
+            ["构件", "位置", "病害", "数量", "尺寸", "照片编号"],
+            ["主梁", "第二跨左幅梁底", "破损", "1处", "局部破损，约20cm×30cm", ""],
+        ],
+    )
+
+    defects, warnings, errors = parse_defect_tables([table])
+
+    assert warnings == []
+    assert errors == []
+    assert len(defects) == 1
+    warning_codes = [warning.code for warning in defects[0].warnings]
+    assert "measurement_parse_low_confidence" in warning_codes
+    assert "photo_number_missing" in warning_codes

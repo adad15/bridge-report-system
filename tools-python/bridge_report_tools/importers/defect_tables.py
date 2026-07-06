@@ -24,10 +24,12 @@ def infer_structure_part(table: DocxTable) -> str:
 def is_defect_table(table: DocxTable) -> bool:
     header = table.rows[0] if table.rows else []
     header_text = "|".join(header)
-    title = table.title or ""
+    chapter = table.chapter or ""
     return (
-        "病害" in title
-        or ("病害" in header_text and "照片" in header_text and ("构件" in header_text or "部位" in header_text))
+        "第二章" in chapter
+        and "病害" in header_text
+        and "照片" in header_text
+        and any(keyword in header_text for keyword in ["构件", "部件", "部位", "位置"])
     )
 
 
