@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import posixpath
 import re
 import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 from bridge_report_tools.contracts.annual_inspection import DefectCandidate, ExtractedPhotoFile, PhotoCandidate, SourceRef, WarningItem
 from bridge_report_tools.importers.docx_reader import DocxBlocks
 
 
-CAPTION_PATTERN = re.compile(r"(?:照片|图)?\s*(?P<number>\d+(?:\.\d+)?-\d+)")
+DOCUMENT_RELATIONSHIP_PATH = "word/_rels/document.xml.rels"
+DOCUMENT_XML_PATH = "word/document.xml"
+IMAGE_RELATIONSHIP_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+RELATIONSHIP_NAMESPACE = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+RELATIONSHIP_EMBED_ATTRIBUTE = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
+CAPTION_PATTERN = re.compile(r"(?:照片|图)\s*(?P<number>\d+(?:\.\d+)?-\d+)")
 
 
 def find_photo_captions(document: DocxBlocks) -> list[tuple[str, str]]:
@@ -22,11 +29,38 @@ def find_photo_captions(document: DocxBlocks) -> list[tuple[str, str]]:
 
 def media_members(docx_path: Path) -> list[str]:
     with zipfile.ZipFile(docx_path) as archive:
-        return sorted(
-            name
-            for name in archive.namelist()
-            if name.startswith("word/media/") and not name.endswith("/")
-        )
+        archive_names = set(archive.namelist())
+        if DOCUMENT_XML_PATH not in archive_names or DOCUMENT_RELATIONSHIP_PATH not in archive_names:
+            return []
+
+        relationships = document_image_relationships(archive)
+        document_root = ET.fromstring(archive.read(DOCUMENT_XML_PATH))
+        members: list[str] = []
+        for element in document_root.iter():
+            relationship_id = element.attrib.get(RELATIONSHIP_EMBED_ATTRIBUTE)
+            if not relationship_id:
+                continue
+            member = relationships.get(relationship_id)
+            if member and member in archive_names and member.startswith("word/media/") and not member.endswith("/"):
+                members.append(member)
+        return members
+
+
+def document_image_relationships(archive: zipfile.ZipFile) -> dict[str, str]:
+    root = ET.fromstring(archive.read(DOCUMENT_RELATIONSHIP_PATH))
+    relationships: dict[str, str] = {}
+    for relationship in root.findall(f"{RELATIONSHIP_NAMESPACE}Relationship"):
+        if relationship.attrib.get("Type") != IMAGE_RELATIONSHIP_TYPE:
+            continue
+        if relationship.attrib.get("TargetMode") == "External":
+            continue
+        relationship_id = relationship.attrib.get("Id")
+        target = relationship.attrib.get("Target")
+        if not relationship_id or not target:
+            continue
+        member = posixpath.normpath(posixpath.join("word", target.lstrip("/")))
+        relationships[relationship_id] = member
+    return relationships
 
 
 def extract_media(docx_path: Path, output_dir: Path) -> list[str]:
@@ -111,13 +145,20 @@ def extract_and_match_photos(
     for defect in defects:
         for photo_number in defect.photo_numbers:
             if photo_number not in matched_numbers:
-                defect.warnings.append(
-                    WarningItem(
-                        code="photo_number_unmatched",
-                        message=f"病害行引用照片编号 {photo_number}，但未在 Word 图片区找到对应图片。",
-                        severity="warning",
-                        target_candidate_id=defect.candidate_id,
-                    )
+                has_existing_warning = any(
+                    warning.code == "photo_number_unmatched"
+                    and warning.message == f"病害行引用照片编号 {photo_number}，但未在 Word 图片区找到对应图片。"
+                    and warning.target_candidate_id == defect.candidate_id
+                    for warning in defect.warnings
                 )
+                if not has_existing_warning:
+                    defect.warnings.append(
+                        WarningItem(
+                            code="photo_number_unmatched",
+                            message=f"病害行引用照片编号 {photo_number}，但未在 Word 图片区找到对应图片。",
+                            severity="warning",
+                            target_candidate_id=defect.candidate_id,
+                        )
+                    )
 
     return photos, temporary_files, []

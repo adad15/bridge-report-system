@@ -1,4 +1,5 @@
 from pathlib import Path
+import zipfile
 
 import pytest
 from docx import Document
@@ -6,9 +7,9 @@ from pydantic import ValidationError
 
 from bridge_report_tools.contracts.annual_inspection import DataRole, FileRole, SourceType
 from bridge_report_tools.importers.defect_tables import parse_defect_tables
-from bridge_report_tools.importers.docx_reader import DocxTable
+from bridge_report_tools.importers.docx_reader import DocxBlocks, DocxTable
 from bridge_report_tools.importers.docx_reader import read_docx_blocks
-from bridge_report_tools.importers.photo_extractor import extract_and_match_photos
+from bridge_report_tools.importers.photo_extractor import extract_and_match_photos, find_photo_captions, media_members
 from bridge_report_tools.importers.word_context import ImportMode, WordImportRequest
 from tests.importers.docx_fixtures import add_defect_table, add_photo, add_rating_table, create_sample_docx, write_png
 
@@ -252,6 +253,17 @@ def test_extract_and_match_photos_links_caption_to_defect(tmp_path: Path) -> Non
     assert photos[0].extracted_file.original_caption == "照片2.1-1 主梁梁底裂缝"
 
 
+def test_find_photo_captions_ignores_dates_without_caption_prefix() -> None:
+    document = DocxBlocks(
+        paragraph_texts=["检测日期 2026-05-18", "照片2.1-1 主梁裂缝"],
+        tables=[],
+    )
+
+    captions = find_photo_captions(document)
+
+    assert captions == [("2.1-1", "照片2.1-1 主梁裂缝")]
+
+
 def test_extract_and_match_photos_keeps_unreferenced_photo_warning(tmp_path: Path) -> None:
     image_path = tmp_path / "photo.png"
     write_png(image_path)
@@ -272,3 +284,58 @@ def test_extract_and_match_photos_keeps_unreferenced_photo_warning(tmp_path: Pat
     assert photos[0].linked_defect_candidate_id is None
     assert photos[0].match_status == "未关联"
     assert photos[0].warnings[0].code == "photo_not_referenced_by_defect"
+
+
+def test_media_members_uses_document_body_relationship_order(tmp_path: Path) -> None:
+    docx_path = tmp_path / "ordered.docx"
+    with zipfile.ZipFile(docx_path, "w") as archive:
+        archive.writestr(
+            "word/document.xml",
+            """
+            <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+                <w:body>
+                    <w:p><w:r><w:drawing><a:blip r:embed="rId2" /></w:drawing></w:r></w:p>
+                    <w:p><w:r><w:drawing><a:blip r:embed="rId1" /></w:drawing></w:r></w:p>
+                </w:body>
+            </w:document>
+            """,
+        )
+        archive.writestr(
+            "word/_rels/document.xml.rels",
+            """
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                <Relationship Id="rId1"
+                    Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                    Target="media/image10.png" />
+                <Relationship Id="rId2"
+                    Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
+                    Target="media/image2.png" />
+            </Relationships>
+            """,
+        )
+        archive.writestr("word/media/image10.png", b"image10")
+        archive.writestr("word/media/image2.png", b"image2")
+        archive.writestr("word/media/logo.png", b"logo")
+
+    assert media_members(docx_path) == ["word/media/image2.png", "word/media/image10.png"]
+
+
+def test_extract_and_match_photos_unmatched_defect_warning_is_idempotent(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    docx_path = tmp_path / "sample.docx"
+    document_obj = Document()
+    add_defect_table(document_obj)
+    add_photo(document_obj, image_path, "照片2.1-3 桥面铺装局部破损")
+    add_rating_table(document_obj)
+    document_obj.save(docx_path)
+    document = read_docx_blocks(docx_path)
+    defects, _, _ = parse_defect_tables(document.tables)
+
+    extract_and_match_photos(docx_path, document, defects, tmp_path / "out")
+    extract_and_match_photos(docx_path, document, defects, tmp_path / "out")
+
+    warning_codes = [warning.code for warning in defects[0].warnings]
+    assert warning_codes.count("photo_number_unmatched") == 1
