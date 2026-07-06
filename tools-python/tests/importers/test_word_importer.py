@@ -10,8 +10,17 @@ from bridge_report_tools.importers.defect_tables import parse_defect_tables
 from bridge_report_tools.importers.docx_reader import DocxBlocks, DocxTable
 from bridge_report_tools.importers.docx_reader import read_docx_blocks
 from bridge_report_tools.importers.photo_extractor import extract_and_match_photos, find_photo_captions, media_members
+from bridge_report_tools.importers.rating_tables import parse_rating_tables
 from bridge_report_tools.importers.word_context import ImportMode, WordImportRequest
-from tests.importers.docx_fixtures import add_defect_table, add_photo, add_rating_table, create_sample_docx, write_png
+from bridge_report_tools.importers.word_errors import WordImportError
+from tests.importers.docx_fixtures import (
+    add_defect_table,
+    add_photo,
+    add_rating_table,
+    create_docx_without_rating_table,
+    create_sample_docx,
+    write_png,
+)
 
 
 def valid_request(tmp_path: Path) -> WordImportRequest:
@@ -209,6 +218,39 @@ def test_parse_defect_tables_reports_missing_defect_table(tmp_path: Path) -> Non
     assert warnings == []
     assert len(errors) == 1
     assert errors[0].code == "defect_tables_not_found"
+
+
+def test_parse_rating_tables_extracts_overall_structure_and_evaluation_parts(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    docx_path = create_sample_docx(tmp_path / "sample.docx", image_path)
+    document = read_docx_blocks(docx_path)
+
+    ratings, warnings = parse_rating_tables(document.tables)
+
+    assert warnings == []
+    assert ratings.overall.total_score == 85.61
+    assert ratings.overall.overall_grade == "2类"
+    assert [item.structure_part for item in ratings.structure_parts] == ["上部结构", "下部结构", "桥面系"]
+    assert ratings.structure_parts[2].grade == "3"
+    assert len(ratings.evaluation_parts) == 1
+    assert ratings.evaluation_parts[0].evaluation_part == "上部承重构件"
+    assert ratings.evaluation_parts[0].part_score == 86.62
+    assert ratings.evaluation_parts[0].score_rows[0].component_count == 3
+    assert ratings.evaluation_parts[0].score_rows[0].component_score == 86.62
+    assert not hasattr(ratings.evaluation_parts[0], "grade")
+
+
+def test_parse_rating_tables_fails_when_fourth_chapter_table_missing(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    docx_path = create_docx_without_rating_table(tmp_path / "sample.docx", image_path)
+    document = read_docx_blocks(docx_path)
+
+    with pytest.raises(WordImportError) as exc_info:
+        parse_rating_tables(document.tables)
+
+    assert exc_info.value.code == "rating_table_not_found"
 
 
 def test_parse_defect_tables_keeps_row_level_warnings() -> None:
