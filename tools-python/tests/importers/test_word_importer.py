@@ -271,6 +271,24 @@ def test_parse_rating_tables_ignores_non_fourth_chapter_rating_like_table() -> N
     assert exc_info.value.code == "rating_table_not_found"
 
 
+def test_parse_rating_tables_ignores_unrelated_fourth_chapter_table_without_rating_headers() -> None:
+    table = DocxTable(
+        index=0,
+        title="技术状况文字说明表",
+        chapter="第四章 全桥技术状况综合评定",
+        rows=[
+            ["层级", "说明"],
+            ["全桥", "整体情况说明"],
+        ],
+    )
+
+    with pytest.raises(WordImportError) as exc_info:
+        parse_rating_tables([table])
+
+    assert exc_info.value.code == "rating_table_not_found"
+    assert exc_info.value.message == "未识别到第四章总体技术状况评定表。"
+
+
 def test_parse_defect_tables_keeps_row_level_warnings() -> None:
     table = DocxTable(
         index=0,

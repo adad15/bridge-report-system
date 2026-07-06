@@ -15,7 +15,6 @@ from bridge_report_tools.importers.docx_reader import DocxTable
 from bridge_report_tools.importers.word_errors import WordImportError
 
 
-RATING_TABLE_KEYWORDS = ["评定", "评分", "技术状况"]
 STRUCTURE_PARTS = {"上部结构", "下部结构", "桥面系"}
 SCORE_ROW_PATTERN = re.compile(r"(?P<count>\d+)\s*[:：]\s*(?P<score>\d+(?:\.\d+)?)")
 
@@ -26,8 +25,10 @@ def is_rating_table(table: DocxTable) -> bool:
         return False
 
     header = table.rows[0] if table.rows else []
-    table_text = " ".join([table.title or "", chapter, " ".join(header)])
-    return any(keyword in table_text for keyword in RATING_TABLE_KEYWORDS)
+    has_level = header_index(header, ["层级"]) is not None
+    has_score = header_index(header, ["评分"]) is not None
+    has_rating_dimension = header_index(header, ["结构部位", "评价部件", "等级"]) is not None
+    return has_level and has_score and has_rating_dimension
 
 
 def header_index(headers: list[str], keywords: list[str]) -> int | None:
