@@ -628,6 +628,65 @@ def test_media_members_uses_document_body_relationship_order(tmp_path: Path) -> 
     assert media_members(docx_path) == ["word/media/image2.png", "word/media/image10.png"]
 
 
+def test_read_docx_blocks_keeps_nested_tables_as_tables(tmp_path: Path) -> None:
+    docx_path = tmp_path / "nested.docx"
+    document_obj = Document()
+    outer = document_obj.add_table(rows=1, cols=1)
+    cell = outer.rows[0].cells[0]
+    cell.add_paragraph("表2.1-1  上部结构病害检查表")
+    nested = cell.add_table(rows=2, cols=6)
+    headers = ["构件", "位置", "病害", "数量", "尺寸", "照片编号"]
+    values = ["主梁", "第二跨左幅梁底", "裂缝", "1处", "L=0.8m", "2.1-1"]
+    for index, header in enumerate(headers):
+        nested.rows[0].cells[index].text = header
+        nested.rows[1].cells[index].text = values[index]
+    document_obj.save(docx_path)
+
+    document = read_docx_blocks(docx_path)
+
+    assert any(table.title == "表2.1-1 上部结构病害检查表" for table in document.tables)
+    assert any(table.rows[0] == headers for table in document.tables)
+
+
+def test_read_docx_blocks_reads_tables_inside_custom_xml_blocks(tmp_path: Path) -> None:
+    from docx.oxml import OxmlElement
+
+    docx_path = tmp_path / "customxml.docx"
+    document_obj = Document()
+    caption = document_obj.add_paragraph("表2.1-1  上部结构病害检查表")
+    table = document_obj.add_table(rows=2, cols=6)
+    headers = ["构件", "位置", "病害", "数量", "尺寸", "照片编号"]
+    values = ["主梁", "第二跨左幅梁底", "裂缝", "1处", "L=0.8m", "2.1-1"]
+    for index, header in enumerate(headers):
+        table.rows[0].cells[index].text = header
+        table.rows[1].cells[index].text = values[index]
+    wrapper = OxmlElement("w:customXml")
+    body = document_obj.element.body
+    body.insert(list(body).index(caption._p), wrapper)
+    wrapper.append(caption._p)
+    wrapper.append(table._tbl)
+    document_obj.save(docx_path)
+
+    document = read_docx_blocks(docx_path)
+
+    assert "表2.1-1 上部结构病害检查表" in document.paragraph_texts
+    assert any(table.title == "表2.1-1 上部结构病害检查表" for table in document.tables)
+    assert any(table.rows[0] == headers for table in document.tables)
+
+
+def test_docx_diagnostics_finds_text_in_document_xml(tmp_path: Path) -> None:
+    from bridge_report_tools.importers.docx_diagnostics import find_text_locations
+
+    docx_path = tmp_path / "diagnostic.docx"
+    document_obj = Document()
+    document_obj.add_paragraph("表4.1-2  总体技术状况评定表")
+    document_obj.save(docx_path)
+
+    locations = find_text_locations(docx_path, ["表4.1-2"])
+
+    assert locations["表4.1-2"] == ["word/document.xml"]
+
+
 def test_extract_and_match_photos_unmatched_defect_warning_is_idempotent(tmp_path: Path) -> None:
     image_path = tmp_path / "photo.png"
     write_png(image_path)
