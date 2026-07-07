@@ -15,7 +15,22 @@ TEST(DbClientFactoryTest, build_pg_connection_string_formats_all_fields) {
 
     EXPECT_EQ(
         connection_string,
-        "host=127.0.0.1 port=5432 dbname=bridge_report_system user=bridge_report password=bridge_report_dev"
+        "host='127.0.0.1' port='5432' dbname='bridge_report_system' "
+        "user='bridge_report' password='bridge_report_dev'"
+    );
+}
+
+TEST(DbClientFactoryTest, build_pg_connection_string_escapes_special_characters) {
+    // libpq 关键字/值连接串中，值内的反斜杠和单引号必须转义：\ -> \\，' -> \'。
+    bridge_report::config::PostgresConfig config{};
+    config.password = R"(p'a s\s)";
+
+    const auto connection_string = bridge_report::db::build_pg_connection_string(config);
+
+    EXPECT_EQ(
+        connection_string,
+        "host='127.0.0.1' port='5432' dbname='bridge_report_system' "
+        "user='bridge_report' password='p\\'a s\\\\s'"
     );
 }
 

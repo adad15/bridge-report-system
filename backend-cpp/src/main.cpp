@@ -103,12 +103,23 @@ void register_health_routes(
         {drogon::Get}
     );
 
+    // 注意：execSqlSync 会阻塞当前 IO 线程；本地单用户 v1 场景可接受。
     drogon::app().registerHandler(
         "/health/db",
         [db_client](
             const drogon::HttpRequestPtr&,
             std::function<void(const drogon::HttpResponsePtr&)>&& callback
         ) {
+            const auto respond_degraded = [&callback]() {
+                Json::Value body;
+                body["status"] = "degraded";
+                body["database"] = "unavailable";
+                auto response = drogon::HttpResponse::newHttpJsonResponse(body);
+                response->setStatusCode(drogon::k503ServiceUnavailable);
+                bridge_report::http::apply_local_dev_cors_headers(response);
+                callback(response);
+            };
+
             try {
                 db_client->execSqlSync("select 1");
 
@@ -119,13 +130,10 @@ void register_health_routes(
                 bridge_report::http::apply_local_dev_cors_headers(response);
                 callback(response);
             } catch (const drogon::orm::DrogonDbException&) {
-                Json::Value body;
-                body["status"] = "degraded";
-                body["database"] = "unavailable";
-                auto response = drogon::HttpResponse::newHttpJsonResponse(body);
-                response->setStatusCode(drogon::k503ServiceUnavailable);
-                bridge_report::http::apply_local_dev_cors_headers(response);
-                callback(response);
+                respond_degraded();
+            } catch (const std::exception&) {
+                // 兜底：健康检查处理器内不允许任何异常向外逃逸。
+                respond_degraded();
             }
         },
         {drogon::Get}
