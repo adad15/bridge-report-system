@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT
 
-更新时间：2026-07-06
+更新时间：2026-07-07
 
 ## 项目一句话
 
@@ -33,8 +33,9 @@
 - 模块 2 设计文档提交号：`52ee0ab docs: add module 02 schema and archive design`。
 - 模块 3 `03-bridge-annual-inspection-data-contract` 已完成实施并推送到 GitHub。
 - 模块 3 已定义并实现 `BridgeAnnualInspectionData` JSON 契约、JSON Schema、Python Pydantic 模型、C++ JsonCpp 校验器和前端 TypeScript 类型/运行时校验。
-- 当前分支已切到 `feature/04-word-importer-prototype`，基点是模块 3 最新提交 `ef27844 docs: add module 03 plan and diagrams`。
-- 下一步进入模块 4 `04-word-importer-prototype`，先讨论需求并编写实施计划。
+- 当前分支为 `feature/04-word-importer-prototype`。
+- 模块 4 `04-word-importer-prototype` 已进入 Python Word 导入原型实现与真实样例适配阶段：第一版支持 `.docx`、`rule_profile="辽宁国省干线"`、第二章三张病害检查表、病害照片抽取匹配、第四章评分表和模块 3 契约输出。
+- 绕阳河二号桥真实软件报告本地验收已覆盖：病害候选 25 条、病害照片候选 31 条、临时图片 36 个、第四章总分 85.61/2类、尺寸低置信误报清零。
 
 ## 已确认方向
 
@@ -136,14 +137,17 @@
 - 等级最小单元是结构分部，即上部结构、下部结构、桥面系；`evaluation_parts[]` 不设置等级。
 - 对比候选不是 Python 从 Word 抽取的结果，而是在第 N 年事实确认入库后，由 C++ 读取数据库第 N-1 年事实生成。
 
-## 模块 4 待讨论方向
+## 模块 4 当前实现状态
 
 - 模块 4 名称：`04-word-importer-prototype`。
 - 当前分支：`feature/04-word-importer-prototype`。
-- 第一版建议放在 Python 工具层，实现 Word 表格解析原型。
-- 输入可以是软件生成的非正式 Word，也可以是正式 Word。
-- 软件生成 Word 第一版只抽取第二章结构病害检查表、第四章全桥技术状况综合评定。
-- 正式 Word 第一版也先聚焦第二章结构病害检查表和第四章评定表，后续再扩展正式报告特定章节文本抽取。
+- 第一版放在 Python 工具层，实现 Word 表格、图片和评分解析原型。
+- 第一版只支持 `.docx`。
+- Python 接收 C++ 传入的 `rule_profile`，不自动识别模板；当前已实现 `辽宁国省干线`。
+- 软件生成 Word 第一版只抽取第二章结构病害检查表、病害照片和第四章全桥技术状况综合评定。
+- 正式 Word 第一版也先聚焦第二章结构病害检查表、病害照片和第四章评定表，后续再扩展正式报告特定章节文本抽取。
+- 辽宁国省干线当前只从 `表2.1-1`、`表2.2-1`、`表2.3-1` 抽取病害，从 `表4.1-1`、`表4.1-2` 识别评分上下文，其中评分主数据来自 `表4.1-2`。
+- 真实样例中的 `表4.1-2` 矩阵布局、图片下方表格题注、`照片2.11` 紧凑编号、`S=0.6×0.1m²` 与 `长度：5m` 等尺寸表达已纳入规则。
 - 输出必须是模块 3 的 `BridgeAnnualInspectionData` JSON 契约。
 - 模块 4 不直接写数据库，不负责人工校对页面，不负责历史病害对比算法。
 - 年度常规流程不要求上传上一年正式 Word；上一年事实优先来自 PostgreSQL。
@@ -254,16 +258,12 @@
 
 ## 下一步建议
 
-进入新项目开发窗口后，先讨论模块 4 的需求边界并编写实施计划，不急着写代码。
-
 推荐下一步：
 
-1. 读取 `PROJECT_CONTEXT.md` 和模块 3 设计文档。
-2. 讨论模块 4 `04-word-importer-prototype` 的输入 Word 类型、可读区域、输出 JSON、错误警告和验收样例。
-3. 确认第一版是否只处理 `.docx`。
-4. 确认 Word 表格识别策略：按章节标题、表题、表头和列名匹配，而不是按固定表格序号硬编码。
-5. 编写模块 4 实施计划。
-6. 计划经用户确认后，再开始写代码。
+1. 继续用更多真实 `.docx` 验证 `辽宁国省干线` 规则。
+2. 对模块 4 当前改动做代码审查、整理提交并推送当前分支。
+3. 后续进入模块 05 前，确认前端校对页如何展示普通候选、带 warning 候选、导入级 warning/error。
+4. 若需要支持吉林国省干线、辽宁鹤大高速等模板，按 `word_rules` 规则集接口新增独立规则模块，不改主流程。
 
 ## 设计文档
 
@@ -286,3 +286,13 @@
 模块 3 桥梁年度检测数据 JSON 契约见：
 
 `docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md`
+
+模块 4 Word 导入原型见：
+
+`docs/superpowers/specs/modules/04-word-importer-prototype.md`
+
+辽宁国省干线规则与真实样例适配见：
+
+`docs/superpowers/specs/2026-07-07-liaoning-trunk-word-rules-design.md`
+
+`docs/superpowers/specs/2026-07-07-liaoning-trunk-real-sample-adaptation-design.md`

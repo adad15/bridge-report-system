@@ -4,6 +4,7 @@ import zipfile
 
 import pytest
 from docx import Document
+from docx.shared import Inches
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
@@ -235,6 +236,56 @@ def test_parse_defect_tables_uses_liaoning_table_numbers() -> None:
     assert defects[0].photo_numbers == ["2.2-1"]
 
 
+def test_parse_defect_tables_maps_real_liaoning_header_aliases() -> None:
+    rule_set = select_rule_set("辽宁国省干线")
+    table = DocxTable(
+        index=0,
+        title="表2.1-1 上部结构病害检查表",
+        chapter=None,
+        rows=[
+            [
+                "序号",
+                "部件 名称",
+                "构件 编号",
+                "病害位置",
+                "病害 类型",
+                "病害特征",
+                "标度",
+                "病害扣分",
+                "构件评分",
+                "照片编号",
+            ],
+            [
+                "1",
+                "上部承重构件",
+                "1-1#板",
+                "梁底",
+                "横向裂缝",
+                "L=6m，W=0.2mm",
+                "2",
+                "35",
+                "55.81",
+                "照片2.1-1",
+            ],
+        ],
+    )
+
+    defects, warnings, errors = parse_defect_tables([table], rule_set)
+
+    assert errors == []
+    assert {warning.code for warning in warnings} == {"liaoning_trunk_defect_table_missing"}
+    assert len(defects) == 1
+    defect = defects[0]
+    assert defect.component_name == "上部承重构件"
+    assert defect.component_alias == "1-1#板"
+    assert defect.defect_location == "梁底"
+    assert defect.defect_type == "横向裂缝"
+    assert defect.measurement_text == "L=6m，W=0.2mm"
+    assert [item.dimension_type for item in defect.measurements] == ["长度", "宽度"]
+    assert defect.photo_numbers == ["2.1-1"]
+    assert defect.severity is None
+
+
 def test_parse_defect_tables_reports_missing_defect_table(tmp_path: Path) -> None:
     image_path = tmp_path / "photo.png"
     write_png(image_path)
@@ -296,6 +347,60 @@ def test_parse_rating_tables_warns_when_liaoning_weight_table_missing(tmp_path: 
 
     assert ratings.overall.total_score == 85.61
     assert [warning.code for warning in warnings] == ["liaoning_trunk_rating_weight_table_missing"]
+
+
+def test_parse_rating_tables_extracts_real_liaoning_table_shape() -> None:
+    rule_set = select_rule_set("辽宁国省干线")
+    weight_table = DocxTable(
+        index=0,
+        title="表4.1-1桥梁部件权重计算表",
+        chapter=None,
+        rows=[
+            ["部位", "序号", "名称", "权重", "重新分配 后权重", "构件数量", "备注"],
+            ["上部结构", "1", "上部承重构件", "0.7", "0.7", "16", "/"],
+        ],
+    )
+    overall_table = DocxTable(
+        index=1,
+        title="表4.1-2 总体技术状况评定表",
+        chapter=None,
+        rows=[
+            [
+                "结构",
+                "类别",
+                "评价 部件",
+                "构件数量",
+                "构件评分",
+                "桥梁部件技术状况评分",
+                "桥梁结构技术状况评分",
+                "桥梁结构组成权重",
+                "等级",
+                "桥梁总体技术状况评分",
+                "综合评级",
+            ],
+            ["上部结构", "1", "上部承重构件", "1个", "55.81", "86.62", "87.45", "0.4", "2", "85.61", "2类"],
+            ["上部结构", "1", "上部承重构件", "2个", "65", "86.62", "87.45", "0.4", "2", "85.61", "2类"],
+            ["上部结构", "2", "上部一般构件", "8个", "75", "82.29", "87.45", "0.4", "2", "85.61", "2类"],
+            ["下部结构", "4", "翼墙、耳墙", "1个", "75", "91.12", "86.61", "0.4", "2", "85.61", "2类"],
+            ["桥面系", "13", "桥面铺装", "3个", "75", "79.93", "79.93", "0.2", "3", "85.61", "2类"],
+        ],
+    )
+
+    ratings, warnings = parse_rating_tables([weight_table, overall_table], rule_set)
+
+    assert warnings == []
+    assert ratings.overall.total_score == 85.61
+    assert ratings.overall.overall_grade == "2类"
+    assert [item.structure_part for item in ratings.structure_parts] == ["上部结构", "下部结构", "桥面系"]
+    assert ratings.structure_parts[0].structure_score == 87.45
+    assert ratings.structure_parts[2].grade == "3"
+    assert len(ratings.evaluation_parts) == 4
+    assert ratings.evaluation_parts[0].evaluation_part == "上部承重构件"
+    assert ratings.evaluation_parts[0].part_score == 86.62
+    assert [(row.component_count, row.component_score) for row in ratings.evaluation_parts[0].score_rows] == [
+        (1, 55.81),
+        (2, 65),
+    ]
 
 
 def test_parse_rating_tables_does_not_use_appendix_rating_table() -> None:
@@ -583,7 +688,7 @@ def test_parse_defect_tables_keeps_row_level_warnings() -> None:
         chapter=None,
         rows=[
             ["构件", "位置", "病害", "数量", "尺寸", "照片编号"],
-            ["主梁", "第二跨左幅梁底", "破损", "1处", "局部破损，约20cm×30cm", ""],
+            ["主梁", "第二跨左幅梁底", "破损", "1处", "局部破损，约20左右", ""],
         ],
     )
 
@@ -638,6 +743,53 @@ def test_find_photo_captions_ignores_dates_without_caption_prefix() -> None:
         ("1-1", False),
         ("2.1-1", True),
     ]
+
+
+def test_liaoning_photo_caption_normalizes_compact_table_text() -> None:
+    rule_set = select_rule_set("辽宁国省干线")
+
+    caption = rule_set.parse_photo_caption("照片2.21 0#台左侧翼墙勾缝砂浆脱落")
+    two_digit_caption = rule_set.parse_photo_caption("照片2.110 2-1#铰缝勾缝砂浆脱落")
+
+    assert caption is not None
+    assert caption.number == "2.2-1"
+    assert caption.is_defect_photo is True
+    assert two_digit_caption is not None
+    assert two_digit_caption.number == "2.1-10"
+    assert two_digit_caption.is_defect_photo is True
+
+
+def test_extract_and_match_photos_links_table_cell_caption_below_image(tmp_path: Path) -> None:
+    rule_set = select_rule_set("辽宁国省干线")
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    docx_path = tmp_path / "sample.docx"
+    document_obj = Document()
+    add_defect_table(document_obj)
+    gallery = document_obj.add_table(rows=1, cols=1)
+    cell = gallery.rows[0].cells[0]
+    cell.paragraphs[0].add_run().add_picture(str(image_path), width=Inches(1))
+    cell.add_paragraph("照片2.1-1 主梁梁底裂缝")
+    add_rating_table(document_obj)
+    document_obj.save(docx_path)
+    document = read_docx_blocks(docx_path)
+    defects, _, _ = parse_defect_tables(document.tables, rule_set)
+
+    photos, temporary_files, warnings = extract_and_match_photos(
+        docx_path,
+        document,
+        defects,
+        tmp_path / "out",
+        rule_set,
+    )
+
+    assert warnings == []
+    assert temporary_files == ["photo_0001.png"]
+    assert len(photos) == 1
+    assert photos[0].photo_number == "2.1-1"
+    assert photos[0].linked_defect_candidate_id == "defect_0001"
+    assert photos[0].match_status == "高置信候选"
+    assert photos[0].extracted_file.original_caption == "照片2.1-1 主梁梁底裂缝"
 
 
 def test_extract_and_match_photos_skips_overview_photos_in_candidates(tmp_path: Path) -> None:

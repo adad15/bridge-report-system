@@ -8,6 +8,9 @@ from bridge_report_tools.importers.word_errors import WordImportError
 from bridge_report_tools.importers.word_rules.common import contains_all
 
 
+COMPACT_DISEASE_PHOTO_NUMBER_PATTERN = re.compile(r"^2\.(?P<section>[123])(?P<serial>\d+)$")
+
+
 @dataclass(frozen=True)
 class DefectTableRule:
     table_no: str
@@ -53,7 +56,7 @@ class WordRuleSet:
         disease_match = self.disease_photo_pattern.search(text)
         if disease_match is not None:
             return PhotoCaption(
-                number=disease_match.group("number"),
+                number=normalize_photo_number(disease_match.group("number")),
                 raw_text=text,
                 is_defect_photo=True,
             )
@@ -61,10 +64,17 @@ class WordRuleSet:
         if caption_match is None:
             return None
         return PhotoCaption(
-            number=caption_match.group("number"),
+            number=normalize_photo_number(caption_match.group("number")),
             raw_text=text,
             is_defect_photo=False,
         )
+
+
+def normalize_photo_number(number: str) -> str:
+    compact_match = COMPACT_DISEASE_PHOTO_NUMBER_PATTERN.match(number)
+    if compact_match is None:
+        return number
+    return f"2.{compact_match.group('section')}-{compact_match.group('serial')}"
 
 
 def select_rule_set(rule_profile: str) -> WordRuleSet:

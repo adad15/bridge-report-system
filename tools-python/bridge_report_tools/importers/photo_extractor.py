@@ -15,6 +15,11 @@ DOCUMENT_XML_PATH = "word/document.xml"
 IMAGE_RELATIONSHIP_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
 RELATIONSHIP_NAMESPACE = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 RELATIONSHIP_EMBED_ATTRIBUTE = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
+A_BLIP_TAG = "{http://schemas.openxmlformats.org/drawingml/2006/main}blip"
+WORD_CELL_TAG = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tc"
+WORD_PARAGRAPH_TAG = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p"
+WORD_TABLE_TAG = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tbl"
+WORD_TEXT_TAG = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"
 
 
 def find_photo_captions(document: DocxBlocks, rule_set: WordRuleSet) -> list[PhotoCaption]:
@@ -24,6 +29,88 @@ def find_photo_captions(document: DocxBlocks, rule_set: WordRuleSet) -> list[Pho
         if caption is not None:
             captions.append(caption)
     return captions
+
+
+def find_image_photo_captions(
+    docx_path: Path,
+    document: DocxBlocks,
+    rule_set: WordRuleSet,
+) -> list[PhotoCaption | None]:
+    captions = find_captions_for_image_occurrences(docx_path, rule_set)
+    if any(caption is not None for caption in captions):
+        return captions
+    return find_photo_captions(document, rule_set)
+
+
+def find_captions_for_image_occurrences(docx_path: Path, rule_set: WordRuleSet) -> list[PhotoCaption | None]:
+    with zipfile.ZipFile(docx_path) as archive:
+        archive_names = set(archive.namelist())
+        if DOCUMENT_XML_PATH not in archive_names:
+            return []
+
+        document_root = ET.fromstring(archive.read(DOCUMENT_XML_PATH))
+        parents = {child: parent for parent in document_root.iter() for child in parent}
+        captions: list[PhotoCaption | None] = []
+        for blip in document_root.iter(A_BLIP_TAG):
+            if not blip.attrib.get(RELATIONSHIP_EMBED_ATTRIBUTE):
+                continue
+            captions.append(caption_for_image_blip(blip, parents, rule_set))
+        return captions
+
+
+def caption_for_image_blip(
+    blip: ET.Element,
+    parents: dict[ET.Element, ET.Element],
+    rule_set: WordRuleSet,
+) -> PhotoCaption | None:
+    cell = nearest_ancestor(blip, parents, WORD_CELL_TAG)
+    if cell is not None and len(image_relationship_ids(cell)) == 1:
+        caption = parse_caption_from_element(cell, rule_set)
+        if caption is not None:
+            return caption
+
+    table = nearest_ancestor(blip, parents, WORD_TABLE_TAG)
+    if table is not None and len(image_relationship_ids(table)) == 1:
+        caption = parse_caption_from_element(table, rule_set)
+        if caption is not None:
+            return caption
+
+    paragraph = nearest_ancestor(blip, parents, WORD_PARAGRAPH_TAG)
+    if paragraph is None:
+        return None
+    return parse_caption_from_element(paragraph, rule_set)
+
+
+def nearest_ancestor(
+    element: ET.Element,
+    parents: dict[ET.Element, ET.Element],
+    tag: str,
+) -> ET.Element | None:
+    current = parents.get(element)
+    while current is not None:
+        if current.tag == tag:
+            return current
+        current = parents.get(current)
+    return None
+
+
+def image_relationship_ids(element: ET.Element) -> list[str]:
+    return [
+        relationship_id
+        for blip in element.iter(A_BLIP_TAG)
+        if (relationship_id := blip.attrib.get(RELATIONSHIP_EMBED_ATTRIBUTE))
+    ]
+
+
+def parse_caption_from_element(element: ET.Element, rule_set: WordRuleSet) -> PhotoCaption | None:
+    text = element_text(element)
+    if not text:
+        return None
+    return rule_set.parse_photo_caption(text)
+
+
+def element_text(element: ET.Element) -> str:
+    return " ".join("".join(text.text or "" for text in element.iter(WORD_TEXT_TAG)).split())
 
 
 def media_members(docx_path: Path) -> list[str]:
@@ -92,7 +179,7 @@ def extract_and_match_photos(
     rule_set: WordRuleSet,
 ) -> tuple[list[PhotoCandidate], list[str], list[WarningItem]]:
     temporary_files = extract_media(docx_path, output_dir)
-    captions = find_photo_captions(document, rule_set)
+    captions = find_image_photo_captions(docx_path, document, rule_set)
     defect_mapping = defect_by_photo_number(defects)
     photos: list[PhotoCandidate] = []
 

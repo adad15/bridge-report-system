@@ -6,6 +6,7 @@ from bridge_report_tools.contracts.annual_inspection import DefectCandidate, Sou
 from bridge_report_tools.importers.docx_reader import DocxTable
 from bridge_report_tools.importers.measurements import parse_measurements
 from bridge_report_tools.importers.word_rules import DefectTableRule, WordRuleSet
+from bridge_report_tools.importers.word_rules.common import normalize_rule_text
 
 
 PHOTO_NUMBER_PATTERN = re.compile(r"(?:照片)?(?P<number>\d+(?:\.\d+)?-\d+)")
@@ -28,9 +29,16 @@ def match_defect_table(table: DocxTable, rule_set: WordRuleSet) -> DefectTableRu
     return rule
 
 
-def header_index(headers: list[str], keywords: list[str]) -> int | None:
+def header_index(headers: list[str], keywords: list[str], excluded_keywords: list[str] | None = None) -> int | None:
+    normalized_keywords = [normalize_rule_text(keyword) for keyword in keywords]
+    normalized_excluded_keywords = [
+        normalize_rule_text(keyword) for keyword in (excluded_keywords or [])
+    ]
     for index, header in enumerate(headers):
-        if any(keyword in header for keyword in keywords):
+        normalized_header = normalize_rule_text(header)
+        if any(keyword in normalized_header for keyword in normalized_excluded_keywords):
+            continue
+        if any(keyword in normalized_header for keyword in normalized_keywords):
             return index
     return None
 
@@ -62,12 +70,13 @@ def parse_defect_tables(
         found_table_numbers.add(table_rule.table_no)
         defect_table_found = True
         headers = table.rows[0]
-        component_index = header_index(headers, ["构件", "部件"])
-        location_index = header_index(headers, ["位置", "部位"])
-        type_index = header_index(headers, ["病害"])
+        component_index = header_index(headers, ["部件名称", "构件名称", "构件", "部件"], ["构件编号", "构件评分"])
+        component_alias_index = header_index(headers, ["构件编号"])
+        location_index = header_index(headers, ["病害位置", "位置", "部位"])
+        type_index = header_index(headers, ["病害类型", "病害名称", "病害"], ["病害位置", "病害特征", "病害扣分"])
         quantity_index = header_index(headers, ["数量"])
-        measurement_index = header_index(headers, ["尺寸"])
-        photo_index = header_index(headers, ["照片"])
+        measurement_index = header_index(headers, ["病害特征", "尺寸"])
+        photo_index = header_index(headers, ["照片编号", "照片"])
         structure_part = table_rule.structure_part
 
         for row_index, row in enumerate(table.rows[1:], start=1):
@@ -96,7 +105,7 @@ def parse_defect_tables(
                     candidate_id=candidate_id,
                     structure_part=structure_part,
                     component_name=get_cell(row, component_index) or "未识别构件",
-                    component_alias=None,
+                    component_alias=get_cell(row, component_alias_index) or None,
                     defect_type=defect_type or "未识别病害",
                     defect_location=location or "未识别位置",
                     defect_description=defect_description,
