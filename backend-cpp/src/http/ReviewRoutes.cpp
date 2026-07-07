@@ -260,6 +260,9 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
                 respond_json(callback, body);
             } catch (const drogon::orm::DrogonDbException&) {
                 respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                // 兜底：处理器内不允许任何异常向外逃逸（与 main.cpp /health/db 的约定一致）。
+                respond_db_unavailable(callback);
             }
         },
         {drogon::Get}
