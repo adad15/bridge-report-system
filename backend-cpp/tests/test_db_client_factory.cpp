@@ -25,8 +25,10 @@ TEST(DbClientFactoryTest, create_db_client_connects_and_selects_one) {
         GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置，跳过需要真实数据库的集成测试";
     }
 
-    const std::string connection_string(env_value);
-    auto client = drogon::orm::DbClient::newPgClient(connection_string, 1);
+    // 前提：本地测试数据库须与模块 02 的默认连接参数一致，
+    // 即默认 PostgresConfig 经 build_pg_connection_string 生成的连接串可以直接连上。
+    const bridge_report::config::PostgresConfig config{};
+    auto client = bridge_report::db::create_db_client(config, 1);
 
     const auto result = client->execSqlSync("select 1");
 
