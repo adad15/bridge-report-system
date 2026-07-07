@@ -13,6 +13,7 @@ from bridge_report_tools.importers.photo_extractor import extract_and_match_phot
 from bridge_report_tools.importers.rating_tables import parse_rating_tables
 from bridge_report_tools.importers.word_context import ImportMode, WordImportRequest
 from bridge_report_tools.importers.word_errors import WordImportError
+from bridge_report_tools.importers.word_importer import parse_word_import
 from tests.importers.docx_fixtures import (
     add_defect_table,
     add_photo,
@@ -372,6 +373,81 @@ def test_parse_rating_tables_skips_malformed_fourth_chapter_rating_candidate() -
 
     with pytest.raises(WordImportError) as exc_info:
         parse_rating_tables([table])
+
+    assert exc_info.value.code == "rating_table_not_found"
+
+
+def test_parse_word_import_outputs_contract_data_and_photo_files(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    request = valid_request(tmp_path)
+    docx_path = create_sample_docx(request.docx_path, image_path)
+    request = request.model_copy(
+        update={
+            "docx_path": docx_path,
+            "temporary_photo_output_dir": tmp_path / "out",
+        }
+    )
+
+    response = parse_word_import(request)
+
+    assert response.temporary_photo_files == ["photo_0001.png"]
+    data = response.data
+    assert data.contract.name == "BridgeAnnualInspectionData"
+    assert data.contract.parser_name == "word_importer"
+    assert data.import_context.source_type == "软件导出Word"
+    assert data.import_context.file_role == "当前年度检测资料"
+    assert data.bridge_check.selected_bridge_system_number == "QL-000001"
+    assert data.bridge_check.extracted_bridge_name == "绕阳河二号桥"
+    assert data.bridge_check.match_status == "匹配"
+    assert data.inspection.inspection_year == 2026
+    assert data.inspection.report_number == "Q202605001-JZ-024"
+    assert len(data.defects) == 1
+    assert data.defects[0].candidate_id == "defect_0001"
+    assert len(data.photos) == 1
+    assert data.photos[0].linked_defect_candidate_id == "defect_0001"
+    assert data.ratings.overall.total_score == 85.61
+    assert data.comparison_candidates == []
+    assert data.report_text_candidates == []
+    assert data.errors == []
+
+
+def test_parse_word_import_keeps_defect_table_missing_as_contract_error(tmp_path: Path) -> None:
+    request = valid_request(tmp_path)
+    document_obj = Document()
+    document_obj.add_paragraph("绕阳河二号桥 定期检测报告")
+    add_rating_table(document_obj)
+    docx_path = request.docx_path
+    document_obj.save(docx_path)
+    request = request.model_copy(
+        update={
+            "docx_path": docx_path,
+            "temporary_photo_output_dir": tmp_path / "out",
+        }
+    )
+
+    response = parse_word_import(request)
+
+    assert response.data.defects == []
+    assert response.data.photos == []
+    assert response.data.errors[0].code == "defect_tables_not_found"
+    assert response.data.ratings.overall.total_score == 85.61
+
+
+def test_parse_word_import_fails_when_rating_table_missing(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    request = valid_request(tmp_path)
+    docx_path = create_docx_without_rating_table(request.docx_path, image_path)
+    request = request.model_copy(
+        update={
+            "docx_path": docx_path,
+            "temporary_photo_output_dir": tmp_path / "out",
+        }
+    )
+
+    with pytest.raises(WordImportError) as exc_info:
+        parse_word_import(request)
 
     assert exc_info.value.code == "rating_table_not_found"
 
