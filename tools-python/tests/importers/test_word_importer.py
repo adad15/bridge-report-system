@@ -35,6 +35,7 @@ def valid_request(tmp_path: Path) -> WordImportRequest:
     return WordImportRequest(
         docx_path=docx_path,
         temporary_photo_output_dir=photo_dir,
+        rule_profile="辽宁国省干线",
         import_mode="已有桥年度导入",
         source_type="软件导出Word",
         file_role="当前年度检测资料",
@@ -53,6 +54,7 @@ def valid_request(tmp_path: Path) -> WordImportRequest:
 def test_word_import_request_accepts_module04_current_year_context(tmp_path: Path) -> None:
     request = valid_request(tmp_path)
 
+    assert request.rule_profile == "辽宁国省干线"
     assert request.import_mode == "已有桥年度导入"
     assert request.source_type == "软件导出Word"
     assert request.file_role == "当前年度检测资料"

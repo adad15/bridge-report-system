@@ -15,6 +15,7 @@ from bridge_report_tools.contracts.annual_inspection import (
 
 
 ImportMode = Literal["新桥初始化", "已有桥年度导入"]
+RuleProfile = Literal["辽宁国省干线"]
 Module04SourceType = Literal["软件导出Word", "正式Word"]
 Module04FileRole = Literal["当前年度检测资料", "历史基线资料"]
 Module04DataRole = Literal["当前年度", "历史基线"]
@@ -27,6 +28,7 @@ class WordImportModel(BaseModel):
 class WordImportRequest(WordImportModel):
     docx_path: Path
     temporary_photo_output_dir: Path
+    rule_profile: RuleProfile
     import_mode: ImportMode
     source_type: Module04SourceType
     file_role: Module04FileRole
