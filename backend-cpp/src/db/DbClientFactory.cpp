@@ -35,7 +35,12 @@ std::string build_pg_connection_string(const config::PostgresConfig& config) {
 
 drogon::orm::DbClientPtr create_db_client(const config::PostgresConfig& config, size_t connection_count) {
     // newPgClient 不会立即建立连接；连接失败会在首次查询时才暴露出来。
-    return drogon::orm::DbClient::newPgClient(build_pg_connection_string(config), connection_count);
+    auto client = drogon::orm::DbClient::newPgClient(build_pg_connection_string(config), connection_count);
+    // 数据库不可达时 drogon 会无限重连并挂起排队的查询；设置超时让
+    // execSqlSync 抛出 TimeoutError（属于 DrogonDbException），调用方才能把
+    // 数据库故障转成 503 而不是无限阻塞 IO 线程。
+    client->setTimeout(10.0);
+    return client;
 }
 
 }  // 命名空间 bridge_report::db
