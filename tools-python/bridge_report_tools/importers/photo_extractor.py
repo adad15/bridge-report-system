@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import posixpath
-import re
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from bridge_report_tools.contracts.annual_inspection import DefectCandidate, ExtractedPhotoFile, PhotoCandidate, SourceRef, WarningItem
 from bridge_report_tools.importers.docx_reader import DocxBlocks
+from bridge_report_tools.importers.word_rules import PhotoCaption, WordRuleSet
 
 
 DOCUMENT_RELATIONSHIP_PATH = "word/_rels/document.xml.rels"
@@ -15,15 +15,14 @@ DOCUMENT_XML_PATH = "word/document.xml"
 IMAGE_RELATIONSHIP_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
 RELATIONSHIP_NAMESPACE = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 RELATIONSHIP_EMBED_ATTRIBUTE = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
-CAPTION_PATTERN = re.compile(r"(?:照片|图)\s*(?P<number>\d+(?:\.\d+)+-\d+)")
 
 
-def find_photo_captions(document: DocxBlocks) -> list[tuple[str, str]]:
-    captions: list[tuple[str, str]] = []
+def find_photo_captions(document: DocxBlocks, rule_set: WordRuleSet) -> list[PhotoCaption]:
+    captions: list[PhotoCaption] = []
     for text in document.paragraph_texts:
-        match = CAPTION_PATTERN.search(text)
-        if match:
-            captions.append((match.group("number"), text))
+        caption = rule_set.parse_photo_caption(text)
+        if caption is not None:
+            captions.append(caption)
     return captions
 
 
@@ -90,21 +89,20 @@ def extract_and_match_photos(
     document: DocxBlocks,
     defects: list[DefectCandidate],
     output_dir: Path,
+    rule_set: WordRuleSet,
 ) -> tuple[list[PhotoCandidate], list[str], list[WarningItem]]:
     temporary_files = extract_media(docx_path, output_dir)
-    captions = find_photo_captions(document)
+    captions = find_photo_captions(document, rule_set)
     defect_mapping = defect_by_photo_number(defects)
     photos: list[PhotoCandidate] = []
 
     for index, temporary_file in enumerate(temporary_files, start=1):
-        caption_number: str | None = None
-        caption_text: str | None = None
-        if index <= len(captions):
-            caption_number, caption_text = captions[index - 1]
-        else:
-            caption_number = f"unmatched-{index:04d}"
-            caption_text = None
+        caption: PhotoCaption | None = captions[index - 1] if index <= len(captions) else None
+        if caption is None or not caption.is_defect_photo:
+            continue
 
+        caption_number = caption.number
+        caption_text = caption.raw_text
         candidate_id = f"photo_{index:04d}"
         linked_defect_id = defect_mapping.get(caption_number)
         warnings: list[WarningItem] = []

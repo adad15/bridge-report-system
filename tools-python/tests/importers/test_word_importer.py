@@ -572,7 +572,9 @@ def test_extract_and_match_photos_links_caption_to_defect(tmp_path: Path) -> Non
     defects, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
     photo_output_dir = tmp_path / "out"
 
-    photos, temporary_files, warnings = extract_and_match_photos(docx_path, document, defects, photo_output_dir)
+    photos, temporary_files, warnings = extract_and_match_photos(
+        docx_path, document, defects, photo_output_dir, select_rule_set("辽宁国省干线")
+    )
 
     assert warnings == []
     assert temporary_files == ["photo_0001.png"]
@@ -586,14 +588,52 @@ def test_extract_and_match_photos_links_caption_to_defect(tmp_path: Path) -> Non
 
 
 def test_find_photo_captions_ignores_dates_without_caption_prefix() -> None:
+    rule_set = select_rule_set("辽宁国省干线")
     document = DocxBlocks(
-        paragraph_texts=["检测日期 2026-05-18", "照片 2026-05-18", "照片2.1-1 主梁裂缝"],
+        paragraph_texts=[
+            "检测日期 2026-05-18",
+            "照片 2026-05-18",
+            "照片1-1 桥梁正面照",
+            "照片2.1-1 主梁裂缝",
+        ],
         tables=[],
     )
 
-    captions = find_photo_captions(document)
+    captions = find_photo_captions(document, rule_set)
 
-    assert captions == [("2.1-1", "照片2.1-1 主梁裂缝")]
+    assert [(caption.number, caption.is_defect_photo) for caption in captions] == [
+        ("1-1", False),
+        ("2.1-1", True),
+    ]
+
+
+def test_extract_and_match_photos_skips_overview_photos_in_candidates(tmp_path: Path) -> None:
+    rule_set = select_rule_set("辽宁国省干线")
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    docx_path = tmp_path / "sample.docx"
+    document_obj = Document()
+    add_defect_table(document_obj)
+    add_photo(document_obj, image_path, "照片1-1 桥梁正面照")
+    add_photo(document_obj, image_path, "照片2.1-1 主梁梁底裂缝")
+    add_rating_table(document_obj)
+    document_obj.save(docx_path)
+    document = read_docx_blocks(docx_path)
+    defects, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
+
+    photos, temporary_files, warnings = extract_and_match_photos(
+        docx_path,
+        document,
+        defects,
+        tmp_path / "out",
+        rule_set,
+    )
+
+    assert warnings == []
+    assert temporary_files == ["photo_0001.png", "photo_0002.png"]
+    assert len(photos) == 1
+    assert photos[0].photo_number == "2.1-1"
+    assert photos[0].extracted_file.temporary_file_name == "photo_0002.png"
 
 
 def test_extract_and_match_photos_keeps_unreferenced_photo_warning(tmp_path: Path) -> None:
@@ -608,7 +648,9 @@ def test_extract_and_match_photos_keeps_unreferenced_photo_warning(tmp_path: Pat
     document = read_docx_blocks(docx_path)
     defects, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
 
-    photos, temporary_files, warnings = extract_and_match_photos(docx_path, document, defects, tmp_path / "out")
+    photos, temporary_files, warnings = extract_and_match_photos(
+        docx_path, document, defects, tmp_path / "out", select_rule_set("辽宁国省干线")
+    )
 
     assert warnings == []
     assert temporary_files == ["photo_0001.png"]
@@ -725,8 +767,9 @@ def test_extract_and_match_photos_unmatched_defect_warning_is_idempotent(tmp_pat
     document = read_docx_blocks(docx_path)
     defects, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
 
-    extract_and_match_photos(docx_path, document, defects, tmp_path / "out")
-    extract_and_match_photos(docx_path, document, defects, tmp_path / "out")
+    rule_set = select_rule_set("辽宁国省干线")
+    extract_and_match_photos(docx_path, document, defects, tmp_path / "out", rule_set)
+    extract_and_match_photos(docx_path, document, defects, tmp_path / "out", rule_set)
 
     warning_codes = [warning.code for warning in defects[0].warnings]
     assert warning_codes.count("photo_number_unmatched") == 1

@@ -9,8 +9,8 @@ from bridge_report_tools.importers.word_rules.rule_set import (
 )
 
 
-DISEASE_PHOTO_PATTERN = re.compile(r"(?:照片)?\s*(?P<number>2\.(?:1|2|3)-\d+)")
-ANY_CAPTION_PATTERN = re.compile(r"(?:照片|图)\s*(?P<number>\d+(?:\.\d+)?-\d+)")
+DISEASE_PHOTO_PATTERN = re.compile(r"(?:^|照片)\s*(?P<number>2\.(?:1|2|3)-\d+)")
+ANY_CAPTION_PATTERN = re.compile(r"(?:照片|图)\s*(?P<number>\d{1,2}(?:\.\d+)?-\d+)")
 
 
 def build_liaoning_trunk_rule_set() -> WordRuleSet:
