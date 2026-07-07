@@ -4,8 +4,11 @@
 #include <string>
 
 #include <drogon/drogon.h>
+#include <drogon/orm/DbClient.h>
+#include <drogon/orm/Exception.h>
 
 #include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/http/Cors.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
 
@@ -23,7 +26,10 @@ Json::Value make_cpp_health_body(const bridge_report::config::AppConfig& config)
     return body;
 }
 
-void register_health_routes(const bridge_report::config::AppConfig& config) {
+void register_health_routes(
+    const bridge_report::config::AppConfig& config,
+    const drogon::orm::DbClientPtr& db_client
+) {
     const auto register_options_handler = [](const std::string& path) {
         drogon::app().registerHandler(
             path,
@@ -39,6 +45,7 @@ void register_health_routes(const bridge_report::config::AppConfig& config) {
 
     register_options_handler("/health");
     register_options_handler("/health/tools");
+    register_options_handler("/health/db");
 
     drogon::app().registerHandler(
         "/health",
@@ -95,6 +102,34 @@ void register_health_routes(const bridge_report::config::AppConfig& config) {
         },
         {drogon::Get}
     );
+
+    drogon::app().registerHandler(
+        "/health/db",
+        [db_client](
+            const drogon::HttpRequestPtr&,
+            std::function<void(const drogon::HttpResponsePtr&)>&& callback
+        ) {
+            try {
+                db_client->execSqlSync("select 1");
+
+                Json::Value body;
+                body["status"] = "ok";
+                body["database"] = "reachable";
+                auto response = drogon::HttpResponse::newHttpJsonResponse(body);
+                bridge_report::http::apply_local_dev_cors_headers(response);
+                callback(response);
+            } catch (const drogon::orm::DrogonDbException&) {
+                Json::Value body;
+                body["status"] = "degraded";
+                body["database"] = "unavailable";
+                auto response = drogon::HttpResponse::newHttpJsonResponse(body);
+                response->setStatusCode(drogon::k503ServiceUnavailable);
+                bridge_report::http::apply_local_dev_cors_headers(response);
+                callback(response);
+            }
+        },
+        {drogon::Get}
+    );
 }
 
 }  // 匿名命名空间
@@ -103,8 +138,10 @@ int main(int argc, char* argv[]) {
     const std::string config_path = argc > 1 ? argv[1] : "config/local.json";
     const auto config = bridge_report::config::load_app_config(config_path);
 
+    const auto db_client = bridge_report::db::create_db_client(config.postgres);
+
     drogon::app().registerMiddleware(std::make_shared<drogon::HttpOptionsMiddleware>());
-    register_health_routes(config);
+    register_health_routes(config, db_client);
 
     std::cout << "Bridge Report C++ backend listening on "
               << config.host << ":" << config.port << "\n";

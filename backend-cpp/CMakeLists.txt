@@ -13,6 +13,7 @@ add_library(bridge_report_backend_core
     src/archive/ArchivePaths.cpp
     src/config/AppConfig.cpp
     src/contracts/AnnualInspectionContract.cpp
+    src/db/DbClientFactory.cpp
     src/http/Cors.cpp
     src/identity/SystemNumber.cpp
     src/runtime/RuntimePaths.cpp
@@ -52,6 +53,7 @@ add_executable(bridge_report_backend_tests
     tests/test_annual_inspection_contract.cpp
     tests/test_app_config.cpp
     tests/test_archive_paths.cpp
+    tests/test_db_client_factory.cpp
     tests/test_system_number.cpp
 )
 
