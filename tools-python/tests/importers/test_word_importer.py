@@ -1,8 +1,10 @@
+import asyncio
 from pathlib import Path
 import zipfile
 
 import pytest
 from docx import Document
+from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
 from bridge_report_tools.contracts.annual_inspection import DataRole, FileRole, SourceType
@@ -14,6 +16,7 @@ from bridge_report_tools.importers.rating_tables import parse_rating_tables
 from bridge_report_tools.importers.word_context import ImportMode, WordImportRequest
 from bridge_report_tools.importers.word_errors import WordImportError
 from bridge_report_tools.importers.word_importer import parse_word_import
+from bridge_report_tools.main import app
 from tests.importers.docx_fixtures import (
     add_defect_table,
     add_photo,
@@ -450,6 +453,66 @@ def test_parse_word_import_fails_when_rating_table_missing(tmp_path: Path) -> No
         parse_word_import(request)
 
     assert exc_info.value.code == "rating_table_not_found"
+
+
+def test_parse_word_endpoint_returns_contract_data(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    request = valid_request(tmp_path)
+    docx_path = create_sample_docx(request.docx_path, image_path)
+    request = request.model_copy(
+        update={
+            "docx_path": docx_path,
+            "temporary_photo_output_dir": tmp_path / "out",
+        }
+    )
+
+    async def post_parse():
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.post(
+                "/imports/word/parse",
+                json=request.model_dump(mode="json"),
+            )
+
+    response = asyncio.run(post_parse())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["data"]["contract"]["name"] == "BridgeAnnualInspectionData"
+    assert payload["data"]["defects"][0]["candidate_id"] == "defect_0001"
+    assert payload["temporary_photo_files"] == ["photo_0001.png"]
+
+
+def test_parse_word_endpoint_maps_import_error_to_bad_request(tmp_path: Path) -> None:
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    request = valid_request(tmp_path)
+    docx_path = create_docx_without_rating_table(request.docx_path, image_path)
+    request = request.model_copy(
+        update={
+            "docx_path": docx_path,
+            "temporary_photo_output_dir": tmp_path / "out",
+        }
+    )
+
+    async def post_parse():
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.post(
+                "/imports/word/parse",
+                json=request.model_dump(mode="json"),
+            )
+
+    response = asyncio.run(post_parse())
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": {
+            "code": "rating_table_not_found",
+            "message": "未识别到第四章总体技术状况评定表。",
+        }
+    }
 
 
 def test_parse_defect_tables_keeps_row_level_warnings() -> None:
