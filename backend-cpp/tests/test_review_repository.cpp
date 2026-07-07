@@ -1,0 +1,132 @@
+#include <cstdlib>
+#include <string>
+
+#include <drogon/orm/DbClient.h>
+#include <gtest/gtest.h>
+
+#include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/db/DbClientFactory.hpp"
+#include "bridge_report/db/ReviewRepository.hpp"
+
+namespace {
+
+// fixture：在事务里插入一座桥 + 一个年度 + 一条导入记录，测试结束后回滚，数据库保持不变。
+class ReviewRepositoryTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        const char* env_value = std::getenv("BRIDGE_REPORT_TEST_DATABASE_URL");
+        if (env_value == nullptr) {
+            GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置，跳过需要真实数据库的集成测试";
+        }
+
+        const bridge_report::config::PostgresConfig config{};
+        client_ = bridge_report::db::create_db_client(config, 1);
+        tx_ = client_->newTransaction();
+
+        const auto bridge_result = tx_->execSqlSync(
+            "insert into bridges (bridge_name, route_name, status) "
+            "values ($1, $2, $3) returning id, system_number",
+            "M05T2测试桥梁",
+            "G1线",
+            "在用"
+        );
+        bridge_id_ = bridge_result[0]["id"].as<std::string>();
+        bridge_system_number_ = bridge_result[0]["system_number"].as<std::string>();
+
+        const auto year_result = tx_->execSqlSync(
+            "insert into inspection_years "
+            "(bridge_id, inspection_year, status, version_number, is_current) "
+            "values ($1::uuid, $2, $3, $4, $5) returning id",
+            bridge_id_,
+            2025,
+            "已确认",
+            1,
+            true
+        );
+        inspection_year_id_ = year_result[0]["id"].as<std::string>();
+
+        const auto import_result = tx_->execSqlSync(
+            "insert into import_records "
+            "(bridge_id, inspection_year_id, import_name, source_type, import_status, importer_name) "
+            "values ($1::uuid, $2::uuid, $3, $4, $5, $6) returning id",
+            bridge_id_,
+            inspection_year_id_,
+            "M05T2测试导入.docx",
+            "正式Word",
+            "待校对",
+            "张三"
+        );
+        import_record_id_ = import_result[0]["id"].as<std::string>();
+    }
+
+    void TearDown() override {
+        if (tx_ != nullptr) {
+            tx_->rollback();
+        }
+    }
+
+    drogon::orm::DbClientPtr client_;
+    std::shared_ptr<drogon::orm::Transaction> tx_;
+    std::string bridge_id_;
+    std::string bridge_system_number_;
+    std::string inspection_year_id_;
+    std::string import_record_id_;
+};
+
+}  // 匿名命名空间
+
+TEST_F(ReviewRepositoryTest, list_bridges_returns_fixture_bridge) {
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    const auto bridges = repository.list_bridges();
+
+    bool found = false;
+    for (const auto& bridge : bridges) {
+        if (bridge.id == bridge_id_) {
+            found = true;
+            EXPECT_EQ(bridge.system_number, bridge_system_number_);
+            EXPECT_EQ(bridge.bridge_name, "M05T2测试桥梁");
+            ASSERT_TRUE(bridge.route_name.has_value());
+            EXPECT_EQ(*bridge.route_name, "G1线");
+            EXPECT_EQ(bridge.status, "在用");
+        }
+    }
+    EXPECT_TRUE(found);
+}
+
+TEST_F(ReviewRepositoryTest, list_inspection_years_returns_fixture_year) {
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    const auto years = repository.list_inspection_years(bridge_id_);
+
+    ASSERT_EQ(years.size(), 1u);
+    EXPECT_EQ(years[0].id, inspection_year_id_);
+    EXPECT_EQ(years[0].inspection_year, 2025);
+    EXPECT_EQ(years[0].status, "已确认");
+    EXPECT_EQ(years[0].version_number, 1);
+    EXPECT_TRUE(years[0].is_current);
+}
+
+TEST_F(ReviewRepositoryTest, list_import_records_returns_fixture_record) {
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    const auto records = repository.list_import_records(bridge_id_);
+
+    ASSERT_EQ(records.size(), 1u);
+    EXPECT_EQ(records[0].id, import_record_id_);
+    EXPECT_EQ(records[0].import_name, "M05T2测试导入.docx");
+    EXPECT_EQ(records[0].source_type, "正式Word");
+    EXPECT_EQ(records[0].import_status, "待校对");
+    ASSERT_TRUE(records[0].inspection_year_id.has_value());
+    EXPECT_EQ(*records[0].inspection_year_id, inspection_year_id_);
+    ASSERT_TRUE(records[0].importer_name.has_value());
+    EXPECT_EQ(*records[0].importer_name, "张三");
+}
+
+TEST_F(ReviewRepositoryTest, list_inspection_years_returns_empty_for_unknown_bridge) {
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    const auto years = repository.list_inspection_years("00000000-0000-0000-0000-000000000000");
+
+    EXPECT_TRUE(years.empty());
+}

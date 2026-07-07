@@ -10,6 +10,7 @@
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/http/Cors.hpp"
+#include "bridge_report/http/ReviewRoutes.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
 
 namespace {
@@ -150,6 +151,7 @@ int main(int argc, char* argv[]) {
 
     drogon::app().registerMiddleware(std::make_shared<drogon::HttpOptionsMiddleware>());
     register_health_routes(config, db_client);
+    bridge_report::http::register_review_routes(db_client);
 
     std::cout << "Bridge Report C++ backend listening on "
               << config.host << ":" << config.port << "\n";
