@@ -648,5 +648,5 @@ reviewDraftReducer(state: BridgeAnnualInspectionData, action): BridgeAnnualInspe
 - `build_preflight_report` 的 `PreflightContext` 字段与 Task 6 端点组装一致。
 - `ConfirmPlan` 结构在 Task 7 定义、Task 8 消费，字段名一致（`defect_description_raw`、`scale`、`photo_title`）。
 - 前端 `ReviewResponse` 等类型对应 Task 3/5/8 响应 JSON；`reviewDraftReducer` 在 Task 12 定义、Task 13/14 消费。
-- 错误码全集：`bridge_not_found`、`import_record_not_found`、`import_record_not_editable`、`invalid_json_body`、`contract_validation_failed`、`import_context_mismatch`、`import_record_wrong_status`、`candidate_pending_review`、`defect_missing_required_field`、`photo_link_unresolved`、`rating_overall_missing`、`revision_confirmation_required`、`db_write_failed`；前后端引用同一份清单。
+- 错误码全集：`bridge_not_found`、`import_record_not_found`、`import_record_not_editable`、`invalid_json_body`、`contract_validation_failed`、`import_context_mismatch`、`import_record_wrong_status`、`candidate_pending_review`、`defect_missing_required_field`、`photo_link_unresolved`、`rating_overall_missing`、`revision_confirmation_required`、`db_write_failed`、`db_unavailable`（503，数据库不可达/查询超时）；前后端引用同一份清单。
 - 契约零扩展：照片无 review_note/无可编辑题注；评分无 review_note；`rule_profile` 不进契约，顶部用 `importer_name` 展示。
