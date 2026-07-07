@@ -1104,6 +1104,18 @@ def add_weight_table(document: Document) -> None:
 
 In every call to `parse_rating_tables(document.tables)`, pass `rule_set`.
 
+In `test_parse_rating_tables_extracts_overall_structure_and_evaluation_parts`, replace:
+
+```python
+    assert warnings == []
+```
+
+with:
+
+```python
+    assert [warning.code for warning in warnings] == ["liaoning_trunk_rating_weight_table_missing"]
+```
+
 Add:
 
 ```python
