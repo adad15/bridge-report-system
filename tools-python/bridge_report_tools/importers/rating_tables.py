@@ -13,15 +13,16 @@ from bridge_report_tools.contracts.annual_inspection import (
 )
 from bridge_report_tools.importers.docx_reader import DocxTable
 from bridge_report_tools.importers.word_errors import WordImportError
+from bridge_report_tools.importers.word_rules import WordRuleSet
 
 
 STRUCTURE_PARTS = {"上部结构", "下部结构", "桥面系"}
 SCORE_ROW_PATTERN = re.compile(r"(?P<count>\d+)\s*[:：]\s*(?P<score>\d+(?:\.\d+)?)")
 
 
-def is_rating_table(table: DocxTable) -> bool:
-    chapter = table.chapter or ""
-    if "第四章" not in chapter:
+def is_overall_rating_table(table: DocxTable, rule_set: WordRuleSet) -> bool:
+    table_rule = rule_set.match_rating_table_title(table.title)
+    if table_rule is None or table_rule.table_kind != "overall":
         return False
 
     header = table.rows[0] if table.rows else []
@@ -34,6 +35,14 @@ def is_rating_table(table: DocxTable) -> bool:
         and has_header(header, "权重")
         and has_header(header, "等级")
         and has_header(header, "构件评分")
+    )
+
+
+def has_weight_table(tables: list[DocxTable], rule_set: WordRuleSet) -> bool:
+    return any(
+        (table_rule := rule_set.match_rating_table_title(table.title)) is not None
+        and table_rule.table_kind == "weight"
+        for table in tables
     )
 
 
@@ -93,11 +102,20 @@ def source_ref(table: DocxTable, row_index: int, row: list[str]) -> SourceRef:
     )
 
 
-def parse_rating_tables(tables: list[DocxTable]) -> tuple[Ratings, list[WarningItem]]:
+def parse_rating_tables(tables: list[DocxTable], rule_set: WordRuleSet) -> tuple[Ratings, list[WarningItem]]:
     warnings: list[WarningItem] = []
+    if not has_weight_table(tables, rule_set):
+        warnings.append(
+            WarningItem(
+                code="liaoning_trunk_rating_weight_table_missing",
+                message="未识别到表4.1-1桥梁部件权重计算表，请人工确认评分权重。",
+                severity="warning",
+                target_candidate_id=None,
+            )
+        )
 
     for table in tables:
-        if not table.rows or not is_rating_table(table):
+        if not table.rows or not is_overall_rating_table(table, rule_set):
             continue
 
         headers = table.rows[0]
@@ -178,5 +196,5 @@ def parse_rating_tables(tables: list[DocxTable]) -> tuple[Ratings, list[WarningI
 
     raise WordImportError(
         code="rating_table_not_found",
-        message="未识别到第四章总体技术状况评定表。",
+        message="未识别到辽宁国省干线表4.1-2总体技术状况评定表。",
     )

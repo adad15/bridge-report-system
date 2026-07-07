@@ -165,8 +165,7 @@ def test_read_docx_blocks_keeps_table_titles(tmp_path: Path) -> None:
     assert document.paragraph_texts[0] == "绕阳河二号桥 定期检测报告"
     assert document.tables[0].title == "表2.1-1 上部结构病害检查表"
     assert document.tables[0].rows[0] == ["构件", "位置", "病害", "数量", "尺寸", "照片编号"]
-    assert document.tables[1].title == "总体技术状况评定表"
-    assert document.tables[1].chapter == "第四章 全桥技术状况综合评定"
+    assert document.tables[1].title == "表4.1-2 总体技术状况评定表"
 
 
 def test_parse_defect_tables_extracts_defect_candidate(tmp_path: Path) -> None:
@@ -257,9 +256,10 @@ def test_parse_rating_tables_extracts_overall_structure_and_evaluation_parts(tmp
     docx_path = create_sample_docx(tmp_path / "sample.docx", image_path)
     document = read_docx_blocks(docx_path)
 
-    ratings, warnings = parse_rating_tables(document.tables)
+    rule_set = select_rule_set("辽宁国省干线")
+    ratings, warnings = parse_rating_tables(document.tables, rule_set)
 
-    assert warnings == []
+    assert [warning.code for warning in warnings] == ["liaoning_trunk_rating_weight_table_missing"]
     assert ratings.overall.total_score == 85.61
     assert ratings.overall.overall_grade == "2类"
     assert [item.structure_part for item in ratings.structure_parts] == ["上部结构", "下部结构", "桥面系"]
@@ -279,10 +279,40 @@ def test_parse_rating_tables_fails_when_fourth_chapter_table_missing(tmp_path: P
     document = read_docx_blocks(docx_path)
 
     with pytest.raises(WordImportError) as exc_info:
-        parse_rating_tables(document.tables)
+        parse_rating_tables(document.tables, select_rule_set("辽宁国省干线"))
 
     assert exc_info.value.code == "rating_table_not_found"
-    assert exc_info.value.message == "未识别到第四章总体技术状况评定表。"
+    assert exc_info.value.message == "未识别到辽宁国省干线表4.1-2总体技术状况评定表。"
+
+
+def test_parse_rating_tables_warns_when_liaoning_weight_table_missing(tmp_path: Path) -> None:
+    rule_set = select_rule_set("辽宁国省干线")
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    docx_path = create_sample_docx(tmp_path / "sample.docx", image_path)
+    document = read_docx_blocks(docx_path)
+
+    ratings, warnings = parse_rating_tables(document.tables, rule_set)
+
+    assert ratings.overall.total_score == 85.61
+    assert [warning.code for warning in warnings] == ["liaoning_trunk_rating_weight_table_missing"]
+
+
+def test_parse_rating_tables_does_not_use_appendix_rating_table() -> None:
+    rule_set = select_rule_set("辽宁国省干线")
+    table = DocxTable(
+        index=0,
+        title="附录1 桥梁技术状况评定表",
+        chapter=None,
+        rows=[
+            ["桥梁总体技术状况评分Dr", "85.61", "总体技术状况等级", "2类"],
+        ],
+    )
+
+    with pytest.raises(WordImportError) as exc_info:
+        parse_rating_tables([table], rule_set)
+
+    assert exc_info.value.code == "rating_table_not_found"
 
 
 def test_parse_rating_tables_ignores_non_fourth_chapter_rating_like_table() -> None:
@@ -297,7 +327,7 @@ def test_parse_rating_tables_ignores_non_fourth_chapter_rating_like_table() -> N
     )
 
     with pytest.raises(WordImportError) as exc_info:
-        parse_rating_tables([table])
+        parse_rating_tables([table], select_rule_set("辽宁国省干线"))
 
     assert exc_info.value.code == "rating_table_not_found"
 
@@ -314,10 +344,10 @@ def test_parse_rating_tables_ignores_unrelated_fourth_chapter_table_without_rati
     )
 
     with pytest.raises(WordImportError) as exc_info:
-        parse_rating_tables([table])
+        parse_rating_tables([table], select_rule_set("辽宁国省干线"))
 
     assert exc_info.value.code == "rating_table_not_found"
-    assert exc_info.value.message == "未识别到第四章总体技术状况评定表。"
+    assert exc_info.value.message == "未识别到辽宁国省干线表4.1-2总体技术状况评定表。"
 
 
 def test_parse_rating_tables_ignores_partial_fourth_chapter_rating_headers() -> None:
@@ -332,7 +362,7 @@ def test_parse_rating_tables_ignores_partial_fourth_chapter_rating_headers() -> 
     )
 
     with pytest.raises(WordImportError) as exc_info:
-        parse_rating_tables([table])
+        parse_rating_tables([table], select_rule_set("辽宁国省干线"))
 
     assert exc_info.value.code == "rating_table_not_found"
 
@@ -349,7 +379,7 @@ def test_parse_rating_tables_rejects_partial_headers_with_numeric_overall_row() 
     )
 
     with pytest.raises(WordImportError) as exc_info:
-        parse_rating_tables([table])
+        parse_rating_tables([table], select_rule_set("辽宁国省干线"))
 
     assert exc_info.value.code == "rating_table_not_found"
 
@@ -366,7 +396,7 @@ def test_parse_rating_tables_requires_standalone_score_header() -> None:
     )
 
     with pytest.raises(WordImportError) as exc_info:
-        parse_rating_tables([table])
+        parse_rating_tables([table], select_rule_set("辽宁国省干线"))
 
     assert exc_info.value.code == "rating_table_not_found"
 
@@ -374,8 +404,8 @@ def test_parse_rating_tables_requires_standalone_score_header() -> None:
 def test_parse_rating_tables_uses_standalone_score_when_component_score_appears_first() -> None:
     table = DocxTable(
         index=0,
-        title="总体技术状况评定表",
-        chapter="第四章 全桥技术状况综合评定",
+        title="表4.1-2 总体技术状况评定表",
+        chapter=None,
         rows=[
             ["层级", "结构部位", "类别编号", "评价部件", "构件评分", "评分", "权重", "等级"],
             ["全桥", "全桥", "", "全桥", "3:86.62", "85.61", "", "2类"],
@@ -383,9 +413,9 @@ def test_parse_rating_tables_uses_standalone_score_when_component_score_appears_
         ],
     )
 
-    ratings, warnings = parse_rating_tables([table])
+    ratings, warnings = parse_rating_tables([table], select_rule_set("辽宁国省干线"))
 
-    assert warnings == []
+    assert [warning.code for warning in warnings] == ["liaoning_trunk_rating_weight_table_missing"]
     assert ratings.overall.total_score == 85.61
     assert ratings.evaluation_parts[0].part_score == 86.62
 
@@ -393,16 +423,16 @@ def test_parse_rating_tables_uses_standalone_score_when_component_score_appears_
 def test_parse_rating_tables_skips_malformed_fourth_chapter_rating_candidate() -> None:
     table = DocxTable(
         index=0,
-        title="总体技术状况评定表",
-        chapter="第四章 全桥技术状况综合评定",
+        title="表4.1-2 总体技术状况评定表",
+        chapter=None,
         rows=[
-            ["层级", "结构部位", "评分", "等级"],
-            ["全桥", "全桥", "整体情况说明", "2类"],
+            ["层级", "结构部位", "类别编号", "评价部件", "评分", "权重", "等级", "构件评分"],
+            ["全桥", "全桥", "", "全桥", "整体情况说明", "", "2类", ""],
         ],
     )
 
     with pytest.raises(WordImportError) as exc_info:
-        parse_rating_tables([table])
+        parse_rating_tables([table], select_rule_set("辽宁国省干线"))
 
     assert exc_info.value.code == "rating_table_not_found"
 
@@ -537,7 +567,7 @@ def test_parse_word_endpoint_maps_import_error_to_bad_request(tmp_path: Path) ->
     assert response.json() == {
         "detail": {
             "code": "rating_table_not_found",
-            "message": "未识别到第四章总体技术状况评定表。",
+            "message": "未识别到辽宁国省干线表4.1-2总体技术状况评定表。",
         }
     }
 

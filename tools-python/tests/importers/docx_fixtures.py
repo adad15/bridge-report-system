@@ -32,9 +32,21 @@ def add_photo(document: Document, image_path: Path, caption: str = "照片2.1-1 
     document.add_paragraph(caption)
 
 
+def add_weight_table(document: Document) -> None:
+    document.add_paragraph("表4.1-1 桥梁部件权重计算表")
+    table = document.add_table(rows=2, cols=3)
+    rows = [
+        ["结构部位", "评价部件", "权重"],
+        ["上部结构", "上部承重构件", "0.70"],
+    ]
+    for row_index, row in enumerate(rows):
+        for cell_index, value in enumerate(row):
+            table.rows[row_index].cells[cell_index].text = value
+
+
 def add_rating_table(document: Document) -> None:
-    document.add_heading("第四章 全桥技术状况综合评定", level=1)
-    document.add_paragraph("总体技术状况评定表")
+    document.add_heading("全桥技术状况综合评定", level=1)
+    document.add_paragraph("表4.1-2  总体技术状况评定表")
     table = document.add_table(rows=6, cols=8)
     headers = ["层级", "结构部位", "类别编号", "评价部件", "评分", "权重", "等级", "构件评分"]
     rows = [
