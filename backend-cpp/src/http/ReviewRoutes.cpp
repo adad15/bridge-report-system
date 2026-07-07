@@ -2,15 +2,18 @@
 
 #include <functional>
 #include <regex>
+#include <sstream>
 #include <string>
 #include <utility>
 
 #include <drogon/HttpResponse.h>
 #include <drogon/drogon.h>
 #include <drogon/orm/Exception.h>
+#include <json/json.h>
 
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/http/Cors.hpp"
+#include "bridge_report/review/ReviewStatistics.hpp"
 
 namespace bridge_report::http {
 
@@ -52,12 +55,33 @@ void respond_bridge_not_found(const HttpCallback& callback) {
     );
 }
 
+void respond_import_record_not_found(const HttpCallback& callback) {
+    respond_json(
+        callback,
+        make_error_body("import_record_not_found", "指定的导入记录不存在"),
+        drogon::k404NotFound
+    );
+}
+
 void respond_db_unavailable(const HttpCallback& callback) {
     respond_json(
         callback,
         make_error_body("db_unavailable", "数据库暂不可用，请稍后重试。"),
         drogon::k503ServiceUnavailable
     );
+}
+
+// parsed_result_json 存储为 jsonb 文本；解析失败（理论上不应发生，防御式处理）时退化为空对象，
+// 使 build_review_statistics 等下游逻辑仍能得到全 0 统计而不是崩溃。
+Json::Value parse_parsed_result_json(const std::string& text) {
+    Json::CharReaderBuilder builder;
+    Json::Value root;
+    std::string errors;
+    std::istringstream stream(text);
+    if (!Json::parseFromStream(builder, stream, &root, &errors)) {
+        return Json::Value(Json::objectValue);
+    }
+    return root;
 }
 
 // 注意：execSqlSync 会阻塞当前 IO 线程；本地单用户 v1 场景可接受（与 /health/db 的取舍一致）。
@@ -107,6 +131,106 @@ void register_bridge_scoped_route(
                 respond_json(callback, build_body(repository, bridge_id));
             } catch (const drogon::orm::DrogonDbException&) {
                 respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                // 兜底：处理器内不允许任何异常向外逃逸（与 main.cpp /health/db 的约定一致）。
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Get}
+    );
+}
+
+// 导入记录详情路由：GET /api/import-records/{import_record_id}/review。
+// 与 register_bridge_scoped_route 类似，但作用域是导入记录而非桥梁，
+// 且响应体需要联查桥梁/年度并叠加纯函数统计。
+void register_import_record_review_route(const drogon::orm::DbClientPtr& db_client) {
+    drogon::app().registerHandler(
+        "/api/import-records/{import_record_id}/review",
+        [db_client](
+            const drogon::HttpRequestPtr&,
+            HttpCallback&& callback,
+            const std::string& import_record_id
+        ) {
+            if (!is_valid_uuid(import_record_id)) {
+                respond_import_record_not_found(callback);
+                return;
+            }
+
+            try {
+                db::ReviewRepository repository(db_client);
+                const auto detail = repository.get_import_record_detail(import_record_id);
+                if (!detail.has_value()) {
+                    respond_import_record_not_found(callback);
+                    return;
+                }
+
+                Json::Value import_record;
+                import_record["id"] = detail->id;
+                import_record["system_number"] = detail->system_number;
+                import_record["import_name"] = detail->import_name;
+                import_record["source_type"] = detail->source_type;
+                import_record["import_status"] = detail->import_status;
+                import_record["importer_name"] =
+                    detail->importer_name.has_value() ? Json::Value(*detail->importer_name) : Json::Value(Json::nullValue);
+                import_record["importer_version"] =
+                    detail->importer_version.has_value() ? Json::Value(*detail->importer_version) : Json::Value(Json::nullValue);
+                import_record["created_at"] = detail->created_at;
+                import_record["updated_at"] = detail->updated_at;
+
+                Json::Value bridge;
+                bridge["id"] = detail->bridge_id;
+                bridge["system_number"] = detail->bridge_system_number;
+                bridge["bridge_name"] = detail->bridge_name;
+                bridge["route_name"] =
+                    detail->bridge_route_name.has_value() ? Json::Value(*detail->bridge_route_name) : Json::Value(Json::nullValue);
+
+                Json::Value inspection_year(Json::nullValue);
+                if (detail->inspection_year_id.has_value()) {
+                    inspection_year = Json::Value(Json::objectValue);
+                    inspection_year["id"] = *detail->inspection_year_id;
+                    inspection_year["system_number"] =
+                        detail->inspection_year_system_number.has_value() ? *detail->inspection_year_system_number : "";
+                    inspection_year["inspection_year"] =
+                        detail->inspection_year.has_value() ? *detail->inspection_year : 0;
+                    inspection_year["status"] =
+                        detail->inspection_year_status.has_value() ? *detail->inspection_year_status : "";
+                    inspection_year["version_number"] =
+                        detail->inspection_year_version_number.has_value() ? *detail->inspection_year_version_number : 0;
+                    inspection_year["is_current"] =
+                        detail->inspection_year_is_current.has_value() && *detail->inspection_year_is_current;
+                }
+
+                const auto parsed_result = parse_parsed_result_json(detail->parsed_result_json);
+                const auto statistics = review::build_review_statistics(parsed_result);
+
+                bool has_current_annual_facts = false;
+                if (detail->inspection_year.has_value()) {
+                    has_current_annual_facts =
+                        repository.has_current_annual_facts(detail->bridge_id, *detail->inspection_year);
+                } else if (
+                    parsed_result.isMember("inspection") && parsed_result["inspection"].isObject()
+                    && parsed_result["inspection"].isMember("inspection_year")
+                    && parsed_result["inspection"]["inspection_year"].isInt()
+                ) {
+                    has_current_annual_facts = repository.has_current_annual_facts(
+                        detail->bridge_id,
+                        parsed_result["inspection"]["inspection_year"].asInt()
+                    );
+                }
+
+                Json::Value body;
+                body["import_record"] = import_record;
+                body["bridge"] = bridge;
+                body["inspection_year"] = inspection_year;
+                body["parsed_result"] = parsed_result;
+                body["statistics"] = statistics.to_json();
+                body["has_current_annual_facts"] = has_current_annual_facts;
+
+                respond_json(callback, body);
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
             }
         },
         {drogon::Get}
@@ -119,6 +243,7 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
     register_options_handler("/api/bridges");
     register_options_handler("/api/bridges/{bridge_id}/inspection-years");
     register_options_handler("/api/bridges/{bridge_id}/import-records");
+    register_options_handler("/api/import-records/{import_record_id}/review");
 
     drogon::app().registerHandler(
         "/api/bridges",
@@ -165,6 +290,8 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
             return body;
         }
     );
+
+    register_import_record_review_route(db_client);
 }
 
 }  // 命名空间 bridge_report::http

@@ -91,4 +91,77 @@ std::vector<review::ImportRecordSummary> ReviewRepository::list_import_records(c
     return records;
 }
 
+std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_detail(
+    const std::string& import_record_id
+) {
+    const auto result = db_client_->execSqlSync(
+        "select "
+        "ir.id, ir.system_number, ir.bridge_id, ir.inspection_year_id, "
+        "ir.import_name, ir.source_type, ir.import_status, "
+        "ir.importer_name, ir.importer_version, ir.parsed_result_json::text as parsed_result_json, "
+        "ir.created_at::text as created_at, ir.updated_at::text as updated_at, "
+        "b.system_number as bridge_system_number, b.bridge_name as bridge_name, b.route_name as bridge_route_name, "
+        "iy.system_number as inspection_year_system_number, iy.inspection_year as inspection_year, "
+        "iy.status as inspection_year_status, iy.version_number as inspection_year_version_number, "
+        "iy.is_current as inspection_year_is_current "
+        "from import_records ir "
+        "join bridges b on b.id = ir.bridge_id "
+        "left join inspection_years iy on iy.id = ir.inspection_year_id "
+        "where ir.id = $1::uuid",
+        import_record_id
+    );
+
+    if (result.empty()) {
+        return std::nullopt;
+    }
+
+    const auto& row = result[0];
+    review::ImportRecordDetail detail;
+    detail.id = row["id"].as<std::string>();
+    detail.system_number = row["system_number"].as<std::string>();
+    detail.bridge_id = row["bridge_id"].as<std::string>();
+    detail.inspection_year_id = optional_text(row, "inspection_year_id");
+    detail.import_name = row["import_name"].as<std::string>();
+    detail.source_type = row["source_type"].as<std::string>();
+    detail.import_status = row["import_status"].as<std::string>();
+    detail.importer_name = optional_text(row, "importer_name");
+    detail.importer_version = optional_text(row, "importer_version");
+    detail.parsed_result_json = row["parsed_result_json"].as<std::string>();
+    detail.created_at = row["created_at"].as<std::string>();
+    detail.updated_at = row["updated_at"].as<std::string>();
+
+    detail.bridge_system_number = row["bridge_system_number"].as<std::string>();
+    detail.bridge_name = row["bridge_name"].as<std::string>();
+    detail.bridge_route_name = optional_text(row, "bridge_route_name");
+
+    detail.inspection_year_system_number = optional_text(row, "inspection_year_system_number");
+    const auto inspection_year_field = row["inspection_year"];
+    detail.inspection_year = inspection_year_field.isNull()
+        ? std::nullopt
+        : std::make_optional(inspection_year_field.as<int>());
+    detail.inspection_year_status = optional_text(row, "inspection_year_status");
+    const auto version_number_field = row["inspection_year_version_number"];
+    detail.inspection_year_version_number = version_number_field.isNull()
+        ? std::nullopt
+        : std::make_optional(version_number_field.as<int>());
+    const auto is_current_field = row["inspection_year_is_current"];
+    detail.inspection_year_is_current = is_current_field.isNull()
+        ? std::nullopt
+        : std::make_optional(is_current_field.as<bool>());
+
+    return detail;
+}
+
+bool ReviewRepository::has_current_annual_facts(const std::string& bridge_id, int inspection_year) {
+    const auto result = db_client_->execSqlSync(
+        "select exists("
+        "select 1 from inspection_years "
+        "where bridge_id = $1::uuid and inspection_year = $2 and is_current and status = '已确认'"
+        ") as found",
+        bridge_id,
+        inspection_year
+    );
+    return !result.empty() && result[0]["found"].as<bool>();
+}
+
 }  // 命名空间 bridge_report::db

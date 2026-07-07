@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,17 @@ public:
     std::vector<review::BridgeSummary> list_bridges();
     std::vector<review::InspectionYearSummary> list_inspection_years(const std::string& bridge_id);
     std::vector<review::ImportRecordSummary> list_import_records(const std::string& bridge_id);
+
+    /**
+     * @brief 联查 import_records + bridges + inspection_years（左联，年度可空），
+     * 供 GET /api/import-records/{import_record_id}/review 使用。
+     */
+    std::optional<review::ImportRecordDetail> get_import_record_detail(const std::string& import_record_id);
+
+    /**
+     * @brief 判断桥梁在指定年度是否存在“已确认 + 当前版本”的年度检查记录。
+     */
+    bool has_current_annual_facts(const std::string& bridge_id, int inspection_year);
 
 private:
     drogon::orm::DbClientPtr db_client_;

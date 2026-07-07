@@ -1,14 +1,30 @@
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 
 #include <drogon/orm/DbClient.h>
 #include <gtest/gtest.h>
+#include <json/json.h>
 
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/db/ReviewRepository.hpp"
 
 namespace {
+
+std::string read_fixture_text(const std::string& file_name) {
+    const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) / "samples" / "contracts" / file_name;
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        throw std::runtime_error("Unable to open fixture: " + path.string());
+    }
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    return buffer.str();
+}
 
 // fixture：在事务里插入一座桥 + 一个年度 + 一条导入记录，测试结束后回滚，数据库保持不变。
 class ReviewRepositoryTest : public ::testing::Test {
@@ -129,4 +145,106 @@ TEST_F(ReviewRepositoryTest, list_inspection_years_returns_empty_for_unknown_bri
     const auto years = repository.list_inspection_years("00000000-0000-0000-0000-000000000000");
 
     EXPECT_TRUE(years.empty());
+}
+
+TEST_F(ReviewRepositoryTest, get_import_record_detail_returns_bridge_year_and_parsed_result) {
+    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.valid.json");
+    tx_->execSqlSync(
+        "update import_records set parsed_result_json = $1::jsonb where id = $2::uuid",
+        fixture_json,
+        import_record_id_
+    );
+
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    const auto detail = repository.get_import_record_detail(import_record_id_);
+
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->id, import_record_id_);
+    EXPECT_EQ(detail->bridge_id, bridge_id_);
+    EXPECT_EQ(detail->bridge_name, "M05T2测试桥梁");
+    ASSERT_TRUE(detail->inspection_year_id.has_value());
+    EXPECT_EQ(*detail->inspection_year_id, inspection_year_id_);
+    ASSERT_TRUE(detail->inspection_year.has_value());
+    EXPECT_EQ(*detail->inspection_year, 2025);
+    ASSERT_TRUE(detail->inspection_year_status.has_value());
+    EXPECT_EQ(*detail->inspection_year_status, "已确认");
+
+    Json::CharReaderBuilder builder;
+    Json::Value parsed;
+    std::string errors;
+    std::istringstream stream(detail->parsed_result_json);
+    ASSERT_TRUE(Json::parseFromStream(builder, stream, &parsed, &errors)) << errors;
+    ASSERT_TRUE(parsed.isMember("defects"));
+    EXPECT_EQ(parsed["defects"].size(), 1u);
+}
+
+TEST_F(ReviewRepositoryTest, get_import_record_detail_returns_null_inspection_year_when_absent) {
+    const auto import_result = tx_->execSqlSync(
+        "insert into import_records "
+        "(bridge_id, import_name, source_type, import_status) "
+        "values ($1::uuid, $2, $3, $4) returning id",
+        bridge_id_,
+        "M05T2无年度导入.docx",
+        "正式Word",
+        "已上传"
+    );
+    const auto import_record_id_without_year = import_result[0]["id"].as<std::string>();
+
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    const auto detail = repository.get_import_record_detail(import_record_id_without_year);
+
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_FALSE(detail->inspection_year_id.has_value());
+    EXPECT_FALSE(detail->inspection_year.has_value());
+    EXPECT_FALSE(detail->inspection_year_status.has_value());
+    EXPECT_FALSE(detail->inspection_year_version_number.has_value());
+    EXPECT_FALSE(detail->inspection_year_is_current.has_value());
+}
+
+TEST_F(ReviewRepositoryTest, get_import_record_detail_returns_nullopt_for_unknown_id) {
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    const auto detail = repository.get_import_record_detail("00000000-0000-0000-0000-000000000000");
+
+    EXPECT_FALSE(detail.has_value());
+}
+
+TEST_F(ReviewRepositoryTest, has_current_annual_facts_reflects_inspection_year_state) {
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    // fixture 中已经插入了一条“已确认 + is_current”的 2025 年度记录。
+    EXPECT_TRUE(repository.has_current_annual_facts(bridge_id_, 2025));
+
+    // 该桥梁没有 2030 年度的记录。
+    EXPECT_FALSE(repository.has_current_annual_facts(bridge_id_, 2030));
+}
+
+TEST_F(ReviewRepositoryTest, has_current_annual_facts_false_before_confirmed_year_inserted) {
+    const auto bridge_result = tx_->execSqlSync(
+        "insert into bridges (bridge_name, route_name, status) "
+        "values ($1, $2, $3) returning id",
+        "M05T2第二测试桥梁",
+        "G2线",
+        "在用"
+    );
+    const auto second_bridge_id = bridge_result[0]["id"].as<std::string>();
+
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    EXPECT_FALSE(repository.has_current_annual_facts(second_bridge_id, 2026));
+
+    tx_->execSqlSync(
+        "insert into inspection_years "
+        "(bridge_id, inspection_year, status, version_number, is_current) "
+        "values ($1::uuid, $2, $3, $4, $5)",
+        second_bridge_id,
+        2026,
+        "已确认",
+        1,
+        true
+    );
+
+    EXPECT_TRUE(repository.has_current_annual_facts(second_bridge_id, 2026));
 }

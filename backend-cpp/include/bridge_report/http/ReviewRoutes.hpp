@@ -9,6 +9,7 @@ namespace bridge_report::http {
  *   GET /api/bridges
  *   GET /api/bridges/{bridge_id}/inspection-years
  *   GET /api/bridges/{bridge_id}/import-records
+ *   GET /api/import-records/{import_record_id}/review
  */
 void register_review_routes(const drogon::orm::DbClientPtr& db_client);
 
