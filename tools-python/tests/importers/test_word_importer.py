@@ -449,6 +449,8 @@ def test_parse_word_import_outputs_contract_data_and_photo_files(tmp_path: Path)
         }
     )
 
+    assert request.rule_profile == "辽宁国省干线"
+
     response = parse_word_import(request)
 
     assert response.temporary_photo_files == ["photo_0001.png"]
@@ -537,6 +539,7 @@ def test_parse_word_endpoint_returns_contract_data(tmp_path: Path) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["data"]["contract"]["name"] == "BridgeAnnualInspectionData"
+    assert payload["data"]["contract"]["parser_name"] == "word_importer"
     assert payload["data"]["defects"][0]["candidate_id"] == "defect_0001"
     assert payload["temporary_photo_files"] == ["photo_0001.png"]
 

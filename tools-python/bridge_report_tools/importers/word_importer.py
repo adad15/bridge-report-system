@@ -18,6 +18,7 @@ from bridge_report_tools.importers.photo_extractor import extract_and_match_phot
 from bridge_report_tools.importers.rating_tables import parse_rating_tables
 from bridge_report_tools.importers.word_context import WordImportRequest, WordImportResponse
 from bridge_report_tools.importers.word_errors import WordImportError
+from bridge_report_tools.importers.word_rules import select_rule_set
 
 
 PARSER_VERSION = "0.1.0"
@@ -64,14 +65,17 @@ def parse_word_import(request: WordImportRequest) -> WordImportResponse:
             message=f"临时图片输出路径不是目录：{request.temporary_photo_output_dir}",
         )
 
+    rule_set = select_rule_set(request.rule_profile)
+
     document = read_docx_blocks(request.docx_path)
-    defects, defect_warnings, defect_errors = parse_defect_tables(document.tables)
-    ratings, rating_warnings = parse_rating_tables(document.tables)
+    defects, defect_warnings, defect_errors = parse_defect_tables(document.tables, rule_set)
+    ratings, rating_warnings = parse_rating_tables(document.tables, rule_set)
     photos, temporary_photo_files, photo_warnings = extract_and_match_photos(
         request.docx_path,
         document,
         defects,
         request.temporary_photo_output_dir,
+        rule_set,
     )
 
     try:
