@@ -17,8 +17,8 @@ def write_png(path: Path) -> None:
 
 
 def add_defect_table(document: Document) -> None:
-    document.add_heading("第二章 结构病害检查", level=1)
-    document.add_paragraph("上部结构病害检查表")
+    document.add_heading("桥梁外观检查", level=1)
+    document.add_paragraph("表2.1-1  上部结构病害检查表")
     table = document.add_table(rows=2, cols=6)
     headers = ["构件", "位置", "病害", "数量", "尺寸", "照片编号"]
     values = ["主梁", "第二跨左幅梁底", "裂缝", "1处", "L=0.8m，W=0.12mm", "2.1-1"]

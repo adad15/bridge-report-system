@@ -15,6 +15,7 @@ from bridge_report_tools.importers.photo_extractor import extract_and_match_phot
 from bridge_report_tools.importers.rating_tables import parse_rating_tables
 from bridge_report_tools.importers.word_context import ImportMode, WordImportRequest
 from bridge_report_tools.importers.word_errors import WordImportError
+from bridge_report_tools.importers.word_rules import select_rule_set
 from bridge_report_tools.importers.word_importer import parse_word_import
 from bridge_report_tools.main import app
 from tests.importers.docx_fixtures import (
@@ -162,8 +163,7 @@ def test_read_docx_blocks_keeps_table_titles(tmp_path: Path) -> None:
     document = read_docx_blocks(docx_path)
 
     assert document.paragraph_texts[0] == "绕阳河二号桥 定期检测报告"
-    assert document.tables[0].title == "上部结构病害检查表"
-    assert document.tables[0].chapter == "第二章 结构病害检查"
+    assert document.tables[0].title == "表2.1-1 上部结构病害检查表"
     assert document.tables[0].rows[0] == ["构件", "位置", "病害", "数量", "尺寸", "照片编号"]
     assert document.tables[1].title == "总体技术状况评定表"
     assert document.tables[1].chapter == "第四章 全桥技术状况综合评定"
@@ -175,9 +175,10 @@ def test_parse_defect_tables_extracts_defect_candidate(tmp_path: Path) -> None:
     docx_path = create_sample_docx(tmp_path / "sample.docx", image_path)
     document = read_docx_blocks(docx_path)
 
-    defects, warnings, errors = parse_defect_tables(document.tables)
+    rule_set = select_rule_set("辽宁国省干线")
+    defects, warnings, errors = parse_defect_tables(document.tables, rule_set)
 
-    assert warnings == []
+    assert {warning.code for warning in warnings} == {"liaoning_trunk_defect_table_missing"}
     assert errors == []
     assert len(defects) == 1
     defect = defects[0]
@@ -190,7 +191,7 @@ def test_parse_defect_tables_extracts_defect_candidate(tmp_path: Path) -> None:
     assert defect.measurement_text == "L=0.8m，W=0.12mm"
     assert [item.dimension_type for item in defect.measurements] == ["长度", "宽度"]
     assert defect.photo_numbers == ["2.1-1"]
-    assert defect.source_ref.table_title == "上部结构病害检查表"
+    assert defect.source_ref.table_title == "表2.1-1 上部结构病害检查表"
 
 
 def test_parse_defect_tables_ignores_non_defect_table_with_disease_title() -> None:
@@ -204,12 +205,35 @@ def test_parse_defect_tables_ignores_non_defect_table_with_disease_title() -> No
         ],
     )
 
-    defects, warnings, errors = parse_defect_tables([table])
+    rule_set = select_rule_set("辽宁国省干线")
+    defects, warnings, errors = parse_defect_tables([table], rule_set)
 
     assert defects == []
     assert warnings == []
     assert len(errors) == 1
     assert errors[0].code == "defect_tables_not_found"
+
+
+def test_parse_defect_tables_uses_liaoning_table_numbers() -> None:
+    rule_set = select_rule_set("辽宁国省干线")
+    table = DocxTable(
+        index=0,
+        title="表2.2-1  下部结构病害检查表",
+        chapter=None,
+        rows=[
+            ["构件", "位置", "病害", "数量", "尺寸", "照片编号"],
+            ["桥台", "0#台左侧翼墙", "勾缝砂浆脱落", "1处", "L=1m", "2.2-1"],
+        ],
+    )
+
+    defects, warnings, errors = parse_defect_tables([table], rule_set)
+
+    assert warnings
+    assert {warning.code for warning in warnings} == {"liaoning_trunk_defect_table_missing"}
+    assert errors == []
+    assert len(defects) == 1
+    assert defects[0].structure_part == "下部结构"
+    assert defects[0].photo_numbers == ["2.2-1"]
 
 
 def test_parse_defect_tables_reports_missing_defect_table(tmp_path: Path) -> None:
@@ -218,7 +242,8 @@ def test_parse_defect_tables_reports_missing_defect_table(tmp_path: Path) -> Non
     docx_path = create_sample_docx(tmp_path / "sample.docx", image_path)
     document = read_docx_blocks(docx_path)
 
-    defects, warnings, errors = parse_defect_tables(document.tables[1:])
+    rule_set = select_rule_set("辽宁国省干线")
+    defects, warnings, errors = parse_defect_tables(document.tables[1:], rule_set)
 
     assert defects == []
     assert warnings == []
@@ -518,19 +543,20 @@ def test_parse_word_endpoint_maps_import_error_to_bad_request(tmp_path: Path) ->
 
 
 def test_parse_defect_tables_keeps_row_level_warnings() -> None:
+    rule_set = select_rule_set("辽宁国省干线")
     table = DocxTable(
         index=0,
-        title="上部结构病害检查表",
-        chapter="第二章 结构病害检查",
+        title="表2.1-1 上部结构病害检查表",
+        chapter=None,
         rows=[
             ["构件", "位置", "病害", "数量", "尺寸", "照片编号"],
             ["主梁", "第二跨左幅梁底", "破损", "1处", "局部破损，约20cm×30cm", ""],
         ],
     )
 
-    defects, warnings, errors = parse_defect_tables([table])
+    defects, warnings, errors = parse_defect_tables([table], rule_set)
 
-    assert warnings == []
+    assert {warning.code for warning in warnings} == {"liaoning_trunk_defect_table_missing"}
     assert errors == []
     assert len(defects) == 1
     warning_codes = [warning.code for warning in defects[0].warnings]
@@ -543,7 +569,7 @@ def test_extract_and_match_photos_links_caption_to_defect(tmp_path: Path) -> Non
     write_png(image_path)
     docx_path = create_sample_docx(tmp_path / "sample.docx", image_path)
     document = read_docx_blocks(docx_path)
-    defects, _, _ = parse_defect_tables(document.tables)
+    defects, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
     photo_output_dir = tmp_path / "out"
 
     photos, temporary_files, warnings = extract_and_match_photos(docx_path, document, defects, photo_output_dir)
@@ -580,7 +606,7 @@ def test_extract_and_match_photos_keeps_unreferenced_photo_warning(tmp_path: Pat
     add_rating_table(document_obj)
     document_obj.save(docx_path)
     document = read_docx_blocks(docx_path)
-    defects, _, _ = parse_defect_tables(document.tables)
+    defects, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
 
     photos, temporary_files, warnings = extract_and_match_photos(docx_path, document, defects, tmp_path / "out")
 
@@ -697,7 +723,7 @@ def test_extract_and_match_photos_unmatched_defect_warning_is_idempotent(tmp_pat
     add_rating_table(document_obj)
     document_obj.save(docx_path)
     document = read_docx_blocks(docx_path)
-    defects, _, _ = parse_defect_tables(document.tables)
+    defects, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
 
     extract_and_match_photos(docx_path, document, defects, tmp_path / "out")
     extract_and_match_photos(docx_path, document, defects, tmp_path / "out")

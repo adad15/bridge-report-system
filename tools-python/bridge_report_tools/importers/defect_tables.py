@@ -5,32 +5,27 @@ import re
 from bridge_report_tools.contracts.annual_inspection import DefectCandidate, SourceRef, WarningItem
 from bridge_report_tools.importers.docx_reader import DocxTable
 from bridge_report_tools.importers.measurements import parse_measurements
+from bridge_report_tools.importers.word_rules import DefectTableRule, WordRuleSet
 
 
 PHOTO_NUMBER_PATTERN = re.compile(r"(?:照片)?(?P<number>\d+(?:\.\d+)?-\d+)")
 
 
-def infer_structure_part(table: DocxTable) -> str:
-    text = " ".join(value or "" for value in [table.title, table.chapter])
-    if "上部结构" in text:
-        return "上部结构"
-    if "下部结构" in text:
-        return "下部结构"
-    if "桥面系" in text:
-        return "桥面系"
-    return "其他"
-
-
-def is_defect_table(table: DocxTable) -> bool:
-    header = table.rows[0] if table.rows else []
+def match_defect_table(table: DocxTable, rule_set: WordRuleSet) -> DefectTableRule | None:
+    if not table.rows:
+        return None
+    rule = rule_set.match_defect_table_title(table.title)
+    if rule is None:
+        return None
+    header = table.rows[0]
     header_text = "|".join(header)
-    chapter = table.chapter or ""
-    return (
-        "第二章" in chapter
-        and "病害" in header_text
-        and "照片" in header_text
-        and any(keyword in header_text for keyword in ["构件", "部件", "部位", "位置"])
-    )
+    if "病害" not in header_text:
+        return None
+    if "照片" not in header_text:
+        return None
+    if not any(keyword in header_text for keyword in ["构件", "部件", "部位", "位置"]):
+        return None
+    return rule
 
 
 def header_index(headers: list[str], keywords: list[str]) -> int | None:
@@ -50,15 +45,21 @@ def parse_photo_numbers(text: str) -> list[str]:
     return [match.group("number") for match in PHOTO_NUMBER_PATTERN.finditer(text)]
 
 
-def parse_defect_tables(tables: list[DocxTable]) -> tuple[list[DefectCandidate], list[WarningItem], list[WarningItem]]:
+def parse_defect_tables(
+    tables: list[DocxTable],
+    rule_set: WordRuleSet,
+) -> tuple[list[DefectCandidate], list[WarningItem], list[WarningItem]]:
     defects: list[DefectCandidate] = []
     warnings: list[WarningItem] = []
     errors: list[WarningItem] = []
     defect_table_found = False
+    found_table_numbers: set[str] = set()
 
     for table in tables:
-        if not table.rows or not is_defect_table(table):
+        table_rule = match_defect_table(table, rule_set)
+        if table_rule is None:
             continue
+        found_table_numbers.add(table_rule.table_no)
         defect_table_found = True
         headers = table.rows[0]
         component_index = header_index(headers, ["构件", "部件"])
@@ -67,7 +68,7 @@ def parse_defect_tables(tables: list[DocxTable]) -> tuple[list[DefectCandidate],
         quantity_index = header_index(headers, ["数量"])
         measurement_index = header_index(headers, ["尺寸"])
         photo_index = header_index(headers, ["照片"])
-        structure_part = infer_structure_part(table)
+        structure_part = table_rule.structure_part
 
         for row_index, row in enumerate(table.rows[1:], start=1):
             if not any(row):
@@ -112,18 +113,30 @@ def parse_defect_tables(tables: list[DocxTable]) -> tuple[list[DefectCandidate],
                         row_index=row_index,
                         raw_row_text=" | ".join(row),
                     ),
-                    confidence=0.92 if structure_part != "其他" else 0.75,
+                    confidence=0.92,
                     review_status="待确认",
                     review_note=None,
                     warnings=row_warnings,
                 )
             )
 
-    if not defect_table_found:
+    if defect_table_found:
+        for table_rule in rule_set.defect_table_rules:
+            if table_rule.table_no in found_table_numbers:
+                continue
+            warnings.append(
+                WarningItem(
+                    code="liaoning_trunk_defect_table_missing",
+                    message=f"未识别到{table_rule.table_no}{table_rule.structure_part}病害检查表，请人工确认。",
+                    severity="warning",
+                    target_candidate_id=None,
+                )
+            )
+    else:
         errors.append(
             WarningItem(
                 code="defect_tables_not_found",
-                message="未识别到第二章结构病害检查表，本次导入没有生成病害候选。",
+                message="未识别到辽宁国省干线表2.1-1、表2.2-1、表2.3-1病害检查表，本次导入没有生成病害候选。",
                 severity="error",
                 target_candidate_id=None,
             )
