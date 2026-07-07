@@ -21,9 +21,9 @@
 
 ```text
 继续 bridge-report-system 项目。仓库路径：D:\vs2022 code\bridge-report-system。
-当前应该在分支 feature/04-word-importer-prototype。
-模块 01、02、03 已完成，现在开始讨论并编写模块 04：Word 导入原型。
-请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/2026-07-01-bridge-report-system-design.md、docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md、docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md，然后开始模块 04 的需求讨论和实施计划。先不要写代码。
+当前应该在分支 feature/05-review-workspace。
+模块 01、02、03、04 已完成，现在开始讨论并编写模块 05：人工校对工作台。
+请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/2026-07-01-bridge-report-system-design.md、docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md、docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md、docs/superpowers/specs/modules/04-word-importer-prototype.md，然后继续模块 05 的需求讨论和实施计划。先不要写代码。
 ```
 
 ## 当前进度
@@ -33,9 +33,10 @@
 - 模块 2 设计文档提交号：`52ee0ab docs: add module 02 schema and archive design`。
 - 模块 3 `03-bridge-annual-inspection-data-contract` 已完成实施并推送到 GitHub。
 - 模块 3 已定义并实现 `BridgeAnnualInspectionData` JSON 契约、JSON Schema、Python Pydantic 模型、C++ JsonCpp 校验器和前端 TypeScript 类型/运行时校验。
-- 当前分支为 `feature/04-word-importer-prototype`。
-- 模块 4 `04-word-importer-prototype` 已进入 Python Word 导入原型实现与真实样例适配阶段：第一版支持 `.docx`、`rule_profile="辽宁国省干线"`、第二章三张病害检查表、病害照片抽取匹配、第四章评分表和模块 3 契约输出。
+- 当前分支为 `feature/05-review-workspace`。
+- 模块 4 `04-word-importer-prototype` 已完成并推送到 GitHub：第一版支持 `.docx`、`rule_profile="辽宁国省干线"`、第二章三张病害检查表、病害照片抽取匹配、第四章评分表和模块 3 契约输出。
 - 绕阳河二号桥真实软件报告本地验收已覆盖：病害候选 25 条、病害照片候选 31 条、临时图片 36 个、第四章总分 85.61/2类、尺寸低置信误报清零。
+- 模块 5 `05-review-workspace` 已进入设计阶段：第一版目标是读取 `import_records.parsed_result_json`，按 warning/error 分组人工校对，保存草稿，并由 C++ 主服务确认入库正式病害、尺寸、照片和评分事实。
 
 ## 已确认方向
 
@@ -137,10 +138,10 @@
 - 等级最小单元是结构分部，即上部结构、下部结构、桥面系；`evaluation_parts[]` 不设置等级。
 - 对比候选不是 Python 从 Word 抽取的结果，而是在第 N 年事实确认入库后，由 C++ 读取数据库第 N-1 年事实生成。
 
-## 模块 4 当前实现状态
+## 模块 4 已完成状态
 
 - 模块 4 名称：`04-word-importer-prototype`。
-- 当前分支：`feature/04-word-importer-prototype`。
+- 完成分支：`feature/04-word-importer-prototype`。
 - 第一版放在 Python 工具层，实现 Word 表格、图片和评分解析原型。
 - 第一版只支持 `.docx`。
 - Python 接收 C++ 传入的 `rule_profile`，不自动识别模板；当前已实现 `辽宁国省干线`。
@@ -152,6 +153,18 @@
 - 模块 4 不直接写数据库，不负责人工校对页面，不负责历史病害对比算法。
 - 年度常规流程不要求上传上一年正式 Word；上一年事实优先来自 PostgreSQL。
 - 正式 Word 在第一版中的主要用途是首次建档或历史补录：当数据库没有上一年度事实时，从正式报告第二章抽取历史基线病害候选，人工确认后入库。
+
+## 模块 5 当前设计状态
+
+- 模块 5 名称：`05-review-workspace`。
+- 当前分支：`feature/05-review-workspace`。
+- 第一版采用“完整校对入库闭环”：桥梁 -> 年度检测任务 -> 导入记录 -> 校对工作台 -> 保存草稿 -> 入库前检查 -> 确认年度事实入库。
+- 页面入口按桥梁年度组织，不单独做全系统待校对任务中心。
+- 页面按“需要处理 / 普通病害 / 病害照片 / 技术状况评定 / 来源证据 / 原始 JSON”组织。
+- 用户校对核心业务字段，不直接编辑全量 JSON。
+- 普通候选允许批量确认，但确认入库前必须由 C++ 后端重新校验。
+- 同桥同年已有当前有效事实时，必须显式作为修订版确认，不允许静默覆盖。
+- 模块 5 不生成历史病害对比候选；对比算法和对比确认页放到后续模块。
 
 ## 核心模块
 
@@ -260,10 +273,10 @@
 
 推荐下一步：
 
-1. 继续用更多真实 `.docx` 验证 `辽宁国省干线` 规则。
-2. 对模块 4 当前改动做代码审查、整理提交并推送当前分支。
-3. 后续进入模块 05 前，确认前端校对页如何展示普通候选、带 warning 候选、导入级 warning/error。
-4. 若需要支持吉林国省干线、辽宁鹤大高速等模板，按 `word_rules` 规则集接口新增独立规则模块，不改主流程。
+1. 审阅模块 05 人工校对工作台设计文档。
+2. 基于模块 05 设计文档编写实施计划。
+3. 第一版优先实现读取候选 JSON、保存校对草稿、入库前检查和确认年度事实入库。
+4. 若继续支持吉林国省干线、辽宁鹤大高速等模板，按 `word_rules` 规则集接口新增独立规则模块，不改模块 05 主流程。
 
 ## 设计文档
 
@@ -290,6 +303,14 @@
 模块 4 Word 导入原型见：
 
 `docs/superpowers/specs/modules/04-word-importer-prototype.md`
+
+模块 5 人工校对工作台见：
+
+`docs/superpowers/specs/modules/05-review-workspace.md`
+
+模块 5 本次讨论设计记录见：
+
+`docs/superpowers/specs/2026-07-07-review-workspace-design.md`
 
 辽宁国省干线规则与真实样例适配见：
 
