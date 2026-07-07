@@ -58,3 +58,28 @@ Artifacts:
 - Frontend types and guard: `frontend/src/contracts/annualInspection.ts`
 
 The contract represents candidate data stored in `import_records.parsed_result_json`. Confirmed bridge facts still live in PostgreSQL after user review and C++ backend confirmation.
+
+## Module 04 Word Importer Prototype
+
+Module 04 adds the Python `.docx` importer prototype.
+
+The C++ backend remains responsible for browser upload, file archive records,
+import records, database writes, and revision/version decisions. The Python
+tool service reads an already archived `.docx` path and writes extracted images
+to a temporary directory provided by C++.
+
+Endpoint:
+
+```text
+POST http://127.0.0.1:18081/imports/word/parse
+```
+
+The endpoint returns a module 03 `BridgeAnnualInspectionData` candidate JSON and
+a list of temporary image file names. First-version extraction is limited to:
+
+- second-chapter defect tables
+- defect photos matched by photo number
+- fourth-chapter condition rating tables
+
+It does not parse formal report body text, generate comparison candidates, write
+PostgreSQL, or decide same-year revision behavior.
