@@ -75,11 +75,27 @@ POST http://127.0.0.1:18081/imports/word/parse
 ```
 
 The endpoint returns a module 03 `BridgeAnnualInspectionData` candidate JSON and
-a list of temporary image file names. First-version extraction is limited to:
+a list of temporary image file names.
 
-- second-chapter defect tables
-- defect photos matched by photo number
-- fourth-chapter condition rating tables
+Current rule profile support:
+
+- `辽宁国省干线`
+
+The parse request must include:
+
+```json
+{
+  "rule_profile": "辽宁国省干线"
+}
+```
+
+The rule profile is selected by the user workflow and passed by C++; Python
+does not auto-detect report templates. Under the `辽宁国省干线` profile,
+extraction is limited to:
+
+- defect tables `表2.1-1`、`表2.2-1`、`表2.3-1`
+- defect photos `照片2.1-x`、`照片2.2-x`、`照片2.3-x` matched by photo number
+- rating tables `表4.1-1`、`表4.1-2` (no fallback to `附录1` or body text)
 
 It does not parse formal report body text, generate comparison candidates, write
 PostgreSQL, or decide same-year revision behavior.
