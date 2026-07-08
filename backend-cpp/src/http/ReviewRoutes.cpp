@@ -271,7 +271,20 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                     return;
                 }
 
-                repository.save_review_draft(import_record_id, body_json->toStyledString());
+                // jsonb 列不保留输入格式，紧凑序列化即可，避免 toStyledString 的缩进开销。
+                Json::StreamWriterBuilder writer_builder;
+                writer_builder["indentation"] = "";
+                const bool saved =
+                    repository.save_review_draft(import_record_id, Json::writeString(writer_builder, *body_json));
+                if (!saved) {
+                    // UPDATE 带状态谓词未命中：记录状态在加载后被并发改变（已取消/已确认），拒绝写入。
+                    respond_json(
+                        callback,
+                        make_error_body("import_record_not_editable", "导入记录状态已变化，无法保存草稿。"),
+                        drogon::k409Conflict
+                    );
+                    return;
+                }
 
                 Json::Value response_body;
                 response_body["saved"] = true;

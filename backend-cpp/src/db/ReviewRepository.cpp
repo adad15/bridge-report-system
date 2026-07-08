@@ -152,14 +152,19 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
     return detail;
 }
 
-void ReviewRepository::save_review_draft(const std::string& import_record_id, const std::string& parsed_json_text) {
-    db_client_->execSqlSync(
+bool ReviewRepository::save_review_draft(const std::string& import_record_id, const std::string& parsed_json_text) {
+    // 与 cancel_import_record 同一惯用法：把状态谓词放进 UPDATE，
+    // 避免“处理器读到待校对 -> 并发取消/确认 -> 草稿仍写入”的 TOCTOU 竞态。
+    const auto result = db_client_->execSqlSync(
         "update import_records "
         "set parsed_result_json = $2::jsonb, updated_at = now() "
-        "where id = $1::uuid",
+        "where id = $1::uuid "
+        "and import_status = '待校对' "
+        "returning id",
         import_record_id,
         parsed_json_text
     );
+    return !result.empty();
 }
 
 bool ReviewRepository::cancel_import_record(const std::string& import_record_id) {

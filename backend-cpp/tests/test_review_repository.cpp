@@ -225,8 +225,9 @@ TEST_F(ReviewRepositoryTest, save_review_draft_updates_parsed_result_and_keeps_s
     const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.valid.json");
 
     bridge_report::db::ReviewRepository repository(tx_);
-    repository.save_review_draft(import_record_id_, fixture_json);
+    const bool saved = repository.save_review_draft(import_record_id_, fixture_json);
 
+    EXPECT_TRUE(saved);
     const auto detail = repository.get_import_record_detail(import_record_id_);
     ASSERT_TRUE(detail.has_value());
     EXPECT_EQ(detail->import_status, "待校对");
@@ -238,6 +239,25 @@ TEST_F(ReviewRepositoryTest, save_review_draft_updates_parsed_result_and_keeps_s
     ASSERT_TRUE(Json::parseFromStream(builder, stream, &parsed, &errors)) << errors;
     ASSERT_TRUE(parsed.isMember("defects"));
     EXPECT_EQ(parsed["defects"].size(), 1u);
+}
+
+TEST_F(ReviewRepositoryTest, save_review_draft_returns_false_and_leaves_json_when_not_pending_review) {
+    tx_->execSqlSync(
+        "update import_records set import_status = $1 where id = $2::uuid",
+        "已取消",
+        import_record_id_
+    );
+    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.valid.json");
+
+    bridge_report::db::ReviewRepository repository(tx_);
+    const bool saved = repository.save_review_draft(import_record_id_, fixture_json);
+
+    EXPECT_FALSE(saved);
+    const auto detail = repository.get_import_record_detail(import_record_id_);
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->import_status, "已取消");
+    // fixture 插入时未写 parsed_result_json，应保持建表默认值 {}，未被草稿覆盖。
+    EXPECT_EQ(detail->parsed_result_json, "{}");
 }
 
 TEST_F(ReviewRepositoryTest, cancel_import_record_transitions_pending_review_to_cancelled) {

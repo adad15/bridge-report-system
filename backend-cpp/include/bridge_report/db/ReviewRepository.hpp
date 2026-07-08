@@ -37,9 +37,12 @@ public:
 
     /**
      * @brief 保存校对草稿：覆盖 parsed_result_json，import_status 保持不变。
+     *
+     * 更新条件带 import_status = '待校对' 谓词，防止处理器加载记录后状态被并发
+     * 改为已取消/已确认时草稿仍写入（TOCTOU）。返回 false 表示记录不存在或状态已不可编辑。
      * @param parsed_json_text 完整的 BridgeAnnualInspectionData JSON 文本。
      */
-    void save_review_draft(const std::string& import_record_id, const std::string& parsed_json_text);
+    bool save_review_draft(const std::string& import_record_id, const std::string& parsed_json_text);
 
     /**
      * @brief 取消导入记录：状态为 已上传/解析中/待校对/解析失败 时更新为 已取消 并返回 true；
