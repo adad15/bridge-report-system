@@ -16,6 +16,7 @@ add_library(bridge_report_backend_core
     src/db/DbClientFactory.cpp
     src/db/ReviewRepository.cpp
     src/http/Cors.cpp
+    src/http/ImportConfirmRoutes.cpp
     src/http/ReviewRoutes.cpp
     src/identity/SystemNumber.cpp
     src/review/ConfirmPlan.cpp

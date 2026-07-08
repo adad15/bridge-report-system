@@ -1,7 +1,6 @@
 #include "bridge_report/http/ReviewRoutes.hpp"
 
 #include <functional>
-#include <regex>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -12,43 +11,14 @@
 #include <json/json.h>
 
 #include "bridge_report/db/ReviewRepository.hpp"
-#include "bridge_report/http/Cors.hpp"
+#include "bridge_report/http/RouteHelpers.hpp"
 #include "bridge_report/review/DraftValidation.hpp"
-#include "bridge_report/review/PreflightReport.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
 #include "bridge_report/review/ReviewStatistics.hpp"
 
 namespace bridge_report::http {
 
 namespace {
-
-using HttpCallback = std::function<void(const drogon::HttpResponsePtr&)>;
-
-// 先用正则校验路径参数，避免把非法 uuid 引发的 SQL 异常与数据库故障混为一谈。
-bool is_valid_uuid(const std::string& value) {
-    static const std::regex uuid_pattern(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-    );
-    return std::regex_match(value, uuid_pattern);
-}
-
-Json::Value make_error_body(const std::string& code, const std::string& message) {
-    Json::Value body;
-    body["code"] = code;
-    body["message"] = message;
-    return body;
-}
-
-void respond_json(
-    const HttpCallback& callback,
-    const Json::Value& body,
-    drogon::HttpStatusCode status = drogon::k200OK
-) {
-    auto response = drogon::HttpResponse::newHttpJsonResponse(body);
-    response->setStatusCode(status);
-    apply_local_dev_cors_headers(response);
-    callback(response);
-}
 
 void respond_bridge_not_found(const HttpCallback& callback) {
     respond_json(
@@ -63,14 +33,6 @@ void respond_import_record_not_found(const HttpCallback& callback) {
         callback,
         make_error_body("import_record_not_found", "指定的导入记录不存在"),
         drogon::k404NotFound
-    );
-}
-
-void respond_db_unavailable(const HttpCallback& callback) {
-    respond_json(
-        callback,
-        make_error_body("db_unavailable", "数据库暂不可用，请稍后重试。"),
-        drogon::k503ServiceUnavailable
     );
 }
 
@@ -337,50 +299,6 @@ void register_cancel_import_record_route(const drogon::orm::DbClientPtr& db_clie
     );
 }
 
-// POST /api/import-records/{import_record_id}/preflight-confirm：入库前检查。
-// 无请求体，只读——不修改导入记录状态，只是把当前 parsed_result_json 跑一遍
-// build_preflight_report 并把报告原样返回，供前端在真正确认入库前展示阻断项/警告。
-void register_preflight_confirm_route(const drogon::orm::DbClientPtr& db_client) {
-    drogon::app().registerHandler(
-        "/api/import-records/{import_record_id}/preflight-confirm",
-        [db_client](
-            const drogon::HttpRequestPtr&,
-            HttpCallback&& callback,
-            const std::string& import_record_id
-        ) {
-            if (!is_valid_uuid(import_record_id)) {
-                respond_import_record_not_found(callback);
-                return;
-            }
-
-            try {
-                db::ReviewRepository repository(db_client);
-                const auto detail = repository.get_import_record_detail(import_record_id);
-                if (!detail.has_value()) {
-                    respond_import_record_not_found(callback);
-                    return;
-                }
-
-                const auto parsed_result = parse_parsed_result_json(detail->parsed_result_json);
-                const auto effective_year = review::resolve_effective_inspection_year(*detail, parsed_result);
-                const bool has_current_annual_facts = effective_year.has_value()
-                    && repository.has_current_annual_facts(detail->bridge_id, *effective_year);
-
-                const auto context =
-                    review::build_preflight_context(*detail, effective_year, has_current_annual_facts);
-                const auto report = review::build_preflight_report(parsed_result, context);
-
-                respond_json(callback, report.to_json());
-            } catch (const drogon::orm::DrogonDbException&) {
-                respond_db_unavailable(callback);
-            } catch (const std::exception&) {
-                respond_db_unavailable(callback);
-            }
-        },
-        {drogon::Post}
-    );
-}
-
 }  // 匿名命名空间
 
 void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
@@ -390,7 +308,6 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
     register_options_handler("/api/import-records/{import_record_id}/review");
     register_options_handler("/api/import-records/{import_record_id}/review-draft");
     register_options_handler("/api/import-records/{import_record_id}/cancel");
-    register_options_handler("/api/import-records/{import_record_id}/preflight-confirm");
 
     drogon::app().registerHandler(
         "/api/bridges",
@@ -444,7 +361,6 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
     register_import_record_review_route(db_client);
     register_save_review_draft_route(db_client);
     register_cancel_import_record_route(db_client);
-    register_preflight_confirm_route(db_client);
 }
 
 }  // 命名空间 bridge_report::http
