@@ -99,4 +99,16 @@ Json::Value build_review_response(
     bool has_current_annual_facts
 );
 
+/**
+ * @brief 解析导入记录的“有效检测年度”：记录已挂年度时优先使用挂载的年度；
+ * 否则退化为已解析 JSON 中 inspection.inspection_year（须为合法整数）；两者都没有时返回 nullopt。
+ *
+ * 纯函数，供 GET /api/import-records/{id}/review 与 POST .../preflight-confirm 两个路由共用，
+ * 用于决定 has_current_annual_facts 应以哪个年度查询。
+ */
+std::optional<int> resolve_effective_inspection_year(
+    const ImportRecordDetail& detail,
+    const Json::Value& parsed_result
+);
+
 }  // 命名空间 bridge_report::review

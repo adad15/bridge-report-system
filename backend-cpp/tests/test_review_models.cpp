@@ -12,6 +12,7 @@ using bridge_report::review::build_review_response;
 using bridge_report::review::ImportRecordDetail;
 using bridge_report::review::ImportRecordSummary;
 using bridge_report::review::InspectionYearSummary;
+using bridge_report::review::resolve_effective_inspection_year;
 using bridge_report::review::ReviewStatistics;
 
 TEST(BridgeSummaryTest, to_json_outputs_all_fields) {
@@ -231,4 +232,35 @@ TEST(BuildReviewResponseTest, IncludesParsedResultAndStatisticsVerbatim) {
     EXPECT_EQ(body["parsed_result"]["defects"].size(), 1u);
     EXPECT_EQ(body["statistics"]["defect_count"].asInt(), 1);
     EXPECT_EQ(body["statistics"]["pending_count"].asInt(), 1);
+}
+
+TEST(ResolveEffectiveInspectionYearTest, UsesAttachedYearWhenPresent) {
+    const auto detail = make_detail_with_year();  // inspection_year = 2025
+    Json::Value parsed_result(Json::objectValue);
+    parsed_result["inspection"]["inspection_year"] = 2099;  // 挂载年度优先，不应被解析结果覆盖
+
+    const auto year = resolve_effective_inspection_year(detail, parsed_result);
+
+    ASSERT_TRUE(year.has_value());
+    EXPECT_EQ(*year, 2025);
+}
+
+TEST(ResolveEffectiveInspectionYearTest, FallsBackToParsedInspectionYearWhenNoAttachedYear) {
+    const auto detail = make_detail_without_year();
+    Json::Value parsed_result(Json::objectValue);
+    parsed_result["inspection"]["inspection_year"] = 2026;
+
+    const auto year = resolve_effective_inspection_year(detail, parsed_result);
+
+    ASSERT_TRUE(year.has_value());
+    EXPECT_EQ(*year, 2026);
+}
+
+TEST(ResolveEffectiveInspectionYearTest, ReturnsNulloptWhenNeitherAttachedNorParsedYearPresent) {
+    const auto detail = make_detail_without_year();
+    Json::Value parsed_result(Json::objectValue);
+
+    const auto year = resolve_effective_inspection_year(detail, parsed_result);
+
+    EXPECT_FALSE(year.has_value());
 }

@@ -14,6 +14,7 @@
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/http/Cors.hpp"
 #include "bridge_report/review/DraftValidation.hpp"
+#include "bridge_report/review/PreflightReport.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
 #include "bridge_report/review/ReviewStatistics.hpp"
 
@@ -170,21 +171,12 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
                 const auto statistics = review::build_review_statistics(parsed_result);
 
                 // 年度事实是否已存在的判定归属数据库决策，留在路由层；
+                // 有效年度的解析（挂载年度优先，否则退化到解析结果里的年度）由纯函数
+                // resolve_effective_inspection_year 承担，与 preflight-confirm 路由共用；
                 // JSON 形状拼装则委托给纯函数 build_review_response（见 ReviewModels.cpp）。
-                bool has_current_annual_facts = false;
-                if (detail->inspection_year.has_value()) {
-                    has_current_annual_facts =
-                        repository.has_current_annual_facts(detail->bridge_id, *detail->inspection_year);
-                } else if (
-                    parsed_result.isMember("inspection") && parsed_result["inspection"].isObject()
-                    && parsed_result["inspection"].isMember("inspection_year")
-                    && parsed_result["inspection"]["inspection_year"].isInt()
-                ) {
-                    has_current_annual_facts = repository.has_current_annual_facts(
-                        detail->bridge_id,
-                        parsed_result["inspection"]["inspection_year"].asInt()
-                    );
-                }
+                const auto effective_year = review::resolve_effective_inspection_year(*detail, parsed_result);
+                const bool has_current_annual_facts = effective_year.has_value()
+                    && repository.has_current_annual_facts(detail->bridge_id, *effective_year);
 
                 const auto body =
                     review::build_review_response(*detail, parsed_result, statistics, has_current_annual_facts);
@@ -345,6 +337,54 @@ void register_cancel_import_record_route(const drogon::orm::DbClientPtr& db_clie
     );
 }
 
+// POST /api/import-records/{import_record_id}/preflight-confirm：入库前检查。
+// 无请求体，只读——不修改导入记录状态，只是把当前 parsed_result_json 跑一遍
+// build_preflight_report 并把报告原样返回，供前端在真正确认入库前展示阻断项/警告。
+void register_preflight_confirm_route(const drogon::orm::DbClientPtr& db_client) {
+    drogon::app().registerHandler(
+        "/api/import-records/{import_record_id}/preflight-confirm",
+        [db_client](
+            const drogon::HttpRequestPtr&,
+            HttpCallback&& callback,
+            const std::string& import_record_id
+        ) {
+            if (!is_valid_uuid(import_record_id)) {
+                respond_import_record_not_found(callback);
+                return;
+            }
+
+            try {
+                db::ReviewRepository repository(db_client);
+                const auto detail = repository.get_import_record_detail(import_record_id);
+                if (!detail.has_value()) {
+                    respond_import_record_not_found(callback);
+                    return;
+                }
+
+                const auto parsed_result = parse_parsed_result_json(detail->parsed_result_json);
+                const auto effective_year = review::resolve_effective_inspection_year(*detail, parsed_result);
+
+                review::PreflightContext context;
+                context.import_status = detail->import_status;
+                context.record_system_number = detail->system_number;
+                context.bridge_system_number = detail->bridge_system_number;
+                context.inspection_year = effective_year;
+                context.has_current_annual_facts = effective_year.has_value()
+                    && repository.has_current_annual_facts(detail->bridge_id, *effective_year);
+
+                const auto report = review::build_preflight_report(parsed_result, context);
+
+                respond_json(callback, report.to_json());
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Post}
+    );
+}
+
 }  // 匿名命名空间
 
 void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
@@ -354,6 +394,7 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
     register_options_handler("/api/import-records/{import_record_id}/review");
     register_options_handler("/api/import-records/{import_record_id}/review-draft");
     register_options_handler("/api/import-records/{import_record_id}/cancel");
+    register_options_handler("/api/import-records/{import_record_id}/preflight-confirm");
 
     drogon::app().registerHandler(
         "/api/bridges",
@@ -407,6 +448,7 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
     register_import_record_review_route(db_client);
     register_save_review_draft_route(db_client);
     register_cancel_import_record_route(db_client);
+    register_preflight_confirm_route(db_client);
 }
 
 }  // 命名空间 bridge_report::http

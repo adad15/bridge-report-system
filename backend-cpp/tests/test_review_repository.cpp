@@ -12,6 +12,8 @@
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/db/ReviewRepository.hpp"
+#include "bridge_report/review/PreflightReport.hpp"
+#include "bridge_report/review/ReviewModels.hpp"
 
 namespace {
 
@@ -24,6 +26,67 @@ std::string read_fixture_text(const std::string& file_name) {
     std::ostringstream buffer;
     buffer << input.rdbuf();
     return buffer.str();
+}
+
+Json::Value parse_json_text(const std::string& text) {
+    Json::CharReaderBuilder builder;
+    Json::Value root;
+    std::string errors;
+    std::istringstream stream(text);
+    if (!Json::parseFromStream(builder, stream, &root, &errors)) {
+        throw std::runtime_error("Unable to parse JSON text: " + errors);
+    }
+    return root;
+}
+
+std::string write_json_compact(const Json::Value& value) {
+    Json::StreamWriterBuilder writer_builder;
+    writer_builder["indentation"] = "";
+    return Json::writeString(writer_builder, value);
+}
+
+// 把样例中所有候选（defects/photos/ratings 三层）的 review_status 改为“已确认”，
+// 与 test_preflight_report.cpp 中的同名辅助函数保持一致语义。
+void confirm_all_candidates(Json::Value& data) {
+    for (auto& defect : data["defects"]) {
+        defect["review_status"] = "已确认";
+    }
+    for (auto& photo : data["photos"]) {
+        photo["review_status"] = "已确认";
+        photo["match_status"] = "已确认";
+    }
+    data["ratings"]["overall"]["review_status"] = "已确认";
+    for (auto& part : data["ratings"]["structure_parts"]) {
+        part["review_status"] = "已确认";
+    }
+    for (auto& part : data["ratings"]["evaluation_parts"]) {
+        part["review_status"] = "已确认";
+    }
+}
+
+// 组装 PreflightContext 并调用 build_preflight_report 的完整流程，
+// 与 POST preflight-confirm 路由的组装逻辑一致（用于集成测试验证端到端行为）。
+bridge_report::review::PreflightReport run_preflight_flow(
+    bridge_report::db::ReviewRepository& repository,
+    const std::string& import_record_id
+) {
+    const auto detail = repository.get_import_record_detail(import_record_id);
+    if (!detail.has_value()) {
+        throw std::runtime_error("import record not found: " + import_record_id);
+    }
+
+    const auto parsed_result = parse_json_text(detail->parsed_result_json);
+    const auto effective_year = bridge_report::review::resolve_effective_inspection_year(*detail, parsed_result);
+
+    bridge_report::review::PreflightContext context;
+    context.import_status = detail->import_status;
+    context.record_system_number = detail->system_number;
+    context.bridge_system_number = detail->bridge_system_number;
+    context.inspection_year = effective_year;
+    context.has_current_annual_facts =
+        effective_year.has_value() && repository.has_current_annual_facts(detail->bridge_id, *effective_year);
+
+    return bridge_report::review::build_preflight_report(parsed_result, context);
 }
 
 // fixture：在事务里插入一座桥 + 一个年度 + 一条导入记录，测试结束后回滚，数据库保持不变。
@@ -330,4 +393,44 @@ TEST_F(ReviewRepositoryTest, has_current_annual_facts_false_before_confirmed_yea
     );
 
     EXPECT_TRUE(repository.has_current_annual_facts(second_bridge_id, 2026));
+}
+
+TEST_F(ReviewRepositoryTest, preflight_flow_blocks_on_pending_candidates_then_confirms_after_review) {
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    // 先取一次详情，拿到本次测试实际生成的编号（system_number 由数据库序列生成，不可硬编码），
+    // 用于把样例 JSON 的 import_context / bridge_check / inspection_year 对齐到本条记录，
+    // 避免 import_context_mismatch 掩盖本测试关注的 candidate_pending_review 场景。
+    const auto initial_detail = repository.get_import_record_detail(import_record_id_);
+    ASSERT_TRUE(initial_detail.has_value());
+
+    auto data = parse_json_text(read_fixture_text("bridge_annual_inspection_data.valid.json"));
+    data["import_context"]["import_record_system_number"] = initial_detail->system_number;
+    data["bridge_check"]["selected_bridge_system_number"] = initial_detail->bridge_system_number;
+    ASSERT_TRUE(initial_detail->inspection_year.has_value());
+    data["inspection"]["inspection_year"] = *initial_detail->inspection_year;
+
+    // 样例默认所有候选都是“待确认”，直接保存即可满足“有待确认候选”场景。
+    ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
+
+    const auto pending_report = run_preflight_flow(repository, import_record_id_);
+
+    EXPECT_FALSE(pending_report.can_confirm);
+    bool has_pending_candidate_issue = false;
+    for (const auto& issue : pending_report.blocking_errors) {
+        if (issue.code == "candidate_pending_review") {
+            has_pending_candidate_issue = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(has_pending_candidate_issue);
+
+    // 把三层候选全部改为“已确认”后重新保存，再走一遍流程应当放行。
+    confirm_all_candidates(data);
+    ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
+
+    const auto confirmed_report = run_preflight_flow(repository, import_record_id_);
+
+    EXPECT_TRUE(confirmed_report.can_confirm);
+    EXPECT_TRUE(confirmed_report.blocking_errors.empty());
 }

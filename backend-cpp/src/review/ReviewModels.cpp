@@ -92,4 +92,21 @@ Json::Value build_review_response(
     return body;
 }
 
+std::optional<int> resolve_effective_inspection_year(
+    const ImportRecordDetail& detail,
+    const Json::Value& parsed_result
+) {
+    if (detail.inspection_year.has_value()) {
+        return detail.inspection_year;
+    }
+
+    if (parsed_result.isObject() && parsed_result.isMember("inspection") && parsed_result["inspection"].isObject()
+        && parsed_result["inspection"].isMember("inspection_year")
+        && parsed_result["inspection"]["inspection_year"].isInt()) {
+        return parsed_result["inspection"]["inspection_year"].asInt();
+    }
+
+    return std::nullopt;
+}
+
 }  // 命名空间 bridge_report::review
