@@ -164,6 +164,7 @@ void check_defect_missing_required_field(const Json::Value& data, std::vector<Pr
 // 检查 6：已确认/已修改照片的病害关联是否能解析
 // -----------------------------------------------------------------------
 
+// 契约不保证 candidate_id 唯一性；若存在重复 id，此处按首个匹配处理。
 const Json::Value* find_defect_by_candidate_id(const Json::Value& data, const std::string& candidate_id) {
     if (!data["defects"].isArray()) {
         return nullptr;
@@ -358,33 +359,27 @@ void check_rating_parts_incomplete(const Json::Value& data, std::vector<Prefligh
     }
 }
 
+// 阻断错误与警告的条目结构一致：target_candidate_id 为空字符串时输出 JSON null。
+Json::Value issues_to_json(const std::vector<PreflightIssue>& issues) {
+    Json::Value json(Json::arrayValue);
+    for (const auto& issue : issues) {
+        Json::Value item;
+        item["code"] = issue.code;
+        item["message"] = issue.message;
+        item["target_candidate_id"] = issue.target_candidate_id.empty() ? Json::Value(Json::nullValue) : Json::Value(issue.target_candidate_id);
+        json.append(item);
+    }
+    return json;
+}
+
 }  // 匿名命名空间
 
 Json::Value PreflightReport::to_json() const {
     Json::Value json;
     json["can_confirm"] = can_confirm;
     json["requires_revision_confirmation"] = requires_revision_confirmation;
-
-    Json::Value blocking_json(Json::arrayValue);
-    for (const auto& issue : blocking_errors) {
-        Json::Value item;
-        item["code"] = issue.code;
-        item["message"] = issue.message;
-        item["target_candidate_id"] = issue.target_candidate_id.empty() ? Json::Value(Json::nullValue) : Json::Value(issue.target_candidate_id);
-        blocking_json.append(item);
-    }
-    json["blocking_errors"] = blocking_json;
-
-    Json::Value warnings_json(Json::arrayValue);
-    for (const auto& issue : warnings) {
-        Json::Value item;
-        item["code"] = issue.code;
-        item["message"] = issue.message;
-        item["target_candidate_id"] = issue.target_candidate_id.empty() ? Json::Value(Json::nullValue) : Json::Value(issue.target_candidate_id);
-        warnings_json.append(item);
-    }
-    json["warnings"] = warnings_json;
-
+    json["blocking_errors"] = issues_to_json(blocking_errors);
+    json["warnings"] = issues_to_json(warnings);
     return json;
 }
 
