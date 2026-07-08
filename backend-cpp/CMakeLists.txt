@@ -19,6 +19,7 @@ add_library(bridge_report_backend_core
     src/http/ReviewRoutes.cpp
     src/identity/SystemNumber.cpp
     src/review/DraftValidation.cpp
+    src/review/PreflightReport.cpp
     src/review/ReviewModels.cpp
     src/review/ReviewStatistics.cpp
     src/runtime/RuntimePaths.cpp
@@ -60,6 +61,7 @@ add_executable(bridge_report_backend_tests
     tests/test_archive_paths.cpp
     tests/test_db_client_factory.cpp
     tests/test_draft_validation.cpp
+    tests/test_preflight_report.cpp
     tests/test_review_models.cpp
     tests/test_review_repository.cpp
     tests/test_review_statistics.cpp
