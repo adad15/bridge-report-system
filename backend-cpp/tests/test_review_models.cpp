@@ -5,10 +5,14 @@
 #include <json/value.h>
 
 #include "bridge_report/review/ReviewModels.hpp"
+#include "bridge_report/review/ReviewStatistics.hpp"
 
 using bridge_report::review::BridgeSummary;
+using bridge_report::review::build_review_response;
+using bridge_report::review::ImportRecordDetail;
 using bridge_report::review::ImportRecordSummary;
 using bridge_report::review::InspectionYearSummary;
+using bridge_report::review::ReviewStatistics;
 
 TEST(BridgeSummaryTest, to_json_outputs_all_fields) {
     BridgeSummary summary{};
@@ -114,4 +118,117 @@ TEST(ImportRecordSummaryTest, to_json_outputs_null_for_missing_optional_fields) 
     EXPECT_TRUE(json["inspection_year_id"].isNull());
     EXPECT_TRUE(json["importer_name"].isNull());
     EXPECT_EQ(json["import_status"].asString(), "已上传");
+}
+
+namespace {
+
+ImportRecordDetail make_detail_with_year() {
+    ImportRecordDetail detail;
+    detail.id = "i1111111-1111-1111-1111-111111111111";
+    detail.system_number = "DRJL-000001";
+    detail.bridge_id = "b1111111-1111-1111-1111-111111111111";
+    detail.inspection_year_id = "y1111111-1111-1111-1111-111111111111";
+    detail.import_name = "2025年度报告.docx";
+    detail.source_type = "正式Word";
+    detail.import_status = "待校对";
+    detail.importer_name = "张三";
+    detail.importer_version = "1.0.0";
+    detail.parsed_result_json = "{}";
+    detail.created_at = "2025-01-01 10:00:00+08";
+    detail.updated_at = "2025-01-02 11:00:00+08";
+
+    detail.bridge_system_number = "QL-000001";
+    detail.bridge_name = "M05T2测试桥梁";
+    detail.bridge_route_name = "G1线";
+
+    detail.inspection_year_system_number = "NDJC-000001";
+    detail.inspection_year = 2025;
+    detail.inspection_year_status = "已确认";
+    detail.inspection_year_version_number = 1;
+    detail.inspection_year_is_current = true;
+
+    return detail;
+}
+
+ImportRecordDetail make_detail_without_year() {
+    ImportRecordDetail detail;
+    detail.id = "i2222222-2222-2222-2222-222222222222";
+    detail.system_number = "DRJL-000002";
+    detail.bridge_id = "b1111111-1111-1111-1111-111111111111";
+    detail.inspection_year_id = std::nullopt;
+    detail.import_name = "病害表.xlsx";
+    detail.source_type = "Excel病害表";
+    detail.import_status = "已上传";
+    detail.importer_name = std::nullopt;
+    detail.importer_version = std::nullopt;
+    detail.parsed_result_json = "{}";
+    detail.created_at = "2025-02-01 09:00:00+08";
+    detail.updated_at = "2025-02-01 09:00:00+08";
+
+    detail.bridge_system_number = "QL-000001";
+    detail.bridge_name = "M05T2测试桥梁";
+    detail.bridge_route_name = std::nullopt;
+
+    detail.inspection_year_system_number = std::nullopt;
+    detail.inspection_year = std::nullopt;
+    detail.inspection_year_status = std::nullopt;
+    detail.inspection_year_version_number = std::nullopt;
+    detail.inspection_year_is_current = std::nullopt;
+
+    return detail;
+}
+
+}  // namespace
+
+TEST(BuildReviewResponseTest, PopulatesInspectionYearObjectWhenPresent) {
+    const auto detail = make_detail_with_year();
+    Json::Value parsed_result(Json::objectValue);
+    ReviewStatistics statistics{};
+
+    const auto body = build_review_response(detail, parsed_result, statistics, /*has_current_annual_facts=*/true);
+
+    ASSERT_TRUE(body["inspection_year"].isObject());
+    EXPECT_EQ(body["inspection_year"]["id"].asString(), "y1111111-1111-1111-1111-111111111111");
+    EXPECT_EQ(body["inspection_year"]["system_number"].asString(), "NDJC-000001");
+    EXPECT_EQ(body["inspection_year"]["inspection_year"].asInt(), 2025);
+    EXPECT_EQ(body["inspection_year"]["status"].asString(), "已确认");
+    EXPECT_EQ(body["inspection_year"]["version_number"].asInt(), 1);
+    EXPECT_TRUE(body["inspection_year"]["is_current"].asBool());
+    EXPECT_TRUE(body["has_current_annual_facts"].asBool());
+
+    EXPECT_EQ(body["import_record"]["id"].asString(), "i1111111-1111-1111-1111-111111111111");
+    EXPECT_EQ(body["import_record"]["importer_name"].asString(), "张三");
+    EXPECT_EQ(body["import_record"]["importer_version"].asString(), "1.0.0");
+    EXPECT_EQ(body["bridge"]["id"].asString(), "b1111111-1111-1111-1111-111111111111");
+    EXPECT_EQ(body["bridge"]["route_name"].asString(), "G1线");
+}
+
+TEST(BuildReviewResponseTest, OutputsNullInspectionYearWhenAbsent) {
+    const auto detail = make_detail_without_year();
+    Json::Value parsed_result(Json::objectValue);
+    ReviewStatistics statistics{};
+
+    const auto body = build_review_response(detail, parsed_result, statistics, /*has_current_annual_facts=*/false);
+
+    EXPECT_TRUE(body["inspection_year"].isNull());
+    EXPECT_FALSE(body["has_current_annual_facts"].asBool());
+    EXPECT_TRUE(body["import_record"]["importer_name"].isNull());
+    EXPECT_TRUE(body["import_record"]["importer_version"].isNull());
+    EXPECT_TRUE(body["bridge"]["route_name"].isNull());
+}
+
+TEST(BuildReviewResponseTest, IncludesParsedResultAndStatisticsVerbatim) {
+    const auto detail = make_detail_with_year();
+    Json::Value parsed_result(Json::objectValue);
+    parsed_result["defects"] = Json::Value(Json::arrayValue);
+    parsed_result["defects"].append(Json::Value(Json::objectValue));
+    ReviewStatistics statistics{};
+    statistics.defect_count = 1;
+    statistics.pending_count = 1;
+
+    const auto body = build_review_response(detail, parsed_result, statistics, /*has_current_annual_facts=*/false);
+
+    EXPECT_EQ(body["parsed_result"]["defects"].size(), 1u);
+    EXPECT_EQ(body["statistics"]["defect_count"].asInt(), 1);
+    EXPECT_EQ(body["statistics"]["pending_count"].asInt(), 1);
 }

@@ -35,6 +35,18 @@ public:
      */
     bool has_current_annual_facts(const std::string& bridge_id, int inspection_year);
 
+    /**
+     * @brief 保存校对草稿：覆盖 parsed_result_json，import_status 保持不变。
+     * @param parsed_json_text 完整的 BridgeAnnualInspectionData JSON 文本。
+     */
+    void save_review_draft(const std::string& import_record_id, const std::string& parsed_json_text);
+
+    /**
+     * @brief 取消导入记录：状态为 已上传/解析中/待校对/解析失败 时更新为 已取消 并返回 true；
+     * 状态已是 已确认/已取消 时不更新，返回 false。
+     */
+    bool cancel_import_record(const std::string& import_record_id);
+
 private:
     drogon::orm::DbClientPtr db_client_;
 };

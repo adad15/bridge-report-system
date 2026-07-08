@@ -152,6 +152,28 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
     return detail;
 }
 
+void ReviewRepository::save_review_draft(const std::string& import_record_id, const std::string& parsed_json_text) {
+    db_client_->execSqlSync(
+        "update import_records "
+        "set parsed_result_json = $2::jsonb, updated_at = now() "
+        "where id = $1::uuid",
+        import_record_id,
+        parsed_json_text
+    );
+}
+
+bool ReviewRepository::cancel_import_record(const std::string& import_record_id) {
+    const auto result = db_client_->execSqlSync(
+        "update import_records "
+        "set import_status = '已取消', updated_at = now() "
+        "where id = $1::uuid "
+        "and import_status in ('已上传', '解析中', '待校对', '解析失败') "
+        "returning id",
+        import_record_id
+    );
+    return !result.empty();
+}
+
 bool ReviewRepository::has_current_annual_facts(const std::string& bridge_id, int inspection_year) {
     const auto result = db_client_->execSqlSync(
         "select exists("

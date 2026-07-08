@@ -221,6 +221,69 @@ TEST_F(ReviewRepositoryTest, has_current_annual_facts_reflects_inspection_year_s
     EXPECT_FALSE(repository.has_current_annual_facts(bridge_id_, 2030));
 }
 
+TEST_F(ReviewRepositoryTest, save_review_draft_updates_parsed_result_and_keeps_status) {
+    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.valid.json");
+
+    bridge_report::db::ReviewRepository repository(tx_);
+    repository.save_review_draft(import_record_id_, fixture_json);
+
+    const auto detail = repository.get_import_record_detail(import_record_id_);
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->import_status, "待校对");
+
+    Json::CharReaderBuilder builder;
+    Json::Value parsed;
+    std::string errors;
+    std::istringstream stream(detail->parsed_result_json);
+    ASSERT_TRUE(Json::parseFromStream(builder, stream, &parsed, &errors)) << errors;
+    ASSERT_TRUE(parsed.isMember("defects"));
+    EXPECT_EQ(parsed["defects"].size(), 1u);
+}
+
+TEST_F(ReviewRepositoryTest, cancel_import_record_transitions_pending_review_to_cancelled) {
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    // fixture 中的导入记录状态为“待校对”。
+    const bool cancelled = repository.cancel_import_record(import_record_id_);
+
+    EXPECT_TRUE(cancelled);
+    const auto detail = repository.get_import_record_detail(import_record_id_);
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->import_status, "已取消");
+}
+
+TEST_F(ReviewRepositoryTest, cancel_import_record_returns_false_when_already_confirmed) {
+    tx_->execSqlSync(
+        "update import_records set import_status = $1 where id = $2::uuid",
+        "已确认",
+        import_record_id_
+    );
+
+    bridge_report::db::ReviewRepository repository(tx_);
+    const bool cancelled = repository.cancel_import_record(import_record_id_);
+
+    EXPECT_FALSE(cancelled);
+    const auto detail = repository.get_import_record_detail(import_record_id_);
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->import_status, "已确认");
+}
+
+TEST_F(ReviewRepositoryTest, cancel_import_record_returns_false_when_already_cancelled) {
+    tx_->execSqlSync(
+        "update import_records set import_status = $1 where id = $2::uuid",
+        "已取消",
+        import_record_id_
+    );
+
+    bridge_report::db::ReviewRepository repository(tx_);
+    const bool cancelled = repository.cancel_import_record(import_record_id_);
+
+    EXPECT_FALSE(cancelled);
+    const auto detail = repository.get_import_record_detail(import_record_id_);
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ(detail->import_status, "已取消");
+}
+
 TEST_F(ReviewRepositoryTest, has_current_annual_facts_false_before_confirmed_year_inserted) {
     const auto bridge_result = tx_->execSqlSync(
         "insert into bridges (bridge_name, route_name, status) "

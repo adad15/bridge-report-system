@@ -7,6 +7,8 @@
 
 namespace bridge_report::review {
 
+struct ReviewStatistics;
+
 /**
  * @brief 桥梁导航摘要，用于 GET /api/bridges 列表展示。
  */
@@ -83,5 +85,18 @@ struct ImportRecordDetail {
     std::optional<int> inspection_year_version_number;
     std::optional<bool> inspection_year_is_current;
 };
+
+/**
+ * @brief 组装 GET /api/import-records/{import_record_id}/review 的响应体。
+ *
+ * 纯函数：只做 JSON 形状拼装，不访问数据库。has_current_annual_facts 由调用方
+ * （路由层）通过 ReviewRepository 查询得到后传入。
+ */
+Json::Value build_review_response(
+    const ImportRecordDetail& detail,
+    const Json::Value& parsed_result,
+    const ReviewStatistics& statistics,
+    bool has_current_annual_facts
+);
 
 }  // 命名空间 bridge_report::review

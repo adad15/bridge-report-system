@@ -13,6 +13,8 @@
 
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/http/Cors.hpp"
+#include "bridge_report/review/DraftValidation.hpp"
+#include "bridge_report/review/ReviewModels.hpp"
 #include "bridge_report/review/ReviewStatistics.hpp"
 
 namespace bridge_report::http {
@@ -164,45 +166,11 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
                     return;
                 }
 
-                Json::Value import_record;
-                import_record["id"] = detail->id;
-                import_record["system_number"] = detail->system_number;
-                import_record["import_name"] = detail->import_name;
-                import_record["source_type"] = detail->source_type;
-                import_record["import_status"] = detail->import_status;
-                import_record["importer_name"] =
-                    detail->importer_name.has_value() ? Json::Value(*detail->importer_name) : Json::Value(Json::nullValue);
-                import_record["importer_version"] =
-                    detail->importer_version.has_value() ? Json::Value(*detail->importer_version) : Json::Value(Json::nullValue);
-                import_record["created_at"] = detail->created_at;
-                import_record["updated_at"] = detail->updated_at;
-
-                Json::Value bridge;
-                bridge["id"] = detail->bridge_id;
-                bridge["system_number"] = detail->bridge_system_number;
-                bridge["bridge_name"] = detail->bridge_name;
-                bridge["route_name"] =
-                    detail->bridge_route_name.has_value() ? Json::Value(*detail->bridge_route_name) : Json::Value(Json::nullValue);
-
-                Json::Value inspection_year(Json::nullValue);
-                if (detail->inspection_year_id.has_value()) {
-                    inspection_year = Json::Value(Json::objectValue);
-                    inspection_year["id"] = *detail->inspection_year_id;
-                    inspection_year["system_number"] =
-                        detail->inspection_year_system_number.has_value() ? *detail->inspection_year_system_number : "";
-                    inspection_year["inspection_year"] =
-                        detail->inspection_year.has_value() ? *detail->inspection_year : 0;
-                    inspection_year["status"] =
-                        detail->inspection_year_status.has_value() ? *detail->inspection_year_status : "";
-                    inspection_year["version_number"] =
-                        detail->inspection_year_version_number.has_value() ? *detail->inspection_year_version_number : 0;
-                    inspection_year["is_current"] =
-                        detail->inspection_year_is_current.has_value() && *detail->inspection_year_is_current;
-                }
-
                 const auto parsed_result = parse_parsed_result_json(detail->parsed_result_json);
                 const auto statistics = review::build_review_statistics(parsed_result);
 
+                // 年度事实是否已存在的判定归属数据库决策，留在路由层；
+                // JSON 形状拼装则委托给纯函数 build_review_response（见 ReviewModels.cpp）。
                 bool has_current_annual_facts = false;
                 if (detail->inspection_year.has_value()) {
                     has_current_annual_facts =
@@ -218,13 +186,8 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
                     );
                 }
 
-                Json::Value body;
-                body["import_record"] = import_record;
-                body["bridge"] = bridge;
-                body["inspection_year"] = inspection_year;
-                body["parsed_result"] = parsed_result;
-                body["statistics"] = statistics.to_json();
-                body["has_current_annual_facts"] = has_current_annual_facts;
+                const auto body =
+                    review::build_review_response(*detail, parsed_result, statistics, has_current_annual_facts);
 
                 respond_json(callback, body);
             } catch (const drogon::orm::DrogonDbException&) {
@@ -237,6 +200,138 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
     );
 }
 
+void respond_invalid_json_body(const HttpCallback& callback) {
+    respond_json(
+        callback,
+        make_error_body("invalid_json_body", "请求体不是合法的 JSON。"),
+        drogon::k400BadRequest
+    );
+}
+
+Json::Value make_draft_validation_error_body(const review::DraftValidationResult& validation) {
+    auto body = make_error_body(validation.code, validation.message);
+    if (!validation.issues.empty()) {
+        Json::Value issues(Json::arrayValue);
+        for (const auto& issue : validation.issues) {
+            Json::Value issue_json;
+            issue_json["path"] = issue.path;
+            issue_json["message"] = issue.message;
+            issues.append(issue_json);
+        }
+        body["issues"] = issues;
+    }
+    return body;
+}
+
+// 校验失败到 HTTP 状态码的映射：not_editable 是状态冲突 -> 409，其余两类是请求体本身的问题 -> 400。
+drogon::HttpStatusCode draft_validation_status_code(const std::string& code) {
+    if (code == "import_record_not_editable") {
+        return drogon::k409Conflict;
+    }
+    return drogon::k400BadRequest;
+}
+
+// PUT /api/import-records/{import_record_id}/review-draft：保存校对草稿。
+// 校验顺序：uuid 合法 -> 请求体是合法 JSON -> 记录存在 -> validate_review_draft -> 保存。
+void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client) {
+    drogon::app().registerHandler(
+        "/api/import-records/{import_record_id}/review-draft",
+        [db_client](
+            const drogon::HttpRequestPtr& request,
+            HttpCallback&& callback,
+            const std::string& import_record_id
+        ) {
+            if (!is_valid_uuid(import_record_id)) {
+                respond_import_record_not_found(callback);
+                return;
+            }
+
+            const auto body_json = request->getJsonObject();
+            if (body_json == nullptr) {
+                respond_invalid_json_body(callback);
+                return;
+            }
+
+            try {
+                db::ReviewRepository repository(db_client);
+                const auto detail = repository.get_import_record_detail(import_record_id);
+                if (!detail.has_value()) {
+                    respond_import_record_not_found(callback);
+                    return;
+                }
+
+                const auto validation =
+                    review::validate_review_draft(*body_json, detail->system_number, detail->import_status);
+                if (!validation.ok) {
+                    respond_json(
+                        callback,
+                        make_draft_validation_error_body(validation),
+                        draft_validation_status_code(validation.code)
+                    );
+                    return;
+                }
+
+                repository.save_review_draft(import_record_id, body_json->toStyledString());
+
+                Json::Value response_body;
+                response_body["saved"] = true;
+                response_body["import_status"] = detail->import_status;
+                respond_json(callback, response_body);
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Put}
+    );
+}
+
+// POST /api/import-records/{import_record_id}/cancel：取消导入。
+void register_cancel_import_record_route(const drogon::orm::DbClientPtr& db_client) {
+    drogon::app().registerHandler(
+        "/api/import-records/{import_record_id}/cancel",
+        [db_client](
+            const drogon::HttpRequestPtr&,
+            HttpCallback&& callback,
+            const std::string& import_record_id
+        ) {
+            if (!is_valid_uuid(import_record_id)) {
+                respond_import_record_not_found(callback);
+                return;
+            }
+
+            try {
+                db::ReviewRepository repository(db_client);
+                const auto detail = repository.get_import_record_detail(import_record_id);
+                if (!detail.has_value()) {
+                    respond_import_record_not_found(callback);
+                    return;
+                }
+
+                const bool cancelled = repository.cancel_import_record(import_record_id);
+                if (!cancelled) {
+                    respond_json(
+                        callback,
+                        make_error_body("import_record_not_editable", "导入记录当前状态不可取消。"),
+                        drogon::k409Conflict
+                    );
+                    return;
+                }
+
+                Json::Value response_body;
+                response_body["cancelled"] = true;
+                respond_json(callback, response_body);
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Post}
+    );
+}
+
 }  // 匿名命名空间
 
 void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
@@ -244,6 +339,8 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
     register_options_handler("/api/bridges/{bridge_id}/inspection-years");
     register_options_handler("/api/bridges/{bridge_id}/import-records");
     register_options_handler("/api/import-records/{import_record_id}/review");
+    register_options_handler("/api/import-records/{import_record_id}/review-draft");
+    register_options_handler("/api/import-records/{import_record_id}/cancel");
 
     drogon::app().registerHandler(
         "/api/bridges",
@@ -295,6 +392,8 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
     );
 
     register_import_record_review_route(db_client);
+    register_save_review_draft_route(db_client);
+    register_cancel_import_record_route(db_client);
 }
 
 }  // 命名空间 bridge_report::http
