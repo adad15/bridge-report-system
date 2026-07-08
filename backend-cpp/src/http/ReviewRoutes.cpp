@@ -363,15 +363,11 @@ void register_preflight_confirm_route(const drogon::orm::DbClientPtr& db_client)
 
                 const auto parsed_result = parse_parsed_result_json(detail->parsed_result_json);
                 const auto effective_year = review::resolve_effective_inspection_year(*detail, parsed_result);
-
-                review::PreflightContext context;
-                context.import_status = detail->import_status;
-                context.record_system_number = detail->system_number;
-                context.bridge_system_number = detail->bridge_system_number;
-                context.inspection_year = effective_year;
-                context.has_current_annual_facts = effective_year.has_value()
+                const bool has_current_annual_facts = effective_year.has_value()
                     && repository.has_current_annual_facts(detail->bridge_id, *effective_year);
 
+                const auto context =
+                    review::build_preflight_context(*detail, effective_year, has_current_annual_facts);
                 const auto report = review::build_preflight_report(parsed_result, context);
 
                 respond_json(callback, report.to_json());

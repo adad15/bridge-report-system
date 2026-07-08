@@ -8,9 +8,11 @@
 #include <json/json.h>
 
 #include "bridge_report/review/PreflightReport.hpp"
+#include "support/review_fixtures.hpp"
 
 namespace {
 
+using bridge_report::test_support::confirm_all_candidates;
 using bridge_report::review::build_preflight_report;
 using bridge_report::review::PreflightContext;
 using bridge_report::review::PreflightIssue;
@@ -49,24 +51,6 @@ PreflightContext base_context() {
     context.inspection_year = kInspectionYear;
     context.has_current_annual_facts = false;
     return context;
-}
-
-// 把样例中所有候选（defects/photos/ratings 三层）的 review_status 改为“已确认”。
-void confirm_all_candidates(Json::Value& data) {
-    for (auto& defect : data["defects"]) {
-        defect["review_status"] = "已确认";
-    }
-    for (auto& photo : data["photos"]) {
-        photo["review_status"] = "已确认";
-        photo["match_status"] = "已确认";
-    }
-    data["ratings"]["overall"]["review_status"] = "已确认";
-    for (auto& part : data["ratings"]["structure_parts"]) {
-        part["review_status"] = "已确认";
-    }
-    for (auto& part : data["ratings"]["evaluation_parts"]) {
-        part["review_status"] = "已确认";
-    }
 }
 
 bool has_blocking_code(const PreflightReport& report, const std::string& code) {

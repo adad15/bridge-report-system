@@ -9,9 +9,11 @@
 #include <json/json.h>
 
 #include "bridge_report/review/ConfirmPlan.hpp"
+#include "support/review_fixtures.hpp"
 
 namespace {
 
+using bridge_report::test_support::confirm_all_candidates;
 using bridge_report::review::build_confirm_plan;
 using bridge_report::review::ComponentPlan;
 using bridge_report::review::ConfirmPlan;
@@ -39,26 +41,6 @@ Json::Value read_contract_fixture(const std::string& file_name) {
 
 Json::Value valid_data() {
     return read_contract_fixture("bridge_annual_inspection_data.valid.json");
-}
-
-// 与 test_preflight_report.cpp 中同名函数逻辑一致：把样例三层候选（defects/photos/ratings）
-// 的 review_status 全部改为“已确认”，作为“标准入库样本”基底。consolidation into a shared
-// test header is planned for Task 8；目前两处测试各自保留一份。
-void confirm_all_candidates(Json::Value& data) {
-    for (auto& defect : data["defects"]) {
-        defect["review_status"] = "已确认";
-    }
-    for (auto& photo : data["photos"]) {
-        photo["review_status"] = "已确认";
-        photo["match_status"] = "已确认";
-    }
-    data["ratings"]["overall"]["review_status"] = "已确认";
-    for (auto& part : data["ratings"]["structure_parts"]) {
-        part["review_status"] = "已确认";
-    }
-    for (auto& part : data["ratings"]["evaluation_parts"]) {
-        part["review_status"] = "已确认";
-    }
 }
 
 const ComponentPlan* find_component(const ConfirmPlan& plan, const std::string& normalized_key) {
@@ -244,6 +226,41 @@ TEST(ConfirmPlanTest, NormalizedComponentKeyCollapsesInternalWhitespace) {
     ASSERT_EQ(plan.components.size(), 1u);
     EXPECT_EQ(plan.components[0].normalized_component_key, "上部结构|1-1# 板|1-1# 板");
     ASSERT_NE(find_component(plan, "上部结构|1-1# 板|1-1# 板"), nullptr);
+}
+
+// 回归测试：某一段字段值本身含有字面 "|" 时，若不转义，两个字段划分不同的构件在朴素拼接下
+// 会得到同一个 key（"上部结构|主梁|1|2"），从而被错误地当成同一个构件去重合并。
+// 转义后二者应产出不同的 normalized_component_key，且都不等于未转义时的碰撞结果。
+TEST(ConfirmPlanTest, NormalizedComponentKeyEscapesLiteralPipeToAvoidCollision) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+
+    // Component A: component_alias = "主梁|1"，component_name = "2"。
+    data["defects"][0]["component_alias"] = "主梁|1";
+    data["defects"][0]["component_name"] = "2";
+
+    // Component B: component_alias = "主梁"，component_name = "1|2"。
+    Json::Value second = data["defects"][0];
+    second["candidate_id"] = "defect_0002";
+    second["component_alias"] = "主梁";
+    second["component_name"] = "1|2";
+    data["defects"].append(second);
+
+    const auto plan = build_confirm_plan(data);
+
+    ASSERT_EQ(plan.defects.size(), 2u);
+    ASSERT_EQ(plan.components.size(), 2u) << "component A and B must not collide despite identical naive concatenation";
+
+    const std::string collided_naive_key = "上部结构|主梁|1|2";
+    EXPECT_EQ(find_component(plan, collided_naive_key), nullptr);
+
+    const auto* defect_a = find_defect(plan, "defect_0001");
+    const auto* defect_b = find_defect(plan, "defect_0002");
+    ASSERT_NE(defect_a, nullptr);
+    ASSERT_NE(defect_b, nullptr);
+    EXPECT_NE(defect_a->component_key, defect_b->component_key);
+    EXPECT_EQ(defect_a->component_key, "上部结构|主梁\\|1|2");
+    EXPECT_EQ(defect_b->component_key, "上部结构|主梁|1\\|2");
 }
 
 // ---------------------------------------------------------------------------

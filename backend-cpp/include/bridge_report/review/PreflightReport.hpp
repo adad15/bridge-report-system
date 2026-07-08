@@ -6,6 +6,8 @@
 
 #include <json/value.h>
 
+#include "bridge_report/review/ReviewModels.hpp"
+
 namespace bridge_report::review {
 
 /**
@@ -61,5 +63,20 @@ struct PreflightReport {
  * measurement_unstructured_kept / rating_parts_incomplete。
  */
 [[nodiscard]] PreflightReport build_preflight_report(const Json::Value& data, const PreflightContext& context);
+
+/**
+ * @brief 组装 build_preflight_report 所需的 PreflightContext：把从数据库读到的 ImportRecordDetail
+ * 与调用方另外算好的“有效检测年度”“当前年度事实是否已存在”合并为四个上下文字段。
+ *
+ * 纯函数，不访问数据库——effective_inspection_year 与 has_current_annual_facts 均由调用方
+ * （路由层 / 测试）预先通过 resolve_effective_inspection_year 与
+ * ReviewRepository::has_current_annual_facts 算好后传入；供 GET .../review、
+ * POST .../preflight-confirm、POST .../confirm 三处路由共用同一份组装逻辑。
+ */
+[[nodiscard]] PreflightContext build_preflight_context(
+    const ImportRecordDetail& detail,
+    std::optional<int> effective_inspection_year,
+    bool has_current_annual_facts
+);
 
 }  // 命名空间 bridge_report::review

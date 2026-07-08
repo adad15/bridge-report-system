@@ -1,39 +1,18 @@
 #include "bridge_report/review/PreflightReport.hpp"
 
 #include "bridge_report/contracts/AnnualInspectionContract.hpp"
+#include "bridge_report/review/JsonAccessors.hpp"
 
 namespace bridge_report::review {
 
 namespace {
 
 constexpr const char* kPending = "待确认";
-constexpr const char* kConfirmed = "已确认";
-constexpr const char* kModified = "已修改";
 constexpr const char* kIgnored = "已忽略";
 
 constexpr const char* kMatchHighConfidence = "高置信候选";
 constexpr const char* kMatchConfirmed = "已确认";
 constexpr const char* kMatchUnlinked = "未关联";
-
-bool is_review_settled(const std::string& status) {
-    return status == kConfirmed || status == kModified;
-}
-
-std::string string_member_or_empty(const Json::Value& object, const char* key) {
-    if (!object.isObject() || !object.isMember(key) || !object[key].isString()) {
-        return std::string();
-    }
-    return object[key].asString();
-}
-
-// candidate_id / review_status 是所有候选（病害/照片/评分项）共有的定位与状态字段。
-std::string candidate_id_of(const Json::Value& candidate) {
-    return string_member_or_empty(candidate, "candidate_id");
-}
-
-std::string review_status_of(const Json::Value& candidate) {
-    return string_member_or_empty(candidate, "review_status");
-}
 
 void add_issue(std::vector<PreflightIssue>& target, std::string code, std::string message, std::string candidate_id = std::string()) {
     target.push_back(PreflightIssue{std::move(code), std::move(message), std::move(candidate_id)});
@@ -413,6 +392,20 @@ PreflightReport build_preflight_report(const Json::Value& data, const PreflightC
 
     report.can_confirm = report.blocking_errors.empty();
     return report;
+}
+
+PreflightContext build_preflight_context(
+    const ImportRecordDetail& detail,
+    std::optional<int> effective_inspection_year,
+    bool has_current_annual_facts
+) {
+    PreflightContext context;
+    context.import_status = detail.import_status;
+    context.record_system_number = detail.system_number;
+    context.bridge_system_number = detail.bridge_system_number;
+    context.inspection_year = effective_inspection_year;
+    context.has_current_annual_facts = has_current_annual_facts;
+    return context;
 }
 
 }  // 命名空间 bridge_report::review

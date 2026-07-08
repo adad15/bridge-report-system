@@ -7,23 +7,11 @@
 
 #include <json/json.h>
 
+#include "bridge_report/review/JsonAccessors.hpp"
+
 namespace bridge_report::review {
 
 namespace {
-
-constexpr const char* kConfirmed = "已确认";
-constexpr const char* kModified = "已修改";
-
-bool is_review_settled(const std::string& status) {
-    return status == kConfirmed || status == kModified;
-}
-
-std::string string_member_or_empty(const Json::Value& object, const char* key) {
-    if (!object.isObject() || !object.isMember(key) || !object[key].isString()) {
-        return std::string();
-    }
-    return object[key].asString();
-}
 
 std::optional<std::string> optional_string_member(const Json::Value& object, const char* key) {
     if (!object.isObject() || !object.isMember(key) || !object[key].isString()) {
@@ -44,16 +32,6 @@ std::optional<int> optional_int_member(const Json::Value& object, const char* ke
         return std::nullopt;
     }
     return object[key].asInt();
-}
-
-// candidate_id / review_status 是所有候选（病害/照片/评分项）共有的定位与状态字段，
-// 与 PreflightReport.cpp 中同名辅助函数逻辑一致（各自独立维护，非共享头）。
-std::string candidate_id_of(const Json::Value& candidate) {
-    return string_member_or_empty(candidate, "candidate_id");
-}
-
-std::string review_status_of(const Json::Value& candidate) {
-    return string_member_or_empty(candidate, "review_status");
 }
 
 // -----------------------------------------------------------------------
@@ -84,11 +62,25 @@ std::string normalize_whitespace(const std::string& input) {
     return result;
 }
 
+// 转义字符串中的字面 "|"：'|' -> "\|"（反斜杠加竖线），使拼接后的三段不会因某一段本身
+// 含有 "|" 而与真正的段分隔符混淆，避免不同分段方式的构件被错误归并为同一个 key。
+std::string escape_pipe(const std::string& input) {
+    std::string result;
+    result.reserve(input.size());
+    for (char ch : input) {
+        if (ch == '|') {
+            result.push_back('\\');
+        }
+        result.push_back(ch);
+    }
+    return result;
+}
+
 std::string normalized_component_key(
     const std::string& structure_part, const std::string& component_type, const std::string& business_component_code
 ) {
-    return normalize_whitespace(structure_part) + "|" + normalize_whitespace(component_type) + "|"
-        + normalize_whitespace(business_component_code);
+    return escape_pipe(normalize_whitespace(structure_part)) + "|" + escape_pipe(normalize_whitespace(component_type))
+        + "|" + escape_pipe(normalize_whitespace(business_component_code));
 }
 
 // -----------------------------------------------------------------------

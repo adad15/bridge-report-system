@@ -14,8 +14,11 @@
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
+#include "support/review_fixtures.hpp"
 
 namespace {
+
+using bridge_report::test_support::confirm_all_candidates;
 
 std::string read_fixture_text(const std::string& file_name) {
     const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) / "samples" / "contracts" / file_name;
@@ -45,25 +48,6 @@ std::string write_json_compact(const Json::Value& value) {
     return Json::writeString(writer_builder, value);
 }
 
-// 把样例中所有候选（defects/photos/ratings 三层）的 review_status 改为“已确认”，
-// 与 test_preflight_report.cpp 中的同名辅助函数保持一致语义。
-void confirm_all_candidates(Json::Value& data) {
-    for (auto& defect : data["defects"]) {
-        defect["review_status"] = "已确认";
-    }
-    for (auto& photo : data["photos"]) {
-        photo["review_status"] = "已确认";
-        photo["match_status"] = "已确认";
-    }
-    data["ratings"]["overall"]["review_status"] = "已确认";
-    for (auto& part : data["ratings"]["structure_parts"]) {
-        part["review_status"] = "已确认";
-    }
-    for (auto& part : data["ratings"]["evaluation_parts"]) {
-        part["review_status"] = "已确认";
-    }
-}
-
 // 组装 PreflightContext 并调用 build_preflight_report 的完整流程，
 // 与 POST preflight-confirm 路由的组装逻辑一致（用于集成测试验证端到端行为）。
 bridge_report::review::PreflightReport run_preflight_flow(
@@ -77,15 +61,11 @@ bridge_report::review::PreflightReport run_preflight_flow(
 
     const auto parsed_result = parse_json_text(detail->parsed_result_json);
     const auto effective_year = bridge_report::review::resolve_effective_inspection_year(*detail, parsed_result);
-
-    bridge_report::review::PreflightContext context;
-    context.import_status = detail->import_status;
-    context.record_system_number = detail->system_number;
-    context.bridge_system_number = detail->bridge_system_number;
-    context.inspection_year = effective_year;
-    context.has_current_annual_facts =
+    const bool has_current_annual_facts =
         effective_year.has_value() && repository.has_current_annual_facts(detail->bridge_id, *effective_year);
 
+    const auto context =
+        bridge_report::review::build_preflight_context(*detail, effective_year, has_current_annual_facts);
     return bridge_report::review::build_preflight_report(parsed_result, context);
 }
 
