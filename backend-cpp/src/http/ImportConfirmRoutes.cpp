@@ -97,7 +97,8 @@ void register_preflight_confirm_route(const drogon::orm::DbClientPtr& db_client)
 }
 
 // 请求体字段读取：均带默认值，缺请求体/缺字段/字段类型不对都静默退化为默认值，
-// 不额外报错——只有整个请求体不是合法 JSON 才算错误（见 respond_invalid_json_body 的调用点）。
+// 不额外报错——只有整个请求体不是合法 JSON 才算错误（见 register_confirm_route 里
+// getJsonError() 非空时返回 400 invalid_json_body 的分支）。
 bool confirm_revision_from_body(const Json::Value* body) {
     if (body == nullptr || !body->isObject() || !body->isMember("confirm_revision")
         || !(*body)["confirm_revision"].isBool()) {

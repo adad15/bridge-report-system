@@ -506,6 +506,11 @@ protected:
         if (!bridge_id_.empty()) {
             client_->execSqlSync("delete from bridges where id = $1::uuid", bridge_id_);
         }
+        // 显式关闭连接，而不是让 client_ 在夹具析构时才隐式释放——本 fixture（不同于
+        // ReviewRepositoryTest）在裸 client_ 上做了大量各自独立提交的语句，外加
+        // confirm_annual_facts 内部另开的事务，连接/事务生命周期的churn 明显更高；
+        // 让析构前的关闭时机确定下来，避免进程退出阶段与 drogon 内部异步清理产生竞争。
+        client_->closeAll();
     }
 
     // 组装与本 fixture 生成的桥梁/导入记录标识对齐、且三层候选全部“已确认”的样例数据。
