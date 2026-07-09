@@ -18,6 +18,8 @@ export interface AttentionItem {
   severity: Severity;
 }
 
+// 字段刻意用 snake_case：与后端 ReviewStatistics 的 JSON 线格式（wire shape）逐字段对应，
+// 便于和 GET /review 返回的 statistics 直接比对；AttentionItem 是前端专属视图，用 camelCase。
 export interface ReviewCounts {
   defect_count: number;
   photo_count: number;

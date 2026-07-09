@@ -2,11 +2,11 @@ import type {
   BridgeAnnualInspectionData,
   DefectCandidate,
   EvaluationPartRating,
-  OverallRating,
   PhotoCandidate,
   Ratings,
   RatingStructurePart,
   ReviewStatus,
+  StructurePart,
   StructurePartRating,
 } from "../contracts/annualInspection";
 import { isNormalDefect, isNormalPhoto, isNormalRating } from "./grouping";
@@ -16,32 +16,30 @@ import { parseMeasurements } from "./measurementParser";
 // （测试会断言原 state 引用未被改动）。只读字段 candidate_id/source_ref/confidence/
 // warnings/original_caption（模块 05 §8.1/§8.2）没有对应的 action，本文件不提供修改它们的入口。
 
-// §8.1 病害候选可编辑字段白名单（measurement_text 走它自己的 edit_measurement_text action）。
-// review_status 既可以通过 set_defect_status 显式设置，也可以通过 edit_defect_field(field:
-// 'review_status') 设置——reducer 的 "edit_defect_field" 分支对这个字段做了特判，两条路径
-// 效果等价，都不套用下面 nextStatusAfterContentEdit 的自动流转规则。
-export type DefectEditableField =
-  | "structure_part"
-  | "component_name"
-  | "component_alias"
-  | "defect_location"
-  | "defect_type"
-  | "defect_description"
-  | "quantity_text"
-  | "photo_numbers"
-  | "review_status"
-  | "review_note";
-
-// §8.3 评分候选可编辑字段。
-export type RatingEditableField = "total_score" | "overall_grade" | "structure_score" | "grade" | "part_score";
-
 // 评分候选的目标定位：全桥 / 按 structure_part 匹配的结构分部 / 按数组下标匹配的评价部件
 // （评价部件用下标而不是 category_no+evaluation_part 组合定位，理由：下标在一次草稿会话内
-// 稳定且唯一，UI 表格本来就按下标渲染行，不需要再引入一套复合键匹配逻辑）。
+// 稳定且唯一，UI 表格本来就按下标渲染行，不需要再引入一套复合键匹配逻辑）。set_rating_status
+// 对任意目标都适用，因此保留这个统一的目标类型；edit_rating_field 因为要把 field↔value 类型
+// 绑死（见下方 union），改为在每个变体里内联 target 形状。
 export type RatingTarget = "overall" | { part: RatingStructurePart } | { evaluation: number };
 
+// 数值字段的 value 一律要求 number，字符串字段一律要求 string——把 field↔value 的合法组合
+// 编译期锁死（模块 05 §8.1/§8.3 可编辑字段白名单）。HTML input 拿到的是字符串，由调用方
+// （UI 组件，Task 13/14）在 dispatch 前用 Number(...) 转好再传进来，reducer 不再做运行时兜底转换。
 export type ReviewDraftAction =
-  | { type: "edit_defect_field"; candidateId: string; field: DefectEditableField; value: unknown }
+  // §8.1 病害候选可编辑字段（measurement_text 走它自己的 edit_measurement_text action）。
+  | { type: "edit_defect_field"; candidateId: string; field: "structure_part"; value: StructurePart }
+  | { type: "edit_defect_field"; candidateId: string; field: "component_name"; value: string }
+  | { type: "edit_defect_field"; candidateId: string; field: "component_alias"; value: string | null }
+  | { type: "edit_defect_field"; candidateId: string; field: "defect_location"; value: string }
+  | { type: "edit_defect_field"; candidateId: string; field: "defect_type"; value: string }
+  | { type: "edit_defect_field"; candidateId: string; field: "defect_description"; value: string }
+  | { type: "edit_defect_field"; candidateId: string; field: "quantity_text"; value: string | null }
+  | { type: "edit_defect_field"; candidateId: string; field: "photo_numbers"; value: string[] }
+  // review_status 既可通过 set_defect_status 设置，也可通过 edit_defect_field 设置——两条路径
+  // 等价，都不套用下面 nextStatusAfterContentEdit 的“内容编辑自动流转为已修改”规则。
+  | { type: "edit_defect_field"; candidateId: string; field: "review_status"; value: ReviewStatus }
+  | { type: "edit_defect_field"; candidateId: string; field: "review_note"; value: string | null }
   | { type: "edit_measurement_text"; candidateId: string; text: string | null }
   | { type: "set_defect_status"; candidateId: string; status: ReviewStatus }
   | { type: "photo_confirm_match"; candidateId: string }
@@ -50,17 +48,23 @@ export type ReviewDraftAction =
   | { type: "photo_ignore"; candidateId: string }
   | { type: "edit_photo_number"; candidateId: string; photoNumber: string }
   | { type: "edit_photo_link"; candidateId: string; defectCandidateId: string | null }
-  | { type: "edit_rating_field"; target: RatingTarget; field: RatingEditableField; value: unknown }
+  // §8.3 评分候选可编辑字段：target↔field↔value 三者绑死。数值字段（total_score/
+  // structure_score/part_score）只收 number，等级字段（overall_grade/grade）只收 string。
+  | { type: "edit_rating_field"; target: "overall"; field: "total_score"; value: number }
+  | { type: "edit_rating_field"; target: "overall"; field: "overall_grade"; value: string }
+  | { type: "edit_rating_field"; target: { part: RatingStructurePart }; field: "structure_score"; value: number }
+  | { type: "edit_rating_field"; target: { part: RatingStructurePart }; field: "grade"; value: string }
+  | { type: "edit_rating_field"; target: { evaluation: number }; field: "part_score"; value: number }
   | { type: "set_rating_status"; target: RatingTarget; status: ReviewStatus }
   | { type: "batch_confirm_normal" };
 
-const NUMERIC_RATING_FIELDS: ReadonlySet<RatingEditableField> = new Set(["total_score", "structure_score", "part_score"]);
+// 从 union 里抽出各分组，供 reducer 内部 helper 使用（Extract/Exclude 保证与上面的 union 单一真源同步）。
+type EditDefectFieldAction = Extract<ReviewDraftAction, { type: "edit_defect_field" }>;
+type EditDefectContentFieldAction = Exclude<EditDefectFieldAction, { field: "review_status" }>;
+type EditRatingFieldAction = Extract<ReviewDraftAction, { type: "edit_rating_field" }>;
 
 // 编辑内容字段后的状态流转规则（模块 05 §8.1）：处于 待确认/已确认 的候选，内容一改就自动
 // 流转为 已修改；已忽略 的候选不会因为内容编辑被“复活”，仍留在 已忽略；已修改 编辑后还是 已修改。
-// 这条规则只适用于“内容字段”编辑（edit_defect_field 的非 review_status 分支、
-// edit_measurement_text）；直接调用 set_defect_status / edit_defect_field(field: 'review_status')
-// 是显式状态操作，不走这条自动流转规则。
 function nextStatusAfterContentEdit(current: ReviewStatus): ReviewStatus {
   return current === "已忽略" ? current : "已修改";
 }
@@ -81,57 +85,97 @@ function updatePhoto(
   return photos.map((photo) => (photo.candidate_id === candidateId ? updater(photo) : photo));
 }
 
-function coerceNumberField(value: unknown): number {
-  return typeof value === "string" ? Number(value) : (value as number);
+// 内容字段编辑：按 field 逐分支处理，让每条 { ...defect, <具体字段>: action.value } 都在
+// field 被收窄后拿到正确的 value 类型，从而不需要任何 `as` 断言。缺任何一个 case 都会因
+// “函数并非所有路径都返回 DefectCandidate” 而编译失败，等价于一次穷尽性检查。
+function applyDefectContentEdit(defect: DefectCandidate, action: EditDefectContentFieldAction): DefectCandidate {
+  const review_status = nextStatusAfterContentEdit(defect.review_status);
+  switch (action.field) {
+    case "structure_part":
+      return { ...defect, structure_part: action.value, review_status };
+    case "component_name":
+      return { ...defect, component_name: action.value, review_status };
+    case "component_alias":
+      return { ...defect, component_alias: action.value, review_status };
+    case "defect_location":
+      return { ...defect, defect_location: action.value, review_status };
+    case "defect_type":
+      return { ...defect, defect_type: action.value, review_status };
+    case "defect_description":
+      return { ...defect, defect_description: action.value, review_status };
+    case "quantity_text":
+      return { ...defect, quantity_text: action.value, review_status };
+    case "photo_numbers":
+      return { ...defect, photo_numbers: action.value, review_status };
+    case "review_note":
+      return { ...defect, review_note: action.value, review_status };
+  }
 }
 
-// 判断 target 是不是结构分部目标；排除 "overall" 和这个之后，剩下的分支 TS 会自动把
-// target 收窄成 { evaluation: number }，不需要再写一个对称的 isEvaluationTarget 守卫。
-function isPartTarget(target: RatingTarget): target is { part: RatingStructurePart } {
-  return typeof target === "object" && target !== null && "part" in target;
+function mapStructurePart(
+  parts: StructurePartRating[],
+  target: RatingStructurePart,
+  updater: (part: StructurePartRating) => StructurePartRating
+): StructurePartRating[] {
+  return parts.map((part) => (part.structure_part === target ? updater(part) : part));
 }
 
-function applyRatingFieldEdit(ratings: Ratings, target: RatingTarget, field: RatingEditableField, value: unknown): Ratings {
-  const coercedValue = NUMERIC_RATING_FIELDS.has(field) ? coerceNumberField(value) : value;
+function mapEvaluationPart(
+  parts: EvaluationPartRating[],
+  index: number,
+  updater: (part: EvaluationPartRating) => EvaluationPartRating
+): EvaluationPartRating[] {
+  return parts.map((part, currentIndex) => (currentIndex === index ? updater(part) : part));
+}
 
-  if (target === "overall") {
-    return { ...ratings, overall: { ...ratings.overall, [field]: coercedValue } as OverallRating };
+// 按 field 收窄整个 action（每个 field 字面量只属于一个 union 成员），从而同时拿到正确的
+// target 形状和 value 类型，同样无需 `as`。
+function applyRatingFieldEdit(ratings: Ratings, action: EditRatingFieldAction): Ratings {
+  switch (action.field) {
+    case "total_score":
+      return { ...ratings, overall: { ...ratings.overall, total_score: action.value } };
+    case "overall_grade":
+      return { ...ratings, overall: { ...ratings.overall, overall_grade: action.value } };
+    case "structure_score":
+      return {
+        ...ratings,
+        structure_parts: mapStructurePart(ratings.structure_parts, action.target.part, (part) => ({
+          ...part,
+          structure_score: action.value,
+        })),
+      };
+    case "grade":
+      return {
+        ...ratings,
+        structure_parts: mapStructurePart(ratings.structure_parts, action.target.part, (part) => ({
+          ...part,
+          grade: action.value,
+        })),
+      };
+    case "part_score":
+      return {
+        ...ratings,
+        evaluation_parts: mapEvaluationPart(ratings.evaluation_parts, action.target.evaluation, (part) => ({
+          ...part,
+          part_score: action.value,
+        })),
+      };
   }
-  if (isPartTarget(target)) {
-    return {
-      ...ratings,
-      structure_parts: ratings.structure_parts.map((part) =>
-        part.structure_part === target.part ? ({ ...part, [field]: coercedValue } as StructurePartRating) : part
-      ),
-    };
-  }
-  const evaluationIndex = target.evaluation;
-  return {
-    ...ratings,
-    evaluation_parts: ratings.evaluation_parts.map((part, index) =>
-      index === evaluationIndex ? ({ ...part, [field]: coercedValue } as EvaluationPartRating) : part
-    ),
-  };
 }
 
 function applyRatingStatus(ratings: Ratings, target: RatingTarget, status: ReviewStatus): Ratings {
   if (target === "overall") {
     return { ...ratings, overall: { ...ratings.overall, review_status: status } };
   }
-  if (isPartTarget(target)) {
+  if ("part" in target) {
     return {
       ...ratings,
-      structure_parts: ratings.structure_parts.map((part) =>
-        part.structure_part === target.part ? { ...part, review_status: status } : part
-      ),
+      structure_parts: mapStructurePart(ratings.structure_parts, target.part, (part) => ({ ...part, review_status: status })),
     };
   }
-  const evaluationIndex = target.evaluation;
   return {
     ...ratings,
-    evaluation_parts: ratings.evaluation_parts.map((part, index) =>
-      index === evaluationIndex ? { ...part, review_status: status } : part
-    ),
+    evaluation_parts: mapEvaluationPart(ratings.evaluation_parts, target.evaluation, (part) => ({ ...part, review_status: status })),
   };
 }
 
@@ -151,22 +195,13 @@ function batchConfirmNormalRatings(ratings: Ratings): Ratings {
 export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: ReviewDraftAction): BridgeAnnualInspectionData {
   switch (action.type) {
     case "edit_defect_field": {
-      const { candidateId, field, value } = action;
-      return {
-        ...state,
-        defects: updateDefect(state.defects, candidateId, (defect) => {
-          // edit_defect_field 对 review_status 字段的编辑等价于 set_defect_status：
-          // 直接把状态设成调用方给的值，不套用“内容编辑自动流转为已修改”的规则。
-          if (field === "review_status") {
-            return { ...defect, review_status: value as ReviewStatus };
-          }
-          return {
-            ...defect,
-            [field]: value,
-            review_status: nextStatusAfterContentEdit(defect.review_status),
-          } as DefectCandidate;
-        }),
-      };
+      const { candidateId } = action;
+      if (action.field === "review_status") {
+        // 显式状态设置，等价于 set_defect_status，不走内容编辑的自动流转。
+        const status = action.value;
+        return { ...state, defects: updateDefect(state.defects, candidateId, (defect) => ({ ...defect, review_status: status })) };
+      }
+      return { ...state, defects: updateDefect(state.defects, candidateId, (defect) => applyDefectContentEdit(defect, action)) };
     }
 
     case "edit_measurement_text": {
@@ -250,7 +285,7 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
     }
 
     case "edit_rating_field": {
-      return { ...state, ratings: applyRatingFieldEdit(state.ratings, action.target, action.field, action.value) };
+      return { ...state, ratings: applyRatingFieldEdit(state.ratings, action) };
     }
 
     case "set_rating_status": {
@@ -268,7 +303,10 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
       };
     }
 
-    default:
-      return state;
+    default: {
+      // 穷尽性检查：将来新增第 13 种 action.type 却忘了在上面处理时，这里会编译失败。
+      const _exhaustive: never = action;
+      return _exhaustive;
+    }
   }
 }

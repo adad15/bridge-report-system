@@ -229,6 +229,45 @@ describe("needsAttention", () => {
 
     expect(needsAttention(data)).toEqual([]);
   });
+
+  // 隔离 rule 5 的第二个析取项（linkedEmpty && review_status !== 已忽略），它独立于 match_status===未关联：
+  // 一张已抽取但未匹配、且未被忽略的照片（待校对 + 未关联病害 + 待确认）应当进入需要处理。
+  // 若删掉这个析取项，仅靠 match_status===未关联 的规则不会覆盖本用例，本测试就会失败。
+  it("rule 5 (second disjunct): a 待校对 photo that is unlinked and not ignored is flagged", () => {
+    const data = makeData({
+      photos: [makePhoto({ match_status: "待校对", linked_defect_candidate_id: null, review_status: "待确认" })],
+    });
+
+    const items = needsAttention(data);
+
+    expect(items).toContainEqual(expect.objectContaining({ kind: "photo", candidateId: "photo_0001" }));
+  });
+
+  it("rule 2 (rating target): a top-level warning targeting ratings.overall is classified as kind 'rating'", () => {
+    const data = makeData({
+      ratings: { overall: makeOverallRating(), structure_parts: [], evaluation_parts: [], warnings: [] },
+      warnings: [makeWarning({ message: "全桥评分待人工复核。", target_candidate_id: "ratings.overall" })],
+    });
+
+    const items = needsAttention(data);
+
+    expect(items).toContainEqual(
+      expect.objectContaining({ kind: "rating", candidateId: "ratings.overall", message: "全桥评分待人工复核。" })
+    );
+  });
+
+  it("rule 2 (import fallthrough): a targeted warning matching no defect/photo/rating is classified as kind 'import'", () => {
+    const data = makeData({
+      defects: [makeDefect()],
+      warnings: [makeWarning({ message: "无法定位到具体候选。", target_candidate_id: "unknown_9999" })],
+    });
+
+    const items = needsAttention(data);
+
+    expect(items).toContainEqual(
+      expect.objectContaining({ kind: "import", candidateId: "unknown_9999", message: "无法定位到具体候选。" })
+    );
+  });
 });
 
 describe("isNormalDefect", () => {

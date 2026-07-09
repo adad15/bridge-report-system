@@ -248,10 +248,10 @@ describe("reviewDraftReducer", () => {
     expect(next.photos[0].linked_defect_candidate_id).toBe("defect_0002");
   });
 
-  it("edit_rating_field on overall coerces a string value to a number for total_score", () => {
+  it("edit_rating_field on overall sets total_score from a number value (UI coerces strings before dispatch)", () => {
     const state = makeState();
 
-    const next = reviewDraftReducer(state, { type: "edit_rating_field", target: "overall", field: "total_score", value: "88" });
+    const next = reviewDraftReducer(state, { type: "edit_rating_field", target: "overall", field: "total_score", value: 88 });
 
     expect(next.ratings.overall.total_score).toBe(88);
     expect(typeof next.ratings.overall.total_score).toBe("number");
