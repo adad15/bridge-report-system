@@ -263,6 +263,22 @@ TEST(ConfirmPlanTest, NormalizedComponentKeyEscapesLiteralPipeToAvoidCollision) 
     EXPECT_EQ(defect_b->component_key, "上部结构|主梁|1\\|2");
 }
 
+// 段内含字面反斜杠时也要转义（'\' -> "\\"），保证 key 编码可证明无歧义：拼接后只有作为段
+// 分隔符的竖线是裸竖线。此处 alias 原文里的单个反斜杠应在 key 段中变为两个。
+TEST(ConfirmPlanTest, NormalizedComponentKeyEscapesLiteralBackslash) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["defects"][0]["component_alias"] = "主\\梁";  // 实际字符串含 1 个反斜杠：主\梁
+    data["defects"][0]["component_name"] = "1";
+
+    const auto plan = build_confirm_plan(data);
+
+    ASSERT_EQ(plan.components.size(), 1u);
+    // 期望 key 段中反斜杠翻倍：主\\梁（实际含 2 个反斜杠）。
+    EXPECT_EQ(plan.components[0].normalized_component_key, "上部结构|主\\\\梁|1");
+    EXPECT_EQ(plan.components[0].component_type, "主\\梁");
+}
+
 // ---------------------------------------------------------------------------
 // Rule 3: defect field-by-field mapping
 // ---------------------------------------------------------------------------

@@ -70,8 +70,9 @@ struct PreflightReport {
  *
  * 纯函数，不访问数据库——effective_inspection_year 与 has_current_annual_facts 均由调用方
  * （路由层 / 测试）预先通过 resolve_effective_inspection_year 与
- * ReviewRepository::has_current_annual_facts 算好后传入；供 GET .../review、
- * POST .../preflight-confirm、POST .../confirm 三处路由共用同一份组装逻辑。
+ * ReviewRepository::has_current_annual_facts 算好后传入；供 POST .../preflight-confirm 与
+ * POST .../confirm 两处路由（均在 ImportConfirmRoutes.cpp）共用同一份组装逻辑。
+ * 注意 GET .../review 不走本函数——它用 build_review_response 组装完整详情，而非入库前检查上下文。
  */
 [[nodiscard]] PreflightContext build_preflight_context(
     const ImportRecordDetail& detail,

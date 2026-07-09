@@ -62,13 +62,15 @@ std::string normalize_whitespace(const std::string& input) {
     return result;
 }
 
-// 转义字符串中的字面 "|"：'|' -> "\|"（反斜杠加竖线），使拼接后的三段不会因某一段本身
-// 含有 "|" 而与真正的段分隔符混淆，避免不同分段方式的构件被错误归并为同一个 key。
-std::string escape_pipe(const std::string& input) {
+// 转义单个 key 段：先把字面反斜杠转义成 "\\"，再把字面竖线转义成 "\|"。两步顺序不可颠倒——
+// 先转义反斜杠可保证转义引入的反斜杠不会被后续再次转义，从而得到可证明无歧义的编码：拼接后
+// 只有作为段分隔符的那些竖线是"裸"竖线，段内的任何 '\' 与 '|' 都带前导反斜杠。这样不同分段
+// 方式的构件（如 "a|b"+"c" 与 "a"+"b|c"）不会拼出相同 key 被错误归并。
+std::string escape_key_segment(const std::string& input) {
     std::string result;
     result.reserve(input.size());
     for (char ch : input) {
-        if (ch == '|') {
+        if (ch == '\\' || ch == '|') {
             result.push_back('\\');
         }
         result.push_back(ch);
@@ -79,8 +81,9 @@ std::string escape_pipe(const std::string& input) {
 std::string normalized_component_key(
     const std::string& structure_part, const std::string& component_type, const std::string& business_component_code
 ) {
-    return escape_pipe(normalize_whitespace(structure_part)) + "|" + escape_pipe(normalize_whitespace(component_type))
-        + "|" + escape_pipe(normalize_whitespace(business_component_code));
+    return escape_key_segment(normalize_whitespace(structure_part)) + "|"
+        + escape_key_segment(normalize_whitespace(component_type)) + "|"
+        + escape_key_segment(normalize_whitespace(business_component_code));
 }
 
 // -----------------------------------------------------------------------
