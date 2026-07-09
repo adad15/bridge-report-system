@@ -141,4 +141,23 @@ describe("navigationApi", () => {
     });
     await expect(fetchInspectionYears("http://127.0.0.1:18080", "missing-bridge")).rejects.toBeInstanceOf(ApiError);
   });
+
+  it("labels a code-less error body from a NON-confirm call as unrecognized_error_response, not preflight_failed", async () => {
+    // 回归保护：通用底座对任何缺 code 的错误体（代理错误页、后端崩溃等）都用中性 code，
+    // 绝不把无关端点的失败误标成 confirm 端点专属的 preflight_failed。
+    const codelessBody = { detail: "502 Bad Gateway" };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => codelessBody,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const error = await fetchBridges("http://127.0.0.1:18080").catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    const apiError = error as InstanceType<typeof ApiError>;
+    expect(apiError.code).toBe("unrecognized_error_response");
+    expect(apiError.details).toEqual(codelessBody);
+  });
 });

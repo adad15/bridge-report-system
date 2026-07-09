@@ -1,6 +1,6 @@
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
 import { isBridgeAnnualInspectionData } from "../contracts/annualInspection";
-import { ApiError, request } from "./navigationApi";
+import { ApiError, request } from "./apiClient";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -122,16 +122,31 @@ export async function runPreflight(baseUrl: string, importRecordId: string): Pro
   });
 }
 
+// details 是不是一份 PreflightReport（can_confirm=false 时被后端当 409 body 返回）。
+function looksLikePreflightReport(details: unknown): boolean {
+  return typeof details === "object" && details !== null && "can_confirm" in details;
+}
+
 export async function confirmImport(
   baseUrl: string,
   importRecordId: string,
   body: ConfirmRequestBody
 ): Promise<ConfirmResponse> {
-  return request(`${baseUrl}${reviewRoute(importRecordId, "/confirm")}`, {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(body),
-  });
+  try {
+    return await request<ConfirmResponse>(`${baseUrl}${reviewRoute(importRecordId, "/confirm")}`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    // 通用底座对缺 code 的错误体一律标 "unrecognized_error_response"；只有 confirm 端点
+    // 真正会收到 PreflightReport 形状的 409 body（can_confirm=false）——这里按 details 形状
+    // 把它重标为 preflight 专属 code，供 UI（Task 14）据此渲染 blocking_errors。details 原样保留。
+    if (error instanceof ApiError && error.code === "unrecognized_error_response" && looksLikePreflightReport(error.details)) {
+      error.code = "preflight_failed";
+    }
+    throw error;
+  }
 }
 
 // 无请求体：后端的 cancel 路由不读取请求体。

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
-import { ApiError } from "./navigationApi";
+import { ApiError } from "./apiClient";
 import { cancelImport, confirmImport, fetchReview, runPreflight, saveReviewDraft } from "./reviewApi";
 
 // 满足 isBridgeAnnualInspectionData 最小必填字段集合的候选数据骨架，供测试复用。
@@ -242,7 +242,7 @@ describe("reviewApi", () => {
     });
   });
 
-  it("confirmImport on 409 with a bare PreflightReport body (no code) throws ApiError with a synthetic code and details", async () => {
+  it("confirmImport on 409 with a bare PreflightReport body (no code) throws ApiError relabeled preflight_failed with details", async () => {
     const preflightReportBody = {
       can_confirm: false,
       requires_revision_confirmation: false,
@@ -265,7 +265,24 @@ describe("reviewApi", () => {
 
     expect(error).toBeInstanceOf(ApiError);
     const apiError = error as InstanceType<typeof ApiError>;
-    expect(apiError.code).toBeTruthy();
+    // confirm 端点按 details 形状把中性 code 重标为 preflight 专属 code。
+    expect(apiError.code).toBe("preflight_failed");
     expect(apiError.details).toEqual(preflightReportBody);
+  });
+
+  it("confirmImport on a 409 with a plain {code,message} body keeps that code (not preflight_failed)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        code: "revision_confirmation_required",
+        message: "同桥同年已有当前有效事实，需显式确认修订版。",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      confirmImport("http://127.0.0.1:18080", "record-1", { confirm_revision: false, confirmation_note: "" })
+    ).rejects.toMatchObject({ code: "revision_confirmation_required" });
   });
 });
