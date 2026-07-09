@@ -305,8 +305,10 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
 
     default: {
       // 穷尽性检查：将来新增第 13 种 action.type 却忘了在上面处理时，这里会编译失败。
+      // 运行期兜底返回原 state（未类型化的 JS 调用方若派发未知 action 时不破坏状态）。
       const _exhaustive: never = action;
-      return _exhaustive;
+      void _exhaustive;
+      return state;
     }
   }
 }
