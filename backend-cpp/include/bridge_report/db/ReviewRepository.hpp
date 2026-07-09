@@ -44,6 +44,13 @@ struct ConfirmOutcome {
  *
  * 注意：内部使用 execSqlSync，会阻塞调用方所在线程；
  * 本地单用户 v1 场景可接受（与 /health/db 的取舍一致）。
+ *
+ * v1 已知并接受的提交确认缺口（confirm_annual_facts）：事务由 drogon 在 Transaction 对象
+ * 析构时异步发出 COMMIT，且未设置 commitCallback，本方法在事务对象析构后即返回 success=true。
+ * 若恰在这最后一步 COMMIT 触达数据库前连接断开，调用方会收到 confirmed=true 但事实并未持久化。
+ * 这是自愈的、不会造成静默数据损坏：数据库要么整段事务提交、要么整段回滚（不会写入部分事实），
+ * 后续任一 GET /review 读到的都是数据库真实状态。用 promise/future 包裹 commitCallback 精确
+ * 回传提交结果对 v1 过于侵入，故本版本知情接受该风险。
  */
 class ReviewRepository {
 public:

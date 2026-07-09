@@ -716,6 +716,13 @@ TEST_F(ConfirmAnnualFactsTest, confirm_requires_revision_when_current_facts_exis
     ASSERT_EQ(record_after.size(), 1u);
     EXPECT_EQ(record_after[0]["inspection_year_id"].as<std::string>(), confirmed_outcome.inspection_year_id);
     EXPECT_EQ(record_after[0]["import_status"].as<std::string>(), "已确认");
+
+    // 被遗弃的挂载占位行（原 import_records.inspection_year_id）应在修订入库时随事务一并删除，
+    // 不能残留为死数据。记录现已改指向新版本行 Z，占位行 X 无人引用，必须已消失。
+    const auto placeholder_after = client_->execSqlSync(
+        "select count(*) as n from inspection_years where id = $1::uuid", placeholder_year_id_
+    );
+    EXPECT_EQ(placeholder_after[0]["n"].as<int64_t>(), 0);
 }
 
 TEST_F(ConfirmAnnualFactsTest, confirm_blocks_wrong_status) {
@@ -757,6 +764,19 @@ TEST_F(ConfirmAnnualFactsTest, confirm_rolls_back_on_failure) {
         "select count(*) as n from defect_observations where source_import_record_id = $1::uuid", import_record_id_
     );
     EXPECT_EQ(observation_count[0]["n"].as<int64_t>(), 0);
+    // defect_measurements / defect_photos 也应当零行。虽然它们经 defect_observation_id 外键级联，
+    // 观测行为零即隐含子行为零，这里仍显式断言，避免回滚不彻底时被 FK 级联掩盖。
+    const auto measurement_count = client_->execSqlSync(
+        "select count(*) as n from defect_measurements dm "
+        "join defect_observations do2 on do2.id = dm.defect_observation_id "
+        "where do2.source_import_record_id = $1::uuid",
+        import_record_id_
+    );
+    EXPECT_EQ(measurement_count[0]["n"].as<int64_t>(), 0);
+    const auto photo_count = client_->execSqlSync(
+        "select count(*) as n from defect_photos where source_import_record_id = $1::uuid", import_record_id_
+    );
+    EXPECT_EQ(photo_count[0]["n"].as<int64_t>(), 0);
     const auto rating_count = client_->execSqlSync(
         "select count(*) as n from condition_ratings where source_import_record_id = $1::uuid", import_record_id_
     );

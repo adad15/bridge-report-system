@@ -28,43 +28,13 @@ void respond_bridge_not_found(const HttpCallback& callback) {
     );
 }
 
-void respond_import_record_not_found(const HttpCallback& callback) {
-    respond_json(
-        callback,
-        make_error_body("import_record_not_found", "指定的导入记录不存在"),
-        drogon::k404NotFound
-    );
-}
-
-// parsed_result_json 存储为 jsonb 文本；解析失败（理论上不应发生，防御式处理）时退化为空对象，
-// 使 build_review_statistics 等下游逻辑仍能得到全 0 统计而不是崩溃。
-Json::Value parse_parsed_result_json(const std::string& text) {
-    Json::CharReaderBuilder builder;
-    Json::Value root;
-    std::string errors;
-    std::istringstream stream(text);
-    if (!Json::parseFromStream(builder, stream, &root, &errors)) {
-        return Json::Value(Json::objectValue);
-    }
-    return root;
-}
+// respond_import_record_not_found / parse_parsed_result_json / register_options_handler
+// 现由 RouteHelpers.hpp 提供（与 ImportConfirmRoutes.cpp 共用）。
 
 // 注意：execSqlSync 会阻塞当前 IO 线程；本地单用户 v1 场景可接受（与 /health/db 的取舍一致）。
 bool bridge_exists(const drogon::orm::DbClientPtr& db_client, const std::string& bridge_id) {
     const auto result = db_client->execSqlSync("select 1 from bridges where id = $1::uuid", bridge_id);
     return !result.empty();
-}
-
-void register_options_handler(const std::string& path) {
-    drogon::app().registerHandler(
-        path,
-        [](const drogon::HttpRequestPtr&, HttpCallback&& callback) {
-            auto response = drogon::HttpResponse::newHttpResponse();
-            apply_local_dev_cors_headers(response);
-            callback(response);
-        },
-        {drogon::Options, "drogon::HttpOptionsMiddleware"}
-    );
 }
 
 // 桥梁子资源路由的公共骨架：先校验 uuid，再确认桥梁存在，最后交给 build_body 组装响应体。

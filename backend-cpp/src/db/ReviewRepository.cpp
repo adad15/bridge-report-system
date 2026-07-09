@@ -49,10 +49,13 @@ using TransactionPtr = std::shared_ptr<drogon::orm::Transaction>;
  * 再决定是否需要新建修订版；仅当不存在修订冲突时才复用/新建“步骤 2”意义上的占位年度行。
  * 这个顺序与规格文本中“先步骤 2 再步骤 3”的写法不同：若严格按步骤 2 先行——当
  * import_records.inspection_year_id 本来为空、又确实需要走修订分支时，步骤 2 插入的
- * version_number=1 占位行会在步骤 3 另建新行后变成永久孤儿（修订分支不回滚，占位行插入
- * 会随事务一起提交）。调整顺序后行为对规格列出的四个测试场景完全一致（inspection_year_id
- * 已挂载时两种顺序均不会在步骤 2/3 产生插入），仅在“未挂载 + 需要修订”这一未覆盖场景下
- * 避免产生垃圾行，因此认为是更安全的实现选择。
+ * version_number=1 占位行会在步骤 3 另建新行后变成永久孤儿。调整顺序后行为对规格列出的四个
+ * 测试场景完全一致（inspection_year_id 已挂载时两种顺序均不会在步骤 2/3 产生插入），仅在
+ * “未挂载 + 需要修订”这一未覆盖场景下避免产生垃圾行，因此认为是更安全的实现选择。
+ *
+ * 另有一类被遗弃的占位行——记录已挂在待校对占位行 X，但同桥同年另一条导入先确认、修订分支
+ * 又新建了 Z——不由本函数处理，而是在 confirm_annual_facts 把导入记录改指向 Z 之后，用一条
+ * 收紧谓词的 DELETE 清理（见该函数步骤 7 收尾）。
  *
  * @return 目标年度行 id；若存在修订冲突且调用方未确认修订，返回 std::nullopt
  * （调用方据此直接回滚并返回 revision_confirmation_required，不再插入任何行）。
@@ -594,6 +597,23 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             confirmation_note,
             write_compact_json(written_json)
         );
+
+        // 步骤 7 收尾：清理被遗弃的挂载占位年度行。
+        // 场景：导入记录原本挂在占位年度行 X（待校对、is_current=false）；同桥同年的另一条导入先被
+        // 确认、建立了当前有效行 Y；本次确认走修订分支新建了行 Z 并把记录改指向 Z（上面的 update）——
+        // 此时 X 已无人引用，若不删除会永久沉积为死数据。仅当原挂载行确实是"另一行、非当前、待校对"
+        // 的占位行时才删除；谓词收得很紧（is_current=false AND status='待校对' AND id=旧挂载id AND
+        // id<>新目标id），保证绝不会误删真正的已确认/当前/已被修订行。
+        // 非修订/复用挂载行的场景下 target_year_id == existing_inspection_year_id，id<>新目标id 直接
+        // 落空，本语句为无操作。
+        if (existing_inspection_year_id.has_value() && *existing_inspection_year_id != target_year_id) {
+            tx->execSqlSync(
+                "delete from inspection_years "
+                "where id = $1::uuid and id <> $2::uuid and is_current = false and status = '待校对'",
+                *existing_inspection_year_id,
+                target_year_id
+            );
+        }
 
         // 未显式调用 rollback()：tx 离开作用域时析构提交事务。
         ConfirmOutcome outcome;

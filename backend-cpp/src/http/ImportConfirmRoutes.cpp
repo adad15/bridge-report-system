@@ -1,6 +1,5 @@
 #include "bridge_report/http/ImportConfirmRoutes.hpp"
 
-#include <sstream>
 #include <string>
 
 #include <drogon/HttpResponse.h>
@@ -18,39 +17,8 @@ namespace bridge_report::http {
 
 namespace {
 
-void respond_import_record_not_found(const HttpCallback& callback) {
-    respond_json(
-        callback,
-        make_error_body("import_record_not_found", "指定的导入记录不存在"),
-        drogon::k404NotFound
-    );
-}
-
-// parsed_result_json 存储为 jsonb 文本；解析失败（理论上不应发生，防御式处理）时退化为空对象，
-// 与 ReviewRoutes.cpp 中的同名辅助函数逻辑一致（未共享——仅两处各自一份的小函数，见模块 05
-// Task 8 实施计划"Keep the move mechanical"）。
-Json::Value parse_parsed_result_json(const std::string& text) {
-    Json::CharReaderBuilder builder;
-    Json::Value root;
-    std::string errors;
-    std::istringstream stream(text);
-    if (!Json::parseFromStream(builder, stream, &root, &errors)) {
-        return Json::Value(Json::objectValue);
-    }
-    return root;
-}
-
-void register_options_handler(const std::string& path) {
-    drogon::app().registerHandler(
-        path,
-        [](const drogon::HttpRequestPtr&, HttpCallback&& callback) {
-            auto response = drogon::HttpResponse::newHttpResponse();
-            apply_local_dev_cors_headers(response);
-            callback(response);
-        },
-        {drogon::Options, "drogon::HttpOptionsMiddleware"}
-    );
-}
+// respond_import_record_not_found / parse_parsed_result_json / register_options_handler
+// 现由 RouteHelpers.hpp 提供（与 ReviewRoutes.cpp 共用）。
 
 // POST /api/import-records/{import_record_id}/preflight-confirm：入库前检查。
 // 无请求体，只读——不修改导入记录状态，只是把当前 parsed_result_json 跑一遍
