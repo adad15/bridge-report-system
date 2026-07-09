@@ -1,47 +1,38 @@
-import { useEffect, useState } from "react";
+import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
 
-import { BackendHealth, fetchBackendHealth } from "./api/health";
+import { BridgeDetailPage } from "./pages/BridgeDetailPage";
+import { BridgesPage } from "./pages/BridgesPage";
+import { HomePage } from "./pages/HomePage";
+import { ReviewWorkspacePlaceholder } from "./pages/ReviewWorkspacePlaceholder";
 import "./styles.css";
 
-const backendBaseUrl =
-  import.meta.env.VITE_BACKEND_BASE_URL ?? "http://127.0.0.1:18080";
-
 export function App() {
-  const [health, setHealth] = useState<BackendHealth | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchBackendHealth(backendBaseUrl)
-      .then((result) => {
-        setHealth(result);
-        setError(null);
-      })
-      .catch((caught: unknown) => {
-        setHealth(null);
-        setError(caught instanceof Error ? caught.message : "Unknown health check error");
-      });
-  }, []);
-
   return (
-    <main className="app-shell">
-      <section className="status-panel">
-        <h1>桥梁报告系统</h1>
-        <div className="status-row">
-          <span>C++ 主服务</span>
-          <strong>{health?.status ?? "checking"}</strong>
+    <BrowserRouter>
+      <main className="app-shell">
+        <div className="app-content">
+          <nav className="top-nav">
+            <NavLink to="/" end className={({ isActive }) => (isActive ? "top-nav-link active" : "top-nav-link")}>
+              首页
+            </NavLink>
+            <NavLink
+              to="/bridges"
+              className={({ isActive }) => (isActive ? "top-nav-link active" : "top-nav-link")}
+            >
+              桥梁列表
+            </NavLink>
+          </nav>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/bridges" element={<BridgesPage />} />
+            <Route path="/bridges/:bridgeId" element={<BridgeDetailPage />} />
+            <Route
+              path="/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review"
+              element={<ReviewWorkspacePlaceholder />}
+            />
+          </Routes>
         </div>
-        <div className="status-grid">
-          <span>服务</span>
-          <span>{health?.service ?? "-"}</span>
-          <span>版本</span>
-          <span>{health?.version ?? "-"}</span>
-          <span>Python 工具服务</span>
-          <span>{health?.python_tools_base_url ?? "-"}</span>
-          <span>归档目录</span>
-          <span>{health?.archive_root ?? "-"}</span>
-        </div>
-        {error ? <p className="error-text">{error}</p> : null}
-      </section>
-    </main>
+      </main>
+    </BrowserRouter>
   );
 }
