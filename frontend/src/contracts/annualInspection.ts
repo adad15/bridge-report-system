@@ -1,4 +1,5 @@
 export type ReviewStatus = "待确认" | "已确认" | "已修改" | "已忽略";
+export type DefectGroupReviewStatus = "待确认" | "已确认";
 export type ComparisonConfirmationStatus = "待确认" | "已确认" | "已修改" | "已拒绝";
 export type Severity = "info" | "warning" | "error";
 export type StructurePart = "全桥" | "上部结构" | "下部结构" | "桥面系" | "其他";
@@ -39,7 +40,7 @@ export interface SourceRef {
 
 export interface ContractInfo {
   name: "BridgeAnnualInspectionData";
-  version: "1.0";
+  version: "1.1";
   generated_at: string;
   producer: string;
   parser_name: string;
@@ -87,6 +88,8 @@ export interface DefectCandidate {
   measurement_text?: string | null;
   measurements: Measurement[];
   photo_numbers: string[];
+  group_review_status: DefectGroupReviewStatus;
+  confirmed_missing_photo_numbers: string[];
   severity?: Severity | null;
   remark?: string | null;
   source_ref: SourceRef;
@@ -240,11 +243,17 @@ function hasRequiredObjectMembers(value: Record<string, unknown>, members: strin
 }
 
 function isValidDefectCandidate(value: unknown): boolean {
+  if (!isRecord(value) || !hasValidConfidence(value)) {
+    return false;
+  }
+  const missingPhotoNumbers = getRequiredArray(value, "confirmed_missing_photo_numbers");
   return (
-    isRecord(value) &&
-    hasValidConfidence(value) &&
     hasRequiredArrayMembers(value, ["measurements", "photo_numbers", "warnings"]) &&
-    hasRequiredObjectMembers(value, ["source_ref"])
+    hasRequiredObjectMembers(value, ["source_ref"]) &&
+    (value.group_review_status === "待确认" || value.group_review_status === "已确认") &&
+    missingPhotoNumbers !== null &&
+    missingPhotoNumbers.every((item) => typeof item === "string") &&
+    new Set(missingPhotoNumbers).size === missingPhotoNumbers.length
   );
 }
 
@@ -296,7 +305,7 @@ export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnn
   if (contract === null) {
     return false;
   }
-  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "1.0") {
+  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "1.1") {
     return false;
   }
 

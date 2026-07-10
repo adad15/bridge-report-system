@@ -9,10 +9,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 ReviewStatus = Literal["待确认", "已确认", "已修改", "已忽略"]
+DefectGroupReviewStatus = Literal["待确认", "已确认"]
 ComparisonConfirmationStatus = Literal["待确认", "已确认", "已修改", "已拒绝"]
 Severity = Literal["info", "warning", "error"]
 StructurePart = Literal["全桥", "上部结构", "下部结构", "桥面系", "其他"]
@@ -61,7 +62,7 @@ class SourceRef(ContractModel):
 
 class ContractInfo(ContractModel):
     name: Literal["BridgeAnnualInspectionData"]
-    version: Literal["1.0"]
+    version: Literal["1.1"]
     generated_at: datetime
     producer: str
     parser_name: str
@@ -111,6 +112,10 @@ class DefectCandidate(ContractModel):
     measurement_text: str | None = None
     measurements: list[Measurement]
     photo_numbers: list[str]
+    group_review_status: DefectGroupReviewStatus
+    confirmed_missing_photo_numbers: list[str] = Field(
+        json_schema_extra={"uniqueItems": True}
+    )
     severity: Severity | None = None
     remark: str | None = None
     source_ref: SourceRef
@@ -118,6 +123,13 @@ class DefectCandidate(ContractModel):
     review_status: ReviewStatus
     review_note: str | None = None
     warnings: list[WarningItem]
+
+    @field_validator("confirmed_missing_photo_numbers")
+    @classmethod
+    def require_unique_missing_numbers(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("confirmed_missing_photo_numbers must be unique")
+        return value
 
 
 class ExtractedPhotoFile(ContractModel):

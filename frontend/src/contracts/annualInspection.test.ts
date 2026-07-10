@@ -6,7 +6,7 @@ import { isBridgeAnnualInspectionData } from "./annualInspection";
 const validData: BridgeAnnualInspectionData = {
   contract: {
     name: "BridgeAnnualInspectionData",
-    version: "1.0",
+    version: "1.1",
     generated_at: "2026-07-03T00:00:00+08:00",
     producer: "bridge-report-system",
     parser_name: "annual_inspection_contract_parser",
@@ -51,6 +51,8 @@ const validData: BridgeAnnualInspectionData = {
         },
       ],
       photo_numbers: ["2.1-1"],
+      group_review_status: "待确认",
+      confirmed_missing_photo_numbers: [],
       severity: "warning",
       remark: null,
       source_ref: {
@@ -178,6 +180,59 @@ function cloneValidData(): BridgeAnnualInspectionData {
 describe("isBridgeAnnualInspectionData", () => {
   it("accepts valid annual inspection data", () => {
     expect(isBridgeAnnualInspectionData(validData)).toBe(true);
+  });
+
+  it("rejects contract version 1.0", () => {
+    expect(
+      isBridgeAnnualInspectionData({
+        ...validData,
+        contract: { ...validData.contract, version: "1.0" },
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects an invalid defect group review status", () => {
+    expect(
+      isBridgeAnnualInspectionData({
+        ...validData,
+        defects: [{ ...validData.defects[0], group_review_status: "非法状态" }],
+      }),
+    ).toBe(false);
+  });
+
+  it.each(["group_review_status", "confirmed_missing_photo_numbers"])(
+    "rejects missing defect field %s",
+    (fieldName) => {
+      const invalid = cloneValidData() as unknown as {
+        defects: Array<Record<string, unknown>>;
+      };
+      delete invalid.defects[0][fieldName];
+
+      expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
+    },
+  );
+
+  it("rejects non-string confirmed missing photo numbers", () => {
+    expect(
+      isBridgeAnnualInspectionData({
+        ...validData,
+        defects: [{ ...validData.defects[0], confirmed_missing_photo_numbers: [1] }],
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects duplicate confirmed missing photo numbers", () => {
+    expect(
+      isBridgeAnnualInspectionData({
+        ...validData,
+        defects: [
+          {
+            ...validData.defects[0],
+            confirmed_missing_photo_numbers: ["2.1-2", "2.1-2"],
+          },
+        ],
+      }),
+    ).toBe(false);
   });
 
   it("rejects an evaluation part with grade", () => {

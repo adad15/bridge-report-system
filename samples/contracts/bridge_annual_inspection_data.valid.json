@@ -1,7 +1,7 @@
 {
   "contract": {
     "name": "BridgeAnnualInspectionData",
-    "version": "1.0",
+    "version": "1.1",
     "generated_at": "2026-07-03T00:00:00+08:00",
     "producer": "bridge-report-system",
     "parser_name": "annual_inspection_contract_parser",
@@ -54,6 +54,8 @@
       "photo_numbers": [
         "2.1-1"
       ],
+      "group_review_status": "待确认",
+      "confirmed_missing_photo_numbers": [],
       "severity": "warning",
       "remark": null,
       "source_ref": {

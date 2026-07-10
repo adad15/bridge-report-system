@@ -24,6 +24,14 @@ def load_fixture_text(name: str) -> str:
     return fixture_path.read_text(encoding="utf-8")
 
 
+def valid_payload() -> dict:
+    payload = copy.deepcopy(load_fixture("bridge_annual_inspection_data.valid.json"))
+    payload["contract"]["version"] = "1.1"
+    payload["defects"][0]["group_review_status"] = "待确认"
+    payload["defects"][0]["confirmed_missing_photo_numbers"] = []
+    return payload
+
+
 def collect_schema_property_names(node: object) -> set[str]:
     names: set[str] = set()
     if isinstance(node, dict):
@@ -136,14 +144,59 @@ def test_historical_official_report_file_role_is_allowed() -> None:
     assert model.import_context.file_role == "历史正式报告"
 
 
-def test_contract_version_must_be_one_zero() -> None:
-    data = copy.deepcopy(load_fixture("bridge_annual_inspection_data.valid.json"))
-    data["contract"]["version"] = "2.0"
+def test_contract_version_one_one_is_accepted() -> None:
+    model = BridgeAnnualInspectionData.model_validate(valid_payload())
+
+    assert model.contract.version == "1.1"
+
+
+def test_contract_version_one_zero_is_rejected() -> None:
+    data = valid_payload()
+    data["contract"]["version"] = "1.0"
 
     with pytest.raises(ValidationError) as exc_info:
         BridgeAnnualInspectionData.model_validate(data)
 
     assert "contract.version" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ["group_review_status", "confirmed_missing_photo_numbers"],
+)
+def test_defect_group_review_fields_are_required(field_name: str) -> None:
+    payload = valid_payload()
+    del payload["defects"][0][field_name]
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(payload)
+
+    assert f"defects.0.{field_name}" in str(exc_info.value)
+
+
+def test_defect_group_review_status_rejects_unplanned_value() -> None:
+    payload = valid_payload()
+    payload["defects"][0]["group_review_status"] = "非法状态"
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(payload)
+
+    assert "Input should be '待确认' or '已确认'" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        ["2.1-2", "2.1-2"],
+        [1],
+    ],
+)
+def test_confirmed_missing_photo_numbers_reject_invalid_values(value: list[object]) -> None:
+    payload = valid_payload()
+    payload["defects"][0]["confirmed_missing_photo_numbers"] = value
+
+    with pytest.raises(ValidationError):
+        BridgeAnnualInspectionData.model_validate(payload)
 
 
 @pytest.mark.parametrize(
@@ -281,6 +334,8 @@ def test_export_bridge_annual_inspection_schema(tmp_path: Path) -> None:
     assert {
         "measurements",
         "photo_numbers",
+        "group_review_status",
+        "confirmed_missing_photo_numbers",
         "source_ref",
         "warnings",
     }.issubset(set(schema["$defs"]["DefectCandidate"]["required"]))
@@ -292,7 +347,11 @@ def test_export_bridge_annual_inspection_schema(tmp_path: Path) -> None:
     )
     assert "warnings" in schema["$defs"]["ComparisonCandidate"]["required"]
     version_schema = schema["$defs"]["ContractInfo"]["properties"]["version"]
-    assert version_schema.get("const") == "1.0" or version_schema.get("enum") == ["1.0"]
+    assert version_schema.get("const") == "1.1" or version_schema.get("enum") == ["1.1"]
+    missing_photo_numbers_schema = schema["$defs"]["DefectCandidate"]["properties"][
+        "confirmed_missing_photo_numbers"
+    ]
+    assert missing_photo_numbers_schema["uniqueItems"] is True
     assert '"extracted_bridge_name"' in schema_text
     assert "extracted_bridge\\u005fname" not in schema_text
     property_names = collect_schema_property_names(schema)

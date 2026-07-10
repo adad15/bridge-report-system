@@ -113,6 +113,8 @@ def parse_defect_tables(
                     measurement_text=measurement_text,
                     measurements=measurements,
                     photo_numbers=photo_numbers,
+                    group_review_status="待确认",
+                    confirmed_missing_photo_numbers=[],
                     severity=None,
                     remark=None,
                     source_ref=SourceRef(

@@ -187,7 +187,7 @@ Python 工具服务只负责把 Word 中可信区域转换成候选 JSON。C++ �
 ```json
 {
   "name": "BridgeAnnualInspectionData",
-  "version": "1.0",
+  "version": "1.1",
   "generated_at": "2026-07-03T10:30:00+08:00",
   "producer": "python-tools",
   "parser_name": "word_table_importer",
@@ -343,6 +343,8 @@ warning 用于表达可继续流程但需要人工关注的问题。
     }
   ],
   "photo_numbers": ["2.1-1"],
+  "group_review_status": "待确认",
+  "confirmed_missing_photo_numbers": [],
   "severity": null,
   "remark": null,
   "source_ref": {
@@ -368,6 +370,8 @@ warning 用于表达可继续流程但需要人工关注的问题。
 5. `measurement_text` 必须保留原文。
 6. `measurements[]` 尽量结构化解析，解析失败时可为空。
 7. `photo_numbers[]` 只保存病害行中的照片编号；图片文件匹配放在 `photos[]`。
+8. `group_review_status` 必填，只允许 `待确认` 或 `已确认`；解析器新建候选时写入 `待确认`。
+9. `confirmed_missing_photo_numbers[]` 必填，只允许唯一字符串；解析器新建候选时写入空数组。
 
 尺寸解析原则：
 
@@ -757,7 +761,7 @@ comparison_candidates: 已确认 / 已修改 -> defect_comparisons
 {
   "contract": {
     "name": "BridgeAnnualInspectionData",
-    "version": "1.0",
+    "version": "1.1",
     "producer": "python-tools",
     "parser_name": "word_table_importer",
     "parser_version": "0.1.0"
@@ -807,6 +811,8 @@ comparison_candidates: 已确认 / 已修改 -> defect_comparisons
         }
       ],
       "photo_numbers": ["2.1-1"],
+      "group_review_status": "待确认",
+      "confirmed_missing_photo_numbers": [],
       "source_ref": {
         "chapter": "第二章",
         "table_title": "上部结构病害检查表",

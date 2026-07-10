@@ -46,6 +46,7 @@
     },
     "ComparisonCandidate": {
       "additionalProperties": false,
+      "description": "事实入库后生成的历史对比候选，不由 Word 解析器直接产生。",
       "properties": {
         "candidate_id": {
           "title": "Candidate Id",
@@ -202,7 +203,7 @@
           "type": "string"
         },
         "version": {
-          "const": "1.0",
+          "const": "1.1",
           "title": "Version",
           "type": "string"
         },
@@ -237,6 +238,7 @@
     },
     "DefectCandidate": {
       "additionalProperties": false,
+      "description": "第二章结构病害检查表中的一条病害候选记录。",
       "properties": {
         "candidate_id": {
           "title": "Candidate Id",
@@ -319,6 +321,22 @@
           "title": "Photo Numbers",
           "type": "array"
         },
+        "group_review_status": {
+          "enum": [
+            "待确认",
+            "已确认"
+          ],
+          "title": "Group Review Status",
+          "type": "string"
+        },
+        "confirmed_missing_photo_numbers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Confirmed Missing Photo Numbers",
+          "type": "array",
+          "uniqueItems": true
+        },
         "severity": {
           "anyOf": [
             {
@@ -396,6 +414,8 @@
         "defect_description",
         "measurements",
         "photo_numbers",
+        "group_review_status",
+        "confirmed_missing_photo_numbers",
         "source_ref",
         "confidence",
         "review_status",
@@ -767,6 +787,7 @@
     },
     "Ratings": {
       "additionalProperties": false,
+      "description": "第四章总体技术状况评定表的候选数据。\n\n等级只放在整体和结构分部层级，评价部件只保存评分，不保存 grade。",
       "properties": {
         "overall": {
           "$ref": "#/$defs/OverallRating"
@@ -804,6 +825,7 @@
     },
     "ReportTextCandidate": {
       "additionalProperties": false,
+      "description": "正式报告文本抽取的预留扩展口，第一版不作为病害事实来源。",
       "properties": {
         "candidate_id": {
           "title": "Candidate Id",
@@ -867,6 +889,7 @@
     },
     "SourceRef": {
       "additionalProperties": false,
+      "description": "候选对象的来源证据，用于人工校对时回到 Word 表格行或段落。",
       "properties": {
         "chapter": {
           "anyOf": [
@@ -1092,6 +1115,7 @@
     }
   },
   "additionalProperties": false,
+  "description": "一次导入任务的完整候选 JSON。",
   "properties": {
     "contract": {
       "$ref": "#/$defs/ContractInfo"

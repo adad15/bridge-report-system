@@ -23,6 +23,8 @@ function makeDefect(overrides: Partial<DefectCandidate> = {}): DefectCandidate {
     measurement_text: null,
     measurements: [],
     photo_numbers: [],
+    group_review_status: "待确认",
+    confirmed_missing_photo_numbers: [],
     severity: null,
     remark: null,
     source_ref: {},
@@ -84,7 +86,7 @@ function makeState(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeA
   return {
     contract: {
       name: "BridgeAnnualInspectionData",
-      version: "1.0",
+      version: "1.1",
       generated_at: "2026-07-09T00:00:00+08:00",
       producer: "bridge-report-system",
       parser_name: "test-parser",

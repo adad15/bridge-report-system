@@ -561,6 +561,7 @@ def test_parse_word_import_outputs_contract_data_and_photo_files(tmp_path: Path)
     assert response.temporary_photo_files == ["photo_0001.png"]
     data = response.data
     assert data.contract.name == "BridgeAnnualInspectionData"
+    assert data.contract.version == "1.1"
     assert data.contract.parser_name == "word_importer"
     assert data.import_context.source_type == "软件导出Word"
     assert data.import_context.file_role == "当前年度检测资料"
@@ -571,6 +572,8 @@ def test_parse_word_import_outputs_contract_data_and_photo_files(tmp_path: Path)
     assert data.inspection.report_number == "Q202605001-JZ-024"
     assert len(data.defects) == 1
     assert data.defects[0].candidate_id == "defect_0001"
+    assert all(item.group_review_status == "待确认" for item in data.defects)
+    assert all(item.confirmed_missing_photo_numbers == [] for item in data.defects)
     assert len(data.photos) == 1
     assert data.photos[0].linked_defect_candidate_id == "defect_0001"
     assert data.ratings.overall.total_score == 85.61
