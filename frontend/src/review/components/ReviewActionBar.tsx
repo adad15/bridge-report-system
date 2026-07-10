@@ -6,9 +6,10 @@ interface ReviewActionBarProps {
   onCancelImport?: () => void;
 }
 
-// 五个操作按钮（模块 05 §7.5）。本任务（Task 13）只负责渲染；按钮行为在 Task 14 接线。
-// 一个按钮是否可用完全取决于调用方是否传了对应的 handler：不传 -> 禁用，这样
-// Task 13 天然满足"先渲染并禁用未接线按钮"的要求，Task 14 只需要传入 handler 即可解锁。
+// 五个操作按钮（模块 05 §7.5）。本组件保持纯展示：一个按钮是否可用完全取决于调用方
+// （ReviewWorkspacePage）是否传了对应的 handler——不传 -> 禁用。保存草稿/批量确认/
+// 入库前检查/确认入库/取消导入的业务逻辑、加载中状态和只读状态全部在页面层维护
+// （只读或请求进行中时，页面层直接不传 handler，本组件不需要认识 busy/readOnly 这类概念）。
 export function ReviewActionBar({
   onSaveDraft,
   onBatchConfirmNormal,
