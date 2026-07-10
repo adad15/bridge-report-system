@@ -6,7 +6,7 @@ import { ApiError } from "../api/apiClient";
 import type { ConfirmResponse, PreflightResponse, ReviewResponse } from "../api/reviewApi";
 import { cancelImport, confirmImport, fetchReview, runPreflight, saveReviewDraft } from "../api/reviewApi";
 import { backendBaseUrl } from "../config";
-import { canPressConfirm, parsePreflightDetails, validateRevisionForm } from "../review/confirmFlow";
+import { canPressConfirm, canRunPreflight, parsePreflightDetails, validateRevisionForm } from "../review/confirmFlow";
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
 import { DefectsSection } from "../review/components/DefectsSection";
 import type { SelectedCandidate } from "../review/components/EvidencePanel";
@@ -111,6 +111,10 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   const [confirmResult, setConfirmResult] = useState<ConfirmResponse | null>(null);
   const [readOnly, setReadOnly] = useState(false);
   const [busy, setBusy] = useState(false);
+  // 草稿自上次成功保存以来是否被编辑过。入库前检查 / 确认入库端点只读数据库里已保存的
+  // parsed_result_json（不读内存草稿），所以有未保存修改时必须先保存，否则用户会对着旧的
+  // 已保存数据跑检查、以为通过了，实际这次编辑不会写进事实表（模块 05 §6.1 的顺序：先保存草稿）。
+  const [dirty, setDirty] = useState(false);
 
   const counts = buildStatistics(draft);
   const attentionItems = needsAttention(draft);
@@ -125,6 +129,7 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   function dispatch(action: ReviewDraftAction): void {
     rawDispatch(action);
     setPreflight(null);
+    setDirty(true);
   }
 
   async function handleSaveDraft(draftToSave: BridgeAnnualInspectionData): Promise<boolean> {
@@ -132,6 +137,7 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
     try {
       await saveReviewDraft(backendBaseUrl, importRecordId, draftToSave);
       setSaveMessage({ kind: "success", text: "已保存" });
+      setDirty(false);
       return true;
     } catch (caught) {
       if (caught instanceof ApiError) {
@@ -273,10 +279,15 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
       <ReviewActionBar
         onSaveDraft={actionsDisabled ? undefined : () => void handleSaveDraft(draft)}
         onBatchConfirmNormal={actionsDisabled ? undefined : () => void handleBatchConfirmNormal()}
-        onPreflight={actionsDisabled ? undefined : () => void handlePreflight()}
+        onPreflight={canRunPreflight(dirty, busy, readOnly) ? () => void handlePreflight() : undefined}
         onConfirmImport={actionsDisabled || !canPressConfirm(preflight) ? undefined : handleConfirmImportClick}
         onCancelImport={actionsDisabled ? undefined : () => void handleCancelImport()}
       />
+      {dirty && !readOnly ? (
+        <section className="status-panel review-dirty-hint">
+          <p className="warning-text">有未保存的修改，请先点击“保存草稿”，再进行入库前检查。</p>
+        </section>
+      ) : null}
       {saveMessage ? (
         <section className="status-panel review-save-message">
           <p className={saveMessage.kind === "error" ? "error-text" : undefined}>{saveMessage.text}</p>

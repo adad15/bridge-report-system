@@ -9,6 +9,13 @@ export function canPressConfirm(preflight: PreflightResponse | null): boolean {
   return preflight !== null && preflight.can_confirm;
 }
 
+// 入库前检查按钮是否可用（模块 05 §6.1）：入库前检查 / 确认入库端点只读数据库里已保存的
+// parsed_result_json，不读内存草稿。因此草稿有未保存修改（dirty）时必须禁用入库前检查，逼
+// 用户先"保存草稿"，否则会对着旧的已保存数据跑检查、误以为通过。busy/readOnly 时同样禁用。
+export function canRunPreflight(dirty: boolean, busy: boolean, readOnly: boolean): boolean {
+  return !dirty && !busy && !readOnly;
+}
+
 export interface RevisionFormValidation {
   valid: boolean;
   error?: string;

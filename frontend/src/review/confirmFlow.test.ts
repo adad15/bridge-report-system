@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PreflightResponse } from "../api/reviewApi";
-import { canPressConfirm, parsePreflightDetails, validateRevisionForm } from "./confirmFlow";
+import { canPressConfirm, canRunPreflight, parsePreflightDetails, validateRevisionForm } from "./confirmFlow";
 
 function preflight(overrides: Partial<PreflightResponse> = {}): PreflightResponse {
   return {
@@ -24,6 +24,21 @@ describe("canPressConfirm", () => {
 
   it("returns true when the latest preflight reports can_confirm=true", () => {
     expect(canPressConfirm(preflight({ can_confirm: true }))).toBe(true);
+  });
+});
+
+describe("canRunPreflight", () => {
+  it("allows preflight only when the draft is clean, idle, and editable", () => {
+    expect(canRunPreflight(false, false, false)).toBe(true);
+  });
+
+  it("blocks preflight when the draft has unsaved edits (must 保存草稿 first)", () => {
+    expect(canRunPreflight(true, false, false)).toBe(false);
+  });
+
+  it("blocks preflight while a request is in flight or the record is read-only", () => {
+    expect(canRunPreflight(false, true, false)).toBe(false);
+    expect(canRunPreflight(false, false, true)).toBe(false);
   });
 });
 
