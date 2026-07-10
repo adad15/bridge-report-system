@@ -99,3 +99,86 @@ extraction is limited to:
 
 It does not parse formal report body text, generate comparison candidates, write
 PostgreSQL, or decide same-year revision behavior.
+
+## Module 05 Review Workspace
+
+Module 05 adds the human review workbench that turns a module 03
+`BridgeAnnualInspectionData` candidate JSON (already saved by the C++ backend into
+`import_records.parsed_result_json`) into confirmed annual facts in PostgreSQL. The
+frontend never talks to the Python tool service directly; it only calls the C++
+main backend.
+
+Page entry (React Router path, reached by clicking an import record row on the
+bridge detail page):
+
+```text
+/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review
+```
+
+C++ API endpoints used by the review workspace:
+
+```text
+GET  /api/import-records/{import_record_id}/review              # load candidate JSON + statistics
+PUT  /api/import-records/{import_record_id}/review-draft         # save edited draft (stays 待校对)
+POST /api/import-records/{import_record_id}/preflight-confirm    # blocking-error/warning check before import
+POST /api/import-records/{import_record_id}/confirm              # write defect/measurement/photo/rating facts
+POST /api/import-records/{import_record_id}/cancel               # cancel a pending import record
+GET  /api/bridges                                                # bridge list (navigation)
+GET  /api/bridges/{bridge_id}/inspection-years                   # inspection years for a bridge
+GET  /api/bridges/{bridge_id}/import-records                     # import records for a bridge
+```
+
+The five action buttons on the review page map onto these endpoints:
+
+```text
+保存草稿           -> PUT  .../review-draft
+批量确认普通候选   -> reducer batch_confirm_normal, then PUT .../review-draft with the updated draft
+入库前检查         -> POST .../preflight-confirm (unlocks 确认年度事实入库 when can_confirm=true)
+确认年度事实入库   -> POST .../confirm (opens a revision-confirmation dialog first when the latest
+                      preflight reports requires_revision_confirmation=true)
+取消导入           -> POST .../cancel, then navigate back to the bridge detail page
+```
+
+Seed sample data (idempotent; deletes and reinserts the sample bridge/year/import
+record by bridge name):
+
+```powershell
+$env:PSQL_EXE = "D:\PostgreSQL\18\bin\psql.exe"   # only if psql is not on PATH
+powershell -ExecutionPolicy Bypass -File scripts/dev/seed-module05-review-sample.ps1
+```
+
+### Manual end-to-end verification performed
+
+With PostgreSQL, the C++ backend (`127.0.0.1:18080`), and the Vite dev server
+(`127.0.0.1:5173`) running:
+
+1. Seeded the sample bridge/year/import record with the script above, then opened
+   the review page for that import record.
+2. Edited a defect's `defect_location` field (its `review_status` auto-flipped to
+   `已修改`) and clicked 保存草稿; confirmed via `psql` that
+   `import_records.parsed_result_json` reflected the new text and status.
+3. Clicked 批量确认普通候选; confirmed via `psql` that the still-`待确认` photo and
+   rating candidates flipped to `已确认` while the manually edited (`已修改`) defect
+   was left untouched (batch confirm only targets `待确认` candidates by design).
+4. Clicked 入库前检查; the result panel reported `can_confirm=true` with no blocking
+   errors, and the 确认年度事实入库 button unlocked.
+5. Clicked 确认年度事实入库; the page switched to read-only and showed the written
+   counts. Confirmed via `psql` that `defect_observations`, `defect_measurements`,
+   `defect_photos`, and `condition_ratings` were populated and that
+   `inspection_years.status = '已确认'` with `version_number = 1`.
+6. Seeded a second import record for the same bridge and year (its own placeholder
+   `inspection_years` row, `is_current=false`). After 批量确认普通候选 and 入库前检查,
+   the panel reported `requires_revision_confirmation=true`. Clicking 确认年度事实入库
+   opened the revision dialog instead of confirming directly; submitting with the
+   checkbox unchecked was blocked client-side, and a direct `POST .../confirm` with
+   `confirm_revision:false` was independently rejected by the backend with
+   `409 revision_confirmation_required`. Checking 作为修订版确认, filling in a note,
+   and submitting succeeded: `psql` showed the original `inspection_years` row
+   transitioned to `已被修订` (`is_current=false`) and a new row was created with
+   `version_number = 2`, `is_current=true`, `revision_source_inspection_id` pointing
+   at the old row, and the placeholder row removed.
+7. Seeded a third throwaway import record and verified 取消导入: after confirming the
+   browser prompt, `psql` showed `import_records.import_status = '已取消'` and the
+   page navigated back to `/bridges/:bridgeId`.
+8. Re-ran the seed script to restore the sample bridge to a single clean pending
+   import record for the next developer.

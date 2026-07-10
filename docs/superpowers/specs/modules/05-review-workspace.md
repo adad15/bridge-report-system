@@ -802,3 +802,4 @@ ratings.evaluation_parts[]
 | 日期 | 变更 | 原因 | 影响模块 |
 | --- | --- | --- | --- |
 | 2026-07-07 | 创建模块 05 人工校对工作台设计 | 明确候选 JSON 到正式事实表的人工确认闭环 | `05-review-workspace`、`06-component-defect-archive`、`07-defect-comparison-engine` |
+| 2026-07-09 | 模块 05 实施完成：五个操作按钮接线、修订版确认弹窗、只读态、端到端手工验收通过 | 完成设计到可用页面的闭环，保存草稿/批量确认/入库前检查/确认入库/取消导入全部接后端，含修订版路径 | `05-review-workspace` |
