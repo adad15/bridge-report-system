@@ -58,4 +58,22 @@ TEST(ArchivePathsTest, DetectsOnlySafeRelativeArchivePaths) {
     EXPECT_FALSE(bridge_report::archive::is_safe_archive_relative_path(
         std::filesystem::path("../outside/file.docx")
     ));
+    EXPECT_FALSE(bridge_report::archive::is_safe_archive_relative_path(std::filesystem::path(".")));
+}
+
+TEST(ArchivePathsTest, ResolvesSafePathUnderConfiguredRoot) {
+    const auto root = std::filesystem::temp_directory_path() / "bridge-report-safe-root";
+
+    const auto resolved = bridge_report::archive::resolve_path_under_root(root, "photos/photo.jpg");
+
+    EXPECT_EQ(resolved, std::filesystem::weakly_canonical(root / "photos/photo.jpg"));
+}
+
+TEST(ArchivePathsTest, RejectsResolvedPathOutsideConfiguredRoot) {
+    const auto root = std::filesystem::temp_directory_path() / "bridge-report-safe-root";
+
+    EXPECT_THROW(
+        bridge_report::archive::resolve_path_under_root(root, "../outside.jpg"),
+        std::invalid_argument
+    );
 }

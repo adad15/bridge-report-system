@@ -43,4 +43,12 @@ std::filesystem::path build_import_photo_relative_path(
  */
 bool is_safe_archive_relative_path(const std::filesystem::path& path);
 
+/**
+ * @brief 将安全相对路径解析到指定根目录；越界或非法路径抛出 invalid_argument。
+ */
+std::filesystem::path resolve_path_under_root(
+    const std::filesystem::path& root,
+    const std::filesystem::path& relative_path
+);
+
 }  // 命名空间 bridge_report::archive

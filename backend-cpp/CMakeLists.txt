@@ -8,9 +8,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Drogon CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 add_library(bridge_report_backend_core
     src/archive/ArchivePaths.cpp
+    src/archive/ExtractedPhotoArchive.cpp
     src/config/AppConfig.cpp
     src/contracts/AnnualInspectionContract.cpp
     src/db/DbClientFactory.cpp
@@ -36,6 +38,7 @@ target_include_directories(bridge_report_backend_core
 target_link_libraries(bridge_report_backend_core
     PUBLIC
         Drogon::Drogon
+        OpenSSL::Crypto
 )
 
 if(MSVC)
@@ -66,6 +69,7 @@ add_executable(bridge_report_backend_tests
     tests/test_contract_compatibility.cpp
     tests/test_db_client_factory.cpp
     tests/test_draft_validation.cpp
+    tests/test_extracted_photo_archive.cpp
     tests/test_preflight_report.cpp
     tests/test_review_models.cpp
     tests/test_review_repository.cpp

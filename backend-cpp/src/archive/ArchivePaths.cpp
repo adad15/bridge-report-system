@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <sstream>
+#include <stdexcept>
 
 namespace bridge_report::archive {
 
@@ -91,7 +92,7 @@ std::filesystem::path build_import_photo_relative_path(
 }
 
 bool is_safe_archive_relative_path(const std::filesystem::path& path) {
-    if (path.empty() || path.is_absolute() || path.has_root_name() || path.has_root_directory()) {
+    if (path.empty() || path == "." || path.is_absolute() || path.has_root_name() || path.has_root_directory()) {
         return false;
     }
 
@@ -102,6 +103,25 @@ bool is_safe_archive_relative_path(const std::filesystem::path& path) {
     }
 
     return true;
+}
+
+std::filesystem::path resolve_path_under_root(
+    const std::filesystem::path& root,
+    const std::filesystem::path& relative_path
+) {
+    if (!is_safe_archive_relative_path(relative_path)) {
+        throw std::invalid_argument("archive path must be a safe relative path");
+    }
+    const auto normalized_root = std::filesystem::weakly_canonical(root);
+    const auto resolved = std::filesystem::weakly_canonical(normalized_root / relative_path);
+    auto root_it = normalized_root.begin();
+    auto resolved_it = resolved.begin();
+    for (; root_it != normalized_root.end(); ++root_it, ++resolved_it) {
+        if (resolved_it == resolved.end() || *root_it != *resolved_it) {
+            throw std::invalid_argument("archive path escapes configured root");
+        }
+    }
+    return resolved;
 }
 
 }  // 命名空间 bridge_report::archive

@@ -6,6 +6,7 @@
       "name": "drogon",
       "features": ["postgres"]
     },
-    "gtest"
+    "gtest",
+    "openssl"
   ]
 }
