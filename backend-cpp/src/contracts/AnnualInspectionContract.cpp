@@ -74,8 +74,8 @@ void validate_contract_info(const Json::Value& root, ContractValidationResult& r
     if (!contract.isMember("name") || !contract["name"].isString() || contract["name"].asString() != "BridgeAnnualInspectionData") {
         result.add_issue("contract.name", "must be BridgeAnnualInspectionData");
     }
-    if (!contract.isMember("version") || !contract["version"].isString() || contract["version"].asString() != "1.0") {
-        result.add_issue("contract.version", "must be 1.0");
+    if (!contract.isMember("version") || !contract["version"].isString() || contract["version"].asString() != "1.1") {
+        result.add_issue("contract.version", "must be 1.1");
     }
 }
 

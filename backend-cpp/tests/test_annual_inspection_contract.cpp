@@ -59,6 +59,16 @@ TEST(AnnualInspectionContractTest, AcceptsComparisonCandidateFixture) {
     EXPECT_TRUE(result.ok()) << result.summary();
 }
 
+TEST(AnnualInspectionContractTest, RejectsLegacy10Version) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    root["contract"]["version"] = "1.0";
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "contract.version: must be 1.1");
+}
+
 TEST(AnnualInspectionContractTest, RejectsGradeOnEvaluationPart) {
     const auto root = read_contract_fixture("bridge_annual_inspection_data.invalid-evaluation-part-grade.json");
 

@@ -111,6 +111,41 @@ describe("reviewApi", () => {
     expect(review.contract_compatibility).toBe("native_1_1");
   });
 
+  it("fetchReview accepts an upgraded_1_0 response with normalized 1.1 data", async () => {
+    const body = reviewResponseBody({ contract_compatibility: "upgraded_1_0" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    }));
+
+    const review = await fetchReview("http://127.0.0.1:18080", "record-1");
+
+    expect(review.contract_compatibility).toBe("upgraded_1_0");
+    expect(review.parsed_result.contract.version).toBe("1.1");
+  });
+
+  it("fetchReview accepts a legacy_read_only response with normalized 1.1 data", async () => {
+    const body = reviewResponseBody({
+      import_record: {
+        ...reviewResponseBody().import_record,
+        import_status: "已确认",
+      },
+      contract_compatibility: "legacy_read_only",
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    }));
+
+    const review = await fetchReview("http://127.0.0.1:18080", "record-1");
+
+    expect(review.import_record.import_status).toBe("已确认");
+    expect(review.contract_compatibility).toBe("legacy_read_only");
+    expect(review.parsed_result.contract.version).toBe("1.1");
+  });
+
   it("fetchReview throws ApiError when parsed_result fails the contract guard", async () => {
     const body = reviewResponseBody({ parsed_result: { not: "a valid contract" } });
     const fetchMock = vi.fn().mockResolvedValue({

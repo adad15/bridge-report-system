@@ -23,6 +23,7 @@ import type { AttentionItem } from "../review/grouping";
 import { buildStatistics, needsAttention } from "../review/grouping";
 import type { ReviewDraftAction } from "../review/reviewDraft";
 import { reviewDraftReducer } from "../review/reviewDraft";
+import { deriveReviewSession } from "../review/reviewSession";
 
 export function ReviewWorkspacePage() {
   const { importRecordId } = useParams<{ importRecordId: string }>();
@@ -109,7 +110,7 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   const [revisionError, setRevisionError] = useState<string | null>(null);
   const [revisionHint, setRevisionHint] = useState<string | null>(null);
   const [confirmResult, setConfirmResult] = useState<ConfirmResponse | null>(null);
-  const [readOnly, setReadOnly] = useState(false);
+  const [sessionImportStatus, setSessionImportStatus] = useState(response.import_record.import_status);
   const [busy, setBusy] = useState(false);
   // 草稿自上次成功保存以来是否被编辑过。入库前检查 / 确认入库端点只读数据库里已保存的
   // parsed_result_json（不读内存草稿），所以有未保存修改时必须先保存，否则用户会对着旧的
@@ -118,6 +119,8 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
 
   const counts = buildStatistics(draft);
   const attentionItems = needsAttention(draft);
+  const reviewSession = deriveReviewSession(sessionImportStatus, response.contract_compatibility);
+  const readOnly = reviewSession.readOnly;
 
   function selectCandidate(kind: AttentionItem["kind"], candidateId: string) {
     setSelected({ kind, candidateId });
@@ -187,7 +190,7 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
         confirmation_note: note,
       });
       setConfirmResult(result);
-      setReadOnly(true);
+      setSessionImportStatus("已确认");
       setConfirmDialogOpen(false);
       setSaveMessage(null);
     } catch (caught) {
@@ -263,7 +266,7 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
       {readOnly ? (
         <section className="status-panel review-readonly-banner">
           <p>
-            本导入记录已确认入库，页面转为只读。
+            {reviewSession.bannerText}
             {confirmResult
               ? ` 已入库：病害 ${confirmResult.written.defect_observations}、尺寸 ${confirmResult.written.defect_measurements}、` +
                 `照片 ${confirmResult.written.defect_photos}、评分 ${confirmResult.written.condition_ratings}；` +

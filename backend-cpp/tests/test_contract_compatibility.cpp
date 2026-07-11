@@ -49,6 +49,13 @@ TEST(ContractCompatibilityTest, MarksConfirmed10AsLegacyReadOnly) {
     EXPECT_TRUE(result.data["defects"][0]["confirmed_missing_photo_numbers"].empty());
 }
 
+TEST(ContractCompatibilityTest, MarksCancelled10AsLegacyReadOnly) {
+    const auto result = normalize_review_contract(make_10_data(), "已取消");
+
+    EXPECT_EQ(result.compatibility, ContractCompatibility::LegacyReadOnly);
+    EXPECT_EQ(result.data["contract"]["version"].asString(), "1.1");
+}
+
 TEST(ContractCompatibilityTest, LeavesNative11DataUnchanged) {
     auto data = make_10_data();
     data["contract"]["version"] = "1.1";
