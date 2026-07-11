@@ -133,3 +133,35 @@ TEST(AnnualInspectionContractTest, RejectsMissingNestedRequiredArray) {
     EXPECT_FALSE(result.ok());
     expect_summary_contains(result, "defects[0].measurements");
 }
+
+TEST(AnnualInspectionContractTest, RejectsInvalidReviewEnumsAndDuplicateIds) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    root["defects"][0]["review_status"] = "随便通过";
+    root["defects"].append(root["defects"][0]);
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "defects[0].review_status");
+    expect_summary_contains(result, "candidate_id");
+}
+
+TEST(AnnualInspectionContractTest, RejectsConfirmedMissingNumberThatIsNotReferenced) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    root["defects"][0]["confirmed_missing_photo_numbers"].append("2.1-99");
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "confirmed_missing_photo_numbers[0]");
+}
+
+TEST(AnnualInspectionContractTest, RejectsUnsafeArchivedPhotoPath) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    root["photos"][0]["extracted_file"]["archive_relative_path"] = "../outside.jpg";
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "archive_relative_path");
+}

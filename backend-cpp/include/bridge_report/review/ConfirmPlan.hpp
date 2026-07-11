@@ -67,6 +67,7 @@ struct PhotoPlan {
     std::string defect_candidate_id;
     std::string photo_number;
     std::optional<std::string> photo_title;
+    std::string archive_relative_path;
 };
 
 /**

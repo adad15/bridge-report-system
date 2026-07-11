@@ -14,6 +14,7 @@ namespace bridge_report::test_support {
 inline void confirm_all_candidates(Json::Value& data) {
     for (auto& defect : data["defects"]) {
         defect["review_status"] = "已确认";
+        defect["group_review_status"] = "已确认";
     }
     for (auto& photo : data["photos"]) {
         photo["review_status"] = "已确认";

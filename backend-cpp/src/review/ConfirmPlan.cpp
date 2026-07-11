@@ -178,7 +178,7 @@ void append_components_and_defects(
             continue;
         }
         const auto status = review_status_of(defect);
-        if (!is_review_settled(status)) {
+        if (!is_review_settled(status) || string_member_or_empty(defect, "group_review_status") != "已确认") {
             continue;
         }
 
@@ -239,7 +239,8 @@ void append_photos(const Json::Value& data, const std::unordered_set<std::string
     }
 
     for (const auto& photo : data["photos"]) {
-        if (!photo.isObject() || !is_review_settled(review_status_of(photo))) {
+        if (!photo.isObject() || !is_review_settled(review_status_of(photo))
+            || string_member_or_empty(photo, "match_status") != "已确认") {
             continue;
         }
 
@@ -251,11 +252,17 @@ void append_photos(const Json::Value& data, const std::unordered_set<std::string
             continue;  // 关联的病害未入计划（已忽略/待确认/不存在）
         }
 
+        const auto archive_relative_path = optional_string_member(photo["extracted_file"], "archive_relative_path");
+        if (!archive_relative_path.has_value() || archive_relative_path->empty()) {
+            continue;
+        }
+
         PhotoPlan photo_plan;
         photo_plan.candidate_id = candidate_id_of(photo);
         photo_plan.defect_candidate_id = *linked_defect_id;
         photo_plan.photo_number = string_member_or_empty(photo, "photo_number");
         photo_plan.photo_title = optional_string_member(photo["extracted_file"], "original_caption");
+        photo_plan.archive_relative_path = *archive_relative_path;
         plan.photos.push_back(std::move(photo_plan));
     }
 }

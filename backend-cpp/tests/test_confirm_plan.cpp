@@ -454,6 +454,28 @@ TEST(ConfirmPlanTest, PhotoConfirmedLinkedToPlannedDefectEntersPlan) {
     EXPECT_EQ(photo->photo_number, "2.1-1");
     ASSERT_TRUE(photo->photo_title.has_value());
     EXPECT_EQ(*photo->photo_title, "主梁梁底裂缝");
+    EXPECT_EQ(photo->archive_relative_path, "photos/2.1-1.jpg");
+}
+
+TEST(ConfirmPlanTest, UnconfirmedDefectGroupDoesNotEnterPlan) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["defects"][0]["group_review_status"] = "待确认";
+
+    const auto plan = build_confirm_plan(data);
+
+    EXPECT_TRUE(plan.defects.empty());
+    EXPECT_TRUE(plan.photos.empty());
+}
+
+TEST(ConfirmPlanTest, ResolvedPhotoWithoutArchivePathDoesNotEnterPlan) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["photos"][0]["extracted_file"]["archive_relative_path"] = Json::Value(Json::nullValue);
+
+    const auto plan = build_confirm_plan(data);
+
+    EXPECT_TRUE(plan.photos.empty());
 }
 
 TEST(ConfirmPlanTest, PhotoLinkedToIgnoredDefectDoesNotEnterPlan) {

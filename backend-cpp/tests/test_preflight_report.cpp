@@ -149,6 +149,50 @@ TEST(PreflightReportTest, ContractValidationFailedBlocks) {
     ASSERT_TRUE(has_blocking_code(report, "contract_validation_failed"));
 }
 
+TEST(PreflightReportTest, GroupConfirmationRequiredBlocks) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["defects"][0]["group_review_status"] = "待确认";
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "group_confirmation_required"));
+}
+
+TEST(PreflightReportTest, MissingPhotoNeedsExplicitAcknowledgement) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["defects"][0]["photo_numbers"].append("2.1-99");
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "missing_photo_confirmation_required"));
+}
+
+TEST(PreflightReportTest, MissingPhotoAcknowledgementAllowsConfirmation) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["defects"][0]["photo_numbers"].append("2.1-99");
+    data["defects"][0]["confirmed_missing_photo_numbers"].append("2.1-99");
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(has_blocking_code(report, "missing_photo_confirmation_required"));
+}
+
+TEST(PreflightReportTest, ResolvedPhotoWithoutArchivePathBlocks) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["photos"][0]["extracted_file"]["archive_relative_path"] = Json::Value(Json::nullValue);
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "photo_archive_missing"));
+}
+
 TEST(PreflightReportTest, ImportContextMismatchOnRecordSystemNumber) {
     auto data = valid_data();
     confirm_all_candidates(data);
@@ -360,7 +404,7 @@ TEST(PreflightReportTest, PhotoLinkUnresolvedWhenLinkedDefectIdIsNull) {
     ASSERT_TRUE(has_blocking_code(report, "photo_link_unresolved"));
 }
 
-TEST(PreflightReportTest, PhotoLinkUnresolvedWhenLinkedDefectDoesNotExist) {
+TEST(PreflightReportTest, MissingLinkedDefectFailsContractValidation) {
     auto data = valid_data();
     confirm_all_candidates(data);
     data["photos"][0]["linked_defect_candidate_id"] = "defect_9999";
@@ -368,7 +412,7 @@ TEST(PreflightReportTest, PhotoLinkUnresolvedWhenLinkedDefectDoesNotExist) {
     const auto report = build_preflight_report(data, base_context());
 
     EXPECT_FALSE(report.can_confirm);
-    ASSERT_TRUE(has_blocking_code(report, "photo_link_unresolved"));
+    ASSERT_TRUE(has_blocking_code(report, "contract_validation_failed"));
 }
 
 TEST(PreflightReportTest, PhotoLinkUnresolvedWhenLinkedDefectIgnored) {

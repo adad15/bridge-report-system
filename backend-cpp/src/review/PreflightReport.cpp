@@ -14,6 +14,8 @@ constexpr const char* kMatchHighConfidence = "高置信候选";
 constexpr const char* kMatchConfirmed = "已确认";
 constexpr const char* kMatchUnlinked = "未关联";
 
+bool photo_number_has_confirmed_link(const Json::Value& data, const std::string& defect_id, const std::string& photo_number);
+
 void add_issue(std::vector<PreflightIssue>& target, std::string code, std::string message, std::string candidate_id = std::string()) {
     target.push_back(PreflightIssue{std::move(code), std::move(message), std::move(candidate_id)});
 }
@@ -192,6 +194,67 @@ void check_photo_link_unresolved(const Json::Value& data, std::vector<PreflightI
             add_issue(blocking, "photo_link_unresolved",
                       "照片候选 " + candidate_id_of(photo) + " 关联的病害 " + linked_id + " 处于「" + defect_status + "」状态。",
                       candidate_id_of(photo));
+        }
+    }
+}
+
+bool string_array_contains(const Json::Value& values, const std::string& expected) {
+    if (!values.isArray()) {
+        return false;
+    }
+    for (const auto& value : values) {
+        if (value.isString() && value.asString() == expected) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void check_defect_photo_groups(const Json::Value& data, std::vector<PreflightIssue>& blocking) {
+    if (!data["defects"].isArray()) {
+        return;
+    }
+
+    for (const auto& defect : data["defects"]) {
+        if (!is_review_settled(review_status_of(defect))) {
+            continue;
+        }
+        const auto defect_id = candidate_id_of(defect);
+        if (string_member_or_empty(defect, "group_review_status") != "已确认") {
+            add_issue(blocking, "group_confirmation_required",
+                      "病害候选 " + defect_id + " 尚未完成病害与照片联合确认。", defect_id);
+        }
+
+        if (!defect["photo_numbers"].isArray()) {
+            continue;
+        }
+        for (const auto& number_value : defect["photo_numbers"]) {
+            if (!number_value.isString()) {
+                continue;
+            }
+            const auto number = number_value.asString();
+            if (!photo_number_has_confirmed_link(data, defect_id, number)
+                && !string_array_contains(defect["confirmed_missing_photo_numbers"], number)) {
+                add_issue(blocking, "missing_photo_confirmation_required",
+                          "病害候选 " + defect_id + " 引用的照片 " + number + " 缺失，尚未人工确认。", defect_id);
+            }
+        }
+    }
+}
+
+void check_photo_archives(const Json::Value& data, std::vector<PreflightIssue>& blocking) {
+    if (!data["photos"].isArray()) {
+        return;
+    }
+    for (const auto& photo : data["photos"]) {
+        if (!is_review_settled(review_status_of(photo))
+            || string_member_or_empty(photo, "match_status") != kMatchConfirmed
+            || string_member_or_empty(photo, "linked_defect_candidate_id").empty()) {
+            continue;
+        }
+        if (string_member_or_empty(photo["extracted_file"], "archive_relative_path").empty()) {
+            add_issue(blocking, "photo_archive_missing",
+                      "照片候选 " + candidate_id_of(photo) + " 缺少归档文件，无法入库。", candidate_id_of(photo));
         }
     }
 }
@@ -383,6 +446,8 @@ PreflightReport build_preflight_report(const Json::Value& data, const PreflightC
     check_candidate_pending_review(data, report.blocking_errors);
     check_defect_missing_required_field(data, report.blocking_errors);
     check_photo_link_unresolved(data, report.blocking_errors);
+    check_defect_photo_groups(data, report.blocking_errors);
+    check_photo_archives(data, report.blocking_errors);
     check_rating_overall_missing(data, report.blocking_errors);
 
     check_defect_without_photo(data, report.warnings);
