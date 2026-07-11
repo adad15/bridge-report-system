@@ -49,6 +49,13 @@ Json::Value build_python_word_request(
     return request;
 }
 
+Json::Value extract_python_parse_data(const Json::Value& response_body) {
+    if (!response_body.isObject() || !response_body.isMember("data") || !response_body["data"].isObject()) {
+        throw std::invalid_argument("Python Word 解析响应缺少 data 对象。");
+    }
+    return response_body["data"];
+}
+
 namespace {
 
 void remove_staging(const std::filesystem::path& path) noexcept {
@@ -148,7 +155,8 @@ void register_word_import_routes(
                             return;
                         }
                         try {
-                            const auto validation = contracts::validate_bridge_annual_inspection_data(*response->getJsonObject());
+                            auto parsed_data = extract_python_parse_data(*response->getJsonObject());
+                            const auto validation = contracts::validate_bridge_annual_inspection_data(parsed_data);
                             if (!validation.ok()) throw std::runtime_error(validation.summary());
                             std::size_t temporary_count = 0;
                             for (const auto& entry : std::filesystem::directory_iterator(photo_dir)) {
@@ -157,7 +165,7 @@ void register_word_import_routes(
                             archive::PhotoArchiveContext archive_context{
                                 photo_dir, config.archive_root, context.bridge_system_number, context.bridge_name,
                                 context.inspection_year, context.import_record_system_number, context.import_name};
-                            auto batch = archive::archive_extracted_photos(*response->getJsonObject(), archive_context);
+                            auto batch = archive::archive_extracted_photos(parsed_data, archive_context);
                             const auto outcome = repository->persist_parse_result(context.import_record_id, batch);
                             if (!outcome.success) {
                                 archive::cleanup_archived_photo_batch(config.archive_root, batch);

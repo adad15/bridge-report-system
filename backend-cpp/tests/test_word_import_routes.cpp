@@ -52,4 +52,21 @@ TEST(WordImportRoutesTest, RejectsMissingRequiredBusinessChoice) {
     );
 }
 
+TEST(WordImportRoutesTest, ExtractsAnnualInspectionDataFromPythonEnvelope) {
+    Json::Value response;
+    response["data"]["contract"]["name"] = "BridgeAnnualInspectionData";
+    response["temporary_photo_files"].append("photo-1.jpg");
+
+    const auto data = bridge_report::http::extract_python_parse_data(response);
+
+    EXPECT_EQ(data["contract"]["name"].asString(), "BridgeAnnualInspectionData");
+    EXPECT_FALSE(data.isMember("temporary_photo_files"));
+}
+
+TEST(WordImportRoutesTest, RejectsPythonEnvelopeWithoutDataObject) {
+    Json::Value response;
+    response["temporary_photo_files"] = Json::arrayValue;
+    EXPECT_THROW(bridge_report::http::extract_python_parse_data(response), std::invalid_argument);
+}
+
 }  // namespace

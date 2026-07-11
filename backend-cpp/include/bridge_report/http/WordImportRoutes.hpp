@@ -16,6 +16,8 @@ Json::Value build_python_word_request(
     const std::filesystem::path& temporary_photo_output_dir
 );
 
+Json::Value extract_python_parse_data(const Json::Value& response_body);
+
 void register_word_import_routes(
     const drogon::orm::DbClientPtr& db_client,
     const config::AppConfig& config
