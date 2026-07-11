@@ -32,40 +32,35 @@ export function NeedsAttentionSection({ items, draft, onSelect }: NeedsAttention
     );
   }
 
+  const errors = items.filter((item) => item.severity === "error");
+  const warnings = items.filter((item) => item.severity !== "error");
+
+  function renderItems(title: string, sectionItems: AttentionItem[]) {
+    if (sectionItems.length === 0) return null;
+    return (
+      <div className="attention-group">
+        <h3>{title}</h3>
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead><tr><th>类型</th><th>对象编号</th><th>问题说明</th><th>严重程度</th><th>处理状态</th></tr></thead>
+            <tbody>{sectionItems.map((item, index) => (
+              <tr key={`${item.kind}-${item.candidateId}-${index}`} className="data-table-row-clickable" title={formatAttentionItem(item)} onClick={() => onSelect(item.kind, item.candidateId)}>
+                <td>{item.kind}</td><td>{item.candidateId}</td><td>{item.message}</td>
+                <td><span className={`severity-badge severity-${item.severity}`}>{item.severity}</span></td>
+                <td>{statusFor(item, draft)}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section className="status-panel">
       <h2>需要处理</h2>
-      <div className="table-scroll">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>类型</th>
-              <th>对象编号</th>
-              <th>问题说明</th>
-              <th>严重程度</th>
-              <th>处理状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, index) => (
-              <tr
-                key={`${item.kind}-${item.candidateId}-${index}`}
-                className="data-table-row-clickable"
-                title={formatAttentionItem(item)}
-                onClick={() => onSelect(item.kind, item.candidateId)}
-              >
-                <td>{item.kind}</td>
-                <td>{item.candidateId}</td>
-                <td>{item.message}</td>
-                <td>
-                  <span className={`severity-badge severity-${item.severity}`}>{item.severity}</span>
-                </td>
-                <td>{statusFor(item, draft)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {renderItems("错误", errors)}
+      {renderItems("警告", warnings)}
     </section>
   );
 }

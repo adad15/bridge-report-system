@@ -277,6 +277,179 @@ body {
   gap: 6px;
 }
 
+.attention-group + .attention-group {
+  margin-top: 24px;
+}
+
+.attention-group h3 {
+  margin: 14px 0 8px;
+  font-size: 16px;
+}
+
+.defect-photo-table {
+  min-width: 1040px;
+}
+
+.defect-photo-table th,
+.defect-photo-table td {
+  min-width: 105px;
+}
+
+.defect-photo-detail-row > td {
+  padding: 18px;
+  background: #f7f9fb;
+}
+
+.defect-photo-review {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.7fr) minmax(260px, 1fr);
+  gap: 16px 20px;
+}
+
+.defect-photo-stage {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid #cbd3dc;
+  background: #20252b;
+}
+
+.defect-photo-stage-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.defect-photo-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.review-photo-actions label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.review-photo-actions select {
+  flex: 1;
+  min-width: 0;
+}
+
+.defect-photo-thumbnails {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.defect-photo-thumbnails button {
+  flex: 0 0 112px;
+  padding: 4px;
+  border: 2px solid transparent;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.defect-photo-thumbnails button.active {
+  border-color: #2456c9;
+}
+
+.defect-photo-thumbnails img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.defect-photo-thumbnails span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+}
+
+.missing-photo-list,
+.defect-group-confirm {
+  grid-column: 1 / -1;
+}
+
+.missing-photo-list > div,
+.defect-group-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.defect-group-confirm {
+  border-top: 1px solid #d9e0e8;
+}
+
+.unlinked-photos-panel {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #d9e0e8;
+}
+
+.unlinked-photos-panel h3,
+.unlinked-photos-panel p {
+  margin-top: 0;
+}
+
+.controls-disabled input,
+.controls-disabled select,
+.controls-disabled button {
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+@media (max-width: 1100px) {
+  .review-columns {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+
+  .evidence-panel {
+    position: static;
+    grid-column: 1 / -1;
+  }
+
+  .defect-photo-review {
+    grid-template-columns: 1fr;
+  }
+
+  .defect-photo-thumbnails,
+  .missing-photo-list,
+  .defect-group-confirm {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 720px) {
+  .review-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .review-sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .review-sidebar-item {
+    flex: 0 0 auto;
+  }
+
+  .evidence-panel {
+    grid-column: 1;
+  }
+}
+
 .review-photo-actions button,
 .review-action-bar button {
   font: inherit;

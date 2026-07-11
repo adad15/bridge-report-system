@@ -13,7 +13,6 @@ import type { SelectedCandidate } from "../review/components/EvidencePanel";
 import { EvidencePanel } from "../review/components/EvidencePanel";
 import { NeedsAttentionSection } from "../review/components/NeedsAttentionSection";
 import { OverviewHeader } from "../review/components/OverviewHeader";
-import { PhotosSection } from "../review/components/PhotosSection";
 import { RatingsSection } from "../review/components/RatingsSection";
 import { RawJsonSection } from "../review/components/RawJsonSection";
 import { ReviewActionBar } from "../review/components/ReviewActionBar";
@@ -100,6 +99,8 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   const navigate = useNavigate();
   const [draft, rawDispatch] = useReducer(reviewDraftReducer, response.parsed_result);
   const [selected, setSelected] = useState<SelectedCandidate | null>(null);
+  const [expandedDefectId, setExpandedDefectId] = useState<string | null>(null);
+  const [activePhotoCandidateId, setActivePhotoCandidateId] = useState<string | null>(null);
   const [activeGroup, setActiveGroup] = useState<GroupKey>("needs_attention");
 
   const [saveMessage, setSaveMessage] = useState<SaveMessageState | null>(null);
@@ -124,6 +125,15 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
 
   function selectCandidate(kind: AttentionItem["kind"], candidateId: string) {
     setSelected({ kind, candidateId });
+    if (kind === "defect") {
+      setExpandedDefectId(candidateId);
+      setActiveGroup("defect_photos");
+    } else if (kind === "photo") {
+      setActivePhotoCandidateId(candidateId);
+      const linkedDefectId = draft.photos.find((photo) => photo.candidate_id === candidateId)?.linked_defect_candidate_id;
+      if (linkedDefectId) setExpandedDefectId(linkedDefectId);
+      setActiveGroup("defect_photos");
+    }
   }
 
   // 任何编辑草稿的 action 都让上一次入库前检查结果失效：PreflightResponse 只反映
@@ -368,21 +378,20 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
           {activeGroup === "needs_attention" ? (
             <NeedsAttentionSection items={attentionItems} draft={draft} onSelect={selectCandidate} />
           ) : null}
-          {activeGroup === "defects" ? (
+          {activeGroup === "defect_photos" ? (
             <DefectsSection
-              defects={draft.defects}
-              selectedCandidateId={selected?.kind === "defect" ? selected.candidateId : null}
-              onSelect={(candidateId) => selectCandidate("defect", candidateId)}
+              draft={draft}
+              importRecordId={importRecordId}
+              baseUrl={backendBaseUrl}
+              selectedCandidateId={expandedDefectId}
+              selectedPhotoCandidateId={activePhotoCandidateId}
+              onSelect={(candidateId) => {
+                setExpandedDefectId((current) => current === candidateId ? null : candidateId);
+                setSelected({ kind: "defect", candidateId });
+                setActivePhotoCandidateId(null);
+              }}
               dispatch={sectionDispatch}
-            />
-          ) : null}
-          {activeGroup === "photos" ? (
-            <PhotosSection
-              photos={draft.photos}
-              defects={draft.defects}
-              selectedCandidateId={selected?.kind === "photo" ? selected.candidateId : null}
-              onSelect={(candidateId) => selectCandidate("photo", candidateId)}
-              dispatch={sectionDispatch}
+              disabled={actionsDisabled}
             />
           ) : null}
           {activeGroup === "ratings" ? <RatingsSection ratings={draft.ratings} dispatch={sectionDispatch} /> : null}
