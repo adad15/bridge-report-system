@@ -12,6 +12,7 @@
 #include "bridge_report/http/Cors.hpp"
 #include "bridge_report/http/ImportConfirmRoutes.hpp"
 #include "bridge_report/http/ReviewRoutes.hpp"
+#include "bridge_report/http/WordImportRoutes.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
 
 namespace {
@@ -154,6 +155,7 @@ int main(int argc, char* argv[]) {
     register_health_routes(config, db_client);
     bridge_report::http::register_review_routes(db_client);
     bridge_report::http::register_import_confirm_routes(db_client);
+    bridge_report::http::register_word_import_routes(db_client, config);
 
     std::cout << "Bridge Report C++ backend listening on "
               << config.host << ":" << config.port << "\n";

@@ -16,10 +16,13 @@ add_library(bridge_report_backend_core
     src/config/AppConfig.cpp
     src/contracts/AnnualInspectionContract.cpp
     src/db/DbClientFactory.cpp
+    src/db/CommitLatch.cpp
     src/db/ReviewRepository.cpp
+    src/db/WordImportRepository.cpp
     src/http/Cors.cpp
     src/http/ImportConfirmRoutes.cpp
     src/http/ReviewRoutes.cpp
+    src/http/WordImportRoutes.cpp
     src/identity/SystemNumber.cpp
     src/review/ConfirmPlan.cpp
     src/review/ContractCompatibility.cpp
@@ -66,6 +69,7 @@ add_executable(bridge_report_backend_tests
     tests/test_app_config.cpp
     tests/test_archive_paths.cpp
     tests/test_confirm_plan.cpp
+    tests/test_commit_latch.cpp
     tests/test_contract_compatibility.cpp
     tests/test_db_client_factory.cpp
     tests/test_draft_validation.cpp
@@ -75,6 +79,8 @@ add_executable(bridge_report_backend_tests
     tests/test_review_repository.cpp
     tests/test_review_statistics.cpp
     tests/test_system_number.cpp
+    tests/test_word_import_routes.cpp
+    tests/test_word_import_repository.cpp
 )
 
 target_link_libraries(bridge_report_backend_tests
