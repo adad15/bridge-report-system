@@ -95,6 +95,10 @@ Json::Value written_counts_to_json(const db::ConfirmWrittenCounts& written) {
 // 仓储层结果到 HTTP 响应的映射：wrong_status / revision_confirmation_required 均为业务拒绝
 // （事务已回滚，导入记录仍是待校对）→ 409；db_write_failed 是写入阶段的数据库异常 → 500。
 void respond_confirm_outcome_failure(const HttpCallback& callback, const db::ConfirmOutcome& outcome) {
+    if (outcome.error_code == "preflight_failed") {
+        respond_json(callback, outcome.preflight_details, drogon::k409Conflict);
+        return;
+    }
     if (outcome.error_code == "import_record_wrong_status") {
         respond_json(
             callback,
@@ -109,6 +113,11 @@ void respond_confirm_outcome_failure(const HttpCallback& callback, const db::Con
             make_error_body(outcome.error_code, "同桥同年已有当前有效事实，需显式确认修订版。"),
             drogon::k409Conflict
         );
+        return;
+    }
+    if (outcome.error_code == "database_commit_failed") {
+        respond_json(callback, make_error_body(outcome.error_code, "数据库提交失败，请刷新后确认实际状态。"),
+                     drogon::k500InternalServerError);
         return;
     }
     respond_json(
@@ -159,48 +168,8 @@ void register_confirm_route(const drogon::orm::DbClientPtr& db_client) {
                     return;
                 }
 
-                const auto parsed_result = parse_parsed_result_json(detail->parsed_result_json);
-                const auto effective_year = review::resolve_effective_inspection_year(*detail, parsed_result);
-                const bool has_current_annual_facts = effective_year.has_value()
-                    && repository.has_current_annual_facts(detail->bridge_id, *effective_year);
-
-                const auto context =
-                    review::build_preflight_context(*detail, effective_year, has_current_annual_facts);
-                const auto preflight = review::build_preflight_report(parsed_result, context);
-
-                if (!preflight.can_confirm) {
-                    respond_json(callback, preflight.to_json(), drogon::k409Conflict);
-                    return;
-                }
-
-                if (preflight.requires_revision_confirmation && !confirm_revision) {
-                    respond_json(
-                        callback,
-                        make_error_body(
-                            "revision_confirmation_required", "同桥同年已有当前有效事实，需显式确认修订版。"
-                        ),
-                        drogon::k409Conflict
-                    );
-                    return;
-                }
-
-                if (!effective_year.has_value()) {
-                    // 理论上不会发生：preflight can_confirm=true 已隐含契约校验通过，
-                    // resolve_effective_inspection_year 至少能从 inspection.inspection_year 退化出年度。
-                    // 防御式处理，提示调用方重新执行入库前检查而不是让空 optional 往下传。
-                    respond_json(
-                        callback,
-                        make_error_body(
-                            "effective_inspection_year_unresolved", "无法解析有效检测年度，请重新执行入库前检查。"
-                        ),
-                        drogon::k409Conflict
-                    );
-                    return;
-                }
-
-                const auto plan = review::build_confirm_plan(parsed_result);
                 const auto outcome = repository.confirm_annual_facts(
-                    import_record_id, plan, *effective_year, confirm_revision, confirmation_note
+                    import_record_id, confirm_revision, confirmation_note
                 );
 
                 if (!outcome.success) {

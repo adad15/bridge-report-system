@@ -37,6 +37,7 @@ struct ConfirmOutcome {
     std::string inspection_year_id;
     int version_number{0};
     ConfirmWrittenCounts written;
+    Json::Value preflight_details;
 };
 
 struct PhotoContentRef {
@@ -50,13 +51,6 @@ struct PhotoContentRef {
  *
  * 注意：内部使用 execSqlSync，会阻塞调用方所在线程；
  * 本地单用户 v1 场景可接受（与 /health/db 的取舍一致）。
- *
- * v1 已知并接受的提交确认缺口（confirm_annual_facts）：事务由 drogon 在 Transaction 对象
- * 析构时异步发出 COMMIT，且未设置 commitCallback，本方法在事务对象析构后即返回 success=true。
- * 若恰在这最后一步 COMMIT 触达数据库前连接断开，调用方会收到 confirmed=true 但事实并未持久化。
- * 这是自愈的、不会造成静默数据损坏：数据库要么整段事务提交、要么整段回滚（不会写入部分事实），
- * 后续任一 GET /review 读到的都是数据库真实状态。用 promise/future 包裹 commitCallback 精确
- * 回传提交结果对 v1 过于侵入，故本版本知情接受该风险。
  */
 class ReviewRepository {
 public:
@@ -98,12 +92,10 @@ public:
 
     /**
      * @brief 唯一的年度事实入库写入口：在单个 drogon::orm::Transaction 内完成状态重校验、
-     * 修订判定、年度行终态更新、构件 upsert 与四类事实表插入，全部成功才提交，任一步失败
-     * （业务拒绝或数据库异常）都显式回滚，不留部分写入。
+     * 锁定并读取最新 parsed_result_json，在事务内完成严格契约校验、预检、写计划构造、
+     * 照片归档 ID 解析、修订判定与事实写入。只有 commitCallback 明确成功才返回 success=true。
      *
      * @param import_record_id 目标导入记录 id（须为合法 uuid，由调用方保证）。
-     * @param plan build_confirm_plan 产出的写计划（调用方保证已通过入库前检查）。
-     * @param inspection_year 有效检测年度（resolve_effective_inspection_year 的结果）。
      * @param confirm_revision 是否显式确认写入修订版（同桥同年已有当前有效事实时生效）。
      * @param confirmation_note 随导入记录 validation_result_json 落盘的确认备注，可为空串。
      *
@@ -112,8 +104,6 @@ public:
      */
     ConfirmOutcome confirm_annual_facts(
         const std::string& import_record_id,
-        const review::ConfirmPlan& plan,
-        int inspection_year,
         bool confirm_revision,
         const std::string& confirmation_note
     );

@@ -507,6 +507,20 @@ protected:
         );
         import_record_id_ = import_result[0]["id"].as<std::string>();
         import_record_system_number_ = import_result[0]["system_number"].as<std::string>();
+
+        const auto archived = client_->execSqlSync(
+            "insert into archived_files (bridge_id, inspection_year_id, original_file_name, current_file_name, "
+            "storage_relative_path, file_type, file_purpose, file_extension) "
+            "values ($1::uuid, $2::uuid, 'photo.jpg', 'photo.jpg', 'photos/2.1-1.jpg', "
+            "'图片', 'Word病害照片', '.jpg') returning id",
+            bridge_id_, placeholder_year_id_);
+        photo_archived_file_id_ = archived[0]["id"].as<std::string>();
+        client_->execSqlSync(
+            "insert into import_record_files (import_record_id, archived_file_id, file_role, process_status) "
+            "values ($1::uuid, $2::uuid, '附件', '处理成功')", import_record_id_, photo_archived_file_id_);
+        client_->execSqlSync(
+            "update import_records set parsed_result_json = $2::jsonb where id = $1::uuid",
+            import_record_id_, write_json_compact(build_confirmed_data()));
     }
 
     void TearDown() override {
@@ -522,6 +536,9 @@ protected:
                 "delete from condition_ratings where source_import_record_id = $1::uuid", import_record_id_
             );
             client_->execSqlSync("delete from import_records where id = $1::uuid", import_record_id_);
+        }
+        if (!photo_archived_file_id_.empty()) {
+            client_->execSqlSync("delete from archived_files where id = $1::uuid", photo_archived_file_id_);
         }
         if (!bridge_id_.empty()) {
             // bridge_components 级联删除 component_aliases；须在 inspection_years 之前删除
@@ -560,18 +577,89 @@ protected:
     std::string import_record_id_;
     std::string import_record_system_number_;
     std::string placeholder_year_id_;
+    std::string photo_archived_file_id_;
     std::vector<std::string> tracked_year_ids_;
 };
 
 }  // 匿名命名空间
 
+TEST_F(ConfirmAnnualFactsTest, ReadsLatestJsonInsteadOfCallerSnapshot) {
+    bridge_report::db::ReviewRepository repository(client_);
+    auto latest = build_confirmed_data();
+    latest["defects"][0]["component_name"] = "事务内最新构件";
+    ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(latest)));
+
+    const auto outcome = repository.confirm_annual_facts(import_record_id_, false, "确认最新草稿");
+
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+    const auto rows = client_->execSqlSync(
+        "select business_component_code from defect_observations where source_import_record_id = $1::uuid",
+        import_record_id_);
+    ASSERT_EQ(rows.size(), 1u);
+    EXPECT_EQ(rows[0]["business_component_code"].as<std::string>(), "事务内最新构件");
+}
+
+TEST_F(ConfirmAnnualFactsTest, ReturnsTransactionTimePreflightDetailsForPendingLatestDraft) {
+    bridge_report::db::ReviewRepository repository(client_);
+    auto latest = build_confirmed_data();
+    latest["defects"][0]["review_status"] = "待确认";
+    ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(latest)));
+
+    const auto outcome = repository.confirm_annual_facts(import_record_id_, false, "");
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "preflight_failed");
+    EXPECT_FALSE(outcome.preflight_details["can_confirm"].asBool());
+    EXPECT_FALSE(outcome.preflight_details["blocking_errors"].empty());
+}
+
+TEST_F(ConfirmAnnualFactsTest, MissingCurrentImportPhotoLinkBlocksAndRollsBack) {
+    bridge_report::db::ReviewRepository repository(client_);
+    client_->execSqlSync(
+        "delete from import_record_files where import_record_id = $1::uuid and archived_file_id = $2::uuid",
+        import_record_id_, photo_archived_file_id_);
+
+    const auto outcome = repository.confirm_annual_facts(import_record_id_, false, "");
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "preflight_failed");
+    ASSERT_EQ(outcome.preflight_details["blocking_errors"].size(), 1u);
+    EXPECT_EQ(outcome.preflight_details["blocking_errors"][0]["code"].asString(), "photo_archive_missing");
+    const auto facts = client_->execSqlSync(
+        "select count(*) as n from defect_observations where source_import_record_id = $1::uuid", import_record_id_);
+    EXPECT_EQ(facts[0]["n"].as<long long>(), 0);
+}
+
+TEST_F(ConfirmAnnualFactsTest, RejectsInspectionYearOwnedByAnotherBridge) {
+    const auto other_bridge = client_->execSqlSync(
+        "insert into bridges (bridge_name) values ('错误挂载目标桥') returning id");
+    const auto other_bridge_id = other_bridge[0]["id"].as<std::string>();
+    const auto other_year = client_->execSqlSync(
+        "insert into inspection_years (bridge_id, inspection_year, status, is_current) "
+        "values ($1::uuid, $2, '待校对', false) returning id", other_bridge_id, kInspectionYear);
+    const auto other_year_id = other_year[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "update import_records set inspection_year_id = $2::uuid where id = $1::uuid",
+        import_record_id_, other_year_id);
+
+    bridge_report::db::ReviewRepository repository(client_);
+    const auto outcome = repository.confirm_annual_facts(import_record_id_, false, "");
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "preflight_failed");
+    EXPECT_EQ(outcome.preflight_details["blocking_errors"][0]["code"].asString(),
+              "inspection_year_bridge_mismatch");
+    client_->execSqlSync(
+        "update import_records set inspection_year_id = $2::uuid where id = $1::uuid",
+        import_record_id_, placeholder_year_id_);
+    client_->execSqlSync("delete from inspection_years where id = $1::uuid", other_year_id);
+    client_->execSqlSync("delete from bridges where id = $1::uuid", other_bridge_id);
+}
+
 TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     bridge_report::db::ReviewRepository repository(client_);
-    const auto data = build_confirmed_data();
-    const auto plan = bridge_report::review::build_confirm_plan(data);
-
     const auto outcome =
-        repository.confirm_annual_facts(import_record_id_, plan, kInspectionYear, /*confirm_revision=*/false, "首次入库确认");
+        repository.confirm_annual_facts(import_record_id_, /*confirm_revision=*/false, "首次入库确认");
 
     ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
     EXPECT_TRUE(outcome.error_code.empty());
@@ -603,11 +691,12 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     EXPECT_EQ(measurement_result.size(), 3u);
 
     const auto photo_result = client_->execSqlSync(
-        "select match_status, photo_number from defect_photos where defect_observation_id = $1::uuid", observation_id
+        "select match_status, photo_number, archived_file_id from defect_photos where defect_observation_id = $1::uuid", observation_id
     );
     ASSERT_EQ(photo_result.size(), 1u);
     EXPECT_EQ(photo_result[0]["match_status"].as<std::string>(), "已确认");
     EXPECT_EQ(photo_result[0]["photo_number"].as<std::string>(), "2.1-1");
+    EXPECT_FALSE(photo_result[0]["archived_file_id"].isNull());
 
     const auto rating_result = client_->execSqlSync(
         "select rating_level from condition_ratings where source_import_record_id = $1::uuid", import_record_id_
@@ -689,11 +778,8 @@ TEST_F(ConfirmAnnualFactsTest, confirm_requires_revision_when_current_facts_exis
     tracked_year_ids_.push_back(current_year_id);
 
     bridge_report::db::ReviewRepository repository(client_);
-    const auto data = build_confirmed_data();
-    const auto plan = bridge_report::review::build_confirm_plan(data);
-
     const auto blocked_outcome =
-        repository.confirm_annual_facts(import_record_id_, plan, kInspectionYear, /*confirm_revision=*/false, "");
+        repository.confirm_annual_facts(import_record_id_, /*confirm_revision=*/false, "");
 
     EXPECT_FALSE(blocked_outcome.success);
     EXPECT_EQ(blocked_outcome.error_code, "revision_confirmation_required");
@@ -708,7 +794,7 @@ TEST_F(ConfirmAnnualFactsTest, confirm_requires_revision_when_current_facts_exis
     EXPECT_EQ(record_still_pending[0]["import_status"].as<std::string>(), "待校对");
 
     const auto confirmed_outcome =
-        repository.confirm_annual_facts(import_record_id_, plan, kInspectionYear, /*confirm_revision=*/true, "修订确认");
+        repository.confirm_annual_facts(import_record_id_, /*confirm_revision=*/true, "修订确认");
 
     ASSERT_TRUE(confirmed_outcome.success) << confirmed_outcome.error_code << ": " << confirmed_outcome.error_message;
     tracked_year_ids_.push_back(confirmed_outcome.inspection_year_id);
@@ -760,11 +846,8 @@ TEST_F(ConfirmAnnualFactsTest, confirm_blocks_wrong_status) {
     client_->execSqlSync("update import_records set import_status = '已确认' where id = $1::uuid", import_record_id_);
 
     bridge_report::db::ReviewRepository repository(client_);
-    const auto data = build_confirmed_data();
-    const auto plan = bridge_report::review::build_confirm_plan(data);
-
     const auto outcome =
-        repository.confirm_annual_facts(import_record_id_, plan, kInspectionYear, /*confirm_revision=*/false, "");
+        repository.confirm_annual_facts(import_record_id_, /*confirm_revision=*/false, "");
 
     EXPECT_FALSE(outcome.success);
     EXPECT_EQ(outcome.error_code, "import_record_wrong_status");
@@ -777,15 +860,14 @@ TEST_F(ConfirmAnnualFactsTest, confirm_blocks_wrong_status) {
 
 TEST_F(ConfirmAnnualFactsTest, confirm_rolls_back_on_failure) {
     bridge_report::db::ReviewRepository repository(client_);
-    const auto data = build_confirmed_data();
-    auto plan = bridge_report::review::build_confirm_plan(data);
-    ASSERT_FALSE(plan.ratings.empty());
-    // ratings[0] 是 append_overall_rating 产出的全桥评分；把 rating_level 改成不在
-    // condition_ratings 表 check 约束枚举内的值，触发写入阶段的数据库异常。
-    plan.ratings[0].rating_level = "不存在的层级";
+    auto data = build_confirmed_data();
+    // 契约/预检允许非空结构部位，但数据库 bridge_components 的枚举约束会拒绝它，
+    // 用于验证写入中途异常仍回滚整笔事务。
+    data["defects"][0]["structure_part"] = "不存在的结构";
+    ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
 
     const auto outcome =
-        repository.confirm_annual_facts(import_record_id_, plan, kInspectionYear, /*confirm_revision=*/false, "");
+        repository.confirm_annual_facts(import_record_id_, /*confirm_revision=*/false, "");
 
     EXPECT_FALSE(outcome.success);
     EXPECT_EQ(outcome.error_code, "db_write_failed");

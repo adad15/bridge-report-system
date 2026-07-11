@@ -1,6 +1,11 @@
 #include "bridge_report/db/ReviewRepository.hpp"
+#include "bridge_report/contracts/AnnualInspectionContract.hpp"
+#include "bridge_report/db/CommitLatch.hpp"
+#include "bridge_report/review/PreflightReport.hpp"
 
 #include <optional>
+#include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
@@ -235,18 +240,31 @@ void insert_defect_measurement(
 void insert_defect_photo(
     const TransactionPtr& tx,
     const std::string& defect_observation_id,
+    const std::string& archived_file_id,
     const std::string& import_record_id,
     const review::PhotoPlan& photo
 ) {
     tx->execSqlSync(
         "insert into defect_photos "
-        "(defect_observation_id, source_import_record_id, photo_number, photo_title, match_status, archived_file_id) "
-        "values ($1::uuid, $2::uuid, $3, $4, '已确认', null)",
+        "(defect_observation_id, archived_file_id, source_import_record_id, photo_number, photo_title, match_status) "
+        "values ($1::uuid, $2::uuid, $3::uuid, $4, $5, '已确认')",
         defect_observation_id,
+        archived_file_id,
         import_record_id,
         photo.photo_number,
         photo.photo_title
     );
+}
+
+Json::Value parse_json_strict(const std::string& text) {
+    Json::CharReaderBuilder builder;
+    Json::Value data;
+    std::string errors;
+    std::istringstream stream(text);
+    if (!Json::parseFromStream(builder, stream, &data, &errors)) {
+        throw std::runtime_error("stored parsed_result_json is invalid: " + errors);
+    }
+    return data;
 }
 
 void insert_condition_rating(
@@ -491,20 +509,21 @@ bool ReviewRepository::has_current_annual_facts(const std::string& bridge_id, in
 
 ConfirmOutcome ReviewRepository::confirm_annual_facts(
     const std::string& import_record_id,
-    const review::ConfirmPlan& plan,
-    int inspection_year,
     bool confirm_revision,
     const std::string& confirmation_note
 ) {
     // db_client_ 必须是裸 DbClient（不能已经是另一个 Transaction）——newTransaction()
     // 在一个 Transaction 上调用不构成合法的嵌套事务，调用方（路由层 / 测试）需保证这一点。
     std::shared_ptr<drogon::orm::Transaction> tx;
+    const auto latch = std::make_shared<CommitLatch>();
 
     // 统一的失败出口：显式回滚后返回携带 code/message 的失败结果。
     // tx 可能在 newTransaction() 本身抛出时仍为空，因此判空后才回滚。
     const auto fail = [&](std::string code, std::string message) -> ConfirmOutcome {
         if (tx != nullptr) {
-            tx->rollback();
+            try { tx->rollback(); }
+            catch (...) {
+            }
         }
         ConfirmOutcome failed;
         failed.success = false;
@@ -514,13 +533,18 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
     };
 
     try {
-        tx = db_client_->newTransaction();
+        tx = db_client_->newTransaction(latch->callback());
 
         // 步骤 1：select ... for update 重新读取导入记录，杜绝 preflight 之后、confirm 之前
         // 状态被并发改变（如已被取消/已被另一次 confirm 确认）的 TOCTOU 竞态。
         const auto record_result = tx->execSqlSync(
-            "select import_status, bridge_id, inspection_year_id "
-            "from import_records where id = $1::uuid for update",
+            "select ir.import_status, ir.bridge_id::text as bridge_id, "
+            "ir.inspection_year_id::text as inspection_year_id, ir.parsed_result_json::text as parsed_result_json, "
+            "ir.system_number as import_number, b.system_number as bridge_number, iy.inspection_year, "
+            "iy.bridge_id::text as inspection_year_bridge_id "
+            "from import_records ir join bridges b on b.id = ir.bridge_id "
+            "left join inspection_years iy on iy.id = ir.inspection_year_id "
+            "where ir.id = $1::uuid for update of ir",
             import_record_id
         );
         if (record_result.empty()) {
@@ -537,10 +561,89 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         }
         const auto bridge_id = record_row["bridge_id"].as<std::string>();
         const auto existing_inspection_year_id = optional_text(record_row, "inspection_year_id");
+        if (existing_inspection_year_id.has_value()
+            && (record_row["inspection_year_bridge_id"].isNull()
+                || record_row["inspection_year_bridge_id"].as<std::string>() != bridge_id)) {
+            review::PreflightReport report;
+            report.blocking_errors.push_back({
+                "inspection_year_bridge_mismatch", "导入记录挂载的检测年度不属于当前桥梁。", std::string()});
+            report.can_confirm = false;
+            auto failed = fail("preflight_failed", "导入记录年度关联异常。");
+            failed.preflight_details = report.to_json();
+            return failed;
+        }
+
+        const auto data = parse_json_strict(record_row["parsed_result_json"].as<std::string>());
+        const auto contract_result = contracts::validate_bridge_annual_inspection_data(data);
+        if (!contract_result.ok()) {
+            review::PreflightReport report;
+            report.blocking_errors.push_back({"contract_validation_failed", contract_result.summary(), std::string()});
+            report.can_confirm = false;
+            auto failed = fail("preflight_failed", "最新草稿未通过契约校验。");
+            failed.preflight_details = report.to_json();
+            return failed;
+        }
+
+        std::optional<int> inspection_year;
+        if (!record_row["inspection_year"].isNull()) inspection_year = record_row["inspection_year"].as<int>();
+        else if (data["inspection"]["inspection_year"].isNumeric()) inspection_year = data["inspection"]["inspection_year"].asInt();
+        if (!inspection_year.has_value()) {
+            review::PreflightReport report;
+            report.blocking_errors.push_back({
+                "effective_inspection_year_unresolved", "无法从最新草稿解析检测年度。", std::string()});
+            report.can_confirm = false;
+            auto failed = fail("preflight_failed", "无法从最新草稿解析检测年度。");
+            failed.preflight_details = report.to_json();
+            return failed;
+        }
+
+        const auto current = tx->execSqlSync(
+            "select exists(select 1 from inspection_years where bridge_id = $1::uuid and inspection_year = $2 "
+            "and is_current and status = '已确认') as found", bridge_id, *inspection_year);
+        review::PreflightContext context;
+        context.import_status = import_status;
+        context.record_system_number = record_row["import_number"].as<std::string>();
+        context.bridge_system_number = record_row["bridge_number"].as<std::string>();
+        context.inspection_year = inspection_year;
+        context.has_current_annual_facts = !current.empty() && current[0]["found"].as<bool>();
+        const auto preflight = review::build_preflight_report(data, context);
+        if (!preflight.can_confirm) {
+            auto failed = fail("preflight_failed", "最新草稿未通过入库前检查。");
+            failed.preflight_details = preflight.to_json();
+            return failed;
+        }
+        if (preflight.requires_revision_confirmation && !confirm_revision) {
+            return fail("revision_confirmation_required", "同桥同年已有当前有效事实，需显式确认修订版。");
+        }
+
+        const auto plan = review::build_confirm_plan(data);
+        std::unordered_map<std::string, std::string> archived_file_id_by_photo_candidate;
+        archived_file_id_by_photo_candidate.reserve(plan.photos.size());
+        for (const auto& photo : plan.photos) {
+            const auto archived = tx->execSqlSync(
+                "select af.id::text as id from import_record_files irf "
+                "join archived_files af on af.id = irf.archived_file_id and af.file_type = '图片' "
+                "where irf.import_record_id = $1::uuid and irf.file_role = '附件' "
+                "and irf.process_status = '处理成功' and af.storage_relative_path = $2 limit 1",
+                import_record_id, photo.archive_relative_path);
+            if (archived.empty()) {
+                review::PreflightReport report;
+                report.blocking_errors.push_back({
+                    "photo_archive_missing",
+                    "照片候选 " + photo.candidate_id + " 的归档文件未关联到当前导入记录。",
+                    photo.candidate_id});
+                report.can_confirm = false;
+                auto failed = fail("preflight_failed", "照片归档关联缺失。");
+                failed.preflight_details = report.to_json();
+                return failed;
+            }
+            archived_file_id_by_photo_candidate.emplace(
+                photo.candidate_id, archived[0]["id"].as<std::string>());
+        }
 
         // 步骤 2/3：解析目标年度行（含修订判定与降级/新建）。
         const auto target_year_id_opt = resolve_target_inspection_year_id(
-            tx, bridge_id, inspection_year, existing_inspection_year_id, confirm_revision
+            tx, bridge_id, *inspection_year, existing_inspection_year_id, confirm_revision
         );
         if (!target_year_id_opt.has_value()) {
             return fail("revision_confirmation_required", "同桥同年已有当前有效事实，需显式确认修订版。");
@@ -606,7 +709,12 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
                     "confirm_annual_facts: defect_candidate_id not found in plan: " + photo.defect_candidate_id
                 );
             }
-            insert_defect_photo(tx, observation_it->second, import_record_id, photo);
+            const auto archived = archived_file_id_by_photo_candidate.find(photo.candidate_id);
+            if (archived == archived_file_id_by_photo_candidate.end()) {
+                throw std::runtime_error("confirm_annual_facts: archived photo id missing from resolved plan");
+            }
+            insert_defect_photo(
+                tx, observation_it->second, archived->second, import_record_id, photo);
             ++written_defect_photos;
         }
 
@@ -655,15 +763,21 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             );
         }
 
-        // 未显式调用 rollback()：tx 离开作用域时析构提交事务。
         ConfirmOutcome outcome;
-        outcome.success = true;
         outcome.inspection_year_id = target_year_id;
         outcome.version_number = version_number;
         outcome.written.defect_observations = written_defect_observations;
         outcome.written.defect_measurements = written_defect_measurements;
         outcome.written.defect_photos = written_defect_photos;
         outcome.written.condition_ratings = written_condition_ratings;
+        tx.reset();
+        if (!latch->wait()) {
+            outcome.success = false;
+            outcome.error_code = "database_commit_failed";
+            outcome.error_message = "数据库提交失败。";
+            return outcome;
+        }
+        outcome.success = true;
         return outcome;
     } catch (const drogon::orm::DrogonDbException& exception) {
         return fail("db_write_failed", exception.base().what());
