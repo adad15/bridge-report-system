@@ -68,13 +68,18 @@ export function PhotosSection({ photos, defects, selectedCandidateId, onSelect, 
                 <td>
                   <select
                     value={photo.linked_defect_candidate_id ?? ""}
-                    onChange={(event) =>
-                      dispatch({
-                        type: "edit_photo_link",
-                        candidateId: photo.candidate_id,
-                        defectCandidateId: event.target.value === "" ? null : event.target.value,
-                      })
-                    }
+                    onChange={(event) => {
+                      const defectCandidateId = event.target.value;
+                      dispatch(
+                        defectCandidateId === ""
+                          ? {
+                              type: "photo_mark_unrelated",
+                              candidateId: photo.candidate_id,
+                              note: "人工确认该照片与病害无关",
+                            }
+                          : { type: "photo_relink", candidateId: photo.candidate_id, defectCandidateId }
+                      );
+                    }}
                   >
                     <option value="">未关联</option>
                     {defects.map((defect) => (
@@ -93,14 +98,20 @@ export function PhotosSection({ photos, defects, selectedCandidateId, onSelect, 
                   >
                     确认匹配
                   </button>
-                  <button type="button" onClick={() => dispatch({ type: "photo_unlink", candidateId: photo.candidate_id })}>
-                    取消匹配
+                  <button type="button" onClick={() => dispatch({ type: "photo_reset", candidateId: photo.candidate_id })}>
+                    重置校对
                   </button>
                   <button
                     type="button"
-                    onClick={() => dispatch({ type: "photo_mark_unrelated", candidateId: photo.candidate_id })}
+                    onClick={() =>
+                      dispatch({
+                        type: "photo_mark_unrelated",
+                        candidateId: photo.candidate_id,
+                        note: "人工确认该照片与病害无关",
+                      })
+                    }
                   >
-                    标记未关联
+                    确认无关
                   </button>
                   <button type="button" onClick={() => dispatch({ type: "photo_ignore", candidateId: photo.candidate_id })}>
                     忽略

@@ -114,7 +114,8 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
 
   for (const defect of data.defects) {
     for (const photoNumber of defect.photo_numbers) {
-      if (!defectPhotoNumberIsLinked(data, defect.candidate_id, photoNumber)) {
+      const missingAcknowledged = defect.confirmed_missing_photo_numbers.includes(photoNumber);
+      if (!missingAcknowledged && !defectPhotoNumberIsLinked(data, defect.candidate_id, photoNumber)) {
         items.push({
           kind: "defect",
           candidateId: defect.candidate_id,
@@ -127,11 +128,37 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
 
   for (const photo of data.photos) {
     const linkedEmpty = !isNonEmptyString(photo.linked_defect_candidate_id);
-    if (photo.match_status === "未关联" || (linkedEmpty && photo.review_status !== "已忽略")) {
+    const handledAsUnrelated = linkedEmpty && photo.match_status === "未关联" && photo.review_status === "已确认";
+    if (!handledAsUnrelated && (photo.match_status === "未关联" || (linkedEmpty && photo.review_status !== "已忽略"))) {
       items.push({
         kind: "photo",
         candidateId: photo.candidate_id,
         message: "照片未关联到任何病害，请人工确认。",
+        severity: "warning",
+      });
+    }
+
+    if (
+      isNonEmptyString(photo.linked_defect_candidate_id) &&
+      photo.match_status === "已确认" &&
+      (photo.review_status === "已确认" || photo.review_status === "已修改") &&
+      !isNonEmptyString(photo.extracted_file.archive_relative_path)
+    ) {
+      items.push({
+        kind: "photo",
+        candidateId: photo.candidate_id,
+        message: "照片归档文件缺失，无法确认入库。",
+        severity: "error",
+      });
+    }
+  }
+
+  for (const defect of data.defects) {
+    if (defect.group_review_status === "待确认") {
+      items.push({
+        kind: "defect",
+        candidateId: defect.candidate_id,
+        message: "病害及照片尚未完成联合确认。",
         severity: "warning",
       });
     }

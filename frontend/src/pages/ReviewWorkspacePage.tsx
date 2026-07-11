@@ -160,8 +160,8 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   // React state（继而是 UI）与之同步，真正发给后端保存的是这个手算值，而不是闭包里
   // 还没更新的 draft。
   async function handleBatchConfirmNormal(): Promise<void> {
-    const nextDraft = reviewDraftReducer(draft, { type: "batch_confirm_normal" });
-    dispatch({ type: "batch_confirm_normal" });
+    const nextDraft = reviewDraftReducer(draft, { type: "batch_confirm_normal_ratings" });
+    dispatch({ type: "batch_confirm_normal_ratings" });
     await handleSaveDraft(nextDraft);
   }
 

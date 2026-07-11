@@ -28,7 +28,7 @@ function makeDefect(overrides: Partial<DefectCandidate> = {}): DefectCandidate {
     measurement_text: null,
     measurements: [],
     photo_numbers: [],
-    group_review_status: "待确认",
+    group_review_status: "已确认",
     confirmed_missing_photo_numbers: [],
     severity: null,
     remark: null,
@@ -46,7 +46,11 @@ function makePhoto(overrides: Partial<PhotoCandidate> = {}): PhotoCandidate {
     candidate_id: "photo_0001",
     photo_number: "1",
     linked_defect_candidate_id: "defect_0001",
-    extracted_file: { temporary_file_name: "tmp_0001.jpg", original_caption: null, archive_relative_path: null },
+    extracted_file: {
+      temporary_file_name: "tmp_0001.jpg",
+      original_caption: null,
+      archive_relative_path: "photos/tmp_0001.jpg",
+    },
     match_status: "已确认",
     source_ref: {},
     confidence: 0.9,
@@ -207,6 +211,15 @@ describe("needsAttention", () => {
     );
   });
 
+  it("does not repeat a missing-photo warning after the user acknowledges that number", () => {
+    const data = makeData({
+      defects: [makeDefect({ photo_numbers: ["7"], confirmed_missing_photo_numbers: ["7"] })],
+      photos: [],
+    });
+
+    expect(needsAttention(data).some((item) => item.message.includes("照片编号 7 未匹配"))).toBe(false);
+  });
+
   it("rule 4 negative: every referenced photo_number has a photo candidate linked back to the defect", () => {
     const data = makeData({
       defects: [makeDefect({ photo_numbers: ["1"] })],
@@ -230,6 +243,39 @@ describe("needsAttention", () => {
     });
 
     expect(needsAttention(data)).toEqual([]);
+  });
+
+  it("does not flag an unlinked photo after the user confirms it is unrelated", () => {
+    const data = makeData({
+      photos: [makePhoto({ match_status: "未关联", linked_defect_candidate_id: null, review_status: "已确认" })],
+    });
+
+    expect(needsAttention(data)).toEqual([]);
+  });
+
+  it("flags a pending defect group", () => {
+    const data = makeData({ defects: [makeDefect({ group_review_status: "待确认" })], photos: [] });
+
+    expect(needsAttention(data)).toContainEqual(
+      expect.objectContaining({ kind: "defect", candidateId: "defect_0001", message: "病害及照片尚未完成联合确认。" })
+    );
+  });
+
+  it("flags a linked photo whose archive path is missing", () => {
+    const data = makeData({
+      defects: [makeDefect({ photo_numbers: ["1"], group_review_status: "已确认" })],
+      photos: [makePhoto({
+        photo_number: "1",
+        linked_defect_candidate_id: "defect_0001",
+        match_status: "已确认",
+        review_status: "已确认",
+        extracted_file: { temporary_file_name: "tmp.jpg", archive_relative_path: null },
+      })],
+    });
+
+    expect(needsAttention(data)).toContainEqual(
+      expect.objectContaining({ kind: "photo", candidateId: "photo_0001", severity: "error" })
+    );
   });
 
   // 隔离 rule 5 的第二个析取项（linkedEmpty && review_status !== 已忽略），它独立于 match_status===未关联：

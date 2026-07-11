@@ -189,12 +189,17 @@ describe("reviewDraftReducer", () => {
     expect(next.defects[0].review_status).toBe("已确认");
   });
 
-  it("photo_confirm_match sets match_status=已确认 when linked_defect_candidate_id is present", () => {
-    const state = makeState({ photos: [makePhoto({ linked_defect_candidate_id: "defect_0001", match_status: "高置信候选" })] });
+  it("photo_confirm_match resolves the photo and invalidates its confirmed group", () => {
+    const state = makeState({
+      defects: [makeDefect({ group_review_status: "已确认" })],
+      photos: [makePhoto({ linked_defect_candidate_id: "defect_0001", match_status: "高置信候选" })],
+    });
 
     const next = reviewDraftReducer(state, { type: "photo_confirm_match", candidateId: "photo_0001" });
 
     expect(next.photos[0].match_status).toBe("已确认");
+    expect(next.photos[0].review_status).toBe("已确认");
+    expect(next.defects[0].group_review_status).toBe("待确认");
   });
 
   it("photo_confirm_match is a no-op when linked_defect_candidate_id is empty", () => {
@@ -205,30 +210,44 @@ describe("reviewDraftReducer", () => {
     expect(next.photos[0].match_status).toBe("待校对");
   });
 
-  it("photo_unlink clears the link and resets match_status to 待校对", () => {
-    const state = makeState({ photos: [makePhoto({ linked_defect_candidate_id: "defect_0001", match_status: "已确认" })] });
+  it("photo_reset returns the photo to pending and invalidates its group", () => {
+    const state = makeState({
+      defects: [makeDefect({ group_review_status: "已确认" })],
+      photos: [makePhoto({ linked_defect_candidate_id: "defect_0001", match_status: "已确认", review_status: "已确认" })],
+    });
 
-    const next = reviewDraftReducer(state, { type: "photo_unlink", candidateId: "photo_0001" });
+    const next = reviewDraftReducer(state, { type: "photo_reset", candidateId: "photo_0001" });
 
-    expect(next.photos[0].linked_defect_candidate_id).toBeNull();
     expect(next.photos[0].match_status).toBe("待校对");
+    expect(next.photos[0].review_status).toBe("待确认");
+    expect(next.defects[0].group_review_status).toBe("待确认");
   });
 
-  it("photo_mark_unrelated clears the link and sets match_status to 未关联", () => {
-    const state = makeState({ photos: [makePhoto({ linked_defect_candidate_id: "defect_0001" })] });
+  it("photo_mark_unrelated clears the link and records a resolved unrelated decision", () => {
+    const state = makeState({
+      defects: [makeDefect({ group_review_status: "已确认" })],
+      photos: [makePhoto({ linked_defect_candidate_id: "defect_0001" })],
+    });
 
-    const next = reviewDraftReducer(state, { type: "photo_mark_unrelated", candidateId: "photo_0001" });
+    const next = reviewDraftReducer(state, { type: "photo_mark_unrelated", candidateId: "photo_0001", note: "与病害无关" });
 
     expect(next.photos[0].linked_defect_candidate_id).toBeNull();
     expect(next.photos[0].match_status).toBe("未关联");
+    expect(next.photos[0].review_status).toBe("已确认");
+    expect(next.defects[0].group_review_status).toBe("待确认");
   });
 
-  it("photo_ignore sets review_status to 已忽略", () => {
-    const state = makeState({ photos: [makePhoto({ review_status: "待确认" })] });
+  it("photo_ignore clears the link, ignores the photo, and invalidates its group", () => {
+    const state = makeState({
+      defects: [makeDefect({ group_review_status: "已确认" })],
+      photos: [makePhoto({ review_status: "待确认" })],
+    });
 
     const next = reviewDraftReducer(state, { type: "photo_ignore", candidateId: "photo_0001" });
 
+    expect(next.photos[0].linked_defect_candidate_id).toBeNull();
     expect(next.photos[0].review_status).toBe("已忽略");
+    expect(next.defects[0].group_review_status).toBe("待确认");
   });
 
   it("edit_photo_number updates the photo_number field", () => {
@@ -239,15 +258,94 @@ describe("reviewDraftReducer", () => {
     expect(next.photos[0].photo_number).toBe("12");
   });
 
-  it("edit_photo_link updates linked_defect_candidate_id", () => {
+  it("photo_relink resolves the photo and invalidates both old and new groups", () => {
     const state = makeState({
-      defects: [makeDefect({ candidate_id: "defect_0001" }), makeDefect({ candidate_id: "defect_0002" })],
+      defects: [
+        makeDefect({ candidate_id: "defect_0001", group_review_status: "已确认" }),
+        makeDefect({ candidate_id: "defect_0002", group_review_status: "已确认" }),
+      ],
       photos: [makePhoto({ linked_defect_candidate_id: "defect_0001" })],
     });
 
-    const next = reviewDraftReducer(state, { type: "edit_photo_link", candidateId: "photo_0001", defectCandidateId: "defect_0002" });
+    const next = reviewDraftReducer(state, { type: "photo_relink", candidateId: "photo_0001", defectCandidateId: "defect_0002" });
 
     expect(next.photos[0].linked_defect_candidate_id).toBe("defect_0002");
+    expect(next.photos[0].match_status).toBe("已确认");
+    expect(next.photos[0].review_status).toBe("已修改");
+    expect(next.defects.map((item) => item.group_review_status)).toEqual(["待确认", "待确认"]);
+  });
+
+  it("confirms and unconfirms a truly missing photo number without duplicates", () => {
+    const state = makeState({ defects: [makeDefect({ photo_numbers: ["2.1-9"] })], photos: [] });
+    const confirmed = reviewDraftReducer(state, {
+      type: "confirm_missing_photo",
+      defectCandidateId: "defect_0001",
+      photoNumber: "2.1-9",
+    });
+    const duplicate = reviewDraftReducer(confirmed, {
+      type: "confirm_missing_photo",
+      defectCandidateId: "defect_0001",
+      photoNumber: "2.1-9",
+    });
+    const unconfirmed = reviewDraftReducer(duplicate, {
+      type: "unconfirm_missing_photo",
+      defectCandidateId: "defect_0001",
+      photoNumber: "2.1-9",
+    });
+
+    expect(confirmed.defects[0].confirmed_missing_photo_numbers).toEqual(["2.1-9"]);
+    expect(duplicate.defects[0].confirmed_missing_photo_numbers).toEqual(["2.1-9"]);
+    expect(unconfirmed.defects[0].confirmed_missing_photo_numbers).toEqual([]);
+  });
+
+  it("does not confirm missing when a candidate with that number exists", () => {
+    const state = makeState({
+      defects: [makeDefect({ photo_numbers: ["1"] })],
+      photos: [makePhoto({ photo_number: "1", linked_defect_candidate_id: null })],
+    });
+
+    const next = reviewDraftReducer(state, {
+      type: "confirm_missing_photo",
+      defectCandidateId: "defect_0001",
+      photoNumber: "1",
+    });
+
+    expect(next.defects[0].confirmed_missing_photo_numbers).toEqual([]);
+  });
+
+  it("confirm_defect_group confirms a complete group and preserves 已修改", () => {
+    const state = makeState({
+      defects: [makeDefect({ review_status: "已修改", photo_numbers: ["1"] })],
+      photos: [makePhoto({ match_status: "已确认", review_status: "已确认", extracted_file: {
+        temporary_file_name: "tmp_0001.jpg",
+        archive_relative_path: "photos/tmp_0001.jpg",
+      } })],
+    });
+
+    const next = reviewDraftReducer(state, { type: "confirm_defect_group", defectCandidateId: "defect_0001" });
+
+    expect(next.defects[0].group_review_status).toBe("已确认");
+    expect(next.defects[0].review_status).toBe("已修改");
+  });
+
+  it("editing photo numbers intersects missing acknowledgements and invalidates the group", () => {
+    const state = makeState({
+      defects: [makeDefect({
+        photo_numbers: ["1", "2"],
+        confirmed_missing_photo_numbers: ["1", "2"],
+        group_review_status: "已确认",
+      })],
+    });
+
+    const next = reviewDraftReducer(state, {
+      type: "edit_defect_field",
+      candidateId: "defect_0001",
+      field: "photo_numbers",
+      value: ["2", "3"],
+    });
+
+    expect(next.defects[0].confirmed_missing_photo_numbers).toEqual(["2"]);
+    expect(next.defects[0].group_review_status).toBe("待确认");
   });
 
   it("edit_rating_field on overall sets total_score from a number value (UI coerces strings before dispatch)", () => {
@@ -318,7 +416,7 @@ describe("reviewDraftReducer", () => {
     expect(afterEvaluation.ratings.evaluation_parts[0].review_status).toBe("已确认");
   });
 
-  it("batch_confirm_normal confirms only normal candidates and skips ones with warnings", () => {
+  it("batch_confirm_normal_ratings confirms only normal ratings and leaves defects and photos unchanged", () => {
     const state = makeState({
       defects: [
         makeDefect({ candidate_id: "defect_normal", review_status: "待确认" }),
@@ -336,11 +434,11 @@ describe("reviewDraftReducer", () => {
       },
     });
 
-    const next = reviewDraftReducer(state, { type: "batch_confirm_normal" });
+    const next = reviewDraftReducer(state, { type: "batch_confirm_normal_ratings" });
 
-    expect(next.defects.find((d) => d.candidate_id === "defect_normal")?.review_status).toBe("已确认");
+    expect(next.defects.find((d) => d.candidate_id === "defect_normal")?.review_status).toBe("待确认");
     expect(next.defects.find((d) => d.candidate_id === "defect_warned")?.review_status).toBe("待确认");
-    expect(next.photos.find((p) => p.candidate_id === "photo_normal")?.review_status).toBe("已确认");
+    expect(next.photos.find((p) => p.candidate_id === "photo_normal")?.review_status).toBe("待确认");
     expect(next.photos.find((p) => p.candidate_id === "photo_low_confidence")?.review_status).toBe("待确认");
     expect(next.ratings.overall.review_status).toBe("已确认");
   });

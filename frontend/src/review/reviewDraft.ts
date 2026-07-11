@@ -9,7 +9,8 @@ import type {
   StructurePart,
   StructurePartRating,
 } from "../contracts/annualInspection";
-import { isNormalDefect, isNormalPhoto, isNormalRating } from "./grouping";
+import { isNormalRating } from "./grouping";
+import { canConfirmDefectPhotoGroup } from "./defectPhotoGroups";
 import { parseMeasurements } from "./measurementParser";
 
 // useReducer 草稿 reducer：所有分支都必须返回新对象/新数组，绝不原地修改传入的 state
@@ -43,11 +44,14 @@ export type ReviewDraftAction =
   | { type: "edit_measurement_text"; candidateId: string; text: string | null }
   | { type: "set_defect_status"; candidateId: string; status: ReviewStatus }
   | { type: "photo_confirm_match"; candidateId: string }
-  | { type: "photo_unlink"; candidateId: string }
-  | { type: "photo_mark_unrelated"; candidateId: string }
+  | { type: "photo_relink"; candidateId: string; defectCandidateId: string }
+  | { type: "photo_mark_unrelated"; candidateId: string; note: string }
   | { type: "photo_ignore"; candidateId: string }
+  | { type: "photo_reset"; candidateId: string }
   | { type: "edit_photo_number"; candidateId: string; photoNumber: string }
-  | { type: "edit_photo_link"; candidateId: string; defectCandidateId: string | null }
+  | { type: "confirm_missing_photo"; defectCandidateId: string; photoNumber: string }
+  | { type: "unconfirm_missing_photo"; defectCandidateId: string; photoNumber: string }
+  | { type: "confirm_defect_group"; defectCandidateId: string }
   // §8.3 评分候选可编辑字段：target↔field↔value 三者绑死。数值字段（total_score/
   // structure_score/part_score）只收 number，等级字段（overall_grade/grade）只收 string。
   | { type: "edit_rating_field"; target: "overall"; field: "total_score"; value: number }
@@ -56,7 +60,7 @@ export type ReviewDraftAction =
   | { type: "edit_rating_field"; target: { part: RatingStructurePart }; field: "grade"; value: string }
   | { type: "edit_rating_field"; target: { evaluation: number }; field: "part_score"; value: number }
   | { type: "set_rating_status"; target: RatingTarget; status: ReviewStatus }
-  | { type: "batch_confirm_normal" };
+  | { type: "batch_confirm_normal_ratings" };
 
 // 从 union 里抽出各分组，供 reducer 内部 helper 使用（Extract/Exclude 保证与上面的 union 单一真源同步）。
 type EditDefectFieldAction = Extract<ReviewDraftAction, { type: "edit_defect_field" }>;
@@ -85,6 +89,14 @@ function updatePhoto(
   return photos.map((photo) => (photo.candidate_id === candidateId ? updater(photo) : photo));
 }
 
+function invalidateDefectGroups(defects: DefectCandidate[], candidateIds: Array<string | null | undefined>): DefectCandidate[] {
+  const ids = new Set(candidateIds.filter((value): value is string => typeof value === "string" && value.length > 0));
+  if (ids.size === 0) return defects;
+  return defects.map((defect) =>
+    ids.has(defect.candidate_id) ? { ...defect, group_review_status: "待确认" } : defect
+  );
+}
+
 // 内容字段编辑：按 field 逐分支处理，让每条 { ...defect, <具体字段>: action.value } 都在
 // field 被收窄后拿到正确的 value 类型，从而不需要任何 `as` 断言。缺任何一个 case 都会因
 // “函数并非所有路径都返回 DefectCandidate” 而编译失败，等价于一次穷尽性检查。
@@ -92,23 +104,29 @@ function applyDefectContentEdit(defect: DefectCandidate, action: EditDefectConte
   const review_status = nextStatusAfterContentEdit(defect.review_status);
   switch (action.field) {
     case "structure_part":
-      return { ...defect, structure_part: action.value, review_status };
+      return { ...defect, structure_part: action.value, review_status, group_review_status: "待确认" };
     case "component_name":
-      return { ...defect, component_name: action.value, review_status };
+      return { ...defect, component_name: action.value, review_status, group_review_status: "待确认" };
     case "component_alias":
-      return { ...defect, component_alias: action.value, review_status };
+      return { ...defect, component_alias: action.value, review_status, group_review_status: "待确认" };
     case "defect_location":
-      return { ...defect, defect_location: action.value, review_status };
+      return { ...defect, defect_location: action.value, review_status, group_review_status: "待确认" };
     case "defect_type":
-      return { ...defect, defect_type: action.value, review_status };
+      return { ...defect, defect_type: action.value, review_status, group_review_status: "待确认" };
     case "defect_description":
-      return { ...defect, defect_description: action.value, review_status };
+      return { ...defect, defect_description: action.value, review_status, group_review_status: "待确认" };
     case "quantity_text":
-      return { ...defect, quantity_text: action.value, review_status };
+      return { ...defect, quantity_text: action.value, review_status, group_review_status: "待确认" };
     case "photo_numbers":
-      return { ...defect, photo_numbers: action.value, review_status };
+      return {
+        ...defect,
+        photo_numbers: action.value,
+        confirmed_missing_photo_numbers: defect.confirmed_missing_photo_numbers.filter((number) => action.value.includes(number)),
+        review_status,
+        group_review_status: "待确认",
+      };
     case "review_note":
-      return { ...defect, review_note: action.value, review_status };
+      return { ...defect, review_note: action.value, review_status, group_review_status: "待确认" };
   }
 }
 
@@ -199,7 +217,14 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
       if (action.field === "review_status") {
         // 显式状态设置，等价于 set_defect_status，不走内容编辑的自动流转。
         const status = action.value;
-        return { ...state, defects: updateDefect(state.defects, candidateId, (defect) => ({ ...defect, review_status: status })) };
+        return {
+          ...state,
+          defects: updateDefect(state.defects, candidateId, (defect) => ({
+            ...defect,
+            review_status: status,
+            group_review_status: "待确认",
+          })),
+        };
       }
       return { ...state, defects: updateDefect(state.defects, candidateId, (defect) => applyDefectContentEdit(defect, action)) };
     }
@@ -213,6 +238,7 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
           measurement_text: text,
           measurements: parseMeasurements(text),
           review_status: nextStatusAfterContentEdit(defect.review_status),
+          group_review_status: "待确认",
         })),
       };
     }
@@ -221,65 +247,135 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
       const { candidateId, status } = action;
       return {
         ...state,
-        defects: updateDefect(state.defects, candidateId, (defect) => ({ ...defect, review_status: status })),
+        defects: updateDefect(state.defects, candidateId, (defect) => ({
+          ...defect,
+          review_status: status,
+          group_review_status: "待确认",
+        })),
       };
     }
 
     case "photo_confirm_match": {
+      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
+      if (!photo?.linked_defect_candidate_id) return state;
       return {
         ...state,
-        photos: updatePhoto(state.photos, action.candidateId, (photo) => {
-          // §8.2：确认匹配要求 linked_defect_candidate_id 非空；没有关联时是空操作。
-          if (!photo.linked_defect_candidate_id) {
-            return photo;
-          }
-          return { ...photo, match_status: "已确认" };
-        }),
+        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
+        photos: updatePhoto(state.photos, action.candidateId, (item) => ({
+          ...item,
+          match_status: "已确认",
+          review_status: "已确认",
+        })),
       };
     }
 
-    case "photo_unlink": {
+    case "photo_relink": {
+      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
+      if (!photo || !state.defects.some((item) => item.candidate_id === action.defectCandidateId)) return state;
       return {
         ...state,
-        photos: updatePhoto(state.photos, action.candidateId, (photo) => ({
-          ...photo,
-          linked_defect_candidate_id: null,
-          match_status: "待校对",
+        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id, action.defectCandidateId]),
+        photos: updatePhoto(state.photos, action.candidateId, (item) => ({
+          ...item,
+          linked_defect_candidate_id: action.defectCandidateId,
+          match_status: "已确认",
+          review_status: "已修改",
         })),
       };
     }
 
     case "photo_mark_unrelated": {
+      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
+      if (!photo) return state;
+      void action.note;
       return {
         ...state,
-        photos: updatePhoto(state.photos, action.candidateId, (photo) => ({
-          ...photo,
+        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
+        photos: updatePhoto(state.photos, action.candidateId, (item) => ({
+          ...item,
           linked_defect_candidate_id: null,
           match_status: "未关联",
+          review_status: "已确认",
         })),
       };
     }
 
     case "photo_ignore": {
+      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
+      if (!photo) return state;
       return {
         ...state,
-        photos: updatePhoto(state.photos, action.candidateId, (photo) => ({ ...photo, review_status: "已忽略" })),
+        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
+        photos: updatePhoto(state.photos, action.candidateId, (item) => ({
+          ...item,
+          linked_defect_candidate_id: null,
+          review_status: "已忽略",
+        })),
+      };
+    }
+
+    case "photo_reset": {
+      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
+      if (!photo) return state;
+      return {
+        ...state,
+        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
+        photos: updatePhoto(state.photos, action.candidateId, (item) => ({
+          ...item,
+          match_status: "待校对",
+          review_status: "待确认",
+        })),
       };
     }
 
     case "edit_photo_number": {
+      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
+      if (!photo) return state;
       return {
         ...state,
+        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
         photos: updatePhoto(state.photos, action.candidateId, (photo) => ({ ...photo, photo_number: action.photoNumber })),
       };
     }
 
-    case "edit_photo_link": {
+    case "confirm_missing_photo": {
+      const defect = state.defects.find((item) => item.candidate_id === action.defectCandidateId);
+      const isReferenced = defect?.photo_numbers.includes(action.photoNumber) ?? false;
+      const hasCandidate = state.photos.some((item) => item.photo_number === action.photoNumber);
+      if (!defect || !isReferenced || hasCandidate) return state;
       return {
         ...state,
-        photos: updatePhoto(state.photos, action.candidateId, (photo) => ({
-          ...photo,
-          linked_defect_candidate_id: action.defectCandidateId,
+        defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
+          ...item,
+          group_review_status: "待确认",
+          confirmed_missing_photo_numbers: item.confirmed_missing_photo_numbers.includes(action.photoNumber)
+            ? item.confirmed_missing_photo_numbers
+            : [...item.confirmed_missing_photo_numbers, action.photoNumber],
+        })),
+      };
+    }
+
+    case "unconfirm_missing_photo": {
+      return {
+        ...state,
+        defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
+          ...item,
+          group_review_status: "待确认",
+          confirmed_missing_photo_numbers: item.confirmed_missing_photo_numbers.filter(
+            (number) => number !== action.photoNumber
+          ),
+        })),
+      };
+    }
+
+    case "confirm_defect_group": {
+      if (!canConfirmDefectPhotoGroup(state, action.defectCandidateId).ok) return state;
+      return {
+        ...state,
+        defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
+          ...item,
+          group_review_status: "已确认",
+          review_status: item.review_status === "待确认" ? "已确认" : item.review_status,
         })),
       };
     }
@@ -292,13 +388,9 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
       return { ...state, ratings: applyRatingStatus(state.ratings, action.target, action.status) };
     }
 
-    case "batch_confirm_normal": {
+    case "batch_confirm_normal_ratings": {
       return {
         ...state,
-        defects: state.defects.map((defect) =>
-          isNormalDefect(defect, state) ? { ...defect, review_status: "已确认" } : defect
-        ),
-        photos: state.photos.map((photo) => (isNormalPhoto(photo) ? { ...photo, review_status: "已确认" } : photo)),
         ratings: batchConfirmNormalRatings(state.ratings),
       };
     }

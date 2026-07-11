@@ -23,7 +23,7 @@ export function ReviewActionBar({
         保存草稿
       </button>
       <button type="button" disabled={!onBatchConfirmNormal} onClick={onBatchConfirmNormal}>
-        批量确认普通候选
+        批量确认普通评分
       </button>
       <button type="button" disabled={!onPreflight} onClick={onPreflight}>
         入库前检查
