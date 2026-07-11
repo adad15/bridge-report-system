@@ -20,6 +20,7 @@ add_library(bridge_report_backend_core
     src/http/ReviewRoutes.cpp
     src/identity/SystemNumber.cpp
     src/review/ConfirmPlan.cpp
+    src/review/ContractCompatibility.cpp
     src/review/DraftValidation.cpp
     src/review/PreflightReport.cpp
     src/review/ReviewModels.cpp
@@ -62,6 +63,7 @@ add_executable(bridge_report_backend_tests
     tests/test_app_config.cpp
     tests/test_archive_paths.cpp
     tests/test_confirm_plan.cpp
+    tests/test_contract_compatibility.cpp
     tests/test_db_client_factory.cpp
     tests/test_draft_validation.cpp
     tests/test_preflight_report.cpp

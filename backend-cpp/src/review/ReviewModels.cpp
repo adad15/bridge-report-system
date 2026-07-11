@@ -44,7 +44,8 @@ Json::Value build_review_response(
     const ImportRecordDetail& detail,
     const Json::Value& parsed_result,
     const ReviewStatistics& statistics,
-    bool has_current_annual_facts
+    bool has_current_annual_facts,
+    std::string_view contract_compatibility
 ) {
     Json::Value import_record;
     import_record["id"] = detail.id;
@@ -89,6 +90,7 @@ Json::Value build_review_response(
     body["parsed_result"] = parsed_result;
     body["statistics"] = statistics.to_json();
     body["has_current_annual_facts"] = has_current_annual_facts;
+    body["contract_compatibility"] = std::string(contract_compatibility);
     return body;
 }
 

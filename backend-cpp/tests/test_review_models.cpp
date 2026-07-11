@@ -186,7 +186,13 @@ TEST(BuildReviewResponseTest, PopulatesInspectionYearObjectWhenPresent) {
     Json::Value parsed_result(Json::objectValue);
     ReviewStatistics statistics{};
 
-    const auto body = build_review_response(detail, parsed_result, statistics, /*has_current_annual_facts=*/true);
+    const auto body = build_review_response(
+        detail,
+        parsed_result,
+        statistics,
+        /*has_current_annual_facts=*/true,
+        "native_1_1"
+    );
 
     ASSERT_TRUE(body["inspection_year"].isObject());
     EXPECT_EQ(body["inspection_year"]["id"].asString(), "y1111111-1111-1111-1111-111111111111");
@@ -196,6 +202,7 @@ TEST(BuildReviewResponseTest, PopulatesInspectionYearObjectWhenPresent) {
     EXPECT_EQ(body["inspection_year"]["version_number"].asInt(), 1);
     EXPECT_TRUE(body["inspection_year"]["is_current"].asBool());
     EXPECT_TRUE(body["has_current_annual_facts"].asBool());
+    EXPECT_EQ(body["contract_compatibility"].asString(), "native_1_1");
 
     EXPECT_EQ(body["import_record"]["id"].asString(), "i1111111-1111-1111-1111-111111111111");
     EXPECT_EQ(body["import_record"]["importer_name"].asString(), "张三");
@@ -209,7 +216,13 @@ TEST(BuildReviewResponseTest, OutputsNullInspectionYearWhenAbsent) {
     Json::Value parsed_result(Json::objectValue);
     ReviewStatistics statistics{};
 
-    const auto body = build_review_response(detail, parsed_result, statistics, /*has_current_annual_facts=*/false);
+    const auto body = build_review_response(
+        detail,
+        parsed_result,
+        statistics,
+        /*has_current_annual_facts=*/false,
+        "native_1_1"
+    );
 
     EXPECT_TRUE(body["inspection_year"].isNull());
     EXPECT_FALSE(body["has_current_annual_facts"].asBool());
@@ -227,11 +240,18 @@ TEST(BuildReviewResponseTest, IncludesParsedResultAndStatisticsVerbatim) {
     statistics.defect_count = 1;
     statistics.pending_count = 1;
 
-    const auto body = build_review_response(detail, parsed_result, statistics, /*has_current_annual_facts=*/false);
+    const auto body = build_review_response(
+        detail,
+        parsed_result,
+        statistics,
+        /*has_current_annual_facts=*/false,
+        "upgraded_1_0"
+    );
 
     EXPECT_EQ(body["parsed_result"]["defects"].size(), 1u);
     EXPECT_EQ(body["statistics"]["defect_count"].asInt(), 1);
     EXPECT_EQ(body["statistics"]["pending_count"].asInt(), 1);
+    EXPECT_EQ(body["contract_compatibility"].asString(), "upgraded_1_0");
 }
 
 TEST(ResolveEffectiveInspectionYearTest, UsesAttachedYearWhenPresent) {

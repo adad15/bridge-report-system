@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include <json/value.h>
 
@@ -96,7 +97,8 @@ Json::Value build_review_response(
     const ImportRecordDetail& detail,
     const Json::Value& parsed_result,
     const ReviewStatistics& statistics,
-    bool has_current_annual_facts
+    bool has_current_annual_facts,
+    std::string_view contract_compatibility
 );
 
 /**

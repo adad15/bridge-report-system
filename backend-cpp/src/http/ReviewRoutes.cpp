@@ -12,6 +12,7 @@
 
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
+#include "bridge_report/review/ContractCompatibility.hpp"
 #include "bridge_report/review/DraftValidation.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
 #include "bridge_report/review/ReviewStatistics.hpp"
@@ -99,19 +100,29 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
                     return;
                 }
 
-                const auto parsed_result = parse_parsed_result_json(detail->parsed_result_json);
-                const auto statistics = review::build_review_statistics(parsed_result);
+                auto parsed_result = parse_parsed_result_json(detail->parsed_result_json);
+                const auto normalized = review::normalize_review_contract(
+                    std::move(parsed_result),
+                    detail->import_status
+                );
+                const auto statistics = review::build_review_statistics(normalized.data);
 
                 // 年度事实是否已存在的判定归属数据库决策，留在路由层；
                 // 有效年度的解析（挂载年度优先，否则退化到解析结果里的年度）由纯函数
                 // resolve_effective_inspection_year 承担，与 preflight-confirm 路由共用；
                 // JSON 形状拼装则委托给纯函数 build_review_response（见 ReviewModels.cpp）。
-                const auto effective_year = review::resolve_effective_inspection_year(*detail, parsed_result);
+                const auto effective_year = review::resolve_effective_inspection_year(*detail, normalized.data);
                 const bool has_current_annual_facts = effective_year.has_value()
                     && repository.has_current_annual_facts(detail->bridge_id, *effective_year);
 
                 const auto body =
-                    review::build_review_response(*detail, parsed_result, statistics, has_current_annual_facts);
+                    review::build_review_response(
+                        *detail,
+                        normalized.data,
+                        statistics,
+                        has_current_annual_facts,
+                        review::contract_compatibility_name(normalized.compatibility)
+                    );
 
                 respond_json(callback, body);
             } catch (const drogon::orm::DrogonDbException&) {

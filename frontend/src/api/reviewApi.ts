@@ -43,6 +43,8 @@ export interface ReviewStatistics {
   object_warning_count: number;
 }
 
+export type ContractCompatibility = "native_1_1" | "upgraded_1_0" | "legacy_read_only";
+
 export interface ReviewResponse {
   import_record: ReviewImportRecordSummary;
   bridge: ReviewBridgeSummary;
@@ -50,6 +52,7 @@ export interface ReviewResponse {
   parsed_result: BridgeAnnualInspectionData;
   statistics: ReviewStatistics;
   has_current_annual_facts: boolean;
+  contract_compatibility: ContractCompatibility;
 }
 
 export interface PreflightIssue {
