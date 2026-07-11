@@ -75,6 +75,7 @@ add_executable(bridge_report_backend_tests
     tests/test_draft_validation.cpp
     tests/test_extracted_photo_archive.cpp
     tests/test_preflight_report.cpp
+    tests/test_photo_content.cpp
     tests/test_review_models.cpp
     tests/test_review_repository.cpp
     tests/test_review_statistics.cpp

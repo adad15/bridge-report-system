@@ -410,6 +410,46 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
     return detail;
 }
 
+std::optional<PhotoContentRef> ReviewRepository::get_photo_content_ref(
+    const std::string& import_record_id,
+    const std::string& photo_candidate_id
+) {
+    const auto result = db_client_->execSqlSync(
+        "select af.id::text as archived_file_id, af.storage_relative_path, lower(af.file_extension) as extension "
+        "from import_records ir "
+        "cross join lateral jsonb_array_elements("
+        "case when jsonb_typeof(ir.parsed_result_json->'photos') = 'array' "
+        "then ir.parsed_result_json->'photos' else '[]'::jsonb end) photo "
+        "join import_record_files irf on irf.import_record_id = ir.id and irf.file_role = '附件' "
+        "and irf.process_status = '处理成功' "
+        "join archived_files af on af.id = irf.archived_file_id "
+        "and af.file_type = '图片' "
+        "and af.storage_relative_path = photo->'extracted_file'->>'archive_relative_path' "
+        "where ir.id = $1::uuid and photo->>'candidate_id' = $2 limit 1",
+        import_record_id,
+        photo_candidate_id
+    );
+    if (result.empty()) return std::nullopt;
+
+    auto extension = result[0]["extension"].isNull()
+        ? std::string() : result[0]["extension"].as<std::string>();
+    if (!extension.empty() && extension.front() != '.') extension.insert(extension.begin(), '.');
+    std::string content_type;
+    if (extension == ".jpg" || extension == ".jpeg") content_type = "image/jpeg";
+    else if (extension == ".png") content_type = "image/png";
+    else if (extension == ".gif") content_type = "image/gif";
+    else if (extension == ".bmp") content_type = "image/bmp";
+    else if (extension == ".webp") content_type = "image/webp";
+    else if (extension == ".tif" || extension == ".tiff") content_type = "image/tiff";
+    else return std::nullopt;
+
+    return PhotoContentRef{
+        result[0]["archived_file_id"].as<std::string>(),
+        result[0]["storage_relative_path"].as<std::string>(),
+        std::move(content_type)
+    };
+}
+
 bool ReviewRepository::save_review_draft(const std::string& import_record_id, const std::string& parsed_json_text) {
     // 与 cancel_import_record 同一惯用法：把状态谓词放进 UPDATE，
     // 避免“处理器读到待校对 -> 并发取消/确认 -> 草稿仍写入”的 TOCTOU 竞态。

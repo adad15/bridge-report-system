@@ -11,6 +11,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/ReviewRepository.hpp"
+#include "bridge_report/archive/ArchivePaths.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
 #include "bridge_report/review/ContractCompatibility.hpp"
 #include "bridge_report/review/DraftValidation.hpp"
@@ -18,6 +19,17 @@
 #include "bridge_report/review/ReviewStatistics.hpp"
 
 namespace bridge_report::http {
+
+std::optional<std::filesystem::path> resolve_photo_content_path(
+    const std::filesystem::path& archive_root,
+    const std::filesystem::path& storage_relative_path
+) {
+    try {
+        return archive::resolve_path_under_root(archive_root, storage_relative_path);
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
 
 namespace {
 
@@ -280,15 +292,90 @@ void register_cancel_import_record_route(const drogon::orm::DbClientPtr& db_clie
     );
 }
 
+const Json::Value* find_photo_candidate(const Json::Value& data, const std::string& candidate_id) {
+    if (!data["photos"].isArray()) return nullptr;
+    for (const auto& photo : data["photos"]) {
+        if (photo["candidate_id"].isString() && photo["candidate_id"].asString() == candidate_id) return &photo;
+    }
+    return nullptr;
+}
+
+void register_photo_content_route(
+    const drogon::orm::DbClientPtr& db_client,
+    const std::filesystem::path& archive_root
+) {
+    drogon::app().registerHandler(
+        "/api/import-records/{import_record_id}/photos/{photo_candidate_id}/content",
+        [db_client, archive_root](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                                  const std::string& import_record_id, const std::string& photo_candidate_id) {
+            if (!is_valid_uuid(import_record_id)) {
+                respond_import_record_not_found(callback);
+                return;
+            }
+            try {
+                db::ReviewRepository repository(db_client);
+                const auto detail = repository.get_import_record_detail(import_record_id);
+                if (!detail.has_value()) {
+                    respond_import_record_not_found(callback);
+                    return;
+                }
+                const auto data = parse_parsed_result_json(detail->parsed_result_json);
+                const auto* photo = find_photo_candidate(data, photo_candidate_id);
+                if (photo == nullptr) {
+                    respond_json(callback, make_error_body("photo_candidate_not_found", "指定的照片候选不存在。"),
+                                 drogon::k404NotFound);
+                    return;
+                }
+                const auto& path_value = (*photo)["extracted_file"]["archive_relative_path"];
+                if (!path_value.isString() || path_value.asString().empty()) {
+                    respond_json(callback, make_error_body("photo_archive_missing", "照片候选尚无归档文件。"),
+                                 drogon::k409Conflict);
+                    return;
+                }
+                const auto reference = repository.get_photo_content_ref(import_record_id, photo_candidate_id);
+                if (!reference.has_value()) {
+                    respond_json(callback, make_error_body("photo_archive_missing", "照片归档未关联到当前导入记录。"),
+                                 drogon::k409Conflict);
+                    return;
+                }
+                const auto resolved = resolve_photo_content_path(archive_root, reference->storage_relative_path);
+                if (!resolved.has_value()) {
+                    respond_json(callback, make_error_body("unsafe_archive_path", "照片归档路径不安全。"),
+                                 drogon::k400BadRequest);
+                    return;
+                }
+                if (!std::filesystem::is_regular_file(*resolved)) {
+                    respond_json(callback, make_error_body("photo_archive_missing", "照片归档文件不存在。"),
+                                 drogon::k409Conflict);
+                    return;
+                }
+                auto response = drogon::HttpResponse::newFileResponse(
+                    resolved->string(), "", drogon::CT_CUSTOM, reference->content_type, request);
+                apply_local_dev_cors_headers(response);
+                callback(response);
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::filesystem::filesystem_error&) {
+                respond_json(callback, make_error_body("photo_archive_missing", "照片归档文件无法读取。"),
+                             drogon::k409Conflict);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Get}
+    );
+}
+
 }  // 匿名命名空间
 
-void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
+void register_review_routes(const drogon::orm::DbClientPtr& db_client, const std::filesystem::path& archive_root) {
     register_options_handler("/api/bridges");
     register_options_handler("/api/bridges/{bridge_id}/inspection-years");
     register_options_handler("/api/bridges/{bridge_id}/import-records");
     register_options_handler("/api/import-records/{import_record_id}/review");
     register_options_handler("/api/import-records/{import_record_id}/review-draft");
     register_options_handler("/api/import-records/{import_record_id}/cancel");
+    register_options_handler("/api/import-records/{import_record_id}/photos/{photo_candidate_id}/content");
 
     drogon::app().registerHandler(
         "/api/bridges",
@@ -342,6 +429,7 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client) {
     register_import_record_review_route(db_client);
     register_save_review_draft_route(db_client);
     register_cancel_import_record_route(db_client);
+    register_photo_content_route(db_client, archive_root);
 }
 
 }  // 命名空间 bridge_report::http

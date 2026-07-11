@@ -91,6 +91,11 @@ function reviewRoute(importRecordId: string, suffix: string): string {
   return `/api/import-records/${encodeURIComponent(importRecordId)}${suffix}`;
 }
 
+export function photoContentUrl(baseUrl: string, importRecordId: string, photoCandidateId: string): string {
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
+  return `${normalizedBaseUrl}/api/import-records/${encodeURIComponent(importRecordId)}/photos/${encodeURIComponent(photoCandidateId)}/content`;
+}
+
 /**
  * 拉取校对详情。parsed_result 驱动整个校对编辑器，因此额外用运行时守卫
  * isBridgeAnnualInspectionData 校验；不满足契约时抛出 ApiError（不是让编辑器

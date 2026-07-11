@@ -153,7 +153,7 @@ int main(int argc, char* argv[]) {
 
     drogon::app().registerMiddleware(std::make_shared<drogon::HttpOptionsMiddleware>());
     register_health_routes(config, db_client);
-    bridge_report::http::register_review_routes(db_client);
+    bridge_report::http::register_review_routes(db_client, config.archive_root);
     bridge_report::http::register_import_confirm_routes(db_client);
     bridge_report::http::register_word_import_routes(db_client, config);
 

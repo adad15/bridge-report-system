@@ -183,6 +183,37 @@ TEST_F(ReviewRepositoryTest, list_import_records_returns_fixture_record) {
     EXPECT_EQ(*records[0].importer_name, "张三");
 }
 
+TEST_F(ReviewRepositoryTest, ResolvesPhotoOnlyThroughCurrentImportFileLinks) {
+    const auto archived = tx_->execSqlSync(
+        "insert into archived_files (bridge_id, inspection_year_id, original_file_name, current_file_name, "
+        "storage_relative_path, file_type, file_purpose, file_extension) "
+        "values ($1::uuid, $2::uuid, 'photo.jpg', 'photo.jpg', "
+        "'bridges/sample/photos/photo_0001.jpg', '图片', 'Word病害照片', 'jpg') returning id",
+        bridge_id_, inspection_year_id_);
+    const auto archived_id = archived[0]["id"].as<std::string>();
+    tx_->execSqlSync(
+        "insert into import_record_files (import_record_id, archived_file_id, file_role, process_status) "
+        "values ($1::uuid, $2::uuid, '附件', '处理成功')", import_record_id_, archived_id);
+    Json::Value data;
+    data["photos"] = Json::Value(Json::arrayValue);
+    Json::Value photo;
+    photo["candidate_id"] = "photo_0001";
+    photo["extracted_file"]["archive_relative_path"] = "bridges/sample/photos/photo_0001.jpg";
+    data["photos"].append(photo);
+    tx_->execSqlSync(
+        "update import_records set parsed_result_json = $2::jsonb where id = $1::uuid",
+        import_record_id_, write_json_compact(data));
+
+    bridge_report::db::ReviewRepository repository(tx_);
+    const auto ref = repository.get_photo_content_ref(import_record_id_, "photo_0001");
+
+    ASSERT_TRUE(ref.has_value());
+    EXPECT_EQ(ref->archived_file_id, archived_id);
+    EXPECT_EQ(ref->storage_relative_path, "bridges/sample/photos/photo_0001.jpg");
+    EXPECT_EQ(ref->content_type, "image/jpeg");
+    EXPECT_FALSE(repository.get_photo_content_ref(import_record_id_, "photo_missing").has_value());
+}
+
 TEST_F(ReviewRepositoryTest, list_inspection_years_returns_empty_for_unknown_bridge) {
     bridge_report::db::ReviewRepository repository(tx_);
 

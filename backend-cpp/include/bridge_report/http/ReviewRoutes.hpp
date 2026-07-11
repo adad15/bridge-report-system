@@ -1,5 +1,8 @@
 #pragma once
 
+#include <filesystem>
+#include <optional>
+
 #include <drogon/orm/DbClient.h>
 
 namespace bridge_report::http {
@@ -13,6 +16,14 @@ namespace bridge_report::http {
  *   PUT /api/import-records/{import_record_id}/review-draft
  *   POST /api/import-records/{import_record_id}/cancel
  */
-void register_review_routes(const drogon::orm::DbClientPtr& db_client);
+std::optional<std::filesystem::path> resolve_photo_content_path(
+    const std::filesystem::path& archive_root,
+    const std::filesystem::path& storage_relative_path
+);
+
+void register_review_routes(
+    const drogon::orm::DbClientPtr& db_client,
+    const std::filesystem::path& archive_root
+);
 
 }  // 命名空间 bridge_report::http

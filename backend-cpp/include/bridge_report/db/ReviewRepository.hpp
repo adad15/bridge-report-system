@@ -39,6 +39,12 @@ struct ConfirmOutcome {
     ConfirmWrittenCounts written;
 };
 
+struct PhotoContentRef {
+    std::string archived_file_id;
+    std::string storage_relative_path;
+    std::string content_type;
+};
+
 /**
  * @brief 桥梁 -> 年度 -> 导入记录导航只读查询，以及唯一的年度事实入库写入口。
  *
@@ -65,6 +71,10 @@ public:
      * 供 GET /api/import-records/{import_record_id}/review 使用。
      */
     std::optional<review::ImportRecordDetail> get_import_record_detail(const std::string& import_record_id);
+    std::optional<PhotoContentRef> get_photo_content_ref(
+        const std::string& import_record_id,
+        const std::string& photo_candidate_id
+    );
 
     /**
      * @brief 判断桥梁在指定年度是否存在“已确认 + 当前版本”的年度检查记录。

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
 import { ApiError } from "./apiClient";
-import { cancelImport, confirmImport, fetchReview, runPreflight, saveReviewDraft } from "./reviewApi";
+import { cancelImport, confirmImport, fetchReview, photoContentUrl, runPreflight, saveReviewDraft } from "./reviewApi";
 
 // 满足 isBridgeAnnualInspectionData 最小必填字段集合的候选数据骨架，供测试复用。
 const minimalParsedResult: BridgeAnnualInspectionData = {
@@ -92,6 +92,11 @@ function reviewResponseBody(overrides: Partial<Record<string, unknown>> = {}) {
 describe("reviewApi", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("builds an encoded photo content URL", () => {
+    expect(photoContentUrl("http://127.0.0.1:18080/", "a/b", "p 1"))
+      .toBe("http://127.0.0.1:18080/api/import-records/a%2Fb/photos/p%201/content");
   });
 
   it("fetchReview requests GET .../review and returns the parsed body when parsed_result is valid", async () => {
