@@ -24,6 +24,7 @@ frontend/vite.config.d.ts
 config/local.json
 logs/
 tmp/
+.superpowers/
 
 archive/*
 !archive/.gitkeep
