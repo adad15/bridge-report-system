@@ -9,13 +9,14 @@ const REVIEW_STATUSES: ReviewStatus[] = ["待确认", "已确认", "已修改", 
 interface RatingsSectionProps {
   ratings: Ratings;
   dispatch: Dispatch<ReviewDraftAction>;
+  disabled?: boolean;
 }
 
 // "技术状况评定" 分组（模块 05 §7.3/§8.3）。用 ratingRows 把全桥/结构分部/评价部件
 // 摊平成一张表：全桥总分和等级可编辑；结构分部评分/权重只读展示、等级可编辑；
 // 评价部件评分可编辑（没有等级/权重）。三级校对状态都可以单独下拉切换。
 // 第一版不重算总分，纯粹接受人工填写的数值。
-export function RatingsSection({ ratings, dispatch }: RatingsSectionProps) {
+export function RatingsSection({ ratings, dispatch, disabled = false }: RatingsSectionProps) {
   const rows = ratingRows(ratings);
 
   return (
@@ -43,6 +44,7 @@ export function RatingsSection({ ratings, dispatch }: RatingsSectionProps) {
                     row.score
                   ) : (
                     <input
+                      disabled={disabled}
                       type="number"
                       value={row.score}
                       onChange={(event) => {
@@ -62,6 +64,7 @@ export function RatingsSection({ ratings, dispatch }: RatingsSectionProps) {
                     "-"
                   ) : (
                     <input
+                      disabled={disabled}
                       type="text"
                       value={row.grade}
                       onChange={(event) => {
@@ -78,6 +81,7 @@ export function RatingsSection({ ratings, dispatch }: RatingsSectionProps) {
                 <td>{row.weight === null ? "-" : row.weight}</td>
                 <td>
                   <select
+                    disabled={disabled}
                     value={row.status}
                     onChange={(event) =>
                       dispatch({ type: "set_rating_status", target: row.target, status: event.target.value as ReviewStatus })

@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveReviewSession } from "./reviewSession";
+import { deriveReviewSession, isImportRecordEditable, shouldClearDirtyAfterSave } from "./reviewSession";
+
+describe("review session guards", () => {
+  it("only allows pending import records to be edited", () => {
+    expect(isImportRecordEditable("待校对")).toBe(true);
+    expect(isImportRecordEditable("已确认")).toBe(false);
+    expect(isImportRecordEditable("已取消")).toBe(false);
+  });
+
+  it("only clears dirty when no newer edit happened during save", () => {
+    expect(shouldClearDirtyAfterSave(11, 11)).toBe(true);
+    expect(shouldClearDirtyAfterSave(11, 12)).toBe(false);
+  });
+});
 
 describe("deriveReviewSession", () => {
   it("keeps a pending upgraded 1.0 review editable", () => {

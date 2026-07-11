@@ -137,7 +137,7 @@ export function BridgeDetailPage() {
                     <td>{record.import_status}</td>
                     <td>{record.created_at}</td>
                     <td>
-                      <Link to={reviewPath}>进入校对</Link>
+                      <Link to={reviewPath}>{record.import_status === "待校对" ? "进入校对" : "查看结果"}</Link>
                     </td>
                   </tr>
                 );

@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import type { ApiErrorIssue } from "../api/apiClient";
@@ -22,7 +22,7 @@ import type { AttentionItem } from "../review/grouping";
 import { buildStatistics, needsAttention } from "../review/grouping";
 import type { ReviewDraftAction } from "../review/reviewDraft";
 import { reviewDraftReducer } from "../review/reviewDraft";
-import { deriveReviewSession } from "../review/reviewSession";
+import { deriveReviewSession, shouldClearDirtyAfterSave } from "../review/reviewSession";
 
 export function ReviewWorkspacePage() {
   const { importRecordId } = useParams<{ importRecordId: string }>();
@@ -117,6 +117,7 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   // parsed_result_json（不读内存草稿），所以有未保存修改时必须先保存，否则用户会对着旧的
   // 已保存数据跑检查、以为通过了，实际这次编辑不会写进事实表（模块 05 §6.1 的顺序：先保存草稿）。
   const [dirty, setDirty] = useState(false);
+  const draftRevision = useRef(0);
 
   const counts = buildStatistics(draft);
   const attentionItems = needsAttention(draft);
@@ -140,17 +141,20 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   // "跑检查那一刻"的草稿状态，草稿改了之后旧结果里的 can_confirm 已经不可信，必须
   // 逼用户对最新草稿重新点一次"入库前检查"（canPressConfirm 依赖 preflight !== null）。
   function dispatch(action: ReviewDraftAction): void {
+    draftRevision.current += 1;
     rawDispatch(action);
     setPreflight(null);
     setDirty(true);
   }
 
   async function handleSaveDraft(draftToSave: BridgeAnnualInspectionData): Promise<boolean> {
+    const saveRevision = draftRevision.current;
     setBusy(true);
     try {
       await saveReviewDraft(backendBaseUrl, importRecordId, draftToSave);
-      setSaveMessage({ kind: "success", text: "已保存" });
-      setDirty(false);
+      const savedLatestRevision = shouldClearDirtyAfterSave(saveRevision, draftRevision.current);
+      setSaveMessage({ kind: "success", text: savedLatestRevision ? "已保存" : "本次保存已完成，但仍有较新的修改未保存。" });
+      if (savedLatestRevision) setDirty(false);
       return true;
     } catch (caught) {
       if (caught instanceof ApiError) {
@@ -349,12 +353,14 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
           <label className="review-confirm-dialog-checkbox">
             <input
               type="checkbox"
+              disabled={busy}
               checked={revisionChecked}
               onChange={(event) => setRevisionChecked(event.target.checked)}
             />
             作为修订版确认
           </label>
           <textarea
+            disabled={busy}
             className="review-confirm-dialog-note"
             value={revisionNote}
             onChange={(event) => setRevisionNote(event.target.value)}
@@ -394,7 +400,7 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
               disabled={actionsDisabled}
             />
           ) : null}
-          {activeGroup === "ratings" ? <RatingsSection ratings={draft.ratings} dispatch={sectionDispatch} /> : null}
+          {activeGroup === "ratings" ? <RatingsSection ratings={draft.ratings} dispatch={sectionDispatch} disabled={actionsDisabled} /> : null}
           {activeGroup === "source_evidence" ? (
             <section className="status-panel">
               <h2>来源证据</h2>

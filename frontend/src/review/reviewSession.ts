@@ -5,6 +5,14 @@ export interface ReviewSession {
   bannerText: string | null;
 }
 
+export function isImportRecordEditable(importStatus: string): boolean {
+  return importStatus === "待校对";
+}
+
+export function shouldClearDirtyAfterSave(saveRevision: number, currentRevision: number): boolean {
+  return saveRevision === currentRevision;
+}
+
 export function deriveReviewSession(
   importStatus: string,
   contractCompatibility: ContractCompatibility
