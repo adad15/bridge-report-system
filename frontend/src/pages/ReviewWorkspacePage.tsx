@@ -102,6 +102,7 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   const [expandedDefectId, setExpandedDefectId] = useState<string | null>(null);
   const [activePhotoCandidateId, setActivePhotoCandidateId] = useState<string | null>(null);
   const [activeGroup, setActiveGroup] = useState<GroupKey>("needs_attention");
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
 
   const [saveMessage, setSaveMessage] = useState<SaveMessageState | null>(null);
   const [preflight, setPreflight] = useState<PreflightResponse | null>(null);
@@ -381,6 +382,9 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
       <div className="review-columns">
         <ReviewSidebar counts={counts} active={activeGroup} onSelect={setActiveGroup} />
         <div className="review-main">
+          <div className="review-main-tools">
+            <button type="button" disabled={!selected} onClick={() => setEvidenceOpen(true)}>查看来源证据</button>
+          </div>
           {activeGroup === "needs_attention" ? (
             <NeedsAttentionSection items={attentionItems} draft={draft} onSelect={selectCandidate} />
           ) : null}
@@ -401,16 +405,17 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
             />
           ) : null}
           {activeGroup === "ratings" ? <RatingsSection ratings={draft.ratings} dispatch={sectionDispatch} disabled={actionsDisabled} /> : null}
-          {activeGroup === "source_evidence" ? (
-            <section className="status-panel">
-              <h2>来源证据</h2>
-              <p>请选择左侧候选后，在右侧证据面板查看来源章节、表名、行号和原文。</p>
-            </section>
-          ) : null}
           {activeGroup === "raw_json" ? <RawJsonSection draft={draft} /> : null}
         </div>
-        <EvidencePanel selected={selected} draft={draft} />
       </div>
+      {evidenceOpen ? (
+        <div className="review-modal-backdrop" role="presentation" onMouseDown={() => setEvidenceOpen(false)}>
+          <div className="review-evidence-dialog" role="dialog" aria-modal="true" aria-label="来源证据" onMouseDown={(event) => event.stopPropagation()}>
+            <button className="review-dialog-close" type="button" aria-label="关闭来源证据" onClick={() => setEvidenceOpen(false)}>×</button>
+            <EvidencePanel selected={selected} draft={draft} />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

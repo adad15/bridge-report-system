@@ -113,14 +113,15 @@ void register_word_import_routes(
             }
             try {
                 auto repository = std::make_shared<db::WordImportRepository>(db_client);
-                const auto context = repository->load_context(import_record_id, config.archive_root);
+                const auto archive_root = std::filesystem::absolute(config.archive_root);
+                const auto context = repository->load_context(import_record_id, archive_root);
                 if (!context.has_value()) {
                     respond_json(callback, make_error_body("word_import_context_invalid", "导入记录、年度或主 Word 文件不可用。"),
                                  drogon::k409Conflict);
                     return;
                 }
                 const auto suffix = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-                const auto staging_root = config.archive_root / "work" / "word-import" / (import_record_id + "-" + suffix);
+                const auto staging_root = archive_root / "work" / "word-import" / (import_record_id + "-" + suffix);
                 const auto photo_dir = staging_root / "photos";
                 std::filesystem::create_directories(photo_dir);
                 Json::Value python_body;
@@ -144,7 +145,7 @@ void register_word_import_routes(
                     python_request->setPath("/imports/word/parse");
                     client->sendRequest(
                     python_request,
-                    [callback, repository, context = *context, config, staging_root, photo_dir](
+                    [callback, repository, context = *context, config, archive_root, staging_root, photo_dir](
                         drogon::ReqResult result, const drogon::HttpResponsePtr& response) mutable {
                         if (result != drogon::ReqResult::Ok || !response || response->statusCode() != drogon::k200OK
                             || !response->getJsonObject()) {
@@ -163,19 +164,19 @@ void register_word_import_routes(
                                 if (entry.is_regular_file()) ++temporary_count;
                             }
                             archive::PhotoArchiveContext archive_context{
-                                photo_dir, config.archive_root, context.bridge_system_number, context.bridge_name,
-                                context.inspection_year, context.import_record_system_number, context.import_name};
+                                photo_dir, archive_root, context.bridge_system_number, "bridge",
+                                context.inspection_year, context.import_record_system_number, "import"};
                             auto batch = archive::archive_extracted_photos(parsed_data, archive_context);
                             const auto outcome = repository->persist_parse_result(context.import_record_id, batch);
                             if (!outcome.success) {
-                                archive::cleanup_archived_photo_batch(config.archive_root, batch);
+                                archive::cleanup_archived_photo_batch(archive_root, batch);
                                 mark_parse_failed_safely(repository, context.import_record_id, outcome.error_message);
                                 remove_staging(staging_root);
                                 respond_json(callback, make_error_body(outcome.error_code, outcome.error_message),
                                              drogon::k500InternalServerError);
                                 return;
                             }
-                            remove_obsolete_files(config.archive_root, outcome.obsolete_storage_paths, batch);
+                            remove_obsolete_files(archive_root, outcome.obsolete_storage_paths, batch);
                             Json::Value result_body;
                             result_body["parsed"] = true;
                             result_body["temporary_photo_file_count"] = static_cast<Json::UInt64>(temporary_count);
