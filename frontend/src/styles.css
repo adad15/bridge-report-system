@@ -353,6 +353,28 @@ body {
   color: #18202a;
 }
 
+.defect-photo-number-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: end;
+  gap: 8px;
+}
+
+.defect-photo-number-control button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid #2456c9;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #2456c9;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.defect-photo-number-control button[aria-expanded="true"] {
+  background: #eaf0fd;
+}
+
 .defect-photo-detail-row > td {
   padding: 18px;
   background: #f7f9fb;

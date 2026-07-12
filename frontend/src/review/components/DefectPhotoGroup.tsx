@@ -47,7 +47,7 @@ export function DefectPhotoGroup({ draft, defect, importRecordId, baseUrl, expan
 
   return (
     <tbody className={disabled ? "defect-photo-group controls-disabled" : "defect-photo-group"} aria-disabled={disabled}>
-      <tr className={expanded ? "data-table-row-clickable data-table-row-selected" : "data-table-row-clickable"} onClick={onToggle}>
+      <tr className={expanded ? "data-table-row-selected" : ""}>
         <td><select aria-label="结构部位" value={defect.structure_part} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "structure_part", value: event.target.value as StructurePart })}>{STRUCTURE_PARTS.map((part) => <option key={part}>{part}</option>)}</select></td>
         <td><input aria-label="构件类别" value={defect.component_name} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_name", value: event.target.value })} /></td>
         <td><input aria-label="构件编号" value={defect.component_alias ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_alias", value: event.target.value || null })} /></td>
@@ -58,7 +58,12 @@ export function DefectPhotoGroup({ draft, defect, importRecordId, baseUrl, expan
       <tr className="defect-fact-detail-row">
         <td><label>数量<input aria-label="数量" value={defect.quantity_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "quantity_text", value: event.target.value })} /></label></td>
         <td colSpan={3}><label>尺寸原文<input aria-label="尺寸原文" title={defect.measurement_text ?? ""} value={defect.measurement_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_measurement_text", candidateId: defect.candidate_id, text: event.target.value })} /></label></td>
-        <td colSpan={2}><label>照片编号<input aria-label="照片编号" value={defect.photo_numbers.join(", ")} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "photo_numbers", value: parsePhotoNumbers(event.target.value) })} /></label></td>
+        <td colSpan={2}>
+          <div className="defect-photo-number-control">
+            <label>照片编号<input aria-label="照片编号" value={defect.photo_numbers.join(", ")} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "photo_numbers", value: parsePhotoNumbers(event.target.value) })} /></label>
+            <button type="button" aria-expanded={expanded} onClick={onToggle}>{expanded ? "收起照片" : `查看照片（${photos.length}）`}</button>
+          </div>
+        </td>
       </tr>
       {expanded ? (
         <tr className="defect-photo-detail-row">

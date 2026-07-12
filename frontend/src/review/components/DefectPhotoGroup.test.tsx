@@ -59,4 +59,15 @@ describe("DefectPhotoGroup", () => {
     expect(screen.getByRole("img", { name: "照片 2.1-2" })).toHaveClass("active");
     expect(dispatch).not.toHaveBeenCalled();
   });
+
+  it("uses an explicit button to open the photo review", () => {
+    const draft = data();
+    const onToggle = vi.fn();
+    render(
+      <table><DefectPhotoGroup draft={draft} defect={draft.defects[0]} importRecordId="record-1" baseUrl="http://backend" expanded={false} onToggle={onToggle} dispatch={vi.fn()} /></table>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "查看照片（2）" }));
+    expect(onToggle).toHaveBeenCalledOnce();
+  });
 });
