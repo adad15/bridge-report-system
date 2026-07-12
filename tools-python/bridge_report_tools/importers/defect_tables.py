@@ -10,6 +10,8 @@ from bridge_report_tools.importers.word_rules.common import normalize_rule_text
 
 
 PHOTO_NUMBER_PATTERN = re.compile(r"(?:照片)?(?P<number>\d+(?:\.\d+)?-\d+)")
+QUANTITY_PATTERN = re.compile(r"(?:共|约)?(?P<quantity>\d+(?:\.\d+)?\s*(?:处|条|个|块|道|孔|座))")
+FUZZY_QUANTITY_PATTERN = re.compile(r"(?P<quantity>多(?:处|条|个|块|道|孔))")
 
 
 def match_defect_table(table: DocxTable, rule_set: WordRuleSet) -> DefectTableRule | None:
@@ -51,6 +53,16 @@ def get_cell(row: list[str], index: int | None) -> str:
 
 def parse_photo_numbers(text: str) -> list[str]:
     return [match.group("number") for match in PHOTO_NUMBER_PATTERN.finditer(text)]
+
+
+def derive_quantity_text(measurement_text: str | None) -> str | None:
+    if not measurement_text:
+        return None
+    for pattern in (QUANTITY_PATTERN, FUZZY_QUANTITY_PATTERN):
+        match = pattern.search(measurement_text)
+        if match:
+            return re.sub(r"\s+", "", match.group("quantity"))
+    return None
 
 
 def parse_defect_tables(
@@ -109,7 +121,7 @@ def parse_defect_tables(
                     defect_type=defect_type or "未识别病害",
                     defect_location=location or "未识别位置",
                     defect_description=defect_description,
-                    quantity_text=get_cell(row, quantity_index) or None,
+                    quantity_text=get_cell(row, quantity_index) or derive_quantity_text(measurement_text),
                     measurement_text=measurement_text,
                     measurements=measurements,
                     photo_numbers=photo_numbers,

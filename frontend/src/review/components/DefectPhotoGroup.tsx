@@ -49,19 +49,22 @@ export function DefectPhotoGroup({ draft, defect, importRecordId, baseUrl, expan
     <tbody className={disabled ? "defect-photo-group controls-disabled" : "defect-photo-group"} aria-disabled={disabled}>
       <tr className={expanded ? "data-table-row-clickable data-table-row-selected" : "data-table-row-clickable"} onClick={onToggle}>
         <td><select aria-label="结构部位" value={defect.structure_part} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "structure_part", value: event.target.value as StructurePart })}>{STRUCTURE_PARTS.map((part) => <option key={part}>{part}</option>)}</select></td>
-        <td><input aria-label="构件" value={defect.component_name} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_name", value: event.target.value })} /></td>
+        <td><input aria-label="构件类别" value={defect.component_name} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_name", value: event.target.value })} /></td>
+        <td><input aria-label="构件编号" value={defect.component_alias ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_alias", value: event.target.value || null })} /></td>
         <td><input aria-label="位置" value={defect.defect_location} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} /></td>
         <td><input aria-label="病害类型" value={defect.defect_type} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_type", value: event.target.value })} /></td>
-        <td><input aria-label="数量" value={defect.quantity_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "quantity_text", value: event.target.value })} /></td>
-        <td><input aria-label="尺寸原文" value={defect.measurement_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_measurement_text", candidateId: defect.candidate_id, text: event.target.value })} /></td>
-        <td><input aria-label="照片编号" value={defect.photo_numbers.join(", ")} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "photo_numbers", value: parsePhotoNumbers(event.target.value) })} /></td>
         <td><select aria-label="校对状态" value={defect.review_status} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_status", value: event.target.value as ReviewStatus })}>{REVIEW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></td>
-        <td><input aria-label="备注" value={defect.review_note ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_note", value: event.target.value })} /></td>
+      </tr>
+      <tr className="defect-fact-detail-row">
+        <td><label>数量<input aria-label="数量" value={defect.quantity_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "quantity_text", value: event.target.value })} /></label></td>
+        <td colSpan={3}><label>尺寸原文<input aria-label="尺寸原文" title={defect.measurement_text ?? ""} value={defect.measurement_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_measurement_text", candidateId: defect.candidate_id, text: event.target.value })} /></label></td>
+        <td colSpan={2}><label>照片编号<input aria-label="照片编号" value={defect.photo_numbers.join(", ")} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "photo_numbers", value: parsePhotoNumbers(event.target.value) })} /></label></td>
       </tr>
       {expanded ? (
         <tr className="defect-photo-detail-row">
-          <td colSpan={9}>
+          <td colSpan={6}>
             <div className="defect-photo-review">
+              <label className="review-note-field">校对备注<input aria-label="备注" value={defect.review_note ?? ""} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_note", value: event.target.value })} /></label>
               <div className="defect-photo-stage">
                 {activePhoto ? <img className="defect-photo-stage-image active" src={photoContentUrl(baseUrl, importRecordId, activePhoto.candidate_id)} alt={`照片 ${activePhoto.photo_number}`} /> : <p>暂无已关联照片。</p>}
               </div>

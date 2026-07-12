@@ -326,15 +326,32 @@ body {
   font-size: 12px;
 }
 
-.defect-photo-table th:nth-child(1) { width: 9%; }
-.defect-photo-table th:nth-child(2) { width: 11%; }
+.defect-photo-table th:nth-child(1) { width: 11%; }
+.defect-photo-table th:nth-child(2) { width: 20%; }
 .defect-photo-table th:nth-child(3) { width: 14%; }
-.defect-photo-table th:nth-child(4) { width: 13%; }
-.defect-photo-table th:nth-child(5) { width: 8%; }
-.defect-photo-table th:nth-child(6) { width: 13%; }
-.defect-photo-table th:nth-child(7) { width: 10%; }
-.defect-photo-table th:nth-child(8) { width: 10%; }
-.defect-photo-table th:nth-child(9) { width: 12%; }
+.defect-photo-table th:nth-child(4) { width: 15%; }
+.defect-photo-table th:nth-child(5) { width: 25%; }
+.defect-photo-table th:nth-child(6) { width: 15%; }
+
+.defect-fact-detail-row td {
+  padding-top: 4px;
+  padding-bottom: 10px;
+  background: #f7f9fb;
+}
+
+.defect-fact-detail-row label,
+.review-note-field {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  color: #55606c;
+  font-size: 12px;
+}
+
+.defect-fact-detail-row input {
+  color: #18202a;
+}
 
 .defect-photo-detail-row > td {
   padding: 18px;
@@ -345,6 +362,15 @@ body {
   display: grid;
   grid-template-columns: minmax(320px, 1.7fr) minmax(260px, 1fr);
   gap: 16px 20px;
+}
+
+.review-note-field {
+  grid-column: 1 / -1;
+}
+
+.review-note-field input {
+  min-width: 0;
+  padding: 7px 8px;
 }
 
 .defect-photo-stage {

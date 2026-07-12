@@ -41,7 +41,7 @@ describe("DefectPhotoGroup", () => {
       <table><DefectPhotoGroup draft={draft} defect={draft.defects[0]} importRecordId="record-1" baseUrl="http://backend" expanded onToggle={vi.fn()} dispatch={vi.fn()} /></table>
     );
 
-    for (const label of ["结构部位", "构件", "位置", "病害类型", "数量", "尺寸原文", "照片编号", "校对状态", "备注"]) {
+    for (const label of ["结构部位", "构件类别", "构件编号", "位置", "病害类型", "数量", "尺寸原文", "照片编号", "校对状态", "备注"]) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
     expect(screen.getAllByRole("img", { name: /照片/ }).filter((item) => item.classList.contains("active"))).toHaveLength(1);
