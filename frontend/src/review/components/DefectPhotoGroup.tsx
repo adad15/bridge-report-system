@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type MouseEvent } from "react";
+import { useEffect, useState, type CSSProperties, type Dispatch, type MouseEvent } from "react";
 
 import { photoContentUrl } from "../../api/reviewApi";
 import type { BridgeAnnualInspectionData, DefectCandidate, ReviewStatus, StructurePart } from "../../contracts/annualInspection";
@@ -7,6 +7,18 @@ import type { ReviewDraftAction } from "../reviewDraft";
 
 const STRUCTURE_PARTS: StructurePart[] = ["全桥", "上部结构", "下部结构", "桥面系", "其他"];
 const REVIEW_STATUSES: ReviewStatus[] = ["待确认", "已确认", "已修改", "已忽略"];
+const CATEGORY_COLORS: Record<string, string> = {
+  "上部承重构件": "#2563a6",
+  "上部一般构件": "#16827a",
+  "桥墩": "#397a4a",
+  "桥台": "#7656a8",
+  "翼墙、耳墙": "#a05a7b",
+  "桥面铺装": "#b86724",
+  "栏杆、护栏": "#46758f",
+  "照明、标志": "#8b6b16",
+  "河床": "#64748b",
+};
+const FALLBACK_CATEGORY_COLORS = ["#3f6f9f", "#3f7d68", "#7b5d9b", "#9a6338", "#536f82"];
 
 interface DefectPhotoGroupProps {
   draft: BridgeAnnualInspectionData;
@@ -26,6 +38,12 @@ function parsePhotoNumbers(text: string): string[] {
 
 function keepRowOpen(event: MouseEvent<HTMLElement>): void {
   event.stopPropagation();
+}
+
+function categoryColor(category: string): string {
+  if (CATEGORY_COLORS[category]) return CATEGORY_COLORS[category];
+  const hash = Array.from(category).reduce((sum, character) => sum + character.codePointAt(0)!, 0);
+  return FALLBACK_CATEGORY_COLORS[hash % FALLBACK_CATEGORY_COLORS.length];
 }
 
 export function DefectPhotoGroup({ draft, defect, importRecordId, baseUrl, expanded, onToggle, dispatch, initialPhotoCandidateId, disabled = false }: DefectPhotoGroupProps) {
@@ -53,7 +71,7 @@ export function DefectPhotoGroup({ draft, defect, importRecordId, baseUrl, expan
   ].filter(Boolean).join(" ");
 
   return (
-    <tbody className={groupClassName} aria-disabled={disabled}>
+    <tbody className={groupClassName} aria-disabled={disabled} style={{ "--defect-category-color": categoryColor(defect.component_name) } as CSSProperties}>
       <tr className={expanded ? "defect-summary-row data-table-row-selected" : "defect-summary-row"}>
         <td><select aria-label="结构部位" value={defect.structure_part} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "structure_part", value: event.target.value as StructurePart })}>{STRUCTURE_PARTS.map((part) => <option key={part}>{part}</option>)}</select></td>
         <td><input aria-label="构件类别" value={defect.component_name} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_name", value: event.target.value })} /></td>
