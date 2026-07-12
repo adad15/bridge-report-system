@@ -46,6 +46,13 @@ function categoryColor(category: string): string {
   return FALLBACK_CATEGORY_COLORS[hash % FALLBACK_CATEGORY_COLORS.length];
 }
 
+// 照片校对状态徽章：沿用页眉的 review-status-badge 配色（待确认=黄、已确认=绿、其余=灰）。
+function reviewStatusBadgeClass(status: ReviewStatus): string {
+  if (status === "已确认") return "review-status-badge review-status-confirmed";
+  if (status === "待确认") return "review-status-badge review-status-pending";
+  return "review-status-badge review-status-neutral";
+}
+
 export function DefectPhotoGroup({ draft, defect, importRecordId, baseUrl, expanded, onToggle, dispatch, initialPhotoCandidateId, disabled = false }: DefectPhotoGroupProps) {
   const group = buildDefectPhotoGroup(draft, defect.candidate_id);
   const photos = group?.photos ?? [];
@@ -72,54 +79,77 @@ export function DefectPhotoGroup({ draft, defect, importRecordId, baseUrl, expan
 
   return (
     <tbody className={groupClassName} aria-disabled={disabled} style={{ "--defect-category-color": categoryColor(defect.component_name) } as CSSProperties}>
-      <tr className={expanded ? "defect-summary-row data-table-row-selected" : "defect-summary-row"}>
-        <td><select aria-label="结构部位" value={defect.structure_part} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "structure_part", value: event.target.value as StructurePart })}>{STRUCTURE_PARTS.map((part) => <option key={part}>{part}</option>)}</select></td>
-        <td><input aria-label="构件类别" value={defect.component_name} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_name", value: event.target.value })} /></td>
-        <td><input aria-label="构件编号" value={defect.component_alias ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_alias", value: event.target.value || null })} /></td>
-        <td><input aria-label="位置" value={defect.defect_location} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} /></td>
-        <td><input aria-label="病害类型" value={defect.defect_type} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_type", value: event.target.value })} /></td>
-        <td><select aria-label="校对状态" value={defect.review_status} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_status", value: event.target.value as ReviewStatus })}>{REVIEW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></td>
-      </tr>
-      <tr className="defect-fact-detail-row">
-        <td><label>数量<input aria-label="数量" value={defect.quantity_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "quantity_text", value: event.target.value })} /></label></td>
-        <td colSpan={3}><label>尺寸原文<input aria-label="尺寸原文" title={defect.measurement_text ?? ""} value={defect.measurement_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_measurement_text", candidateId: defect.candidate_id, text: event.target.value })} /></label></td>
-        <td colSpan={2}>
-          <div className="defect-photo-number-control">
-            <label>照片编号<input aria-label="照片编号" value={defect.photo_numbers.join(", ")} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "photo_numbers", value: parsePhotoNumbers(event.target.value) })} /></label>
-            <button type="button" aria-expanded={expanded} onClick={onToggle}>{expanded ? "收起照片" : `查看照片（${photos.length}）`}</button>
+      <tr className="defect-card-row">
+        <td>
+          {/* 整卡统一表单网格：六个汇总字段与数量/尺寸原文/照片编号用同一套"标签 + 输入框"语言，
+              标签右对齐同一列、输入框共享左边线，消除汇总行与明细行之间的割裂感。 */}
+          <div className="defect-fact-grid">
+            <span className="defect-fact-label defect-fact-label-row-start">结构部位</span>
+            <select aria-label="结构部位" value={defect.structure_part} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "structure_part", value: event.target.value as StructurePart })}>{STRUCTURE_PARTS.map((part) => <option key={part}>{part}</option>)}</select>
+            <span className="defect-fact-label">构件类别</span>
+            <input aria-label="构件类别" value={defect.component_name} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_name", value: event.target.value })} />
+            <span className="defect-fact-label">构件编号</span>
+            <input aria-label="构件编号" value={defect.component_alias ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_alias", value: event.target.value || null })} />
+            <span className="defect-fact-label defect-fact-label-row-start">位置</span>
+            <input aria-label="位置" value={defect.defect_location} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} />
+            <span className="defect-fact-label">病害类型</span>
+            <input aria-label="病害类型" value={defect.defect_type} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_type", value: event.target.value })} />
+            <span className="defect-fact-label">校对状态</span>
+            <select aria-label="校对状态" value={defect.review_status} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_status", value: event.target.value as ReviewStatus })}>{REVIEW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select>
+            <span className="defect-fact-label defect-fact-label-row-start">数量</span>
+            <input aria-label="数量" value={defect.quantity_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "quantity_text", value: event.target.value })} />
+            <span className="defect-fact-label">照片编号</span>
+            <input aria-label="照片编号" value={defect.photo_numbers.join(", ")} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "photo_numbers", value: parsePhotoNumbers(event.target.value) })} />
+            <button type="button" className="defect-photo-toggle" aria-expanded={expanded} onClick={onToggle}>{expanded ? "收起照片" : `查看照片（${photos.length}）`}</button>
+            <span className="defect-fact-label defect-fact-label-row-start">尺寸原文</span>
+            <input className="defect-fact-span" aria-label="尺寸原文" title={defect.measurement_text ?? ""} value={defect.measurement_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_measurement_text", candidateId: defect.candidate_id, text: event.target.value })} />
+            {expanded ? (
+              <>
+                <span className="defect-fact-label defect-fact-label-row-start">校对备注</span>
+                <input className="defect-fact-span" aria-label="备注" placeholder="填写校对说明…" value={defect.review_note ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_note", value: event.target.value })} />
+              </>
+            ) : null}
           </div>
         </td>
       </tr>
       {expanded ? (
         <tr className="defect-photo-detail-row">
-          <td colSpan={6}>
+          <td>
             <div className="defect-photo-review">
-              <label className="review-note-field">校对备注<input aria-label="备注" value={defect.review_note ?? ""} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_note", value: event.target.value })} /></label>
-              <div className="defect-photo-stage">
-                {activePhoto ? <img className="defect-photo-stage-image active" src={photoContentUrl(baseUrl, importRecordId, activePhoto.candidate_id)} alt={`照片 ${activePhoto.photo_number}`} /> : <p>暂无已关联照片。</p>}
-              </div>
-              {activePhoto ? (
-                <div className="defect-photo-meta">
-                  <strong>照片 {activePhoto.photo_number}</strong>
-                  <span>{activePhoto.extracted_file.original_caption ?? "无照片说明"}</span>
-                  <span>匹配：{activePhoto.match_status} · 校对：{activePhoto.review_status}</span>
-                  <div className="review-photo-actions">
-                    <button type="button" onClick={() => dispatch({ type: "photo_confirm_match", candidateId: activePhoto.candidate_id })}>照片正确</button>
-                    <button type="button" onClick={() => dispatch({ type: "photo_reset", candidateId: activePhoto.candidate_id })}>重置</button>
-                    <button type="button" onClick={() => dispatch({ type: "photo_mark_unrelated", candidateId: activePhoto.candidate_id, note: "人工确认与病害无关" })}>确认无关</button>
-                    <button type="button" onClick={() => dispatch({ type: "photo_ignore", candidateId: activePhoto.candidate_id })}>忽略</button>
-                    <label>重新关联<select value={activePhoto.linked_defect_candidate_id ?? ""} onChange={(event) => event.target.value && dispatch({ type: "photo_relink", candidateId: activePhoto.candidate_id, defectCandidateId: event.target.value })}>{draft.defects.map((item) => <option key={item.candidate_id} value={item.candidate_id}>{item.component_name} / {item.defect_location} / {item.defect_type}</option>)}</select></label>
-                  </div>
+              {/* 照片校对区：浅底色圆角块把"正在校对哪张照片"框出来，与上方字段区分区。 */}
+              <div className="defect-photo-zone">
+                <div className="defect-photo-stage">
+                  {activePhoto ? <img className="defect-photo-stage-image active" src={photoContentUrl(baseUrl, importRecordId, activePhoto.candidate_id)} alt={`照片 ${activePhoto.photo_number}`} /> : <p>暂无已关联照片。</p>}
                 </div>
-              ) : null}
-              {photos.length > 0 ? <div className="defect-photo-thumbnails">{photos.map((photo) => <button key={photo.candidate_id} type="button" className={photo.candidate_id === activePhoto?.candidate_id ? "active" : ""} aria-label={`查看照片 ${photo.photo_number}`} onClick={() => setActivePhotoId(photo.candidate_id)}><img src={photoContentUrl(baseUrl, importRecordId, photo.candidate_id)} alt="" /><span>{photo.photo_number}</span></button>)}</div> : null}
+                <div className="defect-photo-meta">
+                  {activePhoto ? (
+                    <>
+                      <div className="defect-photo-meta-head">
+                        <strong>照片 {activePhoto.photo_number}</strong>
+                        <span className="severity-badge severity-info">{activePhoto.match_status}</span>
+                        <span className={reviewStatusBadgeClass(activePhoto.review_status)}>{activePhoto.review_status}</span>
+                      </div>
+                      <span className="defect-photo-caption">{activePhoto.extracted_file.original_caption ?? "无照片说明"}</span>
+                      <div className="review-photo-actions">
+                        <button type="button" className="review-action-primary" onClick={() => dispatch({ type: "photo_confirm_match", candidateId: activePhoto.candidate_id })}>照片正确</button>
+                        <button type="button" onClick={() => dispatch({ type: "photo_reset", candidateId: activePhoto.candidate_id })}>重置</button>
+                        <button type="button" onClick={() => dispatch({ type: "photo_mark_unrelated", candidateId: activePhoto.candidate_id, note: "人工确认与病害无关" })}>确认无关</button>
+                        <button type="button" onClick={() => dispatch({ type: "photo_ignore", candidateId: activePhoto.candidate_id })}>忽略</button>
+                      </div>
+                      {/* 选项用"构件编号 / 位置 / 病害类型"定位病害（编号缺失时回退到构件类别）。 */}
+                      <label className="defect-photo-relink">重新关联<select value={activePhoto.linked_defect_candidate_id ?? ""} onChange={(event) => event.target.value && dispatch({ type: "photo_relink", candidateId: activePhoto.candidate_id, defectCandidateId: event.target.value })}>{draft.defects.map((item) => <option key={item.candidate_id} value={item.candidate_id}>{item.component_alias ?? item.component_name} / {item.defect_location} / {item.defect_type}</option>)}</select></label>
+                    </>
+                  ) : null}
+                  {photos.length > 0 ? <div className="defect-photo-thumbnails">{photos.map((photo) => <button key={photo.candidate_id} type="button" className={photo.candidate_id === activePhoto?.candidate_id ? "active" : ""} aria-label={`查看照片 ${photo.photo_number}`} onClick={() => setActivePhotoId(photo.candidate_id)}><img src={photoContentUrl(baseUrl, importRecordId, photo.candidate_id)} alt="" /><span>{photo.photo_number}</span></button>)}</div> : null}
+                </div>
+              </div>
               {(group?.missingPhotoNumbers.length ?? 0) > 0 ? <div className="missing-photo-list"><strong>Word 中引用但未找到的照片</strong>{group?.missingPhotoNumbers.map((number) => { const confirmed = defect.confirmed_missing_photo_numbers.includes(number); return <div key={number}><span>照片 {number}</span><button type="button" onClick={() => dispatch({ type: confirmed ? "unconfirm_missing_photo" : "confirm_missing_photo", defectCandidateId: defect.candidate_id, photoNumber: number })}>{confirmed ? "撤销缺图确认" : "人工确认缺图"}</button></div>; })}</div> : null}
               <div className="defect-group-confirm"><span>{confirmation.ok ? "病害与照片均已具备确认条件。" : `尚不能确认：${confirmation.reasons.join("、")}`}</span><button type="button" disabled={!confirmation.ok} onClick={() => dispatch({ type: "confirm_defect_group", defectCandidateId: defect.candidate_id })}>确认本组</button></div>
             </div>
           </td>
         </tr>
       ) : null}
-      <tr className="defect-group-spacer" aria-hidden="true"><td colSpan={6} /></tr>
+      <tr className="defect-group-spacer" aria-hidden="true"><td /></tr>
     </tbody>
   );
 }

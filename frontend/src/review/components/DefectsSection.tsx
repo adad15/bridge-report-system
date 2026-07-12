@@ -24,8 +24,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, selectedCandida
       <h2>病害与照片</h2>
       <fieldset className="review-disabled-fieldset" disabled={disabled}>
         <div className="table-scroll">
+          {/* 每条病害是一张自带标签的表单卡片（DefectPhotoGroup），不再需要共享表头。 */}
           <table className="data-table defect-photo-table">
-            <thead><tr><th>结构部位</th><th>构件类别</th><th>构件编号</th><th>位置</th><th>病害类型</th><th>校对状态</th></tr></thead>
             {draft.defects.map((defect) => <DefectPhotoGroup key={defect.candidate_id} draft={draft} defect={defect} importRecordId={importRecordId} baseUrl={baseUrl} expanded={selectedCandidateId === defect.candidate_id} initialPhotoCandidateId={selectedPhotoCandidateId} onToggle={() => onSelect(defect.candidate_id)} dispatch={dispatch} disabled={disabled} />)}
           </table>
         </div>

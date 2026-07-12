@@ -385,9 +385,9 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
   overflow-y: auto;
-  padding: 16px 20px 24px;
+  padding: 10px 20px 24px;
 }
 
 /* 分组组件沿用 status-panel，但在工作台内容区里拍平成普通区块，去掉"卡片摞卡片"感。 */
@@ -398,9 +398,25 @@ body {
   padding: 0;
 }
 
-.review-main .status-panel h2 {
-  margin: 0 0 14px;
-  font-size: 17px;
+/* 分组标题与左侧导航当前项重复，工作台里视觉隐藏（保留在 DOM 中供读屏器定位）。 */
+.review-main .status-panel > h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* 标题隐藏后，各分组的首个内容元素直接顶到分组开头，去掉原本跟在标题后面的上边距。 */
+.review-main .status-panel > p,
+.review-main .review-raw-json,
+.review-main .table-scroll .data-table {
+  margin-top: 0;
+}
+
+.review-main .attention-group h3 {
+  margin-top: 0;
 }
 
 .review-main-tools {
@@ -464,7 +480,6 @@ body {
   table-layout: fixed;
 }
 
-.defect-photo-table th,
 .defect-photo-table td {
   min-width: 0;
   padding: 8px 5px;
@@ -475,53 +490,20 @@ body {
 .defect-photo-table select {
   width: 100%;
   min-width: 0;
-  padding: 5px 4px;
+  box-sizing: border-box;
+  padding: 5px 6px;
   font-size: 12px;
 }
 
-.defect-photo-table th:nth-child(1) { width: 11%; }
-.defect-photo-table th:nth-child(2) { width: 20%; }
-.defect-photo-table th:nth-child(3) { width: 14%; }
-.defect-photo-table th:nth-child(4) { width: 15%; }
-.defect-photo-table th:nth-child(5) { width: 25%; }
-.defect-photo-table th:nth-child(6) { width: 15%; }
-
-.defect-fact-detail-row td {
-  padding-top: 4px;
-  padding-bottom: 10px;
-  background: #f7f9fb;
-}
-
-.defect-summary-row td {
-  border-top: 1px solid var(--defect-category-color);
+/* 一条病害 = 一张卡片：整卡单一底色 + 类别彩色左边条，卡内不再分"汇总行/明细行"两段。 */
+.defect-card-row td {
+  padding: 10px 12px;
+  border: 1px solid var(--defect-category-color);
+  border-left-width: 5px;
   background: color-mix(in srgb, var(--defect-category-color) 5%, #ffffff);
 }
 
-.defect-summary-row td:first-child,
-.defect-fact-detail-row td:first-child {
-  border-left: 5px solid var(--defect-category-color);
-}
-
-.defect-summary-row td:last-child,
-.defect-fact-detail-row td:last-child {
-  border-right: 1px solid var(--defect-category-color);
-}
-
-.defect-fact-detail-row td {
-  border-bottom: 1px solid var(--defect-category-color);
-}
-
-.defect-photo-group .defect-fact-detail-row td {
-  background: color-mix(in srgb, var(--defect-category-color) 8%, #ffffff);
-}
-
-.defect-photo-group.expanded .defect-summary-row td,
-.defect-photo-group.expanded .defect-fact-detail-row td,
-.defect-photo-group.expanded .defect-photo-detail-row > td {
-  border-color: var(--defect-category-color);
-}
-
-.defect-photo-group.expanded .defect-fact-detail-row td {
+.defect-photo-group.expanded .defect-card-row td {
   border-bottom: 0;
 }
 
@@ -539,39 +521,52 @@ body {
   background: transparent !important;
 }
 
-.defect-fact-detail-row label,
-.review-note-field {
+/* 整卡表单网格：三对"标签 + 输入框"一行，标签右对齐各自列，输入框共享左边线。
+   行 1 = 结构部位/构件类别/构件编号，行 2 = 位置/病害类型/校对状态，
+   行 3 = 数量/照片编号/查看照片按钮，行 4 = 尺寸原文，行 5（展开时）= 校对备注。 */
+.defect-fact-grid {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1.3fr) max-content minmax(0, 1fr);
+  gap: 8px 10px;
   align-items: center;
-  gap: 7px;
-  color: #55606c;
-  font-size: 12px;
 }
 
-.defect-fact-detail-row input {
+.defect-fact-label {
+  /* 字段对之间的呼吸空间：非行首标签左侧垫 16px，把它和前一对字段的输入框拉开。 */
+  padding-left: 16px;
+  color: #55606c;
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.defect-fact-label-row-start {
+  padding-left: 0;
+}
+
+.defect-fact-grid input {
   color: #18202a;
 }
 
-.defect-photo-number-control {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  align-items: end;
-  gap: 8px;
+.defect-fact-span {
+  grid-column: 2 / -1;
 }
 
-.defect-photo-number-control button {
+.defect-photo-toggle {
+  grid-column: 5 / -1;
+  justify-self: end;
   min-height: 30px;
-  padding: 5px 10px;
+  padding: 5px 12px;
   border: 1px solid #2456c9;
   border-radius: 5px;
   background: #ffffff;
   color: #2456c9;
   cursor: pointer;
   white-space: nowrap;
+  font-size: 12px;
 }
 
-.defect-photo-number-control button[aria-expanded="true"] {
+.defect-photo-toggle[aria-expanded="true"] {
   background: #eaf0fd;
 }
 
@@ -581,28 +576,31 @@ body {
 }
 
 .defect-photo-review {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 照片校对区：浅底色圆角块，与上方字段区形成分区。 */
+.defect-photo-zone {
   display: grid;
   grid-template-columns: minmax(320px, 1.7fr) minmax(260px, 1fr);
-  gap: 16px 20px;
+  gap: 14px;
+  padding: 12px;
+  background: #f2f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
 }
 
-.review-note-field {
-  grid-column: 1 / -1;
-}
-
-.review-note-field input {
-  min-width: 0;
-  padding: 7px 8px;
-}
-
+/* 大图按原始尺寸展示：不裁剪、不放大，仅在超出列宽时等比缩小。 */
 .defect-photo-stage {
   display: grid;
   place-items: center;
   width: 100%;
-  height: clamp(280px, 52vh, 520px);
-  overflow: hidden;
+  min-height: 120px;
   border: 1px solid #cbd3dc;
-  background: #20252b;
+  border-radius: 4px;
+  background: #ffffff;
 }
 
 .review-modal-backdrop {
@@ -640,9 +638,9 @@ body {
 }
 
 .defect-photo-stage-image {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 .defect-photo-meta {
@@ -652,20 +650,40 @@ body {
   min-width: 0;
 }
 
-.review-photo-actions label {
+.defect-photo-meta-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: 100%;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.review-photo-actions select {
-  flex: 1;
+.defect-photo-meta-head strong {
+  font-size: 14px;
+}
+
+.defect-photo-caption {
+  color: #55606c;
+  font-size: 12px;
+}
+
+.defect-photo-relink {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  color: #55606c;
+  font-size: 12px;
+}
+
+.defect-photo-relink select {
   min-width: 0;
+  padding: 5px 4px;
+  font-size: 12px;
 }
 
+/* 缩略图挪进右栏底部，垫掉大图较高时的空白；当前张蓝框高亮。 */
 .defect-photo-thumbnails {
-  grid-column: 1 / -1;
+  margin-top: auto;
   display: flex;
   gap: 8px;
   overflow-x: auto;
@@ -673,8 +691,8 @@ body {
 }
 
 .defect-photo-thumbnails button {
-  flex: 0 0 112px;
-  padding: 4px;
+  flex: 0 0 76px;
+  padding: 3px;
   border: 2px solid transparent;
   background: #ffffff;
   cursor: pointer;
@@ -695,11 +713,6 @@ body {
   display: block;
   margin-top: 3px;
   font-size: 12px;
-}
-
-.missing-photo-list,
-.defect-group-confirm {
-  grid-column: 1 / -1;
 }
 
 .missing-photo-list > div,
@@ -767,14 +780,8 @@ body {
     background: #ffffff;
   }
 
-  .defect-photo-review {
+  .defect-photo-zone {
     grid-template-columns: 1fr;
-  }
-
-  .defect-photo-thumbnails,
-  .missing-photo-list,
-  .defect-group-confirm {
-    grid-column: 1;
   }
 }
 
@@ -860,7 +867,8 @@ body {
 }
 
 .review-action-bar .review-action-primary,
-.review-confirm-dialog-actions .review-action-primary {
+.review-confirm-dialog-actions .review-action-primary,
+.review-photo-actions .review-action-primary {
   background: #2456c9;
   border-color: #2456c9;
   color: #ffffff;
@@ -868,12 +876,14 @@ body {
 }
 
 .review-action-bar .review-action-primary:not(:disabled):hover,
-.review-confirm-dialog-actions .review-action-primary:not(:disabled):hover {
+.review-confirm-dialog-actions .review-action-primary:not(:disabled):hover,
+.review-photo-actions .review-action-primary:not(:disabled):hover {
   background: #1d49ad;
 }
 
 .review-action-bar .review-action-primary:disabled,
-.review-confirm-dialog-actions .review-action-primary:disabled {
+.review-confirm-dialog-actions .review-action-primary:disabled,
+.review-photo-actions .review-action-primary:disabled {
   background: #a9bce7;
   border-color: #a9bce7;
   color: #ffffff;
