@@ -339,6 +339,58 @@ body {
   background: #f7f9fb;
 }
 
+.defect-summary-row td {
+  border-top: 1px solid #cbd3dc;
+  background: #ffffff;
+}
+
+.defect-summary-row td:first-child,
+.defect-fact-detail-row td:first-child {
+  border-left: 4px solid #8d99a6;
+}
+
+.defect-summary-row td:last-child,
+.defect-fact-detail-row td:last-child {
+  border-right: 1px solid #cbd3dc;
+}
+
+.defect-fact-detail-row td {
+  border-bottom: 1px solid #cbd3dc;
+}
+
+.defect-photo-group.confirmed .defect-summary-row td:first-child,
+.defect-photo-group.confirmed .defect-fact-detail-row td:first-child {
+  border-left-color: #2f855a;
+}
+
+.defect-photo-group.expanded .defect-summary-row td,
+.defect-photo-group.expanded .defect-fact-detail-row td,
+.defect-photo-group.expanded .defect-photo-detail-row > td {
+  border-color: #6f94e8;
+}
+
+.defect-photo-group.expanded .defect-summary-row td:first-child,
+.defect-photo-group.expanded .defect-fact-detail-row td:first-child {
+  border-left-color: #2456c9;
+}
+
+.defect-photo-group.expanded .defect-fact-detail-row td {
+  border-bottom: 0;
+}
+
+.defect-photo-group.expanded .defect-photo-detail-row > td {
+  border-right: 1px solid #6f94e8;
+  border-bottom: 1px solid #6f94e8;
+  border-left: 4px solid #2456c9;
+}
+
+.defect-group-spacer td {
+  height: 12px;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+}
+
 .defect-fact-detail-row label,
 .review-note-field {
   display: grid;

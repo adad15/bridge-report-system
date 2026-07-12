@@ -45,9 +45,16 @@ export function DefectPhotoGroup({ draft, defect, importRecordId, baseUrl, expan
     if (initialPhotoCandidateId && photos.some((photo) => photo.candidate_id === initialPhotoCandidateId)) setActivePhotoId(initialPhotoCandidateId);
   }, [initialPhotoCandidateId, photos]);
 
+  const groupClassName = [
+    "defect-photo-group",
+    expanded ? "expanded" : "",
+    defect.group_review_status === "已确认" ? "confirmed" : "pending",
+    disabled ? "controls-disabled" : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <tbody className={disabled ? "defect-photo-group controls-disabled" : "defect-photo-group"} aria-disabled={disabled}>
-      <tr className={expanded ? "data-table-row-selected" : ""}>
+    <tbody className={groupClassName} aria-disabled={disabled}>
+      <tr className={expanded ? "defect-summary-row data-table-row-selected" : "defect-summary-row"}>
         <td><select aria-label="结构部位" value={defect.structure_part} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "structure_part", value: event.target.value as StructurePart })}>{STRUCTURE_PARTS.map((part) => <option key={part}>{part}</option>)}</select></td>
         <td><input aria-label="构件类别" value={defect.component_name} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_name", value: event.target.value })} /></td>
         <td><input aria-label="构件编号" value={defect.component_alias ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_alias", value: event.target.value || null })} /></td>
@@ -94,6 +101,7 @@ export function DefectPhotoGroup({ draft, defect, importRecordId, baseUrl, expan
           </td>
         </tr>
       ) : null}
+      <tr className="defect-group-spacer" aria-hidden="true"><td colSpan={6} /></tr>
     </tbody>
   );
 }
