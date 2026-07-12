@@ -14,15 +14,16 @@ export function App() {
   );
 }
 
-// 校对工作台是三栏宽页面，需要突破 .app-content 给普通页面用的 880px 宽度上限。
-// useLocation 只能在 Router 的子组件里调用，所以拆出这一层，而不是在 App() 里直接判断。
+// 校对工作台是应用式工作台页面（占满视口、页眉/侧栏/底栏固定），需要突破 .app-content
+// 给普通页面用的 880px 居中卡片流。useLocation 只能在 Router 的子组件里调用，所以拆出
+// 这一层，而不是在 App() 里直接判断。
 function AppShell() {
   const location = useLocation();
   const isReviewWorkspace = /\/review$/.test(location.pathname);
 
   return (
-    <main className="app-shell">
-      <div className={isReviewWorkspace ? "app-content app-content-wide" : "app-content"}>
+    <main className={isReviewWorkspace ? "app-shell app-shell-workbench" : "app-shell"}>
+      <div className={isReviewWorkspace ? "app-content app-content-workbench" : "app-content"}>
         <nav className="top-nav">
           <NavLink to="/" end className={({ isActive }) => (isActive ? "top-nav-link active" : "top-nav-link")}>
             首页

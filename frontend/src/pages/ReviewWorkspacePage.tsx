@@ -1,7 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import type { ApiErrorIssue } from "../api/apiClient";
 import { ApiError } from "../api/apiClient";
 import type { ConfirmResponse, PreflightResponse, ReviewResponse } from "../api/reviewApi";
 import { cancelImport, confirmImport, fetchReview, runPreflight, saveReviewDraft } from "../api/reviewApi";
@@ -16,6 +15,8 @@ import { OverviewHeader } from "../review/components/OverviewHeader";
 import { RatingsSection } from "../review/components/RatingsSection";
 import { RawJsonSection } from "../review/components/RawJsonSection";
 import { ReviewActionBar } from "../review/components/ReviewActionBar";
+import type { SaveMessageState } from "../review/components/ReviewMessageDock";
+import { ReviewMessageDock } from "../review/components/ReviewMessageDock";
 import type { GroupKey } from "../review/components/ReviewSidebar";
 import { ReviewSidebar } from "../review/components/ReviewSidebar";
 import type { AttentionItem } from "../review/grouping";
@@ -84,15 +85,6 @@ export function ReviewWorkspacePage() {
   return <ReviewWorkspaceLoaded response={response} importRecordId={importRecordId} />;
 }
 
-// 保存草稿 / 入库前检查 / 确认入库失败后展示给用户的提示；成功也复用同一个状态
-// （kind="success"）显示"已保存"这类短暂反馈。issues 只有 400 契约校验失败
-// （code=contract_validation_failed）时后端才会填，逐条列出 {path, message}。
-interface SaveMessageState {
-  kind: "success" | "error";
-  text: string;
-  issues?: ApiErrorIssue[];
-}
-
 const NO_OP_DISPATCH: (action: ReviewDraftAction) => void = () => {};
 
 function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewResponse; importRecordId: string }) {
@@ -124,6 +116,13 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   const attentionItems = needsAttention(draft);
   const reviewSession = deriveReviewSession(sessionImportStatus, response.contract_compatibility);
   const readOnly = reviewSession.readOnly;
+
+  // "已保存"这类成功反馈 3 秒后自动消失（布局设计 §8）；错误消息常驻，由用户手动关闭。
+  useEffect(() => {
+    if (saveMessage?.kind !== "success") return;
+    const timer = window.setTimeout(() => setSaveMessage(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [saveMessage]);
 
   function selectCandidate(kind: AttentionItem["kind"], candidateId: string) {
     setSelected({ kind, candidateId });
@@ -276,110 +275,21 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   const actionsDisabled = readOnly || busy;
   const sectionDispatch = readOnly ? NO_OP_DISPATCH : dispatch;
 
+  // 只读时整条底栏换成只读横幅（布局设计 §9），入库统计拼在横幅文字里。
+  const readOnlyNotice = readOnly
+    ? `${reviewSession.bannerText ?? ""}${
+        confirmResult
+          ? ` 已入库：病害 ${confirmResult.written.defect_observations}、尺寸 ${confirmResult.written.defect_measurements}、` +
+            `照片 ${confirmResult.written.defect_photos}、评分 ${confirmResult.written.condition_ratings}；` +
+            `年度版本 v${confirmResult.version_number}。`
+          : ""
+      }`
+    : undefined;
+
   return (
     <div className="review-workspace">
-      {readOnly ? (
-        <section className="status-panel review-readonly-banner">
-          <p>
-            {reviewSession.bannerText}
-            {confirmResult
-              ? ` 已入库：病害 ${confirmResult.written.defect_observations}、尺寸 ${confirmResult.written.defect_measurements}、` +
-                `照片 ${confirmResult.written.defect_photos}、评分 ${confirmResult.written.condition_ratings}；` +
-                `年度版本 v${confirmResult.version_number}。`
-              : null}
-          </p>
-          <button type="button" onClick={() => navigate(`/bridges/${response.bridge.id}`)}>
-            返回桥梁详情
-          </button>
-        </section>
-      ) : null}
       <OverviewHeader response={response} draft={draft} counts={counts} />
-      <ReviewActionBar
-        onSaveDraft={actionsDisabled ? undefined : () => void handleSaveDraft(draft)}
-        onBatchConfirmNormal={actionsDisabled ? undefined : () => void handleBatchConfirmNormal()}
-        onPreflight={canRunPreflight(dirty, busy, readOnly) ? () => void handlePreflight() : undefined}
-        onConfirmImport={actionsDisabled || !canPressConfirm(preflight) ? undefined : handleConfirmImportClick}
-        onCancelImport={actionsDisabled ? undefined : () => void handleCancelImport()}
-      />
-      {dirty && !readOnly ? (
-        <section className="status-panel review-dirty-hint">
-          <p className="warning-text">有未保存的修改，请先点击“保存草稿”，再进行入库前检查。</p>
-        </section>
-      ) : null}
-      {saveMessage ? (
-        <section className="status-panel review-save-message">
-          <p className={saveMessage.kind === "error" ? "error-text" : undefined}>{saveMessage.text}</p>
-          {saveMessage.issues && saveMessage.issues.length > 0 ? (
-            <ul className="review-warning-list">
-              {saveMessage.issues.map((issue, index) => (
-                <li key={`${issue.path}-${index}`} className="error-text">
-                  {issue.path}: {issue.message}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
-      ) : null}
-      {preflight ? (
-        <section className="status-panel review-preflight-panel">
-          <h2>入库前检查结果</h2>
-          <p>{preflight.can_confirm ? "检查通过，可以确认入库。" : "仍有阻断项，暂不能入库。"}</p>
-          {preflight.blocking_errors.length > 0 ? (
-            <ul className="review-warning-list">
-              {preflight.blocking_errors.map((issue, index) => (
-                <li key={`blocking-${index}`} className="error-text">
-                  {issue.code}：{issue.message}
-                  {issue.target_candidate_id ? `（${issue.target_candidate_id}）` : ""}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {preflight.warnings.length > 0 ? (
-            <ul className="review-warning-list">
-              {preflight.warnings.map((issue, index) => (
-                <li key={`warning-${index}`} className="warning-text">
-                  {issue.code}：{issue.message}
-                  {issue.target_candidate_id ? `（${issue.target_candidate_id}）` : ""}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
-      ) : null}
-      {confirmDialogOpen ? (
-        <section className="status-panel review-confirm-dialog">
-          <h2>确认修订版入库</h2>
-          <p>同桥同年已有当前有效事实，需显式确认为修订版才能继续入库；确认后旧版本会标记为已被修订。</p>
-          {revisionHint ? <p className="warning-text">{revisionHint}</p> : null}
-          <label className="review-confirm-dialog-checkbox">
-            <input
-              type="checkbox"
-              disabled={busy}
-              checked={revisionChecked}
-              onChange={(event) => setRevisionChecked(event.target.checked)}
-            />
-            作为修订版确认
-          </label>
-          <textarea
-            disabled={busy}
-            className="review-confirm-dialog-note"
-            value={revisionNote}
-            onChange={(event) => setRevisionNote(event.target.value)}
-            placeholder="请填写修订说明"
-            rows={3}
-          />
-          {revisionError ? <p className="error-text">{revisionError}</p> : null}
-          <div className="review-confirm-dialog-actions">
-            <button type="button" onClick={handleConfirmDialogSubmit} disabled={busy}>
-              确认修订版入库
-            </button>
-            <button type="button" onClick={() => setConfirmDialogOpen(false)} disabled={busy}>
-              取消
-            </button>
-          </div>
-        </section>
-      ) : null}
-      <div className="review-columns">
+      <div className="review-body">
         <ReviewSidebar counts={counts} active={activeGroup} onSelect={setActiveGroup} />
         <div className="review-main">
           <div className="review-main-tools">
@@ -408,6 +318,55 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
           {activeGroup === "raw_json" ? <RawJsonSection draft={draft} /> : null}
         </div>
       </div>
+      <div className="review-footer">
+        <ReviewMessageDock saveMessage={saveMessage} preflight={preflight} onDismissSaveMessage={() => setSaveMessage(null)} />
+        <ReviewActionBar
+          dirty={dirty}
+          readOnlyNotice={readOnlyNotice}
+          onBackToBridge={() => navigate(`/bridges/${response.bridge.id}`)}
+          onSaveDraft={actionsDisabled ? undefined : () => void handleSaveDraft(draft)}
+          onBatchConfirmNormal={actionsDisabled ? undefined : () => void handleBatchConfirmNormal()}
+          onPreflight={canRunPreflight(dirty, busy, readOnly) ? () => void handlePreflight() : undefined}
+          onConfirmImport={actionsDisabled || !canPressConfirm(preflight) ? undefined : handleConfirmImportClick}
+          onCancelImport={actionsDisabled ? undefined : () => void handleCancelImport()}
+        />
+      </div>
+      {confirmDialogOpen ? (
+        // 修订确认是关键决策弹窗：点击遮罩不关闭（避免误触丢失已填写的修订说明），只有"取消"按钮关闭。
+        <div className="review-modal-backdrop" role="presentation">
+          <section className="status-panel review-confirm-dialog" role="dialog" aria-modal="true" aria-label="确认修订版入库">
+            <h2>确认修订版入库</h2>
+            <p>同桥同年已有当前有效事实，需显式确认为修订版才能继续入库；确认后旧版本会标记为已被修订。</p>
+            {revisionHint ? <p className="warning-text">{revisionHint}</p> : null}
+            <label className="review-confirm-dialog-checkbox">
+              <input
+                type="checkbox"
+                disabled={busy}
+                checked={revisionChecked}
+                onChange={(event) => setRevisionChecked(event.target.checked)}
+              />
+              作为修订版确认
+            </label>
+            <textarea
+              disabled={busy}
+              className="review-confirm-dialog-note"
+              value={revisionNote}
+              onChange={(event) => setRevisionNote(event.target.value)}
+              placeholder="请填写修订说明"
+              rows={3}
+            />
+            {revisionError ? <p className="error-text">{revisionError}</p> : null}
+            <div className="review-confirm-dialog-actions">
+              <button type="button" onClick={() => setConfirmDialogOpen(false)} disabled={busy}>
+                取消
+              </button>
+              <button type="button" className="review-action-primary" onClick={handleConfirmDialogSubmit} disabled={busy}>
+                确认修订版入库
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {evidenceOpen ? (
         <div className="review-modal-backdrop" role="presentation" onMouseDown={() => setEvidenceOpen(false)}>
           <div className="review-evidence-dialog" role="dialog" aria-modal="true" aria-label="来源证据" onMouseDown={(event) => event.stopPropagation()}>

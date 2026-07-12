@@ -24,7 +24,7 @@ interface ReviewSidebarProps {
 
 export function ReviewSidebar({ counts, active, onSelect }: ReviewSidebarProps) {
   return (
-    <nav className="status-panel review-sidebar">
+    <nav className="review-sidebar">
       {GROUPS.map((group) => {
         const count = group.count(counts);
         return (
