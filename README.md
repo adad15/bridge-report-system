@@ -119,6 +119,8 @@ C++ API endpoints used by the review workspace:
 
 ```text
 GET  /api/import-records/{import_record_id}/review              # load candidate JSON + statistics
+POST /api/import-records/{import_record_id}/parse-word          # call Python, archive photos, persist draft
+GET  /api/import-records/{import_record_id}/photos/{candidate_id}/content # controlled archived photo content
 PUT  /api/import-records/{import_record_id}/review-draft         # save edited draft (stays 待校对)
 POST /api/import-records/{import_record_id}/preflight-confirm    # blocking-error/warning check before import
 POST /api/import-records/{import_record_id}/confirm              # write defect/measurement/photo/rating facts
@@ -147,7 +149,42 @@ $env:PSQL_EXE = "D:\PostgreSQL\18\bin\psql.exe"   # only if psql is not on PATH
 powershell -ExecutionPolicy Bypass -File scripts/dev/seed-module05-review-sample.ps1
 ```
 
+The seed also creates a deterministic PNG, its `archived_files` row, and the
+`import_record_files` attachment link. Override the default archive root with
+`BRIDGE_REPORT_ARCHIVE_ROOT` when the C++ service uses a different local path.
+
+Start the complete local stack in this order, from the repository root, using a
+separate PowerShell window for each long-running service:
+
+```powershell
+# 1. PostgreSQL must already be running and migrations applied.
+powershell -ExecutionPolicy Bypass -File scripts/dev/start-python-tools.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/start-cpp-backend.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/start-frontend.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/check-health.ps1
+```
+
+Default URLs are Python `127.0.0.1:18081`, C++ `127.0.0.1:18080`, and frontend
+`127.0.0.1:5173`.
+
 ### Manual end-to-end verification performed
+
+The Liaoning trunk-road real Word fixture was verified through the production
+C++ -> Python -> archive -> PostgreSQL path. Baseline results: 25 defects, 31
+photo candidates, 36 temporary Word images, 31 archived photos, and 15 rating
+items. The first controlled photo-content request returned HTTP 200. The fixture
+under `test-inputs/` and runtime archive files are intentionally not committed.
+
+Run the environment-gated real Word parser regression with:
+
+```powershell
+$env:BRIDGE_REPORT_REAL_WORD_PATH = "D:\path\to\liaoning-report.docx"
+Set-Location tools-python
+uv run pytest -q tests/importers/test_real_word_regression.py
+```
+
+Without the variable, the test is reported as skipped and does not require the
+private report fixture.
 
 With PostgreSQL, the C++ backend (`127.0.0.1:18080`), and the Vite dev server
 (`127.0.0.1:5173`) running:

@@ -21,6 +21,12 @@ $env:PGCLIENTENCODING = "UTF8"
 $sampleBridgeName = "绕阳河二号桥（模块05样例）"
 $seedSqlPath = Join-Path $repoRoot "database/dev/seed_module05_review_sample.sql"
 $sampleJsonPath = Join-Path $repoRoot "samples/contracts/bridge_annual_inspection_data.valid.json"
+$archiveRoot = $env:BRIDGE_REPORT_ARCHIVE_ROOT
+if ([string]::IsNullOrWhiteSpace($archiveRoot)) {
+  $archiveRoot = Join-Path $repoRoot "backend-cpp/archive"
+}
+$samplePhotoRelativePath = "photos/2.1-1.jpg"
+$samplePhotoPath = Join-Path $archiveRoot $samplePhotoRelativePath
 
 if (-not (Test-Path $seedSqlPath)) {
   throw "Seed SQL not found: $seedSqlPath"
@@ -28,6 +34,19 @@ if (-not (Test-Path $seedSqlPath)) {
 if (-not (Test-Path $sampleJsonPath)) {
   throw "Sample contract JSON not found: $sampleJsonPath"
 }
+
+# 固定 JPEG：样例照片只用于验证受控内容接口和前端图片渲染，不冒充真实病害照片。
+$samplePhotoDirectory = Split-Path -Parent $samplePhotoPath
+New-Item -ItemType Directory -Force -Path $samplePhotoDirectory | Out-Null
+Add-Type -AssemblyName System.Drawing
+$bitmap = New-Object System.Drawing.Bitmap 16, 16
+try {
+  $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+  try { $graphics.Clear([System.Drawing.Color]::LightGray) } finally { $graphics.Dispose() }
+  $bitmap.Save($samplePhotoPath, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+} finally { $bitmap.Dispose() }
+$samplePhotoSize = (Get-Item -LiteralPath $samplePhotoPath).Length
+$samplePhotoHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $samplePhotoPath).Hash.ToLowerInvariant()
 
 Write-Host "Applying seed SQL (delete + reinsert sample bridge/year/import record)..."
 & $psqlExe $databaseUrl -v ON_ERROR_STOP=1 -f $seedSqlPath
@@ -57,6 +76,17 @@ $updateAndSelectSql = -join @(
   "update import_records", [Environment]::NewLine,
   "set parsed_result_json = '", $escapedJson, "'::jsonb", [Environment]::NewLine,
   "where bridge_id in (select id from bridges where bridge_name = '", $sampleBridgeName, "');", [Environment]::NewLine,
+  [Environment]::NewLine,
+  "with target as (", [Environment]::NewLine,
+  "  select ir.id as import_record_id, ir.bridge_id, ir.inspection_year_id", [Environment]::NewLine,
+  "  from import_records ir join bridges b on b.id = ir.bridge_id", [Environment]::NewLine,
+  "  where b.bridge_name = '", $sampleBridgeName, "'", [Environment]::NewLine,
+  "), sample_file as (", [Environment]::NewLine,
+  "  insert into archived_files (bridge_id, inspection_year_id, original_file_name, current_file_name, storage_relative_path, file_type, file_purpose, file_extension, file_size_bytes, file_hash, source_description)", [Environment]::NewLine,
+  "  select bridge_id, inspection_year_id, 'module05-sample.jpg', '2.1-1.jpg', '", $samplePhotoRelativePath, "', '图片', 'Word病害照片', '.jpg', ", $samplePhotoSize, ", '", $samplePhotoHash, "', '模块05确定性界面样例' from target returning id", [Environment]::NewLine,
+  ")", [Environment]::NewLine,
+  "insert into import_record_files (import_record_id, archived_file_id, file_role, process_status, process_note)", [Environment]::NewLine,
+  "select target.import_record_id, sample_file.id, '附件', '处理成功', '照片候选：photo_0001' from target cross join sample_file;", [Environment]::NewLine,
   [Environment]::NewLine,
   "select id, system_number from import_records", [Environment]::NewLine,
   "where bridge_id in (select id from bridges where bridge_name = '", $sampleBridgeName, "');", [Environment]::NewLine

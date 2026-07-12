@@ -54,6 +54,9 @@ where import_record_id in (
   where bridge_id in (select id from bridges where bridge_name = '绕阳河二号桥（模块05样例）')
 );
 
+delete from archived_files
+where source_description = '模块05确定性界面样例';
+
 delete from import_records
 where bridge_id in (select id from bridges where bridge_name = '绕阳河二号桥（模块05样例）');
 
