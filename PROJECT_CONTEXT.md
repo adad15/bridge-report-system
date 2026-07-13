@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT
 
-更新时间：2026-07-07
+更新时间：2026-07-13
 
 ## 项目一句话
 
@@ -21,9 +21,9 @@
 
 ```text
 继续 bridge-report-system 项目。仓库路径：D:\vs2022 code\bridge-report-system。
-当前应该在分支 feature/05-review-workspace。
-模块 01、02、03、04 已完成，现在开始讨论并编写模块 05：人工校对工作台。
-请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/2026-07-01-bridge-report-system-design.md、docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md、docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md、docs/superpowers/specs/modules/04-word-importer-prototype.md，然后继续模块 05 的需求讨论和实施计划。先不要写代码。
+当前应该在分支 feature/06-component-defect-archive。
+模块 01、02、03、04、05 已完成；模块 06 的设计已确认，当前应先审阅模块 06 规格和跨模块变更提案，再编写实施计划。
+请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md、docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md、docs/superpowers/specs/modules/04-word-importer-prototype.md、docs/superpowers/specs/modules/05-review-workspace.md、docs/superpowers/specs/modules/06-component-defect-archive.md。未确认实施计划前不要大规模编码。
 ```
 
 ## 当前进度
@@ -32,11 +32,14 @@
 - 模块 2 `02-postgresql-schema-and-file-archive` 已完成实施：数据库迁移、系统编号工具、归档路径工具和数据库 smoke test 已通过。
 - 模块 2 设计文档提交号：`52ee0ab docs: add module 02 schema and archive design`。
 - 模块 3 `03-bridge-annual-inspection-data-contract` 已完成实施并推送到 GitHub。
-- 模块 3 已定义并实现 `BridgeAnnualInspectionData` JSON 契约、JSON Schema、Python Pydantic 模型、C++ JsonCpp 校验器和前端 TypeScript 类型/运行时校验。
-- 当前分支为 `feature/05-review-workspace`。
+- 模块 3 已定义并实现 `BridgeAnnualInspectionData` 1.1 JSON 契约、JSON Schema、Python Pydantic 模型、C++ JsonCpp 校验器和前端 TypeScript 类型/运行时校验；1.2 的详细位置、标度、扣分和构件评分双值校验已完成设计，尚待实施。
+- 当前分支为 `feature/06-component-defect-archive`。
 - 模块 4 `04-word-importer-prototype` 已完成并推送到 GitHub：第一版支持 `.docx`、`rule_profile="辽宁国省干线"`、第二章三张病害检查表、病害照片抽取匹配、第四章评分表和模块 3 契约输出。
 - 绕阳河二号桥真实软件报告本地验收已覆盖：病害候选 25 条、病害照片候选 31 条、临时图片 36 个、第四章总分 85.61/2类、尺寸低置信误报清零。
 - 模块 5 `05-review-workspace` 已完成实施：后端确认入库事务（C++）与前端校对工作台（React）已落地，读取 `import_records.parsed_result_json`，按 warning/error 分组人工校对，保存草稿，五个操作按钮（保存草稿/批量确认普通候选/入库前检查/确认年度事实入库/取消导入）全部接后端，修订版确认弹窗和确认后只读态已实现。已完成端到端手工验收：编辑保存、批量确认、入库前检查解锁确认、首次确认入库写入四张事实表、同桥同年二次导入的修订版确认路径（含 409 拒绝校验）、取消导入均通过。
+- 模块 5 已推送到 GitHub；分支 `feature/05-review-workspace` 与远端同步，提交 `52b9772` 为模块 05 当前末端。
+- 模块 6 `06-component-defect-archive` 已完成需求讨论和设计确认：采用只读档案优先、左侧构件列表 + 右侧详情、病害卡片下按年度纵向展示的 A1 方案；病害线索只由人工创建或绑定，模块 06 不生成发展/减轻/修复/新增结论。
+- 模块 6 实施前置为合同 1.2 跨模块升级，详见 `docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md`。
 
 ## 已确认方向
 
@@ -133,8 +136,10 @@
 - 后续可能从正式报告抽取特定章节文本，统一预留在 `report_text_candidates`，但文本候选不能直接创建病害事实、不能覆盖数据库事实。
 - 病害尺寸必须保留原文 `measurement_text`，结构化尺寸 `measurements[]` 尽量解析，解析不稳时写 warning。
 - 照片编号以病害检查表中的照片编号列为主依据，图片区标题或说明作为校验依据。
-- 技术状况评定按表 4.1-2 建模为 `overall`、`structure_parts`、`evaluation_parts`。
-- 评分最小单元是评价部件，例如上部承重构件、上部一般构件、支座、翼墙、耳墙等。
+- 技术状况评定原 1.1 按表 4.1-2 建模为 `overall`、`structure_parts`、`evaluation_parts`；1.2 增加第二章具体构件的 `component_ratings[]`。
+- 具体构件（如 `2-1#板`）有自己的年度构件评分；评价部件（如上部承重构件）仍保留部件评分，二者不是同一层级。
+- 构件评分依据 JTG/T H21-2011 第 4.1.1 条，按多个病害扣分累计计算，不是简单取单个病害的最低分。
+- 1.2 保存 Word 来源分、规范复算分、最终确认分和校验状态；第一版只使用 Word 已给出的 DP，不从病害标度反推 DP。
 - 等级最小单元是结构分部，即上部结构、下部结构、桥面系；`evaluation_parts[]` 不设置等级。
 - 对比候选不是 Python 从 Word 抽取的结果，而是在第 N 年事实确认入库后，由 C++ 读取数据库第 N-1 年事实生成。
 
@@ -147,7 +152,7 @@
 - Python 接收 C++ 传入的 `rule_profile`，不自动识别模板；当前已实现 `辽宁国省干线`。
 - 软件生成 Word 第一版只抽取第二章结构病害检查表、病害照片和第四章全桥技术状况综合评定。
 - 正式 Word 第一版也先聚焦第二章结构病害检查表、病害照片和第四章评定表，后续再扩展正式报告特定章节文本抽取。
-- 辽宁国省干线当前只从 `表2.1-1`、`表2.2-1`、`表2.3-1` 抽取病害，从 `表4.1-1`、`表4.1-2` 识别评分上下文，其中评分主数据来自 `表4.1-2`。
+- 辽宁国省干线当前实现从 `表2.1-1`、`表2.2-1`、`表2.3-1` 抽取病害，从 `表4.1-1`、`表4.1-2` 识别评分上下文；合同 1.2 实施时还要从表 2.x-1 抽取详细位置、标度、病害扣分和具体构件评分。
 - 真实样例中的 `表4.1-2` 矩阵布局、图片下方表格题注、`照片2.11` 紧凑编号、`S=0.6×0.1m²` 与 `长度：5m` 等尺寸表达已纳入规则。
 - 输出必须是模块 3 的 `BridgeAnnualInspectionData` JSON 契约。
 - 模块 4 不直接写数据库，不负责人工校对页面，不负责历史病害对比算法。
@@ -157,7 +162,7 @@
 ## 模块 5 已实现状态
 
 - 模块 5 名称：`05-review-workspace`。
-- 当前分支：`feature/05-review-workspace`。
+- 模块 05 完成分支：`feature/05-review-workspace`，已推送并与远端同步。
 - 第一版采用“完整校对入库闭环”：桥梁 -> 年度检测任务 -> 导入记录 -> 校对工作台 -> 保存草稿 -> 入库前检查 -> 确认年度事实入库。
 - 页面入口按桥梁年度组织，不单独做全系统待校对任务中心。
 - 页面按“需要处理 / 病害与照片 / 技术状况评定 / 原始 JSON”组织；来源证据通过按钮弹窗查看。
@@ -171,6 +176,20 @@
 - 普通候选允许批量确认，但确认入库前必须由 C++ 后端重新校验。
 - 同桥同年已有当前有效事实时，必须显式作为修订版确认，不允许静默覆盖。
 - 模块 5 不生成历史病害对比候选；对比算法和对比确认页放到后续模块。
+
+## 模块 6 已确认设计
+
+- 模块名称：`06-component-defect-archive`。
+- 当前分支：`feature/06-component-defect-archive`。
+- 主页面只读优先：左侧构件列表，右侧构件档案详情。
+- 构件只要在任一年度当前有效版本中存在正式病害，就进入默认列表；最新年度未出现也不能消失。
+- 默认只读各年度当前有效版本，旧修订版从独立历史入口查看且不参与统计。
+- 详情以病害为一级单位，以年度为二级单位；例如 `2-1#板 -> 蜂窝、麻面 -> 2025 / 2024`。
+- 病害线索保存标准详细位置，年度观测保留当年实际位置原文；如 `0#台顶处`、`小桩号立面`、`左侧端部`。
+- 系统可按同构件、病害类型、详细位置给出候选，但只能由用户绑定已有线索、创建新线索或保持不确定。
+- 模块 06 只写病害线索和绑定关系，不修改年度病害事实，不生成对比结论。
+- 构件年度评分显示来源值、规范复算值、最终确认值、校验状态和计算证据。
+- 模块 07 `07-defect-comparison-engine` 再基于已整理线索判断发展、减轻、修复、新增等变化。
 
 ## 核心模块
 
@@ -202,14 +221,13 @@
 
 这是核心页面，不是附加功能。
 
-选中一座桥后，系统应展示所有曾经出现过病害或维护记录的构件，包括已经修复的构件。点选构件后展示：
+选中一座桥后，模块 06 第一版展示所有曾在当前有效年度版本中出现正式病害的构件。维护记录和“已经修复”的结论待后续模块接入。点选构件后展示：
 
-- 病害时间轴
-- 维护时间轴
-- 历年观测记录
+- 按病害线索组织的历年观测记录
+- 线索标准详细位置和年度实际位置
 - 照片
 - 尺寸变化
-- 对比状态
+- 构件年度评分与校验证据
 - 报告引用
 - 原始来源
 
@@ -279,10 +297,10 @@
 
 推荐下一步：
 
-1. 审阅模块 05 人工校对工作台设计文档。
-2. 基于模块 05 设计文档编写实施计划。
-3. 第一版优先实现读取候选 JSON、保存校对草稿、入库前检查和确认年度事实入库。
-4. 若继续支持吉林国省干线、辽宁鹤大高速等模板，按 `word_rules` 规则集接口新增独立规则模块，不改模块 05 主流程。
+1. 审阅跨模块变更提案和模块 06 设计文档。
+2. 审阅通过后编写模块 06 实施计划，实施顺序固定为合同 1.2 -> Python 解析 -> 模块 05 校对/确认 -> 模块 06 档案与线索。
+3. 实施中保持真实 Word 原回归数量，并新增 `1-1#板=65`、`1-2#板=65`、`2-1#板=55.81`、上部承重构件 `86.62`、全桥 `85.61` 精确断言。
+4. 模块 06 验收后再进入模块 07 病害对比引擎。
 
 ## 设计文档
 
@@ -313,6 +331,14 @@
 模块 5 人工校对工作台见：
 
 `docs/superpowers/specs/modules/05-review-workspace.md`
+
+构件评分与病害详细位置跨模块变更提案见：
+
+`docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md`
+
+模块 6 构件病害档案与病害线索整理见：
+
+`docs/superpowers/specs/modules/06-component-defect-archive.md`
 
 模块 5 本次讨论设计记录见：
 

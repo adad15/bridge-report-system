@@ -1,6 +1,9 @@
 # 03 桥梁年度检测数据 JSON 契约
 
 日期：2026-07-03
+当前合同版本：1.2（2026-07-13 修订）
+
+> 2026-07-13 修订说明：本次修订依据 `docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md`，把病害详细位置、病害标度、病害扣分和构件评分双值校验纳入合同 1.2。本文中与本修订冲突的“只保存第四章评分、不复算构件评分”“标度/扣分/构件评分不进入合同”等 1.1 约定不再适用；完整 DP 推导规则库和更高层级评分重算仍不在模块 03 范围内。
 
 ## 1. 背景与目标
 
@@ -43,7 +46,7 @@
 5. 病害对比算法。
 6. 章节草稿生成规则。
 7. AI 润色和 Milvus 检索。
-8. 重新计算技术状况评分。
+8. 根据病害类型和标度独立推导病害扣分，或重新计算部件、结构分部和全桥评分。
 9. 从正式报告自然语言正文中抽取病害事实。
 
 ## 3. 上游依赖
@@ -92,7 +95,7 @@
 2. 业务值、枚举值和报告原文保留中文。
 3. 第一版只读取 Word 中可信的结构化表格区域。
 4. 软件 Word 和正式 Word 都优先从第二章结构病害检查表抽取病害。
-5. 第四章评定只保存 Word 已有评分结果，不在本模块重新计算。
+5. 第四章评定保存 Word 已有评分；第二章构件评分同时保存 Word 来源值，并允许依据 Word 已给出的病害扣分按 JTG/T H21-2011 第 4.1.1 条复算校验。
 6. 对比候选在年度事实确认入库后生成。
 7. 对比候选确认前仍存在 `parsed_result_json`，确认后才写正式对比表。
 
@@ -187,7 +190,7 @@ Python 工具服务只负责把 Word 中可信区域转换成候选 JSON。C++ �
 ```json
 {
   "name": "BridgeAnnualInspectionData",
-  "version": "1.1",
+  "version": "1.2",
   "generated_at": "2026-07-03T10:30:00+08:00",
   "producer": "python-tools",
   "parser_name": "word_table_importer",
@@ -325,6 +328,8 @@ warning 用于表达可继续流程但需要人工关注的问题。
   "component_alias": "1#孔主梁",
   "defect_type": "裂缝",
   "defect_location": "梁底",
+  "defect_scale": 2,
+  "defect_deduction": 35.0,
   "defect_description": "梁底存在横向裂缝",
   "quantity_text": "1处",
   "measurement_text": "L=0.8m，W=0.12mm",
@@ -372,6 +377,8 @@ warning 用于表达可继续流程但需要人工关注的问题。
 7. `photo_numbers[]` 只保存病害行中的照片编号；图片文件匹配放在 `photos[]`。
 8. `group_review_status` 必填，只允许 `待确认` 或 `已确认`；解析器新建候选时写入 `待确认`。
 9. `confirmed_missing_photo_numbers[]` 必填，只允许唯一字符串；解析器新建候选时写入空数组。
+10. `defect_location` 保存当年报告的详细位置原文，第一版不拆分结构化位置字段。
+11. `defect_scale` 和 `defect_deduction` 分别表示规范病害标度和 Word 病害扣分；不得从 `severity` 取值。
 
 尺寸解析原则：
 
@@ -440,7 +447,7 @@ warning 用于表达可继续流程但需要人工关注的问题。
 
 ## 10. ratings 技术状况评定
 
-`ratings` 来自第四章总体技术状况评定表。第一版只保存 Word 中已有的评分和等级，不重新计算评分。
+`ratings` 同时承载第二章构件评分和第四章总体技术状况评定。合同 1.2 保存 Word 中已有评分，并根据第二章已给出的病害扣分复算构件评分；不从标度反推扣分，也不重算部件、结构分部或全桥评分。
 
 根据表 4.1-2，总体技术状况评定表的层级是：
 
@@ -539,6 +546,27 @@ warning 用于表达可继续流程但需要人工关注的问题。
         "review_status": "待确认"
       }
     ],
+    "component_ratings": [
+      {
+        "component_ref": {
+          "structure_part": "上部结构",
+          "component_name": "上部承重构件",
+          "component_alias": "2-1#板"
+        },
+        "source_score": 55.81,
+        "calculated_score": 55.8076118446,
+        "confirmed_score": 55.81,
+        "score_validation_status": "一致",
+        "score_resolution_reason": null,
+        "deduction_defect_candidate_ids": ["defect_0001", "defect_0002"],
+        "calculation_details": {
+          "standard": "JTG/T H21-2011 4.1.1",
+          "ordered_deductions": [35.0, 20.0],
+          "rounding_scale": 2
+        },
+        "review_status": "待确认"
+      }
+    ],
     "warnings": []
   }
 }
@@ -549,8 +577,59 @@ warning 用于表达可继续流程但需要人工关注的问题。
 1. `ratings.overall` 写入 `condition_ratings`，`rating_level = 全桥`，`rating_item_name = 全桥`。
 2. `ratings.structure_parts[]` 写入 `condition_ratings`，`rating_level = 结构分部`，`rating_item_name = structure_part`，`grade` 有值。
 3. `ratings.evaluation_parts[]` 写入 `condition_ratings`，`rating_level = 部件`，`rating_item_name = evaluation_part`，`grade = null`。
+4. `ratings.component_ratings[]` 写入 `condition_ratings`，`rating_level = 构件`，绑定 `bridge_component_id`；`score` 保存最终确认分，来源分、复算分、状态和计算明细分别保存。
 
 `evaluation_parts[]` 不设置等级。等级最小单元是 `structure_parts[]` 中的上部结构、下部结构和桥面系。
+
+### 10.1 合同 1.2：病害详细位置、标度与扣分
+
+`defects[]` 在原有字段基础上增加或明确：
+
+```json
+{
+  "defect_location": "左侧端部",
+  "defect_scale": 2,
+  "defect_deduction": 35.0,
+  "severity": "info"
+}
+```
+
+- `defect_location` 是年度观测的详细位置原文，进入人工校对。
+- `defect_scale` 是规范病害标度，允许为空但不得用 `severity` 代替。
+- `defect_deduction` 是 Word 病害表给出的扣分 `DP`，允许为空但不得编造。
+- `severity` 仍只表示 warning/error 提示严重程度。
+
+### 10.2 合同 1.2：构件评分候选
+
+`ratings.component_ratings[]` 一条记录对应一个报告年度中的一个具体桥梁构件：
+
+```json
+{
+  "component_ref": {
+    "structure_part": "上部结构",
+    "component_name": "上部承重构件",
+    "component_alias": "2-1#板"
+  },
+  "source_score": 55.81,
+  "calculated_score": 55.8076118446,
+  "confirmed_score": 55.81,
+  "score_validation_status": "一致",
+  "score_resolution_reason": null,
+  "deduction_defect_candidate_ids": ["defect-1", "defect-2"],
+  "calculation_details": {
+    "standard": "JTG/T H21-2011 4.1.1",
+    "ordered_deductions": [35.0, 20.0],
+    "rounding_scale": 2
+  },
+  "review_status": "待确认"
+}
+```
+
+`score_validation_status` 只能是：`一致`、`不一致`、`无法复算`、`人工接受Word值`、`人工采用复算值`。复算时先按扣分降序排列，按第 4.1.1 条累计扣分公式计算，全程不得提前舍入；任一 `DP=100` 时构件评分为 0。
+
+`defect_scale` 为可空正整数；`defect_deduction`、`source_score`、`calculated_score`、`confirmed_score` 为可空的 0–100 数值。来源分和复算分按各自四舍五入到两位小数后的结果判断是否一致。不一致或无法复算时，解析器必须令 `confirmed_score=null`；用户在模块 05 选择最终分后写入 `confirmed_score`，并在 `score_resolution_reason` 保存必填原因。自动一致时可以预填来源分，`score_resolution_reason=null`。
+
+合同只表达校验事实和证据，不授权 Python 直接写正式表。最终确认值仍由模块 05 人工校对并由 C++ 主服务事务入库。
 
 ## 11. comparison_candidates 对比候选
 
@@ -761,7 +840,7 @@ comparison_candidates: 已确认 / 已修改 -> defect_comparisons
 {
   "contract": {
     "name": "BridgeAnnualInspectionData",
-    "version": "1.1",
+    "version": "1.2",
     "producer": "python-tools",
     "parser_name": "word_table_importer",
     "parser_version": "0.1.0"
@@ -889,11 +968,13 @@ comparison_candidates: 已确认 / 已修改 -> defect_comparisons
 3. 能表达病害尺寸原文和结构化尺寸。
 4. 能表达照片编号、抽取图片和匹配状态。
 5. 能表达表 4.1-2 的全桥评分、结构分部等级和评价部件评分。
-6. 能表达第 N 年事实确认后生成的历史对比候选。
-7. 能明确候选数据和正式表之间的入库边界。
-8. 能保留来源、置信度、校对状态、warning 和 error。
-9. 不抽取模板正文作为事实或参考。
-10. 为正式报告文本抽取保留扩展口。
+6. 能表达表 2.x-1 的详细位置、病害标度、病害扣分和具体构件评分。
+7. 能表达构件评分的 Word 来源值、规范复算值、最终确认值、校验状态和计算证据。
+8. 能表达第 N 年事实确认后生成的历史对比候选。
+9. 能明确候选数据和正式表之间的入库边界。
+10. 能保留来源、置信度、校对状态、warning 和 error。
+11. 不抽取模板正文作为事实或参考。
+12. 为正式报告文本抽取保留扩展口。
 
 ## 16. 暂缓事项
 
@@ -901,7 +982,7 @@ comparison_candidates: 已确认 / 已修改 -> defect_comparisons
 
 1. 正式报告自然语言章节抽取。
 2. 章节文本候选的详细字段和使用规则。
-3. 技术状况评分重新计算。
+3. 从病害类型和标度推导 DP 的完整规则库，以及部件、结构分部和全桥评分重新计算。
 4. 病害对比算法细节。
 5. 前端校对工作台布局。
 6. JSON Schema 文件和代码生成。
@@ -920,5 +1001,6 @@ comparison_candidates: 已确认 / 已修改 -> defect_comparisons
 | 2026-07-03 | 预留 `report_text_candidates` 扩展口 | 后续可能从正式报告抽取特定章节文本 | 模块 8、模块 10 |
 | 2026-07-03 | JSON key 使用英文 `snake_case`，业务值使用中文 | 跨语言代码稳定，同时保留桥检业务原文 | Python、C++、前端 |
 | 2026-07-03 | 病害尺寸保留原文并尽量结构化 | 兼顾可靠校对和后续尺寸变化对比 | 病害校对、病害对比 |
-| 2026-07-03 | 评定结构按表 4.1-2 建模为 `overall`、`structure_parts`、`evaluation_parts` | 评分最小单元是评价部件，等级最小单元是结构分部 | 技术状况评定、正式表入库 |
+| 2026-07-03 | 表 4.1-2 评定结构建模为 `overall`、`structure_parts`、`evaluation_parts` | 表 4.1-2 中等级最小单元是结构分部，评分行按评价部件聚合 | 技术状况评定、正式表入库 |
 | 2026-07-03 | 对比候选在年度事实确认入库后生成 | 对比引擎处理事实对事实，避免未校对候选污染匹配 | 病害对比模块 |
+| 2026-07-13 | 合同升级为 1.2，加入详细位置、病害标度、病害扣分和构件评分双值校验 | 为模块 06 提供可信构件年度事实，并修正 `severity` 与标度混用风险 | 模块 03、04、05、06 |
