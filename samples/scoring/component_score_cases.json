@@ -1,0 +1,163 @@
+{
+  "standard": "JTG/T H21-2011 4.1.1",
+  "description": "构件评分纯函数跨语言一致性用例；expected_unrounded 精度断言容差 1e-9，expected_rounded 用统一自实现 round2（半数远离零）。",
+  "cases": [
+    {
+      "name": "single_35",
+      "deductions": [
+        35
+      ],
+      "expected_unrounded": 65.0,
+      "expected_rounded": 65.0,
+      "expected_ordered_deductions": [
+        35.0
+      ]
+    },
+    {
+      "name": "two_35_20",
+      "deductions": [
+        35,
+        20
+      ],
+      "expected_unrounded": 55.80761184457488,
+      "expected_rounded": 55.81,
+      "expected_ordered_deductions": [
+        35.0,
+        20.0
+      ]
+    },
+    {
+      "name": "order_independent_20_35",
+      "deductions": [
+        20,
+        35
+      ],
+      "expected_unrounded": 55.80761184457488,
+      "expected_rounded": 55.81,
+      "expected_ordered_deductions": [
+        35.0,
+        20.0
+      ]
+    },
+    {
+      "name": "dp_100_alone",
+      "deductions": [
+        100
+      ],
+      "expected_unrounded": 0.0,
+      "expected_rounded": 0.0,
+      "expected_ordered_deductions": [
+        100.0
+      ]
+    },
+    {
+      "name": "dp_100_with_50",
+      "deductions": [
+        50,
+        100
+      ],
+      "expected_unrounded": 0.0,
+      "expected_rounded": 0.0,
+      "expected_ordered_deductions": [
+        100.0,
+        50.0
+      ]
+    },
+    {
+      "name": "two_90_90",
+      "deductions": [
+        90,
+        90
+      ],
+      "expected_unrounded": 3.6360389693210777,
+      "expected_rounded": 3.64,
+      "expected_ordered_deductions": [
+        90.0,
+        90.0
+      ]
+    },
+    {
+      "name": "three_unordered_15_25_20",
+      "deductions": [
+        15,
+        25,
+        20
+      ],
+      "expected_unrounded": 58.81676640736219,
+      "expected_rounded": 58.82,
+      "expected_ordered_deductions": [
+        25.0,
+        20.0,
+        15.0
+      ]
+    },
+    {
+      "name": "single_small_5",
+      "deductions": [
+        5
+      ],
+      "expected_unrounded": 95.0,
+      "expected_rounded": 95.0,
+      "expected_ordered_deductions": [
+        5.0
+      ]
+    },
+    {
+      "name": "decimal_deductions_12_5_7_5",
+      "deductions": [
+        12.5,
+        7.5
+      ],
+      "expected_unrounded": 82.85961174846328,
+      "expected_rounded": 82.86,
+      "expected_ordered_deductions": [
+        12.5,
+        7.5
+      ]
+    },
+    {
+      "name": "empty",
+      "deductions": [],
+      "expected_unrounded": null,
+      "expected_rounded": null,
+      "expected_ordered_deductions": null
+    },
+    {
+      "name": "invalid_zero",
+      "deductions": [
+        0
+      ],
+      "expected_unrounded": null,
+      "expected_rounded": null,
+      "expected_ordered_deductions": null
+    },
+    {
+      "name": "invalid_negative",
+      "deductions": [
+        -5
+      ],
+      "expected_unrounded": null,
+      "expected_rounded": null,
+      "expected_ordered_deductions": null
+    },
+    {
+      "name": "invalid_over_100",
+      "deductions": [
+        150
+      ],
+      "expected_unrounded": null,
+      "expected_rounded": null,
+      "expected_ordered_deductions": null
+    },
+    {
+      "name": "invalid_mixed_with_valid",
+      "deductions": [
+        35,
+        0
+      ],
+      "expected_unrounded": null,
+      "expected_rounded": null,
+      "expected_ordered_deductions": null
+    }
+  ]
+}

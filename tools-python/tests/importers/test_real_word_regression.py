@@ -45,3 +45,54 @@ def test_liaoning_real_word_regression(tmp_path: Path) -> None:
     assert 15 == 1 + len(response.data.ratings.structure_parts) + len(response.data.ratings.evaluation_parts)
     assert 10 == sum(1 for defect in response.data.defects if defect.quantity_text)
     assert any(defect.component_alias == "2-1#板" for defect in response.data.defects)
+
+    # 合同 1.2：表 2.x-1 详细位置、标度、扣分与构件评分来源值的精确断言。
+    def defects_of(alias: str):
+        return [defect for defect in response.data.defects if defect.component_alias == alias]
+
+    def rating_of(alias: str):
+        matches = [
+            rating
+            for rating in response.data.ratings.component_ratings
+            if rating.component_ref.component_alias == alias
+        ]
+        assert len(matches) == 1, f"expected exactly one component rating for {alias}"
+        return matches[0]
+
+    board_1_1 = defects_of("1-1#板")
+    assert [defect.defect_scale for defect in board_1_1] == [2]
+    assert [defect.defect_deduction for defect in board_1_1] == [35.0]
+
+    board_1_2 = defects_of("1-2#板")
+    assert [defect.defect_scale for defect in board_1_2] == [2]
+    assert [defect.defect_deduction for defect in board_1_2] == [35.0]
+
+    board_2_1 = defects_of("2-1#板")
+    assert sorted(defect.defect_deduction for defect in board_2_1) == [20.0, 35.0]
+
+    assert rating_of("1-1#板").source_score == 65
+    assert rating_of("1-2#板").source_score == 65
+    assert rating_of("2-1#板").source_score == 55.81
+    assert set(rating_of("2-1#板").deduction_defect_candidate_ids) == {
+        defect.candidate_id for defect in board_2_1
+    }
+
+    # JTG/T H21-2011 4.1.1 复算：三块板均应与 Word 来源分一致并预填最终分。
+    from bridge_report_tools.scoring.component_score import round2
+
+    for alias, expected in [("1-1#板", 65.0), ("1-2#板", 65.0), ("2-1#板", 55.81)]:
+        rating = rating_of(alias)
+        assert rating.calculated_score is not None, alias
+        assert round2(rating.calculated_score) == expected, alias
+        assert rating.score_validation_status == "一致", alias
+        assert rating.confirmed_score == expected, alias
+        assert rating.score_resolution_reason is None, alias
+    assert rating_of("2-1#板").calculation_details.ordered_deductions == [35.0, 20.0]
+
+    # 第四章：上部承重构件与全桥的精确值。
+    assert any(
+        part.evaluation_part == "上部承重构件" and part.part_score == 86.62
+        for part in response.data.ratings.evaluation_parts
+    )
+    assert response.data.ratings.overall.total_score == 85.61
+    assert response.data.ratings.overall.overall_grade == "2类"

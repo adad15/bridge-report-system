@@ -21,6 +21,7 @@ from bridge_report_tools.importers.word_importer import parse_word_import
 from bridge_report_tools.main import app
 from tests.importers.docx_fixtures import (
     add_defect_table,
+    add_liaoning_defect_table,
     add_photo,
     add_rating_table,
     create_docx_without_rating_table,
@@ -176,7 +177,7 @@ def test_parse_defect_tables_extracts_defect_candidate(tmp_path: Path) -> None:
     document = read_docx_blocks(docx_path)
 
     rule_set = select_rule_set("辽宁国省干线")
-    defects, warnings, errors = parse_defect_tables(document.tables, rule_set)
+    defects, _component_groups, warnings, errors = parse_defect_tables(document.tables, rule_set)
 
     assert {warning.code for warning in warnings} == {"liaoning_trunk_defect_table_missing"}
     assert errors == []
@@ -206,7 +207,7 @@ def test_parse_defect_tables_ignores_non_defect_table_with_disease_title() -> No
     )
 
     rule_set = select_rule_set("辽宁国省干线")
-    defects, warnings, errors = parse_defect_tables([table], rule_set)
+    defects, _component_groups, warnings, errors = parse_defect_tables([table], rule_set)
 
     assert defects == []
     assert warnings == []
@@ -226,7 +227,7 @@ def test_parse_defect_tables_uses_liaoning_table_numbers() -> None:
         ],
     )
 
-    defects, warnings, errors = parse_defect_tables([table], rule_set)
+    defects, _component_groups, warnings, errors = parse_defect_tables([table], rule_set)
 
     assert warnings
     assert {warning.code for warning in warnings} == {"liaoning_trunk_defect_table_missing"}
@@ -270,7 +271,7 @@ def test_parse_defect_tables_maps_real_liaoning_header_aliases() -> None:
         ],
     )
 
-    defects, warnings, errors = parse_defect_tables([table], rule_set)
+    defects, _component_groups, warnings, errors = parse_defect_tables([table], rule_set)
 
     assert errors == []
     assert {warning.code for warning in warnings} == {"liaoning_trunk_defect_table_missing"}
@@ -293,7 +294,7 @@ def test_parse_defect_tables_reports_missing_defect_table(tmp_path: Path) -> Non
     document = read_docx_blocks(docx_path)
 
     rule_set = select_rule_set("辽宁国省干线")
-    defects, warnings, errors = parse_defect_tables(document.tables[1:], rule_set)
+    defects, _component_groups, warnings, errors = parse_defect_tables(document.tables[1:], rule_set)
 
     assert defects == []
     assert warnings == []
@@ -561,7 +562,7 @@ def test_parse_word_import_outputs_contract_data_and_photo_files(tmp_path: Path)
     assert response.temporary_photo_files == ["photo_0001.png"]
     data = response.data
     assert data.contract.name == "BridgeAnnualInspectionData"
-    assert data.contract.version == "1.1"
+    assert data.contract.version == "1.2"
     assert data.contract.parser_name == "word_importer"
     assert data.import_context.source_type == "软件导出Word"
     assert data.import_context.file_role == "当前年度检测资料"
@@ -695,7 +696,7 @@ def test_parse_defect_tables_keeps_row_level_warnings() -> None:
         ],
     )
 
-    defects, warnings, errors = parse_defect_tables([table], rule_set)
+    defects, _component_groups, warnings, errors = parse_defect_tables([table], rule_set)
 
     assert {warning.code for warning in warnings} == {"liaoning_trunk_defect_table_missing"}
     assert errors == []
@@ -710,7 +711,7 @@ def test_extract_and_match_photos_links_caption_to_defect(tmp_path: Path) -> Non
     write_png(image_path)
     docx_path = create_sample_docx(tmp_path / "sample.docx", image_path)
     document = read_docx_blocks(docx_path)
-    defects, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
+    defects, _, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
     photo_output_dir = tmp_path / "out"
 
     photos, temporary_files, warnings = extract_and_match_photos(
@@ -776,7 +777,7 @@ def test_extract_and_match_photos_links_table_cell_caption_below_image(tmp_path:
     add_rating_table(document_obj)
     document_obj.save(docx_path)
     document = read_docx_blocks(docx_path)
-    defects, _, _ = parse_defect_tables(document.tables, rule_set)
+    defects, _, _, _ = parse_defect_tables(document.tables, rule_set)
 
     photos, temporary_files, warnings = extract_and_match_photos(
         docx_path,
@@ -807,7 +808,7 @@ def test_extract_and_match_photos_skips_overview_photos_in_candidates(tmp_path: 
     add_rating_table(document_obj)
     document_obj.save(docx_path)
     document = read_docx_blocks(docx_path)
-    defects, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
+    defects, _, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
 
     photos, temporary_files, warnings = extract_and_match_photos(
         docx_path,
@@ -834,7 +835,7 @@ def test_extract_and_match_photos_keeps_unreferenced_photo_warning(tmp_path: Pat
     add_rating_table(document_obj)
     document_obj.save(docx_path)
     document = read_docx_blocks(docx_path)
-    defects, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
+    defects, _, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
 
     photos, temporary_files, warnings = extract_and_match_photos(
         docx_path, document, defects, tmp_path / "out", select_rule_set("辽宁国省干线")
@@ -953,7 +954,7 @@ def test_extract_and_match_photos_unmatched_defect_warning_is_idempotent(tmp_pat
     add_rating_table(document_obj)
     document_obj.save(docx_path)
     document = read_docx_blocks(docx_path)
-    defects, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
+    defects, _, _, _ = parse_defect_tables(document.tables, select_rule_set("辽宁国省干线"))
 
     rule_set = select_rule_set("辽宁国省干线")
     extract_and_match_photos(docx_path, document, defects, tmp_path / "out", rule_set)
@@ -961,3 +962,65 @@ def test_extract_and_match_photos_unmatched_defect_warning_is_idempotent(tmp_pat
 
     warning_codes = [warning.code for warning in defects[0].warnings]
     assert warning_codes.count("photo_number_unmatched") == 1
+
+
+def test_parse_word_import_emits_component_rating_candidates(tmp_path: Path) -> None:
+    request = valid_request(tmp_path)
+    document_obj = Document()
+    document_obj.add_paragraph("绕阳河二号桥 定期检测报告")
+    add_liaoning_defect_table(document_obj)
+    add_rating_table(document_obj)
+    docx_path = tmp_path / "liaoning.docx"
+    document_obj.save(docx_path)
+    request = request.model_copy(update={"docx_path": docx_path})
+
+    response = parse_word_import(request)
+
+    ratings = response.data.ratings
+    assert len(ratings.component_ratings) == 1
+    rating = ratings.component_ratings[0]
+    assert rating.candidate_id == "component_rating_0001"
+    assert rating.component_ref.structure_part == "上部结构"
+    assert rating.component_ref.component_name == "上部承重构件"
+    assert rating.component_ref.component_alias == "2-1#板"
+    assert rating.source_score == 55.81
+    assert rating.deduction_defect_candidate_ids == ["defect_0001", "defect_0002"]
+    assert rating.review_status == "待确认"
+    defect_deductions = [defect.defect_deduction for defect in response.data.defects]
+    assert defect_deductions == [35.0, 20.0]
+    assert [defect.defect_scale for defect in response.data.defects] == [2, 2]
+
+    # 规范复算：扣分齐全时按 4.1.1 复算并与来源分自动比对，一致则预填最终分。
+    assert rating.calculated_score is not None
+    assert abs(rating.calculated_score - 55.80761184457488) < 1e-9
+    assert rating.score_validation_status == "一致"
+    assert rating.confirmed_score == 55.81
+    assert rating.score_resolution_reason is None
+    assert rating.calculation_details is not None
+    assert rating.calculation_details.standard == "JTG/T H21-2011 4.1.1"
+    assert rating.calculation_details.ordered_deductions == [35.0, 20.0]
+    assert rating.calculation_details.rounding_scale == 2
+
+
+def test_component_rating_without_full_deductions_is_uncomputable(tmp_path: Path) -> None:
+    request = valid_request(tmp_path)
+    document_obj = Document()
+    document_obj.add_paragraph("绕阳河二号桥 定期检测报告")
+    add_liaoning_defect_table(document_obj)
+    add_rating_table(document_obj)
+    docx_path = tmp_path / "liaoning-missing-deduction.docx"
+    document_obj.save(docx_path)
+    request = request.model_copy(update={"docx_path": docx_path})
+
+    # 抹掉第二行的病害扣分单元格：组内缺任一扣分即无法复算，不得编造。
+    document_obj.tables[0].rows[2].cells[7].text = ""
+    document_obj.save(docx_path)
+
+    response = parse_word_import(request)
+
+    rating = response.data.ratings.component_ratings[0]
+    assert rating.source_score == 55.81
+    assert rating.calculated_score is None
+    assert rating.score_validation_status == "无法复算"
+    assert rating.confirmed_score is None
+    assert rating.calculation_details is None

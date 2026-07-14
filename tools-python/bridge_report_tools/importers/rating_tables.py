@@ -226,6 +226,7 @@ def parse_liaoning_overall_rating_table(
         overall=overall,
         structure_parts=list(structure_parts.values()),
         evaluation_parts=list(evaluation_parts.values()),
+        component_ratings=[],
         warnings=warnings,
     )
 
@@ -305,6 +306,7 @@ def parse_legacy_overall_rating_table(table: DocxTable, warnings: list[WarningIt
         overall=table_overall,
         structure_parts=table_structure_parts,
         evaluation_parts=table_evaluation_parts,
+        component_ratings=[],
         warnings=warnings,
     )
 

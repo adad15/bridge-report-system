@@ -27,6 +27,26 @@ def add_defect_table(document: Document) -> None:
         table.rows[1].cells[index].text = values[index]
 
 
+def add_liaoning_defect_table(document: Document) -> None:
+    """真实辽宁国省干线表头形态：含 标度/病害扣分/构件评分 列的两行构件组。"""
+    document.add_heading("桥梁外观检查", level=1)
+    document.add_paragraph("表2.1-1  上部结构病害检查表")
+    headers = [
+        "部件名称", "构件编号", "病害位置", "病害类型", "数量",
+        "病害特征", "标度", "病害扣分", "构件评分", "照片编号",
+    ]
+    rows = [
+        ["上部承重构件", "2-1#板", "小桩号侧", "蜂窝、麻面", "1处", "S=0.6×0.1m²", "2", "35", "55.81", "2.1-1"],
+        ["上部承重构件", "2-1#板", "左侧端部", "剥落、掉角", "1处", "长度：0.5m", "2", "20", "55.81", "2.1-2"],
+    ]
+    table = document.add_table(rows=1 + len(rows), cols=len(headers))
+    for index, header in enumerate(headers):
+        table.rows[0].cells[index].text = header
+    for row_index, row in enumerate(rows, start=1):
+        for cell_index, value in enumerate(row):
+            table.rows[row_index].cells[cell_index].text = value
+
+
 def add_photo(document: Document, image_path: Path, caption: str = "照片2.1-1 主梁梁底裂缝") -> None:
     document.add_picture(str(image_path), width=Inches(1))
     document.add_paragraph(caption)
