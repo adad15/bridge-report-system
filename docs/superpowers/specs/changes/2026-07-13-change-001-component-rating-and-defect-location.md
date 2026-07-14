@@ -2,7 +2,7 @@
 
 > 日期：2026-07-13
 >
-> 状态：设计已确认，待实施
+> 状态：已实施（2026-07-14，实施计划见 `docs/superpowers/plans/2026-07-13-component-defect-archive-implementation-plan.md`；第 10 节验收标准全部通过，真实 Word 精确回归 65/65/55.81、86.62、85.61 命中）
 >
 > 影响模块：03、04、05、06
 >

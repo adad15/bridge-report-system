@@ -2,7 +2,7 @@
 
 > 日期：2026-07-13
 >
-> 状态：设计已确认，待实施
+> 状态：已实施（2026-07-14，实施计划见 `docs/superpowers/plans/2026-07-13-component-defect-archive-implementation-plan.md`）
 >
 > 前置变更：`2026-07-13-change-001-component-rating-and-defect-location.md`
 
@@ -350,3 +350,4 @@ PUT /api/defect-observations/{observation_id}/defect-thread
 |---|---|---|---|
 | 2026-07-13 | 创建模块 06 设计 | 确认只读档案优先、病害主线 A1 布局和人工线索绑定 | 06、07 |
 | 2026-07-13 | 纳入合同 1.2 前置变更 | 模块 06 必须读取真实标度、扣分、详细位置和可信构件评分 | 03、04、05、06 |
+| 2026-07-14 | 模块 06 实施完成 | §8 全部查询/写接口落地（`ComponentArchiveRepository/Routes`、`DefectThreadRepository/Routes`）；§9 绑定事务以 `defect_observations.updated_at` 文本作为并发令牌，解绑与换绑均需 `confirm_rebind=true`；线索建议为纯函数（同构件候选，类型×2 + 位置全等×1 + 位置包含×0.5 评分排序）；前端 A1 档案页与线索整理页上线；§13 验收标准 1-12 逐条通过，真实 Word 端到端（重解析→校对→入库→档案→建线索→绑定）实操验证 | 实施 | 06、07 |

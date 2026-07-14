@@ -45,6 +45,22 @@ powershell -ExecutionPolicy Bypass -File scripts/dev/check-module02-db.ps1
 
 The check applies `database/migrations/002_core_schema_and_archive.sql` and runs the rollback-only smoke test in `database/tests/002_core_schema_smoke.sql`.
 
+For module 06 (contract 1.2 component ratings and defect-thread archive), run the
+combined check instead. It applies migrations 002 and 003 in order — both are
+idempotent and safe to re-run — and executes both rollback-only smoke tests:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/dev/check-module06-db.ps1
+```
+
+Migration `003_component_rating_validation_and_thread_binding.sql` adds the
+component-score validation columns (`source_score`, `calculated_score`,
+`score_validation_status`, `score_resolution_reason`, `calculation_details_json`)
+to `condition_ratings`, enforces one component-level rating per inspection
+version per component, and clears legacy `severity` values that were previously
+mis-written into `defect_observations.scale`. Confirmed 1.1-era rows stay
+readable with the new columns as `NULL`; nothing is backfilled.
+
 ## Module 03 Annual Inspection Contract
 
 Module 03 defines the shared `BridgeAnnualInspectionData` candidate JSON used by the Python Word-import tools, C++ backend, and React review workspace.
@@ -219,3 +235,53 @@ With PostgreSQL, the C++ backend (`127.0.0.1:18080`), and the Vite dev server
    page navigated back to `/bridges/:bridgeId`.
 8. Re-ran the seed script to restore the sample bridge to a single clean pending
    import record for the next developer.
+
+## Module 06 Component Defect Archive
+
+Module 06 organizes confirmed annual facts into a read-only component defect
+archive with human-curated defect threads. The main pages are read-first: the
+only writes are creating a defect thread and binding/rebinding an observation
+to one — annual defect facts themselves are never modified here, and no
+progress/repair conclusions are produced (those belong to module 07).
+
+Contract 1.2 (see `contracts/README.md`) is the prerequisite: defect candidates
+carry `defect_scale` / `defect_deduction`, and `ratings.component_ratings[]`
+carries the Word source score, the JTG/T H21-2011 4.1.1 recalculated score, and
+the reviewer-confirmed final score. The shared scoring fixture lives in
+`samples/scoring/component_score_cases.json` and is consumed by the Python,
+C++, and TypeScript implementations of the same pure function.
+
+Frontend routes:
+
+```text
+/bridges/:bridgeId/components                      # A1 layout: component list + archive detail
+/bridges/:bridgeId/components/:componentId         # same page with a component selected
+/bridges/:bridgeId/defect-threads/review           # unbound observations, thread suggestions, bind/create
+```
+
+C++ API endpoints:
+
+```text
+GET /api/bridges/{bridge_id}/components                          # components with current-valid formal defects
+GET /api/bridge-components/{component_id}/defect-archive         # thread-first archive (threads > yearly observations)
+GET /api/bridge-components/{component_id}/defect-archive/revisions # superseded revisions, read-only
+GET /api/bridges/{bridge_id}/unbound-defect-observations         # thread review page data source
+GET /api/defect-observations/{observation_id}/thread-suggestions # same-component suggestions (never auto-bind)
+GET /api/defect-observations/{observation_id}/evidence           # raw row, table, import/file numbers
+GET /api/defect-photos/{defect_photo_id}/content                 # controlled formal photo content
+POST /api/defect-threads                                          # create thread + bind first observation
+PUT  /api/defect-observations/{observation_id}/defect-thread      # bind / rebind / unbind (confirm_rebind + token)
+```
+
+Binding requests carry the observation's `updated_at` text as an optimistic
+concurrency token; changing an existing binding requires `confirm_rebind=true`,
+and observations referenced by a manually confirmed comparison are rejected
+until module 07 revokes the conclusion. Default queries only read current-valid
+inspection versions (`is_current` and `已确认`); superseded revisions are shown
+through the separate revisions entry and never inherit thread bindings.
+
+Legacy data policy: pending 1.0/1.1 drafts open read-only as
+`legacy_pending_reparse` and must be re-parsed to 1.2 via
+`POST /api/import-records/{id}/parse-word`; confirmed 1.1-era rating rows stay
+readable and the archive marks them as lacking score-validation details instead
+of guessing.

@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT
 
-更新时间：2026-07-13
+更新时间：2026-07-14
 
 ## 项目一句话
 
@@ -32,14 +32,16 @@
 - 模块 2 `02-postgresql-schema-and-file-archive` 已完成实施：数据库迁移、系统编号工具、归档路径工具和数据库 smoke test 已通过。
 - 模块 2 设计文档提交号：`52ee0ab docs: add module 02 schema and archive design`。
 - 模块 3 `03-bridge-annual-inspection-data-contract` 已完成实施并推送到 GitHub。
-- 模块 3 已定义并实现 `BridgeAnnualInspectionData` 1.1 JSON 契约、JSON Schema、Python Pydantic 模型、C++ JsonCpp 校验器和前端 TypeScript 类型/运行时校验；1.2 的详细位置、标度、扣分和构件评分双值校验已完成设计，尚待实施。
+- 模块 3 已定义并实现 `BridgeAnnualInspectionData` 1.2 JSON 契约、JSON Schema、Python Pydantic 模型、C++ JsonCpp 校验器和前端 TypeScript 类型/运行时校验；1.2 增加病害详细位置、标度、扣分和构件评分双值校验，四端已同步实施。
 - 当前分支为 `feature/06-component-defect-archive`。
 - 模块 4 `04-word-importer-prototype` 已完成并推送到 GitHub：第一版支持 `.docx`、`rule_profile="辽宁国省干线"`、第二章三张病害检查表、病害照片抽取匹配、第四章评分表和模块 3 契约输出。
 - 绕阳河二号桥真实软件报告本地验收已覆盖：病害候选 25 条、病害照片候选 31 条、临时图片 36 个、第四章总分 85.61/2类、尺寸低置信误报清零。
 - 模块 5 `05-review-workspace` 已完成实施：后端确认入库事务（C++）与前端校对工作台（React）已落地，读取 `import_records.parsed_result_json`，按 warning/error 分组人工校对，保存草稿，五个操作按钮（保存草稿/批量确认普通候选/入库前检查/确认年度事实入库/取消导入）全部接后端，修订版确认弹窗和确认后只读态已实现。已完成端到端手工验收：编辑保存、批量确认、入库前检查解锁确认、首次确认入库写入四张事实表、同桥同年二次导入的修订版确认路径（含 409 拒绝校验）、取消导入均通过。
 - 模块 5 已推送到 GitHub；分支 `feature/05-review-workspace` 与远端同步，提交 `52b9772` 为模块 05 当前末端。
-- 模块 6 `06-component-defect-archive` 已完成需求讨论和设计确认：采用只读档案优先、左侧构件列表 + 右侧详情、病害卡片下按年度纵向展示的 A1 方案；病害线索只由人工创建或绑定，模块 06 不生成发展/减轻/修复/新增结论。
-- 模块 6 实施前置为合同 1.2 跨模块升级，详见 `docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md`。
+- 模块 6 `06-component-defect-archive` 已完成实施：合同 1.2 四端升级（Python/JSON Schema/C++/TypeScript）、表 2.x-1 标度/扣分/构件评分抽取与构件组传播、JTG/T H21-2011 4.1.1 三语言评分纯函数（共享夹具 `samples/scoring/component_score_cases.json`）、模块 05 评分差异校对与 C++ 入库前独立复算、迁移 003（`condition_ratings` 三值校验列 + 构件级唯一约束 + severity 误写 scale 纠错）、构件级 `condition_ratings` 事务写入、模块 06 只读档案查询 API、线索建议纯函数、线索创建/绑定/重绑事务（`updated_at` 乐观令牌 + 已确认对比引用拦截）与前端 A1 档案页/线索整理页。
+- 真实 Word 端到端已验证：重解析 1.1 旧草稿为 1.2、25/31/36/31 基线保持、23 条构件评分候选（17 条自动一致）、确认入库后 `1-1#板/1-2#板=65`、`2-1#板=55.81` 全部 `一致`，上部承重构件 86.62、全桥 85.61，档案页与线索创建/绑定在浏览器实操通过。
+- 待校对的 1.0/1.1 旧草稿标记 `legacy_pending_reparse` 只读，必须经 `POST /api/import-records/{id}/parse-word` 重新解析为 1.2；已确认 1.1 事实保持可读，档案页显示"历史数据缺少评分校验明细"，不做猜测性回填。
+- 合同 1.2 变更提案见 `docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md`（已实施）；实施计划见 `docs/superpowers/plans/2026-07-13-component-defect-archive-implementation-plan.md`。
 
 ## 已确认方向
 
@@ -297,10 +299,9 @@
 
 推荐下一步：
 
-1. 审阅跨模块变更提案和模块 06 设计文档。
-2. 审阅通过后编写模块 06 实施计划，实施顺序固定为合同 1.2 -> Python 解析 -> 模块 05 校对/确认 -> 模块 06 档案与线索。
-3. 实施中保持真实 Word 原回归数量，并新增 `1-1#板=65`、`1-2#板=65`、`2-1#板=55.81`、上部承重构件 `86.62`、全桥 `85.61` 精确断言。
-4. 模块 06 验收后再进入模块 07 病害对比引擎。
+1. 模块 06 已实施并通过真实 Word 端到端验收，等待用户确认后提交并推送。
+2. 进入模块 07 `07-defect-comparison-engine`：基于已整理的病害线索与相邻年度观测生成对比候选，人工确认后写入 `defect_comparisons`。
+3. 模块 07 设计时注意：模块 06 的绑定事务已在数据库层拦截"重新绑定被人工已确认对比引用的观测"，撤销对比结论的入口应由模块 07 提供。
 
 ## 设计文档
 
