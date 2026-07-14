@@ -27,6 +27,9 @@ inline void confirm_all_candidates(Json::Value& data) {
     for (auto& part : data["ratings"]["evaluation_parts"]) {
         part["review_status"] = "已确认";
     }
+    for (auto& rating : data["ratings"]["component_ratings"]) {
+        rating["review_status"] = "已确认";
+    }
 }
 
 }  // 命名空间 bridge_report::test_support

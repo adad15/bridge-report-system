@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type {
   BridgeAnnualInspectionData,
+  ComponentRatingCandidate,
   DefectCandidate,
   EvaluationPartRating,
   OverallRating,
@@ -86,7 +87,7 @@ function makeState(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeA
   return {
     contract: {
       name: "BridgeAnnualInspectionData",
-      version: "1.1",
+      version: "1.2",
       generated_at: "2026-07-09T00:00:00+08:00",
       producer: "bridge-report-system",
       parser_name: "test-parser",
@@ -112,6 +113,7 @@ function makeState(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeA
       overall: makeOverallRating(),
       structure_parts: [makeStructurePartRating()],
       evaluation_parts: [makeEvaluationPartRating()],
+      component_ratings: [],
       warnings: [],
     },
     comparison_candidates: [],
@@ -366,6 +368,7 @@ describe("reviewDraftReducer", () => {
           makeStructurePartRating({ structure_part: "下部结构", structure_score: 85 }),
         ],
         evaluation_parts: [],
+        component_ratings: [],
         warnings: [],
       },
     });
@@ -387,6 +390,7 @@ describe("reviewDraftReducer", () => {
         overall: makeOverallRating(),
         structure_parts: [],
         evaluation_parts: [makeEvaluationPartRating({ part_score: 95 }), makeEvaluationPartRating({ part_score: 88 })],
+        component_ratings: [],
         warnings: [],
       },
     });
@@ -403,6 +407,7 @@ describe("reviewDraftReducer", () => {
         overall: makeOverallRating({ review_status: "待确认" }),
         structure_parts: [makeStructurePartRating({ structure_part: "桥面系", review_status: "待确认" })],
         evaluation_parts: [makeEvaluationPartRating({ review_status: "待确认" })],
+        component_ratings: [],
         warnings: [],
       },
     });
@@ -430,6 +435,7 @@ describe("reviewDraftReducer", () => {
         overall: makeOverallRating({ review_status: "待确认" }),
         structure_parts: [],
         evaluation_parts: [],
+        component_ratings: [],
         warnings: [],
       },
     });
@@ -461,5 +467,263 @@ describe("reviewDraftReducer", () => {
     // 未涉及的顶层字段保持引用相等——reducer 只重建被改动的分支，不做无谓深拷贝。
     expect(next.photos).toBe(state.photos);
     expect(next.ratings).toBe(state.ratings);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 合同 1.2：构件评分联动重算与人工差异处理
+// ---------------------------------------------------------------------------
+
+function makeComponentRating(overrides: Partial<ComponentRatingCandidate> = {}): ComponentRatingCandidate {
+  return {
+    candidate_id: "component_rating_0001",
+    component_ref: { structure_part: "上部结构", component_name: "主梁", component_alias: null },
+    source_score: 65,
+    calculated_score: 65,
+    confirmed_score: 65,
+    score_validation_status: "一致",
+    score_resolution_reason: null,
+    deduction_defect_candidate_ids: ["defect_0001"],
+    calculation_details: { standard: "JTG/T H21-2011 4.1.1", ordered_deductions: [35], rounding_scale: 2 },
+    review_status: "待确认",
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function makeScoredState(
+  ratingOverrides: Partial<ComponentRatingCandidate> = {},
+  defectOverrides: Partial<DefectCandidate> = {}
+): BridgeAnnualInspectionData {
+  return makeState({
+    defects: [makeDefect({ defect_scale: 2, defect_deduction: 35, ...defectOverrides })],
+    ratings: {
+      overall: makeOverallRating(),
+      structure_parts: [],
+      evaluation_parts: [],
+      component_ratings: [makeComponentRating(ratingOverrides)],
+      warnings: [],
+    },
+  });
+}
+
+describe("component rating recomputation", () => {
+  it("edit_defect_field on defect_scale and defect_deduction updates the defect and flips status to 已修改", () => {
+    const state = makeScoredState();
+    const afterScale = reviewDraftReducer(state, {
+      type: "edit_defect_field",
+      candidateId: "defect_0001",
+      field: "defect_scale",
+      value: 3,
+    });
+    expect(afterScale.defects[0].defect_scale).toBe(3);
+    expect(afterScale.defects[0].review_status).toBe("已修改");
+    expect(afterScale.defects[0].group_review_status).toBe("待确认");
+
+    const afterClear = reviewDraftReducer(afterScale, {
+      type: "edit_defect_field",
+      candidateId: "defect_0001",
+      field: "defect_scale",
+      value: null,
+    });
+    expect(afterClear.defects[0].defect_scale).toBeNull();
+  });
+
+  it("changing a deduction recomputes the component rating and reclassifies the status", () => {
+    const state = makeScoredState();
+    const next = reviewDraftReducer(state, {
+      type: "edit_defect_field",
+      candidateId: "defect_0001",
+      field: "defect_deduction",
+      value: 20,
+    });
+
+    const rating = next.ratings.component_ratings[0];
+    expect(rating.calculated_score).toBe(80);
+    expect(rating.calculation_details?.ordered_deductions).toEqual([20]);
+    expect(rating.score_validation_status).toBe("不一致");
+    expect(rating.confirmed_score).toBeNull();
+    expect(rating.score_resolution_reason).toBeNull();
+    expect(rating.review_status).toBe("待确认");
+    // 原 state 不被原地修改。
+    expect(state.ratings.component_ratings[0].calculated_score).toBe(65);
+  });
+
+  it("clearing a deduction makes the rating 无法复算 without fabricating deductions", () => {
+    const state = makeScoredState();
+    const next = reviewDraftReducer(state, {
+      type: "edit_defect_field",
+      candidateId: "defect_0001",
+      field: "defect_deduction",
+      value: null,
+    });
+
+    const rating = next.ratings.component_ratings[0];
+    expect(rating.calculated_score).toBeNull();
+    expect(rating.calculation_details).toBeNull();
+    expect(rating.score_validation_status).toBe("无法复算");
+    expect(rating.confirmed_score).toBeNull();
+  });
+
+  it("ignoring a defect shrinks the deduction evidence and recomputes", () => {
+    const state = makeState({
+      defects: [
+        makeDefect({ candidate_id: "defect_0001", defect_deduction: 35 }),
+        makeDefect({ candidate_id: "defect_0002", defect_deduction: 20 }),
+      ],
+      ratings: {
+        overall: makeOverallRating(),
+        structure_parts: [],
+        evaluation_parts: [],
+        component_ratings: [
+          makeComponentRating({
+            source_score: 55.81,
+            calculated_score: 55.80761184457488,
+            confirmed_score: 55.81,
+            deduction_defect_candidate_ids: ["defect_0001", "defect_0002"],
+            calculation_details: { standard: "JTG/T H21-2011 4.1.1", ordered_deductions: [35, 20], rounding_scale: 2 },
+          }),
+        ],
+        warnings: [],
+      },
+    });
+
+    const next = reviewDraftReducer(state, { type: "set_defect_status", candidateId: "defect_0002", status: "已忽略" });
+
+    const rating = next.ratings.component_ratings[0];
+    expect(rating.deduction_defect_candidate_ids).toEqual(["defect_0001"]);
+    expect(rating.calculated_score).toBe(65);
+    expect(rating.score_validation_status).toBe("不一致");
+    expect(rating.confirmed_score).toBeNull();
+  });
+
+  it("keeps the rating object untouched when an unrelated edit does not change evidence", () => {
+    const state = makeScoredState();
+    const next = reviewDraftReducer(state, {
+      type: "edit_defect_field",
+      candidateId: "defect_0001",
+      field: "defect_location",
+      value: "左侧端部",
+    });
+    expect(next.ratings.component_ratings[0]).toBe(state.ratings.component_ratings[0]);
+  });
+});
+
+describe("resolve_component_score", () => {
+  it("accept_source stores the source score with reason and flips to 已修改", () => {
+    const state = makeScoredState({
+      source_score: 70,
+      calculated_score: 65,
+      confirmed_score: null,
+      score_validation_status: "不一致",
+    });
+    const next = reviewDraftReducer(state, {
+      type: "resolve_component_score",
+      candidateId: "component_rating_0001",
+      choice: "accept_source",
+      reason: "现场复核后采信 Word 分值",
+    });
+
+    const rating = next.ratings.component_ratings[0];
+    expect(rating.confirmed_score).toBe(70);
+    expect(rating.score_validation_status).toBe("人工接受Word值");
+    expect(rating.score_resolution_reason).toBe("现场复核后采信 Word 分值");
+    expect(rating.review_status).toBe("已修改");
+  });
+
+  it("adopt_calculated stores the rounded calculated score", () => {
+    const state = makeScoredState({
+      source_score: 70,
+      calculated_score: 55.80761184457488,
+      confirmed_score: null,
+      score_validation_status: "不一致",
+    });
+    const next = reviewDraftReducer(state, {
+      type: "resolve_component_score",
+      candidateId: "component_rating_0001",
+      choice: "adopt_calculated",
+      reason: "扣分依据完整，采用规范复算值",
+    });
+
+    const rating = next.ratings.component_ratings[0];
+    expect(rating.confirmed_score).toBe(55.81);
+    expect(rating.score_validation_status).toBe("人工采用复算值");
+  });
+
+  it("is a no-op without a reason or when the status is already consistent", () => {
+    const unresolved = makeScoredState({
+      source_score: 70,
+      confirmed_score: null,
+      score_validation_status: "不一致",
+    });
+    expect(
+      reviewDraftReducer(unresolved, {
+        type: "resolve_component_score",
+        candidateId: "component_rating_0001",
+        choice: "accept_source",
+        reason: "   ",
+      })
+    ).toBe(unresolved);
+
+    const consistent = makeScoredState();
+    expect(
+      reviewDraftReducer(consistent, {
+        type: "resolve_component_score",
+        candidateId: "component_rating_0001",
+        choice: "accept_source",
+        reason: "不需要的原因",
+      })
+    ).toBe(consistent);
+  });
+
+  it("reset_component_score_resolution returns to the automatic classification", () => {
+    const state = makeScoredState({
+      source_score: 70,
+      calculated_score: 65,
+      confirmed_score: 70,
+      score_validation_status: "人工接受Word值",
+      score_resolution_reason: "早前的选择",
+      review_status: "已修改",
+    });
+    const next = reviewDraftReducer(state, {
+      type: "reset_component_score_resolution",
+      candidateId: "component_rating_0001",
+    });
+
+    const rating = next.ratings.component_ratings[0];
+    expect(rating.score_validation_status).toBe("不一致");
+    expect(rating.confirmed_score).toBeNull();
+    expect(rating.score_resolution_reason).toBeNull();
+    expect(rating.review_status).toBe("待确认");
+  });
+
+  it("batch_confirm_normal_ratings confirms consistent component ratings only", () => {
+    const state = makeState({
+      defects: [makeDefect({ defect_deduction: 35 })],
+      ratings: {
+        overall: makeOverallRating({ review_status: "已确认" }),
+        structure_parts: [],
+        evaluation_parts: [],
+        component_ratings: [
+          makeComponentRating({ candidate_id: "component_rating_0001" }),
+          makeComponentRating({
+            candidate_id: "component_rating_0002",
+            component_ref: { structure_part: "上部结构", component_name: "横梁", component_alias: null },
+            source_score: 70,
+            calculated_score: null,
+            confirmed_score: null,
+            score_validation_status: "无法复算",
+            calculation_details: null,
+            deduction_defect_candidate_ids: [],
+          }),
+        ],
+        warnings: [],
+      },
+    });
+
+    const next = reviewDraftReducer(state, { type: "batch_confirm_normal_ratings" });
+
+    expect(next.ratings.component_ratings[0].review_status).toBe("已确认");
+    expect(next.ratings.component_ratings[1].review_status).toBe("待确认");
   });
 });

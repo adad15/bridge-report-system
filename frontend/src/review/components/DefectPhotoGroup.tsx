@@ -2,23 +2,12 @@ import { useEffect, useState, type CSSProperties, type Dispatch, type MouseEvent
 
 import { photoContentUrl } from "../../api/reviewApi";
 import type { BridgeAnnualInspectionData, DefectCandidate, ReviewStatus, StructurePart } from "../../contracts/annualInspection";
+import { categoryColor } from "../categoryColor";
 import { buildDefectPhotoGroup, canConfirmDefectPhotoGroup } from "../defectPhotoGroups";
 import type { ReviewDraftAction } from "../reviewDraft";
 
 const STRUCTURE_PARTS: StructurePart[] = ["全桥", "上部结构", "下部结构", "桥面系", "其他"];
 const REVIEW_STATUSES: ReviewStatus[] = ["待确认", "已确认", "已修改", "已忽略"];
-const CATEGORY_COLORS: Record<string, string> = {
-  "上部承重构件": "#2563a6",
-  "上部一般构件": "#16827a",
-  "桥墩": "#397a4a",
-  "桥台": "#7656a8",
-  "翼墙、耳墙": "#a05a7b",
-  "桥面铺装": "#b86724",
-  "栏杆、护栏": "#46758f",
-  "照明、标志": "#8b6b16",
-  "河床": "#64748b",
-};
-const FALLBACK_CATEGORY_COLORS = ["#3f6f9f", "#3f7d68", "#7b5d9b", "#9a6338", "#536f82"];
 
 interface DefectPhotoGroupProps {
   draft: BridgeAnnualInspectionData;
@@ -38,12 +27,6 @@ function parsePhotoNumbers(text: string): string[] {
 
 function keepRowOpen(event: MouseEvent<HTMLElement>): void {
   event.stopPropagation();
-}
-
-function categoryColor(category: string): string {
-  if (CATEGORY_COLORS[category]) return CATEGORY_COLORS[category];
-  const hash = Array.from(category).reduce((sum, character) => sum + character.codePointAt(0)!, 0);
-  return FALLBACK_CATEGORY_COLORS[hash % FALLBACK_CATEGORY_COLORS.length];
 }
 
 // 照片校对状态徽章：沿用页眉的 review-status-badge 配色（待确认=黄、已确认=绿、其余=灰）。
@@ -96,6 +79,12 @@ export function DefectPhotoGroup({ draft, defect, importRecordId, baseUrl, expan
             <input aria-label="病害类型" value={defect.defect_type} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_type", value: event.target.value })} />
             <span className="defect-fact-label">校对状态</span>
             <select aria-label="校对状态" value={defect.review_status} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_status", value: event.target.value as ReviewStatus })}>{REVIEW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select>
+            {/* 合同 1.2：规范标度（正整数）与病害扣分（0-100）。空输入回落为 null；
+                扣分编辑会触发所属构件评分候选的复算校验联动。 */}
+            <span className="defect-fact-label defect-fact-label-row-start">标度</span>
+            <input aria-label="标度" type="number" min={1} step={1} value={defect.defect_scale ?? ""} onClick={keepRowOpen} onChange={(event) => { const raw = event.target.value; const parsed = raw === "" ? null : Number.parseInt(raw, 10); if (parsed !== null && (!Number.isInteger(parsed) || parsed <= 0)) return; dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_scale", value: parsed }); }} />
+            <span className="defect-fact-label">病害扣分</span>
+            <input aria-label="病害扣分" type="number" min={0} max={100} step={0.1} value={defect.defect_deduction ?? ""} onClick={keepRowOpen} onChange={(event) => { const raw = event.target.value; const parsed = raw === "" ? null : Number(raw); if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0 || parsed > 100)) return; dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_deduction", value: parsed }); }} />
             <span className="defect-fact-label defect-fact-label-row-start">数量</span>
             <input aria-label="数量" value={defect.quantity_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "quantity_text", value: event.target.value })} />
             <span className="defect-fact-label">照片编号</span>

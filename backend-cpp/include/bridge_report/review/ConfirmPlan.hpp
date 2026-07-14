@@ -46,9 +46,12 @@ struct DefectPlan {
     std::string structure_part;
     std::optional<std::string> part_name;
     std::string defect_location;
+    // 规范病害标度：只来自合同 1.2 的 defect_scale（整数转十进制字符串），
+    // 严禁取 severity——severity 只是 info/warning/error 校对提示级别。
+    std::optional<std::string> scale;
+    std::optional<double> defect_deduction;
     std::string defect_type;
     std::string defect_description_raw;
-    std::optional<std::string> scale;
     std::optional<std::string> raw_row_text;
     std::optional<std::string> source_table_title;
     std::optional<int> source_table_index;
@@ -71,7 +74,7 @@ struct PhotoPlan {
 };
 
 /**
- * @brief 评分写入计划：对应 inspection_ratings 一行（rating_level 取值 全桥/结构分部/部件）。
+ * @brief 评分写入计划：对应 condition_ratings 一行（rating_level 取值 全桥/结构分部/部件）。
  */
 struct RatingPlan {
     std::string rating_level;
@@ -85,6 +88,27 @@ struct RatingPlan {
 };
 
 /**
+ * @brief 构件评分写入计划：对应 condition_ratings 一行（rating_level='构件'）。
+ *
+ * component_key 与 ComponentPlan::normalized_component_key 同规则生成，
+ * 入库事务据此解析 bridge_component_id；score 为最终确认分，
+ * 来源分/复算分/校验状态/原因/计算明细分别落入迁移 003 新增列。
+ */
+struct ComponentRatingPlan {
+    std::string candidate_id;
+    std::string component_key;
+    std::string structure_part;
+    std::string rating_item_name;  // 构件编号（alias），缺省用部件名称
+    std::optional<double> score;
+    std::optional<double> source_score;
+    std::optional<double> calculated_score;
+    std::string score_validation_status;
+    std::optional<std::string> score_resolution_reason;
+    std::string calculation_details_json{"{}"};
+    std::string review_status;
+};
+
+/**
  * @brief 入库写计划：Task 8 事务执行器的唯一输入，构件/病害/照片/评分四类写入行的纯映射结果。
  *
  * overall_score/overall_grade 冗余自 ratings 中 rating_level=="全桥" 的一条（若存在），
@@ -92,10 +116,11 @@ struct RatingPlan {
  * overall_score 为 nullopt、overall_grade 为空串。
  */
 struct ConfirmPlan {
-    std::vector<ComponentPlan> components;  // 按 normalized_component_key 去重
+    std::vector<ComponentPlan> components;  // 按 normalized_component_key 去重（含构件评分引用的构件）
     std::vector<DefectPlan> defects;
     std::vector<PhotoPlan> photos;
     std::vector<RatingPlan> ratings;
+    std::vector<ComponentRatingPlan> component_ratings;
     std::optional<double> overall_score;
     std::string overall_grade;
 };

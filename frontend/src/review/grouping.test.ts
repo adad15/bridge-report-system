@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type {
   BridgeAnnualInspectionData,
+  ComponentRatingCandidate,
   DefectCandidate,
   EvaluationPartRating,
   OverallRating,
@@ -9,7 +10,14 @@ import type {
   StructurePartRating,
   WarningItem,
 } from "../contracts/annualInspection";
-import { buildStatistics, isNormalDefect, isNormalPhoto, isNormalRating, needsAttention } from "./grouping";
+import {
+  buildStatistics,
+  isNormalComponentRating,
+  isNormalDefect,
+  isNormalPhoto,
+  isNormalRating,
+  needsAttention,
+} from "./grouping";
 
 function makeWarning(overrides: Partial<WarningItem> = {}): WarningItem {
   return { code: "some_warning", message: "需要人工确认。", severity: "warning", target_candidate_id: null, ...overrides };
@@ -95,7 +103,7 @@ function makeData(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeAn
   return {
     contract: {
       name: "BridgeAnnualInspectionData",
-      version: "1.1",
+      version: "1.2",
       generated_at: "2026-07-09T00:00:00+08:00",
       producer: "bridge-report-system",
       parser_name: "test-parser",
@@ -117,7 +125,7 @@ function makeData(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeAn
     },
     defects: [],
     photos: [],
-    ratings: { overall: makeOverallRating(), structure_parts: [], evaluation_parts: [], warnings: [] },
+    ratings: { overall: makeOverallRating(), structure_parts: [], evaluation_parts: [], component_ratings: [], warnings: [] },
     comparison_candidates: [],
     report_text_candidates: [],
     warnings: [],
@@ -293,7 +301,7 @@ describe("needsAttention", () => {
 
   it("rule 2 (rating target): a top-level warning targeting ratings.overall is classified as kind 'rating'", () => {
     const data = makeData({
-      ratings: { overall: makeOverallRating(), structure_parts: [], evaluation_parts: [], warnings: [] },
+      ratings: { overall: makeOverallRating(), structure_parts: [], evaluation_parts: [], component_ratings: [], warnings: [] },
       warnings: [makeWarning({ message: "全桥评分待人工复核。", target_candidate_id: "ratings.overall" })],
     });
 
@@ -447,6 +455,7 @@ describe("buildStatistics", () => {
         overall: makeOverallRating({ review_status: "已修改" }),
         structure_parts: [makeStructurePartRating({ review_status: "待确认" })],
         evaluation_parts: [makeEvaluationPartRating({ review_status: "已确认" })],
+        component_ratings: [],
         warnings: [],
       },
     });
@@ -463,5 +472,116 @@ describe("buildStatistics", () => {
     expect(stats.object_warning_count).toBe(1); // defect_0002 has a warning
     expect(stats.needs_attention_count).toBe(needsAttention(data).length);
     expect(stats.needs_attention_count).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 合同 1.2：构件评分的注意力清单、普通判定与统计口径
+// ---------------------------------------------------------------------------
+
+function makeComponentRating(overrides: Partial<ComponentRatingCandidate> = {}): ComponentRatingCandidate {
+  return {
+    candidate_id: "component_rating_0001",
+    component_ref: { structure_part: "上部结构", component_name: "主梁", component_alias: "2-1#板" },
+    source_score: 55.81,
+    calculated_score: 55.80761184457488,
+    confirmed_score: 55.81,
+    score_validation_status: "一致",
+    score_resolution_reason: null,
+    deduction_defect_candidate_ids: [],
+    calculation_details: null,
+    review_status: "待确认",
+    warnings: [],
+    ...overrides,
+  };
+}
+
+function ratingsWith(componentRatings: ComponentRatingCandidate[]) {
+  return {
+    overall: makeOverallRating(),
+    structure_parts: [],
+    evaluation_parts: [],
+    component_ratings: componentRatings,
+    warnings: [],
+  };
+}
+
+describe("component rating grouping", () => {
+  it("unresolved score validation states appear in needsAttention as rating items", () => {
+    const data = makeData({
+      ratings: ratingsWith([
+        makeComponentRating({
+          score_validation_status: "不一致",
+          confirmed_score: null,
+        }),
+      ]),
+    });
+
+    const items = needsAttention(data);
+
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        kind: "rating",
+        candidateId: "component_rating_0001",
+        severity: "warning",
+      })
+    );
+  });
+
+  it("consistent and manually resolved ratings do not enter needsAttention", () => {
+    const data = makeData({
+      ratings: ratingsWith([
+        makeComponentRating(),
+        makeComponentRating({
+          candidate_id: "component_rating_0002",
+          score_validation_status: "人工接受Word值",
+          confirmed_score: 70,
+          score_resolution_reason: "已复核",
+          review_status: "已修改",
+        }),
+      ]),
+    });
+
+    const items = needsAttention(data).filter((item) => item.candidateId.startsWith("component_rating_"));
+    expect(items).toEqual([]);
+  });
+
+  it("component rating warnings enter needsAttention with kind rating", () => {
+    const data = makeData({
+      ratings: ratingsWith([
+        makeComponentRating({
+          warnings: [makeWarning({ message: "组内评分不一致。", target_candidate_id: "component_rating_0001" })],
+        }),
+      ]),
+    });
+
+    const items = needsAttention(data);
+    expect(items).toContainEqual(
+      expect.objectContaining({ kind: "rating", candidateId: "component_rating_0001", message: "组内评分不一致。" })
+    );
+  });
+
+  it("isNormalComponentRating only accepts pending, warning-free, consistent ratings", () => {
+    expect(isNormalComponentRating(makeComponentRating())).toBe(true);
+    expect(isNormalComponentRating(makeComponentRating({ review_status: "已确认" }))).toBe(false);
+    expect(
+      isNormalComponentRating(makeComponentRating({ score_validation_status: "不一致", confirmed_score: null }))
+    ).toBe(false);
+    expect(isNormalComponentRating(makeComponentRating({ warnings: [makeWarning()] }))).toBe(false);
+  });
+
+  it("buildStatistics counts component ratings in totals and status buckets", () => {
+    const data = makeData({
+      ratings: ratingsWith([
+        makeComponentRating(),
+        makeComponentRating({ candidate_id: "component_rating_0002", review_status: "已修改" }),
+      ]),
+    });
+
+    const counts = buildStatistics(data);
+
+    expect(counts.rating_item_count).toBe(3); // overall + 2 component ratings
+    expect(counts.pending_count).toBeGreaterThanOrEqual(2); // overall(待确认) + component_rating_0001
+    expect(counts.modified_count).toBe(1);
   });
 });

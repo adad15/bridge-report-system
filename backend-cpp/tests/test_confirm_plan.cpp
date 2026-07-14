@@ -116,6 +116,8 @@ TEST(ConfirmPlanTest, DefectConfirmedEntersPlanWithComponentDetails) {
 TEST(ConfirmPlanTest, DefectIgnoredDoesNotEnterPlan) {
     auto data = valid_data();
     confirm_all_candidates(data);
+    // 该场景下引用被忽略病害的构件评分会被 preflight 阻断；此处聚焦病害排除行为。
+    data["ratings"]["component_ratings"] = Json::Value(Json::arrayValue);
     data["defects"][0]["review_status"] = "已忽略";
 
     const auto plan = build_confirm_plan(data);
@@ -186,6 +188,7 @@ TEST(ConfirmPlanTest, DifferentComponentTwoDefectsProduceTwoComponentPlans) {
 TEST(ConfirmPlanTest, ComponentAliasEmptyFallsBackToComponentNameAndAliasTextUnset) {
     auto data = valid_data();
     confirm_all_candidates(data);
+    data["ratings"]["component_ratings"] = Json::Value(Json::arrayValue);
     data["defects"][0]["component_alias"] = Json::Value(Json::nullValue);
 
     const auto plan = build_confirm_plan(data);
@@ -200,6 +203,7 @@ TEST(ConfirmPlanTest, ComponentAliasEmptyFallsBackToComponentNameAndAliasTextUns
 TEST(ConfirmPlanTest, NormalizedComponentKeyTrimsSurroundingWhitespace) {
     auto data = valid_data();
     confirm_all_candidates(data);
+    data["ratings"]["component_ratings"] = Json::Value(Json::arrayValue);
     data["defects"][0]["component_name"] = " 主梁 ";
     data["defects"][0]["component_alias"] = Json::Value(Json::nullValue);
 
@@ -218,6 +222,8 @@ TEST(ConfirmPlanTest, NormalizedComponentKeyTrimsSurroundingWhitespace) {
 TEST(ConfirmPlanTest, NormalizedComponentKeyCollapsesInternalWhitespace) {
     auto data = valid_data();
     confirm_all_candidates(data);
+    // 本组测试聚焦病害侧 key 归一化；清空构件评分，避免其 component_ref 额外沉淀构件。
+    data["ratings"]["component_ratings"] = Json::Value(Json::arrayValue);
     data["defects"][0]["component_name"] = "1-1#   板";
     data["defects"][0]["component_alias"] = Json::Value(Json::nullValue);
 
@@ -234,6 +240,7 @@ TEST(ConfirmPlanTest, NormalizedComponentKeyCollapsesInternalWhitespace) {
 TEST(ConfirmPlanTest, NormalizedComponentKeyEscapesLiteralPipeToAvoidCollision) {
     auto data = valid_data();
     confirm_all_candidates(data);
+    data["ratings"]["component_ratings"] = Json::Value(Json::arrayValue);
 
     // Component A: component_alias = "主梁|1"，component_name = "2"。
     data["defects"][0]["component_alias"] = "主梁|1";
@@ -268,6 +275,7 @@ TEST(ConfirmPlanTest, NormalizedComponentKeyEscapesLiteralPipeToAvoidCollision) 
 TEST(ConfirmPlanTest, NormalizedComponentKeyEscapesLiteralBackslash) {
     auto data = valid_data();
     confirm_all_candidates(data);
+    data["ratings"]["component_ratings"] = Json::Value(Json::arrayValue);
     data["defects"][0]["component_alias"] = "主\\梁";  // 实际字符串含 1 个反斜杠：主\梁
     data["defects"][0]["component_name"] = "1";
 
@@ -297,8 +305,11 @@ TEST(ConfirmPlanTest, DefectFieldMappingFromSourceRefAndReview) {
     EXPECT_EQ(defect->defect_location, "第二跨左幅梁底");
     EXPECT_EQ(defect->defect_type, "裂缝");
     EXPECT_EQ(defect->defect_description_raw, "梁底发现纵向裂缝，需现场复核。");
+    // 夹具 severity="warning"，但 scale 只能来自 defect_scale=2；severity 永不写入标度。
     ASSERT_TRUE(defect->scale.has_value());
-    EXPECT_EQ(*defect->scale, "warning");
+    EXPECT_EQ(*defect->scale, "2");
+    ASSERT_TRUE(defect->defect_deduction.has_value());
+    EXPECT_DOUBLE_EQ(*defect->defect_deduction, 35.0);
     ASSERT_TRUE(defect->raw_row_text.has_value());
     EXPECT_EQ(*defect->raw_row_text, "第二跨左幅梁底主梁裂缝，L=0.8m，W=0.12mm。");
     ASSERT_TRUE(defect->source_table_title.has_value());
@@ -321,6 +332,71 @@ TEST(ConfirmPlanTest, DefectReviewNoteAbsentWhenNull) {
     const auto* defect = find_defect(plan, "defect_0001");
     ASSERT_NE(defect, nullptr);
     EXPECT_FALSE(defect->review_note.has_value());
+}
+
+TEST(ConfirmPlanTest, SeverityNeverReachesScaleWhenDefectScaleIsNull) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["defects"][0]["defect_scale"] = Json::Value(Json::nullValue);
+    data["defects"][0]["severity"] = "error";
+
+    const auto plan = build_confirm_plan(data);
+
+    const auto* defect = find_defect(plan, "defect_0001");
+    ASSERT_NE(defect, nullptr);
+    EXPECT_FALSE(defect->scale.has_value());
+}
+
+// ---------------------------------------------------------------------------
+// Rule 8: component rating mapping (rating_level='构件')
+// ---------------------------------------------------------------------------
+
+TEST(ConfirmPlanTest, SettledComponentRatingProducesComponentRatingPlan) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+
+    const auto plan = build_confirm_plan(data);
+
+    ASSERT_EQ(plan.component_ratings.size(), 1u);
+    const auto& rating = plan.component_ratings[0];
+    EXPECT_EQ(rating.candidate_id, "component_rating_0001");
+    EXPECT_EQ(rating.structure_part, "上部结构");
+    EXPECT_EQ(rating.rating_item_name, "上部承重构件");
+    ASSERT_TRUE(rating.score.has_value());
+    EXPECT_DOUBLE_EQ(*rating.score, 65.0);
+    ASSERT_TRUE(rating.source_score.has_value());
+    EXPECT_DOUBLE_EQ(*rating.source_score, 65.0);
+    ASSERT_TRUE(rating.calculated_score.has_value());
+    EXPECT_EQ(rating.score_validation_status, "一致");
+    EXPECT_FALSE(rating.score_resolution_reason.has_value());
+    EXPECT_NE(rating.calculation_details_json.find("ordered_deductions"), std::string::npos);
+    // 构件评分与病害共用同一构件 key，入库时解析到同一 bridge_component_id。
+    const auto* defect = find_defect(plan, "defect_0001");
+    ASSERT_NE(defect, nullptr);
+    EXPECT_EQ(rating.component_key, defect->component_key);
+    EXPECT_EQ(plan.components.size(), 1u);
+}
+
+TEST(ConfirmPlanTest, PendingComponentRatingIsExcluded) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["ratings"]["component_ratings"][0]["review_status"] = "待确认";
+
+    const auto plan = build_confirm_plan(data);
+
+    EXPECT_TRUE(plan.component_ratings.empty());
+}
+
+TEST(ConfirmPlanTest, ComponentRatingWithoutMatchingDefectStillSeedsComponent) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    // 把病害改到另一个构件：评分引用的构件必须独立进入沉淀集合。
+    data["defects"][0]["component_alias"] = "另一构件";
+
+    const auto plan = build_confirm_plan(data);
+
+    ASSERT_EQ(plan.component_ratings.size(), 1u);
+    EXPECT_EQ(plan.components.size(), 2u);
 }
 
 // ---------------------------------------------------------------------------

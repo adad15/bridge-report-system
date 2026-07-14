@@ -699,3 +699,201 @@ TEST(PreflightReportTest, ToJsonEmitsNullTargetCandidateIdWhenEmpty) {
     }
     EXPECT_TRUE(found_null_target);
 }
+
+// ---------------------------------------------------------------------------
+// Contract 1.2: component rating resolution and independent recalculation
+// ---------------------------------------------------------------------------
+
+TEST(PreflightReportTest, PendingComponentRatingBlocksConfirm) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["ratings"]["component_ratings"][0]["review_status"] = "待确认";
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    const auto* issue = find_blocking(report, "candidate_pending_review");
+    ASSERT_NE(issue, nullptr);
+    EXPECT_EQ(issue->target_candidate_id, "component_rating_0001");
+}
+
+TEST(PreflightReportTest, UnresolvedComponentScoreBlocksConfirm) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    auto& rating = data["ratings"]["component_ratings"][0];
+    rating["score_validation_status"] = "不一致";
+    rating["confirmed_score"] = Json::Value(Json::nullValue);
+    rating["score_resolution_reason"] = Json::Value(Json::nullValue);
+    // 制造真实的不一致：来源分与复算分两位小数不同。
+    rating["source_score"] = 70.0;
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "component_score_pending_resolution"));
+}
+
+TEST(PreflightReportTest, ManualResolutionWithReasonPassesComponentChecks) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    auto& rating = data["ratings"]["component_ratings"][0];
+    rating["source_score"] = 70.0;
+    rating["score_validation_status"] = "人工采用复算值";
+    rating["confirmed_score"] = 65.0;
+    rating["score_resolution_reason"] = "现场复核后采用规范复算值。";
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_TRUE(report.can_confirm) << [&] {
+        std::string all;
+        for (const auto& issue : report.blocking_errors) {
+            all += issue.code + ": " + issue.message + "\n";
+        }
+        return all;
+    }();
+}
+
+TEST(PreflightReportTest, RecalcMismatchBlocksConfirm) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    // 篡改 calculated_score：后端独立复算 [35] -> 65，与 60 不符。
+    data["ratings"]["component_ratings"][0]["calculated_score"] = 60.0;
+    data["ratings"]["component_ratings"][0]["confirmed_score"] = Json::Value(Json::nullValue);
+    data["ratings"]["component_ratings"][0]["score_validation_status"] = "人工接受Word值";
+    data["ratings"]["component_ratings"][0]["confirmed_score"] = 65.0;
+    data["ratings"]["component_ratings"][0]["score_resolution_reason"] = "接受来源分。";
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "component_score_recalc_mismatch"));
+}
+
+TEST(PreflightReportTest, StatusInconsistentWithRecalcBlocksConfirm) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    // 状态声称一致，但来源分与复算分（65）两位小数不同。
+    data["ratings"]["component_ratings"][0]["source_score"] = 70.0;
+    data["ratings"]["component_ratings"][0]["confirmed_score"] = 70.0;
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "component_score_recalc_mismatch"));
+}
+
+TEST(PreflightReportTest, UncomputableStatusWithCompleteDeductionsBlocksConfirm) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    auto& rating = data["ratings"]["component_ratings"][0];
+    rating["score_validation_status"] = "无法复算";
+    rating["calculated_score"] = Json::Value(Json::nullValue);
+    rating["confirmed_score"] = Json::Value(Json::nullValue);
+    rating["calculation_details"] = Json::Value(Json::nullValue);
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    // 扣分齐全却标无法复算：既提示重新校对，也阻断未解决状态。
+    EXPECT_TRUE(has_blocking_code(report, "component_score_recalc_mismatch"));
+    EXPECT_TRUE(has_blocking_code(report, "component_score_pending_resolution"));
+}
+
+TEST(PreflightReportTest, IgnoredReferencedDefectBlocksConfirm) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["defects"][0]["review_status"] = "已忽略";
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "component_score_defect_reference_invalid"));
+}
+
+TEST(PreflightReportTest, UnreferencedDeductionBlocksConfirm) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    // 同构件新增一条带扣分的已确认病害，但证据链未纳入。
+    Json::Value extra = data["defects"][0];
+    extra["candidate_id"] = "defect_0002";
+    extra["defect_deduction"] = 20.0;
+    extra["photo_numbers"] = Json::Value(Json::arrayValue);
+    extra["confirmed_missing_photo_numbers"] = Json::Value(Json::arrayValue);
+    data["defects"].append(extra);
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    const auto* issue = find_blocking(report, "component_score_deduction_incomplete");
+    ASSERT_NE(issue, nullptr);
+    EXPECT_EQ(issue->target_candidate_id, "component_rating_0001");
+}
+
+TEST(PreflightReportTest, DuplicateComponentRatingBlocksConfirm) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    Json::Value duplicate = data["ratings"]["component_ratings"][0];
+    duplicate["candidate_id"] = "component_rating_0002";
+    data["ratings"]["component_ratings"].append(duplicate);
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "component_rating_duplicate_component"));
+}
+
+TEST(PreflightReportTest, UncomputableAcceptedAsWordValuePassesWithIncompleteDeductions) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    // 扣分缺失 -> 无法复算 -> 人工接受Word值：这是合法的处理路径，不得误伤。
+    data["defects"][0]["defect_deduction"] = Json::Value(Json::nullValue);
+    auto& rating = data["ratings"]["component_ratings"][0];
+    rating["calculated_score"] = Json::Value(Json::nullValue);
+    rating["calculation_details"] = Json::Value(Json::nullValue);
+    rating["score_validation_status"] = "人工接受Word值";
+    rating["confirmed_score"] = 65.0;
+    rating["score_resolution_reason"] = "扣分列缺失，经复核采信Word来源分。";
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_TRUE(report.can_confirm) << [&] {
+        std::string all;
+        for (const auto& issue : report.blocking_errors) {
+            all += issue.code + ": " + issue.message + "\n";
+        }
+        return all;
+    }();
+}
+
+TEST(PreflightReportTest, AdoptCalculatedWithoutStoredCalcBlocks) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    auto& rating = data["ratings"]["component_ratings"][0];
+    rating["calculated_score"] = Json::Value(Json::nullValue);
+    rating["calculation_details"] = Json::Value(Json::nullValue);
+    rating["score_validation_status"] = "人工采用复算值";
+    rating["confirmed_score"] = 65.0;
+    rating["score_resolution_reason"] = "采用复算值。";
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "component_score_recalc_mismatch"));
+}
+
+TEST(PreflightReportTest, AcceptWordValueWithComputableEvidenceButNoStoredCalcBlocks) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    // 扣分齐全可复算，却仍以"无法复算后接受Word值"的形态提交：证据链已变化，必须重新校对。
+    auto& rating = data["ratings"]["component_ratings"][0];
+    rating["calculated_score"] = Json::Value(Json::nullValue);
+    rating["calculation_details"] = Json::Value(Json::nullValue);
+    rating["score_validation_status"] = "人工接受Word值";
+    rating["confirmed_score"] = 65.0;
+    rating["score_resolution_reason"] = "沿用旧状态。";
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "component_score_recalc_mismatch"));
+}

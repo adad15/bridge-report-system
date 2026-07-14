@@ -668,17 +668,19 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     EXPECT_EQ(outcome.written.defect_observations, 1);
     EXPECT_EQ(outcome.written.defect_measurements, 3);
     EXPECT_EQ(outcome.written.defect_photos, 1);
-    EXPECT_EQ(outcome.written.condition_ratings, 7);
+    EXPECT_EQ(outcome.written.condition_ratings, 8);
 
     const auto observation_result = client_->execSqlSync(
-        "select id, scale, defect_description_raw, part_name, component_type, business_component_code, "
-        "review_status, bridge_component_id "
+        "select id, scale, defect_deduction, defect_description_raw, part_name, component_type, "
+        "business_component_code, review_status, bridge_component_id "
         "from defect_observations where source_import_record_id = $1::uuid",
         import_record_id_
     );
     ASSERT_EQ(observation_result.size(), 1u);
     const auto observation_id = observation_result[0]["id"].as<std::string>();
-    EXPECT_EQ(observation_result[0]["scale"].as<std::string>(), "warning");
+    // severity="warning" 不再进入 scale；标度只来自 defect_scale=2。
+    EXPECT_EQ(observation_result[0]["scale"].as<std::string>(), "2");
+    EXPECT_DOUBLE_EQ(observation_result[0]["defect_deduction"].as<double>(), 35.0);
     EXPECT_EQ(observation_result[0]["defect_description_raw"].as<std::string>(), "梁底发现纵向裂缝，需现场复核。");
     EXPECT_EQ(observation_result[0]["part_name"].as<std::string>(), "上部承重构件");
     EXPECT_EQ(observation_result[0]["component_type"].as<std::string>(), "上部承重构件");
@@ -701,10 +703,11 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     const auto rating_result = client_->execSqlSync(
         "select rating_level from condition_ratings where source_import_record_id = $1::uuid", import_record_id_
     );
-    ASSERT_EQ(rating_result.size(), 7u);
+    ASSERT_EQ(rating_result.size(), 8u);
     int overall_count = 0;
     int structure_count = 0;
     int part_count = 0;
+    int component_count = 0;
     for (const auto& row : rating_result) {
         const auto level = row["rating_level"].as<std::string>();
         if (level == "全桥") {
@@ -713,11 +716,35 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
             ++structure_count;
         } else if (level == "部件") {
             ++part_count;
+        } else if (level == "构件") {
+            ++component_count;
         }
     }
     EXPECT_EQ(overall_count, 1);
     EXPECT_EQ(structure_count, 3);
     EXPECT_EQ(part_count, 3);
+    EXPECT_EQ(component_count, 1);
+
+    // 构件级评分行：三值校验列全部落库并绑定正确构件。
+    const auto component_rating_result = client_->execSqlSync(
+        "select structure_part, bridge_component_id, rating_item_name, score, source_score, calculated_score, "
+        "score_validation_status, score_resolution_reason, calculation_details_json::text as details, review_status "
+        "from condition_ratings where source_import_record_id = $1::uuid and rating_level = '构件'",
+        import_record_id_
+    );
+    ASSERT_EQ(component_rating_result.size(), 1u);
+    EXPECT_EQ(component_rating_result[0]["structure_part"].as<std::string>(), "上部结构");
+    EXPECT_EQ(component_rating_result[0]["rating_item_name"].as<std::string>(), "上部承重构件");
+    EXPECT_DOUBLE_EQ(component_rating_result[0]["score"].as<double>(), 65.0);
+    EXPECT_DOUBLE_EQ(component_rating_result[0]["source_score"].as<double>(), 65.0);
+    EXPECT_DOUBLE_EQ(component_rating_result[0]["calculated_score"].as<double>(), 65.0);
+    EXPECT_EQ(component_rating_result[0]["score_validation_status"].as<std::string>(), "一致");
+    EXPECT_TRUE(component_rating_result[0]["score_resolution_reason"].isNull());
+    const auto details = parse_json_text(component_rating_result[0]["details"].as<std::string>());
+    EXPECT_EQ(details["standard"].asString(), "JTG/T H21-2011 4.1.1");
+    ASSERT_EQ(details["ordered_deductions"].size(), 1u);
+    EXPECT_DOUBLE_EQ(details["ordered_deductions"][0].asDouble(), 35.0);
+    EXPECT_EQ(component_rating_result[0]["review_status"].as<std::string>(), "已确认");
 
     const auto year_result = client_->execSqlSync(
         "select status, is_current, overall_score, overall_grade from inspection_years where id = $1::uuid",
@@ -742,7 +769,8 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     EXPECT_EQ(validation_json["written"]["defect_observations"].asInt(), 1);
     EXPECT_EQ(validation_json["written"]["defect_measurements"].asInt(), 3);
     EXPECT_EQ(validation_json["written"]["defect_photos"].asInt(), 1);
-    EXPECT_EQ(validation_json["written"]["condition_ratings"].asInt(), 7);
+    EXPECT_EQ(validation_json["written"]["condition_ratings"].asInt(), 8);
+    EXPECT_EQ(validation_json["written"]["component_condition_ratings"].asInt(), 1);
 
     const auto component_result = client_->execSqlSync(
         "select id, structure_part, component_type, business_component_code, current_status, creation_source "
@@ -827,6 +855,16 @@ TEST_F(ConfirmAnnualFactsTest, confirm_requires_revision_when_current_facts_exis
     ASSERT_EQ(observation_after.size(), 1u);
     EXPECT_EQ(observation_after[0]["inspection_year_id"].as<std::string>(), confirmed_outcome.inspection_year_id);
 
+    // 构件评分绑定新版本检测行；同构件唯一约束按检测版本作用域，与旧版本不冲突。
+    const auto component_rating_after = client_->execSqlSync(
+        "select inspection_year_id from condition_ratings "
+        "where source_import_record_id = $1::uuid and rating_level = '构件'",
+        import_record_id_
+    );
+    ASSERT_EQ(component_rating_after.size(), 1u);
+    EXPECT_EQ(component_rating_after[0]["inspection_year_id"].as<std::string>(),
+              confirmed_outcome.inspection_year_id);
+
     const auto record_after = client_->execSqlSync(
         "select inspection_year_id, import_status from import_records where id = $1::uuid", import_record_id_
     );
@@ -856,6 +894,35 @@ TEST_F(ConfirmAnnualFactsTest, confirm_blocks_wrong_status) {
         "select count(*) as n from defect_observations where source_import_record_id = $1::uuid", import_record_id_
     );
     EXPECT_EQ(observation_count[0]["n"].as<int64_t>(), 0);
+}
+
+TEST_F(ConfirmAnnualFactsTest, duplicate_component_rating_is_blocked_without_partial_writes) {
+    bridge_report::db::ReviewRepository repository(client_);
+    auto data = build_confirmed_data();
+    Json::Value duplicate = data["ratings"]["component_ratings"][0];
+    duplicate["candidate_id"] = "component_rating_0002";
+    data["ratings"]["component_ratings"].append(duplicate);
+    ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
+
+    const auto outcome = repository.confirm_annual_facts(import_record_id_, /*confirm_revision=*/false, "");
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "preflight_failed");
+    bool found = false;
+    for (const auto& issue : outcome.preflight_details["blocking_errors"]) {
+        if (issue["code"].asString() == "component_rating_duplicate_component") {
+            found = true;
+        }
+    }
+    EXPECT_TRUE(found);
+    const auto rating_count = client_->execSqlSync(
+        "select count(*) as n from condition_ratings where source_import_record_id = $1::uuid", import_record_id_
+    );
+    EXPECT_EQ(rating_count[0]["n"].as<int64_t>(), 0);
+    const auto record_row = client_->execSqlSync(
+        "select import_status from import_records where id = $1::uuid", import_record_id_
+    );
+    EXPECT_EQ(record_row[0]["import_status"].as<std::string>(), "待校对");
 }
 
 TEST_F(ConfirmAnnualFactsTest, confirm_rolls_back_on_failure) {

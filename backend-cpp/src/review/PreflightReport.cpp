@@ -1,6 +1,11 @@
 #include "bridge_report/review/PreflightReport.hpp"
 
+#include <cmath>
+#include <optional>
+#include <vector>
+
 #include "bridge_report/contracts/AnnualInspectionContract.hpp"
+#include "bridge_report/review/ComponentScore.hpp"
 #include "bridge_report/review/JsonAccessors.hpp"
 
 namespace bridge_report::review {
@@ -105,6 +110,14 @@ void check_candidate_pending_review(const Json::Value& data, std::vector<Preflig
                 if (review_status_of(evaluation_parts[index]) == kPending) {
                     const auto target = "ratings.evaluation_parts[" + std::to_string(index) + "]";
                     add_issue(blocking, "candidate_pending_review", "评价部件评分 " + target + " 仍处于待确认状态。", target);
+                }
+            }
+        }
+        if (ratings["component_ratings"].isArray()) {
+            for (const auto& rating : ratings["component_ratings"]) {
+                if (review_status_of(rating) == kPending) {
+                    add_issue(blocking, "candidate_pending_review",
+                              "构件评分候选 " + candidate_id_of(rating) + " 仍处于待确认状态。", candidate_id_of(rating));
                 }
             }
         }
@@ -255,6 +268,178 @@ void check_photo_archives(const Json::Value& data, std::vector<PreflightIssue>& 
         if (string_member_or_empty(photo["extracted_file"], "archive_relative_path").empty()) {
             add_issue(blocking, "photo_archive_missing",
                       "照片候选 " + candidate_id_of(photo) + " 缺少归档文件，无法入库。", candidate_id_of(photo));
+        }
+    }
+}
+
+// -----------------------------------------------------------------------
+// 检查 6b：构件评分独立复算与差异处理（合同 1.2）
+// -----------------------------------------------------------------------
+
+std::optional<double> optional_numeric_member(const Json::Value& object, const char* key) {
+    if (!object.isObject() || !object.isMember(key) || object[key].isNull() || !object[key].isNumeric()) {
+        return std::nullopt;
+    }
+    return object[key].asDouble();
+}
+
+// 病害是否属于该构件评分的构件（component_ref 三字段原文相等；空 alias 与缺省等价）。
+bool defect_matches_component_ref(const Json::Value& defect, const Json::Value& component_ref) {
+    if (string_member_or_empty(defect, "structure_part") != string_member_or_empty(component_ref, "structure_part")) {
+        return false;
+    }
+    if (string_member_or_empty(defect, "component_name") != string_member_or_empty(component_ref, "component_name")) {
+        return false;
+    }
+    return string_member_or_empty(defect, "component_alias")
+        == string_member_or_empty(component_ref, "component_alias");
+}
+
+void check_component_ratings(const Json::Value& data, std::vector<PreflightIssue>& blocking) {
+    const auto& ratings = data["ratings"];
+    if (!ratings.isObject() || !ratings["component_ratings"].isArray()) {
+        return;
+    }
+
+    std::vector<std::string> seen_component_refs;
+    for (const auto& rating : ratings["component_ratings"]) {
+        const auto status = review_status_of(rating);
+        if (!is_review_settled(status)) {
+            continue;
+        }
+        const auto rating_id = candidate_id_of(rating);
+        const auto& component_ref = rating["component_ref"];
+        const auto validation_status = string_member_or_empty(rating, "score_validation_status");
+
+        // 同一构件只允许一条已定评分，防止把组评分复制成多个正式评分事实。
+        const auto ref_key = string_member_or_empty(component_ref, "structure_part") + "|"
+            + string_member_or_empty(component_ref, "component_name") + "|"
+            + string_member_or_empty(component_ref, "component_alias");
+        for (const auto& seen : seen_component_refs) {
+            if (seen == ref_key) {
+                add_issue(blocking, "component_rating_duplicate_component",
+                          "构件评分候选 " + rating_id + " 与另一条候选指向同一构件。", rating_id);
+                break;
+            }
+        }
+        seen_component_refs.push_back(ref_key);
+
+        // 未解决的差异不允许入库：必须显式选择最终分并填写原因。
+        if (validation_status == "不一致" || validation_status == "无法复算") {
+            add_issue(blocking, "component_score_pending_resolution",
+                      "构件评分候选 " + rating_id + " 校验状态为「" + validation_status
+                          + "」，必须显式选择最终分并填写原因。",
+                      rating_id);
+        }
+
+        // 证据链校验：引用的病害必须存在且未被忽略。
+        std::vector<double> deductions;
+        bool references_valid = true;
+        bool deductions_complete = true;
+        if (rating["deduction_defect_candidate_ids"].isArray()) {
+            for (const auto& id_value : rating["deduction_defect_candidate_ids"]) {
+                const auto defect_id = id_value.isString() ? id_value.asString() : std::string();
+                const auto* defect = find_defect_by_candidate_id(data, defect_id);
+                if (defect == nullptr || review_status_of(*defect) == kIgnored) {
+                    add_issue(blocking, "component_score_defect_reference_invalid",
+                              "构件评分候选 " + rating_id + " 引用的病害 " + defect_id + " 不存在或已忽略。",
+                              rating_id);
+                    references_valid = false;
+                    continue;
+                }
+                const auto deduction = optional_numeric_member(*defect, "defect_deduction");
+                if (deduction.has_value()) {
+                    deductions.push_back(*deduction);
+                } else {
+                    deductions_complete = false;
+                }
+            }
+        }
+
+        // 完整性校验：同构件还有带扣分且未忽略的已定病害没进证据链，说明编辑后未重算。
+        if (data["defects"].isArray() && component_ref.isObject()) {
+            for (const auto& defect : data["defects"]) {
+                const auto defect_status = review_status_of(defect);
+                if (defect_status == kIgnored || !is_review_settled(defect_status)) {
+                    continue;
+                }
+                if (!defect_matches_component_ref(defect, component_ref)) {
+                    continue;
+                }
+                if (!optional_numeric_member(defect, "defect_deduction").has_value()) {
+                    continue;
+                }
+                const auto defect_id = candidate_id_of(defect);
+                if (!rating["deduction_defect_candidate_ids"].isArray()
+                    || !string_array_contains(rating["deduction_defect_candidate_ids"], defect_id)) {
+                    add_issue(blocking, "component_score_deduction_incomplete",
+                              "构件评分候选 " + rating_id + " 未纳入同构件病害 " + defect_id + " 的扣分。",
+                              rating_id);
+                }
+            }
+        }
+
+        // 独立复算：C++ 在入库前重跑同一纯函数，不信任 Python 或前端结果。
+        // 扣分缺失或含非法值（如 0）时纯函数无结果，与解析器的"无法复算"语义一致。
+        if (!references_valid) {
+            continue;  // 引用已阻断，复算无意义。
+        }
+        const auto recalculated = (deductions_complete && !deductions.empty())
+            ? compute_component_score(deductions)
+            : std::nullopt;
+        const auto calculated = optional_numeric_member(rating, "calculated_score");
+        const bool stored_matches_recalc = recalculated.has_value() && calculated.has_value()
+            && std::abs(recalculated->score - *calculated) <= 1e-6;
+
+        if (validation_status == "无法复算") {
+            if (recalculated.has_value()) {
+                add_issue(blocking, "component_score_recalc_mismatch",
+                          "构件评分候选 " + rating_id + " 标记为无法复算，但扣分齐全且可复算，请重新校对。",
+                          rating_id);
+            }
+            continue;
+        }
+        if (validation_status == "一致" || validation_status == "不一致") {
+            if (!recalculated.has_value()) {
+                add_issue(blocking, "component_score_recalc_mismatch",
+                          "构件评分候选 " + rating_id + " 声称已复算，但扣分不齐全或不可复算，请重新校对。",
+                          rating_id);
+                continue;
+            }
+            if (!stored_matches_recalc) {
+                add_issue(blocking, "component_score_recalc_mismatch",
+                          "构件评分候选 " + rating_id + " 的复算分与后端独立复算结果不一致。", rating_id);
+                continue;
+            }
+            // 自动状态与两位小数比较结论必须吻合。
+            const auto source = optional_numeric_member(rating, "source_score");
+            const auto expected_auto = classify_score_validation(source, recalculated->score);
+            if ((validation_status == "一致" && expected_auto != "一致")
+                || (validation_status == "不一致" && expected_auto == "一致")) {
+                add_issue(blocking, "component_score_recalc_mismatch",
+                          "构件评分候选 " + rating_id + " 的校验状态与来源分/复算分两位小数比较结论不符。",
+                          rating_id);
+            }
+            continue;
+        }
+        if (validation_status == "人工采用复算值") {
+            // 采用复算值必须建立在可复算且与后端独立复算一致的基础上。
+            if (!stored_matches_recalc) {
+                add_issue(blocking, "component_score_recalc_mismatch",
+                          "构件评分候选 " + rating_id + " 采用复算值，但复算依据与后端独立复算不一致。", rating_id);
+            }
+            continue;
+        }
+        // 人工接受Word值：合法来源是"不一致"（复算分存在且与独立复算一致）或
+        // "无法复算"（复算分为空且确实不可复算）；证据链变化后仍挂旧状态则拦截。
+        if (recalculated.has_value()) {
+            if (!calculated.has_value() || !stored_matches_recalc) {
+                add_issue(blocking, "component_score_recalc_mismatch",
+                          "构件评分候选 " + rating_id + " 的扣分证据已可复算，请重新校对后再处理差异。", rating_id);
+            }
+        } else if (calculated.has_value()) {
+            add_issue(blocking, "component_score_recalc_mismatch",
+                      "构件评分候选 " + rating_id + " 记录了复算分但扣分证据已不可复算，请重新校对。", rating_id);
         }
     }
 }
@@ -448,6 +633,7 @@ PreflightReport build_preflight_report(const Json::Value& data, const PreflightC
     check_photo_link_unresolved(data, report.blocking_errors);
     check_defect_photo_groups(data, report.blocking_errors);
     check_photo_archives(data, report.blocking_errors);
+    check_component_ratings(data, report.blocking_errors);
     check_rating_overall_missing(data, report.blocking_errors);
 
     check_defect_without_photo(data, report.warnings);

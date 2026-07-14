@@ -40,6 +40,7 @@ function makeRatings(overrides: Partial<Ratings> = {}): Ratings {
     overall: makeOverallRating(),
     structure_parts: [],
     evaluation_parts: [],
+    component_ratings: [],
     warnings: [],
     ...overrides,
   };

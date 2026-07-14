@@ -190,13 +190,13 @@ std::string insert_defect_observation(
         "(inspection_year_id, bridge_id, bridge_component_id, source_import_record_id, "
         " source_table_title, source_table_index, source_row_number, source_raw_cells_json, "
         " structure_part, part_name, component_type, business_component_code, "
-        " defect_location, defect_type, defect_description_raw, scale, "
+        " defect_location, defect_type, defect_description_raw, scale, defect_deduction, "
         " extraction_confidence, review_status, review_note) "
         "values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, "
         "        $5, $6, $7, $8::jsonb, "
         "        $9, $10, $11, $12, "
-        "        $13, $14, $15, $16, "
-        "        $17, $18, $19) "
+        "        $13, $14, $15, $16, $17, "
+        "        $18, $19, $20) "
         "returning id",
         inspection_year_id,
         bridge_id,
@@ -214,6 +214,7 @@ std::string insert_defect_observation(
         defect.defect_type,
         defect.defect_description_raw,
         defect.scale,
+        defect.defect_deduction,
         defect.extraction_confidence,
         defect.review_status,
         defect.review_note
@@ -287,6 +288,38 @@ void insert_condition_rating(
         rating.grade,
         rating.weight,
         rating.remarks,
+        rating.review_status
+    );
+}
+
+// 构件级评分：rating_level='构件'，绑定 bridge_component_id，并落迁移 003 的
+// 三值校验列（score 为最终确认分；来源分/复算分/状态/原因/计算明细分别入列）。
+// 同检测版本同构件的唯一性由部分唯一索引 ux_condition_ratings_component_per_inspection
+// 兜底；预检的 component_rating_duplicate_component 是第一道防线。
+void insert_component_condition_rating(
+    const TransactionPtr& tx,
+    const std::string& inspection_year_id,
+    const std::string& import_record_id,
+    const std::string& bridge_component_id,
+    const review::ComponentRatingPlan& rating
+) {
+    tx->execSqlSync(
+        "insert into condition_ratings "
+        "(inspection_year_id, source_import_record_id, rating_level, structure_part, bridge_component_id, "
+        " rating_item_name, score, source_score, calculated_score, score_validation_status, "
+        " score_resolution_reason, calculation_details_json, review_status) "
+        "values ($1::uuid, $2::uuid, '构件', $3, $4::uuid, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)",
+        inspection_year_id,
+        import_record_id,
+        rating.structure_part,
+        bridge_component_id,
+        rating.rating_item_name,
+        rating.score,
+        rating.source_score,
+        rating.calculated_score,
+        rating.score_validation_status,
+        rating.score_resolution_reason,
+        rating.calculation_details_json,
         rating.review_status
     );
 }
@@ -718,10 +751,26 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             ++written_defect_photos;
         }
 
-        // 步骤 6c：condition_ratings。
+        // 步骤 6c：condition_ratings（全桥/结构分部/部件）。
         int written_condition_ratings = 0;
         for (const auto& rating : plan.ratings) {
             insert_condition_rating(tx, target_year_id, import_record_id, rating);
+            ++written_condition_ratings;
+        }
+
+        // 步骤 6d：构件级 condition_ratings，经构件 upsert 映射回填 bridge_component_id。
+        int written_component_ratings = 0;
+        for (const auto& rating : plan.component_ratings) {
+            const auto component_it = component_by_key.find(rating.component_key);
+            if (component_it == component_by_key.end()) {
+                // 不应发生：build_confirm_plan 把构件评分引用的构件也加入沉淀集合。
+                throw std::runtime_error(
+                    "confirm_annual_facts: component rating key not found in plan: " + rating.component_key
+                );
+            }
+            insert_component_condition_rating(
+                tx, target_year_id, import_record_id, component_it->second.bridge_component_id, rating);
+            ++written_component_ratings;
             ++written_condition_ratings;
         }
 
@@ -731,6 +780,7 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         written_json["defect_measurements"] = written_defect_measurements;
         written_json["defect_photos"] = written_defect_photos;
         written_json["condition_ratings"] = written_condition_ratings;
+        written_json["component_condition_ratings"] = written_component_ratings;
 
         tx->execSqlSync(
             "update import_records "

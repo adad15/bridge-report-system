@@ -99,6 +99,16 @@ ReviewStatistics build_review_statistics(const Json::Value& parsed_result) {
                 tally_review_status(part, stats);
             }
         }
+
+        // 合同 1.2：第二章构件评分候选计入评分统计（旧 1.0/1.1 数据缺该数组时按空处理）。
+        if (ratings.isMember("component_ratings") && ratings["component_ratings"].isArray()) {
+            const auto& component_ratings = ratings["component_ratings"];
+            stats.rating_item_count += static_cast<int>(component_ratings.size());
+            for (const auto& rating : component_ratings) {
+                tally_review_status(rating, stats);
+                tally_object_warnings(rating, stats);
+            }
+        }
     }
 
     return stats;

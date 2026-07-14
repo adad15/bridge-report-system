@@ -1,5 +1,6 @@
 import type {
   BridgeAnnualInspectionData,
+  ComponentRatingCandidate,
   DefectCandidate,
   EvaluationPartRating,
   OverallRating,
@@ -54,7 +55,7 @@ function classifyCandidateId(data: BridgeAnnualInspectionData, candidateId: stri
   if (data.photos.some((photo) => photo.candidate_id === candidateId)) {
     return "photo";
   }
-  if (candidateId.startsWith("ratings.")) {
+  if (candidateId.startsWith("ratings.") || candidateId.startsWith("component_rating_")) {
     return "rating";
   }
   return "import";
@@ -164,6 +165,25 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
     }
   }
 
+  // 合同 1.2：构件评分对象级 warning + 未解决的评分差异（不一致/无法复算必须人工显式处理）。
+  for (const rating of data.ratings.component_ratings) {
+    for (const warning of rating.warnings) {
+      items.push({ kind: "rating", candidateId: rating.candidate_id, message: warning.message, severity: warning.severity });
+    }
+    if (rating.review_status === "已忽略") {
+      continue;
+    }
+    if (rating.score_validation_status === "不一致" || rating.score_validation_status === "无法复算") {
+      const componentLabel = rating.component_ref.component_alias ?? rating.component_ref.component_name;
+      items.push({
+        kind: "rating",
+        candidateId: rating.candidate_id,
+        message: `构件 ${componentLabel} 的评分校验状态为「${rating.score_validation_status}」，请显式选择最终分并填写原因。`,
+        severity: "warning",
+      });
+    }
+  }
+
   return items;
 }
 
@@ -235,6 +255,19 @@ export function isNormalRating(item: OverallRating | StructurePartRating | Evalu
   return isFiniteNumber(item.part_score);
 }
 
+/**
+ * §9.2 普通构件评分：待确认 + 无对象级 warning + 校验状态自动「一致」。
+ * 「不一致/无法复算」必须人工显式处理，人工已解决的候选 review_status 已是「已修改」，
+ * 两类都不进入批量确认。
+ */
+export function isNormalComponentRating(rating: ComponentRatingCandidate): boolean {
+  return (
+    rating.review_status === "待确认" &&
+    rating.warnings.length === 0 &&
+    rating.score_validation_status === "一致"
+  );
+}
+
 function tallyReviewStatus(
   status: DefectCandidate["review_status"],
   counts: Pick<ReviewCounts, "pending_count" | "confirmed_count" | "modified_count" | "ignored_count">
@@ -258,7 +291,11 @@ export function buildStatistics(data: BridgeAnnualInspectionData): ReviewCounts 
   const counts: ReviewCounts = {
     defect_count: data.defects.length,
     photo_count: data.photos.length,
-    rating_item_count: 1 + data.ratings.structure_parts.length + data.ratings.evaluation_parts.length,
+    rating_item_count:
+      1 +
+      data.ratings.structure_parts.length +
+      data.ratings.evaluation_parts.length +
+      data.ratings.component_ratings.length,
     pending_count: 0,
     confirmed_count: 0,
     modified_count: 0,
@@ -286,6 +323,12 @@ export function buildStatistics(data: BridgeAnnualInspectionData): ReviewCounts 
   }
   for (const part of data.ratings.evaluation_parts) {
     tallyReviewStatus(part.review_status, counts);
+  }
+  for (const rating of data.ratings.component_ratings) {
+    tallyReviewStatus(rating.review_status, counts);
+    if (rating.warnings.length > 0) {
+      counts.object_warning_count += 1;
+    }
   }
 
   counts.needs_attention_count = needsAttention(data).length;

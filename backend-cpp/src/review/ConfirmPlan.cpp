@@ -164,14 +164,42 @@ void append_measurements(const Json::Value& defect, DefectPlan& plan) {
 // 规则 1-4：构件去重 + 病害映射
 // -----------------------------------------------------------------------
 
+// 构件沉淀共用入口：病害与构件评分引用的构件走同一 key 规则与去重集合。
+std::string ensure_component_in_plan(
+    ConfirmPlan& plan,
+    std::unordered_set<std::string>& seen_component_keys,
+    const std::string& structure_part,
+    const std::string& component_name,
+    const std::optional<std::string>& component_alias
+) {
+    const bool alias_non_empty = component_alias.has_value() && !component_alias->empty();
+    const std::string component_type = alias_non_empty ? *component_alias : component_name;
+    const std::string& business_component_code = component_name;
+    auto key = normalized_component_key(structure_part, component_type, business_component_code);
+
+    if (seen_component_keys.insert(key).second) {
+        ComponentPlan component;
+        component.structure_part = structure_part;
+        component.component_type = component_type;
+        component.business_component_code = business_component_code;
+        component.normalized_component_key = key;
+        if (alias_non_empty) {
+            component.alias_text = component_alias;
+        }
+        plan.components.push_back(std::move(component));
+    }
+    return key;
+}
+
 void append_components_and_defects(
-    const Json::Value& data, ConfirmPlan& plan, std::unordered_set<std::string>& defect_ids_in_plan
+    const Json::Value& data,
+    ConfirmPlan& plan,
+    std::unordered_set<std::string>& seen_component_keys,
+    std::unordered_set<std::string>& defect_ids_in_plan
 ) {
     if (!data.isObject() || !data["defects"].isArray()) {
         return;
     }
-
-    std::unordered_set<std::string> seen_component_keys;
 
     for (const auto& defect : data["defects"]) {
         if (!defect.isObject()) {
@@ -185,22 +213,8 @@ void append_components_and_defects(
         const auto structure_part = string_member_or_empty(defect, "structure_part");
         const auto component_name = string_member_or_empty(defect, "component_name");
         const auto component_alias = optional_string_member(defect, "component_alias");
-        const bool alias_non_empty = component_alias.has_value() && !component_alias->empty();
-        const std::string component_type = alias_non_empty ? *component_alias : component_name;
-        const std::string& business_component_code = component_name;
-        const auto key = normalized_component_key(structure_part, component_type, business_component_code);
-
-        if (seen_component_keys.insert(key).second) {
-            ComponentPlan component;
-            component.structure_part = structure_part;
-            component.component_type = component_type;
-            component.business_component_code = business_component_code;
-            component.normalized_component_key = key;
-            if (alias_non_empty) {
-                component.alias_text = component_alias;
-            }
-            plan.components.push_back(std::move(component));
-        }
+        const auto key =
+            ensure_component_in_plan(plan, seen_component_keys, structure_part, component_name, component_alias);
 
         DefectPlan defect_plan;
         defect_plan.candidate_id = candidate_id_of(defect);
@@ -210,7 +224,12 @@ void append_components_and_defects(
         defect_plan.defect_location = string_member_or_empty(defect, "defect_location");
         defect_plan.defect_type = string_member_or_empty(defect, "defect_type");
         defect_plan.defect_description_raw = string_member_or_empty(defect, "defect_description");
-        defect_plan.scale = optional_string_member(defect, "severity");
+        // 规范标度只来自 defect_scale；severity 是校对提示级别，永不写入 scale。
+        if (defect.isMember("defect_scale") && defect["defect_scale"].isIntegral()
+            && !defect["defect_scale"].isNull()) {
+            defect_plan.scale = std::to_string(defect["defect_scale"].asInt64());
+        }
+        defect_plan.defect_deduction = optional_double_member(defect, "defect_deduction");
 
         const auto& source_ref = defect["source_ref"];
         defect_plan.raw_row_text = optional_string_member(source_ref, "raw_row_text");
@@ -345,7 +364,58 @@ void append_evaluation_part_ratings(const Json::Value& ratings, ConfirmPlan& pla
     }
 }
 
-void append_ratings(const Json::Value& data, ConfirmPlan& plan) {
+// -----------------------------------------------------------------------
+// 规则 8：构件评分映射（rating_level='构件'，绑定 bridge_component_id）
+// -----------------------------------------------------------------------
+
+void append_component_ratings(
+    const Json::Value& ratings,
+    ConfirmPlan& plan,
+    std::unordered_set<std::string>& seen_component_keys
+) {
+    if (!ratings.isObject() || !ratings["component_ratings"].isArray()) {
+        return;
+    }
+    for (const auto& rating : ratings["component_ratings"]) {
+        if (!rating.isObject()) {
+            continue;
+        }
+        const auto status = review_status_of(rating);
+        if (!is_review_settled(status)) {
+            continue;
+        }
+        const auto& component_ref = rating["component_ref"];
+        if (!component_ref.isObject()) {
+            continue;
+        }
+
+        const auto structure_part = string_member_or_empty(component_ref, "structure_part");
+        const auto component_name = string_member_or_empty(component_ref, "component_name");
+        const auto component_alias = optional_string_member(component_ref, "component_alias");
+        // 构件评分引用的构件也进入沉淀集合，保证入库时能解析 bridge_component_id。
+        const auto key =
+            ensure_component_in_plan(plan, seen_component_keys, structure_part, component_name, component_alias);
+
+        ComponentRatingPlan component_rating;
+        component_rating.candidate_id = candidate_id_of(rating);
+        component_rating.component_key = key;
+        component_rating.structure_part = structure_part;
+        const bool alias_non_empty = component_alias.has_value() && !component_alias->empty();
+        component_rating.rating_item_name = alias_non_empty ? *component_alias : component_name;
+        component_rating.score = optional_double_member(rating, "confirmed_score");
+        component_rating.source_score = optional_double_member(rating, "source_score");
+        component_rating.calculated_score = optional_double_member(rating, "calculated_score");
+        component_rating.score_validation_status = string_member_or_empty(rating, "score_validation_status");
+        component_rating.score_resolution_reason = optional_string_member(rating, "score_resolution_reason");
+        if (rating.isMember("calculation_details") && rating["calculation_details"].isObject()) {
+            component_rating.calculation_details_json = write_compact_json(rating["calculation_details"]);
+        }
+        component_rating.review_status = status;
+        plan.component_ratings.push_back(std::move(component_rating));
+    }
+}
+
+void append_ratings(const Json::Value& data, ConfirmPlan& plan, std::unordered_set<std::string>& seen_component_keys) {
     if (!data.isObject() || !data["ratings"].isObject()) {
         plan.overall_score = std::nullopt;
         plan.overall_grade.clear();
@@ -355,17 +425,19 @@ void append_ratings(const Json::Value& data, ConfirmPlan& plan) {
     append_overall_rating(ratings, plan);
     append_structure_part_ratings(ratings, plan);
     append_evaluation_part_ratings(ratings, plan);
+    append_component_ratings(ratings, plan, seen_component_keys);
 }
 
 }  // 匿名命名空间
 
 ConfirmPlan build_confirm_plan(const Json::Value& data) {
     ConfirmPlan plan;
+    std::unordered_set<std::string> seen_component_keys;
     std::unordered_set<std::string> defect_ids_in_plan;
 
-    append_components_and_defects(data, plan, defect_ids_in_plan);
+    append_components_and_defects(data, plan, seen_component_keys, defect_ids_in_plan);
     append_photos(data, defect_ids_in_plan, plan);
-    append_ratings(data, plan);
+    append_ratings(data, plan, seen_component_keys);
 
     return plan;
 }

@@ -1,5 +1,8 @@
 import type {
   BridgeAnnualInspectionData,
+  ComponentRatingCandidate,
+  ComponentRef,
+  ComponentScoreCalculationDetails,
   DefectCandidate,
   EvaluationPartRating,
   PhotoCandidate,
@@ -9,7 +12,14 @@ import type {
   StructurePart,
   StructurePartRating,
 } from "../contracts/annualInspection";
-import { isNormalRating } from "./grouping";
+import {
+  COMPONENT_SCORE_ROUNDING_SCALE,
+  COMPONENT_SCORE_STANDARD,
+  classifyScoreValidation,
+  computeComponentScore,
+  roundScoreToTwoDecimals,
+} from "./componentScore";
+import { isNormalComponentRating, isNormalRating } from "./grouping";
 import { canConfirmDefectPhotoGroup } from "./defectPhotoGroups";
 import { parseMeasurements } from "./measurementParser";
 
@@ -33,6 +43,10 @@ export type ReviewDraftAction =
   | { type: "edit_defect_field"; candidateId: string; field: "component_name"; value: string }
   | { type: "edit_defect_field"; candidateId: string; field: "component_alias"; value: string | null }
   | { type: "edit_defect_field"; candidateId: string; field: "defect_location"; value: string }
+  // 合同 1.2：规范标度与病害扣分。标度是提示级别 severity 之外的独立规范字段；
+  // 扣分编辑会触发所属构件评分候选的联动重算（见 recomputeComponentRatings）。
+  | { type: "edit_defect_field"; candidateId: string; field: "defect_scale"; value: number | null }
+  | { type: "edit_defect_field"; candidateId: string; field: "defect_deduction"; value: number | null }
   | { type: "edit_defect_field"; candidateId: string; field: "defect_type"; value: string }
   | { type: "edit_defect_field"; candidateId: string; field: "defect_description"; value: string }
   | { type: "edit_defect_field"; candidateId: string; field: "quantity_text"; value: string | null }
@@ -60,6 +74,11 @@ export type ReviewDraftAction =
   | { type: "edit_rating_field"; target: { part: RatingStructurePart }; field: "grade"; value: string }
   | { type: "edit_rating_field"; target: { evaluation: number }; field: "part_score"; value: number }
   | { type: "set_rating_status"; target: RatingTarget; status: ReviewStatus }
+  // 合同 1.2：构件评分差异的人工处理。resolve 只在「不一致/无法复算」时有效，必须给出非空原因；
+  // reset 撤销人工选择并回到自动校验状态。
+  | { type: "resolve_component_score"; candidateId: string; choice: "accept_source" | "adopt_calculated"; reason: string }
+  | { type: "reset_component_score_resolution"; candidateId: string }
+  | { type: "set_component_rating_status"; candidateId: string; status: ReviewStatus }
   | { type: "batch_confirm_normal_ratings" };
 
 // 从 union 里抽出各分组，供 reducer 内部 helper 使用（Extract/Exclude 保证与上面的 union 单一真源同步）。
@@ -111,6 +130,10 @@ function applyDefectContentEdit(defect: DefectCandidate, action: EditDefectConte
       return { ...defect, component_alias: action.value, review_status, group_review_status: "待确认" };
     case "defect_location":
       return { ...defect, defect_location: action.value, review_status, group_review_status: "待确认" };
+    case "defect_scale":
+      return { ...defect, defect_scale: action.value, review_status, group_review_status: "待确认" };
+    case "defect_deduction":
+      return { ...defect, defect_deduction: action.value, review_status, group_review_status: "待确认" };
     case "defect_type":
       return { ...defect, defect_type: action.value, review_status, group_review_status: "待确认" };
     case "defect_description":
@@ -207,6 +230,92 @@ function batchConfirmNormalRatings(ratings: Ratings): Ratings {
     evaluation_parts: ratings.evaluation_parts.map((part) =>
       isNormalRating(part) ? { ...part, review_status: "已确认" } : part
     ),
+    component_ratings: ratings.component_ratings.map((rating) =>
+      isNormalComponentRating(rating) ? { ...rating, review_status: "已确认" } : rating
+    ),
+  };
+}
+
+// -----------------------------------------------------------------------
+// 合同 1.2：构件评分联动重算与人工差异处理
+// -----------------------------------------------------------------------
+
+function componentRatingMatchesDefect(ref: ComponentRef, defect: DefectCandidate): boolean {
+  return (
+    ref.structure_part === defect.structure_part &&
+    ref.component_name === defect.component_name &&
+    (ref.component_alias ?? "") === (defect.component_alias ?? "")
+  );
+}
+
+/**
+ * 病害扣分、状态或构件字段变化后，按 JTG/T H21-2011 4.1.1 重算所有受影响的构件评分候选。
+ * 重算集合 = 与 component_ref 匹配且未忽略的病害；任一病害缺扣分即「无法复算」（不编造扣分）。
+ * 幂等：证据链与复算分都没变的候选保持原对象引用，人工已解决的选择不会被无谓清空；
+ * 一旦重算结果变化，自动重分类状态——「一致」预填来源分，其余清空最终分与原因、退回待确认。
+ */
+function recomputeComponentRatings(state: BridgeAnnualInspectionData): BridgeAnnualInspectionData {
+  if (state.ratings.component_ratings.length === 0) {
+    return state;
+  }
+  let changed = false;
+  const next = state.ratings.component_ratings.map((rating): ComponentRatingCandidate => {
+    const relevant = state.defects.filter(
+      (defect) => defect.review_status !== "已忽略" && componentRatingMatchesDefect(rating.component_ref, defect)
+    );
+    const ids = relevant.map((defect) => defect.candidate_id);
+    const deductions = relevant.map((defect) => defect.defect_deduction);
+
+    let calculated: number | null = null;
+    let details: ComponentScoreCalculationDetails | null = null;
+    if (ids.length > 0 && deductions.every((value): value is number => typeof value === "number")) {
+      const result = computeComponentScore(deductions);
+      if (result !== null) {
+        calculated = result.score;
+        details = {
+          standard: COMPONENT_SCORE_STANDARD,
+          ordered_deductions: result.orderedDeductions,
+          rounding_scale: COMPONENT_SCORE_ROUNDING_SCALE,
+        };
+      }
+    }
+
+    const currentIds = rating.deduction_defect_candidate_ids;
+    const sameIds = ids.length === currentIds.length && ids.every((id, index) => currentIds[index] === id);
+    const currentCalculated = rating.calculated_score ?? null;
+    if (sameIds && currentCalculated === calculated) {
+      return rating;
+    }
+
+    changed = true;
+    const status = classifyScoreValidation(rating.source_score ?? null, calculated);
+    return {
+      ...rating,
+      deduction_defect_candidate_ids: ids,
+      calculated_score: calculated,
+      calculation_details: details,
+      score_validation_status: status,
+      confirmed_score: status === "一致" ? rating.source_score ?? null : null,
+      score_resolution_reason: null,
+      review_status: "待确认",
+    };
+  });
+  if (!changed) {
+    return state;
+  }
+  return { ...state, ratings: { ...state.ratings, component_ratings: next } };
+}
+
+function updateComponentRating(
+  ratings: Ratings,
+  candidateId: string,
+  updater: (rating: ComponentRatingCandidate) => ComponentRatingCandidate
+): Ratings {
+  return {
+    ...ratings,
+    component_ratings: ratings.component_ratings.map((rating) =>
+      rating.candidate_id === candidateId ? updater(rating) : rating
+    ),
   };
 }
 
@@ -217,16 +326,20 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
       if (action.field === "review_status") {
         // 显式状态设置，等价于 set_defect_status，不走内容编辑的自动流转。
         const status = action.value;
-        return {
+        return recomputeComponentRatings({
           ...state,
           defects: updateDefect(state.defects, candidateId, (defect) => ({
             ...defect,
             review_status: status,
             group_review_status: "待确认",
           })),
-        };
+        });
       }
-      return { ...state, defects: updateDefect(state.defects, candidateId, (defect) => applyDefectContentEdit(defect, action)) };
+      // 扣分/构件字段/忽略状态的变化都可能影响构件评分证据链，统一走幂等重算。
+      return recomputeComponentRatings({
+        ...state,
+        defects: updateDefect(state.defects, candidateId, (defect) => applyDefectContentEdit(defect, action)),
+      });
     }
 
     case "edit_measurement_text": {
@@ -245,14 +358,14 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
 
     case "set_defect_status": {
       const { candidateId, status } = action;
-      return {
+      return recomputeComponentRatings({
         ...state,
         defects: updateDefect(state.defects, candidateId, (defect) => ({
           ...defect,
           review_status: status,
           group_review_status: "待确认",
         })),
-      };
+      });
     }
 
     case "photo_confirm_match": {
@@ -386,6 +499,66 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
 
     case "set_rating_status": {
       return { ...state, ratings: applyRatingStatus(state.ratings, action.target, action.status) };
+    }
+
+    case "resolve_component_score": {
+      const rating = state.ratings.component_ratings.find((item) => item.candidate_id === action.candidateId);
+      const reason = action.reason.trim();
+      if (!rating || reason === "") return state;
+      // 只有未解决的差异（不一致/无法复算）需要人工选择；一致或已解决时该动作无效。
+      if (rating.score_validation_status !== "不一致" && rating.score_validation_status !== "无法复算") return state;
+      if (action.choice === "accept_source") {
+        if (rating.source_score === null || rating.source_score === undefined) return state;
+        const confirmed = rating.source_score;
+        return {
+          ...state,
+          ratings: updateComponentRating(state.ratings, action.candidateId, (item) => ({
+            ...item,
+            confirmed_score: confirmed,
+            score_validation_status: "人工接受Word值",
+            score_resolution_reason: reason,
+            review_status: "已修改",
+          })),
+        };
+      }
+      if (rating.calculated_score === null || rating.calculated_score === undefined) return state;
+      const confirmed = roundScoreToTwoDecimals(rating.calculated_score);
+      return {
+        ...state,
+        ratings: updateComponentRating(state.ratings, action.candidateId, (item) => ({
+          ...item,
+          confirmed_score: confirmed,
+          score_validation_status: "人工采用复算值",
+          score_resolution_reason: reason,
+          review_status: "已修改",
+        })),
+      };
+    }
+
+    case "reset_component_score_resolution": {
+      const rating = state.ratings.component_ratings.find((item) => item.candidate_id === action.candidateId);
+      if (!rating) return state;
+      const status = classifyScoreValidation(rating.source_score ?? null, rating.calculated_score ?? null);
+      return {
+        ...state,
+        ratings: updateComponentRating(state.ratings, action.candidateId, (item) => ({
+          ...item,
+          score_validation_status: status,
+          confirmed_score: status === "一致" ? item.source_score ?? null : null,
+          score_resolution_reason: null,
+          review_status: "待确认",
+        })),
+      };
+    }
+
+    case "set_component_rating_status": {
+      return {
+        ...state,
+        ratings: updateComponentRating(state.ratings, action.candidateId, (item) => ({
+          ...item,
+          review_status: action.status,
+        })),
+      };
     }
 
     case "batch_confirm_normal_ratings": {

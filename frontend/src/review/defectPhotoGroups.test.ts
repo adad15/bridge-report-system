@@ -52,7 +52,7 @@ function data(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeAnnual
   return {
     contract: {
       name: "BridgeAnnualInspectionData",
-      version: "1.1",
+      version: "1.2",
       generated_at: "2026-07-11T00:00:00+08:00",
       producer: "test",
       parser_name: "test",
@@ -78,6 +78,7 @@ function data(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeAnnual
       overall: { total_score: 90, overall_grade: "2类", source_ref: {}, confidence: 0.9, review_status: "已确认" },
       structure_parts: [],
       evaluation_parts: [],
+      component_ratings: [],
       warnings: [],
     },
     comparison_candidates: [],
