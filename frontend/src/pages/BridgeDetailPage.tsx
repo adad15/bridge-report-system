@@ -76,6 +76,16 @@ export function BridgeDetailPage() {
   return (
     <>
       <section className="status-panel">
+        <h1>构件病害档案</h1>
+        <p>
+          按病害线索查看构件历年观测、照片与评分校验证据，并整理未绑定观测：
+          <Link to={`/bridges/${bridgeId}/components`}>进入构件病害档案</Link>
+          ｜
+          <Link to={`/bridges/${bridgeId}/defect-threads/review`}>线索整理</Link>
+        </p>
+      </section>
+
+      <section className="status-panel">
         <h1>年度检测任务</h1>
         {yearsError ? <p className="error-text">{yearsError}</p> : null}
         {!yearsError && years === null ? <p>加载中…</p> : null}

@@ -2,6 +2,8 @@ import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router
 
 import { BridgeDetailPage } from "./pages/BridgeDetailPage";
 import { BridgesPage } from "./pages/BridgesPage";
+import { ComponentArchivePage } from "./pages/ComponentArchivePage";
+import { DefectThreadReviewPage } from "./pages/DefectThreadReviewPage";
 import { HomePage } from "./pages/HomePage";
 import { ReviewWorkspacePage } from "./pages/ReviewWorkspacePage";
 import "./styles.css";
@@ -19,7 +21,9 @@ export function App() {
 // 这一层，而不是在 App() 里直接判断。
 function AppShell() {
   const location = useLocation();
-  const isReviewWorkspace = /\/review$/.test(location.pathname);
+  // 只有"导入记录校对工作台"使用全屏工作台壳；模块 06 的 /defect-threads/review
+  // 是普通卡片流页面，正则必须锚定 imports 段避免误匹配。
+  const isReviewWorkspace = /\/imports\/[^/]+\/review$/.test(location.pathname);
 
   return (
     <main className={isReviewWorkspace ? "app-shell app-shell-workbench" : "app-shell"}>
@@ -36,6 +40,9 @@ function AppShell() {
           <Route path="/" element={<HomePage />} />
           <Route path="/bridges" element={<BridgesPage />} />
           <Route path="/bridges/:bridgeId" element={<BridgeDetailPage />} />
+          <Route path="/bridges/:bridgeId/components" element={<ComponentArchivePage />} />
+          <Route path="/bridges/:bridgeId/components/:componentId" element={<ComponentArchivePage />} />
+          <Route path="/bridges/:bridgeId/defect-threads/review" element={<DefectThreadReviewPage />} />
           <Route
             path="/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review"
             element={<ReviewWorkspacePage />}
