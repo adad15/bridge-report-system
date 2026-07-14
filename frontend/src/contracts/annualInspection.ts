@@ -1,4 +1,10 @@
 export type ReviewStatus = "待确认" | "已确认" | "已修改" | "已忽略";
+export type ScoreValidationStatus =
+  | "一致"
+  | "不一致"
+  | "无法复算"
+  | "人工接受Word值"
+  | "人工采用复算值";
 export type DefectGroupReviewStatus = "待确认" | "已确认";
 export type ComparisonConfirmationStatus = "待确认" | "已确认" | "已修改" | "已拒绝";
 export type Severity = "info" | "warning" | "error";
@@ -40,7 +46,7 @@ export interface SourceRef {
 
 export interface ContractInfo {
   name: "BridgeAnnualInspectionData";
-  version: "1.1";
+  version: "1.2";
   generated_at: string;
   producer: string;
   parser_name: string;
@@ -83,6 +89,8 @@ export interface DefectCandidate {
   component_alias?: string | null;
   defect_type: string;
   defect_location: string;
+  defect_scale?: number | null;
+  defect_deduction?: number | null;
   defect_description: string;
   quantity_text?: string | null;
   measurement_text?: string | null;
@@ -151,10 +159,38 @@ export interface EvaluationPartRating {
   review_status: ReviewStatus;
 }
 
+// 第二章具体构件评分候选：保存 Word 来源分、规范复算分与最终确认分三值。
+export interface ComponentRef {
+  structure_part: StructurePart;
+  component_name: string;
+  component_alias?: string | null;
+}
+
+export interface ComponentScoreCalculationDetails {
+  standard: "JTG/T H21-2011 4.1.1";
+  ordered_deductions: number[];
+  rounding_scale: 2;
+}
+
+export interface ComponentRatingCandidate {
+  candidate_id: string;
+  component_ref: ComponentRef;
+  source_score?: number | null;
+  calculated_score?: number | null;
+  confirmed_score?: number | null;
+  score_validation_status: ScoreValidationStatus;
+  score_resolution_reason?: string | null;
+  deduction_defect_candidate_ids: string[];
+  calculation_details?: ComponentScoreCalculationDetails | null;
+  review_status: ReviewStatus;
+  warnings: WarningItem[];
+}
+
 export interface Ratings {
   overall: OverallRating;
   structure_parts: StructurePartRating[];
   evaluation_parts: EvaluationPartRating[];
+  component_ratings: ComponentRatingCandidate[];
   warnings: WarningItem[];
 }
 
@@ -242,6 +278,24 @@ function hasRequiredObjectMembers(value: Record<string, unknown>, members: strin
   return members.every((member) => getRequiredObject(value, member) !== null);
 }
 
+// 可空的 0-100 分值：缺字段、null 或闭区间数值都合法。
+function isNullableScore(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100)
+  );
+}
+
+// 病害标度是规范意义的正整数，与提示级别 severity 完全分离。
+function isNullablePositiveInteger(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    (typeof value === "number" && Number.isInteger(value) && value > 0)
+  );
+}
+
 function isValidDefectCandidate(value: unknown): boolean {
   if (!isRecord(value) || !hasValidConfidence(value)) {
     return false;
@@ -251,10 +305,62 @@ function isValidDefectCandidate(value: unknown): boolean {
     hasRequiredArrayMembers(value, ["measurements", "photo_numbers", "warnings"]) &&
     hasRequiredObjectMembers(value, ["source_ref"]) &&
     (value.group_review_status === "待确认" || value.group_review_status === "已确认") &&
+    isNullablePositiveInteger(value.defect_scale) &&
+    isNullableScore(value.defect_deduction) &&
     missingPhotoNumbers !== null &&
     missingPhotoNumbers.every((item) => typeof item === "string") &&
     new Set(missingPhotoNumbers).size === missingPhotoNumbers.length
   );
+}
+
+const SCORE_VALIDATION_STATUSES: readonly string[] = [
+  "一致",
+  "不一致",
+  "无法复算",
+  "人工接受Word值",
+  "人工采用复算值",
+];
+
+export function isValidComponentRating(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const componentRef = getRequiredObject(value, "component_ref");
+  const deductionIds = getRequiredArray(value, "deduction_defect_candidate_ids");
+  if (
+    componentRef === null ||
+    typeof componentRef.component_name !== "string" ||
+    deductionIds === null ||
+    !deductionIds.every((item) => typeof item === "string") ||
+    getRequiredArray(value, "warnings") === null ||
+    typeof value.candidate_id !== "string" ||
+    value.candidate_id.length === 0 ||
+    !isNullableScore(value.source_score) ||
+    !isNullableScore(value.calculated_score) ||
+    !isNullableScore(value.confirmed_score)
+  ) {
+    return false;
+  }
+  const status = value.score_validation_status;
+  if (typeof status !== "string" || !SCORE_VALIDATION_STATUSES.includes(status)) {
+    return false;
+  }
+  const details = value.calculation_details;
+  if (details !== undefined && details !== null) {
+    if (!isRecord(details) || getRequiredArray(details, "ordered_deductions") === null) {
+      return false;
+    }
+  }
+  const confirmedScore = value.confirmed_score ?? null;
+  const reason = value.score_resolution_reason ?? null;
+  // 与 Pydantic model_validator 相同的三条状态不变量。
+  if (status === "不一致" || status === "无法复算") {
+    return confirmedScore === null && reason === null;
+  }
+  if (status === "人工接受Word值" || status === "人工采用复算值") {
+    return confirmedScore !== null && typeof reason === "string" && reason.trim().length > 0;
+  }
+  return reason === null;
 }
 
 function isValidPhotoCandidate(value: unknown): boolean {
@@ -305,7 +411,7 @@ export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnn
   if (contract === null) {
     return false;
   }
-  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "1.1") {
+  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "1.2") {
     return false;
   }
 
@@ -341,11 +447,13 @@ export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnn
   const overall = getRequiredObject(ratings, "overall");
   const structureParts = getRequiredArray(ratings, "structure_parts");
   const evaluationParts = getRequiredArray(ratings, "evaluation_parts");
+  const componentRatings = getRequiredArray(ratings, "component_ratings");
   const ratingWarnings = getRequiredArray(ratings, "warnings");
   if (
     overall === null ||
     structureParts === null ||
     evaluationParts === null ||
+    componentRatings === null ||
     ratingWarnings === null
   ) {
     return false;
@@ -357,6 +465,7 @@ export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnn
     comparisonCandidates.every(isValidComparisonCandidate) &&
     isValidOverallRating(overall) &&
     structureParts.every(isValidStructurePartRating) &&
-    evaluationParts.every(isValidEvaluationPartRating)
+    evaluationParts.every(isValidEvaluationPartRating) &&
+    componentRatings.every(isValidComponentRating)
   );
 }

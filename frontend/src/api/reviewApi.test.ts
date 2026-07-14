@@ -8,7 +8,7 @@ import { cancelImport, confirmImport, fetchReview, photoContentUrl, runPreflight
 const minimalParsedResult: BridgeAnnualInspectionData = {
   contract: {
     name: "BridgeAnnualInspectionData",
-    version: "1.1",
+    version: "1.2",
     generated_at: "2026-07-09T00:00:00+08:00",
     producer: "bridge-report-system",
     parser_name: "test-parser",
@@ -44,6 +44,7 @@ const minimalParsedResult: BridgeAnnualInspectionData = {
     },
     structure_parts: [],
     evaluation_parts: [],
+    component_ratings: [],
     warnings: [],
   },
   comparison_candidates: [],
@@ -84,7 +85,7 @@ function reviewResponseBody(overrides: Partial<Record<string, unknown>> = {}) {
       object_warning_count: 0,
     },
     has_current_annual_facts: false,
-    contract_compatibility: "native_1_1",
+    contract_compatibility: "native_1_2",
     ...overrides,
   };
 }
@@ -113,11 +114,11 @@ describe("reviewApi", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/review");
     expect(review.parsed_result).toEqual(minimalParsedResult);
     expect(review.statistics.defect_count).toBe(0);
-    expect(review.contract_compatibility).toBe("native_1_1");
+    expect(review.contract_compatibility).toBe("native_1_2");
   });
 
-  it("fetchReview accepts an upgraded_1_0 response with normalized 1.1 data", async () => {
-    const body = reviewResponseBody({ contract_compatibility: "upgraded_1_0" });
+  it("fetchReview accepts a legacy_pending_reparse response with display-normalized 1.2 data", async () => {
+    const body = reviewResponseBody({ contract_compatibility: "legacy_pending_reparse" });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -126,11 +127,11 @@ describe("reviewApi", () => {
 
     const review = await fetchReview("http://127.0.0.1:18080", "record-1");
 
-    expect(review.contract_compatibility).toBe("upgraded_1_0");
-    expect(review.parsed_result.contract.version).toBe("1.1");
+    expect(review.contract_compatibility).toBe("legacy_pending_reparse");
+    expect(review.parsed_result.contract.version).toBe("1.2");
   });
 
-  it("fetchReview accepts a legacy_read_only response with normalized 1.1 data", async () => {
+  it("fetchReview accepts a legacy_read_only response with display-normalized 1.2 data", async () => {
     const body = reviewResponseBody({
       import_record: {
         ...reviewResponseBody().import_record,
@@ -148,7 +149,7 @@ describe("reviewApi", () => {
 
     expect(review.import_record.import_status).toBe("已确认");
     expect(review.contract_compatibility).toBe("legacy_read_only");
-    expect(review.parsed_result.contract.version).toBe("1.1");
+    expect(review.parsed_result.contract.version).toBe("1.2");
   });
 
   it("fetchReview throws ApiError when parsed_result fails the contract guard", async () => {

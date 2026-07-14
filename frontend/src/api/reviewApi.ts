@@ -43,7 +43,9 @@ export interface ReviewStatistics {
   object_warning_count: number;
 }
 
-export type ContractCompatibility = "native_1_1" | "upgraded_1_0" | "legacy_read_only";
+// native_1_2：原生 1.2 草稿；legacy_pending_reparse：待校对的 1.0/1.1 旧草稿，
+// 只读展示并提示重新解析（不做内存补造）；legacy_read_only：旧版终态记录。
+export type ContractCompatibility = "native_1_2" | "legacy_pending_reparse" | "legacy_read_only";
 
 export interface ReviewResponse {
   import_record: ReviewImportRecordSummary;

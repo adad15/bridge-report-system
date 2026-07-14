@@ -17,8 +17,14 @@ export function deriveReviewSession(
   importStatus: string,
   contractCompatibility: ContractCompatibility
 ): ReviewSession {
-  if (importStatus === "待校对" && contractCompatibility !== "legacy_read_only") {
+  if (importStatus === "待校对" && contractCompatibility === "native_1_2") {
     return { readOnly: false, bannerText: null };
+  }
+  if (importStatus === "待校对" && contractCompatibility === "legacy_pending_reparse") {
+    return {
+      readOnly: true,
+      bannerText: "该草稿为旧版合同（1.0/1.1），请重新解析为 1.2 后再校对。",
+    };
   }
   if (importStatus === "已确认") {
     return { readOnly: true, bannerText: "本导入记录已确认入库，页面转为只读。" };

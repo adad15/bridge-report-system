@@ -191,7 +191,7 @@ TEST(BuildReviewResponseTest, PopulatesInspectionYearObjectWhenPresent) {
         parsed_result,
         statistics,
         /*has_current_annual_facts=*/true,
-        "native_1_1"
+        "native_1_2"
     );
 
     ASSERT_TRUE(body["inspection_year"].isObject());
@@ -202,7 +202,7 @@ TEST(BuildReviewResponseTest, PopulatesInspectionYearObjectWhenPresent) {
     EXPECT_EQ(body["inspection_year"]["version_number"].asInt(), 1);
     EXPECT_TRUE(body["inspection_year"]["is_current"].asBool());
     EXPECT_TRUE(body["has_current_annual_facts"].asBool());
-    EXPECT_EQ(body["contract_compatibility"].asString(), "native_1_1");
+    EXPECT_EQ(body["contract_compatibility"].asString(), "native_1_2");
 
     EXPECT_EQ(body["import_record"]["id"].asString(), "i1111111-1111-1111-1111-111111111111");
     EXPECT_EQ(body["import_record"]["importer_name"].asString(), "张三");
@@ -221,7 +221,7 @@ TEST(BuildReviewResponseTest, OutputsNullInspectionYearWhenAbsent) {
         parsed_result,
         statistics,
         /*has_current_annual_facts=*/false,
-        "native_1_1"
+        "native_1_2"
     );
 
     EXPECT_TRUE(body["inspection_year"].isNull());
@@ -245,13 +245,13 @@ TEST(BuildReviewResponseTest, IncludesParsedResultAndStatisticsVerbatim) {
         parsed_result,
         statistics,
         /*has_current_annual_facts=*/false,
-        "upgraded_1_0"
+        "legacy_pending_reparse"
     );
 
     EXPECT_EQ(body["parsed_result"]["defects"].size(), 1u);
     EXPECT_EQ(body["statistics"]["defect_count"].asInt(), 1);
     EXPECT_EQ(body["statistics"]["pending_count"].asInt(), 1);
-    EXPECT_EQ(body["contract_compatibility"].asString(), "upgraded_1_0");
+    EXPECT_EQ(body["contract_compatibility"].asString(), "legacy_pending_reparse");
 }
 
 TEST(ResolveEffectiveInspectionYearTest, UsesAttachedYearWhenPresent) {

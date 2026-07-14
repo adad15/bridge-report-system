@@ -6,7 +6,7 @@ import { isBridgeAnnualInspectionData } from "./annualInspection";
 const validData: BridgeAnnualInspectionData = {
   contract: {
     name: "BridgeAnnualInspectionData",
-    version: "1.1",
+    version: "1.2",
     generated_at: "2026-07-03T00:00:00+08:00",
     producer: "bridge-report-system",
     parser_name: "annual_inspection_contract_parser",
@@ -39,6 +39,8 @@ const validData: BridgeAnnualInspectionData = {
       component_alias: "上部承重构件",
       defect_type: "裂缝",
       defect_location: "第二跨左幅梁底",
+      defect_scale: 2,
+      defect_deduction: 35,
       defect_description: "梁底发现纵向裂缝，需现场复核。",
       quantity_text: "1处",
       measurement_text: "L=0.8m，W=0.12mm",
@@ -165,6 +167,29 @@ const validData: BridgeAnnualInspectionData = {
         review_status: "待确认",
       },
     ],
+    component_ratings: [
+      {
+        candidate_id: "component_rating_0001",
+        component_ref: {
+          structure_part: "上部结构",
+          component_name: "主梁",
+          component_alias: "上部承重构件",
+        },
+        source_score: 65,
+        calculated_score: 65,
+        confirmed_score: 65,
+        score_validation_status: "一致",
+        score_resolution_reason: null,
+        deduction_defect_candidate_ids: ["defect_0001"],
+        calculation_details: {
+          standard: "JTG/T H21-2011 4.1.1",
+          ordered_deductions: [35],
+          rounding_scale: 2,
+        },
+        review_status: "待确认",
+        warnings: [],
+      },
+    ],
     warnings: [],
   },
   comparison_candidates: [],
@@ -182,13 +207,85 @@ describe("isBridgeAnnualInspectionData", () => {
     expect(isBridgeAnnualInspectionData(validData)).toBe(true);
   });
 
-  it("rejects contract version 1.0", () => {
+  it.each(["1.0", "1.1"])("rejects contract version %s", (version) => {
     expect(
       isBridgeAnnualInspectionData({
         ...validData,
-        contract: { ...validData.contract, version: "1.0" },
+        contract: { ...validData.contract, version },
       }),
     ).toBe(false);
+  });
+
+  it.each([
+    ["defect_scale", 0],
+    ["defect_scale", -1],
+    ["defect_scale", 2.5],
+    ["defect_deduction", -5],
+    ["defect_deduction", 100.5],
+  ])("rejects invalid defect field %s = %s", (fieldName, value) => {
+    expect(
+      isBridgeAnnualInspectionData({
+        ...validData,
+        defects: [{ ...validData.defects[0], [fieldName]: value }],
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts null defect scale and deduction", () => {
+    expect(
+      isBridgeAnnualInspectionData({
+        ...validData,
+        defects: [{ ...validData.defects[0], defect_scale: null, defect_deduction: null }],
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects missing ratings.component_ratings", () => {
+    const invalid = cloneValidData() as unknown as {
+      ratings: Record<string, unknown>;
+    };
+    delete invalid.ratings.component_ratings;
+
+    expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
+  });
+
+  it("rejects an unresolved component rating that carries a confirmed score", () => {
+    const invalid = cloneValidData();
+    invalid.ratings.component_ratings[0].score_validation_status = "不一致";
+
+    expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
+  });
+
+  it("rejects a manual resolution without a reason", () => {
+    const invalid = cloneValidData();
+    invalid.ratings.component_ratings[0].score_validation_status = "人工接受Word值";
+    invalid.ratings.component_ratings[0].score_resolution_reason = "  ";
+
+    expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
+  });
+
+  it("accepts a manual resolution with confirmed score and reason", () => {
+    const resolved = cloneValidData();
+    resolved.ratings.component_ratings[0].score_validation_status = "人工采用复算值";
+    resolved.ratings.component_ratings[0].score_resolution_reason = "复算依据完整，采用规范复算值。";
+
+    expect(isBridgeAnnualInspectionData(resolved)).toBe(true);
+  });
+
+  it("rejects a consistent component rating that carries a reason", () => {
+    const invalid = cloneValidData();
+    invalid.ratings.component_ratings[0].score_resolution_reason = "不该有原因";
+
+    expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
+  });
+
+  it("accepts an unresolved component rating with empty confirmed score and reason", () => {
+    const pending = cloneValidData();
+    pending.ratings.component_ratings[0].score_validation_status = "无法复算";
+    pending.ratings.component_ratings[0].confirmed_score = null;
+    pending.ratings.component_ratings[0].score_resolution_reason = null;
+
+    expect(isBridgeAnnualInspectionData(pending)).toBe(true);
   });
 
   it("rejects an invalid defect group review status", () => {

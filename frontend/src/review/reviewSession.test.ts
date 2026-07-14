@@ -16,22 +16,29 @@ describe("review session guards", () => {
 });
 
 describe("deriveReviewSession", () => {
-  it("keeps a pending upgraded 1.0 review editable", () => {
-    expect(deriveReviewSession("待校对", "upgraded_1_0")).toEqual({
+  it("keeps a pending native 1.2 review editable", () => {
+    expect(deriveReviewSession("待校对", "native_1_2")).toEqual({
       readOnly: false,
       bannerText: null,
     });
   });
 
+  it("makes a pending legacy draft read-only and asks for a re-parse", () => {
+    expect(deriveReviewSession("待校对", "legacy_pending_reparse")).toEqual({
+      readOnly: true,
+      bannerText: "该草稿为旧版合同（1.0/1.1），请重新解析为 1.2 后再校对。",
+    });
+  });
+
   it("makes a confirmed review read-only with a confirmed banner", () => {
-    expect(deriveReviewSession("已确认", "native_1_1")).toEqual({
+    expect(deriveReviewSession("已确认", "native_1_2")).toEqual({
       readOnly: true,
       bannerText: "本导入记录已确认入库，页面转为只读。",
     });
   });
 
   it("makes a cancelled review read-only with a cancelled banner", () => {
-    expect(deriveReviewSession("已取消", "native_1_1")).toEqual({
+    expect(deriveReviewSession("已取消", "native_1_2")).toEqual({
       readOnly: true,
       bannerText: "本导入记录已取消，页面转为只读。",
     });

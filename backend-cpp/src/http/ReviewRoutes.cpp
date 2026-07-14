@@ -218,6 +218,21 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                     return;
                 }
 
+                // 存量草稿仍是旧版合同（1.0/1.1）时拒绝保存：旧草稿必须重新解析为 1.2，
+                // 不能靠客户端提交一份"看起来像 1.2"的请求体绕过重解析（变更提案 001 §7）。
+                if (review::stored_contract_requires_reparse(
+                        parse_parsed_result_json(detail->parsed_result_json))) {
+                    respond_json(
+                        callback,
+                        make_error_body(
+                            "contract_version_outdated",
+                            "该导入记录的候选数据仍是旧版合同，请先重新解析为 1.2 再校对。"
+                        ),
+                        drogon::k409Conflict
+                    );
+                    return;
+                }
+
                 // jsonb 列不保留输入格式，紧凑序列化即可，避免 toStyledString 的缩进开销。
                 Json::StreamWriterBuilder writer_builder;
                 writer_builder["indentation"] = "";

@@ -1,7 +1,7 @@
 {
   "contract": {
     "name": "BridgeAnnualInspectionData",
-    "version": "1.1",
+    "version": "1.2",
     "generated_at": "2026-07-03T00:00:00+08:00",
     "producer": "bridge-report-system",
     "parser_name": "annual_inspection_contract_parser",
@@ -34,6 +34,8 @@
       "component_alias": "上部承重构件",
       "defect_type": "裂缝",
       "defect_location": "第二跨左幅梁底",
+      "defect_scale": 2,
+      "defect_deduction": 35.0,
       "defect_description": "梁底发现纵向裂缝，需现场复核。",
       "quantity_text": "1处",
       "measurement_text": "L=0.8m，W=0.12mm",
@@ -254,6 +256,33 @@
         },
         "confidence": 0.91,
         "review_status": "待确认"
+      }
+    ],
+    "component_ratings": [
+      {
+        "candidate_id": "component_rating_0001",
+        "component_ref": {
+          "structure_part": "上部结构",
+          "component_name": "主梁",
+          "component_alias": "上部承重构件"
+        },
+        "source_score": 65,
+        "calculated_score": 65.0,
+        "confirmed_score": 65,
+        "score_validation_status": "一致",
+        "score_resolution_reason": null,
+        "deduction_defect_candidate_ids": [
+          "defect_0001"
+        ],
+        "calculation_details": {
+          "standard": "JTG/T H21-2011 4.1.1",
+          "ordered_deductions": [
+            35.0
+          ],
+          "rounding_scale": 2
+        },
+        "review_status": "待确认",
+        "warnings": []
       }
     ],
     "warnings": []

@@ -194,6 +194,198 @@
       "title": "ComparisonMatchBasis",
       "type": "object"
     },
+    "ComponentRatingCandidate": {
+      "additionalProperties": false,
+      "description": "第二章具体构件评分候选，保存 Word 来源分、规范复算分和最终确认分。\n\n`一致` 可预填来源分；`不一致` 与 `无法复算` 必须留空最终分，\n由模块 05 人工显式选择并填写原因后才允许赋值。",
+      "properties": {
+        "candidate_id": {
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "component_ref": {
+          "$ref": "#/$defs/ComponentRef"
+        },
+        "source_score": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Score"
+        },
+        "calculated_score": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Calculated Score"
+        },
+        "confirmed_score": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confirmed Score"
+        },
+        "score_validation_status": {
+          "enum": [
+            "一致",
+            "不一致",
+            "无法复算",
+            "人工接受Word值",
+            "人工采用复算值"
+          ],
+          "title": "Score Validation Status",
+          "type": "string"
+        },
+        "score_resolution_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score Resolution Reason"
+        },
+        "deduction_defect_candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Deduction Defect Candidate Ids",
+          "type": "array"
+        },
+        "calculation_details": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ComponentScoreCalculationDetails"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "review_status": {
+          "enum": [
+            "待确认",
+            "已确认",
+            "已修改",
+            "已忽略"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "$ref": "#/$defs/WarningItem"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "component_ref",
+        "score_validation_status",
+        "deduction_defect_candidate_ids",
+        "review_status",
+        "warnings"
+      ],
+      "title": "ComponentRatingCandidate",
+      "type": "object"
+    },
+    "ComponentRef": {
+      "additionalProperties": false,
+      "description": "第二章病害表中的具体构件标识，与病害候选的构件字段同源。",
+      "properties": {
+        "structure_part": {
+          "enum": [
+            "全桥",
+            "上部结构",
+            "下部结构",
+            "桥面系",
+            "其他"
+          ],
+          "title": "Structure Part",
+          "type": "string"
+        },
+        "component_name": {
+          "title": "Component Name",
+          "type": "string"
+        },
+        "component_alias": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Component Alias"
+        }
+      },
+      "required": [
+        "structure_part",
+        "component_name"
+      ],
+      "title": "ComponentRef",
+      "type": "object"
+    },
+    "ComponentScoreCalculationDetails": {
+      "additionalProperties": false,
+      "description": "JTG/T H21-2011 第 4.1.1 条复算证据：降序扣分序列与展示舍入位数。",
+      "properties": {
+        "standard": {
+          "const": "JTG/T H21-2011 4.1.1",
+          "title": "Standard",
+          "type": "string"
+        },
+        "ordered_deductions": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Ordered Deductions",
+          "type": "array"
+        },
+        "rounding_scale": {
+          "const": 2,
+          "title": "Rounding Scale",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "standard",
+        "ordered_deductions",
+        "rounding_scale"
+      ],
+      "title": "ComponentScoreCalculationDetails",
+      "type": "object"
+    },
     "ContractInfo": {
       "additionalProperties": false,
       "properties": {
@@ -203,7 +395,7 @@
           "type": "string"
         },
         "version": {
-          "const": "1.1",
+          "const": "1.2",
           "title": "Version",
           "type": "string"
         },
@@ -278,6 +470,33 @@
         "defect_location": {
           "title": "Defect Location",
           "type": "string"
+        },
+        "defect_scale": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Defect Scale"
+        },
+        "defect_deduction": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Defect Deduction"
         },
         "defect_description": {
           "title": "Defect Description",
@@ -787,7 +1006,7 @@
     },
     "Ratings": {
       "additionalProperties": false,
-      "description": "第四章总体技术状况评定表的候选数据。\n\n等级只放在整体和结构分部层级，评价部件只保存评分，不保存 grade。",
+      "description": "第四章总体技术状况评定表与第二章构件评分的候选数据。\n\n等级只放在整体和结构分部层级，评价部件只保存评分，不保存 grade。\n`component_ratings` 保存第二章具体构件的评分双值校验候选。",
       "properties": {
         "overall": {
           "$ref": "#/$defs/OverallRating"
@@ -806,6 +1025,13 @@
           "title": "Evaluation Parts",
           "type": "array"
         },
+        "component_ratings": {
+          "items": {
+            "$ref": "#/$defs/ComponentRatingCandidate"
+          },
+          "title": "Component Ratings",
+          "type": "array"
+        },
         "warnings": {
           "items": {
             "$ref": "#/$defs/WarningItem"
@@ -818,6 +1044,7 @@
         "overall",
         "structure_parts",
         "evaluation_parts",
+        "component_ratings",
         "warnings"
       ],
       "title": "Ratings",

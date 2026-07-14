@@ -59,14 +59,124 @@ TEST(AnnualInspectionContractTest, AcceptsComparisonCandidateFixture) {
     EXPECT_TRUE(result.ok()) << result.summary();
 }
 
-TEST(AnnualInspectionContractTest, RejectsLegacy10Version) {
+TEST(AnnualInspectionContractTest, RejectsLegacyVersions) {
+    for (const std::string version : {"1.0", "1.1"}) {
+        SCOPED_TRACE(version);
+        auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+        root["contract"]["version"] = version;
+
+        const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+        EXPECT_FALSE(result.ok());
+        expect_summary_contains(result, "contract.version: must be 1.2");
+    }
+}
+
+TEST(AnnualInspectionContractTest, RejectsInvalidDefectScaleAndDeduction) {
     auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
-    root["contract"]["version"] = "1.0";
+    root["defects"][0]["defect_scale"] = 0;
+    root["defects"][0]["defect_deduction"] = 100.5;
 
     const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
 
     EXPECT_FALSE(result.ok());
-    expect_summary_contains(result, "contract.version: must be 1.1");
+    expect_summary_contains(result, "defects[0].defect_scale");
+    expect_summary_contains(result, "defects[0].defect_deduction");
+}
+
+TEST(AnnualInspectionContractTest, AcceptsNullDefectScaleAndDeduction) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    root["defects"][0]["defect_scale"] = Json::Value(Json::nullValue);
+    root["defects"][0]["defect_deduction"] = Json::Value(Json::nullValue);
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_TRUE(result.ok()) << result.summary();
+}
+
+TEST(AnnualInspectionContractTest, RejectsMissingComponentRatings) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    root["ratings"].removeMember("component_ratings");
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "ratings.component_ratings");
+}
+
+TEST(AnnualInspectionContractTest, RejectsUnresolvedComponentRatingWithConfirmedScore) {
+    const auto root = read_contract_fixture("bridge_annual_inspection_data.invalid-component-rating-status.json");
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "ratings.component_ratings[0].confirmed_score");
+    expect_summary_contains(result, "until the reviewer makes an explicit choice");
+}
+
+TEST(AnnualInspectionContractTest, RejectsManualResolutionWithoutReason) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    root["ratings"]["component_ratings"][0]["score_validation_status"] = "人工接受Word值";
+    root["ratings"]["component_ratings"][0]["score_resolution_reason"] = "  ";
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "ratings.component_ratings[0].score_resolution_reason");
+}
+
+TEST(AnnualInspectionContractTest, AcceptsManualResolutionWithConfirmedScoreAndReason) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    root["ratings"]["component_ratings"][0]["score_validation_status"] = "人工采用复算值";
+    root["ratings"]["component_ratings"][0]["score_resolution_reason"] = "复算依据完整，采用规范复算值。";
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_TRUE(result.ok()) << result.summary();
+}
+
+TEST(AnnualInspectionContractTest, RejectsConsistentComponentRatingWithReason) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    root["ratings"]["component_ratings"][0]["score_resolution_reason"] = "不该有原因";
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "must be null when scores are consistent");
+}
+
+TEST(AnnualInspectionContractTest, RejectsDanglingDeductionDefectReference) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    root["ratings"]["component_ratings"][0]["deduction_defect_candidate_ids"].append("defect_9999");
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "deduction_defect_candidate_ids[1]");
+    expect_summary_contains(result, "must reference an existing defect candidate");
+}
+
+TEST(AnnualInspectionContractTest, RejectsAscendingOrderedDeductions) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    auto& deductions = root["ratings"]["component_ratings"][0]["calculation_details"]["ordered_deductions"];
+    deductions.clear();
+    deductions.append(20.0);
+    deductions.append(35.0);
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "must be sorted in descending order");
+}
+
+TEST(AnnualInspectionContractTest, RejectsDuplicateComponentRatingCandidateIds) {
+    auto root = read_contract_fixture("bridge_annual_inspection_data.valid.json");
+    root["ratings"]["component_ratings"].append(root["ratings"]["component_ratings"][0]);
+
+    const auto result = bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "ratings.component_ratings[1].candidate_id");
 }
 
 TEST(AnnualInspectionContractTest, RejectsGradeOnEvaluationPart) {

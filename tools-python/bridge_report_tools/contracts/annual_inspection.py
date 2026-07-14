@@ -9,10 +9,11 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 ReviewStatus = Literal["待确认", "已确认", "已修改", "已忽略"]
+ScoreValidationStatus = Literal["一致", "不一致", "无法复算", "人工接受Word值", "人工采用复算值"]
 DefectGroupReviewStatus = Literal["待确认", "已确认"]
 ComparisonConfirmationStatus = Literal["待确认", "已确认", "已修改", "已拒绝"]
 Severity = Literal["info", "warning", "error"]
@@ -62,7 +63,7 @@ class SourceRef(ContractModel):
 
 class ContractInfo(ContractModel):
     name: Literal["BridgeAnnualInspectionData"]
-    version: Literal["1.1"]
+    version: Literal["1.2"]
     generated_at: datetime
     producer: str
     parser_name: str
@@ -107,6 +108,8 @@ class DefectCandidate(ContractModel):
     component_alias: str | None = None
     defect_type: str
     defect_location: str
+    defect_scale: int | None = Field(default=None, gt=0)
+    defect_deduction: float | None = Field(default=None, ge=0, le=100)
     defect_description: str
     quantity_text: str | None = None
     measurement_text: str | None = None
@@ -184,15 +187,75 @@ class EvaluationPartRating(ContractModel):
     review_status: ReviewStatus
 
 
+class ComponentRef(ContractModel):
+    """第二章病害表中的具体构件标识，与病害候选的构件字段同源。"""
+
+    structure_part: StructurePart
+    component_name: str
+    component_alias: str | None = None
+
+
+class ComponentScoreCalculationDetails(ContractModel):
+    """JTG/T H21-2011 第 4.1.1 条复算证据：降序扣分序列与展示舍入位数。"""
+
+    standard: Literal["JTG/T H21-2011 4.1.1"]
+    ordered_deductions: list[float]
+    rounding_scale: Literal[2]
+
+
+class ComponentRatingCandidate(ContractModel):
+    """第二章具体构件评分候选，保存 Word 来源分、规范复算分和最终确认分。
+
+    `一致` 可预填来源分；`不一致` 与 `无法复算` 必须留空最终分，
+    由模块 05 人工显式选择并填写原因后才允许赋值。
+    """
+
+    candidate_id: str
+    component_ref: ComponentRef
+    source_score: float | None = Field(default=None, ge=0, le=100)
+    calculated_score: float | None = Field(default=None, ge=0, le=100)
+    confirmed_score: float | None = Field(default=None, ge=0, le=100)
+    score_validation_status: ScoreValidationStatus
+    score_resolution_reason: str | None = None
+    deduction_defect_candidate_ids: list[str]
+    calculation_details: ComponentScoreCalculationDetails | None = None
+    review_status: ReviewStatus
+    warnings: list[WarningItem]
+
+    @model_validator(mode="after")
+    def enforce_resolution_invariants(self) -> "ComponentRatingCandidate":
+        status = self.score_validation_status
+        if status in ("不一致", "无法复算"):
+            if self.confirmed_score is not None:
+                raise ValueError(
+                    "score_validation_status 为不一致或无法复算时 confirmed_score 必须为空"
+                )
+            if self.score_resolution_reason is not None:
+                raise ValueError(
+                    "score_validation_status 为不一致或无法复算时 score_resolution_reason 必须为空"
+                )
+        elif status in ("人工接受Word值", "人工采用复算值"):
+            if self.confirmed_score is None:
+                raise ValueError("人工选择最终分后 confirmed_score 不能为空")
+            if self.score_resolution_reason is None or not self.score_resolution_reason.strip():
+                raise ValueError("人工选择最终分必须填写 score_resolution_reason")
+        else:
+            if self.score_resolution_reason is not None:
+                raise ValueError("score_validation_status 为一致时 score_resolution_reason 必须为空")
+        return self
+
+
 class Ratings(ContractModel):
-    """第四章总体技术状况评定表的候选数据。
+    """第四章总体技术状况评定表与第二章构件评分的候选数据。
 
     等级只放在整体和结构分部层级，评价部件只保存评分，不保存 grade。
+    `component_ratings` 保存第二章具体构件的评分双值校验候选。
     """
 
     overall: OverallRating
     structure_parts: list[StructurePartRating]
     evaluation_parts: list[EvaluationPartRating]
+    component_ratings: list[ComponentRatingCandidate]
     warnings: list[WarningItem]
 
 

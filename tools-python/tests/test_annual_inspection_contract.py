@@ -26,7 +26,7 @@ def load_fixture_text(name: str) -> str:
 
 def valid_payload() -> dict:
     payload = copy.deepcopy(load_fixture("bridge_annual_inspection_data.valid.json"))
-    payload["contract"]["version"] = "1.1"
+    payload["contract"]["version"] = "1.2"
     payload["defects"][0]["group_review_status"] = "待确认"
     payload["defects"][0]["confirmed_missing_photo_numbers"] = []
     return payload
@@ -144,20 +144,129 @@ def test_historical_official_report_file_role_is_allowed() -> None:
     assert model.import_context.file_role == "历史正式报告"
 
 
-def test_contract_version_one_one_is_accepted() -> None:
+def test_contract_version_one_two_is_accepted() -> None:
     model = BridgeAnnualInspectionData.model_validate(valid_payload())
 
-    assert model.contract.version == "1.1"
+    assert model.contract.version == "1.2"
 
 
-def test_contract_version_one_zero_is_rejected() -> None:
+@pytest.mark.parametrize("version", ["1.0", "1.1"])
+def test_contract_old_versions_are_rejected(version: str) -> None:
     data = valid_payload()
-    data["contract"]["version"] = "1.0"
+    data["contract"]["version"] = version
 
     with pytest.raises(ValidationError) as exc_info:
         BridgeAnnualInspectionData.model_validate(data)
 
     assert "contract.version" in str(exc_info.value)
+
+
+def test_defect_scale_and_deduction_accept_null_and_values() -> None:
+    data = valid_payload()
+    model = BridgeAnnualInspectionData.model_validate(data)
+    assert model.defects[0].defect_scale == 2
+    assert model.defects[0].defect_deduction == 35.0
+
+    data["defects"][0]["defect_scale"] = None
+    data["defects"][0]["defect_deduction"] = None
+    model = BridgeAnnualInspectionData.model_validate(data)
+    assert model.defects[0].defect_scale is None
+    assert model.defects[0].defect_deduction is None
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("defect_scale", 0),
+        ("defect_scale", -1),
+        ("defect_scale", "warning"),
+        ("defect_deduction", -5),
+        ("defect_deduction", 100.5),
+    ],
+)
+def test_defect_scale_and_deduction_reject_invalid_values(
+    field_name: str, value: object
+) -> None:
+    data = valid_payload()
+    data["defects"][0][field_name] = value
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert f"defects.0.{field_name}" in str(exc_info.value)
+
+
+def test_component_ratings_is_required() -> None:
+    data = valid_payload()
+    del data["ratings"]["component_ratings"]
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "ratings.component_ratings" in str(exc_info.value)
+
+
+def test_invalid_component_rating_status_fixture_is_rejected() -> None:
+    data = load_fixture("bridge_annual_inspection_data.invalid-component-rating-status.json")
+    valid_data = load_fixture("bridge_annual_inspection_data.valid.json")
+
+    data_with_consistent_status = copy.deepcopy(data)
+    data_with_consistent_status["ratings"]["component_ratings"][0][
+        "score_validation_status"
+    ] = "一致"
+    assert data_with_consistent_status == valid_data
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "confirmed_score 必须为空" in str(exc_info.value)
+
+
+def test_unresolved_component_rating_must_not_carry_reason() -> None:
+    data = valid_payload()
+    rating = data["ratings"]["component_ratings"][0]
+    rating["score_validation_status"] = "无法复算"
+    rating["confirmed_score"] = None
+    rating["score_resolution_reason"] = "顺手写的原因"
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "score_resolution_reason 必须为空" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("status", ["人工接受Word值", "人工采用复算值"])
+def test_manual_resolution_requires_confirmed_score_and_reason(status: str) -> None:
+    data = valid_payload()
+    rating = data["ratings"]["component_ratings"][0]
+    rating["score_validation_status"] = status
+    rating["confirmed_score"] = None
+    rating["score_resolution_reason"] = None
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "confirmed_score 不能为空" in str(exc_info.value)
+
+    rating["confirmed_score"] = 65
+    rating["score_resolution_reason"] = "  "
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "必须填写 score_resolution_reason" in str(exc_info.value)
+
+    rating["score_resolution_reason"] = "现场复核采用 Word 分值"
+    model = BridgeAnnualInspectionData.model_validate(data)
+    assert model.ratings.component_ratings[0].score_validation_status == status
+
+
+def test_consistent_component_rating_rejects_reason() -> None:
+    data = valid_payload()
+    data["ratings"]["component_ratings"][0]["score_resolution_reason"] = "不该有原因"
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "为一致时 score_resolution_reason 必须为空" in str(exc_info.value)
 
 
 @pytest.mark.parametrize(
@@ -347,7 +456,19 @@ def test_export_bridge_annual_inspection_schema(tmp_path: Path) -> None:
     )
     assert "warnings" in schema["$defs"]["ComparisonCandidate"]["required"]
     version_schema = schema["$defs"]["ContractInfo"]["properties"]["version"]
-    assert version_schema.get("const") == "1.1" or version_schema.get("enum") == ["1.1"]
+    assert version_schema.get("const") == "1.2" or version_schema.get("enum") == ["1.2"]
+    assert "component_ratings" in schema["$defs"]["Ratings"]["required"]
+    assert {
+        "candidate_id",
+        "component_ref",
+        "score_validation_status",
+        "deduction_defect_candidate_ids",
+        "review_status",
+        "warnings",
+    }.issubset(set(schema["$defs"]["ComponentRatingCandidate"]["required"]))
+    assert {"standard", "ordered_deductions", "rounding_scale"}.issubset(
+        set(schema["$defs"]["ComponentScoreCalculationDetails"]["required"])
+    )
     missing_photo_numbers_schema = schema["$defs"]["DefectCandidate"]["properties"][
         "confirmed_missing_photo_numbers"
     ]
