@@ -41,6 +41,7 @@ add_library(bridge_report_backend_core
     src/review/ReviewModels.cpp
     src/review/ReviewStatistics.cpp
     src/review/ThreadSuggestions.cpp
+    src/review/WorkspaceModels.cpp
     src/runtime/RuntimePaths.cpp
 )
 
@@ -101,6 +102,7 @@ add_executable(bridge_report_backend_tests
     tests/test_thread_suggestions.cpp
     tests/test_word_import_routes.cpp
     tests/test_word_import_repository.cpp
+    tests/test_workspace_models.cpp
 )
 
 target_link_libraries(bridge_report_backend_tests
