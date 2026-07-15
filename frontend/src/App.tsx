@@ -1,13 +1,14 @@
-import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 
 import { AuthProvider, useAuth } from "./auth/AuthContext";
-import { BridgeDetailPage } from "./pages/BridgeDetailPage";
+import { BridgeOverviewPage } from "./pages/BridgeOverviewPage";
 import { BridgesPage } from "./pages/BridgesPage";
 import { ComponentArchivePage } from "./pages/ComponentArchivePage";
 import { DefectThreadReviewPage } from "./pages/DefectThreadReviewPage";
-import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ReviewWorkspacePage } from "./pages/ReviewWorkspacePage";
+import { BridgeWorkspaceShell } from "./workspace/BridgeWorkspaceShell";
+import { InspectionWorkspacePage } from "./pages/InspectionWorkspacePage";
 import "./styles.css";
 
 export function App() {
@@ -75,21 +76,22 @@ function AppShell() {
     <main className={isReviewWorkspace ? "app-shell app-shell-workbench" : "app-shell"}>
       <div className={isReviewWorkspace ? "app-content app-content-workbench" : "app-content"}>
         <nav className="top-nav">
-          <NavLink to="/" end className={({ isActive }) => (isActive ? "top-nav-link active" : "top-nav-link")}>
-            首页
-          </NavLink>
           <NavLink to="/bridges" className={({ isActive }) => (isActive ? "top-nav-link active" : "top-nav-link")}>
-            桥梁列表
+            桥梁档案
           </NavLink>
           <CurrentUserBadge />
         </nav>
         <Routes>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/" element={<Navigate replace to="/bridges" />} />
           <Route path="/bridges" element={<BridgesPage />} />
-          <Route path="/bridges/:bridgeId" element={<BridgeDetailPage />} />
-          <Route path="/bridges/:bridgeId/components" element={<ComponentArchivePage />} />
-          <Route path="/bridges/:bridgeId/components/:componentId" element={<ComponentArchivePage />} />
-          <Route path="/bridges/:bridgeId/defect-threads/review" element={<DefectThreadReviewPage />} />
+          <Route path="/bridges/:bridgeId" element={<BridgeWorkspaceShell />}>
+            <Route index element={<BridgeOverviewPage />} />
+            <Route path="inspections" element={<InspectionWorkspacePage />} />
+            <Route path="inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
+            <Route path="components" element={<ComponentArchivePage />} />
+            <Route path="components/:componentId" element={<ComponentArchivePage />} />
+            <Route path="defect-threads/review" element={<DefectThreadReviewPage />} />
+          </Route>
           <Route
             path="/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review"
             element={<ReviewWorkspacePage />}

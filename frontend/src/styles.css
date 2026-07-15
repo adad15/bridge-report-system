@@ -16,7 +16,7 @@ body {
 }
 
 .app-content {
-  width: min(880px, 100%);
+  width: min(1180px, 100%);
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -1525,4 +1525,420 @@ body {
   border-color: #d8b46f;
   background: #fff7e8;
   color: #714f14;
+}
+
+/* 模块 6.5：桥梁档案工作区。校对页仍由 app-shell-workbench 单独控制。 */
+.section-kicker {
+  margin: 0 0 6px;
+  color: #667586;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.page-title-row,
+.bridge-title-row,
+.card-heading,
+.annual-heading,
+.annual-actions,
+.rail-heading,
+.import-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.page-title-row h1,
+.bridge-title-row h1,
+.workspace-card h2,
+.import-source-card h3 {
+  margin: 0;
+}
+
+.bridge-search {
+  display: grid;
+  gap: 6px;
+  min-width: min(360px, 100%);
+  color: #55606c;
+  font-size: 13px;
+}
+
+.bridge-search input,
+.workspace-dialog input,
+.workspace-dialog select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid #cbd4df;
+  border-radius: 7px;
+  background: #fff;
+  font: inherit;
+}
+
+.pending-badge,
+.status-badge,
+.progress-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #edf2f8;
+  color: #40526a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pending-badge {
+  background: #fff0d1;
+  color: #7c5510;
+}
+
+.bridge-workspace-shell {
+  display: grid;
+  gap: 20px;
+}
+
+.bridge-workspace-header {
+  overflow: hidden;
+  border: 1px solid #d9e0e8;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(24, 32, 42, 0.06);
+}
+
+.bridge-breadcrumb,
+.bridge-title-row,
+.bridge-tabs {
+  padding-right: 24px;
+  padding-left: 24px;
+}
+
+.bridge-breadcrumb {
+  display: flex;
+  gap: 8px;
+  padding-top: 16px;
+  color: #647286;
+  font-size: 13px;
+}
+
+.bridge-title-row {
+  padding-top: 12px;
+  padding-bottom: 18px;
+}
+
+.bridge-title-row p {
+  margin: 6px 0 0;
+  color: #667586;
+}
+
+.bridge-tabs {
+  display: flex;
+  gap: 26px;
+  border-top: 1px solid #edf0f4;
+}
+
+.bridge-tabs a {
+  padding: 13px 2px 11px;
+  border-bottom: 3px solid transparent;
+  color: #4d5b6b;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.bridge-tabs a.active {
+  border-bottom-color: #2456c9;
+  color: #2456c9;
+}
+
+.bridge-overview-page,
+.inspection-workspace-content {
+  display: grid;
+  gap: 18px;
+}
+
+.workspace-card {
+  box-sizing: border-box;
+  padding: 22px 24px;
+  border: 1px solid #dce3eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.overview-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: linear-gradient(135deg, #fff 55%, #eef4ff);
+}
+
+.overview-hero p:last-child {
+  margin-bottom: 0;
+}
+
+.primary-link,
+.primary-button {
+  display: inline-flex;
+  justify-content: center;
+  padding: 9px 14px;
+  border: 1px solid #2456c9;
+  border-radius: 7px;
+  background: #2456c9;
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.metric-grid-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-grid > * {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 8px;
+  background: #f5f7fa;
+  color: inherit;
+  text-decoration: none;
+}
+
+.metric-grid strong {
+  font-size: 26px;
+}
+
+.metric-grid span,
+.muted-text,
+.empty-hint {
+  color: #687585;
+}
+
+.rating-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.rating-chips span {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #f2f5f9;
+  font-size: 13px;
+}
+
+.inspection-layout {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.inspection-year-rail {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #dce3eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.rail-heading h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.rail-heading button {
+  border: 0;
+  background: transparent;
+  color: #2456c9;
+  cursor: pointer;
+}
+
+.year-link {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  color: #273444;
+  text-decoration: none;
+}
+
+.year-link span {
+  color: #708094;
+  font-size: 12px;
+}
+
+.year-link.active {
+  background: #eaf0fd;
+  color: #2456c9;
+}
+
+.annual-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.progress-parse_failed {
+  background: #fbe3e3;
+  color: #a43333;
+}
+
+.progress-review,
+.progress-uploaded,
+.progress-parsing {
+  background: #fff0d1;
+  color: #7c5510;
+}
+
+.progress-completed {
+  background: #e5f4ea;
+  color: #23623c;
+}
+
+.import-card-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.import-source-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 16px;
+  border: 1px solid #e1e6ed;
+  border-radius: 8px;
+}
+
+.import-source-card p {
+  margin: 5px 0 0;
+  color: #637184;
+  font-size: 13px;
+}
+
+.lock-note {
+  color: #8a5b09 !important;
+  font-weight: 700;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(20, 28, 38, 0.52);
+}
+
+.workspace-dialog {
+  display: grid;
+  gap: 14px;
+  box-sizing: border-box;
+  width: min(480px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 24px;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.workspace-dialog label {
+  display: grid;
+  gap: 6px;
+  color: #48586a;
+  font-size: 14px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.dialog-actions button:not(.primary-button),
+.import-source-card button {
+  padding: 8px 12px;
+  border: 1px solid #c6d0dc;
+  border-radius: 7px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.progress-text {
+  color: #2456c9;
+  font-weight: 700;
+}
+
+.archive-pending-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  border: 1px solid #e2c17e;
+  border-radius: 8px;
+  background: #fff7e8;
+  color: #714f14;
+}
+
+@media (max-width: 1100px) {
+  .inspection-layout {
+    grid-template-columns: 185px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 14px;
+  }
+
+  .page-title-row,
+  .bridge-title-row,
+  .overview-hero,
+  .annual-heading,
+  .import-source-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bridge-tabs {
+    gap: 14px;
+    overflow-x: auto;
+  }
+
+  .inspection-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .inspection-year-rail {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .rail-heading {
+    min-width: 120px;
+  }
+
+  .year-link {
+    min-width: 90px;
+  }
+
+  .metric-grid,
+  .metric-grid-three {
+    grid-template-columns: 1fr;
+  }
 }
