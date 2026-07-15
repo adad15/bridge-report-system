@@ -331,9 +331,22 @@ ReviewRepository::ReviewRepository(drogon::orm::DbClientPtr db_client) : db_clie
 
 std::vector<review::BridgeSummary> ReviewRepository::list_bridges() {
     const auto result = db_client_->execSqlSync(
-        "select id, system_number, bridge_name, route_name, status "
-        "from bridges "
-        "order by system_number"
+        "select b.id, b.system_number, b.bridge_name, b.route_name, b.status, "
+        "latest.inspection_year as latest_inspection_year, latest.overall_score as latest_overall_score, "
+        "latest.overall_grade as latest_overall_grade, "
+        "(coalesce((select count(*) from import_records ir "
+        " left join inspection_years piy on piy.id = ir.inspection_year_id "
+        " where ir.bridge_id = b.id and ir.import_status in ('已上传','解析中','待校对','解析失败') "
+        " and (ir.inspection_year_id is null or piy.is_current)), 0) + "
+        " coalesce((select count(*) from defect_observations o "
+        " join inspection_years oiy on oiy.id = o.inspection_year_id "
+        " where o.bridge_id = b.id and oiy.is_current and oiy.status = '已确认' "
+        " and o.review_status in ('已确认','已修改') and o.defect_thread_id is null), 0))::int as pending_count "
+        "from bridges b "
+        "left join lateral (select iy.inspection_year, iy.overall_score, iy.overall_grade "
+        " from inspection_years iy where iy.bridge_id = b.id and iy.is_current "
+        " and iy.status in ('已确认','已归档') order by iy.inspection_year desc limit 1) latest on true "
+        "order by b.system_number"
     );
 
     std::vector<review::BridgeSummary> bridges;
@@ -345,6 +358,14 @@ std::vector<review::BridgeSummary> ReviewRepository::list_bridges() {
         summary.bridge_name = row["bridge_name"].as<std::string>();
         summary.route_name = optional_text(row, "route_name");
         summary.status = row["status"].as<std::string>();
+        if (!row["latest_inspection_year"].isNull()) {
+            summary.latest_inspection_year = row["latest_inspection_year"].as<int>();
+        }
+        if (!row["latest_overall_score"].isNull()) {
+            summary.latest_overall_score = row["latest_overall_score"].as<double>();
+        }
+        summary.latest_overall_grade = optional_text(row, "latest_overall_grade");
+        summary.pending_count = row["pending_count"].as<int>();
         bridges.push_back(std::move(summary));
     }
     return bridges;

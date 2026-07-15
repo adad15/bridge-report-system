@@ -23,6 +23,7 @@ add_library(bridge_report_backend_core
     src/db/DefectThreadRepository.cpp
     src/db/EditLockRepository.cpp
     src/db/ReviewRepository.cpp
+    src/db/WorkspaceRepository.cpp
     src/db/WordImportRepository.cpp
     src/http/AuthRoutes.cpp
     src/http/ComponentArchiveRoutes.cpp
@@ -32,6 +33,7 @@ add_library(bridge_report_backend_core
     src/http/ImportConfirmRoutes.cpp
     src/http/ReviewRoutes.cpp
     src/http/WordImportRoutes.cpp
+    src/http/WorkspaceRoutes.cpp
     src/identity/SystemNumber.cpp
     src/review/ComponentScore.cpp
     src/review/ConfirmPlan.cpp
@@ -103,6 +105,8 @@ add_executable(bridge_report_backend_tests
     tests/test_word_import_routes.cpp
     tests/test_word_import_repository.cpp
     tests/test_workspace_models.cpp
+    tests/test_workspace_repository.cpp
+    tests/test_workspace_routes.cpp
 )
 
 target_link_libraries(bridge_report_backend_tests

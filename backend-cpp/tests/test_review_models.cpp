@@ -22,6 +22,10 @@ TEST(BridgeSummaryTest, to_json_outputs_all_fields) {
     summary.bridge_name = "M05T2测试桥梁";
     summary.route_name = "G1线";
     summary.status = "在用";
+    summary.latest_inspection_year = 2025;
+    summary.latest_overall_score = 86.25;
+    summary.latest_overall_grade = "2类";
+    summary.pending_count = 3;
 
     const auto json = summary.to_json();
 
@@ -30,6 +34,10 @@ TEST(BridgeSummaryTest, to_json_outputs_all_fields) {
     EXPECT_EQ(json["bridge_name"].asString(), "M05T2测试桥梁");
     EXPECT_EQ(json["route_name"].asString(), "G1线");
     EXPECT_EQ(json["status"].asString(), "在用");
+    EXPECT_EQ(json["latest_inspection_year"].asInt(), 2025);
+    EXPECT_DOUBLE_EQ(json["latest_overall_score"].asDouble(), 86.25);
+    EXPECT_EQ(json["latest_overall_grade"].asString(), "2类");
+    EXPECT_EQ(json["pending_count"].asInt(), 3);
 }
 
 TEST(BridgeSummaryTest, to_json_outputs_null_for_missing_route_name) {
@@ -44,6 +52,10 @@ TEST(BridgeSummaryTest, to_json_outputs_null_for_missing_route_name) {
 
     EXPECT_TRUE(json["route_name"].isNull());
     EXPECT_EQ(json["status"].asString(), "停用");
+    EXPECT_TRUE(json["latest_inspection_year"].isNull());
+    EXPECT_TRUE(json["latest_overall_score"].isNull());
+    EXPECT_TRUE(json["latest_overall_grade"].isNull());
+    EXPECT_EQ(json["pending_count"].asInt(), 0);
 }
 
 TEST(InspectionYearSummaryTest, to_json_outputs_all_fields) {

@@ -19,6 +19,10 @@ struct BridgeSummary {
     std::string bridge_name;
     std::optional<std::string> route_name;
     std::string status;
+    std::optional<int> latest_inspection_year;
+    std::optional<double> latest_overall_score;
+    std::optional<std::string> latest_overall_grade;
+    int pending_count{0};
 
     Json::Value to_json() const;
 };
