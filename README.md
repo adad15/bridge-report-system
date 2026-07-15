@@ -124,8 +124,7 @@ Module 05 adds the human review workbench that turns a module 03
 frontend never talks to the Python tool service directly; it only calls the C++
 main backend.
 
-Page entry (React Router path, reached by clicking an import record row on the
-bridge detail page):
+Page entry (React Router path, reached from the selected annual workspace):
 
 ```text
 /bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review
@@ -144,6 +143,10 @@ POST /api/import-records/{import_record_id}/cancel               # cancel a pend
 GET  /api/bridges                                                # bridge list (navigation)
 GET  /api/bridges/{bridge_id}/inspection-years                   # inspection years for a bridge
 GET  /api/bridges/{bridge_id}/import-records                     # import records for a bridge
+GET  /api/bridges/{bridge_id}/overview                           # bridge archive overview
+GET  /api/inspection-years/{inspection_year_id}/workspace        # annual workspace summary
+POST /api/bridges/{bridge_id}/inspection-years                   # create a current annual inspection
+POST /api/inspection-years/{inspection_year_id}/import-records/word # archive one Word source
 ```
 
 The five action buttons on the review page map onto these endpoints:
@@ -154,7 +157,7 @@ The five action buttons on the review page map onto these endpoints:
 入库前检查         -> POST .../preflight-confirm (unlocks 确认年度事实入库 when can_confirm=true)
 确认年度事实入库   -> POST .../confirm (opens a revision-confirmation dialog first when the latest
                       preflight reports requires_revision_confirmation=true)
-取消导入           -> POST .../cancel, then navigate back to the bridge detail page
+取消导入           -> POST .../cancel, then navigate back to the selected annual workspace
 ```
 
 Seed sample data (idempotent; deletes and reinserts the sample bridge/year/import
@@ -232,9 +235,36 @@ With PostgreSQL, the C++ backend (`127.0.0.1:18080`), and the Vite dev server
    at the old row, and the placeholder row removed.
 7. Seeded a third throwaway import record and verified 取消导入: after confirming the
    browser prompt, `psql` showed `import_records.import_status = '已取消'` and the
-   page navigated back to `/bridges/:bridgeId`.
+   page navigated back to the selected `/bridges/:bridgeId/inspections/:inspectionYearId` workspace.
 8. Re-ran the seed script to restore the sample bridge to a single clean pending
    import record for the next developer.
+
+## Module 06.5 Bridge-centered Workspace
+
+Module 06.5 reorganizes the existing review and archive capabilities around a
+bridge archive. After login, `/` redirects to `/bridges`; selecting a bridge
+opens its overview rather than a database-oriented detail page.
+
+Frontend routes:
+
+```text
+/bridges                                            # searchable bridge archive list
+/bridges/:bridgeId                                  # latest conclusion, pending work, history, defect summary
+/bridges/:bridgeId/inspections                      # redirects to the latest current annual inspection
+/bridges/:bridgeId/inspections/:inspectionYearId    # year rail + annual workspace
+/bridges/:bridgeId/components                       # read-first component defect archive
+/bridges/:bridgeId/defect-threads/review            # nested thread cleanup action, not a top-level tab
+/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review
+                                                    # existing full-width review workbench
+```
+
+An annual workspace can create a non-conflicting year, upload one `.docx`
+source (`软件导出Word` or `正式Word`), call the existing Python parse endpoint,
+and then enter the full-width review workbench. The selected bridge and year
+come from PostgreSQL context, not from the Word file. Failed parsing keeps the
+archived Word and exposes a retry action without another upload. Word uploads
+default to a 256 MiB limit (`archive.word_upload_max_bytes`) and responses never
+expose archive paths.
 
 ## Module 06 Component Defect Archive
 

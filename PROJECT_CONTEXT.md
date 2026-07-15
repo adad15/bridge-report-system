@@ -21,9 +21,9 @@
 
 ```text
 继续 bridge-report-system 项目。仓库路径：D:\vs2022 code\bridge-report-system。
-当前应该在分支 feature/06-component-defect-archive。
-模块 01、02、03、04、05 已完成；模块 06 的设计已确认，当前应先审阅模块 06 规格和跨模块变更提案，再编写实施计划。
-请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md、docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md、docs/superpowers/specs/modules/04-word-importer-prototype.md、docs/superpowers/specs/modules/05-review-workspace.md、docs/superpowers/specs/modules/06-component-defect-archive.md。未确认实施计划前不要大规模编码。
+当前应该在分支 codex/06-5-interaction-redesign。
+模块 01～06.5 已完成；下一步先由用户决定是否开始模块 07，不要自动进入模块 07 编码。
+请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/modules/06-5-bridge-centric-interaction-redesign.md、docs/superpowers/plans/2026-07-15-module06-5-bridge-workspace-implementation-plan.md，以及模块 05、06 规格。模块 07 未完成需求确认前不要大规模编码。
 ```
 
 ## 当前进度
@@ -33,7 +33,7 @@
 - 模块 2 设计文档提交号：`52ee0ab docs: add module 02 schema and archive design`。
 - 模块 3 `03-bridge-annual-inspection-data-contract` 已完成实施并推送到 GitHub。
 - 模块 3 已定义并实现 `BridgeAnnualInspectionData` 1.2 JSON 契约、JSON Schema、Python Pydantic 模型、C++ JsonCpp 校验器和前端 TypeScript 类型/运行时校验；1.2 增加病害详细位置、标度、扣分和构件评分双值校验，四端已同步实施。
-- 当前分支为 `feature/06-component-defect-archive`。
+- 当前分支为 `codex/06-5-interaction-redesign`。
 - 模块 4 `04-word-importer-prototype` 已完成并推送到 GitHub：第一版支持 `.docx`、`rule_profile="辽宁国省干线"`、第二章三张病害检查表、病害照片抽取匹配、第四章评分表和模块 3 契约输出。
 - 绕阳河二号桥真实软件报告本地验收已覆盖：病害候选 25 条、病害照片候选 31 条、临时图片 36 个、第四章总分 85.61/2类、尺寸低置信误报清零。
 - 模块 5 `05-review-workspace` 已完成实施：后端确认入库事务（C++）与前端校对工作台（React）已落地，读取 `import_records.parsed_result_json`，按 warning/error 分组人工校对，保存草稿，五个操作按钮（保存草稿/批量确认普通候选/入库前检查/确认年度事实入库/取消导入）全部接后端，修订版确认弹窗和确认后只读态已实现。已完成端到端手工验收：编辑保存、批量确认、入库前检查解锁确认、首次确认入库写入四张事实表、同桥同年二次导入的修订版确认路径（含 409 拒绝校验）、取消导入均通过。
@@ -44,6 +44,8 @@
 - 合同 1.2 变更提案见 `docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md`（已实施）；实施计划见 `docs/superpowers/plans/2026-07-13-component-defect-archive-implementation-plan.md`。
 - 变更 002 已实施（2026-07-15，见 `docs/superpowers/specs/changes/2026-07-15-change-002-accounts-and-post-confirm-reopen.md`）：轻量账号体系（users/user_sessions、登录页、会话 token、写端点鉴权，默认账号 admin/admin123 与 user/user123 由后端启动播种）；已确认导入记录支持"重开校对 + 修订版入库"（warnings_only=任何登录用户仅改带警告病害，full=仅管理员全改；放弃修改可还原重开快照；重开态禁止取消导入）；校对页只读态照片查看不再被禁用（逐控件禁用取代 fieldset 一揽子禁用）；迁移 004。
 - 模块 06 验收修复已实施（2026-07-15）：待校对导入记录采用独占租约编辑锁（30 秒心跳、2 分钟过期、同账号其他会话只读、管理员带原因强制解锁并留审计，迁移 005）；扣分 `0` 按合法值参与 JTG/T H21-2011 构件评分复算；入库前检查将最终分严格绑定到“一致/采用复算值/接受 Word 值”的相应来源；`warnings_only` 由后端字段白名单冻结非警告候选、照片、证据和其他评分，仅接受病害改动及其确定性评分复算结果。异常关闭不保存本地草稿，未保存修改按已确认方案直接丢失。
+- 模块 06.5 已完成实施（2026-07-15）：系统入口改为桥梁档案列表；进入桥梁默认显示“最新正式结论 → 待办 → 历年技术状况 → 病害概况”；年度检测采用左侧年份栏和右侧年度工作台；支持桥梁内并发安全创建年度、受控上传/归档 Word、调用现有解析并进入模块 05 全屏校对；解析失败保留原 Word 并可重试；校对退出返回原年度；构件档案保留线索整理但不作为一级导航。当前仍只有 Word 格式，不实现多来源合并。
+- 模块 06.5 验收：Python 115 项通过、1 项环境门控跳过；指定真实 Word 后专项 1 项通过；前端 241 项通过；C++ + PostgreSQL 294 项通过；C++ Debug 构建和前端生产构建通过。
 
 ## 已确认方向
 
@@ -301,8 +303,8 @@
 
 推荐下一步：
 
-1. 模块 06 已实施并通过真实 Word 端到端验收，等待用户确认后提交并推送。
-2. 进入模块 07 `07-defect-comparison-engine`：基于已整理的病害线索与相邻年度观测生成对比候选，人工确认后写入 `defect_comparisons`。
+1. 先由用户体验并确认模块 06.5 的桥梁概览、年度工作台和 Word 导入流程；必要时继续做 6.5 界面优化。
+2. 用户明确同意后再进入模块 07 `07-defect-comparison-engine`：基于已整理的病害线索与相邻年度观测生成对比候选，人工确认后写入 `defect_comparisons`。
 3. 模块 07 设计时注意：模块 06 的绑定事务已在数据库层拦截"重新绑定被人工已确认对比引用的观测"，撤销对比结论的入口应由模块 07 提供。
 
 ## 设计文档
