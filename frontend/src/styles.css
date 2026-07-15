@@ -1942,3 +1942,20 @@ body {
     grid-template-columns: 1fr;
   }
 }
+.dialog-actions .danger-button { background: #b42318; border-color: #b42318; color: #fff; }
+.dialog-actions .danger-button:disabled { background: #d9a7a2; border-color: #d9a7a2; cursor: not-allowed; }
+.more-actions { position: relative; }
+.more-actions summary { cursor: pointer; list-style: none; padding: .62rem .85rem; border: 1px solid #cbd5e1; border-radius: .5rem; background: #fff; }
+.more-actions > div { position: absolute; z-index: 5; right: 0; top: calc(100% + .35rem); min-width: 8rem; padding: .35rem; border: 1px solid #dbe3ee; border-radius: .5rem; background: #fff; box-shadow: 0 8px 24px rgb(15 23 42 / 14%); }
+.danger-menu-item { width: 100%; border: 0; color: #b42318; background: transparent; text-align: left; }
+.delete-year-dialog { width: min(38rem, calc(100vw - 2rem)); }
+.danger-callout, .lock-warning { margin: 1rem 0; padding: .9rem 1rem; border-radius: .55rem; }
+.danger-callout { color: #7a271a; background: #fef3f2; border: 1px solid #fecdca; }
+.lock-warning { color: #7a2e0e; background: #fffaeb; border: 1px solid #fedf89; }
+.danger-callout p, .lock-warning p { margin-bottom: 0; }
+.deletion-impact-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .65rem; margin: 1rem 0; }
+.deletion-impact-grid > div { padding: .7rem; border: 1px solid #e2e8f0; border-radius: .5rem; background: #f8fafc; }
+.deletion-impact-grid dt { color: #64748b; font-size: .85rem; }
+.deletion-impact-grid dd { margin: .2rem 0 0; font-size: 1.15rem; font-weight: 700; }
+.delete-year-dialog textarea { min-height: 5rem; resize: vertical; }
+@media (max-width: 720px) { .deletion-impact-grid { grid-template-columns: repeat(2, 1fr); } }

@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./apiClient";
 import {
   createInspectionYear,
+  deleteInspectionYear,
+  fetchInspectionYearDeletionImpact,
   fetchBridgeOverview,
   uploadWordImport,
   workspaceErrorMessage,
@@ -51,6 +53,25 @@ describe("workspaceApi", () => {
     expect(init.headers).toBeUndefined();
     expect(init.body.get("file")).toBe(file);
     expect(init.body.get("source_type")).toBe("正式Word");
+  });
+
+  it("previews and permanently deletes an encoded inspection year", async () => {
+    const impact = { impact_token: "sha256:abc", confirmation_text: "永久删除 2026" };
+    const result = { deleted: true, next_inspection_year_id: "year-2025" };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => impact })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => result });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchInspectionYearDeletionImpact("http://backend", "year/2026")).resolves.toEqual(impact);
+    await expect(deleteInspectionYear("http://backend", "year/2026", {
+      impact_token: "sha256:abc", confirmation_text: "永久删除 2026", reason: "误建年度",
+    })).resolves.toEqual(result);
+    expect(fetchMock.mock.calls[1]).toEqual([
+      "http://backend/api/inspection-years/year%2F2026",
+      { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        impact_token: "sha256:abc", confirmation_text: "永久删除 2026", reason: "误建年度",
+      }) },
+    ]);
   });
 
   it("maps stable errors and preserves unknown backend messages", () => {

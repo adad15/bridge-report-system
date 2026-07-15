@@ -86,6 +86,43 @@ export interface InspectionWorkspace {
   pending: WorkspacePendingSummary;
 }
 
+export interface InspectionYearDeletionImpact {
+  bridge: { id: string; system_number: string; bridge_name: string };
+  inspection_year: number;
+  version_numbers: number[];
+  counts: {
+    inspection_versions: number;
+    import_records: number;
+    defect_observations: number;
+    defect_measurements: number;
+    defect_photos: number;
+    condition_ratings: number;
+    archived_files_to_delete: number;
+    shared_files_retained: number;
+    defect_threads_affected: number;
+    defect_comparisons: number;
+  };
+  active_edit_locks: Array<{
+    import_record_id: string;
+    owner_username: string;
+    owner_display_name: string;
+    acquired_at: string;
+    expires_at: string;
+  }>;
+  confirmation_text: string;
+  impact_token: string;
+}
+
+export interface DeleteInspectionYearResult {
+  deleted: true;
+  deletion_audit_id: string;
+  bridge_id: string;
+  inspection_year: number;
+  deleted_counts: InspectionYearDeletionImpact["counts"];
+  next_inspection_year_id: string | null;
+  file_cleanup: { completed: number; failed: number };
+}
+
 export async function fetchBridgeOverview(baseUrl: string, bridgeId: string): Promise<BridgeOverview> {
   return request(`${baseUrl}/api/bridges/${encodeURIComponent(bridgeId)}/overview`);
 }
@@ -95,6 +132,25 @@ export async function fetchInspectionWorkspace(
   inspectionYearId: string
 ): Promise<InspectionWorkspace> {
   return request(`${baseUrl}/api/inspection-years/${encodeURIComponent(inspectionYearId)}/workspace`);
+}
+
+export async function fetchInspectionYearDeletionImpact(
+  baseUrl: string,
+  inspectionYearId: string
+): Promise<InspectionYearDeletionImpact> {
+  return request(`${baseUrl}/api/inspection-years/${encodeURIComponent(inspectionYearId)}/deletion-impact`);
+}
+
+export async function deleteInspectionYear(
+  baseUrl: string,
+  inspectionYearId: string,
+  input: { impact_token: string; confirmation_text: string; reason: string }
+): Promise<DeleteInspectionYearResult> {
+  return request(`${baseUrl}/api/inspection-years/${encodeURIComponent(inspectionYearId)}`, {
+    method: "DELETE",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(input),
+  });
 }
 
 export async function createInspectionYear(
@@ -135,6 +191,9 @@ export function workspaceErrorMessage(error: unknown): string {
     invalid_word_file: "请选择一个非空的 .docx 文件。",
     word_file_too_large: "Word 文件超过允许的上传大小。",
     word_archive_failed: "Word 文件归档失败，请重试。",
+    inspection_year_edit_locked: "该年度仍有人正在编辑，暂时不能删除。",
+    deletion_impact_changed: "删除影响范围已经变化，请重新核对后再次确认。",
+    deletion_reason_required: "请填写删除原因。",
   };
   return stable[error.code] ?? error.message;
 }

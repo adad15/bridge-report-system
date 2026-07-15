@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/apiClient";
+import { useAuth } from "../auth/AuthContext";
 import { fetchInspectionYears, type InspectionYearSummary } from "../api/navigationApi";
 import { fetchInspectionWorkspace, type InspectionWorkspace, type WorkspaceImport } from "../api/workspaceApi";
 import { backendBaseUrl } from "../config";
 import { CreateInspectionDialog } from "../workspace/CreateInspectionDialog";
 import { ImportWordDialog } from "../workspace/ImportWordDialog";
+import { DeleteInspectionYearDialog } from "../workspace/DeleteInspectionYearDialog";
 import { useBridgeWorkspace } from "../workspace/BridgeWorkspaceShell";
 import { deriveInspectionProgress, inspectionWorkspacePath, reviewPath } from "../workspace/workspaceState";
 
@@ -20,6 +22,7 @@ const actionLabel = (item: WorkspaceImport) => {
 export function InspectionWorkspacePage() {
   const { bridgeId, inspectionYearId } = useParams<{ bridgeId: string; inspectionYearId?: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { overview, reloadOverview } = useBridgeWorkspace();
   const [years, setYears] = useState<InspectionYearSummary[] | null>(null);
   const [workspace, setWorkspace] = useState<InspectionWorkspace | null>(null);
@@ -27,6 +30,7 @@ export function InspectionWorkspacePage() {
   const [version, setVersion] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [importDialog, setImportDialog] = useState<{ retry: WorkspaceImport | null } | null>(null);
+  const [showDelete, setShowDelete] = useState(false);
 
   useEffect(() => {
     if (!bridgeId) return;
@@ -101,6 +105,8 @@ export function InspectionWorkspacePage() {
           bridgeId={bridgeId}
           onImport={() => setImportDialog({ retry: null })}
           onRetry={(item) => setImportDialog({ retry: item })}
+          canDelete={user?.role === "admin"}
+          onDelete={() => setShowDelete(true)}
         /> : null}
       </section>
 
@@ -116,22 +122,35 @@ export function InspectionWorkspacePage() {
         onChanged={refresh}
         onCompleted={(importId) => navigate(reviewPath(bridgeId, workspace.inspection_year.id, importId))}
       /> : null}
+      {showDelete && workspace ? <DeleteInspectionYearDialog
+        inspectionYearId={workspace.inspection_year.id}
+        onClose={() => setShowDelete(false)}
+        onDeleted={(result) => {
+          setShowDelete(false);
+          refresh();
+          navigate(result.next_inspection_year_id
+            ? inspectionWorkspacePath(bridgeId, result.next_inspection_year_id)
+            : `/bridges/${encodeURIComponent(bridgeId)}/inspections`, { replace: true });
+        }}
+      /> : null}
     </div>
   );
 }
 
-function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry }: {
+function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry, canDelete, onDelete }: {
   workspace: InspectionWorkspace;
   bridgeId: string;
   onImport: () => void;
   onRetry: (item: WorkspaceImport) => void;
+  canDelete: boolean;
+  onDelete: () => void;
 }) {
   const progress = deriveInspectionProgress(workspace.inspection_year, workspace.imports);
   return (
     <>
       <section className="workspace-card annual-heading">
         <div><p className="section-kicker">{workspace.inspection_year.system_number}</p><h2>{workspace.inspection_year.inspection_year} 年度检测</h2><p>{workspace.inspection_year.status} · 当前版本 V{workspace.inspection_year.version_number}</p></div>
-        <div className="annual-actions"><span className={`progress-badge progress-${progress.stage}`}>{progress.label}</span>{workspace.inspection_year.is_current ? <button className="primary-button" type="button" onClick={onImport}>导入资料</button> : null}</div>
+        <div className="annual-actions"><span className={`progress-badge progress-${progress.stage}`}>{progress.label}</span>{workspace.inspection_year.is_current ? <button className="primary-button" type="button" onClick={onImport}>导入资料</button> : null}{canDelete ? <details className="more-actions"><summary>更多</summary><div><button type="button" className="danger-menu-item" onClick={onDelete}>删除年度</button></div></details> : null}</div>
       </section>
       <section className="workspace-card">
         <div className="card-heading"><div><p className="section-kicker">资料与处理记录</p><h2>{workspace.imports.length} 条导入记录</h2></div></div>

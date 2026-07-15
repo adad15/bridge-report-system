@@ -23,15 +23,19 @@ add_library(bridge_report_backend_core
     src/db/CommitLatch.cpp
     src/db/DefectThreadRepository.cpp
     src/db/EditLockRepository.cpp
+    src/db/InspectionYearDeletionRepository.cpp
     src/db/ReviewRepository.cpp
     src/db/WorkspaceRepository.cpp
     src/db/WordImportRepository.cpp
+    src/deletion/ArchivedFileDeletionQueue.cpp
+    src/deletion/InspectionYearDeletionModels.cpp
     src/http/AuthRoutes.cpp
     src/http/ComponentArchiveRoutes.cpp
     src/http/Cors.cpp
     src/http/DefectThreadRoutes.cpp
     src/http/EditLockRoutes.cpp
     src/http/ImportConfirmRoutes.cpp
+    src/http/InspectionYearDeletionRoutes.cpp
     src/http/ReviewRoutes.cpp
     src/http/WordImportRoutes.cpp
     src/http/WorkspaceRoutes.cpp
@@ -83,6 +87,7 @@ add_executable(bridge_report_backend_tests
     tests/test_annual_inspection_contract.cpp
     tests/test_app_config.cpp
     tests/test_archive_paths.cpp
+    tests/test_archived_file_deletion_queue.cpp
     tests/test_component_archive_repository.cpp
     tests/test_component_archive_routes.cpp
     tests/test_component_score.cpp
@@ -95,6 +100,9 @@ add_executable(bridge_report_backend_tests
     tests/test_draft_validation.cpp
     tests/test_edit_lock_repository.cpp
     tests/test_extracted_photo_archive.cpp
+    tests/test_inspection_year_deletion_models.cpp
+    tests/test_inspection_year_deletion_repository.cpp
+    tests/test_inspection_year_deletion_routes.cpp
     tests/test_password_hash.cpp
     tests/test_preflight_report.cpp
     tests/test_photo_content.cpp

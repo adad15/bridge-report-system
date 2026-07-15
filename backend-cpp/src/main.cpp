@@ -16,10 +16,12 @@
 #include "bridge_report/http/DefectThreadRoutes.hpp"
 #include "bridge_report/http/EditLockRoutes.hpp"
 #include "bridge_report/http/ImportConfirmRoutes.hpp"
+#include "bridge_report/http/InspectionYearDeletionRoutes.hpp"
 #include "bridge_report/http/ReviewRoutes.hpp"
 #include "bridge_report/http/WordImportRoutes.hpp"
 #include "bridge_report/http/WorkspaceRoutes.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
+#include "bridge_report/deletion/ArchivedFileDeletionQueue.hpp"
 
 namespace {
 
@@ -168,6 +170,14 @@ int main(int argc, char* argv[]) {
         std::cout << "默认账号播种失败（稍后可重启重试）：" << error.what() << "\n";
     }
 
+    // 上次删除若因进程异常未完成物理文件清理，启动时做一次有界重试。
+    try {
+        bridge_report::deletion::ArchivedFileDeletionQueue queue(db_client, config.archive_root);
+        queue.process_pending();
+    } catch (const std::exception& error) {
+        std::cout << "归档文件待清理队列重试失败：" << error.what() << "\n";
+    }
+
     drogon::app().registerMiddleware(std::make_shared<drogon::HttpOptionsMiddleware>());
     register_health_routes(config, db_client);
     bridge_report::http::register_auth_routes(db_client);
@@ -178,6 +188,7 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_workspace_routes(db_client, config);
     bridge_report::http::register_component_archive_routes(db_client, config.archive_root);
     bridge_report::http::register_defect_thread_routes(db_client);
+    bridge_report::http::register_inspection_year_deletion_routes(db_client, config.archive_root);
 
     std::cout << "Bridge Report C++ backend listening on "
               << config.host << ":" << config.port << "\n";
