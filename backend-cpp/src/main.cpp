@@ -175,7 +175,7 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_review_routes(db_client, config.archive_root);
     bridge_report::http::register_import_confirm_routes(db_client);
     bridge_report::http::register_word_import_routes(db_client, config);
-    bridge_report::http::register_workspace_routes(db_client);
+    bridge_report::http::register_workspace_routes(db_client, config);
     bridge_report::http::register_component_archive_routes(db_client, config.archive_root);
     bridge_report::http::register_defect_thread_routes(db_client);
 

@@ -3,7 +3,9 @@
 #include <string>
 
 #include <drogon/drogon.h>
+#include <drogon/MultiPart.h>
 
+#include "bridge_report/archive/WordInputArchive.hpp"
 #include "bridge_report/db/WorkspaceRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
@@ -36,11 +38,20 @@ Json::Value inspection_year_already_exists_body(
     return body;
 }
 
-void register_workspace_routes(const drogon::orm::DbClientPtr& db_client) {
+bool is_supported_word_source_type(const std::string& source_type) {
+    return source_type == "软件导出Word" || source_type == "正式Word";
+}
+
+void register_workspace_routes(
+    const drogon::orm::DbClientPtr& db_client,
+    const config::AppConfig& config
+) {
     const std::string bridge_path = "/api/bridges/{bridge_id}/overview";
     const std::string inspection_path = "/api/inspection-years/{inspection_year_id}/workspace";
+    const std::string word_upload_path = "/api/inspection-years/{inspection_year_id}/import-records/word";
     register_options_handler(bridge_path);
     register_options_handler(inspection_path);
+    register_options_handler(word_upload_path);
 
     drogon::app().registerHandler(
         bridge_path,
@@ -144,6 +155,85 @@ void register_workspace_routes(const drogon::orm::DbClientPtr& db_client) {
 
                 Json::Value body;
                 body["inspection_year"] = outcome.inspection_year->to_json();
+                respond_json(callback, body, drogon::k201Created);
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Post}
+    );
+
+    drogon::app().registerHandler(
+        word_upload_path,
+        [db_client, config](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                            const std::string& inspection_year_id) {
+            if (!is_valid_uuid(inspection_year_id)) {
+                respond_workspace_not_found(callback, WorkspaceResource::InspectionYear);
+                return;
+            }
+            try {
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+
+                drogon::MultiPartParser parser;
+                if (parser.parse(request) != 0) {
+                    respond_json(callback, make_error_body("invalid_word_file", "上传内容不是合法的 multipart 表单。"),
+                                 drogon::k400BadRequest);
+                    return;
+                }
+                const auto& files = parser.getFiles();
+                if (files.size() != 1 || files[0].getItemName() != "file") {
+                    respond_json(callback, make_error_body("invalid_word_file", "必须上传一个名为 file 的 Word 文件。"),
+                                 drogon::k400BadRequest);
+                    return;
+                }
+                const auto source_type = parser.getParameter<std::string>("source_type");
+                if (!is_supported_word_source_type(source_type)) {
+                    respond_json(callback,
+                                 make_error_body("invalid_source_type", "Word 来源类型必须是软件导出Word或正式Word。"),
+                                 drogon::k400BadRequest);
+                    return;
+                }
+                const auto content = files[0].fileContent();
+                const auto validation = archive::validate_word_input(
+                    files[0].getFileName(), content, config.word_upload_max_bytes);
+                if (validation.error == archive::WordInputValidationError::FileTooLarge) {
+                    respond_json(callback, make_error_body("word_file_too_large", "Word 文件超过允许的上传大小。"),
+                                 drogon::k413RequestEntityTooLarge);
+                    return;
+                }
+                if (!validation.ok()) {
+                    respond_json(callback, make_error_body("invalid_word_file", "只能上传非空的 .docx 文件。"),
+                                 drogon::k400BadRequest);
+                    return;
+                }
+
+                db::WorkspaceRepository repository(db_client);
+                const auto outcome = repository.upload_word_import(
+                    inspection_year_id, source_type, validation.metadata, content,
+                    std::filesystem::absolute(config.archive_root));
+                if (outcome.status == db::UploadWordStatus::InspectionYearNotFound) {
+                    respond_workspace_not_found(callback, WorkspaceResource::InspectionYear);
+                    return;
+                }
+                if (outcome.status == db::UploadWordStatus::InspectionYearNotCurrent) {
+                    respond_json(callback,
+                                 make_error_body("inspection_year_not_current", "非当前年度版本不能继续导入资料。"),
+                                 drogon::k409Conflict);
+                    return;
+                }
+                if (outcome.status == db::UploadWordStatus::ArchiveFailed) {
+                    respond_json(callback, make_error_body("word_archive_failed", "Word 文件归档失败。"),
+                                 drogon::k500InternalServerError);
+                    return;
+                }
+
+                Json::Value body;
+                body["import_record"] = outcome.import_record->to_json();
                 respond_json(callback, body, drogon::k201Created);
             } catch (const drogon::orm::DrogonDbException&) {
                 respond_db_unavailable(callback);

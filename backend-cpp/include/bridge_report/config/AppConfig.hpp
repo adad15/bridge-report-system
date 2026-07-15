@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <cstddef>
 #include <string>
 
 namespace bridge_report::config {
@@ -24,6 +25,7 @@ struct AppConfig {
     int port{18080};
     std::string python_tools_base_url{"http://127.0.0.1:18081"};
     std::filesystem::path archive_root{"archive"};
+    std::size_t word_upload_max_bytes{256ULL * 1024ULL * 1024ULL};
     PostgresConfig postgres{};
 };
 

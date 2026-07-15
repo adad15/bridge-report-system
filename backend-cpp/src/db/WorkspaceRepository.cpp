@@ -1,10 +1,14 @@
 #include "bridge_report/db/WorkspaceRepository.hpp"
 
+#include <memory>
 #include <sstream>
 #include <utility>
 
 #include <json/json.h>
 
+#include "bridge_report/archive/ArchivePaths.hpp"
+#include "bridge_report/archive/WordInputArchive.hpp"
+#include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/db/ComponentArchiveRepository.hpp"
 #include "bridge_report/review/ReviewStatistics.hpp"
 
@@ -222,6 +226,102 @@ CreateInspectionYearOutcome WorkspaceRepository::create_inspection_year(
 
     // 理论上仅会在桥梁被并发删除时发生；对调用方仍按桥梁不存在处理。
     return {CreateInspectionYearStatus::BridgeNotFound, std::nullopt, std::nullopt};
+}
+
+UploadWordOutcome WorkspaceRepository::upload_word_import(
+    const std::string& inspection_year_id,
+    const std::string& source_type,
+    const archive::WordInputMetadata& metadata,
+    const std::string_view content,
+    const std::filesystem::path& archive_root
+) {
+    std::shared_ptr<drogon::orm::Transaction> transaction;
+    auto latch = std::make_shared<CommitLatch>();
+    std::filesystem::path stored_relative_path;
+    bool file_stored = false;
+    try {
+        transaction = db_client_->newTransaction(latch->callback());
+        const auto context_rows = transaction->execSqlSync(
+            "select iy.inspection_year, iy.is_current, b.id::text as bridge_id, "
+            "b.system_number as bridge_system_number, b.bridge_name "
+            "from inspection_years iy join bridges b on b.id = iy.bridge_id "
+            "where iy.id = $1::uuid for update", inspection_year_id);
+        if (context_rows.empty()) {
+            transaction->rollback();
+            return {UploadWordStatus::InspectionYearNotFound, std::nullopt};
+        }
+        const auto& context = context_rows[0];
+        if (!context["is_current"].as<bool>()) {
+            transaction->rollback();
+            return {UploadWordStatus::InspectionYearNotCurrent, std::nullopt};
+        }
+
+        const auto import_rows = transaction->execSqlSync(
+            "insert into import_records (bridge_id, inspection_year_id, import_name, source_type, import_status) "
+            "values ($1::uuid, $2::uuid, $3, $4, '已上传') "
+            "returning id::text, system_number, created_at::text, updated_at::text",
+            context["bridge_id"].as<std::string>(), inspection_year_id,
+            metadata.original_file_name, source_type);
+        const auto& import_row = import_rows[0];
+        const auto import_id = import_row["id"].as<std::string>();
+        const auto import_number = import_row["system_number"].as<std::string>();
+
+        const auto archived_rows = transaction->execSqlSync(
+            "insert into archived_files (bridge_id, inspection_year_id, original_file_name, current_file_name, "
+            "storage_relative_path, file_type, file_purpose, file_extension, file_size_bytes, file_hash, "
+            "source_description) values ($1::uuid, $2::uuid, $3, $3, $4, 'Word文档', '导入主报告', "
+            "$5, $6, $7, '年度工作台上传') returning id::text, system_number",
+            context["bridge_id"].as<std::string>(), inspection_year_id, metadata.original_file_name,
+            "pending/" + import_id, metadata.file_extension,
+            static_cast<long long>(metadata.file_size_bytes), metadata.sha256);
+        const auto archived_file_id = archived_rows[0]["id"].as<std::string>();
+        const auto file_number = archived_rows[0]["system_number"].as<std::string>();
+        stored_relative_path = archive::build_import_input_relative_path(
+            context["bridge_system_number"].as<std::string>(),
+            context["bridge_name"].as<std::string>(),
+            context["inspection_year"].as<int>(),
+            import_number,
+            metadata.original_file_name,
+            file_number,
+            metadata.original_file_name);
+
+        archive::archive_word_input(archive_root, stored_relative_path, content, metadata.sha256);
+        file_stored = true;
+        transaction->execSqlSync(
+            "update archived_files set storage_relative_path = $2 where id = $1::uuid",
+            archived_file_id, stored_relative_path.generic_string());
+        transaction->execSqlSync(
+            "insert into import_record_files (import_record_id, archived_file_id, file_role, process_status) "
+            "values ($1::uuid, $2::uuid, '主报告', '待处理')",
+            import_id, archived_file_id);
+        transaction->execSqlSync(
+            "update import_records set main_file_id = $2::uuid, updated_at = now() where id = $1::uuid",
+            import_id, archived_file_id);
+
+        transaction.reset();
+        if (!latch->wait()) {
+            archive::remove_archived_word_input(archive_root, stored_relative_path);
+            return {UploadWordStatus::ArchiveFailed, std::nullopt};
+        }
+
+        review::WorkspaceImport imported;
+        imported.id = import_id;
+        imported.system_number = import_number;
+        imported.import_name = metadata.original_file_name;
+        imported.source_type = source_type;
+        imported.import_status = "已上传";
+        imported.created_at = optional_text(import_row, "created_at");
+        imported.updated_at = optional_text(import_row, "updated_at");
+        return {UploadWordStatus::Created, std::move(imported)};
+    } catch (...) {
+        if (transaction) {
+            try { transaction->rollback(); }
+            catch (...) {
+            }
+        }
+        if (file_stored) archive::remove_archived_word_input(archive_root, stored_relative_path);
+        return {UploadWordStatus::ArchiveFailed, std::nullopt};
+    }
 }
 
 }  // namespace bridge_report::db

@@ -22,6 +22,14 @@ int get_int_or_default(const Json::Value& object, const char* key, int fallback)
     return object[key].asInt();
 }
 
+std::size_t get_size_or_default(const Json::Value& object, const char* key, const std::size_t fallback) {
+    if (!object.isObject() || !object.isMember(key) || !object[key].isUInt64()) {
+        return fallback;
+    }
+    const auto value = object[key].asUInt64();
+    return value == 0 ? fallback : static_cast<std::size_t>(value);
+}
+
 }  // 匿名命名空间
 
 AppConfig load_app_config(const std::filesystem::path& path) {
@@ -56,6 +64,11 @@ AppConfig load_app_config(const std::filesystem::path& path) {
         archive,
         "root",
         config.archive_root.generic_string()
+    );
+    config.word_upload_max_bytes = get_size_or_default(
+        archive,
+        "word_upload_max_bytes",
+        config.word_upload_max_bytes
     );
 
     const auto& postgres = root["postgres"];

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <utility>
@@ -7,6 +8,8 @@
 #include <gtest/gtest.h>
 
 #include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/archive/ArchivePaths.hpp"
+#include "bridge_report/archive/WordInputArchive.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/db/WorkspaceRepository.hpp"
@@ -24,6 +27,8 @@ protected:
 
         bridge_id_ = insert_id(
             "insert into bridges (bridge_name, route_name) values ('M065工作区测试桥', 'G305') returning id");
+        upload_root_ = std::filesystem::temp_directory_path() / ("bridge-report-upload-" + bridge_id_);
+        std::filesystem::remove_all(upload_root_);
 
         confirmed_year_id_ = insert_id(
             "insert into inspection_years (bridge_id, inspection_year, status, version_number, is_current, "
@@ -71,6 +76,7 @@ protected:
     void TearDown() override {
         if (client_ == nullptr) return;
         client_->execSqlSync("delete from import_records where bridge_id = $1::uuid", bridge_id_);
+        client_->execSqlSync("delete from archived_files where bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from defect_observations where bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from condition_ratings where inspection_year_id in ($1::uuid, $2::uuid, $3::uuid)",
                              confirmed_year_id_, superseded_year_id_, pending_year_id_);
@@ -79,6 +85,7 @@ protected:
         client_->execSqlSync("delete from inspection_years where bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from bridges where id = $1::uuid", bridge_id_);
         client_->closeAll();
+        std::filesystem::remove_all(upload_root_);
     }
 
     template <typename... Args>
@@ -106,6 +113,7 @@ protected:
     std::string unbound_observation_id_;
     std::string pending_import_id_;
     std::string confirmed_import_id_;
+    std::filesystem::path upload_root_;
 };
 
 }  // namespace
@@ -189,4 +197,52 @@ TEST_F(WorkspaceRepositoryTest, CreateAnnualInspectionRejectsUnknownBridge) {
         "11111111-1111-1111-1111-111111111111", 2030);
     EXPECT_EQ(outcome.status, bridge_report::db::CreateInspectionYearStatus::BridgeNotFound);
     EXPECT_FALSE(outcome.inspection_year.has_value());
+}
+
+TEST_F(WorkspaceRepositoryTest, UploadWordArchivesFileAndCreatesThreeTableRelationship) {
+    const std::string content = "fake-docx-content";
+    const auto validation = bridge_report::archive::validate_word_input(
+        R"(C:\fakepath\年度报告.DOCX)", content, 1024);
+    ASSERT_TRUE(validation.ok());
+    bridge_report::db::WorkspaceRepository repository(client_);
+
+    const auto outcome = repository.upload_word_import(
+        pending_year_id_, "正式Word", validation.metadata, content, upload_root_);
+
+    ASSERT_EQ(outcome.status, bridge_report::db::UploadWordStatus::Created);
+    ASSERT_TRUE(outcome.import_record.has_value());
+    EXPECT_EQ(outcome.import_record->import_status, "已上传");
+    const auto response_json = outcome.import_record->to_json();
+    EXPECT_FALSE(response_json.isMember("storage_relative_path"));
+    EXPECT_FALSE(response_json.isMember("absolute_path"));
+    const auto rows = client_->execSqlSync(
+        "select ir.main_file_id::text as main_file_id, af.id::text as archived_file_id, "
+        "af.storage_relative_path, af.file_hash, af.file_size_bytes, irf.file_role "
+        "from import_records ir join archived_files af on af.id = ir.main_file_id "
+        "join import_record_files irf on irf.import_record_id = ir.id and irf.archived_file_id = af.id "
+        "where ir.id = $1::uuid", outcome.import_record->id);
+    ASSERT_EQ(rows.size(), 1u);
+    EXPECT_EQ(rows[0]["main_file_id"].as<std::string>(), rows[0]["archived_file_id"].as<std::string>());
+    EXPECT_EQ(rows[0]["file_role"].as<std::string>(), "主报告");
+    EXPECT_EQ(rows[0]["file_hash"].as<std::string>(), validation.metadata.sha256);
+    EXPECT_EQ(rows[0]["file_size_bytes"].as<long long>(), static_cast<long long>(content.size()));
+    const auto relative = std::filesystem::path(rows[0]["storage_relative_path"].as<std::string>());
+    EXPECT_FALSE(relative.is_absolute());
+    const auto archived = bridge_report::archive::resolve_path_under_root(upload_root_, relative);
+    EXPECT_TRUE(std::filesystem::is_regular_file(archived));
+}
+
+TEST_F(WorkspaceRepositoryTest, UploadWordRejectsMissingOrNonCurrentInspectionYear) {
+    const std::string content = "fake-docx-content";
+    const auto validation = bridge_report::archive::validate_word_input("年度报告.docx", content, 1024);
+    ASSERT_TRUE(validation.ok());
+    bridge_report::db::WorkspaceRepository repository(client_);
+
+    EXPECT_EQ(repository.upload_word_import(
+                  "11111111-1111-1111-1111-111111111111", "正式Word", validation.metadata,
+                  content, upload_root_).status,
+              bridge_report::db::UploadWordStatus::InspectionYearNotFound);
+    EXPECT_EQ(repository.upload_word_import(
+                  superseded_year_id_, "正式Word", validation.metadata, content, upload_root_).status,
+              bridge_report::db::UploadWordStatus::InspectionYearNotCurrent);
 }

@@ -21,7 +21,8 @@
     "password": "bridge_report_dev"
   },
   "archive": {
-    "root": "archive"
+    "root": "archive",
+    "word_upload_max_bytes": 268435456
   },
   "logs": {
     "root": "logs"

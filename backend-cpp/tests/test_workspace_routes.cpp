@@ -7,6 +7,7 @@
 using bridge_report::http::WorkspaceResource;
 using bridge_report::http::workspace_not_found_body;
 using bridge_report::http::inspection_year_already_exists_body;
+using bridge_report::http::is_supported_word_source_type;
 
 TEST(WorkspaceRoutesTest, BuildsStableBridgeNotFoundError) {
     const auto body = workspace_not_found_body(WorkspaceResource::Bridge);
@@ -27,4 +28,11 @@ TEST(WorkspaceRoutesTest, BuildsDuplicateInspectionErrorWithExistingId) {
     EXPECT_NE(body["message"].asString().find("2026"), std::string::npos);
     EXPECT_EQ(body["existing_inspection_year_id"].asString(),
               "y1111111-1111-1111-1111-111111111111");
+}
+
+TEST(WorkspaceRoutesTest, UploadWordOnlyAcceptsCurrentWordSourceTypes) {
+    EXPECT_TRUE(is_supported_word_source_type("软件导出Word"));
+    EXPECT_TRUE(is_supported_word_source_type("正式Word"));
+    EXPECT_FALSE(is_supported_word_source_type("Excel病害表"));
+    EXPECT_FALSE(is_supported_word_source_type(""));
 }

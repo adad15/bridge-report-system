@@ -29,7 +29,8 @@ std::filesystem::path write_config_file() {
     "password": "secret"
   },
   "archive": {
-    "root": "test-archive"
+    "root": "test-archive",
+    "word_upload_max_bytes": 1048576
   }
 })json";
     return path;
@@ -46,6 +47,7 @@ TEST(AppConfigTest, LoadsConfiguredPortsAndArchiveRoot) {
     EXPECT_EQ(config.port, 19080);
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:19081");
     EXPECT_EQ(config.archive_root.generic_string(), "test-archive");
+    EXPECT_EQ(config.word_upload_max_bytes, 1048576u);
     EXPECT_EQ(config.postgres.host, "127.0.0.1");
     EXPECT_EQ(config.postgres.port, 15432);
     EXPECT_EQ(config.postgres.database, "bridge_report_test");
@@ -60,6 +62,7 @@ TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
     EXPECT_EQ(config.port, 18080);
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:18081");
     EXPECT_EQ(config.archive_root.generic_string(), "archive");
+    EXPECT_EQ(config.word_upload_max_bytes, 256u * 1024u * 1024u);
     EXPECT_EQ(config.postgres.host, "127.0.0.1");
     EXPECT_EQ(config.postgres.port, 5432);
     EXPECT_EQ(config.postgres.database, "bridge_report_system");

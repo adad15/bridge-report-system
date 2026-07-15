@@ -13,6 +13,7 @@ find_package(OpenSSL REQUIRED)
 add_library(bridge_report_backend_core
     src/archive/ArchivePaths.cpp
     src/archive/ExtractedPhotoArchive.cpp
+    src/archive/WordInputArchive.cpp
     src/auth/PasswordHash.cpp
     src/config/AppConfig.cpp
     src/contracts/AnnualInspectionContract.cpp
@@ -104,6 +105,7 @@ add_executable(bridge_report_backend_tests
     tests/test_thread_suggestions.cpp
     tests/test_word_import_routes.cpp
     tests/test_word_import_repository.cpp
+    tests/test_word_input_archive.cpp
     tests/test_workspace_models.cpp
     tests/test_workspace_repository.cpp
     tests/test_workspace_routes.cpp
