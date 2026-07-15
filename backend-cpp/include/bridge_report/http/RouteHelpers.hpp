@@ -62,6 +62,24 @@ inline void respond_import_record_not_found(const HttpCallback& callback) {
     );
 }
 
+// 401：未登录 / 会话过期。前端 apiClient 对该状态码统一清空本地会话回登录页。
+inline void respond_unauthorized(const HttpCallback& callback) {
+    respond_json(
+        callback,
+        make_error_body("auth_required", "请先登录。"),
+        drogon::k401Unauthorized
+    );
+}
+
+// 403：已登录但角色不够（如普通账号请求管理员专属操作）。
+inline void respond_forbidden(const HttpCallback& callback) {
+    respond_json(
+        callback,
+        make_error_body("forbidden", "当前账号无权执行该操作。"),
+        drogon::k403Forbidden
+    );
+}
+
 // parsed_result_json 存储为 jsonb 文本；解析失败（理论上不应发生，防御式处理）时退化为空对象，
 // 使下游纯函数（build_review_statistics / build_preflight_report 等）仍能得到全 0 统计 /
 // 空数据视图而不是崩溃。供 ReviewRoutes.cpp / ImportConfirmRoutes.cpp 共用。

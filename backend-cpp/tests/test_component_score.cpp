@@ -80,10 +80,16 @@ TEST(ComponentScoreTest, KeyValuesMatchChangeProposal) {
 
 TEST(ComponentScoreTest, RejectsEmptyAndOutOfRangeDeductions) {
     EXPECT_FALSE(compute_component_score({}).has_value());
-    EXPECT_FALSE(compute_component_score({0.0}).has_value());
     EXPECT_FALSE(compute_component_score({-5.0}).has_value());
     EXPECT_FALSE(compute_component_score({150.0}).has_value());
-    EXPECT_FALSE(compute_component_score({35.0, 0.0}).has_value());
+}
+
+TEST(ComponentScoreTest, AcceptsZeroDeductions) {
+    EXPECT_EQ(compute_component_score({0.0})->score, 100.0);
+    EXPECT_EQ(compute_component_score({0.0, 0.0})->score, 100.0);
+    EXPECT_EQ(compute_component_score({35.0, 0.0})->score, 65.0);
+    EXPECT_EQ(round_score_to_two_decimals(compute_component_score({35.0, 20.0, 0.0})->score), 55.81);
+    EXPECT_EQ(compute_component_score({100.0, 0.0})->score, 0.0);
 }
 
 TEST(ComponentScoreTest, ClassifiesScoreValidation) {

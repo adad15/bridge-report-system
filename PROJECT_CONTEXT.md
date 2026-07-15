@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT
 
-更新时间：2026-07-14
+更新时间：2026-07-15
 
 ## 项目一句话
 
@@ -42,6 +42,8 @@
 - 真实 Word 端到端已验证：重解析 1.1 旧草稿为 1.2、25/31/36/31 基线保持、23 条构件评分候选（17 条自动一致）、确认入库后 `1-1#板/1-2#板=65`、`2-1#板=55.81` 全部 `一致`，上部承重构件 86.62、全桥 85.61，档案页与线索创建/绑定在浏览器实操通过。
 - 待校对的 1.0/1.1 旧草稿标记 `legacy_pending_reparse` 只读，必须经 `POST /api/import-records/{id}/parse-word` 重新解析为 1.2；已确认 1.1 事实保持可读，档案页显示"历史数据缺少评分校验明细"，不做猜测性回填。
 - 合同 1.2 变更提案见 `docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md`（已实施）；实施计划见 `docs/superpowers/plans/2026-07-13-component-defect-archive-implementation-plan.md`。
+- 变更 002 已实施（2026-07-15，见 `docs/superpowers/specs/changes/2026-07-15-change-002-accounts-and-post-confirm-reopen.md`）：轻量账号体系（users/user_sessions、登录页、会话 token、写端点鉴权，默认账号 admin/admin123 与 user/user123 由后端启动播种）；已确认导入记录支持"重开校对 + 修订版入库"（warnings_only=任何登录用户仅改带警告病害，full=仅管理员全改；放弃修改可还原重开快照；重开态禁止取消导入）；校对页只读态照片查看不再被禁用（逐控件禁用取代 fieldset 一揽子禁用）；迁移 004。
+- 模块 06 验收修复已实施（2026-07-15）：待校对导入记录采用独占租约编辑锁（30 秒心跳、2 分钟过期、同账号其他会话只读、管理员带原因强制解锁并留审计，迁移 005）；扣分 `0` 按合法值参与 JTG/T H21-2011 构件评分复算；入库前检查将最终分严格绑定到“一致/采用复算值/接受 Word 值”的相应来源；`warnings_only` 由后端字段白名单冻结非警告候选、照片、证据和其他评分，仅接受病害改动及其确定性评分复算结果。异常关闭不保存本地草稿，未保存修改按已确认方案直接丢失。
 
 ## 已确认方向
 

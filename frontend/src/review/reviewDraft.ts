@@ -295,7 +295,9 @@ function recomputeComponentRatings(state: BridgeAnnualInspectionData): BridgeAnn
       calculated_score: calculated,
       calculation_details: details,
       score_validation_status: status,
-      confirmed_score: status === "一致" ? rating.source_score ?? null : null,
+      confirmed_score: status === "一致" && rating.source_score !== null && rating.source_score !== undefined
+        ? roundScoreToTwoDecimals(rating.source_score)
+        : null,
       score_resolution_reason: null,
       review_status: "待确认",
     };
@@ -509,7 +511,7 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
       if (rating.score_validation_status !== "不一致" && rating.score_validation_status !== "无法复算") return state;
       if (action.choice === "accept_source") {
         if (rating.source_score === null || rating.source_score === undefined) return state;
-        const confirmed = rating.source_score;
+        const confirmed = roundScoreToTwoDecimals(rating.source_score);
         return {
           ...state,
           ratings: updateComponentRating(state.ratings, action.candidateId, (item) => ({
@@ -544,7 +546,9 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
         ratings: updateComponentRating(state.ratings, action.candidateId, (item) => ({
           ...item,
           score_validation_status: status,
-          confirmed_score: status === "一致" ? item.source_score ?? null : null,
+          confirmed_score: status === "一致" && item.source_score !== null && item.source_score !== undefined
+            ? roundScoreToTwoDecimals(item.source_score)
+            : null,
           score_resolution_reason: null,
           review_status: "待确认",
         })),

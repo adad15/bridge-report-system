@@ -13,17 +13,22 @@ find_package(OpenSSL REQUIRED)
 add_library(bridge_report_backend_core
     src/archive/ArchivePaths.cpp
     src/archive/ExtractedPhotoArchive.cpp
+    src/auth/PasswordHash.cpp
     src/config/AppConfig.cpp
     src/contracts/AnnualInspectionContract.cpp
+    src/db/AuthRepository.cpp
     src/db/ComponentArchiveRepository.cpp
     src/db/DbClientFactory.cpp
     src/db/CommitLatch.cpp
     src/db/DefectThreadRepository.cpp
+    src/db/EditLockRepository.cpp
     src/db/ReviewRepository.cpp
     src/db/WordImportRepository.cpp
+    src/http/AuthRoutes.cpp
     src/http/ComponentArchiveRoutes.cpp
     src/http/Cors.cpp
     src/http/DefectThreadRoutes.cpp
+    src/http/EditLockRoutes.cpp
     src/http/ImportConfirmRoutes.cpp
     src/http/ReviewRoutes.cpp
     src/http/WordImportRoutes.cpp
@@ -84,7 +89,9 @@ add_executable(bridge_report_backend_tests
     tests/test_contract_compatibility.cpp
     tests/test_db_client_factory.cpp
     tests/test_draft_validation.cpp
+    tests/test_edit_lock_repository.cpp
     tests/test_extracted_photo_archive.cpp
+    tests/test_password_hash.cpp
     tests/test_preflight_report.cpp
     tests/test_photo_content.cpp
     tests/test_review_models.cpp

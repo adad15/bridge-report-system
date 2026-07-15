@@ -56,10 +56,27 @@ export async function parseError(response: Response): Promise<ApiError> {
   if (isRecord(body) && typeof body.code === "string") {
     const message = typeof body.message === "string" ? body.message : `请求失败（HTTP ${response.status}）`;
     const issues = Array.isArray(body.issues) ? (body.issues as ApiErrorIssue[]) : undefined;
-    return new ApiError(body.code, message, { issues });
+    return new ApiError(body.code, message, { issues, details: body });
   }
 
   return new ApiError("unrecognized_error_response", `请求失败（HTTP ${response.status}）`, { details: body });
+}
+
+// 模块级会话令牌：由 AuthContext 在登录/登出/会话恢复时设置。放在这里（而不是
+// 每个领域 API 手动传 token）保证所有请求自动携带 Authorization，apiClient 仍不依赖 React。
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null): void {
+  authToken = token;
+}
+
+// 401 处理器：AuthContext 注册，用于"会话过期/被清除"时清空本地状态回登录页。
+// 仅在请求确实带了 token 时触发——未登录状态的 401（如登录接口的密码错误）不触发，
+// 避免登录页自身的失败反馈被全局登出逻辑吞掉。
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  unauthorizedHandler = handler;
 }
 
 /**
@@ -68,8 +85,20 @@ export async function parseError(response: Response): Promise<ApiError> {
  * 而不是把裸 SyntaxError 抛给调用方——与 readJsonBody 的 try/catch 对称。
  */
 export async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = init === undefined ? await fetch(url) : await fetch(url, init);
+  const hadToken = authToken !== null;
+  let effectiveInit = init;
+  if (hadToken) {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${authToken}`);
+    }
+    effectiveInit = { ...init, headers };
+  }
+  const response = effectiveInit === undefined ? await fetch(url) : await fetch(url, effectiveInit);
   if (!response.ok) {
+    if (response.status === 401 && hadToken) {
+      unauthorizedHandler?.();
+    }
     throw await parseError(response);
   }
   try {

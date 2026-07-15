@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, request } from "./apiClient";
+import { ApiError, request, setAuthToken, setUnauthorizedHandler } from "./apiClient";
 
 describe("apiClient request/parseError", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    setAuthToken(null);
+    setUnauthorizedHandler(null);
   });
 
   it("returns the parsed JSON body on a 2xx response", async () => {
@@ -77,5 +79,39 @@ describe("apiClient request/parseError", () => {
 
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).code).toBe("invalid_response_body");
+  });
+
+  it("attaches the Authorization header when a session token is set", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    setAuthToken("token-1");
+
+    await request("http://127.0.0.1:18080/api/thing", { method: "POST" });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer token-1");
+  });
+
+  it("fires the unauthorized handler on 401 only when the request carried a token", async () => {
+    const handler = vi.fn();
+    setUnauthorizedHandler(handler);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ code: "auth_required", message: "请先登录。" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    // 未带 token 的 401（例如登录接口密码错误）不触发全局登出。
+    await request("http://127.0.0.1:18080/api/auth/login", { method: "POST" }).catch(() => undefined);
+    expect(handler).not.toHaveBeenCalled();
+
+    setAuthToken("token-1");
+    await request("http://127.0.0.1:18080/api/thing").catch(() => undefined);
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 });

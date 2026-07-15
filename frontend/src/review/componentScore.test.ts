@@ -61,10 +61,16 @@ describe("computeComponentScore", () => {
 
   it("rejects empty and out-of-range deductions", () => {
     expect(computeComponentScore([])).toBeNull();
-    expect(computeComponentScore([0])).toBeNull();
     expect(computeComponentScore([-5])).toBeNull();
     expect(computeComponentScore([150])).toBeNull();
-    expect(computeComponentScore([35, 0])).toBeNull();
+  });
+
+  it("accepts zero deductions without changing the accumulated deduction", () => {
+    expect(computeComponentScore([0])!.score).toBe(100);
+    expect(computeComponentScore([0, 0])!.score).toBe(100);
+    expect(computeComponentScore([35, 0])!.score).toBe(65);
+    expect(roundScoreToTwoDecimals(computeComponentScore([35, 20, 0])!.score)).toBe(55.81);
+    expect(computeComponentScore([100, 0])!.score).toBe(0);
   });
 });
 

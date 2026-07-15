@@ -1,18 +1,40 @@
 import { BrowserRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 
+import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { BridgeDetailPage } from "./pages/BridgeDetailPage";
 import { BridgesPage } from "./pages/BridgesPage";
 import { ComponentArchivePage } from "./pages/ComponentArchivePage";
 import { DefectThreadReviewPage } from "./pages/DefectThreadReviewPage";
 import { HomePage } from "./pages/HomePage";
+import { LoginPage } from "./pages/LoginPage";
 import { ReviewWorkspacePage } from "./pages/ReviewWorkspacePage";
 import "./styles.css";
 
 export function App() {
   return (
-    <BrowserRouter>
-      <AppShell />
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <AppShell />
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}
+
+// 顶栏右侧的当前用户信息 + 退出登录。角色徽章帮助用户确认当前权限
+// （管理员才有"解锁全部修改"等入口）。
+function CurrentUserBadge() {
+  const { user, logout } = useAuth();
+  if (user === null) return null;
+  return (
+    <div className="top-nav-user">
+      <span>{user.display_name}</span>
+      <span className={user.role === "admin" ? "role-badge role-admin" : "role-badge role-normal"}>
+        {user.role === "admin" ? "管理员" : "普通用户"}
+      </span>
+      <button type="button" className="top-nav-logout" onClick={() => void logout()}>
+        退出登录
+      </button>
+    </div>
   );
 }
 
@@ -20,10 +42,34 @@ export function App() {
 // 给普通页面用的 880px 居中卡片流。useLocation 只能在 Router 的子组件里调用，所以拆出
 // 这一层，而不是在 App() 里直接判断。
 function AppShell() {
+  const { user, restoring } = useAuth();
   const location = useLocation();
   // 只有"导入记录校对工作台"使用全屏工作台壳；模块 06 的 /defect-threads/review
   // 是普通卡片流页面，正则必须锚定 imports 段避免误匹配。
   const isReviewWorkspace = /\/imports\/[^/]+\/review$/.test(location.pathname);
+
+  // 启动恢复会话期间不渲染登录页，避免"闪一下登录页再进入系统"。
+  if (restoring) {
+    return (
+      <main className="app-shell">
+        <div className="app-content">
+          <section className="status-panel">
+            <p>正在恢复登录会话…</p>
+          </section>
+        </div>
+      </main>
+    );
+  }
+
+  if (user === null) {
+    return (
+      <main className="app-shell">
+        <div className="app-content">
+          <LoginPage />
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className={isReviewWorkspace ? "app-shell app-shell-workbench" : "app-shell"}>
@@ -35,6 +81,7 @@ function AppShell() {
           <NavLink to="/bridges" className={({ isActive }) => (isActive ? "top-nav-link active" : "top-nav-link")}>
             桥梁列表
           </NavLink>
+          <CurrentUserBadge />
         </nav>
         <Routes>
           <Route path="/" element={<HomePage />} />

@@ -47,6 +47,32 @@ export interface ReviewStatistics {
 // 只读展示并提示重新解析（不做内存补造）；legacy_read_only：旧版终态记录。
 export type ContractCompatibility = "native_1_2" | "legacy_pending_reparse" | "legacy_read_only";
 
+// 重开校对范围：warnings_only=仅带警告的病害可改（任何登录用户）；
+// full=全部可改（仅管理员可发起）。
+export type ReopenScope = "warnings_only" | "full";
+
+// 重开校对现场（import_records 审计列）；非重开态为 null。
+export interface ReviewReopenState {
+  reopened_at: string;
+  reopened_by_username: string;
+  scope: ReopenScope;
+}
+
+export interface EditLockSummary {
+  owner_username: string;
+  owner_display_name: string;
+  owned_by_current_user: boolean;
+  acquired_at: string;
+  expires_at: string;
+}
+
+export interface AcquireEditLockResponse {
+  acquired: true;
+  lock_token: string;
+  heartbeat_interval_seconds: number;
+  lock: EditLockSummary;
+}
+
 export interface ReviewResponse {
   import_record: ReviewImportRecordSummary;
   bridge: ReviewBridgeSummary;
@@ -55,6 +81,8 @@ export interface ReviewResponse {
   statistics: ReviewStatistics;
   has_current_annual_facts: boolean;
   contract_compatibility: ContractCompatibility;
+  reopen: ReviewReopenState | null;
+  edit_lock: EditLockSummary | null;
 }
 
 export interface PreflightIssue {
@@ -93,6 +121,12 @@ function reviewRoute(importRecordId: string, suffix: string): string {
   return `/api/import-records/${encodeURIComponent(importRecordId)}${suffix}`;
 }
 
+function lockHeaders(lockToken: string, includeJson = false): Headers {
+  const headers = new Headers(includeJson ? JSON_HEADERS : undefined);
+  headers.set("X-Edit-Lock-Token", lockToken);
+  return headers;
+}
+
 export function photoContentUrl(baseUrl: string, importRecordId: string, photoCandidateId: string): string {
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
   return `${normalizedBaseUrl}/api/import-records/${encodeURIComponent(importRecordId)}/photos/${encodeURIComponent(photoCandidateId)}/content`;
@@ -115,20 +149,22 @@ export async function fetchReview(baseUrl: string, importRecordId: string): Prom
 export async function saveReviewDraft(
   baseUrl: string,
   importRecordId: string,
-  data: BridgeAnnualInspectionData
+  data: BridgeAnnualInspectionData,
+  lockToken: string
 ): Promise<{ saved: boolean; import_status: string }> {
   return request(`${baseUrl}${reviewRoute(importRecordId, "/review-draft")}`, {
     method: "PUT",
-    headers: JSON_HEADERS,
+    headers: lockHeaders(lockToken, true),
     body: JSON.stringify(data),
   });
 }
 
 // 无请求体：后端的 preflight-confirm 路由本来就不读取请求体，只读当前已保存的
 // parsed_result_json 跑一遍入库前检查。
-export async function runPreflight(baseUrl: string, importRecordId: string): Promise<PreflightResponse> {
+export async function runPreflight(baseUrl: string, importRecordId: string, lockToken: string): Promise<PreflightResponse> {
   return request(`${baseUrl}${reviewRoute(importRecordId, "/preflight-confirm")}`, {
     method: "POST",
+    headers: lockHeaders(lockToken),
   });
 }
 
@@ -140,12 +176,13 @@ function looksLikePreflightReport(details: unknown): boolean {
 export async function confirmImport(
   baseUrl: string,
   importRecordId: string,
-  body: ConfirmRequestBody
+  body: ConfirmRequestBody,
+  lockToken: string
 ): Promise<ConfirmResponse> {
   try {
     return await request<ConfirmResponse>(`${baseUrl}${reviewRoute(importRecordId, "/confirm")}`, {
       method: "POST",
-      headers: JSON_HEADERS,
+      headers: lockHeaders(lockToken, true),
       body: JSON.stringify(body),
     });
   } catch (error) {
@@ -160,8 +197,76 @@ export async function confirmImport(
 }
 
 // 无请求体：后端的 cancel 路由不读取请求体。
-export async function cancelImport(baseUrl: string, importRecordId: string): Promise<{ cancelled: boolean }> {
+export async function cancelImport(baseUrl: string, importRecordId: string, lockToken: string): Promise<{ cancelled: boolean }> {
   return request(`${baseUrl}${reviewRoute(importRecordId, "/cancel")}`, {
     method: "POST",
+    headers: lockHeaders(lockToken),
+  });
+}
+
+// 重开校对：已确认记录翻回待校对（后端快照草稿供「放弃修改」还原）。
+// full 范围仅管理员可发起，后端双重校验。
+export async function reopenImport(
+  baseUrl: string,
+  importRecordId: string,
+  scope: ReopenScope
+): Promise<{ reopened: boolean; scope: ReopenScope; import_status: string; lock_token: string; edit_lock: EditLockSummary }> {
+  return request(`${baseUrl}${reviewRoute(importRecordId, "/reopen")}`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ scope }),
+  });
+}
+
+// 放弃重开修改：草稿还原为重开时快照，状态翻回已确认。
+export async function restoreReopenedImport(
+  baseUrl: string,
+  importRecordId: string,
+  lockToken: string
+): Promise<{ restored: boolean; import_status: string }> {
+  return request(`${baseUrl}${reviewRoute(importRecordId, "/reopen-restore")}`, {
+    method: "POST",
+    headers: lockHeaders(lockToken),
+  });
+}
+
+
+export async function acquireEditLock(baseUrl: string, importRecordId: string): Promise<AcquireEditLockResponse> {
+  return request(`${baseUrl}${reviewRoute(importRecordId, "/edit-lock")}`, { method: "POST" });
+}
+
+export async function heartbeatEditLock(
+  baseUrl: string,
+  importRecordId: string,
+  lockToken: string
+): Promise<{ renewed: true; lock: EditLockSummary }> {
+  return request(`${baseUrl}${reviewRoute(importRecordId, "/edit-lock/heartbeat")}`, {
+    method: "POST",
+    headers: lockHeaders(lockToken),
+  });
+}
+
+export async function releaseEditLock(
+  baseUrl: string,
+  importRecordId: string,
+  lockToken: string,
+  keepalive = false
+): Promise<{ released: boolean }> {
+  return request(`${baseUrl}${reviewRoute(importRecordId, "/edit-lock")}`, {
+    method: "DELETE",
+    headers: lockHeaders(lockToken),
+    keepalive,
+  });
+}
+
+export async function forceReleaseEditLock(
+  baseUrl: string,
+  importRecordId: string,
+  reason: string
+): Promise<{ released: true }> {
+  return request(`${baseUrl}${reviewRoute(importRecordId, "/edit-lock/force-release")}`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ reason }),
   });
 }

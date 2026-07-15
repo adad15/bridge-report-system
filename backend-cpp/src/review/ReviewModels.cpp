@@ -37,6 +37,17 @@ Json::Value ImportRecordSummary::to_json() const {
     json["importer_name"] =
         importer_name.has_value() ? Json::Value(*importer_name) : Json::Value(Json::nullValue);
     json["created_at"] = created_at;
+    if (edit_lock_owner_username.has_value() && edit_lock_owner_display_name.has_value()
+        && edit_lock_acquired_at.has_value() && edit_lock_expires_at.has_value()) {
+        Json::Value edit_lock;
+        edit_lock["owner_username"] = *edit_lock_owner_username;
+        edit_lock["owner_display_name"] = *edit_lock_owner_display_name;
+        edit_lock["acquired_at"] = *edit_lock_acquired_at;
+        edit_lock["expires_at"] = *edit_lock_expires_at;
+        json["edit_lock"] = std::move(edit_lock);
+    } else {
+        json["edit_lock"] = Json::Value(Json::nullValue);
+    }
     return json;
 }
 
@@ -83,6 +94,16 @@ Json::Value build_review_response(
             detail.inspection_year_is_current.has_value() && *detail.inspection_year_is_current;
     }
 
+    // 重开校对现场：非重开态为 null；重开态携带谁/何时/什么范围，
+    // 前端据此决定逐病害可编辑范围与「放弃修改」按钮。
+    Json::Value reopen(Json::nullValue);
+    if (detail.reopened_at.has_value()) {
+        reopen = Json::Value(Json::objectValue);
+        reopen["reopened_at"] = *detail.reopened_at;
+        reopen["reopened_by_username"] = detail.reopened_by_username.value_or("");
+        reopen["scope"] = detail.reopen_scope.value_or("");
+    }
+
     Json::Value body;
     body["import_record"] = import_record;
     body["bridge"] = bridge;
@@ -91,6 +112,7 @@ Json::Value build_review_response(
     body["statistics"] = statistics.to_json();
     body["has_current_annual_facts"] = has_current_annual_facts;
     body["contract_compatibility"] = std::string(contract_compatibility);
+    body["reopen"] = reopen;
     return body;
 }
 

@@ -21,6 +21,12 @@ struct ConfirmWrittenCounts {
     int condition_ratings{0};
 };
 
+struct EditLockCredentials {
+    std::string user_id;
+    std::string session_id;
+    std::string lock_token;
+};
+
 /**
  * @brief confirm_annual_facts 的结果：成功时携带目标年度信息与写入计数；
  * 失败时 error_code 为下列之一，事务已回滚，未产生任何写入：
@@ -82,13 +88,44 @@ public:
      * 改为已取消/已确认时草稿仍写入（TOCTOU）。返回 false 表示记录不存在或状态已不可编辑。
      * @param parsed_json_text 完整的 BridgeAnnualInspectionData JSON 文本。
      */
-    bool save_review_draft(const std::string& import_record_id, const std::string& parsed_json_text);
+    bool save_review_draft(
+        const std::string& import_record_id,
+        const std::string& parsed_json_text,
+        const std::optional<EditLockCredentials>& edit_lock = std::nullopt
+    );
 
     /**
      * @brief 取消导入记录：状态为 已上传/解析中/待校对/解析失败 时更新为 已取消 并返回 true；
      * 状态已是 已确认/已取消 时不更新，返回 false。
+     * 重开校对中的记录（reopened_at 非空）也拒绝取消——它背后已有正式事实，
+     * 只能「放弃修改」恢复已确认或重新确认修订版。
      */
-    bool cancel_import_record(const std::string& import_record_id);
+    bool cancel_import_record(
+        const std::string& import_record_id,
+        const std::optional<EditLockCredentials>& edit_lock = std::nullopt
+    );
+
+    /**
+     * @brief 重开校对：已确认记录翻回待校对，记录审计现场并快照当前草稿
+     * （供「放弃修改」精确还原）。谓词带 import_status='已确认'，并发安全同 cancel。
+     *
+     * @param scope 'warnings_only'（仅警告病害可改）或 'full'（管理员全改），由路由层校验。
+     * @return false 表示记录不存在或状态已不是已确认。
+     */
+    bool reopen_import_record(
+        const std::string& import_record_id,
+        const std::string& scope,
+        const std::string& username
+    );
+
+    /**
+     * @brief 放弃重开修改：草稿还原为重开时的快照，状态翻回已确认，清空重开列。
+     * 仅当记录处于"待校对 + 重开态"时生效；正式事实表从未被重开触碰，无需回滚。
+     */
+    bool restore_reopened_import_record(
+        const std::string& import_record_id,
+        const std::optional<EditLockCredentials>& edit_lock = std::nullopt
+    );
 
     /**
      * @brief 唯一的年度事实入库写入口：在单个 drogon::orm::Transaction 内完成状态重校验、
@@ -105,7 +142,8 @@ public:
     ConfirmOutcome confirm_annual_facts(
         const std::string& import_record_id,
         bool confirm_revision,
-        const std::string& confirmation_note
+        const std::string& confirmation_note,
+        const std::optional<EditLockCredentials>& edit_lock = std::nullopt
     );
 
 private:

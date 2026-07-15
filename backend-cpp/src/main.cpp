@@ -8,10 +8,13 @@
 #include <drogon/orm/Exception.h>
 
 #include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/db/AuthRepository.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
+#include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/ComponentArchiveRoutes.hpp"
 #include "bridge_report/http/Cors.hpp"
 #include "bridge_report/http/DefectThreadRoutes.hpp"
+#include "bridge_report/http/EditLockRoutes.hpp"
 #include "bridge_report/http/ImportConfirmRoutes.hpp"
 #include "bridge_report/http/ReviewRoutes.hpp"
 #include "bridge_report/http/WordImportRoutes.hpp"
@@ -153,8 +156,21 @@ int main(int argc, char* argv[]) {
 
     const auto db_client = bridge_report::db::create_db_client(config.postgres);
 
+    // 默认账号播种：users 表为空时预置 admin/admin123 与 user/user123。
+    // 数据库暂不可用时不阻断启动（/health/db 会如实报告），下次重启再播种。
+    try {
+        bridge_report::db::AuthRepository auth_repository(db_client);
+        if (auth_repository.seed_default_users() > 0) {
+            std::cout << "已播种默认账号 admin(管理员) / user(普通)，初始密码见 docs，请尽快修改。\n";
+        }
+    } catch (const std::exception& error) {
+        std::cout << "默认账号播种失败（稍后可重启重试）：" << error.what() << "\n";
+    }
+
     drogon::app().registerMiddleware(std::make_shared<drogon::HttpOptionsMiddleware>());
     register_health_routes(config, db_client);
+    bridge_report::http::register_auth_routes(db_client);
+    bridge_report::http::register_edit_lock_routes(db_client);
     bridge_report::http::register_review_routes(db_client, config.archive_root);
     bridge_report::http::register_import_confirm_routes(db_client);
     bridge_report::http::register_word_import_routes(db_client, config);

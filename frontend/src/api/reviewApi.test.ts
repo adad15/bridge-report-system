@@ -2,7 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
 import { ApiError } from "./apiClient";
-import { cancelImport, confirmImport, fetchReview, photoContentUrl, runPreflight, saveReviewDraft } from "./reviewApi";
+import {
+  acquireEditLock,
+  cancelImport,
+  confirmImport,
+  fetchReview,
+  forceReleaseEditLock,
+  heartbeatEditLock,
+  photoContentUrl,
+  releaseEditLock,
+  runPreflight,
+  saveReviewDraft,
+} from "./reviewApi";
 
 // 满足 isBridgeAnnualInspectionData 最小必填字段集合的候选数据骨架，供测试复用。
 const minimalParsedResult: BridgeAnnualInspectionData = {
@@ -175,13 +186,15 @@ describe("reviewApi", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult);
+    const result = await saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult, "lock-token");
 
-    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/review-draft", {
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/review-draft", expect.objectContaining({
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(minimalParsedResult),
-    });
+    }));
+    const saveHeaders = new Headers(fetchMock.mock.calls[0][1].headers);
+    expect(saveHeaders.get("Content-Type")).toBe("application/json");
+    expect(saveHeaders.get("X-Edit-Lock-Token")).toBe("lock-token");
     expect(result).toEqual({ saved: true, import_status: "待校对" });
   });
 
@@ -199,11 +212,12 @@ describe("reviewApi", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const report = await runPreflight("http://127.0.0.1:18080", "record-1");
+    const report = await runPreflight("http://127.0.0.1:18080", "record-1", "lock-token");
 
-    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/preflight-confirm", {
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/preflight-confirm", expect.objectContaining({
       method: "POST",
-    });
+    }));
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get("X-Edit-Lock-Token")).toBe("lock-token");
     expect(report).toEqual(reportBody);
   });
 
@@ -227,13 +241,15 @@ describe("reviewApi", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const requestBody = { confirm_revision: true, confirmation_note: "确认修订版" };
-    const result = await confirmImport("http://127.0.0.1:18080", "record-1", requestBody);
+    const result = await confirmImport("http://127.0.0.1:18080", "record-1", requestBody, "lock-token");
 
-    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/confirm", {
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/confirm", expect.objectContaining({
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),
-    });
+    }));
+    const confirmHeaders = new Headers(fetchMock.mock.calls[0][1].headers);
+    expect(confirmHeaders.get("Content-Type")).toBe("application/json");
+    expect(confirmHeaders.get("X-Edit-Lock-Token")).toBe("lock-token");
     expect(result).toEqual(confirmResponseBody);
   });
 
@@ -245,11 +261,12 @@ describe("reviewApi", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await cancelImport("http://127.0.0.1:18080", "record-1");
+    const result = await cancelImport("http://127.0.0.1:18080", "record-1", "lock-token");
 
-    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/cancel", {
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/cancel", expect.objectContaining({
       method: "POST",
-    });
+    }));
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get("X-Edit-Lock-Token")).toBe("lock-token");
     expect(result).toEqual({ cancelled: true });
   });
 
@@ -261,7 +278,7 @@ describe("reviewApi", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult)).rejects.toMatchObject({
+    await expect(saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult, "lock-token")).rejects.toMatchObject({
       code: "import_record_not_editable",
       message: "导入记录状态已变化，无法保存草稿。",
     });
@@ -279,7 +296,7 @@ describe("reviewApi", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult)).rejects.toMatchObject({
+    await expect(saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult, "lock-token")).rejects.toMatchObject({
       code: "contract_validation_failed",
       issues: [{ path: "defects[0].confidence", message: "must be between 0 and 1" }],
     });
@@ -304,7 +321,7 @@ describe("reviewApi", () => {
     const error = await confirmImport("http://127.0.0.1:18080", "record-1", {
       confirm_revision: false,
       confirmation_note: "",
-    }).catch((caught: unknown) => caught);
+    }, "lock-token").catch((caught: unknown) => caught);
 
     expect(error).toBeInstanceOf(ApiError);
     const apiError = error as InstanceType<typeof ApiError>;
@@ -325,7 +342,48 @@ describe("reviewApi", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      confirmImport("http://127.0.0.1:18080", "record-1", { confirm_revision: false, confirmation_note: "" })
+      confirmImport("http://127.0.0.1:18080", "record-1", { confirm_revision: false, confirmation_note: "" }, "lock-token")
     ).rejects.toMatchObject({ code: "revision_confirmation_required" });
+  });
+
+  it("acquires, heartbeats, releases, and force-releases an edit lock", async () => {
+    const lock = {
+      owner_username: "zhang",
+      owner_display_name: "张工",
+      acquired_at: "2026-07-15T10:00:00+08:00",
+      expires_at: "2026-07-15T10:02:00+08:00",
+      owned_by_current_user: true,
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ acquired: true, lock_token: "lock-token", heartbeat_interval_seconds: 30, lock }),
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ renewed: true, lock }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ released: true }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ released: true }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(acquireEditLock("http://127.0.0.1:18080", "record-1")).resolves.toMatchObject({ lock_token: "lock-token" });
+    await expect(heartbeatEditLock("http://127.0.0.1:18080", "record-1", "lock-token")).resolves.toMatchObject({ renewed: true, lock });
+    await expect(releaseEditLock("http://127.0.0.1:18080", "record-1", "lock-token")).resolves.toEqual({ released: true });
+    await expect(forceReleaseEditLock("http://127.0.0.1:18080", "record-1", "交接给夜班人员")).resolves.toEqual({ released: true });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "http://127.0.0.1:18080/api/import-records/record-1/edit-lock", { method: "POST" });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "http://127.0.0.1:18080/api/import-records/record-1/edit-lock/heartbeat", expect.objectContaining({
+      method: "POST",
+    }));
+    expect(new Headers(fetchMock.mock.calls[1][1].headers).get("X-Edit-Lock-Token")).toBe("lock-token");
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "http://127.0.0.1:18080/api/import-records/record-1/edit-lock", expect.objectContaining({
+      method: "DELETE",
+      keepalive: false,
+    }));
+    expect(new Headers(fetchMock.mock.calls[2][1].headers).get("X-Edit-Lock-Token")).toBe("lock-token");
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "http://127.0.0.1:18080/api/import-records/record-1/edit-lock/force-release", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ reason: "交接给夜班人员" }),
+    }));
+    expect(new Headers(fetchMock.mock.calls[3][1].headers).get("Content-Type")).toBe("application/json");
   });
 });

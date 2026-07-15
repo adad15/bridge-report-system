@@ -50,4 +50,22 @@ describe("deriveReviewSession", () => {
       bannerText: "本导入记录为旧版终态数据，页面转为只读。",
     });
   });
+
+  it("keeps a reopened warnings_only review editable with a scoped banner", () => {
+    const session = deriveReviewSession("待校对", "native_1_2", "warnings_only");
+    expect(session.readOnly).toBe(false);
+    expect(session.bannerText).toContain("仅带警告的病害可修改");
+    expect(session.bannerText).toContain("修订版入库");
+  });
+
+  it("keeps a reopened full review editable with a full-scope banner", () => {
+    const session = deriveReviewSession("待校对", "native_1_2", "full");
+    expect(session.readOnly).toBe(false);
+    expect(session.bannerText).toContain("全部病害可修改");
+  });
+
+  it("ignores the reopen scope when the stored draft is legacy", () => {
+    // 重开端点不会放行旧版合同记录；即便状态异常组合出现，也保持只读。
+    expect(deriveReviewSession("待校对", "legacy_pending_reparse", "full").readOnly).toBe(true);
+  });
 });

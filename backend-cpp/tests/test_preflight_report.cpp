@@ -753,6 +753,47 @@ TEST(PreflightReportTest, ManualResolutionWithReasonPassesComponentChecks) {
     }();
 }
 
+TEST(PreflightReportTest, ConsistentRatingRejectsArbitraryConfirmedScore) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["ratings"]["component_ratings"][0]["confirmed_score"] = 64.0;
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "component_score_confirmed_value_mismatch"));
+}
+
+TEST(PreflightReportTest, AdoptCalculatedRejectsConfirmedScoreThatDoesNotMatchRecalculation) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    auto& rating = data["ratings"]["component_ratings"][0];
+    rating["source_score"] = 70.0;
+    rating["score_validation_status"] = "人工采用复算值";
+    rating["confirmed_score"] = 70.0;
+    rating["score_resolution_reason"] = "采用规范复算值。";
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "component_score_confirmed_value_mismatch"));
+}
+
+TEST(PreflightReportTest, AcceptWordRejectsConfirmedScoreThatDoesNotMatchSource) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    auto& rating = data["ratings"]["component_ratings"][0];
+    rating["source_score"] = 70.0;
+    rating["score_validation_status"] = "人工接受Word值";
+    rating["confirmed_score"] = 65.0;
+    rating["score_resolution_reason"] = "采信 Word 来源分。";
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    EXPECT_TRUE(has_blocking_code(report, "component_score_confirmed_value_mismatch"));
+}
+
 TEST(PreflightReportTest, RecalcMismatchBlocksConfirm) {
     auto data = valid_data();
     confirm_all_candidates(data);

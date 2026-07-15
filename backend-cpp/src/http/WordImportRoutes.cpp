@@ -3,6 +3,7 @@
 #include "bridge_report/archive/ArchivePaths.hpp"
 #include "bridge_report/archive/ExtractedPhotoArchive.hpp"
 #include "bridge_report/contracts/AnnualInspectionContract.hpp"
+#include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
 
 #include <chrono>
@@ -112,6 +113,11 @@ void register_word_import_routes(
                 return;
             }
             try {
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+
                 auto repository = std::make_shared<db::WordImportRepository>(db_client);
                 const auto archive_root = std::filesystem::absolute(config.archive_root);
                 const auto context = repository->load_context(import_record_id, archive_root);

@@ -11,7 +11,10 @@
 #include <json/json.h>
 
 #include "bridge_report/db/ReviewRepository.hpp"
+#include "bridge_report/db/EditLockRepository.hpp"
 #include "bridge_report/archive/ArchivePaths.hpp"
+#include "bridge_report/http/AuthRoutes.hpp"
+#include "bridge_report/http/EditLockRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
 #include "bridge_report/review/ContractCompatibility.hpp"
 #include "bridge_report/review/DraftValidation.hpp"
@@ -60,7 +63,7 @@ void register_bridge_scoped_route(
     drogon::app().registerHandler(
         path,
         [db_client, build_body = std::move(build_body)](
-            const drogon::HttpRequestPtr&,
+            const drogon::HttpRequestPtr& request,
             HttpCallback&& callback,
             const std::string& bridge_id
         ) {
@@ -95,7 +98,7 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
     drogon::app().registerHandler(
         "/api/import-records/{import_record_id}/review",
         [db_client](
-            const drogon::HttpRequestPtr&,
+            const drogon::HttpRequestPtr& request,
             HttpCallback&& callback,
             const std::string& import_record_id
         ) {
@@ -127,7 +130,7 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
                 const bool has_current_annual_facts = effective_year.has_value()
                     && repository.has_current_annual_facts(detail->bridge_id, *effective_year);
 
-                const auto body =
+                auto body =
                     review::build_review_response(
                         *detail,
                         normalized.data,
@@ -135,6 +138,13 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
                         has_current_annual_facts,
                         review::contract_compatibility_name(normalized.compatibility)
                     );
+
+                db::EditLockRepository lock_repository(db_client);
+                const auto active_lock = lock_repository.get_active(import_record_id);
+                const auto current_user = authenticate_request(db_client, request);
+                body["edit_lock"] = active_lock.has_value()
+                    ? edit_lock_info_to_json(*active_lock, current_user.has_value() ? current_user->id : std::string())
+                    : Json::Value(Json::nullValue);
 
                 respond_json(callback, body);
             } catch (const drogon::orm::DrogonDbException&) {
@@ -200,10 +210,19 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
             }
 
             try {
+                const auto user = authenticate_request(db_client, request);
+                if (!user.has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+
                 db::ReviewRepository repository(db_client);
                 const auto detail = repository.get_import_record_detail(import_record_id);
                 if (!detail.has_value()) {
                     respond_import_record_not_found(callback);
+                    return;
+                }
+                if (!require_active_edit_lock(db_client, request, import_record_id, *user, callback)) {
                     return;
                 }
 
@@ -233,11 +252,37 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                     return;
                 }
 
+                Json::Value draft_to_save = *body_json;
+
+                // 重开态的范围与角色校验（后端兜底，不依赖前端按钮显隐）：
+                //   full 重开由管理员发起，其草稿保存同样只认管理员；
+                //   warnings_only 重开允许任何登录用户，但只能改带警告的病害候选。
+                if (detail->reopened_at.has_value()) {
+                    if (detail->reopen_scope.value_or("") == "full" && !user->is_admin()) {
+                        respond_forbidden(callback);
+                        return;
+                    }
+                    if (detail->reopen_scope.value_or("") == "warnings_only") {
+                        const auto scope_validation = review::validate_warnings_only_scope(
+                            parse_parsed_result_json(detail->parsed_result_json), *body_json, &draft_to_save);
+                        if (!scope_validation.ok) {
+                            respond_json(
+                                callback,
+                                make_draft_validation_error_body(scope_validation),
+                                drogon::k400BadRequest
+                            );
+                            return;
+                        }
+                    }
+                }
+
                 // jsonb 列不保留输入格式，紧凑序列化即可，避免 toStyledString 的缩进开销。
                 Json::StreamWriterBuilder writer_builder;
                 writer_builder["indentation"] = "";
-                const bool saved =
-                    repository.save_review_draft(import_record_id, Json::writeString(writer_builder, *body_json));
+                const db::EditLockCredentials edit_lock{
+                    user->id, user->session_id, edit_lock_token_from_request(request)};
+                const bool saved = repository.save_review_draft(
+                    import_record_id, Json::writeString(writer_builder, draft_to_save), edit_lock);
                 if (!saved) {
                     // UPDATE 带状态谓词未命中：记录状态在加载后被并发改变（已取消/已确认），拒绝写入。
                     respond_json(
@@ -267,7 +312,7 @@ void register_cancel_import_record_route(const drogon::orm::DbClientPtr& db_clie
     drogon::app().registerHandler(
         "/api/import-records/{import_record_id}/cancel",
         [db_client](
-            const drogon::HttpRequestPtr&,
+            const drogon::HttpRequestPtr& request,
             HttpCallback&& callback,
             const std::string& import_record_id
         ) {
@@ -277,14 +322,39 @@ void register_cancel_import_record_route(const drogon::orm::DbClientPtr& db_clie
             }
 
             try {
+                const auto user = authenticate_request(db_client, request);
+                if (!user.has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+
                 db::ReviewRepository repository(db_client);
                 const auto detail = repository.get_import_record_detail(import_record_id);
                 if (!detail.has_value()) {
                     respond_import_record_not_found(callback);
                     return;
                 }
+                if (!require_active_edit_lock(db_client, request, import_record_id, *user, callback)) {
+                    return;
+                }
 
-                const bool cancelled = repository.cancel_import_record(import_record_id);
+                // 重开校对中的记录背后已有正式事实，取消会留下"事实存在但来源记录已取消"
+                // 的悬空状态；引导用户走「放弃修改」恢复已确认。
+                if (detail->reopened_at.has_value()) {
+                    respond_json(
+                        callback,
+                        make_error_body(
+                            "import_record_reopened",
+                            "该记录为重开校对的已确认记录，不能取消；请使用「放弃修改」恢复。"
+                        ),
+                        drogon::k409Conflict
+                    );
+                    return;
+                }
+
+                const db::EditLockCredentials edit_lock{
+                    user->id, user->session_id, edit_lock_token_from_request(request)};
+                const bool cancelled = repository.cancel_import_record(import_record_id, edit_lock);
                 if (!cancelled) {
                     respond_json(
                         callback,
@@ -296,6 +366,176 @@ void register_cancel_import_record_route(const drogon::orm::DbClientPtr& db_clie
 
                 Json::Value response_body;
                 response_body["cancelled"] = true;
+                respond_json(callback, response_body);
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Post}
+    );
+}
+
+// POST /api/import-records/{import_record_id}/reopen：重开校对。
+// body {scope: "warnings_only" | "full"}。已确认 + 原生 1.2 记录专用：
+// 翻回待校对并快照草稿，之后走既有"保存草稿 -> 入库前检查 -> 确认修订版"生成 v+1。
+// full 范围仅限管理员；warnings_only 要求草稿存在带警告的病害候选。
+void register_reopen_import_record_route(const drogon::orm::DbClientPtr& db_client) {
+    drogon::app().registerHandler(
+        "/api/import-records/{import_record_id}/reopen",
+        [db_client](
+            const drogon::HttpRequestPtr& request,
+            HttpCallback&& callback,
+            const std::string& import_record_id
+        ) {
+            if (!is_valid_uuid(import_record_id)) {
+                respond_import_record_not_found(callback);
+                return;
+            }
+
+            const auto body_json = request->getJsonObject();
+            const std::string scope = body_json != nullptr && (*body_json)["scope"].isString()
+                ? (*body_json)["scope"].asString()
+                : std::string();
+            if (scope != "warnings_only" && scope != "full") {
+                respond_json(
+                    callback,
+                    make_error_body("invalid_reopen_scope", "scope 必须是 warnings_only 或 full。"),
+                    drogon::k400BadRequest
+                );
+                return;
+            }
+
+            try {
+                const auto user = authenticate_request(db_client, request);
+                if (!user.has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                if (scope == "full" && !user->is_admin()) {
+                    respond_forbidden(callback);
+                    return;
+                }
+
+                db::ReviewRepository repository(db_client);
+                const auto detail = repository.get_import_record_detail(import_record_id);
+                if (!detail.has_value()) {
+                    respond_import_record_not_found(callback);
+                    return;
+                }
+                if (detail->import_status != "已确认") {
+                    respond_json(
+                        callback,
+                        make_error_body("import_record_wrong_status", "只有已确认的导入记录才能重开校对。"),
+                        drogon::k409Conflict
+                    );
+                    return;
+                }
+
+                const auto stored = parse_parsed_result_json(detail->parsed_result_json);
+                if (review::stored_contract_requires_reparse(stored)) {
+                    respond_json(
+                        callback,
+                        make_error_body(
+                            "contract_version_outdated",
+                            "该记录为旧版合同终态数据，不支持重开校对。"
+                        ),
+                        drogon::k409Conflict
+                    );
+                    return;
+                }
+                if (scope == "warnings_only" && !review::draft_has_warning_defects(stored)) {
+                    respond_json(
+                        callback,
+                        make_error_body("no_warning_defects", "该记录没有带警告的病害候选，无需按警告范围重开。"),
+                        drogon::k409Conflict
+                    );
+                    return;
+                }
+
+                db::EditLockRepository lock_repository(db_client);
+                const auto lock_outcome = lock_repository.acquire_and_reopen(import_record_id, *user, scope);
+                if (!lock_outcome.acquired) {
+                    if (lock_outcome.import_record_state_changed) {
+                        respond_json(
+                            callback,
+                            make_error_body("import_record_wrong_status", "导入记录状态已变化，无法重开校对。"),
+                            drogon::k409Conflict
+                        );
+                        return;
+                    }
+                    auto error = make_error_body("import_record_locked", "该导入记录正在被其他页面编辑。");
+                    if (lock_outcome.lock.has_value()) {
+                        error["lock"] = edit_lock_info_to_json(*lock_outcome.lock, user->id);
+                    }
+                    respond_json(callback, error, drogon::k409Conflict);
+                    return;
+                }
+
+                Json::Value response_body;
+                response_body["reopened"] = true;
+                response_body["scope"] = scope;
+                response_body["import_status"] = "待校对";
+                response_body["lock_token"] = lock_outcome.lock_token;
+                response_body["edit_lock"] = edit_lock_info_to_json(*lock_outcome.lock, user->id);
+                respond_json(callback, response_body);
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Post}
+    );
+}
+
+// POST /api/import-records/{import_record_id}/reopen-restore：放弃重开修改。
+// 草稿还原为重开时快照，状态翻回已确认；正式事实从未被触碰，无需其他回滚。
+void register_restore_reopened_import_record_route(const drogon::orm::DbClientPtr& db_client) {
+    drogon::app().registerHandler(
+        "/api/import-records/{import_record_id}/reopen-restore",
+        [db_client](
+            const drogon::HttpRequestPtr& request,
+            HttpCallback&& callback,
+            const std::string& import_record_id
+        ) {
+            if (!is_valid_uuid(import_record_id)) {
+                respond_import_record_not_found(callback);
+                return;
+            }
+
+            try {
+                const auto user = authenticate_request(db_client, request);
+                if (!user.has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+
+                db::ReviewRepository repository(db_client);
+                const auto detail = repository.get_import_record_detail(import_record_id);
+                if (!detail.has_value()) {
+                    respond_import_record_not_found(callback);
+                    return;
+                }
+                if (!require_active_edit_lock(db_client, request, import_record_id, *user, callback)) {
+                    return;
+                }
+
+                const db::EditLockCredentials edit_lock{
+                    user->id, user->session_id, edit_lock_token_from_request(request)};
+                if (!repository.restore_reopened_import_record(import_record_id, edit_lock)) {
+                    respond_json(
+                        callback,
+                        make_error_body("import_record_not_reopened", "该导入记录不处于重开校对状态。"),
+                        drogon::k409Conflict
+                    );
+                    return;
+                }
+
+                Json::Value response_body;
+                response_body["restored"] = true;
+                response_body["import_status"] = "已确认";
                 respond_json(callback, response_body);
             } catch (const drogon::orm::DrogonDbException&) {
                 respond_db_unavailable(callback);
@@ -390,6 +630,8 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client, const std
     register_options_handler("/api/import-records/{import_record_id}/review");
     register_options_handler("/api/import-records/{import_record_id}/review-draft");
     register_options_handler("/api/import-records/{import_record_id}/cancel");
+    register_options_handler("/api/import-records/{import_record_id}/reopen");
+    register_options_handler("/api/import-records/{import_record_id}/reopen-restore");
     register_options_handler("/api/import-records/{import_record_id}/photos/{photo_candidate_id}/content");
 
     drogon::app().registerHandler(
@@ -444,6 +686,8 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client, const std
     register_import_record_review_route(db_client);
     register_save_review_draft_route(db_client);
     register_cancel_import_record_route(db_client);
+    register_reopen_import_record_route(db_client);
+    register_restore_reopened_import_record_route(db_client);
     register_photo_content_route(db_client, archive_root);
 }
 

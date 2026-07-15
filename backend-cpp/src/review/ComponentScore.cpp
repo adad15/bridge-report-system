@@ -11,7 +11,7 @@ std::optional<ComponentScoreResult> compute_component_score(const std::vector<do
         return std::nullopt;
     }
     for (const auto value : deductions) {
-        if (!(value > 0.0) || value > 100.0) {
+        if (value < 0.0 || value > 100.0) {
             return std::nullopt;
         }
     }

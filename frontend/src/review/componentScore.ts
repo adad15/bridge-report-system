@@ -22,7 +22,7 @@ export function roundScoreToTwoDecimals(value: number): number {
 
 /**
  * 按第 4.1.1 条累计扣分计算构件评分。
- * 输入为空或任一扣分不在 (0, 100] 内时无法计算，返回 null。
+ * 输入为空或任一扣分不在 [0, 100] 内时无法计算，返回 null。
  * 输入顺序不影响结果：内部先降序排序再累计；任一 DP=100 时评分为 0。
  */
 export function computeComponentScore(deductions: number[]): ComponentScoreResult | null {
@@ -30,7 +30,7 @@ export function computeComponentScore(deductions: number[]): ComponentScoreResul
     return null;
   }
   for (const value of deductions) {
-    if (!Number.isFinite(value) || !(value > 0) || value > 100) {
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
       return null;
     }
   }

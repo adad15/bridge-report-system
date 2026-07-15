@@ -9,6 +9,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/DefectThreadRepository.hpp"
+#include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
 
 namespace bridge_report::http {
@@ -116,6 +117,11 @@ void register_defect_thread_routes(const drogon::orm::DbClientPtr& db_client) {
                 return;
             }
             try {
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+
                 db::DefectThreadRepository repository(db_client);
                 respond_outcome(callback, repository.create_thread(
                     parsed.bridge_component_id, parsed.defect_type, parsed.defect_location,
@@ -152,6 +158,11 @@ void register_defect_thread_routes(const drogon::orm::DbClientPtr& db_client) {
                 return;
             }
             try {
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+
                 db::DefectThreadRepository repository(db_client);
                 respond_outcome(callback, repository.bind_observation(
                     observation_id, parsed.defect_thread_id, parsed.expected_observation_updated_at,

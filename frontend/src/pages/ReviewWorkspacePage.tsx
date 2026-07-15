@@ -2,8 +2,21 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/apiClient";
-import type { ConfirmResponse, PreflightResponse, ReviewResponse } from "../api/reviewApi";
-import { cancelImport, confirmImport, fetchReview, runPreflight, saveReviewDraft } from "../api/reviewApi";
+import type { ConfirmResponse, EditLockSummary, PreflightResponse, ReopenScope, ReviewResponse } from "../api/reviewApi";
+import {
+  acquireEditLock,
+  cancelImport,
+  confirmImport,
+  fetchReview,
+  forceReleaseEditLock,
+  heartbeatEditLock,
+  releaseEditLock,
+  reopenImport,
+  restoreReopenedImport,
+  runPreflight,
+  saveReviewDraft,
+} from "../api/reviewApi";
+import { useAuth } from "../auth/AuthContext";
 import { backendBaseUrl } from "../config";
 import { canPressConfirm, canRunPreflight, parsePreflightDetails, validateRevisionForm } from "../review/confirmFlow";
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
@@ -30,6 +43,9 @@ export function ReviewWorkspacePage() {
 
   const [response, setResponse] = useState<ReviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 「放弃修改」等需要以数据库最新状态整体重建页面的操作通过 +1 触发重新拉取；
+  // 拉取期间 response 置空 -> ReviewWorkspaceLoaded 卸载重挂，useReducer 重新初始化。
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     if (!importRecordId) return;
@@ -52,7 +68,7 @@ export function ReviewWorkspacePage() {
     return () => {
       cancelled = true;
     };
-  }, [importRecordId]);
+  }, [importRecordId, reloadNonce]);
 
   if (!importRecordId) {
     return (
@@ -82,13 +98,42 @@ export function ReviewWorkspacePage() {
   // 永远是真实的 parsed_result，不需要在本组件里对 useReducer 做任何条件调用
   // （不满足 React hooks 规则的写法是 fetch 完成前就 useReducer(reducer, undefined)
   // 之类的占位状态，再在 effect 里想办法灌数据——那样会让 state 类型变得别扭）。
-  return <ReviewWorkspaceLoaded response={response} importRecordId={importRecordId} />;
+  return (
+    <ReviewWorkspaceLoaded
+      response={response}
+      importRecordId={importRecordId}
+      onReload={() => setReloadNonce((nonce) => nonce + 1)}
+    />
+  );
 }
 
 const NO_OP_DISPATCH: (action: ReviewDraftAction) => void = () => {};
 
-function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewResponse; importRecordId: string }) {
+type EditLockPhase = "not_required" | "acquiring" | "held" | "blocked" | "uncertain" | "lost";
+
+function lockSummaryFromError(error: unknown): EditLockSummary | null {
+  if (!(error instanceof ApiError) || typeof error.details !== "object" || error.details === null) return null;
+  const lock = (error.details as { lock?: unknown }).lock;
+  if (typeof lock !== "object" || lock === null) return null;
+  const candidate = lock as Partial<EditLockSummary>;
+  return typeof candidate.owner_display_name === "string" && typeof candidate.acquired_at === "string"
+    && typeof candidate.expires_at === "string" && typeof candidate.owner_username === "string"
+    && typeof candidate.owned_by_current_user === "boolean"
+    ? candidate as EditLockSummary
+    : null;
+}
+
+function ReviewWorkspaceLoaded({
+  response,
+  importRecordId,
+  onReload,
+}: {
+  response: ReviewResponse;
+  importRecordId: string;
+  onReload: () => void;
+}) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [draft, rawDispatch] = useReducer(reviewDraftReducer, response.parsed_result);
   const [selected, setSelected] = useState<SelectedCandidate | null>(null);
   const [expandedDefectId, setExpandedDefectId] = useState<string | null>(null);
@@ -105,17 +150,120 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   const [revisionHint, setRevisionHint] = useState<string | null>(null);
   const [confirmResult, setConfirmResult] = useState<ConfirmResponse | null>(null);
   const [sessionImportStatus, setSessionImportStatus] = useState(response.import_record.import_status);
+  // 重开校对现场：已确认记录被翻回待校对时非空；再确认（修订版）或放弃修改后清空。
+  const [reopenState, setReopenState] = useState(response.reopen);
   const [busy, setBusy] = useState(false);
   // 草稿自上次成功保存以来是否被编辑过。入库前检查 / 确认入库端点只读数据库里已保存的
   // parsed_result_json（不读内存草稿），所以有未保存修改时必须先保存，否则用户会对着旧的
   // 已保存数据跑检查、以为通过了，实际这次编辑不会写进事实表（模块 05 §6.1 的顺序：先保存草稿）。
   const [dirty, setDirty] = useState(false);
   const draftRevision = useRef(0);
+  const lockTokenRef = useRef<string | null>(null);
+  const [lockToken, setLockToken] = useState<string | null>(null);
+  const [lockSummary, setLockSummary] = useState<EditLockSummary | null>(response.edit_lock);
+  const [lockPhase, setLockPhase] = useState<EditLockPhase>("not_required");
+  const [lockMessage, setLockMessage] = useState<string | null>(null);
 
   const counts = buildStatistics(draft);
   const attentionItems = needsAttention(draft);
-  const reviewSession = deriveReviewSession(sessionImportStatus, response.contract_compatibility);
+  const reviewSession = deriveReviewSession(
+    sessionImportStatus,
+    response.contract_compatibility,
+    reopenState?.scope ?? null
+  );
   const readOnly = reviewSession.readOnly;
+  const isAdmin = user?.role === "admin";
+  const hasWarningDefects = draft.defects.some((defect) => defect.warnings.length > 0);
+  // 已确认 + 原生 1.2 才能重开；旧版终态（legacy_read_only）永久只读。
+  const canReopen = sessionImportStatus === "已确认" && response.contract_compatibility === "native_1_2" && !busy;
+  const needsEditLock = !reviewSession.readOnly;
+
+  function rememberLock(token: string, summary: EditLockSummary): void {
+    lockTokenRef.current = token;
+    setLockToken(token);
+    setLockSummary(summary);
+    setLockPhase("held");
+    setLockMessage(null);
+  }
+
+  function forgetLock(phase: EditLockPhase = "not_required"): void {
+    lockTokenRef.current = null;
+    setLockToken(null);
+    setLockPhase(phase);
+  }
+
+  useEffect(() => {
+    if (!needsEditLock) {
+      setLockPhase("not_required");
+      return;
+    }
+    if (lockTokenRef.current !== null) {
+      setLockPhase("held");
+      return () => {
+        const token = lockTokenRef.current;
+        if (token !== null) void releaseEditLock(backendBaseUrl, importRecordId, token, true).catch(() => undefined);
+      };
+    }
+
+    let cancelled = false;
+    // 延后一拍可避开 React StrictMode 的首次 setup→cleanup 探测，防止开发态重复抢锁。
+    const timer = window.setTimeout(() => {
+      setLockPhase("acquiring");
+      acquireEditLock(backendBaseUrl, importRecordId)
+        .then((result) => {
+          if (cancelled) {
+            void releaseEditLock(backendBaseUrl, importRecordId, result.lock_token, true).catch(() => undefined);
+            return;
+          }
+          rememberLock(result.lock_token, result.lock);
+        })
+        .catch((caught: unknown) => {
+          if (cancelled) return;
+          setLockSummary(lockSummaryFromError(caught) ?? response.edit_lock);
+          setLockPhase("blocked");
+          setLockMessage(caught instanceof ApiError ? caught.message : "无法取得编辑锁。");
+        });
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      const token = lockTokenRef.current;
+      if (token !== null) void releaseEditLock(backendBaseUrl, importRecordId, token, true).catch(() => undefined);
+    };
+  }, [importRecordId, needsEditLock]);
+
+  useEffect(() => {
+    if (lockToken === null || lockPhase !== "held") return;
+    const timer = window.setInterval(() => {
+      setLockPhase("uncertain");
+      heartbeatEditLock(backendBaseUrl, importRecordId, lockToken)
+        .then((result) => {
+          setLockSummary(result.lock);
+          setLockPhase("held");
+          setLockMessage(null);
+        })
+        .catch((caught: unknown) => {
+          if (caught instanceof ApiError && ["edit_lock_invalid", "edit_lock_expired", "edit_lock_force_released", "edit_lock_required"].includes(caught.code)) {
+            forgetLock("lost");
+          } else {
+            setLockPhase("uncertain");
+          }
+          setLockMessage(caught instanceof ApiError ? caught.message : "编辑锁续租失败，正在等待恢复。" );
+        });
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [importRecordId, lockToken, lockPhase]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   // "已保存"这类成功反馈 3 秒后自动消失（布局设计 §8）；错误消息常驻，由用户手动关闭。
   useEffect(() => {
@@ -148,10 +296,14 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   }
 
   async function handleSaveDraft(draftToSave: BridgeAnnualInspectionData): Promise<boolean> {
+    if (lockToken === null) {
+      setSaveMessage({ kind: "error", text: "当前页面没有编辑权，无法保存。" });
+      return false;
+    }
     const saveRevision = draftRevision.current;
     setBusy(true);
     try {
-      await saveReviewDraft(backendBaseUrl, importRecordId, draftToSave);
+      await saveReviewDraft(backendBaseUrl, importRecordId, draftToSave, lockToken);
       const savedLatestRevision = shouldClearDirtyAfterSave(saveRevision, draftRevision.current);
       setSaveMessage({ kind: "success", text: savedLatestRevision ? "已保存" : "本次保存已完成，但仍有较新的修改未保存。" });
       if (savedLatestRevision) setDirty(false);
@@ -180,9 +332,10 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   }
 
   async function handlePreflight(): Promise<void> {
+    if (lockToken === null) return;
     setBusy(true);
     try {
-      const result = await runPreflight(backendBaseUrl, importRecordId);
+      const result = await runPreflight(backendBaseUrl, importRecordId, lockToken);
       setPreflight(result);
       setSaveMessage(null);
     } catch (caught) {
@@ -197,16 +350,20 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   }
 
   async function submitConfirm(confirmRevision: boolean, note: string): Promise<void> {
+    if (lockToken === null) return;
     setBusy(true);
     try {
       const result = await confirmImport(backendBaseUrl, importRecordId, {
         confirm_revision: confirmRevision,
         confirmation_note: note,
-      });
+      }, lockToken);
       setConfirmResult(result);
       setSessionImportStatus("已确认");
+      // 后端在确认事务里清空了重开列；本地同步退出重开态。
+      setReopenState(null);
       setConfirmDialogOpen(false);
       setSaveMessage(null);
+      forgetLock("not_required");
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === "revision_confirmation_required") {
         // 后端在确认那一刻发现同桥同年已有当前有效事实，但本次请求没有带
@@ -260,7 +417,9 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
     if (!confirmed) return;
     setBusy(true);
     try {
-      await cancelImport(backendBaseUrl, importRecordId);
+      if (lockToken === null) return;
+      await cancelImport(backendBaseUrl, importRecordId, lockToken);
+      forgetLock("not_required");
       navigate(`/bridges/${response.bridge.id}`);
     } catch (caught) {
       setSaveMessage({
@@ -272,12 +431,107 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
     }
   }
 
-  const actionsDisabled = readOnly || busy;
-  const sectionDispatch = readOnly ? NO_OP_DISPATCH : dispatch;
+  // 重开校对：已确认 -> 待校对（后端快照草稿）。成功后页面就地切回可编辑态，
+  // 不需要重新拉取——草稿内容没有变化，变的只有状态与可编辑范围。
+  async function handleReopen(scope: ReopenScope): Promise<void> {
+    setBusy(true);
+    try {
+      const result = await reopenImport(backendBaseUrl, importRecordId, scope);
+      rememberLock(result.lock_token, result.edit_lock);
+      setSessionImportStatus("待校对");
+      setReopenState({
+        reopened_at: new Date().toISOString(),
+        reopened_by_username: user?.username ?? "",
+        scope,
+      });
+      setConfirmResult(null);
+      setPreflight(null);
+      setSaveMessage(null);
+      setDirty(false);
+    } catch (caught) {
+      setSaveMessage({
+        kind: "error",
+        text: caught instanceof ApiError ? caught.message : "重开校对失败。",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 放弃修改：后端把草稿还原为重开快照并翻回已确认；本地内存草稿已经脏了，
+  // 必须整体重新拉取重建（onReload -> 外层重新 fetch -> 本组件卸载重挂）。
+  async function handleAbandonReopen(): Promise<void> {
+    const confirmed = window.confirm("确定放弃本次重开修改吗？草稿将恢复为确认入库时的内容。");
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      if (lockToken === null) return;
+      await restoreReopenedImport(backendBaseUrl, importRecordId, lockToken);
+      forgetLock("not_required");
+      onReload();
+    } catch (caught) {
+      setSaveMessage({
+        kind: "error",
+        text: caught instanceof ApiError ? caught.message : "放弃修改失败。",
+      });
+      setBusy(false);
+    }
+  }
+
+  async function handleBackToBridge(): Promise<void> {
+    if (dirty && !window.confirm("有未保存的修改，离开后将丢失。确定离开吗？")) return;
+    const token = lockTokenRef.current;
+    if (token !== null) {
+      try {
+        await releaseEditLock(backendBaseUrl, importRecordId, token);
+      } catch {
+        // 正常释放失败由 2 分钟租约兜底，不阻止用户离开。
+      }
+      forgetLock("not_required");
+    }
+    navigate(`/bridges/${response.bridge.id}`);
+  }
+
+  async function handleForceRelease(): Promise<void> {
+    if (!isAdmin || lockSummary === null) return;
+    const reason = window.prompt(`请输入强制解除“${lockSummary.owner_display_name}”编辑锁的原因：`)?.trim() ?? "";
+    if (reason === "" || !window.confirm("强制解锁后，原编辑页面将不能继续保存。确定继续吗？")) return;
+    setBusy(true);
+    try {
+      await forceReleaseEditLock(backendBaseUrl, importRecordId, reason);
+      const acquired = await acquireEditLock(backendBaseUrl, importRecordId);
+      rememberLock(acquired.lock_token, acquired.lock);
+    } catch (caught) {
+      setSaveMessage({ kind: "error", text: caught instanceof ApiError ? caught.message : "强制解锁失败。" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const lockAllowsEditing = !needsEditLock || lockPhase === "held";
+  const effectiveReadOnly = readOnly || !lockAllowsEditing;
+  const actionsDisabled = effectiveReadOnly || busy || lockPhase === "uncertain";
+  const sectionDispatch = effectiveReadOnly ? NO_OP_DISPATCH : dispatch;
+
+  // 重开 warnings_only 态：仅带警告的病害可编辑；full 态与正常待校对态全部可编辑。
+  const isDefectEditable =
+    reopenState?.scope === "warnings_only"
+      ? (defect: BridgeAnnualInspectionData["defects"][number]) => defect.warnings.length > 0
+      : undefined;
+
+  const lockNotice = lockPhase === "held"
+    ? "你正在编辑此导入记录。"
+    : lockPhase === "acquiring"
+      ? "正在取得编辑权……"
+      : lockPhase === "uncertain"
+        ? "连接异常，正在确认编辑权；写入操作已暂停。"
+        : lockSummary !== null
+          ? `${lockSummary.owned_by_current_user ? "你已在另一个页面" : lockSummary.owner_display_name}正在编辑此导入记录。`
+          : lockMessage ?? (lockPhase === "lost" ? "编辑权已失效，请刷新页面。" : null);
 
   // 只读时整条底栏换成只读横幅（布局设计 §9），入库统计拼在横幅文字里。
-  const readOnlyNotice = readOnly
-    ? `${reviewSession.bannerText ?? ""}${
+  const readOnlyNotice = effectiveReadOnly
+    ? `${!readOnly && lockNotice ? lockNotice : reviewSession.bannerText ?? ""}${
         confirmResult
           ? ` 已入库：病害 ${confirmResult.written.defect_observations}、尺寸 ${confirmResult.written.defect_measurements}、` +
             `照片 ${confirmResult.written.defect_photos}、评分 ${confirmResult.written.condition_ratings}；` +
@@ -289,6 +543,22 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
   return (
     <div className="review-workspace">
       <OverviewHeader response={response} draft={draft} counts={counts} />
+      {lockNotice ? (
+        <div className={`review-edit-lock-banner review-edit-lock-${lockPhase}`}>
+          <span>{lockNotice}</span>
+          {lockSummary ? <span className="review-reopen-meta">开始时间：{lockSummary.acquired_at}</span> : null}
+          {isAdmin && lockSummary !== null && lockPhase !== "held" ? (
+            <button type="button" disabled={busy} onClick={() => void handleForceRelease()}>管理员强制解锁</button>
+          ) : null}
+        </div>
+      ) : null}
+      {/* 重开校对态横幅：可编辑态下 bannerText 非空即重开中，提示范围与后续流程。 */}
+      {!readOnly && reviewSession.bannerText ? (
+        <div className="review-reopen-banner">
+          <span>{reviewSession.bannerText}</span>
+          {reopenState ? <span className="review-reopen-meta">重开人：{reopenState.reopened_by_username}</span> : null}
+        </div>
+      ) : null}
       <div className="review-body">
         <ReviewSidebar counts={counts} active={activeGroup} onSelect={setActiveGroup} />
         <div className="review-main">
@@ -312,9 +582,16 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
               }}
               dispatch={sectionDispatch}
               disabled={actionsDisabled}
+              isDefectEditable={isDefectEditable}
             />
           ) : null}
-          {activeGroup === "ratings" ? <RatingsSection ratings={draft.ratings} dispatch={sectionDispatch} disabled={actionsDisabled} /> : null}
+          {activeGroup === "ratings" ? (
+            <RatingsSection
+              ratings={draft.ratings}
+              dispatch={sectionDispatch}
+              disabled={actionsDisabled || reopenState?.scope === "warnings_only"}
+            />
+          ) : null}
           {activeGroup === "raw_json" ? <RawJsonSection draft={draft} /> : null}
         </div>
       </div>
@@ -323,12 +600,18 @@ function ReviewWorkspaceLoaded({ response, importRecordId }: { response: ReviewR
         <ReviewActionBar
           dirty={dirty}
           readOnlyNotice={readOnlyNotice}
-          onBackToBridge={() => navigate(`/bridges/${response.bridge.id}`)}
+          onBackToBridge={() => void handleBackToBridge()}
           onSaveDraft={actionsDisabled ? undefined : () => void handleSaveDraft(draft)}
-          onBatchConfirmNormal={actionsDisabled ? undefined : () => void handleBatchConfirmNormal()}
-          onPreflight={canRunPreflight(dirty, busy, readOnly) ? () => void handlePreflight() : undefined}
+          onBatchConfirmNormal={
+            // warnings_only 重开态隐藏批量确认：该操作会批量改动评分候选，超出"修正警告病害"的语义。
+            actionsDisabled || reopenState?.scope === "warnings_only" ? undefined : () => void handleBatchConfirmNormal()
+          }
+          onPreflight={canRunPreflight(dirty, busy, effectiveReadOnly) ? () => void handlePreflight() : undefined}
           onConfirmImport={actionsDisabled || !canPressConfirm(preflight) ? undefined : handleConfirmImportClick}
-          onCancelImport={actionsDisabled ? undefined : () => void handleCancelImport()}
+          onCancelImport={actionsDisabled || reopenState !== null ? undefined : () => void handleCancelImport()}
+          onAbandonReopen={!effectiveReadOnly && reopenState !== null && !busy ? () => void handleAbandonReopen() : undefined}
+          onReopenWarnings={canReopen && hasWarningDefects ? () => void handleReopen("warnings_only") : undefined}
+          onReopenFull={canReopen && isAdmin ? () => void handleReopen("full") : undefined}
         />
       </div>
       {confirmDialogOpen ? (

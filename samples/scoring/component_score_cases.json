@@ -123,13 +123,15 @@
       "expected_ordered_deductions": null
     },
     {
-      "name": "invalid_zero",
+      "name": "zero_alone",
       "deductions": [
         0
       ],
-      "expected_unrounded": null,
-      "expected_rounded": null,
-      "expected_ordered_deductions": null
+      "expected_unrounded": 100.0,
+      "expected_rounded": 100.0,
+      "expected_ordered_deductions": [
+        0.0
+      ]
     },
     {
       "name": "invalid_negative",
@@ -150,14 +152,58 @@
       "expected_ordered_deductions": null
     },
     {
-      "name": "invalid_mixed_with_valid",
+      "name": "zero_with_valid",
       "deductions": [
         35,
         0
       ],
-      "expected_unrounded": null,
-      "expected_rounded": null,
-      "expected_ordered_deductions": null
+      "expected_unrounded": 65.0,
+      "expected_rounded": 65.0,
+      "expected_ordered_deductions": [
+        35.0,
+        0.0
+      ]
+    },
+    {
+      "name": "two_zeros",
+      "deductions": [
+        0,
+        0
+      ],
+      "expected_unrounded": 100.0,
+      "expected_rounded": 100.0,
+      "expected_ordered_deductions": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "zero_with_35_20",
+      "deductions": [
+        35,
+        20,
+        0
+      ],
+      "expected_unrounded": 55.80761184457488,
+      "expected_rounded": 55.81,
+      "expected_ordered_deductions": [
+        35.0,
+        20.0,
+        0.0
+      ]
+    },
+    {
+      "name": "zero_with_100",
+      "deductions": [
+        100,
+        0
+      ],
+      "expected_unrounded": 0.0,
+      "expected_rounded": 0.0,
+      "expected_ordered_deductions": [
+        100.0,
+        0.0
+      ]
     }
   ]
 }

@@ -90,6 +90,10 @@ TEST(ImportRecordSummaryTest, to_json_outputs_all_fields_when_present) {
     summary.inspection_year_id = "y1111111-1111-1111-1111-111111111111";
     summary.importer_name = "张三";
     summary.created_at = "2025-01-01 10:00:00+08";
+    summary.edit_lock_owner_username = "zhang";
+    summary.edit_lock_owner_display_name = "张工";
+    summary.edit_lock_acquired_at = "2025-01-01 10:05:00+08";
+    summary.edit_lock_expires_at = "2025-01-01 10:07:00+08";
 
     const auto json = summary.to_json();
 
@@ -101,6 +105,8 @@ TEST(ImportRecordSummaryTest, to_json_outputs_all_fields_when_present) {
     EXPECT_EQ(json["inspection_year_id"].asString(), "y1111111-1111-1111-1111-111111111111");
     EXPECT_EQ(json["importer_name"].asString(), "张三");
     EXPECT_EQ(json["created_at"].asString(), "2025-01-01 10:00:00+08");
+    EXPECT_EQ(json["edit_lock"]["owner_display_name"].asString(), "张工");
+    EXPECT_EQ(json["edit_lock"]["acquired_at"].asString(), "2025-01-01 10:05:00+08");
 }
 
 TEST(ImportRecordSummaryTest, to_json_outputs_null_for_missing_optional_fields) {
@@ -119,6 +125,7 @@ TEST(ImportRecordSummaryTest, to_json_outputs_null_for_missing_optional_fields) 
     EXPECT_TRUE(json["inspection_year_id"].isNull());
     EXPECT_TRUE(json["importer_name"].isNull());
     EXPECT_EQ(json["import_status"].asString(), "已上传");
+    EXPECT_TRUE(json["edit_lock"].isNull());
 }
 
 namespace {
@@ -252,6 +259,30 @@ TEST(BuildReviewResponseTest, IncludesParsedResultAndStatisticsVerbatim) {
     EXPECT_EQ(body["statistics"]["defect_count"].asInt(), 1);
     EXPECT_EQ(body["statistics"]["pending_count"].asInt(), 1);
     EXPECT_EQ(body["contract_compatibility"].asString(), "legacy_pending_reparse");
+}
+
+TEST(BuildReviewResponseTest, OutputsNullReopenWhenNotReopened) {
+    const auto detail = make_detail_with_year();
+
+    const auto body = build_review_response(
+        detail, Json::Value(Json::objectValue), ReviewStatistics{}, false, "native_1_2");
+
+    EXPECT_TRUE(body["reopen"].isNull());
+}
+
+TEST(BuildReviewResponseTest, PopulatesReopenAuditWhenReopened) {
+    auto detail = make_detail_with_year();
+    detail.reopened_at = "2026-07-15 09:00:00+08";
+    detail.reopened_by_username = "admin";
+    detail.reopen_scope = "full";
+
+    const auto body = build_review_response(
+        detail, Json::Value(Json::objectValue), ReviewStatistics{}, false, "native_1_2");
+
+    ASSERT_TRUE(body["reopen"].isObject());
+    EXPECT_EQ(body["reopen"]["reopened_at"].asString(), "2026-07-15 09:00:00+08");
+    EXPECT_EQ(body["reopen"]["reopened_by_username"].asString(), "admin");
+    EXPECT_EQ(body["reopen"]["scope"].asString(), "full");
 }
 
 TEST(ResolveEffectiveInspectionYearTest, UsesAttachedYearWhenPresent) {

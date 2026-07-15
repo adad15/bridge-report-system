@@ -129,6 +129,7 @@ export function BridgeDetailPage() {
                 <th>名称</th>
                 <th>来源类型</th>
                 <th>状态</th>
+                <th>编辑状态</th>
                 <th>创建时间</th>
                 <th>操作</th>
               </tr>
@@ -145,6 +146,11 @@ export function BridgeDetailPage() {
                     <td>{record.import_name}</td>
                     <td>{record.source_type}</td>
                     <td>{record.import_status}</td>
+                    <td>
+                      {record.edit_lock
+                        ? `${record.edit_lock.owner_display_name} 正在编辑（${record.edit_lock.acquired_at}）`
+                        : "—"}
+                    </td>
                     <td>{record.created_at}</td>
                     <td>
                       <Link to={reviewPath}>{record.import_status === "待校对" ? "进入校对" : "查看结果"}</Link>

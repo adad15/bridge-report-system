@@ -49,6 +49,10 @@ struct ImportRecordSummary {
     std::optional<std::string> inspection_year_id;
     std::optional<std::string> importer_name;
     std::string created_at;
+    std::optional<std::string> edit_lock_owner_username;
+    std::optional<std::string> edit_lock_owner_display_name;
+    std::optional<std::string> edit_lock_acquired_at;
+    std::optional<std::string> edit_lock_expires_at;
 
     Json::Value to_json() const;
 };
@@ -85,6 +89,12 @@ struct ImportRecordDetail {
     std::optional<std::string> inspection_year_status;
     std::optional<int> inspection_year_version_number;
     std::optional<bool> inspection_year_is_current;
+
+    // 重开校对审计（迁移 004）：reopened_at 非空即处于重开态；
+    // scope 为 'warnings_only'（仅警告病害可改）或 'full'（管理员全改）。
+    std::optional<std::string> reopened_at;
+    std::optional<std::string> reopened_by_username;
+    std::optional<std::string> reopen_scope;
 };
 
 /**

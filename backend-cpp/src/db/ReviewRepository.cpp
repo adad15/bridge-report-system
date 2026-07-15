@@ -1,5 +1,6 @@
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/contracts/AnnualInspectionContract.hpp"
+#include "bridge_report/auth/PasswordHash.hpp"
 #include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
 
@@ -375,11 +376,14 @@ std::vector<review::InspectionYearSummary> ReviewRepository::list_inspection_yea
 
 std::vector<review::ImportRecordSummary> ReviewRepository::list_import_records(const std::string& bridge_id) {
     const auto result = db_client_->execSqlSync(
-        "select id, system_number, import_name, source_type, import_status, "
-        "inspection_year_id, importer_name, created_at::text "
-        "from import_records "
-        "where bridge_id = $1::uuid "
-        "order by created_at desc",
+        "select ir.id, ir.system_number, ir.import_name, ir.source_type, ir.import_status, "
+        "ir.inspection_year_id, ir.importer_name, ir.created_at::text, "
+        "u.username as lock_owner_username, u.display_name as lock_owner_display_name, "
+        "l.acquired_at::text as lock_acquired_at, l.expires_at::text as lock_expires_at "
+        "from import_records ir "
+        "left join import_record_edit_locks l on l.import_record_id = ir.id and l.expires_at > now() "
+        "left join users u on u.id = l.user_id "
+        "where ir.bridge_id = $1::uuid order by ir.created_at desc",
         bridge_id
     );
 
@@ -395,6 +399,10 @@ std::vector<review::ImportRecordSummary> ReviewRepository::list_import_records(c
         summary.inspection_year_id = optional_text(row, "inspection_year_id");
         summary.importer_name = optional_text(row, "importer_name");
         summary.created_at = row["created_at"].as<std::string>();
+        summary.edit_lock_owner_username = optional_text(row, "lock_owner_username");
+        summary.edit_lock_owner_display_name = optional_text(row, "lock_owner_display_name");
+        summary.edit_lock_acquired_at = optional_text(row, "lock_acquired_at");
+        summary.edit_lock_expires_at = optional_text(row, "lock_expires_at");
         records.push_back(std::move(summary));
     }
     return records;
@@ -409,6 +417,7 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
         "ir.import_name, ir.source_type, ir.import_status, "
         "ir.importer_name, ir.importer_version, ir.parsed_result_json::text as parsed_result_json, "
         "ir.created_at::text as created_at, ir.updated_at::text as updated_at, "
+        "ir.reopened_at::text as reopened_at, ir.reopened_by_username, ir.reopen_scope, "
         "b.system_number as bridge_system_number, b.bridge_name as bridge_name, b.route_name as bridge_route_name, "
         "iy.system_number as inspection_year_system_number, iy.inspection_year as inspection_year, "
         "iy.status as inspection_year_status, iy.version_number as inspection_year_version_number, "
@@ -438,6 +447,9 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
     detail.parsed_result_json = row["parsed_result_json"].as<std::string>();
     detail.created_at = row["created_at"].as<std::string>();
     detail.updated_at = row["updated_at"].as<std::string>();
+    detail.reopened_at = optional_text(row, "reopened_at");
+    detail.reopened_by_username = optional_text(row, "reopened_by_username");
+    detail.reopen_scope = optional_text(row, "reopen_scope");
 
     detail.bridge_system_number = row["bridge_system_number"].as<std::string>();
     detail.bridge_name = row["bridge_name"].as<std::string>();
@@ -501,30 +513,105 @@ std::optional<PhotoContentRef> ReviewRepository::get_photo_content_ref(
     };
 }
 
-bool ReviewRepository::save_review_draft(const std::string& import_record_id, const std::string& parsed_json_text) {
+bool ReviewRepository::save_review_draft(
+    const std::string& import_record_id,
+    const std::string& parsed_json_text,
+    const std::optional<EditLockCredentials>& edit_lock
+) {
     // 与 cancel_import_record 同一惯用法：把状态谓词放进 UPDATE，
     // 避免“处理器读到待校对 -> 并发取消/确认 -> 草稿仍写入”的 TOCTOU 竞态。
+    const auto result = edit_lock.has_value()
+        ? db_client_->execSqlSync(
+            "update import_records "
+            "set parsed_result_json = $2::jsonb, updated_at = now() "
+            "where id = $1::uuid and import_status = '待校对' "
+            "and exists(select 1 from import_record_edit_locks l "
+            "  where l.import_record_id = import_records.id and l.user_id = $3::uuid "
+            "  and l.user_session_id = $4::uuid and l.lock_token_hash = $5 and l.expires_at > now()) "
+            "returning id",
+            import_record_id, parsed_json_text, edit_lock->user_id, edit_lock->session_id,
+            auth::sha256_hex(edit_lock->lock_token))
+        : db_client_->execSqlSync(
+            "update import_records "
+            "set parsed_result_json = $2::jsonb, updated_at = now() "
+            "where id = $1::uuid and import_status = '待校对' returning id",
+            import_record_id, parsed_json_text);
+    return !result.empty();
+}
+
+bool ReviewRepository::cancel_import_record(
+    const std::string& import_record_id,
+    const std::optional<EditLockCredentials>& edit_lock
+) {
+    const auto result = edit_lock.has_value()
+        ? db_client_->execSqlSync(
+            "with updated as ("
+            "  update import_records set import_status = '已取消', updated_at = now() "
+            "  where id = $1::uuid and import_status in ('已上传', '解析中', '待校对', '解析失败') "
+            "  and reopened_at is null and exists(select 1 from import_record_edit_locks l "
+            "    where l.import_record_id = import_records.id and l.user_id = $2::uuid "
+            "    and l.user_session_id = $3::uuid and l.lock_token_hash = $4 and l.expires_at > now()) "
+            "  returning id"
+            ") delete from import_record_edit_locks l using updated u "
+            "where l.import_record_id = u.id and l.user_id = $2::uuid and l.user_session_id = $3::uuid "
+            "and l.lock_token_hash = $4 returning l.import_record_id",
+            import_record_id, edit_lock->user_id, edit_lock->session_id,
+            auth::sha256_hex(edit_lock->lock_token))
+        : db_client_->execSqlSync(
+            "update import_records set import_status = '已取消', updated_at = now() "
+            "where id = $1::uuid and import_status in ('已上传', '解析中', '待校对', '解析失败') "
+            "and reopened_at is null returning id",
+            import_record_id);
+    return !result.empty();
+}
+
+bool ReviewRepository::reopen_import_record(
+    const std::string& import_record_id,
+    const std::string& scope,
+    const std::string& username
+) {
     const auto result = db_client_->execSqlSync(
         "update import_records "
-        "set parsed_result_json = $2::jsonb, updated_at = now() "
-        "where id = $1::uuid "
-        "and import_status = '待校对' "
+        "set import_status = '待校对', reopened_at = now(), reopened_by_username = $2, "
+        "    reopen_scope = $3, reopen_backup_parsed_result_json = parsed_result_json, "
+        "    updated_at = now() "
+        "where id = $1::uuid and import_status = '已确认' "
         "returning id",
         import_record_id,
-        parsed_json_text
+        username,
+        scope
     );
     return !result.empty();
 }
 
-bool ReviewRepository::cancel_import_record(const std::string& import_record_id) {
-    const auto result = db_client_->execSqlSync(
-        "update import_records "
-        "set import_status = '已取消', updated_at = now() "
-        "where id = $1::uuid "
-        "and import_status in ('已上传', '解析中', '待校对', '解析失败') "
-        "returning id",
-        import_record_id
-    );
+bool ReviewRepository::restore_reopened_import_record(
+    const std::string& import_record_id,
+    const std::optional<EditLockCredentials>& edit_lock
+) {
+    // coalesce 兜底：备份列理论上在重开态必非空（reopen 时同步快照），
+    // 万一为空则保留现草稿，宁可多显示修改也不清空数据。
+    const std::string update_sql =
+        "update import_records set import_status = '已确认', "
+        "parsed_result_json = coalesce(reopen_backup_parsed_result_json, parsed_result_json), "
+        "reopened_at = null, reopened_by_username = null, reopen_scope = null, "
+        "reopen_backup_parsed_result_json = null, updated_at = now() ";
+    const auto result = edit_lock.has_value()
+        ? db_client_->execSqlSync(
+            "with updated as (" + update_sql +
+            "  where id = $1::uuid and import_status = '待校对' and reopened_at is not null "
+            "  and exists(select 1 from import_record_edit_locks l "
+            "    where l.import_record_id = import_records.id and l.user_id = $2::uuid "
+            "    and l.user_session_id = $3::uuid and l.lock_token_hash = $4 and l.expires_at > now()) "
+            "  returning id"
+            ") delete from import_record_edit_locks l using updated u "
+            "where l.import_record_id = u.id and l.user_id = $2::uuid and l.user_session_id = $3::uuid "
+            "and l.lock_token_hash = $4 returning l.import_record_id",
+            import_record_id, edit_lock->user_id, edit_lock->session_id,
+            auth::sha256_hex(edit_lock->lock_token))
+        : db_client_->execSqlSync(
+            update_sql +
+            "where id = $1::uuid and import_status = '待校对' and reopened_at is not null returning id",
+            import_record_id);
     return !result.empty();
 }
 
@@ -543,7 +630,8 @@ bool ReviewRepository::has_current_annual_facts(const std::string& bridge_id, in
 ConfirmOutcome ReviewRepository::confirm_annual_facts(
     const std::string& import_record_id,
     bool confirm_revision,
-    const std::string& confirmation_note
+    const std::string& confirmation_note,
+    const std::optional<EditLockCredentials>& edit_lock
 ) {
     // db_client_ 必须是裸 DbClient（不能已经是另一个 Transaction）——newTransaction()
     // 在一个 Transaction 上调用不构成合法的嵌套事务，调用方（路由层 / 测试）需保证这一点。
@@ -591,6 +679,20 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
                 "import_record_wrong_status",
                 "导入记录当前状态为「" + import_status + "」，不是待校对，无法入库。"
             );
+        }
+        if (edit_lock.has_value()) {
+            const auto lock_result = tx->execSqlSync(
+                "select exists(select 1 from import_record_edit_locks "
+                "where import_record_id = $1::uuid and user_id = $2::uuid and user_session_id = $3::uuid "
+                "and lock_token_hash = $4 and expires_at > now()) as active",
+                import_record_id,
+                edit_lock->user_id,
+                edit_lock->session_id,
+                auth::sha256_hex(edit_lock->lock_token)
+            );
+            if (lock_result.empty() || !lock_result[0]["active"].as<bool>()) {
+                return fail("edit_lock_invalid", "编辑锁已失效，确认入库事务已回滚。");
+            }
         }
         const auto bridge_id = record_row["bridge_id"].as<std::string>();
         const auto existing_inspection_year_id = optional_text(record_row, "inspection_year_id");
@@ -782,12 +884,15 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         written_json["condition_ratings"] = written_condition_ratings;
         written_json["component_condition_ratings"] = written_component_ratings;
 
+        // 重开列一并清空：重开后的再确认（修订版）完成即退出重开态，备份快照不再需要。
         tx->execSqlSync(
             "update import_records "
             "set import_status = '已确认', finished_at = now(), inspection_year_id = $2::uuid, "
             "    validation_result_json = jsonb_build_object("
             "        'confirmed_at', now(), 'confirmation_note', $3::text, 'written', $4::jsonb"
             "    ), "
+            "    reopened_at = null, reopened_by_username = null, reopen_scope = null, "
+            "    reopen_backup_parsed_result_json = null, "
             "    updated_at = now() "
             "where id = $1::uuid",
             import_record_id,
@@ -811,6 +916,21 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
                 *existing_inspection_year_id,
                 target_year_id
             );
+        }
+
+        if (edit_lock.has_value()) {
+            const auto released = tx->execSqlSync(
+                "delete from import_record_edit_locks "
+                "where import_record_id = $1::uuid and user_id = $2::uuid and user_session_id = $3::uuid "
+                "and lock_token_hash = $4 returning import_record_id",
+                import_record_id,
+                edit_lock->user_id,
+                edit_lock->session_id,
+                auth::sha256_hex(edit_lock->lock_token)
+            );
+            if (released.empty()) {
+                return fail("edit_lock_invalid", "编辑锁在确认入库期间失效，事务已回滚。");
+            }
         }
 
         ConfirmOutcome outcome;

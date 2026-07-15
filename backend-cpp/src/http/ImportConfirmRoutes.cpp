@@ -8,6 +8,9 @@
 #include <json/json.h>
 
 #include "bridge_report/db/ReviewRepository.hpp"
+#include "bridge_report/db/EditLockRepository.hpp"
+#include "bridge_report/http/AuthRoutes.hpp"
+#include "bridge_report/http/EditLockRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
 #include "bridge_report/review/ConfirmPlan.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
@@ -27,7 +30,7 @@ void register_preflight_confirm_route(const drogon::orm::DbClientPtr& db_client)
     drogon::app().registerHandler(
         "/api/import-records/{import_record_id}/preflight-confirm",
         [db_client](
-            const drogon::HttpRequestPtr&,
+            const drogon::HttpRequestPtr& request,
             HttpCallback&& callback,
             const std::string& import_record_id
         ) {
@@ -37,6 +40,15 @@ void register_preflight_confirm_route(const drogon::orm::DbClientPtr& db_client)
             }
 
             try {
+                const auto user = authenticate_request(db_client, request);
+                if (!user.has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                if (!require_active_edit_lock(db_client, request, import_record_id, *user, callback)) {
+                    return;
+                }
+
                 db::ReviewRepository repository(db_client);
                 const auto detail = repository.get_import_record_detail(import_record_id);
                 if (!detail.has_value()) {
@@ -115,6 +127,14 @@ void respond_confirm_outcome_failure(const HttpCallback& callback, const db::Con
         );
         return;
     }
+    if (outcome.error_code == "edit_lock_invalid") {
+        respond_json(
+            callback,
+            make_error_body(outcome.error_code, "编辑锁已失效，确认入库未执行，请刷新页面。"),
+            drogon::k409Conflict
+        );
+        return;
+    }
     if (outcome.error_code == "database_commit_failed") {
         respond_json(callback, make_error_body(outcome.error_code, "数据库提交失败，请刷新后确认实际状态。"),
                      drogon::k500InternalServerError);
@@ -161,6 +181,15 @@ void register_confirm_route(const drogon::orm::DbClientPtr& db_client) {
             const std::string confirmation_note = confirmation_note_from_body(body_json.get());
 
             try {
+                const auto user = authenticate_request(db_client, request);
+                if (!user.has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                if (!require_active_edit_lock(db_client, request, import_record_id, *user, callback)) {
+                    return;
+                }
+
                 db::ReviewRepository repository(db_client);
                 const auto detail = repository.get_import_record_detail(import_record_id);
                 if (!detail.has_value()) {
@@ -169,7 +198,11 @@ void register_confirm_route(const drogon::orm::DbClientPtr& db_client) {
                 }
 
                 const auto outcome = repository.confirm_annual_facts(
-                    import_record_id, confirm_revision, confirmation_note
+                    import_record_id,
+                    confirm_revision,
+                    confirmation_note,
+                    db::EditLockCredentials{
+                        user->id, user->session_id, edit_lock_token_from_request(request)}
                 );
 
                 if (!outcome.success) {

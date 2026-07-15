@@ -1,7 +1,9 @@
 #include "bridge_report/review/PreflightReport.hpp"
 
 #include <cmath>
+#include <iomanip>
 #include <optional>
+#include <sstream>
 #include <vector>
 
 #include "bridge_report/contracts/AnnualInspectionContract.hpp"
@@ -23,6 +25,12 @@ bool photo_number_has_confirmed_link(const Json::Value& data, const std::string&
 
 void add_issue(std::vector<PreflightIssue>& target, std::string code, std::string message, std::string candidate_id = std::string()) {
     target.push_back(PreflightIssue{std::move(code), std::move(message), std::move(candidate_id)});
+}
+
+std::string score_text(double value) {
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(2) << value;
+    return stream.str();
 }
 
 // -----------------------------------------------------------------------
@@ -380,7 +388,7 @@ void check_component_ratings(const Json::Value& data, std::vector<PreflightIssue
         }
 
         // 独立复算：C++ 在入库前重跑同一纯函数，不信任 Python 或前端结果。
-        // 扣分缺失或含非法值（如 0）时纯函数无结果，与解析器的"无法复算"语义一致。
+        // 扣分缺失或含 [0,100] 之外的非法值时纯函数无结果；0 是合法扣分。
         if (!references_valid) {
             continue;  // 引用已阻断，复算无意义。
         }
@@ -388,8 +396,23 @@ void check_component_ratings(const Json::Value& data, std::vector<PreflightIssue
             ? compute_component_score(deductions)
             : std::nullopt;
         const auto calculated = optional_numeric_member(rating, "calculated_score");
+        const auto confirmed = optional_numeric_member(rating, "confirmed_score");
         const bool stored_matches_recalc = recalculated.has_value() && calculated.has_value()
             && std::abs(recalculated->score - *calculated) <= 1e-6;
+        const auto require_confirmed_score = [&](double expected, const std::string& choice) {
+            const auto rounded_expected = round_score_to_two_decimals(expected);
+            if (!confirmed.has_value()
+                || round_score_to_two_decimals(*confirmed) != rounded_expected) {
+                const auto current = confirmed.has_value() ? score_text(*confirmed) : std::string("空");
+                add_issue(
+                    blocking,
+                    "component_score_confirmed_value_mismatch",
+                    "构件评分候选 " + rating_id + " 选择了「" + choice + "」，最终分应为 "
+                        + score_text(rounded_expected) + "，当前为 " + current + "。",
+                    rating_id
+                );
+            }
+        };
 
         if (validation_status == "无法复算") {
             if (recalculated.has_value()) {
@@ -420,6 +443,9 @@ void check_component_ratings(const Json::Value& data, std::vector<PreflightIssue
                           "构件评分候选 " + rating_id + " 的校验状态与来源分/复算分两位小数比较结论不符。",
                           rating_id);
             }
+            if (validation_status == "一致" && source.has_value() && expected_auto == "一致") {
+                require_confirmed_score(*source, "一致");
+            }
             continue;
         }
         if (validation_status == "人工采用复算值") {
@@ -427,6 +453,9 @@ void check_component_ratings(const Json::Value& data, std::vector<PreflightIssue
             if (!stored_matches_recalc) {
                 add_issue(blocking, "component_score_recalc_mismatch",
                           "构件评分候选 " + rating_id + " 采用复算值，但复算依据与后端独立复算不一致。", rating_id);
+            }
+            if (recalculated.has_value()) {
+                require_confirmed_score(recalculated->score, "人工采用复算值");
             }
             continue;
         }
@@ -440,6 +469,13 @@ void check_component_ratings(const Json::Value& data, std::vector<PreflightIssue
         } else if (calculated.has_value()) {
             add_issue(blocking, "component_score_recalc_mismatch",
                       "构件评分候选 " + rating_id + " 记录了复算分但扣分证据已不可复算，请重新校对。", rating_id);
+        }
+        const auto source = optional_numeric_member(rating, "source_score");
+        if (!source.has_value()) {
+            add_issue(blocking, "component_score_confirmed_value_mismatch",
+                      "构件评分候选 " + rating_id + " 选择了「人工接受Word值」，但 Word 来源分为空。", rating_id);
+        } else {
+            require_confirmed_score(*source, "人工接受Word值");
         }
     }
 }

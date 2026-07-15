@@ -52,6 +52,14 @@ def test_ordered_deductions_are_descending() -> None:
     assert result.ordered_deductions == [25.0, 20.0, 15.0]
 
 
+def test_zero_deductions_are_valid() -> None:
+    assert compute_component_score([0]).score == 100.0
+    assert compute_component_score([0, 0]).score == 100.0
+    assert compute_component_score([35, 0]).score == 65.0
+    assert round2(compute_component_score([35, 20, 0]).score) == 55.81
+    assert compute_component_score([100, 0]).score == 0.0
+
+
 def test_classify_score_validation() -> None:
     assert classify_score_validation(None, None) == "无法复算"
     assert classify_score_validation(55.81, None) == "无法复算"

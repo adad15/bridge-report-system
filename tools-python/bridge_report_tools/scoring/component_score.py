@@ -42,14 +42,14 @@ def round2(value: float) -> float:
 def compute_component_score(deductions: Sequence[float]) -> ComponentScoreResult | None:
     """按第 4.1.1 条累计扣分计算构件评分。
 
-    输入为空或任一扣分不在 (0, 100] 内时无法计算，返回 None。
+    输入为空或任一扣分不在 [0, 100] 内时无法计算，返回 None。
     输入顺序不影响结果：内部先降序排序再累计。
     """
     values = [float(value) for value in deductions]
     if not values:
         return None
     for value in values:
-        if not 0 < value <= 100:
+        if not 0 <= value <= 100:
             return None
 
     ordered = sorted(values, reverse=True)

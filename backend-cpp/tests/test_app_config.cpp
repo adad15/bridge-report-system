@@ -84,6 +84,9 @@ TEST(CorsTest, AppliesLocalFrontendCorsHeaders) {
     bridge_report::http::apply_local_dev_cors_headers(response);
 
     EXPECT_EQ(response->getHeader("Access-Control-Allow-Origin"), "http://127.0.0.1:5173");
-    EXPECT_EQ(response->getHeader("Access-Control-Allow-Methods"), "GET, PUT, POST, OPTIONS");
-    EXPECT_EQ(response->getHeader("Access-Control-Allow-Headers"), "Content-Type");
+    EXPECT_EQ(response->getHeader("Access-Control-Allow-Methods"), "GET, PUT, POST, DELETE, OPTIONS");
+    EXPECT_EQ(
+        response->getHeader("Access-Control-Allow-Headers"),
+        "Content-Type, Authorization, X-Edit-Lock-Token"
+    );
 }

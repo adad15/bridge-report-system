@@ -31,6 +31,12 @@ export interface ImportRecordSummary {
   inspection_year_id: string | null;
   importer_name: string | null;
   created_at: string;
+  edit_lock: {
+    owner_username: string;
+    owner_display_name: string;
+    acquired_at: string;
+    expires_at: string;
+  } | null;
 }
 
 export async function fetchBridges(baseUrl: string): Promise<BridgeSummary[]> {

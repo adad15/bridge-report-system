@@ -17,7 +17,7 @@ struct ComponentScoreResult {
     std::vector<double> ordered_deductions;
 };
 
-// 输入为空或任一扣分不在 (0, 100] 内时无法计算，返回空。
+// 输入为空或任一扣分不在 [0, 100] 内时无法计算，返回空。
 // 输入顺序不影响结果：内部先降序排序再累计；任一 DP=100 时评分为 0。
 std::optional<ComponentScoreResult> compute_component_score(const std::vector<double>& deductions);
 

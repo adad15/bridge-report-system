@@ -89,6 +89,12 @@ describe("navigationApi", () => {
             inspection_year_id: null,
             importer_name: "张三",
             created_at: "2026-07-01T00:00:00+08:00",
+            edit_lock: {
+              owner_username: "zhang",
+              owner_display_name: "张工",
+              acquired_at: "2026-07-01T01:00:00+08:00",
+              expires_at: "2026-07-01T01:02:00+08:00",
+            },
           },
         ],
       }),
@@ -108,6 +114,12 @@ describe("navigationApi", () => {
         inspection_year_id: null,
         importer_name: "张三",
         created_at: "2026-07-01T00:00:00+08:00",
+        edit_lock: {
+          owner_username: "zhang",
+          owner_display_name: "张工",
+          acquired_at: "2026-07-01T01:00:00+08:00",
+          expires_at: "2026-07-01T01:02:00+08:00",
+        },
       },
     ]);
   });

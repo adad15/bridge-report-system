@@ -42,6 +42,79 @@ body {
   border-bottom-color: #2456c9;
 }
 
+/* 顶栏右侧的当前用户区：显示名 + 角色徽章 + 退出登录。 */
+.top-nav-user {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #18202a;
+}
+
+.role-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.role-badge.role-admin {
+  background: #e8effc;
+  color: #2456c9;
+}
+
+.role-badge.role-normal {
+  background: #eef2f6;
+  color: #5b6674;
+}
+
+.top-nav-logout {
+  border: 1px solid #d9e0e8;
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: #5b6674;
+}
+
+.top-nav-logout:hover {
+  color: #18202a;
+  border-color: #b9c4d0;
+}
+
+/* 登录页：单卡片居中，表单纵向排布。 */
+.login-panel {
+  max-width: 420px;
+  margin: 64px auto 0;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  color: #18202a;
+}
+
+.login-form input {
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.login-form button {
+  margin-top: 6px;
+}
+
 .status-panel {
   width: 100%;
   box-sizing: border-box;
@@ -195,6 +268,24 @@ body {
 .app-content-workbench > .status-panel {
   width: min(880px, calc(100% - 48px));
   margin: 24px auto;
+}
+
+/* 重开校对态横幅：黄底提示条，编辑态下常驻在页眉与主体之间。 */
+.review-reopen-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #fdf6e3;
+  border-bottom: 1px solid #ecd9a0;
+  color: #7a5a12;
+  padding: 8px 20px;
+  font-size: 14px;
+}
+
+.review-reopen-meta {
+  color: #a08540;
+  white-space: nowrap;
 }
 
 .review-workspace {
@@ -739,11 +830,13 @@ body {
   margin-top: 0;
 }
 
-.controls-disabled input,
-.controls-disabled select,
-.controls-disabled button {
-  pointer-events: none;
+/* 禁用视觉态：现在由各控件自身的 disabled 属性驱动（逐控件禁用），
+   查看类控件（查看照片 toggle、缩略图）不再被一揽子 pointer-events 杀掉。 */
+.defect-photo-section input:disabled,
+.defect-photo-section select:disabled,
+.defect-photo-section button:disabled {
   opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .review-disabled-fieldset {
@@ -1408,4 +1501,28 @@ body {
   gap: 8px;
   margin: 10px 0;
   font-size: 14px;
+}
+.review-edit-lock-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid #b9c9d8;
+  border-radius: 8px;
+  background: #eef6fb;
+  color: #1f3f56;
+}
+
+.review-edit-lock-held {
+  border-color: #8fc5a7;
+  background: #edf8f1;
+  color: #205b38;
+}
+
+.review-edit-lock-blocked,
+.review-edit-lock-lost,
+.review-edit-lock-uncertain {
+  border-color: #d8b46f;
+  background: #fff7e8;
+  color: #714f14;
 }

@@ -11,6 +11,7 @@
 
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
+#include "bridge_report/db/EditLockRepository.hpp"
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/review/ConfirmPlan.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
@@ -537,6 +538,9 @@ protected:
             );
             client_->execSqlSync("delete from import_records where id = $1::uuid", import_record_id_);
         }
+        for (const auto& user_id : tracked_user_ids_) {
+            client_->execSqlSync("delete from users where id = $1::uuid", user_id);
+        }
         if (!photo_archived_file_id_.empty()) {
             client_->execSqlSync("delete from archived_files where id = $1::uuid", photo_archived_file_id_);
         }
@@ -579,6 +583,7 @@ protected:
     std::string placeholder_year_id_;
     std::string photo_archived_file_id_;
     std::vector<std::string> tracked_year_ids_;
+    std::vector<std::string> tracked_user_ids_;
 };
 
 }  // 匿名命名空间
@@ -597,6 +602,73 @@ TEST_F(ConfirmAnnualFactsTest, ReadsLatestJsonInsteadOfCallerSnapshot) {
         import_record_id_);
     ASSERT_EQ(rows.size(), 1u);
     EXPECT_EQ(rows[0]["business_component_code"].as<std::string>(), "事务内最新构件");
+}
+
+TEST_F(ConfirmAnnualFactsTest, ConfirmationRechecksAndReleasesEditLockInsideFactTransaction) {
+    const auto user_rows = client_->execSqlSync(
+        "insert into users (username, display_name, password_hash, role) "
+        "values ($1, '确认锁测试员', 'test', 'normal') returning id::text as id",
+        "m06_confirm_lock_" + import_record_id_.substr(0, 8));
+    const auto user_id = user_rows[0]["id"].as<std::string>();
+    tracked_user_ids_.push_back(user_id);
+    const auto session_rows = client_->execSqlSync(
+        "insert into user_sessions (user_id, token_hash, expires_at) "
+        "values ($1::uuid, $2, now() + interval '1 hour') returning id::text as id",
+        user_id, "m06-confirm-session-" + import_record_id_);
+    bridge_report::db::AuthUser user{
+        user_id,
+        session_rows[0]["id"].as<std::string>(),
+        "m06_confirm_lock",
+        "确认锁测试员",
+        "normal",
+    };
+    bridge_report::db::EditLockRepository lock_repository(client_);
+    const auto acquired = lock_repository.acquire(import_record_id_, user);
+    ASSERT_TRUE(acquired.acquired);
+
+    bridge_report::db::ReviewRepository repository(client_);
+    const auto outcome = repository.confirm_annual_facts(
+        import_record_id_,
+        false,
+        "确认并释放锁",
+        bridge_report::db::EditLockCredentials{user.id, user.session_id, acquired.lock_token});
+
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+    EXPECT_FALSE(lock_repository.get_active(import_record_id_).has_value());
+    const auto state = client_->execSqlSync(
+        "select import_status from import_records where id = $1::uuid", import_record_id_);
+    EXPECT_EQ(state[0]["import_status"].as<std::string>(), "已确认");
+}
+
+TEST_F(ConfirmAnnualFactsTest, InvalidEditLockRollsBackBeforeWritingFacts) {
+    const auto user_rows = client_->execSqlSync(
+        "insert into users (username, display_name, password_hash, role) "
+        "values ($1, '错误锁测试员', 'test', 'normal') returning id::text as id",
+        "m06_invalid_lock_" + import_record_id_.substr(0, 8));
+    const auto user_id = user_rows[0]["id"].as<std::string>();
+    tracked_user_ids_.push_back(user_id);
+    const auto session_rows = client_->execSqlSync(
+        "insert into user_sessions (user_id, token_hash, expires_at) "
+        "values ($1::uuid, $2, now() + interval '1 hour') returning id::text as id",
+        user_id, "m06-invalid-session-" + import_record_id_);
+
+    bridge_report::db::ReviewRepository repository(client_);
+    const auto outcome = repository.confirm_annual_facts(
+        import_record_id_,
+        false,
+        "不应入库",
+        bridge_report::db::EditLockCredentials{
+            user_id, session_rows[0]["id"].as<std::string>(), "not-a-real-lock-token"});
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "edit_lock_invalid");
+    const auto state = client_->execSqlSync(
+        "select import_status from import_records where id = $1::uuid", import_record_id_);
+    EXPECT_EQ(state[0]["import_status"].as<std::string>(), "待校对");
+    const auto facts = client_->execSqlSync(
+        "select count(*) as count from defect_observations where source_import_record_id = $1::uuid",
+        import_record_id_);
+    EXPECT_EQ(facts[0]["count"].as<long long>(), 0);
 }
 
 TEST_F(ConfirmAnnualFactsTest, ReturnsTransactionTimePreflightDetailsForPendingLatestDraft) {
