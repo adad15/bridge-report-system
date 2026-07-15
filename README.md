@@ -266,6 +266,20 @@ archived Word and exposes a retry action without another upload. Word uploads
 default to a 256 MiB limit (`archive.word_upload_max_bytes`) and responses never
 expose archive paths.
 
+Administrators can also use `更多 → 删除年度` in the annual workspace. This is
+an irreversible C1 deletion: selecting any revision permanently removes every
+version for the same bridge and year. The warning dialog first loads a live
+impact preview, shows affected facts/files, requires a reason and the exact
+confirmation text, and remains disabled while an import record has an active
+edit lock. Shared archive files are retained; exclusive files are removed after
+the database transaction through a retryable cleanup queue, while the deletion
+audit is kept permanently.
+
+```text
+GET    /api/inspection-years/{inspection_year_id}/deletion-impact  # admin-only live preview
+DELETE /api/inspection-years/{inspection_year_id}                  # admin-only C1 permanent deletion
+```
+
 ## Module 06 Component Defect Archive
 
 Module 06 organizes confirmed annual facts into a read-only component defect

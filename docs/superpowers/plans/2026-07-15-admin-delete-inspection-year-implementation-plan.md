@@ -1,5 +1,7 @@
 # 管理员永久删除年度检测实施计划
 
+> 实施状态：已完成（2026-07-15）。数据库迁移与烟雾测试、C++ + PostgreSQL 303 项、前端 244 项、Python 115 项（1 项环境门控跳过）、C++ Debug 全量链接及前端生产构建均通过。
+
 > 日期：2026-07-15
 >
 > 设计真源：`docs/superpowers/specs/modules/06-5-admin-delete-inspection-year.md`
@@ -184,4 +186,3 @@ Task 6 + Task 8 ─ Task 9
 - 审计与失败文件队列可追踪；
 - API 不泄漏路径；
 - 全量测试、构建、真实 Word 回归和保护目录审计通过。
-
