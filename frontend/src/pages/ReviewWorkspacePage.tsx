@@ -37,6 +37,7 @@ import { buildStatistics, needsAttention } from "../review/grouping";
 import type { ReviewDraftAction } from "../review/reviewDraft";
 import { reviewDraftReducer } from "../review/reviewDraft";
 import { deriveReviewSession, shouldClearDirtyAfterSave } from "../review/reviewSession";
+import { bridgeOverviewPath, inspectionWorkspacePath } from "../workspace/workspaceState";
 
 export function ReviewWorkspacePage() {
   const { importRecordId } = useParams<{ importRecordId: string }>();
@@ -177,6 +178,12 @@ function ReviewWorkspaceLoaded({
   // 已确认 + 原生 1.2 才能重开；旧版终态（legacy_read_only）永久只读。
   const canReopen = sessionImportStatus === "已确认" && response.contract_compatibility === "native_1_2" && !busy;
   const needsEditLock = !reviewSession.readOnly;
+  const returnPath = response.inspection_year
+    ? inspectionWorkspacePath(response.bridge.id, response.inspection_year.id)
+    : bridgeOverviewPath(response.bridge.id);
+  const returnLabel = response.inspection_year
+    ? `返回 ${response.inspection_year.inspection_year} 年度工作台`
+    : "返回桥梁概览";
 
   function rememberLock(token: string, summary: EditLockSummary): void {
     lockTokenRef.current = token;
@@ -420,7 +427,7 @@ function ReviewWorkspaceLoaded({
       if (lockToken === null) return;
       await cancelImport(backendBaseUrl, importRecordId, lockToken);
       forgetLock("not_required");
-      navigate(`/bridges/${response.bridge.id}`);
+      navigate(returnPath);
     } catch (caught) {
       setSaveMessage({
         kind: "error",
@@ -489,7 +496,7 @@ function ReviewWorkspaceLoaded({
       }
       forgetLock("not_required");
     }
-    navigate(`/bridges/${response.bridge.id}`);
+    navigate(returnPath);
   }
 
   async function handleForceRelease(): Promise<void> {
@@ -601,6 +608,7 @@ function ReviewWorkspaceLoaded({
           dirty={dirty}
           readOnlyNotice={readOnlyNotice}
           onBackToBridge={() => void handleBackToBridge()}
+          backLabel={returnLabel}
           onSaveDraft={actionsDisabled ? undefined : () => void handleSaveDraft(draft)}
           onBatchConfirmNormal={
             // warnings_only 重开态隐藏批量确认：该操作会批量改动评分候选，超出"修正警告病害"的语义。

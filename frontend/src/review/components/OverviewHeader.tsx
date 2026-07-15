@@ -29,9 +29,9 @@ export function OverviewHeader({ response, draft, counts }: OverviewHeaderProps)
   return (
     <header className="review-header">
       <div className="review-header-main">
-        <h1>校对工作台 · {bridge.bridge_name}</h1>
+        <h1>{inspection_year ? `${inspection_year.inspection_year} 年度检测` : "导入资料"} · {import_record.source_type}校对</h1>
         <span className="review-header-sub">
-          {inspection_year ? `${inspection_year.inspection_year} 年` : "-"} · {import_record.system_number}
+          {bridge.bridge_name} · {import_record.system_number}
         </span>
         <span className={statusBadgeClass(import_record.import_status)}>{import_record.import_status}</span>
         <button

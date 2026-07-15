@@ -9,6 +9,7 @@ interface ReviewActionBarProps {
   dirty?: boolean;
   readOnlyNotice?: string;
   onBackToBridge?: () => void;
+  backLabel?: string;
   /** 已确认只读态的重开入口：存在带警告病害时对所有登录用户开放。 */
   onReopenWarnings?: () => void;
   /** 已确认只读态的重开入口：仅管理员（解锁全部修改）。 */
@@ -29,6 +30,7 @@ export function ReviewActionBar({
   dirty = false,
   readOnlyNotice,
   onBackToBridge,
+  backLabel = "返回桥梁详情",
   onReopenWarnings,
   onReopenFull,
 }: ReviewActionBarProps) {
@@ -47,7 +49,7 @@ export function ReviewActionBar({
           </button>
         ) : null}
         <button type="button" onClick={onBackToBridge}>
-          返回桥梁详情
+          {backLabel}
         </button>
       </div>
     );
@@ -55,6 +57,9 @@ export function ReviewActionBar({
 
   return (
     <div className="review-action-bar">
+      <button type="button" disabled={!onBackToBridge} onClick={onBackToBridge}>
+        {backLabel}
+      </button>
       {onAbandonReopen ? (
         <button type="button" className="review-action-cancel" onClick={onAbandonReopen}>
           放弃修改

@@ -56,4 +56,11 @@ describe("ReviewActionBar", () => {
     await userEvent.click(screen.getByRole("button", { name: "放弃修改" }));
     expect(onAbandonReopen).toHaveBeenCalledTimes(1);
   });
+
+  it("uses the annual workspace return label when supplied", async () => {
+    const onBack = vi.fn();
+    render(<ReviewActionBar onBackToBridge={onBack} backLabel="返回 2026 年度工作台" />);
+    await userEvent.click(screen.getByRole("button", { name: "返回 2026 年度工作台" }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
 });
