@@ -42,7 +42,7 @@ std::optional<WordImportContext> WordImportRepository::load_context(
         "left join inspection_years iy on iy.id = ir.inspection_year_id "
         "join archived_files af on af.id = ir.main_file_id and af.bridge_id = ir.bridge_id "
         "and (af.inspection_year_id is null or af.inspection_year_id = ir.inspection_year_id) "
-        "and af.file_type = 'Word文档' where ir.id = $1::uuid",
+        "and af.file_type = 'Word文档' where ir.id = $1::uuid and iy.is_current",
         import_record_id
     );
     if (rows.empty()) return std::nullopt;
@@ -76,7 +76,7 @@ std::optional<WordImportContext> WordImportRepository::load_context(
 bool WordImportRepository::mark_parsing(const std::string& import_record_id) {
     const auto result = db_client_->execSqlSync(
         "update import_records set import_status = '解析中', started_at = now(), error_message = null, updated_at = now() "
-        "where id = $1::uuid and import_status in ('已上传', '解析失败', '待校对') returning id",
+        "where id = $1::uuid and import_status in ('已上传', '解析失败') returning id",
         import_record_id
     );
     return !result.empty();
@@ -94,10 +94,7 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
         const auto locked = tx->execSqlSync(
             "select bridge_id::text as bridge_id, inspection_year_id::text as inspection_year_id, import_status "
             "from import_records where id = $1::uuid for update", import_record_id);
-        if (locked.empty() || (locked[0]["import_status"].as<std::string>() != "解析中"
-            && locked[0]["import_status"].as<std::string>() != "已上传"
-            && locked[0]["import_status"].as<std::string>() != "解析失败"
-            && locked[0]["import_status"].as<std::string>() != "待校对")) {
+        if (locked.empty() || locked[0]["import_status"].as<std::string>() != "解析中") {
             tx->rollback();
             outcome.error_code = "import_record_wrong_status";
             return outcome;

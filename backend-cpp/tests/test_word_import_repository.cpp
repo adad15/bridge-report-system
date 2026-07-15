@@ -1,4 +1,6 @@
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -22,7 +24,7 @@ protected:
         bridge_id_ = bridge[0]["id"].as<std::string>();
         const auto year = client_->execSqlSync(
             "insert into inspection_years (bridge_id, inspection_year, status, is_current) "
-            "values ($1::uuid, 2026, '待校对', false) returning id", bridge_id_);
+            "values ($1::uuid, 2026, '待校对', true) returning id", bridge_id_);
         year_id_ = year[0]["id"].as<std::string>();
         const auto main_file = client_->execSqlSync(
             "insert into archived_files (bridge_id, inspection_year_id, original_file_name, current_file_name, "
@@ -35,6 +37,9 @@ protected:
             "values ($1::uuid, $2::uuid, 'Word导入事务测试', '软件导出Word', '解析中', $3::uuid) returning id",
             bridge_id_, year_id_, main_file_id_);
         import_id_ = record[0]["id"].as<std::string>();
+        archive_root_ = std::filesystem::temp_directory_path() / ("bridge-word-parse-" + import_id_);
+        std::filesystem::create_directories(archive_root_ / "tests");
+        std::ofstream(archive_root_ / "tests" / "report.docx", std::ios::binary) << "fake-docx";
     }
 
     void TearDown() override {
@@ -44,6 +49,7 @@ protected:
         client_->execSqlSync("delete from inspection_years where id = $1::uuid", year_id_);
         client_->execSqlSync("delete from bridges where id = $1::uuid", bridge_id_);
         client_->closeAll();
+        std::filesystem::remove_all(archive_root_);
     }
 
     drogon::orm::DbClientPtr client_;
@@ -51,6 +57,7 @@ protected:
     std::string year_id_;
     std::string main_file_id_;
     std::string import_id_;
+    std::filesystem::path archive_root_;
 };
 
 TEST_F(WordImportRepositoryTest, PersistsPhotosAndJsonInOneTransaction) {
@@ -78,6 +85,39 @@ TEST_F(WordImportRepositoryTest, PersistsPhotosAndJsonInOneTransaction) {
     EXPECT_EQ(rows[0]["importer_version"].as<std::string>(), "1.1.0");
     EXPECT_EQ(rows[0]["attachment_count"].as<long long>(), 1);
     EXPECT_NE(rows[0]["parsed"].as<std::string>().find("photos"), std::string::npos);
+}
+
+TEST_F(WordImportRepositoryTest, LoadsArchivedCurrentAnnualWordContext) {
+    bridge_report::db::WordImportRepository repository(client_);
+
+    const auto loaded = repository.load_context(import_id_, archive_root_);
+
+    ASSERT_TRUE(loaded.has_value());
+    EXPECT_EQ(loaded->bridge_id, bridge_id_);
+    EXPECT_EQ(loaded->inspection_year_id, year_id_);
+    EXPECT_EQ(loaded->inspection_year, 2026);
+    EXPECT_EQ(loaded->word_path, archive_root_ / "tests" / "report.docx");
+}
+
+TEST_F(WordImportRepositoryTest, ParsingOnlyStartsFromUploadedOrFailed) {
+    bridge_report::db::WordImportRepository repository(client_);
+
+    client_->execSqlSync("update import_records set import_status = '已上传' where id = $1::uuid", import_id_);
+    EXPECT_TRUE(repository.mark_parsing(import_id_));
+    EXPECT_FALSE(repository.mark_parsing(import_id_));
+
+    client_->execSqlSync("update import_records set import_status = '待校对' where id = $1::uuid", import_id_);
+    EXPECT_FALSE(repository.mark_parsing(import_id_));
+
+    client_->execSqlSync("update import_records set import_status = '解析失败' where id = $1::uuid", import_id_);
+    EXPECT_TRUE(repository.mark_parsing(import_id_));
+}
+
+TEST_F(WordImportRepositoryTest, NonCurrentAnnualWordCannotBeLoadedForParsing) {
+    bridge_report::db::WordImportRepository repository(client_);
+    client_->execSqlSync("update inspection_years set is_current = false where id = $1::uuid", year_id_);
+
+    EXPECT_FALSE(repository.load_context(import_id_, archive_root_).has_value());
 }
 
 }  // namespace
