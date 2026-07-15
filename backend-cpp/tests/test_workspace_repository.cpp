@@ -166,3 +166,27 @@ TEST_F(WorkspaceRepositoryTest, UnknownIdsReturnNoWorkspace) {
     EXPECT_FALSE(repository.get_bridge_overview("11111111-1111-1111-1111-111111111111").has_value());
     EXPECT_FALSE(repository.get_inspection_workspace("22222222-2222-2222-2222-222222222222").has_value());
 }
+
+TEST_F(WorkspaceRepositoryTest, CreatesAnnualInspectionAndReturnsExistingOnDuplicate) {
+    bridge_report::db::WorkspaceRepository repository(client_);
+
+    const auto created = repository.create_inspection_year(bridge_id_, 2030);
+    ASSERT_EQ(created.status, bridge_report::db::CreateInspectionYearStatus::Created);
+    ASSERT_TRUE(created.inspection_year.has_value());
+    EXPECT_EQ(created.inspection_year->inspection_year, 2030);
+    EXPECT_EQ(created.inspection_year->status, "待校对");
+    EXPECT_TRUE(created.inspection_year->is_current);
+
+    const auto duplicate = repository.create_inspection_year(bridge_id_, 2030);
+    ASSERT_EQ(duplicate.status, bridge_report::db::CreateInspectionYearStatus::AlreadyExists);
+    ASSERT_TRUE(duplicate.existing_inspection_year_id.has_value());
+    EXPECT_EQ(*duplicate.existing_inspection_year_id, created.inspection_year->id);
+}
+
+TEST_F(WorkspaceRepositoryTest, CreateAnnualInspectionRejectsUnknownBridge) {
+    bridge_report::db::WorkspaceRepository repository(client_);
+    const auto outcome = repository.create_inspection_year(
+        "11111111-1111-1111-1111-111111111111", 2030);
+    EXPECT_EQ(outcome.status, bridge_report::db::CreateInspectionYearStatus::BridgeNotFound);
+    EXPECT_FALSE(outcome.inspection_year.has_value());
+}

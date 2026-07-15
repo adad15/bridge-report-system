@@ -182,4 +182,46 @@ std::optional<review::InspectionWorkspace> WorkspaceRepository::get_inspection_w
     return workspace;
 }
 
+CreateInspectionYearOutcome WorkspaceRepository::create_inspection_year(
+    const std::string& bridge_id,
+    const int inspection_year
+) {
+    const auto bridge_rows = db_client_->execSqlSync(
+        "select 1 from bridges where id = $1::uuid", bridge_id);
+    if (bridge_rows.empty()) {
+        return {CreateInspectionYearStatus::BridgeNotFound, std::nullopt, std::nullopt};
+    }
+
+    const auto inserted_rows = db_client_->execSqlSync(
+        "insert into inspection_years (bridge_id, inspection_year, status, version_number, is_current) "
+        "values ($1::uuid, $2, '待校对', 1, true) "
+        "on conflict (bridge_id, inspection_year) where is_current do nothing "
+        "returning id::text as inspection_id, system_number as inspection_system_number, inspection_year, "
+        "status as inspection_status, version_number, is_current, overall_score, overall_grade, "
+        "created_at::text as inspection_created_at, updated_at::text as inspection_updated_at",
+        bridge_id, inspection_year);
+    if (!inserted_rows.empty()) {
+        return {
+            CreateInspectionYearStatus::Created,
+            inspection_from_row(inserted_rows[0]),
+            std::nullopt,
+        };
+    }
+
+    const auto existing_rows = db_client_->execSqlSync(
+        "select id::text from inspection_years "
+        "where bridge_id = $1::uuid and inspection_year = $2 and is_current limit 1",
+        bridge_id, inspection_year);
+    if (!existing_rows.empty()) {
+        return {
+            CreateInspectionYearStatus::AlreadyExists,
+            std::nullopt,
+            existing_rows[0]["id"].as<std::string>(),
+        };
+    }
+
+    // 理论上仅会在桥梁被并发删除时发生；对调用方仍按桥梁不存在处理。
+    return {CreateInspectionYearStatus::BridgeNotFound, std::nullopt, std::nullopt};
+}
+
 }  // namespace bridge_report::db
