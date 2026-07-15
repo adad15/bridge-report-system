@@ -9,6 +9,7 @@ import {
   fetchReview,
   forceReleaseEditLock,
   heartbeatEditLock,
+  parseWordImport,
   photoContentUrl,
   releaseEditLock,
   runPreflight,
@@ -385,5 +386,31 @@ describe("reviewApi", () => {
       body: JSON.stringify({ reason: "交接给夜班人员" }),
     }));
     expect(new Headers(fetchMock.mock.calls[3][1].headers).get("Content-Type")).toBe("application/json");
+  });
+
+  it("posts the fixed annual Word parse contract", async () => {
+    const response = {
+      parsed: true as const,
+      temporary_photo_file_count: 36,
+      photo_candidate_count: 31,
+      archived_photo_count: 31,
+    };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => response });
+    vi.stubGlobal("fetch", fetchMock);
+    const body = {
+      rule_profile: "辽宁国省干线" as const,
+      import_mode: "已有桥年度导入" as const,
+      file_role: "当前年度检测资料" as const,
+      data_role: "当前年度" as const,
+      inspection_date: "2026-05-18",
+      report_number: "BG-2026-001",
+      project_name: "绕阳河二号桥2026年度定期检测",
+    };
+
+    await expect(parseWordImport("http://127.0.0.1:18080", "record/1", body)).resolves.toEqual(response);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:18080/api/import-records/record%2F1/parse-word",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+    );
   });
 });

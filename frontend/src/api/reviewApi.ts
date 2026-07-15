@@ -117,8 +117,37 @@ export interface ConfirmRequestBody {
   confirmation_note: string;
 }
 
+export interface ParseWordImportRequest {
+  rule_profile: "辽宁国省干线";
+  import_mode: "已有桥年度导入";
+  file_role: "当前年度检测资料";
+  data_role: "当前年度";
+  inspection_date: string;
+  report_number: string;
+  project_name: string;
+}
+
+export interface ParseWordImportResponse {
+  parsed: true;
+  temporary_photo_file_count: number;
+  photo_candidate_count: number;
+  archived_photo_count: number;
+}
+
 function reviewRoute(importRecordId: string, suffix: string): string {
   return `/api/import-records/${encodeURIComponent(importRecordId)}${suffix}`;
+}
+
+export async function parseWordImport(
+  baseUrl: string,
+  importRecordId: string,
+  body: ParseWordImportRequest
+): Promise<ParseWordImportResponse> {
+  return request(`${baseUrl}${reviewRoute(importRecordId, "/parse-word")}`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  });
 }
 
 function lockHeaders(lockToken: string, includeJson = false): Headers {
