@@ -14,7 +14,9 @@ if ([string]::IsNullOrWhiteSpace($psqlExe)) {
 & $psqlExe $databaseUrl -v ON_ERROR_STOP=1 -f database/migrations/003_component_rating_validation_and_thread_binding.sql
 & $psqlExe $databaseUrl -v ON_ERROR_STOP=1 -f database/migrations/004_users_and_import_reopen.sql
 & $psqlExe $databaseUrl -v ON_ERROR_STOP=1 -f database/migrations/005_import_record_edit_locks.sql
+& $psqlExe $databaseUrl -v ON_ERROR_STOP=1 -f database/migrations/006_inspection_year_deletion.sql
 & $psqlExe $databaseUrl -v ON_ERROR_STOP=1 -f database/tests/002_core_schema_smoke.sql
 & $psqlExe $databaseUrl -v ON_ERROR_STOP=1 -f database/tests/003_component_rating_archive_smoke.sql
+& $psqlExe $databaseUrl -v ON_ERROR_STOP=1 -f database/tests/006_inspection_year_deletion_smoke.sql
 
 Write-Host "Module 06 database check passed."
