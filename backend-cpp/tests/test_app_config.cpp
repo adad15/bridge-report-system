@@ -37,6 +37,10 @@ std::filesystem::path write_config_file() {
     "cleanup_claim_timeout_seconds": 120,
     "cleanup_retry_base_seconds": 30,
     "cleanup_retry_max_seconds": 3600
+  },
+  "temporary_storage": {
+    "root": "test-runtime/word-imports",
+    "failed_word_retention_hours": 48
   }
 })json";
     return path;
@@ -53,6 +57,8 @@ TEST(AppConfigTest, LoadsConfiguredPortsAndArchiveRoot) {
     EXPECT_EQ(config.port, 19080);
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:19081");
     EXPECT_EQ(config.archive_root.generic_string(), "test-archive");
+    EXPECT_EQ(config.temporary_word_root.generic_string(), "test-runtime/word-imports");
+    EXPECT_EQ(config.failed_word_retention_hours, 48);
     EXPECT_EQ(config.word_upload_max_bytes, 1048576u);
     EXPECT_EQ(config.cleanup_interval_seconds, 60);
     EXPECT_EQ(config.cleanup_batch_size, 10);
@@ -73,6 +79,8 @@ TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
     EXPECT_EQ(config.port, 18080);
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:18081");
     EXPECT_EQ(config.archive_root.generic_string(), "archive");
+    EXPECT_EQ(config.temporary_word_root.generic_string(), "runtime/temp/word-imports");
+    EXPECT_EQ(config.failed_word_retention_hours, 24);
     EXPECT_EQ(config.word_upload_max_bytes, 256u * 1024u * 1024u);
     EXPECT_EQ(config.cleanup_interval_seconds, 300);
     EXPECT_EQ(config.cleanup_batch_size, 25);

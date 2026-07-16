@@ -25,6 +25,8 @@ struct AppConfig {
     int port{18080};
     std::string python_tools_base_url{"http://127.0.0.1:18081"};
     std::filesystem::path archive_root{"archive"};
+    std::filesystem::path temporary_word_root{"runtime/temp/word-imports"};
+    int failed_word_retention_hours{24};
     std::size_t word_upload_max_bytes{256ULL * 1024ULL * 1024ULL};
     int cleanup_interval_seconds{300};
     int cleanup_batch_size{25};

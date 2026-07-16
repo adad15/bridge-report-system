@@ -7,7 +7,7 @@
 #include <json/json.h>
 #include <trantor/utils/Logger.h>
 
-#include "bridge_report/archive/ArchivePaths.hpp"
+#include "bridge_report/archive/TemporaryWordStorage.hpp"
 #include "bridge_report/archive/WordInputArchive.hpp"
 #include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/db/ComponentArchiveRepository.hpp"
@@ -146,8 +146,10 @@ std::optional<review::InspectionWorkspace> WorkspaceRepository::get_inspection_w
         "select ir.id::text, ir.system_number, ir.import_name, ir.source_type, ir.import_status, "
         "ir.importer_name, ir.parsed_result_json::text, ir.created_at::text, ir.updated_at::text, "
         "u.username as lock_owner_username, u.display_name as lock_owner_display_name, "
-        "l.acquired_at::text as lock_acquired_at, l.expires_at::text as lock_expires_at "
+        "l.acquired_at::text as lock_acquired_at, l.expires_at::text as lock_expires_at, "
+        "sf.status as temporary_source_status, sf.expires_at::text as temporary_source_expires_at "
         "from import_records ir "
+        "left join import_source_files sf on sf.import_record_id=ir.id "
         "left join import_record_edit_locks l on l.import_record_id = ir.id and l.expires_at > now() "
         "left join users u on u.id = l.user_id "
         "where ir.inspection_year_id = $1::uuid order by ir.created_at desc", inspection_year_id);
@@ -162,6 +164,8 @@ std::optional<review::InspectionWorkspace> WorkspaceRepository::get_inspection_w
         item.importer_name = optional_text(row, "importer_name");
         item.created_at = optional_text(row, "created_at");
         item.updated_at = optional_text(row, "updated_at");
+        item.temporary_source_status = optional_text(row, "temporary_source_status");
+        item.temporary_source_expires_at = optional_text(row, "temporary_source_expires_at");
         item.statistics = review::build_review_statistics(
             parse_json_or_empty(row["parsed_result_json"].as<std::string>()));
         const auto owner_username = optional_text(row, "lock_owner_username");
@@ -234,7 +238,7 @@ UploadWordOutcome WorkspaceRepository::upload_word_import(
     const std::string& source_type,
     const archive::WordInputMetadata& metadata,
     const std::string_view content,
-    const std::filesystem::path& archive_root
+    const std::filesystem::path& temporary_word_root
 ) {
     std::shared_ptr<drogon::orm::Transaction> transaction;
     auto latch = std::make_shared<CommitLatch>();
@@ -267,42 +271,28 @@ UploadWordOutcome WorkspaceRepository::upload_word_import(
         const auto import_id = import_row["id"].as<std::string>();
         const auto import_number = import_row["system_number"].as<std::string>();
 
-        const auto archived_rows = transaction->execSqlSync(
-            "insert into archived_files (bridge_id, inspection_year_id, original_file_name, current_file_name, "
-            "storage_relative_path, file_type, file_purpose, file_extension, file_size_bytes, file_hash, "
-            "source_description) values ($1::uuid, $2::uuid, $3, $3, $4, 'Word文档', '导入主报告', "
-            "$5, $6, $7, '年度工作台上传') returning id::text, system_number",
-            context["bridge_id"].as<std::string>(), inspection_year_id, metadata.original_file_name,
-            "pending/" + import_id, metadata.file_extension,
+        const auto source_rows = transaction->execSqlSync(
+            "with source_id as (select gen_random_uuid() as id) "
+            "insert into import_source_files "
+            "(id, import_record_id, original_file_name, storage_relative_path, file_extension, "
+            " file_size_bytes, file_hash, status) "
+            "select id, $1::uuid, $2, id::text || '.docx', $3, $4, $5, '待解析' from source_id "
+            "returning id::text, system_number, storage_relative_path",
+            import_id, metadata.original_file_name, metadata.file_extension,
             static_cast<long long>(metadata.file_size_bytes), metadata.sha256);
-        const auto archived_file_id = archived_rows[0]["id"].as<std::string>();
-        const auto file_number = archived_rows[0]["system_number"].as<std::string>();
-        stored_relative_path = archive::build_import_input_relative_path(
-            context["bridge_system_number"].as<std::string>(),
-            context["bridge_name"].as<std::string>(),
-            context["inspection_year"].as<int>(),
-            import_number,
-            metadata.original_file_name,
-            file_number,
-            metadata.original_file_name);
+        stored_relative_path = std::filesystem::path(
+            source_rows[0]["storage_relative_path"].as<std::string>());
 
-        archive::archive_word_input(archive_root, stored_relative_path, content, metadata.sha256);
+        archive::store_temporary_word(
+            temporary_word_root, stored_relative_path, content, metadata.sha256);
         file_stored = true;
-        transaction->execSqlSync(
-            "update archived_files set storage_relative_path = $2 where id = $1::uuid",
-            archived_file_id, stored_relative_path.generic_string());
-        transaction->execSqlSync(
-            "insert into import_record_files (import_record_id, archived_file_id, file_role, process_status) "
-            "values ($1::uuid, $2::uuid, '主报告', '待处理')",
-            import_id, archived_file_id);
-        transaction->execSqlSync(
-            "update import_records set main_file_id = $2::uuid, updated_at = now() where id = $1::uuid",
-            import_id, archived_file_id);
 
         transaction.reset();
         if (!latch->wait()) {
-            archive::remove_archived_word_input(archive_root, stored_relative_path);
-            return {UploadWordStatus::ArchiveFailed, std::nullopt};
+            try { archive::remove_temporary_word(temporary_word_root, stored_relative_path); }
+            catch (...) {
+            }
+            return {UploadWordStatus::TemporaryStorageFailed, std::nullopt};
         }
 
         review::WorkspaceImport imported;
@@ -320,18 +310,26 @@ UploadWordOutcome WorkspaceRepository::upload_word_import(
             catch (...) {
             }
         }
-        if (file_stored) archive::remove_archived_word_input(archive_root, stored_relative_path);
-        LOG_ERROR << "Word archive transaction failed: " << error.what();
-        return {UploadWordStatus::ArchiveFailed, std::nullopt};
+        if (file_stored) {
+            try { archive::remove_temporary_word(temporary_word_root, stored_relative_path); }
+            catch (...) {
+            }
+        }
+        LOG_ERROR << "Temporary Word source transaction failed: " << error.what();
+        return {UploadWordStatus::TemporaryStorageFailed, std::nullopt};
     } catch (...) {
         if (transaction) {
             try { transaction->rollback(); }
             catch (...) {
             }
         }
-        if (file_stored) archive::remove_archived_word_input(archive_root, stored_relative_path);
-        LOG_ERROR << "Word archive transaction failed with an unknown exception";
-        return {UploadWordStatus::ArchiveFailed, std::nullopt};
+        if (file_stored) {
+            try { archive::remove_temporary_word(temporary_word_root, stored_relative_path); }
+            catch (...) {
+            }
+        }
+        LOG_ERROR << "Temporary Word source transaction failed with an unknown exception";
+        return {UploadWordStatus::TemporaryStorageFailed, std::nullopt};
     }
 }
 

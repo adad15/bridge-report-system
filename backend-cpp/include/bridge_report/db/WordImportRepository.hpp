@@ -21,7 +21,8 @@ struct WordImportContext {
     std::string import_record_system_number;
     std::string import_name;
     std::string source_type;
-    std::string main_file_system_number;
+    std::string source_file_system_number;
+    std::filesystem::path source_relative_path;
     std::filesystem::path word_path;
 };
 
@@ -44,7 +45,17 @@ public:
         const archive::ArchivedPhotoBatch& batch
     );
     bool mark_parsing(const std::string& import_record_id);
-    void mark_parse_failed(const std::string& import_record_id, const std::string& message);
+    void mark_parse_failed(
+        const std::string& import_record_id,
+        const std::string& message,
+        int retention_hours
+    );
+    void mark_source_deleted(const std::string& import_record_id);
+    void mark_source_cleanup_failed(
+        const std::string& import_record_id,
+        const std::string& message,
+        int retry_after_seconds
+    );
 
 private:
     drogon::orm::DbClientPtr db_client_;

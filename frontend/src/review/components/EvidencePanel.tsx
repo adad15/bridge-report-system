@@ -32,6 +32,7 @@ function Shell({ children }: { children: ReactNode }) {
   return (
     <aside className="status-panel evidence-panel">
       <h2>来源证据</h2>
+      <p className="muted-text">原始 Word 已按临时文件策略清理，当前证据来自解析快照。</p>
       {children}
     </aside>
   );

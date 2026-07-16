@@ -29,6 +29,10 @@
     "cleanup_retry_base_seconds": 300,
     "cleanup_retry_max_seconds": 86400
   },
+  "temporary_storage": {
+    "root": "runtime/temp/word-imports",
+    "failed_word_retention_hours": 24
+  },
   "logs": {
     "root": "logs"
   },

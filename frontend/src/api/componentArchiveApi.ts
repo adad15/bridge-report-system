@@ -121,8 +121,10 @@ export interface ObservationEvidence {
   source_table_index: number | null;
   source_row_number: number | null;
   import_record_system_number: string | null;
-  archived_file_system_number: string | null;
-  archived_file_name: string | null;
+  source_file_system_number: string | null;
+  source_file_name: string | null;
+  temporary_source_status: string | null;
+  original_word_retained: boolean;
 }
 
 export interface CreateThreadRequestBody {

@@ -46,6 +46,7 @@ Json::Value DeletionCounts::to_json() const {
     json["defect_photos"] = defect_photos;
     json["condition_ratings"] = condition_ratings;
     json["archived_files_to_delete"] = archived_files_to_delete;
+    json["temporary_source_files_to_delete"] = temporary_source_files_to_delete;
     json["shared_files_retained"] = shared_files_retained;
     json["defect_threads_affected"] = defect_threads_affected;
     json["defect_comparisons"] = defect_comparisons;
@@ -78,6 +79,7 @@ std::string InspectionYearDeletionPlan::impact_token() const {
     canonical["defect_thread_ids"] = string_array(defect_thread_ids);
     canonical["defect_comparison_ids"] = string_array(defect_comparison_ids);
     canonical["archived_file_ids_to_delete"] = string_array(archived_file_ids_to_delete);
+    canonical["temporary_source_file_ids_to_delete"] = string_array(temporary_source_file_ids_to_delete);
     canonical["fingerprint_items"] = string_array(fingerprint_items);
     canonical["counts"] = counts.to_json();
     Json::Value locks(Json::arrayValue);

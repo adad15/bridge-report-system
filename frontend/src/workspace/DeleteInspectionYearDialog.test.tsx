@@ -17,7 +17,8 @@ const impact = {
   version_numbers: [1, 2],
   counts: {
     inspection_versions: 2, import_records: 1, defect_observations: 25, defect_measurements: 10,
-    defect_photos: 31, condition_ratings: 15, archived_files_to_delete: 32, shared_files_retained: 1,
+    defect_photos: 31, condition_ratings: 15, archived_files_to_delete: 32,
+    temporary_source_files_to_delete: 1, shared_files_retained: 1,
     defect_threads_affected: 8, defect_comparisons: 3,
   },
   active_edit_locks: [],

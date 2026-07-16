@@ -23,6 +23,7 @@
 #include "bridge_report/http/WorkspaceRoutes.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
 #include "bridge_report/deletion/ArchiveFileCleanupCoordinator.hpp"
+#include "bridge_report/deletion/TemporaryWordCleanupCoordinator.hpp"
 
 namespace {
 
@@ -180,19 +181,31 @@ int main(int argc, char* argv[]) {
         std::make_shared<bridge_report::deletion::ArchiveFileCleanupCoordinator>(
             db_client, config.archive_root, cleanup_policy);
 
+    bridge_report::deletion::TemporaryWordCleanupPolicy temporary_cleanup_policy;
+    temporary_cleanup_policy.batch_size = config.cleanup_batch_size;
+    temporary_cleanup_policy.parsing_timeout_seconds = config.cleanup_claim_timeout_seconds;
+    temporary_cleanup_policy.failed_retention_hours = config.failed_word_retention_hours;
+    temporary_cleanup_policy.retry_base_seconds = config.cleanup_retry_base_seconds;
+    temporary_cleanup_policy.retry_max_seconds = config.cleanup_retry_max_seconds;
+    const auto temporary_word_cleanup =
+        std::make_shared<bridge_report::deletion::TemporaryWordCleanupCoordinator>(
+            db_client, config.temporary_word_root, temporary_cleanup_policy);
+
     // 启动时处理遗留项，并在运行期间持续有界重试。异常不得阻断 HTTP 服务。
     drogon::app().registerBeginningAdvice(
-        [cleanup_coordinator, interval = config.cleanup_interval_seconds]() {
+        [cleanup_coordinator, temporary_word_cleanup, interval = config.cleanup_interval_seconds]() {
             try {
                 cleanup_coordinator->process_pending();
+                temporary_word_cleanup->process_pending();
             } catch (const std::exception& error) {
                 std::cout << "归档文件启动清理失败：" << error.what() << "\n";
             }
             drogon::app().getLoop()->runEvery(
                 static_cast<double>(interval),
-                [cleanup_coordinator]() {
+                [cleanup_coordinator, temporary_word_cleanup]() {
                     try {
                         cleanup_coordinator->process_pending();
+                        temporary_word_cleanup->process_pending();
                     } catch (const std::exception& error) {
                         std::cout << "归档文件定时清理失败：" << error.what() << "\n";
                     }

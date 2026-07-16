@@ -199,10 +199,10 @@ TEST_F(WorkspaceRepositoryTest, CreateAnnualInspectionRejectsUnknownBridge) {
     EXPECT_FALSE(outcome.inspection_year.has_value());
 }
 
-TEST_F(WorkspaceRepositoryTest, UploadWordArchivesFileAndCreatesThreeTableRelationship) {
+TEST_F(WorkspaceRepositoryTest, UploadWordCreatesFlatTemporarySourceWithoutArchivedFile) {
     const std::string content = "fake-docx-content";
     const auto validation = bridge_report::archive::validate_word_input(
-        R"(C:\fakepath\年度报告.DOCX)", content, 1024);
+        R"(C:\fakepath\Q202406002-JZ-506大桥定期检测报告—（2类）.DOCX)", content, 1024);
     ASSERT_TRUE(validation.ok());
     bridge_report::db::WorkspaceRepository repository(client_);
 
@@ -216,18 +216,25 @@ TEST_F(WorkspaceRepositoryTest, UploadWordArchivesFileAndCreatesThreeTableRelati
     EXPECT_FALSE(response_json.isMember("storage_relative_path"));
     EXPECT_FALSE(response_json.isMember("absolute_path"));
     const auto rows = client_->execSqlSync(
-        "select ir.main_file_id::text as main_file_id, af.id::text as archived_file_id, "
-        "af.storage_relative_path, af.file_hash, af.file_size_bytes, irf.file_role "
-        "from import_records ir join archived_files af on af.id = ir.main_file_id "
-        "join import_record_files irf on irf.import_record_id = ir.id and irf.archived_file_id = af.id "
+        "select ir.main_file_id::text as main_file_id, sf.id::text as source_file_id, "
+        "sf.system_number, sf.original_file_name, sf.storage_relative_path, sf.file_hash, "
+        "sf.file_size_bytes, sf.status, "
+        "(select count(*) from archived_files af where af.bridge_id = ir.bridge_id and af.file_type = 'Word文档') "
+        "as archived_word_count "
+        "from import_records ir join import_source_files sf on sf.import_record_id = ir.id "
         "where ir.id = $1::uuid", outcome.import_record->id);
     ASSERT_EQ(rows.size(), 1u);
-    EXPECT_EQ(rows[0]["main_file_id"].as<std::string>(), rows[0]["archived_file_id"].as<std::string>());
-    EXPECT_EQ(rows[0]["file_role"].as<std::string>(), "主报告");
+    EXPECT_TRUE(rows[0]["main_file_id"].isNull());
+    EXPECT_EQ(rows[0]["archived_word_count"].as<long long>(), 0);
+    EXPECT_EQ(rows[0]["status"].as<std::string>(), "待解析");
+    EXPECT_EQ(rows[0]["original_file_name"].as<std::string>(),
+              "Q202406002-JZ-506大桥定期检测报告—（2类）.DOCX");
     EXPECT_EQ(rows[0]["file_hash"].as<std::string>(), validation.metadata.sha256);
     EXPECT_EQ(rows[0]["file_size_bytes"].as<long long>(), static_cast<long long>(content.size()));
     const auto relative = std::filesystem::path(rows[0]["storage_relative_path"].as<std::string>());
     EXPECT_FALSE(relative.is_absolute());
+    EXPECT_EQ(relative.parent_path(), std::filesystem::path());
+    EXPECT_EQ(relative.extension(), ".docx");
     const auto archived = bridge_report::archive::resolve_path_under_root(upload_root_, relative);
     EXPECT_TRUE(std::filesystem::is_regular_file(archived));
 }

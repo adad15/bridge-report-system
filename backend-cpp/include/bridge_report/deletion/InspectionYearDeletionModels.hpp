@@ -16,6 +16,7 @@ struct DeletionCounts {
     int defect_photos{0};
     int condition_ratings{0};
     int archived_files_to_delete{0};
+    int temporary_source_files_to_delete{0};
     int shared_files_retained{0};
     int defect_threads_affected{0};
     int defect_comparisons{0};
@@ -51,6 +52,8 @@ struct InspectionYearDeletionPlan {
     std::vector<std::string> defect_comparison_ids;
     std::vector<std::string> archived_file_ids_to_delete;
     std::vector<std::string> archived_file_relative_paths_to_delete;
+    std::vector<std::string> temporary_source_file_ids_to_delete;
+    std::vector<std::string> temporary_source_relative_paths_to_delete;
     std::vector<std::string> fingerprint_items;
 
     std::string confirmation_text() const;

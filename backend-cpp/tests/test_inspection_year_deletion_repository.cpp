@@ -43,6 +43,12 @@ protected:
         import_id_ = id(
             "insert into import_records(bridge_id,inspection_year_id,import_name,source_type,main_file_id) values($1::uuid,$2::uuid,'删除测试导入','正式Word',$3::uuid) returning id",
             bridge_id_, year_v2_, exclusive_file_id_);
+        temporary_source_id_ = id(
+            "with source_id as(select gen_random_uuid() id) "
+            "insert into import_source_files(id,import_record_id,original_file_name,storage_relative_path,"
+            "file_extension,file_size_bytes,file_hash,status) "
+            "select id,$1::uuid,'临时报告.docx',id::text||'.docx','.docx',4,$2,'解析失败' from source_id returning id",
+            import_id_, std::string(64, 'c'));
         user_id_ = id(
             "insert into users(username,display_name,password_hash,role) values('delete-test-'||gen_random_uuid()::text,'删除测试员','x','admin') returning id");
     }
@@ -56,6 +62,7 @@ protected:
         }
         client_->execSqlSync("delete from defect_comparisons where bridge_id=$1::uuid", bridge_id_);
         client_->execSqlSync("delete from import_records where bridge_id=$1::uuid", bridge_id_);
+        client_->execSqlSync("delete from import_source_files where id=$1::uuid", temporary_source_id_);
         client_->execSqlSync("delete from defect_observations where bridge_id=$1::uuid", bridge_id_);
         client_->execSqlSync("delete from condition_ratings where inspection_year_id in(select id from inspection_years where bridge_id=$1::uuid)", bridge_id_);
         client_->execSqlSync("delete from defect_threads where bridge_id=$1::uuid", bridge_id_);
@@ -81,7 +88,7 @@ protected:
 
     drogon::orm::DbClientPtr client_;
     std::string bridge_id_, year_2025_, year_v1_, year_v2_, component_id_, thread_id_;
-    std::string observation_2025_, observation_2026_, exclusive_file_id_, shared_file_id_, import_id_, user_id_;
+    std::string observation_2025_, observation_2026_, exclusive_file_id_, shared_file_id_, import_id_, temporary_source_id_, user_id_;
 };
 
 TEST_F(InspectionYearDeletionRepositoryTest, DeletesAllVersionsAndRetainsOtherYearThreadAndSharedFile) {
@@ -95,6 +102,7 @@ TEST_F(InspectionYearDeletionRepositoryTest, DeletesAllVersionsAndRetainsOtherYe
     EXPECT_EQ(preview->counts.condition_ratings, 1);
     EXPECT_EQ(preview->counts.defect_comparisons, 1);
     EXPECT_EQ(preview->counts.archived_files_to_delete, 1);
+    EXPECT_EQ(preview->counts.temporary_source_files_to_delete, 1);
     EXPECT_EQ(preview->counts.shared_files_retained, 1);
 
     const auto outcome = repository.delete_year(year_v1_, preview->impact_token(), "永久删除 2026", "误建年度", actor());
@@ -104,6 +112,13 @@ TEST_F(InspectionYearDeletionRepositoryTest, DeletesAllVersionsAndRetainsOtherYe
     EXPECT_FALSE(client_->execSqlSync("select 1 from defect_threads where id=$1::uuid", thread_id_).empty());
     EXPECT_FALSE(client_->execSqlSync("select 1 from archived_files where id=$1::uuid", shared_file_id_).empty());
     EXPECT_TRUE(client_->execSqlSync("select 1 from archived_files where id=$1::uuid", exclusive_file_id_).empty());
+    const auto temporary = client_->execSqlSync(
+        "select import_record_id,status,cleanup_reason from import_source_files where id=$1::uuid",
+        temporary_source_id_);
+    ASSERT_EQ(temporary.size(), 1u);
+    EXPECT_TRUE(temporary[0]["import_record_id"].isNull());
+    EXPECT_EQ(temporary[0]["status"].as<std::string>(), "待清理");
+    EXPECT_EQ(temporary[0]["cleanup_reason"].as<std::string>(), "业务删除");
 }
 
 TEST_F(InspectionYearDeletionRepositoryTest, ActiveEditLockBlocksAndChangedImpactTokenRequiresReconfirmation) {

@@ -15,10 +15,14 @@ enum class WorkspaceImportAction {
     Parse,
     ContinueReview,
     ViewResult,
+    Reupload,
     None,
 };
 
-WorkspaceImportAction derive_workspace_import_action(std::string_view import_status);
+WorkspaceImportAction derive_workspace_import_action(
+    std::string_view import_status,
+    std::string_view temporary_source_status = {}
+);
 std::string_view workspace_import_action_name(WorkspaceImportAction action);
 
 struct WorkspaceBridge {
@@ -89,6 +93,8 @@ struct WorkspaceImport {
     std::optional<std::string> importer_name;
     std::optional<std::string> created_at;
     std::optional<std::string> updated_at;
+    std::optional<std::string> temporary_source_status;
+    std::optional<std::string> temporary_source_expires_at;
     ReviewStatistics statistics;
     std::optional<WorkspaceEditLock> edit_lock;
 

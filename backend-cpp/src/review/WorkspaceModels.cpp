@@ -24,8 +24,16 @@ Json::Value array_json(const std::vector<Item>& items) {
 
 }  // namespace
 
-WorkspaceImportAction derive_workspace_import_action(const std::string_view import_status) {
+WorkspaceImportAction derive_workspace_import_action(
+    const std::string_view import_status,
+    const std::string_view temporary_source_status
+) {
     if (import_status == "已上传" || import_status == "解析失败") {
+        if (temporary_source_status == "已过期" || temporary_source_status == "已删除"
+            || temporary_source_status == "待清理" || temporary_source_status == "清理中"
+            || temporary_source_status == "清理失败") {
+            return WorkspaceImportAction::Reupload;
+        }
         return WorkspaceImportAction::Parse;
     }
     if (import_status == "待校对") {
@@ -45,6 +53,8 @@ std::string_view workspace_import_action_name(const WorkspaceImportAction action
             return "continue_review";
         case WorkspaceImportAction::ViewResult:
             return "view_result";
+        case WorkspaceImportAction::Reupload:
+            return "reupload";
         case WorkspaceImportAction::None:
             return "none";
     }
@@ -124,9 +134,12 @@ Json::Value WorkspaceImport::to_json() const {
     json["importer_name"] = optional_string_json(importer_name);
     json["created_at"] = optional_string_json(created_at);
     json["updated_at"] = optional_string_json(updated_at);
+    json["temporary_source_status"] = optional_string_json(temporary_source_status);
+    json["temporary_source_expires_at"] = optional_string_json(temporary_source_expires_at);
     json["statistics"] = statistics.to_json();
     json["edit_lock"] = edit_lock.has_value() ? edit_lock->to_json() : Json::Value(Json::nullValue);
-    json["available_action"] = std::string(workspace_import_action_name(derive_workspace_import_action(import_status)));
+    json["available_action"] = std::string(workspace_import_action_name(
+        derive_workspace_import_action(import_status, temporary_source_status.value_or(""))));
     return json;
 }
 

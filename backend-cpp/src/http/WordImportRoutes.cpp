@@ -2,6 +2,7 @@
 
 #include "bridge_report/archive/ArchivePaths.hpp"
 #include "bridge_report/archive/ExtractedPhotoArchive.hpp"
+#include "bridge_report/archive/TemporaryWordStorage.hpp"
 #include "bridge_report/contracts/AnnualInspectionContract.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
@@ -45,7 +46,9 @@ Json::Value build_python_word_request(
     request["inspection_date"] = required_string(body, "inspection_date");
     request["report_number"] = required_string(body, "report_number");
     request["project_name"] = required_string(body, "project_name");
-    request["archived_file_system_number"] = context.main_file_system_number;
+    // BridgeAnnualInspectionData 1.1 的兼容字段名仍是 archived_file_system_number；
+    // 实际值来自临时来源文件记录，并不表示原 Word 被长期归档。
+    request["archived_file_system_number"] = context.source_file_system_number;
     request["import_record_system_number"] = context.import_record_system_number;
     return request;
 }
@@ -67,10 +70,29 @@ void remove_staging(const std::filesystem::path& path) noexcept {
 void mark_parse_failed_safely(
     const std::shared_ptr<db::WordImportRepository>& repository,
     const std::string& import_record_id,
-    const std::string& message
+    const std::string& message,
+    const int retention_hours
 ) noexcept {
-    try { repository->mark_parse_failed(import_record_id, message); }
+    try { repository->mark_parse_failed(import_record_id, message, retention_hours); }
     catch (...) {
+    }
+}
+
+void cleanup_temporary_source_after_success(
+    const std::shared_ptr<db::WordImportRepository>& repository,
+    const db::WordImportContext& context,
+    const config::AppConfig& config
+) noexcept {
+    try {
+        archive::remove_temporary_word(
+            std::filesystem::absolute(config.temporary_word_root), context.source_relative_path);
+        repository->mark_source_deleted(context.import_record_id);
+    } catch (const std::exception& error) {
+        try {
+            repository->mark_source_cleanup_failed(
+                context.import_record_id, error.what(), config.cleanup_retry_base_seconds);
+        } catch (...) {
+        }
     }
 }
 
@@ -120,7 +142,8 @@ void register_word_import_routes(
 
                 auto repository = std::make_shared<db::WordImportRepository>(db_client);
                 const auto archive_root = std::filesystem::absolute(config.archive_root);
-                const auto context = repository->load_context(import_record_id, archive_root);
+                const auto temporary_word_root = std::filesystem::absolute(config.temporary_word_root);
+                const auto context = repository->load_context(import_record_id, temporary_word_root);
                 if (!context.has_value()) {
                     respond_json(callback, make_error_body("word_import_context_invalid", "导入记录、年度或主 Word 文件不可用。"),
                                  drogon::k409Conflict);
@@ -155,7 +178,9 @@ void register_word_import_routes(
                         drogon::ReqResult result, const drogon::HttpResponsePtr& response) mutable {
                         if (result != drogon::ReqResult::Ok || !response || response->statusCode() != drogon::k200OK
                             || !response->getJsonObject()) {
-                            mark_parse_failed_safely(repository, context.import_record_id, "Python Word 解析服务调用失败。");
+                            mark_parse_failed_safely(repository, context.import_record_id,
+                                                     "Python Word 解析服务调用失败。",
+                                                     config.failed_word_retention_hours);
                             remove_staging(staging_root);
                             respond_json(callback, make_error_body("python_parse_failed", "Word 解析服务未返回有效结果。"),
                                          drogon::k502BadGateway);
@@ -176,7 +201,8 @@ void register_word_import_routes(
                             const auto outcome = repository->persist_parse_result(context.import_record_id, batch);
                             if (!outcome.success) {
                                 archive::cleanup_archived_photo_batch(archive_root, batch);
-                                mark_parse_failed_safely(repository, context.import_record_id, outcome.error_message);
+                                mark_parse_failed_safely(repository, context.import_record_id, outcome.error_message,
+                                                         config.failed_word_retention_hours);
                                 remove_staging(staging_root);
                                 respond_json(callback, make_error_body(outcome.error_code, outcome.error_message),
                                              drogon::k500InternalServerError);
@@ -188,17 +214,20 @@ void register_word_import_routes(
                             result_body["temporary_photo_file_count"] = static_cast<Json::UInt64>(temporary_count);
                             result_body["photo_candidate_count"] = static_cast<Json::UInt64>(batch.data["photos"].size());
                             result_body["archived_photo_count"] = static_cast<Json::UInt64>(batch.files.size());
+                            cleanup_temporary_source_after_success(repository, context, config);
                             remove_staging(staging_root);
                             respond_json(callback, result_body);
                         } catch (const std::exception& error) {
-                            mark_parse_failed_safely(repository, context.import_record_id, error.what());
+                            mark_parse_failed_safely(repository, context.import_record_id, error.what(),
+                                                     config.failed_word_retention_hours);
                             remove_staging(staging_root);
                             respond_json(callback, make_error_body("word_parse_persistence_failed", error.what()),
                                          drogon::k500InternalServerError);
                         }
                     });
                 } catch (const std::exception& error) {
-                    mark_parse_failed_safely(repository, context->import_record_id, error.what());
+                    mark_parse_failed_safely(repository, context->import_record_id, error.what(),
+                                             config.failed_word_retention_hours);
                     remove_staging(staging_root);
                     respond_json(callback, make_error_body("python_request_failed", error.what()),
                                  drogon::k502BadGateway);

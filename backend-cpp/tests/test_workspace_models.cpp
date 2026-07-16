@@ -54,11 +54,13 @@ TEST(WorkspaceImportActionTest, DerivesStableActionsFromExistingStatuses) {
     EXPECT_EQ(derive_workspace_import_action("已确认"), WorkspaceImportAction::ViewResult);
     EXPECT_EQ(derive_workspace_import_action("已取消"), WorkspaceImportAction::ViewResult);
     EXPECT_EQ(derive_workspace_import_action("解析中"), WorkspaceImportAction::None);
+    EXPECT_EQ(derive_workspace_import_action("解析失败", "已过期"), WorkspaceImportAction::Reupload);
     EXPECT_EQ(derive_workspace_import_action("未知状态"), WorkspaceImportAction::None);
 
     EXPECT_EQ(workspace_import_action_name(WorkspaceImportAction::Parse), "parse");
     EXPECT_EQ(workspace_import_action_name(WorkspaceImportAction::ContinueReview), "continue_review");
     EXPECT_EQ(workspace_import_action_name(WorkspaceImportAction::ViewResult), "view_result");
+    EXPECT_EQ(workspace_import_action_name(WorkspaceImportAction::Reupload), "reupload");
     EXPECT_EQ(workspace_import_action_name(WorkspaceImportAction::None), "none");
 }
 

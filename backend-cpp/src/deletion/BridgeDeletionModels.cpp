@@ -44,6 +44,7 @@ Json::Value BridgeDeletionCounts::to_json() const {
     value["condition_ratings"] = condition_ratings;
     value["defect_comparisons"] = defect_comparisons;
     value["archived_files_to_delete"] = archived_files_to_delete;
+    value["temporary_source_files_to_delete"] = temporary_source_files_to_delete;
     value["shared_files_retained"] = shared_files_retained;
     return value;
 }
@@ -62,6 +63,7 @@ BridgeDeletionCounts& BridgeDeletionCounts::operator+=(const BridgeDeletionCount
     condition_ratings += other.condition_ratings;
     defect_comparisons += other.defect_comparisons;
     archived_files_to_delete += other.archived_files_to_delete;
+    temporary_source_files_to_delete += other.temporary_source_files_to_delete;
     shared_files_retained += other.shared_files_retained;
     return *this;
 }

@@ -24,6 +24,7 @@ struct BridgeDeletionCounts {
     int condition_ratings{0};
     int defect_comparisons{0};
     int archived_files_to_delete{0};
+    int temporary_source_files_to_delete{0};
     int shared_files_retained{0};
 
     Json::Value to_json() const;
@@ -43,6 +44,8 @@ struct BridgeDeletionPlan {
 
     std::vector<std::string> archived_file_ids_to_delete;
     std::vector<std::string> archived_file_relative_paths_to_delete;
+    std::vector<std::string> temporary_source_file_ids_to_delete;
+    std::vector<std::string> temporary_source_relative_paths_to_delete;
     std::vector<std::string> fingerprint_items;
 
     std::string impact_token() const;

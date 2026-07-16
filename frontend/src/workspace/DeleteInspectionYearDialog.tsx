@@ -82,7 +82,8 @@ export function DeleteInspectionYearDialog({ inspectionYearId, onClose, onDelete
             <div><dt>病害观测</dt><dd>{impact.counts.defect_observations}</dd></div>
             <div><dt>病害照片</dt><dd>{impact.counts.defect_photos}</dd></div>
             <div><dt>评分记录</dt><dd>{impact.counts.condition_ratings}</dd></div>
-            <div><dt>物理文件</dt><dd>{impact.counts.archived_files_to_delete}</dd></div>
+            <div><dt>正式归档文件</dt><dd>{impact.counts.archived_files_to_delete}</dd></div>
+            <div><dt>临时来源文件</dt><dd>{impact.counts.temporary_source_files_to_delete}</dd></div>
           </dl>
           {impact.counts.shared_files_retained > 0 ? <p className="muted-text">另有 {impact.counts.shared_files_retained} 个共享文件仍被其他资料引用，将保留。</p> : null}
           {locked ? <div className="lock-warning" role="alert">

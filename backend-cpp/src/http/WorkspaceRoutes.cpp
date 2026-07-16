@@ -69,12 +69,12 @@ void register_workspace_routes(
                 }
                 respond_json(callback, overview->to_json());
             } catch (const drogon::orm::DrogonDbException& error) {
-                LOG_ERROR << "Word upload database failure: " << error.base().what();
+                LOG_ERROR << "Bridge overview database failure: " << error.base().what();
                 respond_db_unavailable(callback);
             } catch (const std::exception& error) {
-                LOG_ERROR << "Word upload request handling failure: " << error.what();
+                LOG_ERROR << "Bridge overview request handling failure: " << error.what();
                 respond_json(callback,
-                             make_error_body("word_upload_failed", "Word 上传处理失败，请稍后重试。"),
+                             make_error_body("bridge_overview_failed", "桥梁概览加载失败，请稍后重试。"),
                              drogon::k500InternalServerError);
             }
         },
@@ -219,7 +219,7 @@ void register_workspace_routes(
                 db::WorkspaceRepository repository(db_client);
                 const auto outcome = repository.upload_word_import(
                     inspection_year_id, source_type, validation.metadata, content,
-                    std::filesystem::absolute(config.archive_root));
+                    std::filesystem::absolute(config.temporary_word_root));
                 if (outcome.status == db::UploadWordStatus::InspectionYearNotFound) {
                     respond_workspace_not_found(callback, WorkspaceResource::InspectionYear);
                     return;
@@ -230,8 +230,8 @@ void register_workspace_routes(
                                  drogon::k409Conflict);
                     return;
                 }
-                if (outcome.status == db::UploadWordStatus::ArchiveFailed) {
-                    respond_json(callback, make_error_body("word_archive_failed", "Word 文件归档失败。"),
+                if (outcome.status == db::UploadWordStatus::TemporaryStorageFailed) {
+                    respond_json(callback, make_error_body("word_temporary_storage_failed", "Word 临时保存失败。"),
                                  drogon::k500InternalServerError);
                     return;
                 }
@@ -239,10 +239,14 @@ void register_workspace_routes(
                 Json::Value body;
                 body["import_record"] = outcome.import_record->to_json();
                 respond_json(callback, body, drogon::k201Created);
-            } catch (const drogon::orm::DrogonDbException&) {
+            } catch (const drogon::orm::DrogonDbException& error) {
+                LOG_ERROR << "Word upload database failure: " << error.base().what();
                 respond_db_unavailable(callback);
-            } catch (const std::exception&) {
-                respond_db_unavailable(callback);
+            } catch (const std::exception& error) {
+                LOG_ERROR << "Word upload request handling failure: " << error.what();
+                respond_json(callback,
+                             make_error_body("word_upload_failed", "Word 上传处理失败，请稍后重试。"),
+                             drogon::k500InternalServerError);
             }
         },
         {drogon::Post}

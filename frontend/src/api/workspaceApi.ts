@@ -34,7 +34,7 @@ export interface WorkspaceStatistics {
   object_warning_count: number;
 }
 
-export type WorkspaceImportAction = "parse" | "continue_review" | "view_result" | "none";
+export type WorkspaceImportAction = "parse" | "continue_review" | "view_result" | "reupload" | "none";
 
 export interface WorkspaceImport {
   id: string;
@@ -45,6 +45,8 @@ export interface WorkspaceImport {
   importer_name: string | null;
   created_at: string | null;
   updated_at: string | null;
+  temporary_source_status: string | null;
+  temporary_source_expires_at: string | null;
   statistics: WorkspaceStatistics;
   edit_lock: {
     owner_username: string;
@@ -98,6 +100,7 @@ export interface InspectionYearDeletionImpact {
     defect_photos: number;
     condition_ratings: number;
     archived_files_to_delete: number;
+    temporary_source_files_to_delete: number;
     shared_files_retained: number;
     defect_threads_affected: number;
     defect_comparisons: number;
@@ -191,6 +194,7 @@ export function workspaceErrorMessage(error: unknown): string {
     invalid_word_file: "请选择一个非空的 .docx 文件。",
     word_file_too_large: "Word 文件超过允许的上传大小。",
     word_archive_failed: "Word 文件归档失败，请重试。",
+    word_temporary_storage_failed: "Word 临时保存失败，请重试。",
     word_upload_failed: "Word 上传处理失败，请重试；若仍失败，请保留当前弹窗并联系管理员。",
     inspection_year_edit_locked: "该年度仍有人正在编辑，暂时不能删除。",
     deletion_impact_changed: "删除影响范围已经变化，请重新核对后再次确认。",

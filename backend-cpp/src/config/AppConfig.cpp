@@ -90,6 +90,18 @@ AppConfig load_app_config(const std::filesystem::path& path) {
         config.cleanup_retry_max_seconds = config.cleanup_retry_base_seconds;
     }
 
+    const auto& temporary_storage = root["temporary_storage"];
+    config.temporary_word_root = get_string_or_default(
+        temporary_storage,
+        "root",
+        config.temporary_word_root.generic_string()
+    );
+    config.failed_word_retention_hours = get_positive_int_or_default(
+        temporary_storage,
+        "failed_word_retention_hours",
+        config.failed_word_retention_hours
+    );
+
     const auto& postgres = root["postgres"];
     config.postgres.host = get_string_or_default(postgres, "host", config.postgres.host);
     config.postgres.port = get_int_or_default(postgres, "port", config.postgres.port);

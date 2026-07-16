@@ -15,6 +15,7 @@ import { deriveInspectionProgress, inspectionWorkspacePath, reviewPath } from ".
 const actionLabel = (item: WorkspaceImport) => {
   if (item.available_action === "continue_review") return "继续校对";
   if (item.available_action === "view_result") return "查看结果";
+  if (item.available_action === "reupload") return "重新上传";
   if (item.available_action === "parse") return item.import_status === "解析失败" ? "重新解析" : "开始解析";
   return null;
 };
@@ -180,8 +181,8 @@ function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry, canDelete, on
             const label = actionLabel(item);
             const lockText = item.edit_lock ? `${item.edit_lock.owner_display_name} 正在编辑` : null;
             return <article className="import-source-card" key={item.id}>
-              <div><div className="import-title-row"><h3>{item.import_name}</h3><span className="status-badge">{item.import_status}</span></div><p>{item.system_number} · {item.source_type}</p><p>病害 {item.statistics.defect_count} · 照片 {item.statistics.photo_count} · 评分 {item.statistics.rating_item_count}</p>{lockText ? <p className="lock-note">{lockText}</p> : null}</div>
-              {label ? item.available_action === "parse" ? <button type="button" onClick={() => onRetry(item)}>{label}</button> : <Link to={reviewPath(bridgeId, workspace.inspection_year.id, item.id)}>{label}</Link> : <span className="muted-text">处理中</span>}
+              <div><div className="import-title-row"><h3>{item.import_name}</h3><span className="status-badge">{item.import_status}</span></div><p>{item.system_number} · {item.source_type}</p><p>病害 {item.statistics.defect_count} · 照片 {item.statistics.photo_count} · 评分 {item.statistics.rating_item_count}</p>{item.import_status === "解析失败" && item.temporary_source_expires_at ? <p className="muted-text">临时 Word 保留至 {new Date(item.temporary_source_expires_at).toLocaleString()}</p> : null}{item.available_action === "reupload" ? <p className="error-text">原临时 Word 已不可用，请重新上传。</p> : null}{lockText ? <p className="lock-note">{lockText}</p> : null}</div>
+              {label ? item.available_action === "parse" ? <button type="button" onClick={() => onRetry(item)}>{label}</button> : item.available_action === "reupload" ? <button type="button" onClick={onImport}>{label}</button> : <Link to={reviewPath(bridgeId, workspace.inspection_year.id, item.id)}>{label}</Link> : <span className="muted-text">处理中</span>}
             </article>;
           })}</div>
         )}

@@ -15,7 +15,8 @@ bridge_report::db::WordImportContext context() {
     value.import_record_system_number = "DRJL-000001";
     value.import_name = "软件Word导入";
     value.source_type = "软件导出Word";
-    value.main_file_system_number = "GDWJ-000001";
+    value.source_file_system_number = "LSWJ-000001";
+    value.source_relative_path = "883a08d4-557d-4421-8cc3-c1036e19b56a.docx";
     value.word_path = "D:/archive/report.docx";
     return value;
 }
@@ -38,7 +39,7 @@ TEST(WordImportRoutesTest, BuildsPythonRequestFromTrustedDatabaseContext) {
     EXPECT_EQ(request["selected_bridge_system_number"].asString(), "QL-000001");
     EXPECT_EQ(request["selected_bridge_name"].asString(), "绕阳河二号桥");
     EXPECT_EQ(request["import_record_system_number"].asString(), "DRJL-000001");
-    EXPECT_EQ(request["archived_file_system_number"].asString(), "GDWJ-000001");
+    EXPECT_EQ(request["archived_file_system_number"].asString(), "LSWJ-000001");
     EXPECT_EQ(request["report_number"].asString(), "TEST-001");
     EXPECT_EQ(request["temporary_photo_output_dir"].asString(), "D:/staging/photos");
 }

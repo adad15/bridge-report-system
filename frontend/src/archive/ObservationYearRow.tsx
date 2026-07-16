@@ -113,9 +113,10 @@ export function ObservationYearRow({ observation, onRebind }: ObservationYearRow
                 <dd>{evidence.import_record_system_number ?? "-"}</dd>
                 <dt>来源文件</dt>
                 <dd>
-                  {evidence.archived_file_system_number ?? "-"}
-                  {evidence.archived_file_name ? `｜${evidence.archived_file_name}` : ""}
+                  {evidence.source_file_system_number ?? "-"}
+                  {evidence.source_file_name ? `｜${evidence.source_file_name}` : ""}
                 </dd>
+                {!evidence.original_word_retained ? <><dt>原始 Word</dt><dd>已按临时文件策略清理，当前证据来自解析快照。</dd></> : null}
                 <dt>原始行</dt>
                 <dd>
                   <code>{JSON.stringify(evidence.source_raw_cells)}</code>

@@ -13,6 +13,7 @@ find_package(OpenSSL REQUIRED)
 add_library(bridge_report_backend_core
     src/archive/ArchivePaths.cpp
     src/archive/ExtractedPhotoArchive.cpp
+    src/archive/TemporaryWordStorage.cpp
     src/archive/WordInputArchive.cpp
     src/auth/PasswordHash.cpp
     src/config/AppConfig.cpp
@@ -34,6 +35,7 @@ add_library(bridge_report_backend_core
     src/deletion/ArchivedFileDeletionQueue.cpp
     src/deletion/BridgeDeletionModels.cpp
     src/deletion/InspectionYearDeletionModels.cpp
+    src/deletion/TemporaryWordCleanupCoordinator.cpp
     src/http/AuthRoutes.cpp
     src/http/BridgeAdministrationRoutes.cpp
     src/http/ComponentArchiveRoutes.cpp
@@ -123,6 +125,7 @@ add_executable(bridge_report_backend_tests
     tests/test_review_statistics.cpp
     tests/test_system_number.cpp
     tests/test_thread_suggestions.cpp
+    tests/test_temporary_word_cleanup_coordinator.cpp
     tests/test_word_import_routes.cpp
     tests/test_word_import_repository.cpp
     tests/test_word_input_archive.cpp

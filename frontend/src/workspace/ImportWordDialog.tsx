@@ -93,7 +93,7 @@ export function ImportWordDialog({
     <div className="dialog-backdrop" role="presentation">
       <form className="workspace-dialog import-dialog" role="dialog" aria-modal="true" aria-labelledby="import-word-title" noValidate onSubmit={(event) => void submit(event)}>
         <h2 id="import-word-title">{retryImport ? "重新解析 Word 资料" : "导入 Word 资料"}</h2>
-        {retryImport ? <p className="dialog-note">将重新解析已归档文件：{retryImport.import_name}</p> : (
+        {retryImport ? <p className="dialog-note">将重新解析仍在保留期内的临时 Word：{retryImport.import_name}</p> : (
           <>
             <label>Word 文件<input ref={fileInputRef} type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
             <label>来源类型<select value={sourceType} onChange={(event) => setSourceType(event.target.value as typeof sourceType)}><option>软件导出Word</option><option>正式Word</option></select></label>
@@ -103,7 +103,7 @@ export function ImportWordDialog({
         <label>检查日期<input ref={inspectionDateRef} type="date" required value={inspectionDate} onChange={(event) => setInspectionDate(event.target.value)} /></label>
         <label>报告编号<input ref={reportNumberRef} required value={reportNumber} onChange={(event) => setReportNumber(event.target.value)} /></label>
         <label>项目名称<input ref={projectNameRef} required value={projectName} onChange={(event) => setProjectName(event.target.value)} /></label>
-        {phase === "uploading" ? <p className="progress-text">正在上传并归档 Word…</p> : null}
+        {phase === "uploading" ? <p className="progress-text">正在上传并临时保存 Word…</p> : null}
         {phase === "parsing" ? <p className="progress-text">正在解析病害、照片和评分…</p> : null}
         {error ? <p className="error-text" role="alert">{error}</p> : null}
         <div className="dialog-actions"><button type="button" onClick={onClose} disabled={busy}>取消</button><button className="primary-button" type="submit" disabled={busy}>{busy ? "处理中…" : retryImport ? "重新解析" : "上传并解析"}</button></div>

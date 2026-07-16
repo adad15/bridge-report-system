@@ -376,10 +376,13 @@ std::optional<Json::Value> ComponentArchiveRepository::get_observation_evidence(
     const auto rows = db_client_->execSqlSync(
         "select o.source_raw_cells_json::text as raw_cells, o.source_table_title, o.source_table_index, "
         "o.source_row_number, ir.system_number as import_record_system_number, "
-        "af.system_number as archived_file_system_number, af.original_file_name "
+        "coalesce(af.system_number,sf.system_number) as source_file_system_number, "
+        "coalesce(af.original_file_name,sf.original_file_name) as source_file_name, "
+        "sf.status as temporary_source_status "
         "from defect_observations o "
         "left join import_records ir on ir.id = o.source_import_record_id "
         "left join archived_files af on af.id = o.source_file_id "
+        "left join import_source_files sf on sf.import_record_id=ir.id "
         "where o.id = $1::uuid",
         observation_id
     );
@@ -394,8 +397,10 @@ std::optional<Json::Value> ComponentArchiveRepository::get_observation_evidence(
     evidence["source_table_index"] = nullable_int(row, "source_table_index");
     evidence["source_row_number"] = nullable_int(row, "source_row_number");
     evidence["import_record_system_number"] = nullable_string(row, "import_record_system_number");
-    evidence["archived_file_system_number"] = nullable_string(row, "archived_file_system_number");
-    evidence["archived_file_name"] = nullable_string(row, "original_file_name");
+    evidence["source_file_system_number"] = nullable_string(row, "source_file_system_number");
+    evidence["source_file_name"] = nullable_string(row, "source_file_name");
+    evidence["temporary_source_status"] = nullable_string(row, "temporary_source_status");
+    evidence["original_word_retained"] = row["temporary_source_status"].isNull();
     return evidence;
 }
 

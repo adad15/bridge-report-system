@@ -86,6 +86,26 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
     plan.counts.condition_ratings = counts["ratings"].as<int>();
     plan.counts.defect_comparisons = counts["comparisons"].as<int>();
 
+    const auto temporary_sources = client->execSqlSync(
+        lock_rows
+            ? "select sf.id::text as id,sf.storage_relative_path,sf.updated_at::text as updated_at "
+              "from import_source_files sf join import_records ir on ir.id=sf.import_record_id "
+              "where ir.bridge_id=$1::uuid and sf.status not in ('已删除','已过期') "
+              "order by sf.id for update of sf"
+            : "select sf.id::text as id,sf.storage_relative_path,sf.updated_at::text as updated_at "
+              "from import_source_files sf join import_records ir on ir.id=sf.import_record_id "
+              "where ir.bridge_id=$1::uuid and sf.status not in ('已删除','已过期') order by sf.id",
+        bridge_id);
+    for (const auto& row : temporary_sources) {
+        const auto id = row["id"].as<std::string>();
+        plan.temporary_source_file_ids_to_delete.push_back(id);
+        plan.temporary_source_relative_paths_to_delete.push_back(
+            row["storage_relative_path"].as<std::string>());
+        plan.fingerprint_items.push_back(
+            "temporary-source:" + id + ":" + row["updated_at"].as<std::string>());
+    }
+    plan.counts.temporary_source_files_to_delete = static_cast<int>(temporary_sources.size());
+
     const auto fingerprints = client->execSqlSync(
         "select item from ("
         "select 'year:'||id::text||':'||updated_at::text as item from inspection_years where bridge_id=$1::uuid "
@@ -222,6 +242,11 @@ deletion::DeleteBridgeOutcome BridgeDeletionRepository::delete_bridge(
         }
 
         tx->execSqlSync("delete from defect_comparisons where bridge_id=$1::uuid", bridge_id);
+        tx->execSqlSync(
+            "update import_source_files sf set status='待清理',cleanup_reason='业务删除',"
+            "expires_at=null,next_cleanup_at=now(),last_error=null,updated_at=now() "
+            "from import_records ir where sf.import_record_id=ir.id and ir.bridge_id=$1::uuid "
+            "and sf.status not in ('已删除','已过期')", bridge_id);
         tx->execSqlSync("delete from import_records where bridge_id=$1::uuid", bridge_id);
         tx->execSqlSync(
             "update inspection_years set revision_source_inspection_id=null where revision_source_inspection_id in "

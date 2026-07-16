@@ -78,6 +78,28 @@ std::optional<deletion::InspectionYearDeletionPlan> build_plan(
         plan.fingerprint_items.push_back("import:" + id + ":" + row["updated_at"].as<std::string>());
     }
     plan.counts.import_records = static_cast<int>(imports.size());
+    const auto temporary_sources = client->execSqlSync(
+        lock_rows
+            ? "select sf.id::text as id,sf.storage_relative_path,sf.updated_at::text as updated_at "
+              "from import_source_files sf join import_records ir on ir.id=sf.import_record_id "
+              "join inspection_years iy on iy.id=ir.inspection_year_id "
+              "where iy.bridge_id=$1::uuid and iy.inspection_year=$2 "
+              "and sf.status not in ('已删除','已过期') order by sf.id for update of sf"
+            : "select sf.id::text as id,sf.storage_relative_path,sf.updated_at::text as updated_at "
+              "from import_source_files sf join import_records ir on ir.id=sf.import_record_id "
+              "join inspection_years iy on iy.id=ir.inspection_year_id "
+              "where iy.bridge_id=$1::uuid and iy.inspection_year=$2 "
+              "and sf.status not in ('已删除','已过期') order by sf.id",
+        plan.bridge_id, plan.inspection_year);
+    for (const auto& row : temporary_sources) {
+        const auto id = row["id"].as<std::string>();
+        plan.temporary_source_file_ids_to_delete.push_back(id);
+        plan.temporary_source_relative_paths_to_delete.push_back(
+            row["storage_relative_path"].as<std::string>());
+        plan.fingerprint_items.push_back(
+            "temporary-source:" + id + ":" + row["updated_at"].as<std::string>());
+    }
+    plan.counts.temporary_source_files_to_delete = static_cast<int>(temporary_sources.size());
     if (lock_rows) {
         client->execSqlSync(
             "select f.id from import_record_files f join import_records ir on ir.id=f.import_record_id "
@@ -344,6 +366,14 @@ deletion::DeleteInspectionYearOutcome InspectionYearDeletionRepository::delete_y
             "delete from defect_comparisons c using inspection_years cy, inspection_years py "
             "where cy.id=c.current_inspection_year_id and py.id=c.compared_inspection_year_id "
             "and ((cy.bridge_id=$1::uuid and cy.inspection_year=$2) or (py.bridge_id=$1::uuid and py.inspection_year=$2))",
+            plan->bridge_id, plan->inspection_year
+        );
+        tx->execSqlSync(
+            "update import_source_files sf set status='待清理',cleanup_reason='业务删除',"
+            "expires_at=null,next_cleanup_at=now(),last_error=null,updated_at=now() "
+            "from import_records ir join inspection_years iy on iy.id=ir.inspection_year_id "
+            "where sf.import_record_id=ir.id and iy.bridge_id=$1::uuid and iy.inspection_year=$2 "
+            "and sf.status not in ('已删除','已过期')",
             plan->bridge_id, plan->inspection_year
         );
         tx->execSqlSync(

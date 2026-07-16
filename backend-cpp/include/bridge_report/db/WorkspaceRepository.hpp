@@ -28,11 +28,11 @@ enum class UploadWordStatus {
     Created,
     InspectionYearNotFound,
     InspectionYearNotCurrent,
-    ArchiveFailed,
+    TemporaryStorageFailed,
 };
 
 struct UploadWordOutcome {
-    UploadWordStatus status{UploadWordStatus::ArchiveFailed};
+    UploadWordStatus status{UploadWordStatus::TemporaryStorageFailed};
     std::optional<review::WorkspaceImport> import_record;
 };
 
@@ -48,7 +48,7 @@ public:
         const std::string& source_type,
         const archive::WordInputMetadata& metadata,
         std::string_view content,
-        const std::filesystem::path& archive_root
+        const std::filesystem::path& temporary_word_root
     );
 
 private:

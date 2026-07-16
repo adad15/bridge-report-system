@@ -37,12 +37,13 @@ std::optional<WordImportContext> WordImportRepository::load_context(
         "select ir.id::text as import_record_id, ir.bridge_id::text as bridge_id, "
         "ir.inspection_year_id::text as inspection_year_id, ir.system_number as import_number, "
         "ir.import_name, ir.source_type, ir.import_status, b.system_number as bridge_number, "
-        "b.bridge_name, iy.inspection_year, af.system_number as file_number, af.storage_relative_path "
+        "b.bridge_name, iy.inspection_year, sf.system_number as file_number, sf.storage_relative_path "
         "from import_records ir join bridges b on b.id = ir.bridge_id "
         "left join inspection_years iy on iy.id = ir.inspection_year_id "
-        "join archived_files af on af.id = ir.main_file_id and af.bridge_id = ir.bridge_id "
-        "and (af.inspection_year_id is null or af.inspection_year_id = ir.inspection_year_id) "
-        "and af.file_type = 'Word文档' where ir.id = $1::uuid and iy.is_current",
+        "join import_source_files sf on sf.import_record_id = ir.id "
+        "where ir.id = $1::uuid and iy.is_current "
+        "and sf.status in ('待解析', '解析失败') "
+        "and (sf.expires_at is null or sf.expires_at > now())",
         import_record_id
     );
     if (rows.empty()) return std::nullopt;
@@ -68,15 +69,24 @@ std::optional<WordImportContext> WordImportRepository::load_context(
     context.import_record_system_number = row["import_number"].as<std::string>();
     context.import_name = row["import_name"].as<std::string>();
     context.source_type = row["source_type"].as<std::string>();
-    context.main_file_system_number = row["file_number"].as<std::string>();
+    context.source_file_system_number = row["file_number"].as<std::string>();
+    context.source_relative_path = relative;
     context.word_path = std::move(word_path);
     return context;
 }
 
 bool WordImportRepository::mark_parsing(const std::string& import_record_id) {
     const auto result = db_client_->execSqlSync(
-        "update import_records set import_status = '解析中', started_at = now(), error_message = null, updated_at = now() "
-        "where id = $1::uuid and import_status in ('已上传', '解析失败') returning id",
+        "with eligible as ("
+        " select sf.id from import_source_files sf join import_records ir on ir.id=sf.import_record_id "
+        " where ir.id=$1::uuid and ir.import_status in ('已上传','解析失败') "
+        " and sf.status in ('待解析','解析失败') and (sf.expires_at is null or sf.expires_at>now()) "
+        " for update of sf,ir"
+        "), source_update as ("
+        " update import_source_files sf set status='解析中',parsing_started_at=now(),expires_at=null,"
+        " last_error=null,updated_at=now() from eligible e where sf.id=e.id returning sf.id"
+        ") update import_records ir set import_status='解析中',started_at=now(),error_message=null,updated_at=now() "
+        "where ir.id=$1::uuid and exists(select 1 from source_update) returning ir.id",
         import_record_id
     );
     return !result.empty();
@@ -141,6 +151,11 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
             "import_status = '待校对', finished_at = now(), error_message = null, updated_at = now() where id = $1::uuid",
             import_record_id, compact_json(batch.data), parser_member(batch.data, "parser_name"),
             parser_member(batch.data, "parser_version"));
+        tx->execSqlSync(
+            "update import_source_files set status='待清理',cleanup_reason='解析成功',expires_at=null,"
+            "last_error=null,next_cleanup_at=now(),updated_at=now() "
+            "where import_record_id=$1::uuid and status='解析中'",
+            import_record_id);
         tx.reset();
         if (!latch->wait()) {
             outcome.error_code = "db_commit_failed";
@@ -161,10 +176,40 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
     }
 }
 
-void WordImportRepository::mark_parse_failed(const std::string& import_record_id, const std::string& message) {
+void WordImportRepository::mark_parse_failed(
+    const std::string& import_record_id,
+    const std::string& message,
+    const int retention_hours
+) {
     db_client_->execSqlSync(
-        "update import_records set import_status = '解析失败', error_message = $2, finished_at = now(), updated_at = now() "
-        "where id = $1::uuid and import_status = '解析中'", import_record_id, message);
+        "with source_update as ("
+        " update import_source_files set status='解析失败',expires_at=now()+make_interval(hours=>$3::int),"
+        " parsing_started_at=null,last_error=$2,cleanup_reason=null,next_cleanup_at=null,updated_at=now() "
+        " where import_record_id=$1::uuid and status='解析中' returning id"
+        ") update import_records set import_status='解析失败',error_message=$2,finished_at=now(),updated_at=now() "
+        "where id=$1::uuid and import_status='解析中' and exists(select 1 from source_update)",
+        import_record_id, message, retention_hours);
+}
+
+void WordImportRepository::mark_source_deleted(const std::string& import_record_id) {
+    db_client_->execSqlSync(
+        "update import_source_files set status='已删除',deleted_at=now(),last_error=null,"
+        "next_cleanup_at=null,updated_at=now() "
+        "where import_record_id=$1::uuid and status in ('待清理','清理中','清理失败')",
+        import_record_id);
+}
+
+void WordImportRepository::mark_source_cleanup_failed(
+    const std::string& import_record_id,
+    const std::string& message,
+    const int retry_after_seconds
+) {
+    db_client_->execSqlSync(
+        "update import_source_files set status='清理失败',last_error=$2,"
+        "cleanup_attempt_count=cleanup_attempt_count+1,"
+        "next_cleanup_at=now()+make_interval(secs=>$3::int),updated_at=now() "
+        "where import_record_id=$1::uuid and status in ('待清理','清理中','清理失败')",
+        import_record_id, message, retry_after_seconds);
 }
 
 }  // namespace bridge_report::db
