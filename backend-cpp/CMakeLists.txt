@@ -18,6 +18,8 @@ add_library(bridge_report_backend_core
     src/config/AppConfig.cpp
     src/contracts/AnnualInspectionContract.cpp
     src/db/AuthRepository.cpp
+    src/db/BridgeAdministrationRepository.cpp
+    src/db/BridgeDeletionRepository.cpp
     src/db/ComponentArchiveRepository.cpp
     src/db/DbClientFactory.cpp
     src/db/CommitLatch.cpp
@@ -30,8 +32,10 @@ add_library(bridge_report_backend_core
     src/deletion/ArchiveFileCleanupCoordinator.cpp
     src/deletion/ArchiveFileDeletionCore.cpp
     src/deletion/ArchivedFileDeletionQueue.cpp
+    src/deletion/BridgeDeletionModels.cpp
     src/deletion/InspectionYearDeletionModels.cpp
     src/http/AuthRoutes.cpp
+    src/http/BridgeAdministrationRoutes.cpp
     src/http/ComponentArchiveRoutes.cpp
     src/http/Cors.cpp
     src/http/DefectThreadRoutes.cpp
@@ -92,6 +96,10 @@ add_executable(bridge_report_backend_tests
     tests/test_archive_file_deletion_core.cpp
     tests/test_archive_paths.cpp
     tests/test_archived_file_deletion_queue.cpp
+    tests/test_bridge_deletion_models.cpp
+    tests/test_bridge_administration_repository.cpp
+    tests/test_bridge_administration_routes.cpp
+    tests/test_bridge_deletion_repository.cpp
     tests/test_component_archive_repository.cpp
     tests/test_component_archive_routes.cpp
     tests/test_component_score.cpp
