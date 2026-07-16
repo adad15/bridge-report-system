@@ -1,0 +1,15 @@
+import { ApiError, request } from "./apiClient";
+
+export interface BridgeAdminSummary { id: string; system_number: string; bridge_name: string; route_number: string | null; route_name: string | null; administrative_region: string | null; station_mark: string | null; status: string; }
+export interface CreateBridgeInput { bridge_name: string; route_number?: string; route_name?: string; administrative_region?: string; station_mark?: string; status: string; }
+export interface BridgeDeletionCounts { inspection_years: number; inspection_versions: number; import_records: number; bridge_aliases: number; bridge_components: number; component_aliases: number; defect_threads: number; defect_observations: number; defect_measurements: number; defect_photos: number; condition_ratings: number; defect_comparisons: number; archived_files_to_delete: number; shared_files_retained: number; }
+export interface BridgeDeletionImpact { bridge: { id: string; system_number: string; bridge_name: string; route_number: string | null; route_name: string | null; station_mark: string | null; status: string }; counts: BridgeDeletionCounts; active_edit_locks: Array<{ import_record_id: string; owner_username: string; owner_display_name: string; acquired_at: string; expires_at: string }>; impact_token: string; }
+export interface BridgeDeletionPreview { bridges: BridgeDeletionImpact[]; totals: BridgeDeletionCounts; confirmation_text: string; }
+export type BridgeDeletionResult = { bridge_id: string; system_number: string; bridge_name: string; status: "deleted" | "locked" | "impact_changed" | "not_found" | "failed"; file_cleanup_status?: "completed" | "pending"; pending_file_count?: number; audit_id?: string; message?: string; };
+export interface DeleteBridgesResult { batch_id: string; results: BridgeDeletionResult[]; }
+
+const json = (method: string, body: unknown): RequestInit => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+export async function createBridge(baseUrl: string, input: CreateBridgeInput): Promise<BridgeAdminSummary> { return (await request<{ bridge: BridgeAdminSummary }>(`${baseUrl}/api/bridges`, json("POST", input))).bridge; }
+export function fetchBridgeDeletionImpact(baseUrl: string, bridgeIds: string[]): Promise<BridgeDeletionPreview> { return request(`${baseUrl}/api/bridges/deletion-impact`, json("POST", { bridge_ids: bridgeIds })); }
+export function deleteBridges(baseUrl: string, body: { reason: string; confirmation_text: string; items: Array<{ bridge_id: string; impact_token: string }> }): Promise<DeleteBridgesResult> { return request(`${baseUrl}/api/bridges`, json("DELETE", body)); }
+export function bridgeAdministrationError(error: unknown): string { if (!(error instanceof ApiError)) return "操作失败，请稍后重试。"; const messages: Record<string, string> = { bridge_selection_changed: "桥梁列表已经变化，请刷新后重新选择。", bridge_already_exists: "该桥梁已经存在。", forbidden: "只有管理员可以执行此操作。" }; return messages[error.code] ?? error.message; }

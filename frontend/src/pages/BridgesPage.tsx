@@ -1,81 +1,20 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
 import { ApiError } from "../api/apiClient";
-import { BridgeSummary, fetchBridges } from "../api/navigationApi";
+import { type BridgeSummary, fetchBridges } from "../api/navigationApi";
+import { useAuth } from "../auth/AuthContext";
+import { CreateBridgeDialog } from "../bridges/CreateBridgeDialog";
+import { DeleteBridgesDialog } from "../bridges/DeleteBridgesDialog";
 import { backendBaseUrl } from "../config";
 
 export function BridgesPage() {
-  const [bridges, setBridges] = useState<BridgeSummary[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
-  const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    fetchBridges(backendBaseUrl)
-      .then((result) => {
-        if (cancelled) return;
-        setBridges(result);
-        setError(null);
-      })
-      .catch((caught: unknown) => {
-        if (cancelled) return;
-        setBridges(null);
-        setError(caught instanceof ApiError ? caught.message : "加载桥梁列表失败");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  const visibleBridges = bridges?.filter((bridge) =>
-    [bridge.bridge_name, bridge.system_number, bridge.route_name ?? ""]
-      .some((value) => value.toLocaleLowerCase().includes(normalizedQuery))
-  ) ?? null;
-
-  return (
-    <section className="status-panel bridges-page">
-      <div className="page-title-row"><div><p className="section-kicker">桥梁档案</p><h1>选择一座桥梁</h1><p>进入桥梁后查看最新结论、年度检测和跨年病害档案。</p></div>
-        <label className="bridge-search">搜索桥名、编号或路线<input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="例如：绕阳河、QL-000001、G305" /></label>
-      </div>
-      {error ? <p className="error-text">{error}</p> : null}
-      {!error && bridges === null ? <p>加载中…</p> : null}
-      {visibleBridges !== null && bridges?.length === 0 ? <p>暂无桥梁数据。</p> : null}
-      {visibleBridges !== null && bridges && bridges.length > 0 && visibleBridges.length === 0 ? <p className="empty-hint">没有匹配的桥梁。</p> : null}
-      {visibleBridges !== null && visibleBridges.length > 0 ? (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>系统编号</th>
-              <th>桥名</th>
-              <th>路线</th>
-              <th>状态</th>
-              <th>最新结论</th>
-              <th>待办</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleBridges.map((bridge) => (
-              <tr
-                key={bridge.id}
-                className="data-table-row-clickable"
-                onClick={() => navigate(`/bridges/${encodeURIComponent(bridge.id)}`)}
-              >
-                <td>{bridge.system_number}</td>
-                <td>{bridge.bridge_name}</td>
-                <td>{bridge.route_name ?? "-"}</td>
-                <td>{bridge.status}</td>
-                <td>{bridge.latest_inspection_year ? `${bridge.latest_inspection_year} · ${bridge.latest_overall_grade ?? "—"}` : "—"}</td>
-                <td>{bridge.pending_count > 0 ? <span className="pending-badge">{bridge.pending_count}</span> : "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : null}
-    </section>
-  );
+  const [bridges, setBridges] = useState<BridgeSummary[] | null>(null); const [error, setError] = useState<string | null>(null); const [query, setQuery] = useState(""); const [selected, setSelected] = useState<Set<string>>(new Set()); const [createOpen, setCreateOpen] = useState(false); const [deleteOpen, setDeleteOpen] = useState(false); const navigate = useNavigate(); const { user } = useAuth(); const isAdmin = user?.role === "admin";
+  const reload = useCallback(async () => { try { const result = await fetchBridges(backendBaseUrl); setBridges(result); setSelected((current) => new Set([...current].filter((id) => result.some((bridge) => bridge.id === id)))); setError(null); } catch (caught) { setBridges(null); setError(caught instanceof ApiError ? caught.message : "加载桥梁列表失败"); } }, []);
+  useEffect(() => { void reload(); }, [reload]);
+  const normalizedQuery = query.trim().toLocaleLowerCase(); const visible = bridges?.filter((bridge) => [bridge.bridge_name, bridge.system_number, bridge.route_name ?? ""].some((value) => value.toLocaleLowerCase().includes(normalizedQuery))) ?? null; const visibleIds = visible?.map((bridge) => bridge.id) ?? []; const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  function changeQuery(value: string) { setQuery(value); setSelected(new Set()); }
+  function toggle(id: string) { setSelected((current) => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; }); }
+  function toggleVisible() { setSelected((current) => { const next = new Set(current); if (allVisibleSelected) visibleIds.forEach((id) => next.delete(id)); else visibleIds.forEach((id) => next.add(id)); return next; }); }
+  const selectionChanged = useCallback(() => { setSelected(new Set()); setDeleteOpen(false); void reload(); }, [reload]);
+  return <section className="status-panel bridges-page"><div className="page-title-row"><div><p className="section-kicker">桥梁档案</p><h1>选择一座桥梁</h1><p>进入桥梁后查看最新结论、年度检测和跨年病害档案。</p></div><div className="bridge-page-actions">{isAdmin ? <div className="bridge-admin-actions"><button type="button" onClick={() => setCreateOpen(true)}>＋ 添加桥梁</button><button type="button" className="danger-button" disabled={selected.size === 0} onClick={() => setDeleteOpen(true)}>删除选中桥梁（{selected.size}）</button></div> : null}<label className="bridge-search">搜索桥名、编号或路线<input type="search" value={query} onChange={(event) => changeQuery(event.target.value)} placeholder="例如：绕阳河、QL-000001、G305" /></label></div></div>{error ? <p className="error-text">{error}</p> : null}{!error && bridges === null ? <p>加载中…</p> : null}{visible !== null && bridges?.length === 0 ? <p>暂无桥梁数据。</p> : null}{visible !== null && bridges && bridges.length > 0 && visible.length === 0 ? <p className="empty-hint">没有匹配的桥梁。</p> : null}{visible && visible.length > 0 ? <table className="data-table"><thead><tr>{isAdmin ? <th><input aria-label="选择当前搜索结果" type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} /></th> : null}<th>系统编号</th><th>桥名</th><th>路线</th><th>状态</th><th>最新结论</th><th>待办</th></tr></thead><tbody>{visible.map((bridge) => <tr key={bridge.id} className="data-table-row-clickable" onClick={() => navigate(`/bridges/${encodeURIComponent(bridge.id)}`)}>{isAdmin ? <td><input aria-label={`选择 ${bridge.system_number}`} type="checkbox" checked={selected.has(bridge.id)} onClick={(event) => event.stopPropagation()} onChange={() => toggle(bridge.id)} /></td> : null}<td>{bridge.system_number}</td><td>{bridge.bridge_name}</td><td>{bridge.route_name ?? "-"}</td><td>{bridge.status}</td><td>{bridge.latest_inspection_year ? `${bridge.latest_inspection_year} · ${bridge.latest_overall_grade ?? "—"}` : "—"}</td><td>{bridge.pending_count > 0 ? <span className="pending-badge">{bridge.pending_count}</span> : "—"}</td></tr>)}</tbody></table> : null}{createOpen ? <CreateBridgeDialog onClose={() => setCreateOpen(false)} onCreated={(bridge) => { setCreateOpen(false); navigate(`/bridges/${encodeURIComponent(bridge.id)}`); }} /> : null}{deleteOpen ? <DeleteBridgesDialog bridgeIds={[...selected]} onClose={() => { setDeleteOpen(false); setSelected(new Set()); void reload(); }} onSelectionChanged={selectionChanged} onCompleted={() => { setSelected(new Set()); void reload(); }} /> : null}</section>;
 }
