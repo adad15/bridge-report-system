@@ -27,6 +27,8 @@ add_library(bridge_report_backend_core
     src/db/ReviewRepository.cpp
     src/db/WorkspaceRepository.cpp
     src/db/WordImportRepository.cpp
+    src/deletion/ArchiveFileCleanupCoordinator.cpp
+    src/deletion/ArchiveFileDeletionCore.cpp
     src/deletion/ArchivedFileDeletionQueue.cpp
     src/deletion/InspectionYearDeletionModels.cpp
     src/http/AuthRoutes.cpp
@@ -86,6 +88,8 @@ enable_testing()
 add_executable(bridge_report_backend_tests
     tests/test_annual_inspection_contract.cpp
     tests/test_app_config.cpp
+    tests/test_archive_file_cleanup_coordinator.cpp
+    tests/test_archive_file_deletion_core.cpp
     tests/test_archive_paths.cpp
     tests/test_archived_file_deletion_queue.cpp
     tests/test_component_archive_repository.cpp

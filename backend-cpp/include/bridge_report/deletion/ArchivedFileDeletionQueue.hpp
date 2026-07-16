@@ -5,12 +5,9 @@
 
 #include <drogon/orm/DbClient.h>
 
-namespace bridge_report::deletion {
+#include "bridge_report/deletion/ArchiveFileCleanupCoordinator.hpp"
 
-struct FileCleanupSummary {
-    int completed{0};
-    int failed{0};
-};
+namespace bridge_report::deletion {
 
 class ArchivedFileDeletionQueue {
 public:
