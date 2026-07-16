@@ -280,6 +280,20 @@ GET    /api/inspection-years/{inspection_year_id}/deletion-impact  # admin-only 
 DELETE /api/inspection-years/{inspection_year_id}                  # admin-only C1 permanent deletion
 ```
 
+The bridge archive list also provides administrator-only bridge maintenance.
+Administrators can create a bridge with its name and optional route/location
+identity, or select up to 100 bridges for a live whole-archive deletion preview.
+Batch deletion commits each bridge independently, blocks only bridges with an
+active edit lock or changed impact token, and permanently retains a compact
+audit snapshot. Exclusive files are processed immediately and by a durable
+cleanup coordinator at startup and every five minutes; shared files remain.
+
+```text
+POST   /api/bridges                    # admin-only bridge creation
+POST   /api/bridges/deletion-impact    # admin-only batch impact preview
+DELETE /api/bridges                    # admin-only per-bridge atomic batch deletion
+```
+
 ## Module 06 Component Defect Archive
 
 Module 06 organizes confirmed annual facts into a read-only component defect

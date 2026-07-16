@@ -2,7 +2,7 @@
 
 > 日期：2026-07-16
 >
-> 状态：设计已确认，等待用户复核
+> 状态：已实施（2026-07-16）
 >
 > 关联设计：
 > - `docs/superpowers/specs/modules/06-5-bridge-centric-interaction-redesign.md`
