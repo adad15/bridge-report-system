@@ -39,4 +39,12 @@ struct AppConfig {
  */
 AppConfig load_app_config(const std::filesystem::path& path);
 
+/**
+ * @brief Drogon 接收 multipart 上传时使用的请求体上限。
+ *
+ * Word 文件大小上限只计算文件内容；HTTP multipart 还包含边界、字段和文件名，
+ * 因此框架层必须额外预留封装空间，业务路由再执行精确的文件大小校验。
+ */
+std::size_t word_upload_request_max_bytes(const AppConfig& config) noexcept;
+
 }  // 命名空间 bridge_report::config

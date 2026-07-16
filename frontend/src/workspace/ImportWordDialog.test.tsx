@@ -44,4 +44,13 @@ describe("ImportWordDialog", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(".docx");
     expect(uploadWordImport).not.toHaveBeenCalled();
   });
+
+  it("shows a field-specific error instead of letting native validation silently block submission", async () => {
+    render(<ImportWordDialog bridgeName="测试桥" inspectionYearId="year-1" inspectionYear={2026} onClose={vi.fn()} onChanged={vi.fn()} onCompleted={vi.fn()} />);
+    await userEvent.upload(screen.getByLabelText("Word 文件"), new File(["docx"], "报告.docx"));
+    await userEvent.click(screen.getByRole("button", { name: "上传并解析" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("请选择检查日期");
+    expect(screen.getByLabelText("检查日期")).toHaveFocus();
+    expect(uploadWordImport).not.toHaveBeenCalled();
+  });
 });

@@ -24,6 +24,14 @@ TEST(WordInputArchiveTest, AcceptsChineseNameAndUppercaseDocx) {
     EXPECT_EQ(result.metadata.sha256.size(), 64u);
 }
 
+TEST(WordInputArchiveTest, AcceptsUnicodeReportNameWithoutFilesystemConversion) {
+    const auto result = bridge_report::archive::validate_word_input(
+        "Q202406002-JZ-506大桥定期检测报告—（2类）🚧.DOCX", "word-content", 1024);
+
+    ASSERT_TRUE(result.ok());
+    EXPECT_EQ(result.metadata.file_extension, ".docx");
+}
+
 TEST(WordInputArchiveTest, RejectsEmptyWrongExtensionAndOversize) {
     EXPECT_EQ(bridge_report::archive::validate_word_input("", "x", 10).error,
               bridge_report::archive::WordInputValidationError::InvalidFile);

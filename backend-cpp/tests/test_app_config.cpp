@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <fstream>
+#include <limits>
 
 #include <drogon/drogon.h>
 #include <gtest/gtest.h>
@@ -83,6 +84,22 @@ TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
     EXPECT_EQ(config.postgres.database, "bridge_report_system");
     EXPECT_EQ(config.postgres.user, "bridge_report");
     EXPECT_EQ(config.postgres.password, "bridge_report_dev");
+}
+
+TEST(AppConfigTest, AllowsMultipartEnvelopeBeyondConfiguredWordFileLimit) {
+    bridge_report::config::AppConfig config;
+    config.word_upload_max_bytes = 256u * 1024u * 1024u;
+
+    EXPECT_EQ(
+        bridge_report::config::word_upload_request_max_bytes(config),
+        257u * 1024u * 1024u
+    );
+
+    config.word_upload_max_bytes = (std::numeric_limits<std::size_t>::max)();
+    EXPECT_EQ(
+        bridge_report::config::word_upload_request_max_bytes(config),
+        (std::numeric_limits<std::size_t>::max)()
+    );
 }
 
 TEST(RuntimePathsTest, CreatesMissingLogDirectory) {

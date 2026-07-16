@@ -191,6 +191,7 @@ export function workspaceErrorMessage(error: unknown): string {
     invalid_word_file: "请选择一个非空的 .docx 文件。",
     word_file_too_large: "Word 文件超过允许的上传大小。",
     word_archive_failed: "Word 文件归档失败，请重试。",
+    word_upload_failed: "Word 上传处理失败，请重试；若仍失败，请保留当前弹窗并联系管理员。",
     inspection_year_edit_locked: "该年度仍有人正在编辑，暂时不能删除。",
     deletion_impact_changed: "删除影响范围已经变化，请重新核对后再次确认。",
     deletion_reason_required: "请填写删除原因。",

@@ -23,6 +23,15 @@ std::string lower_ascii(std::string value) {
     return value;
 }
 
+std::string file_extension(std::string_view file_name) {
+    const auto separator = file_name.find_last_of("/\\");
+    const auto dot = file_name.find_last_of('.');
+    if (dot == std::string_view::npos || (separator != std::string_view::npos && dot < separator)) {
+        return {};
+    }
+    return lower_ascii(std::string(file_name.substr(dot)));
+}
+
 std::string display_file_name(std::string_view submitted) {
     std::string value(submitted);
     std::replace(value.begin(), value.end(), '\\', '/');
@@ -59,8 +68,10 @@ WordInputValidationResult validate_word_input(
         result.error = WordInputValidationError::InvalidFile;
         return result;
     }
-    result.metadata.file_extension = lower_ascii(
-        std::filesystem::path(result.metadata.original_file_name).extension().string());
+    // HTTP multipart 文件名是 UTF-8 文本。这里只需检查 ASCII 扩展名，不应先转换为
+    // Windows filesystem::path；文件名含全角符号或当前代码页无法表示的字符时，
+    // 路径转换可能抛异常并把合法 .docx 误报成服务故障。
+    result.metadata.file_extension = file_extension(result.metadata.original_file_name);
     if (result.metadata.file_extension != ".docx") {
         result.error = WordInputValidationError::InvalidFile;
         return result;

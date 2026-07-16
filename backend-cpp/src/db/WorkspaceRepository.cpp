@@ -5,6 +5,7 @@
 #include <utility>
 
 #include <json/json.h>
+#include <trantor/utils/Logger.h>
 
 #include "bridge_report/archive/ArchivePaths.hpp"
 #include "bridge_report/archive/WordInputArchive.hpp"
@@ -313,6 +314,15 @@ UploadWordOutcome WorkspaceRepository::upload_word_import(
         imported.created_at = optional_text(import_row, "created_at");
         imported.updated_at = optional_text(import_row, "updated_at");
         return {UploadWordStatus::Created, std::move(imported)};
+    } catch (const std::exception& error) {
+        if (transaction) {
+            try { transaction->rollback(); }
+            catch (...) {
+            }
+        }
+        if (file_stored) archive::remove_archived_word_input(archive_root, stored_relative_path);
+        LOG_ERROR << "Word archive transaction failed: " << error.what();
+        return {UploadWordStatus::ArchiveFailed, std::nullopt};
     } catch (...) {
         if (transaction) {
             try { transaction->rollback(); }
@@ -320,6 +330,7 @@ UploadWordOutcome WorkspaceRepository::upload_word_import(
             }
         }
         if (file_stored) archive::remove_archived_word_input(archive_root, stored_relative_path);
+        LOG_ERROR << "Word archive transaction failed with an unknown exception";
         return {UploadWordStatus::ArchiveFailed, std::nullopt};
     }
 }

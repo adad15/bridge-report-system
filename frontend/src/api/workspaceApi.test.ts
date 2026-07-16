@@ -76,6 +76,7 @@ describe("workspaceApi", () => {
 
   it("maps stable errors and preserves unknown backend messages", () => {
     expect(workspaceErrorMessage(new ApiError("invalid_word_file", "raw"))).toContain(".docx");
+    expect(workspaceErrorMessage(new ApiError("word_upload_failed", "raw"))).toContain("Word 上传处理失败");
     expect(workspaceErrorMessage(new ApiError("future_error", "后端原始提示"))).toBe("后端原始提示");
   });
 });

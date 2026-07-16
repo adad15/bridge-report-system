@@ -222,6 +222,7 @@ int main(int argc, char* argv[]) {
 
     drogon::app()
         .addListener(config.host, config.port)
+        .setClientMaxBodySize(bridge_report::config::word_upload_request_max_bytes(config))
         .setLogPath(log_path)
         .setLogLevel(trantor::Logger::kInfo)
         .run();

@@ -19,6 +19,12 @@ const actionLabel = (item: WorkspaceImport) => {
   return null;
 };
 
+interface ImportDialogState {
+  retry: WorkspaceImport | null;
+  inspectionYearId: string;
+  inspectionYear: number;
+}
+
 export function InspectionWorkspacePage() {
   const { bridgeId, inspectionYearId } = useParams<{ bridgeId: string; inspectionYearId?: string }>();
   const navigate = useNavigate();
@@ -29,7 +35,7 @@ export function InspectionWorkspacePage() {
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
-  const [importDialog, setImportDialog] = useState<{ retry: WorkspaceImport | null } | null>(null);
+  const [importDialog, setImportDialog] = useState<ImportDialogState | null>(null);
   const [showDelete, setShowDelete] = useState(false);
 
   useEffect(() => {
@@ -81,6 +87,10 @@ export function InspectionWorkspacePage() {
 
   const refresh = () => {
     setVersion((current) => current + 1);
+  };
+
+  const refreshAll = () => {
+    refresh();
     reloadOverview();
   };
 
@@ -103,31 +113,42 @@ export function InspectionWorkspacePage() {
         {!error && workspace ? <AnnualWorkspace
           workspace={workspace}
           bridgeId={bridgeId}
-          onImport={() => setImportDialog({ retry: null })}
-          onRetry={(item) => setImportDialog({ retry: item })}
+          onImport={() => setImportDialog({
+            retry: null,
+            inspectionYearId: workspace.inspection_year.id,
+            inspectionYear: workspace.inspection_year.inspection_year,
+          })}
+          onRetry={(item) => setImportDialog({
+            retry: item,
+            inspectionYearId: workspace.inspection_year.id,
+            inspectionYear: workspace.inspection_year.inspection_year,
+          })}
           canDelete={user?.role === "admin"}
           onDelete={() => setShowDelete(true)}
         /> : null}
       </section>
 
       {showCreate ? <CreateInspectionDialog bridgeId={bridgeId} onClose={() => setShowCreate(false)} onCreated={(id) => {
-        setShowCreate(false); refresh(); navigate(inspectionWorkspacePath(bridgeId, id));
+        setShowCreate(false); refreshAll(); navigate(inspectionWorkspacePath(bridgeId, id));
       }} /> : null}
-      {importDialog && workspace ? <ImportWordDialog
+      {importDialog ? <ImportWordDialog
         bridgeName={overview.bridge.bridge_name}
-        inspectionYearId={workspace.inspection_year.id}
-        inspectionYear={workspace.inspection_year.inspection_year}
+        inspectionYearId={importDialog.inspectionYearId}
+        inspectionYear={importDialog.inspectionYear}
         retryImport={importDialog.retry}
         onClose={() => setImportDialog(null)}
         onChanged={refresh}
-        onCompleted={(importId) => navigate(reviewPath(bridgeId, workspace.inspection_year.id, importId))}
+        onCompleted={(importId) => {
+          reloadOverview();
+          navigate(reviewPath(bridgeId, importDialog.inspectionYearId, importId));
+        }}
       /> : null}
       {showDelete && workspace ? <DeleteInspectionYearDialog
         inspectionYearId={workspace.inspection_year.id}
         onClose={() => setShowDelete(false)}
         onDeleted={(result) => {
           setShowDelete(false);
-          refresh();
+          refreshAll();
           navigate(result.next_inspection_year_id
             ? inspectionWorkspacePath(bridgeId, result.next_inspection_year_id)
             : `/bridges/${encodeURIComponent(bridgeId)}/inspections`, { replace: true });

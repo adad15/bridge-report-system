@@ -1,6 +1,7 @@
 #include "bridge_report/config/AppConfig.hpp"
 
 #include <fstream>
+#include <limits>
 
 #include <json/json.h>
 
@@ -101,6 +102,15 @@ AppConfig load_app_config(const std::filesystem::path& path) {
     config.postgres.password = get_string_or_default(postgres, "password", config.postgres.password);
 
     return config;
+}
+
+std::size_t word_upload_request_max_bytes(const AppConfig& config) noexcept {
+    constexpr std::size_t multipart_envelope_allowance = 1024ULL * 1024ULL;
+    const auto maximum = std::numeric_limits<std::size_t>::max();
+    if (config.word_upload_max_bytes > maximum - multipart_envelope_allowance) {
+        return maximum;
+    }
+    return config.word_upload_max_bytes + multipart_envelope_allowance;
 }
 
 }  // 命名空间 bridge_report::config

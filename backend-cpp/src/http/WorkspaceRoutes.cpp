@@ -68,10 +68,14 @@ void register_workspace_routes(
                     return;
                 }
                 respond_json(callback, overview->to_json());
-            } catch (const drogon::orm::DrogonDbException&) {
+            } catch (const drogon::orm::DrogonDbException& error) {
+                LOG_ERROR << "Word upload database failure: " << error.base().what();
                 respond_db_unavailable(callback);
-            } catch (const std::exception&) {
-                respond_db_unavailable(callback);
+            } catch (const std::exception& error) {
+                LOG_ERROR << "Word upload request handling failure: " << error.what();
+                respond_json(callback,
+                             make_error_body("word_upload_failed", "Word 上传处理失败，请稍后重试。"),
+                             drogon::k500InternalServerError);
             }
         },
         {drogon::Get}
