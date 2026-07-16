@@ -6,7 +6,7 @@
 #include <drogon/orm/Exception.h>
 
 #include "bridge_report/db/InspectionYearDeletionRepository.hpp"
-#include "bridge_report/deletion/ArchivedFileDeletionQueue.hpp"
+#include "bridge_report/deletion/ArchiveFileCleanupCoordinator.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
 
@@ -47,7 +47,7 @@ std::optional<std::string> parse_delete_inspection_year_request(
 
 void register_inspection_year_deletion_routes(
     const drogon::orm::DbClientPtr& db_client,
-    const std::filesystem::path& archive_root
+    const std::shared_ptr<deletion::ArchiveFileCleanupCoordinator>& cleanup_coordinator
 ) {
     register_options_handler("/api/inspection-years/{inspection_year_id}/deletion-impact");
     register_options_handler("/api/inspection-years/{inspection_year_id}");
@@ -73,7 +73,7 @@ void register_inspection_year_deletion_routes(
 
     drogon::app().registerHandler(
         "/api/inspection-years/{inspection_year_id}",
-        [db_client, archive_root](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+        [db_client, cleanup_coordinator](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
                                   const std::string& id) {
             if (!is_valid_uuid(id)) { respond_year_not_found(callback); return; }
             const auto body = request->getJsonObject();
@@ -125,8 +125,7 @@ void register_inspection_year_deletion_routes(
 
                 deletion::FileCleanupSummary cleanup;
                 try {
-                    deletion::ArchivedFileDeletionQueue queue(db_client, archive_root);
-                    cleanup = queue.process_audit(*outcome.deletion_audit_id);
+                    cleanup = cleanup_coordinator->process_annual_audit(*outcome.deletion_audit_id);
                 } catch (const std::exception&) {
                     cleanup.failed = outcome.current_plan.has_value()
                         ? outcome.current_plan->counts.archived_files_to_delete : 1;
@@ -141,6 +140,8 @@ void register_inspection_year_deletion_routes(
                     ? Json::Value(*outcome.next_inspection_year_id) : Json::Value(Json::nullValue);
                 response["file_cleanup"]["completed"] = cleanup.completed;
                 response["file_cleanup"]["failed"] = cleanup.failed;
+                response["file_cleanup"]["pending"] = cleanup_coordinator->pending_annual_items(
+                    *outcome.deletion_audit_id);
                 respond_json(callback, response);
             } catch (const std::exception&) {
                 respond_db_unavailable(callback);

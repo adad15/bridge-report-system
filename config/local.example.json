@@ -22,7 +22,12 @@
   },
   "archive": {
     "root": "archive",
-    "word_upload_max_bytes": 268435456
+    "word_upload_max_bytes": 268435456,
+    "cleanup_interval_seconds": 300,
+    "cleanup_batch_size": 25,
+    "cleanup_claim_timeout_seconds": 900,
+    "cleanup_retry_base_seconds": 300,
+    "cleanup_retry_max_seconds": 86400
   },
   "logs": {
     "root": "logs"

@@ -30,7 +30,12 @@ std::filesystem::path write_config_file() {
   },
   "archive": {
     "root": "test-archive",
-    "word_upload_max_bytes": 1048576
+    "word_upload_max_bytes": 1048576,
+    "cleanup_interval_seconds": 60,
+    "cleanup_batch_size": 10,
+    "cleanup_claim_timeout_seconds": 120,
+    "cleanup_retry_base_seconds": 30,
+    "cleanup_retry_max_seconds": 3600
   }
 })json";
     return path;
@@ -48,6 +53,11 @@ TEST(AppConfigTest, LoadsConfiguredPortsAndArchiveRoot) {
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:19081");
     EXPECT_EQ(config.archive_root.generic_string(), "test-archive");
     EXPECT_EQ(config.word_upload_max_bytes, 1048576u);
+    EXPECT_EQ(config.cleanup_interval_seconds, 60);
+    EXPECT_EQ(config.cleanup_batch_size, 10);
+    EXPECT_EQ(config.cleanup_claim_timeout_seconds, 120);
+    EXPECT_EQ(config.cleanup_retry_base_seconds, 30);
+    EXPECT_EQ(config.cleanup_retry_max_seconds, 3600);
     EXPECT_EQ(config.postgres.host, "127.0.0.1");
     EXPECT_EQ(config.postgres.port, 15432);
     EXPECT_EQ(config.postgres.database, "bridge_report_test");
@@ -63,6 +73,11 @@ TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:18081");
     EXPECT_EQ(config.archive_root.generic_string(), "archive");
     EXPECT_EQ(config.word_upload_max_bytes, 256u * 1024u * 1024u);
+    EXPECT_EQ(config.cleanup_interval_seconds, 300);
+    EXPECT_EQ(config.cleanup_batch_size, 25);
+    EXPECT_EQ(config.cleanup_claim_timeout_seconds, 900);
+    EXPECT_EQ(config.cleanup_retry_base_seconds, 300);
+    EXPECT_EQ(config.cleanup_retry_max_seconds, 86400);
     EXPECT_EQ(config.postgres.host, "127.0.0.1");
     EXPECT_EQ(config.postgres.port, 5432);
     EXPECT_EQ(config.postgres.database, "bridge_report_system");

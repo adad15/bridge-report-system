@@ -1,11 +1,13 @@
 #pragma once
 
-#include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 
 #include <drogon/orm/DbClient.h>
 #include <json/value.h>
+
+#include "bridge_report/deletion/ArchiveFileCleanupCoordinator.hpp"
 
 namespace bridge_report::http {
 
@@ -22,7 +24,7 @@ struct DeleteInspectionYearRequest {
 
 void register_inspection_year_deletion_routes(
     const drogon::orm::DbClientPtr& db_client,
-    const std::filesystem::path& archive_root
+    const std::shared_ptr<deletion::ArchiveFileCleanupCoordinator>& cleanup_coordinator
 );
 
 }  // namespace bridge_report::http

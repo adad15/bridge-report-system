@@ -26,6 +26,11 @@ struct AppConfig {
     std::string python_tools_base_url{"http://127.0.0.1:18081"};
     std::filesystem::path archive_root{"archive"};
     std::size_t word_upload_max_bytes{256ULL * 1024ULL * 1024ULL};
+    int cleanup_interval_seconds{300};
+    int cleanup_batch_size{25};
+    int cleanup_claim_timeout_seconds{900};
+    int cleanup_retry_base_seconds{300};
+    int cleanup_retry_max_seconds{86400};
     PostgresConfig postgres{};
 };
 

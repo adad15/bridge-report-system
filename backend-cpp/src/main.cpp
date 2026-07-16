@@ -21,7 +21,7 @@
 #include "bridge_report/http/WordImportRoutes.hpp"
 #include "bridge_report/http/WorkspaceRoutes.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
-#include "bridge_report/deletion/ArchivedFileDeletionQueue.hpp"
+#include "bridge_report/deletion/ArchiveFileCleanupCoordinator.hpp"
 
 namespace {
 
@@ -170,13 +170,35 @@ int main(int argc, char* argv[]) {
         std::cout << "默认账号播种失败（稍后可重启重试）：" << error.what() << "\n";
     }
 
-    // 上次删除若因进程异常未完成物理文件清理，启动时做一次有界重试。
-    try {
-        bridge_report::deletion::ArchivedFileDeletionQueue queue(db_client, config.archive_root);
-        queue.process_pending();
-    } catch (const std::exception& error) {
-        std::cout << "归档文件待清理队列重试失败：" << error.what() << "\n";
-    }
+    bridge_report::deletion::ArchiveFileCleanupPolicy cleanup_policy;
+    cleanup_policy.batch_size = config.cleanup_batch_size;
+    cleanup_policy.claim_timeout_seconds = config.cleanup_claim_timeout_seconds;
+    cleanup_policy.retry_base_seconds = config.cleanup_retry_base_seconds;
+    cleanup_policy.retry_max_seconds = config.cleanup_retry_max_seconds;
+    const auto cleanup_coordinator =
+        std::make_shared<bridge_report::deletion::ArchiveFileCleanupCoordinator>(
+            db_client, config.archive_root, cleanup_policy);
+
+    // 启动时处理遗留项，并在运行期间持续有界重试。异常不得阻断 HTTP 服务。
+    drogon::app().registerBeginningAdvice(
+        [cleanup_coordinator, interval = config.cleanup_interval_seconds]() {
+            try {
+                cleanup_coordinator->process_pending();
+            } catch (const std::exception& error) {
+                std::cout << "归档文件启动清理失败：" << error.what() << "\n";
+            }
+            drogon::app().getLoop()->runEvery(
+                static_cast<double>(interval),
+                [cleanup_coordinator]() {
+                    try {
+                        cleanup_coordinator->process_pending();
+                    } catch (const std::exception& error) {
+                        std::cout << "归档文件定时清理失败：" << error.what() << "\n";
+                    }
+                }
+            );
+        }
+    );
 
     drogon::app().registerMiddleware(std::make_shared<drogon::HttpOptionsMiddleware>());
     register_health_routes(config, db_client);
@@ -188,7 +210,7 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_workspace_routes(db_client, config);
     bridge_report::http::register_component_archive_routes(db_client, config.archive_root);
     bridge_report::http::register_defect_thread_routes(db_client);
-    bridge_report::http::register_inspection_year_deletion_routes(db_client, config.archive_root);
+    bridge_report::http::register_inspection_year_deletion_routes(db_client, cleanup_coordinator);
 
     std::cout << "Bridge Report C++ backend listening on "
               << config.host << ":" << config.port << "\n";

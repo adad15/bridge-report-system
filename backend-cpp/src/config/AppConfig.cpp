@@ -22,6 +22,11 @@ int get_int_or_default(const Json::Value& object, const char* key, int fallback)
     return object[key].asInt();
 }
 
+int get_positive_int_or_default(const Json::Value& object, const char* key, int fallback) {
+    const auto value = get_int_or_default(object, key, fallback);
+    return value > 0 ? value : fallback;
+}
+
 std::size_t get_size_or_default(const Json::Value& object, const char* key, const std::size_t fallback) {
     if (!object.isObject() || !object.isMember(key) || !object[key].isUInt64()) {
         return fallback;
@@ -70,6 +75,19 @@ AppConfig load_app_config(const std::filesystem::path& path) {
         "word_upload_max_bytes",
         config.word_upload_max_bytes
     );
+    config.cleanup_interval_seconds = get_positive_int_or_default(
+        archive, "cleanup_interval_seconds", config.cleanup_interval_seconds);
+    config.cleanup_batch_size = get_positive_int_or_default(
+        archive, "cleanup_batch_size", config.cleanup_batch_size);
+    config.cleanup_claim_timeout_seconds = get_positive_int_or_default(
+        archive, "cleanup_claim_timeout_seconds", config.cleanup_claim_timeout_seconds);
+    config.cleanup_retry_base_seconds = get_positive_int_or_default(
+        archive, "cleanup_retry_base_seconds", config.cleanup_retry_base_seconds);
+    config.cleanup_retry_max_seconds = get_positive_int_or_default(
+        archive, "cleanup_retry_max_seconds", config.cleanup_retry_max_seconds);
+    if (config.cleanup_retry_max_seconds < config.cleanup_retry_base_seconds) {
+        config.cleanup_retry_max_seconds = config.cleanup_retry_base_seconds;
+    }
 
     const auto& postgres = root["postgres"];
     config.postgres.host = get_string_or_default(postgres, "host", config.postgres.host);
