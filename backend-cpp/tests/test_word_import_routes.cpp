@@ -70,4 +70,25 @@ TEST(WordImportRoutesTest, RejectsPythonEnvelopeWithoutDataObject) {
     EXPECT_THROW(bridge_report::http::extract_python_parse_data(response), std::invalid_argument);
 }
 
+TEST(WordImportRoutesTest, ExtractsStructuredPythonBusinessError) {
+    Json::Value response;
+    response["detail"]["code"] = "rating_table_not_found";
+    response["detail"]["message"] = "未识别到表4.1-2总体技术状况评定表。";
+
+    const auto error = bridge_report::http::extract_python_parse_error(response);
+
+    ASSERT_TRUE(error.has_value());
+    EXPECT_EQ(error->code, "rating_table_not_found");
+    EXPECT_EQ(error->message, "未识别到表4.1-2总体技术状况评定表。");
+}
+
+TEST(WordImportRoutesTest, RejectsMalformedPythonBusinessError) {
+    Json::Value response;
+    response["detail"]["code"] = "rating_table_not_found";
+    response["detail"]["message"] = "";
+
+    EXPECT_FALSE(bridge_report::http::extract_python_parse_error(response).has_value());
+    EXPECT_FALSE(bridge_report::http::extract_python_parse_error(Json::Value(Json::objectValue)).has_value());
+}
+
 }  // namespace

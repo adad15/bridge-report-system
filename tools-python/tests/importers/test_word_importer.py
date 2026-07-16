@@ -404,6 +404,77 @@ def test_parse_rating_tables_extracts_real_liaoning_table_shape() -> None:
     ]
 
 
+def test_parse_rating_tables_accepts_liaoning_summary_without_component_detail_columns() -> None:
+    rule_set = select_rule_set("辽宁国省干线")
+    weight_table = DocxTable(
+        index=0,
+        title="表4.1-1桥梁部件权重计算表",
+        chapter=None,
+        rows=[["部位", "序号", "名称", "权重"]],
+    )
+    overall_table = DocxTable(
+        index=1,
+        title="表4.1-2总体技术状况评定表",
+        chapter=None,
+        rows=[
+            [
+                "结构",
+                "类别",
+                "评价部件",
+                "桥梁部件技术状况评分",
+                "桥梁结构技术状况评分",
+                "桥梁结构组成权重",
+                "等级",
+                "桥梁总体技术状况评分",
+                "综合评级",
+            ],
+            ["上部结构", "1", "上部承重构件", "81.54", "84.09", "0.4", "2", "82.96", "2类"],
+            ["下部结构", "6", "桥墩", "78.41", "89.55", "0.4", "2", "82.96", "2类"],
+            ["桥面系", "11", "桥面铺装", "72.21", "67.51", "0.2", "3", "82.96", "2类"],
+        ],
+    )
+
+    ratings, warnings = parse_rating_tables([weight_table, overall_table], rule_set)
+
+    assert warnings == []
+    assert ratings.overall.total_score == 82.96
+    assert ratings.overall.overall_grade == "2类"
+    assert [item.structure_score for item in ratings.structure_parts] == [84.09, 89.55, 67.51]
+    assert [item.part_score for item in ratings.evaluation_parts] == [81.54, 78.41, 72.21]
+    assert all(item.score_rows == [] for item in ratings.evaluation_parts)
+
+
+def test_parse_rating_tables_warns_when_only_one_component_detail_column_exists() -> None:
+    table = DocxTable(
+        index=0,
+        title="表4.1-2总体技术状况评定表",
+        chapter=None,
+        rows=[
+            [
+                "结构",
+                "类别",
+                "评价部件",
+                "构件评分",
+                "桥梁部件技术状况评分",
+                "桥梁结构技术状况评分",
+                "桥梁结构组成权重",
+                "等级",
+                "桥梁总体技术状况评分",
+                "综合评级",
+            ],
+            ["上部结构", "1", "上部承重构件", "65", "81.54", "84.09", "0.4", "2", "82.96", "2类"],
+        ],
+    )
+
+    ratings, warnings = parse_rating_tables([table], select_rule_set("辽宁国省干线"))
+
+    assert ratings.evaluation_parts[0].score_rows == []
+    assert [warning.code for warning in warnings] == [
+        "liaoning_trunk_rating_weight_table_missing",
+        "liaoning_trunk_component_score_columns_incomplete",
+    ]
+
+
 def test_parse_rating_tables_does_not_use_appendix_rating_table() -> None:
     rule_set = select_rule_set("辽宁国省干线")
     table = DocxTable(

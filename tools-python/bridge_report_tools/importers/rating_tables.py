@@ -19,12 +19,10 @@ from bridge_report_tools.importers.word_rules.common import normalize_rule_text
 
 STRUCTURE_PARTS = {"上部结构", "下部结构", "桥面系"}
 SCORE_ROW_PATTERN = re.compile(r"(?P<count>\d+)\s*[:：]\s*(?P<score>\d+(?:\.\d+)?)")
-LIAONING_OVERALL_HEADERS = (
+LIAONING_OVERALL_CORE_HEADERS = (
     "结构",
     "类别",
     "评价部件",
-    "构件数量",
-    "构件评分",
     "桥梁部件技术状况评分",
     "桥梁结构技术状况评分",
     "桥梁结构组成权重",
@@ -58,7 +56,7 @@ def is_liaoning_overall_rating_table(table: DocxTable, rule_set: WordRuleSet) ->
         return False
 
     headers = table.rows[0] if table.rows else []
-    return all(exact_header_index(headers, required) is not None for required in LIAONING_OVERALL_HEADERS)
+    return all(exact_header_index(headers, required) is not None for required in LIAONING_OVERALL_CORE_HEADERS)
 
 
 def has_weight_table(tables: list[DocxTable], rule_set: WordRuleSet) -> bool:
@@ -155,6 +153,19 @@ def parse_liaoning_overall_rating_table(
     grade_index = exact_header_index(headers, "等级")
     overall_score_index = exact_header_index(headers, "桥梁总体技术状况评分")
     overall_grade_index = exact_header_index(headers, "综合评级")
+    has_component_count = component_count_index is not None
+    has_component_score = component_score_index is not None
+    has_component_details = has_component_count and has_component_score
+
+    if has_component_count != has_component_score:
+        warnings.append(
+            WarningItem(
+                code="liaoning_trunk_component_score_columns_incomplete",
+                message="表4.1-2仅包含构件数量或构件评分中的一列，构件评分明细已留空，请人工补充。",
+                severity="warning",
+                target_candidate_id=None,
+            )
+        )
 
     overall: OverallRating | None = None
     structure_parts: dict[str, StructurePartRating] = {}
@@ -170,8 +181,6 @@ def parse_liaoning_overall_rating_table(
 
         try:
             category_no = parse_int(get_cell(row, category_no_index))
-            component_count = parse_int(get_cell(row, component_count_index))
-            component_score = parse_float(get_cell(row, component_score_index))
             part_score = parse_float(get_cell(row, part_score_index))
             structure_score = parse_float(get_cell(row, structure_score_index))
             weight = parse_float(get_cell(row, weight_index))
@@ -215,9 +224,15 @@ def parse_liaoning_overall_rating_table(
                 confidence=0.92,
                 review_status="待确认",
             )
-        evaluation_parts[key].score_rows.append(
-            EvaluationScoreRow(component_count=component_count, component_score=component_score)
-        )
+        if has_component_details:
+            try:
+                component_count = parse_int(get_cell(row, component_count_index))
+                component_score = parse_float(get_cell(row, component_score_index))
+            except ValueError:
+                continue
+            evaluation_parts[key].score_rows.append(
+                EvaluationScoreRow(component_count=component_count, component_score=component_score)
+            )
 
     if overall is None:
         return None

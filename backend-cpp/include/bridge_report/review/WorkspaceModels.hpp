@@ -93,6 +93,7 @@ struct WorkspaceImport {
     std::optional<std::string> importer_name;
     std::optional<std::string> created_at;
     std::optional<std::string> updated_at;
+    std::optional<std::string> error_message;
     std::optional<std::string> temporary_source_status;
     std::optional<std::string> temporary_source_expires_at;
     ReviewStatistics statistics;

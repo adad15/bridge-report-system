@@ -134,6 +134,7 @@ Json::Value WorkspaceImport::to_json() const {
     json["importer_name"] = optional_string_json(importer_name);
     json["created_at"] = optional_string_json(created_at);
     json["updated_at"] = optional_string_json(updated_at);
+    json["error_message"] = optional_string_json(error_message);
     json["temporary_source_status"] = optional_string_json(temporary_source_status);
     json["temporary_source_expires_at"] = optional_string_json(temporary_source_expires_at);
     json["statistics"] = statistics.to_json();

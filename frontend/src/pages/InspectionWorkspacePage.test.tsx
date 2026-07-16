@@ -71,4 +71,31 @@ describe("InspectionWorkspacePage", () => {
     expect(screen.getByRole("region", { name: "导入测试弹窗" })).toBeInTheDocument();
     expect(reloadOverview).not.toHaveBeenCalled();
   });
+
+  it("shows the specific Python parsing error stored on a failed import", async () => {
+    vi.mocked(fetchInspectionWorkspace).mockResolvedValue({
+      bridge: { id: "bridge-1", system_number: "QL-000001", bridge_name: "百股大桥", route_name: "大养线", status: "在用" },
+      inspection_year: { id: "year-1", system_number: "NDJC-000001", inspection_year: 2024, status: "待校对", version_number: 1, is_current: true, overall_score: null, overall_grade: null, created_at: null, updated_at: null },
+      imports: [{
+        id: "import-1", system_number: "DRJL-000001", import_name: "百股大桥报告.docx",
+        source_type: "软件导出Word", import_status: "解析失败", importer_name: null,
+        created_at: null, updated_at: null,
+        error_message: "未识别到表4.1-2总体技术状况评定表。",
+        temporary_source_status: "解析失败", temporary_source_expires_at: "2026-07-17T12:00:00+08:00",
+        statistics: { defect_count: 0, photo_count: 0, rating_item_count: 0, pending_count: 0, confirmed_count: 0, modified_count: 0, ignored_count: 0, object_warning_count: 0 },
+        edit_lock: null, available_action: "parse",
+      }],
+      pending: { import_count: 1, unbound_observation_count: 0, total_count: 1 },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
+        <Routes>
+          <Route path="/bridges/:bridgeId/inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("解析失败：未识别到表4.1-2总体技术状况评定表。")).toBeInTheDocument();
+  });
 });

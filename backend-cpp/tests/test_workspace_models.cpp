@@ -111,6 +111,7 @@ TEST(WorkspaceImportTest, EmitsReviewStatisticsActionAndOptionalLock) {
     item.importer_name = "张工";
     item.created_at = "2026-07-12 08:28:00+08";
     item.updated_at = "2026-07-15 14:22:00+08";
+    item.error_message = "未识别到表4.1-2总体技术状况评定表。";
     item.statistics.defect_count = 25;
     item.statistics.photo_count = 31;
     item.statistics.rating_item_count = 15;
@@ -124,6 +125,7 @@ TEST(WorkspaceImportTest, EmitsReviewStatisticsActionAndOptionalLock) {
     EXPECT_EQ(json["statistics"]["photo_count"].asInt(), 31);
     EXPECT_EQ(json["statistics"]["rating_item_count"].asInt(), 15);
     EXPECT_EQ(json["edit_lock"]["owner_display_name"].asString(), "张工");
+    EXPECT_EQ(json["error_message"].asString(), "未识别到表4.1-2总体技术状况评定表。");
 
     item.edit_lock = std::nullopt;
     EXPECT_TRUE(item.to_json()["edit_lock"].isNull());

@@ -144,7 +144,7 @@ std::optional<review::InspectionWorkspace> WorkspaceRepository::get_inspection_w
 
     const auto import_rows = db_client_->execSqlSync(
         "select ir.id::text, ir.system_number, ir.import_name, ir.source_type, ir.import_status, "
-        "ir.importer_name, ir.parsed_result_json::text, ir.created_at::text, ir.updated_at::text, "
+        "ir.importer_name, ir.parsed_result_json::text, ir.created_at::text, ir.updated_at::text, ir.error_message, "
         "u.username as lock_owner_username, u.display_name as lock_owner_display_name, "
         "l.acquired_at::text as lock_acquired_at, l.expires_at::text as lock_expires_at, "
         "sf.status as temporary_source_status, sf.expires_at::text as temporary_source_expires_at "
@@ -164,6 +164,7 @@ std::optional<review::InspectionWorkspace> WorkspaceRepository::get_inspection_w
         item.importer_name = optional_text(row, "importer_name");
         item.created_at = optional_text(row, "created_at");
         item.updated_at = optional_text(row, "updated_at");
+        item.error_message = optional_text(row, "error_message");
         item.temporary_source_status = optional_text(row, "temporary_source_status");
         item.temporary_source_expires_at = optional_text(row, "temporary_source_expires_at");
         item.statistics = review::build_review_statistics(

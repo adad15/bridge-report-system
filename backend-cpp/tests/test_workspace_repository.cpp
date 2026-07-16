@@ -138,6 +138,9 @@ TEST_F(WorkspaceRepositoryTest, BridgeOverviewUsesLatestFormalCurrentFactsAndArc
 }
 
 TEST_F(WorkspaceRepositoryTest, InspectionWorkspaceIsolatesImportsAndReusesReviewStatistics) {
+    client_->execSqlSync(
+        "update import_records set error_message='Python 返回的具体解析错误' where id=$1::uuid",
+        pending_import_id_);
     bridge_report::db::WorkspaceRepository repository(client_);
 
     const auto workspace = repository.get_inspection_workspace(pending_year_id_);
@@ -150,6 +153,8 @@ TEST_F(WorkspaceRepositoryTest, InspectionWorkspaceIsolatesImportsAndReusesRevie
     EXPECT_EQ(workspace->imports[0].statistics.defect_count, 1);
     EXPECT_EQ(workspace->imports[0].statistics.rating_item_count, 1);
     EXPECT_EQ(workspace->imports[0].statistics.pending_count, 1);
+    ASSERT_TRUE(workspace->imports[0].error_message.has_value());
+    EXPECT_EQ(*workspace->imports[0].error_message, "Python 返回的具体解析错误");
     EXPECT_EQ(workspace->pending.import_count, 1);
     EXPECT_EQ(workspace->pending.unbound_observation_count, 0);
 }

@@ -45,6 +45,7 @@ export interface WorkspaceImport {
   importer_name: string | null;
   created_at: string | null;
   updated_at: string | null;
+  error_message: string | null;
   temporary_source_status: string | null;
   temporary_source_expires_at: string | null;
   statistics: WorkspaceStatistics;

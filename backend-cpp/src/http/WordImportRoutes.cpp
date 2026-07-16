@@ -13,6 +13,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace bridge_report::http {
 namespace {
@@ -58,6 +59,22 @@ Json::Value extract_python_parse_data(const Json::Value& response_body) {
         throw std::invalid_argument("Python Word 解析响应缺少 data 对象。");
     }
     return response_body["data"];
+}
+
+std::optional<PythonParseError> extract_python_parse_error(const Json::Value& response_body) {
+    if (!response_body.isObject() || !response_body.isMember("detail")
+        || !response_body["detail"].isObject()) {
+        return std::nullopt;
+    }
+    const auto& detail = response_body["detail"];
+    if (!detail.isMember("code") || !detail["code"].isString()
+        || !detail.isMember("message") || !detail["message"].isString()) {
+        return std::nullopt;
+    }
+    auto code = detail["code"].asString();
+    auto message = detail["message"].asString();
+    if (code.empty() || message.empty()) return std::nullopt;
+    return PythonParseError{std::move(code), std::move(message)};
 }
 
 namespace {
@@ -176,8 +193,36 @@ void register_word_import_routes(
                     python_request,
                     [callback, repository, context = *context, config, archive_root, staging_root, photo_dir](
                         drogon::ReqResult result, const drogon::HttpResponsePtr& response) mutable {
-                        if (result != drogon::ReqResult::Ok || !response || response->statusCode() != drogon::k200OK
-                            || !response->getJsonObject()) {
+                        if (result != drogon::ReqResult::Ok || !response) {
+                            mark_parse_failed_safely(repository, context.import_record_id,
+                                                     "Python Word 解析服务调用失败。",
+                                                     config.failed_word_retention_hours);
+                            remove_staging(staging_root);
+                            respond_json(callback, make_error_body("python_parse_failed", "Word 解析服务未返回有效结果。"),
+                                         drogon::k502BadGateway);
+                            return;
+                        }
+                        const auto python_response_body = response->getJsonObject();
+                        if (response->statusCode() != drogon::k200OK) {
+                            if (python_response_body) {
+                                if (const auto error = extract_python_parse_error(*python_response_body)) {
+                                    mark_parse_failed_safely(repository, context.import_record_id, error->message,
+                                                             config.failed_word_retention_hours);
+                                    remove_staging(staging_root);
+                                    respond_json(callback, make_error_body(error->code, error->message),
+                                                 drogon::k400BadRequest);
+                                    return;
+                                }
+                            }
+                            mark_parse_failed_safely(repository, context.import_record_id,
+                                                     "Python Word 解析服务调用失败。",
+                                                     config.failed_word_retention_hours);
+                            remove_staging(staging_root);
+                            respond_json(callback, make_error_body("python_parse_failed", "Word 解析服务未返回有效结果。"),
+                                         drogon::k502BadGateway);
+                            return;
+                        }
+                        if (!python_response_body) {
                             mark_parse_failed_safely(repository, context.import_record_id,
                                                      "Python Word 解析服务调用失败。",
                                                      config.failed_word_retention_hours);
@@ -187,7 +232,7 @@ void register_word_import_routes(
                             return;
                         }
                         try {
-                            auto parsed_data = extract_python_parse_data(*response->getJsonObject());
+                            auto parsed_data = extract_python_parse_data(*python_response_body);
                             const auto validation = contracts::validate_bridge_annual_inspection_data(parsed_data);
                             if (!validation.ok()) throw std::runtime_error(validation.summary());
                             std::size_t temporary_count = 0;
