@@ -3,6 +3,7 @@ import { useState, type Dispatch } from "react";
 import type { ComponentRatingCandidate, Ratings, ReviewStatus } from "../../contracts/annualInspection";
 import { roundScoreToTwoDecimals } from "../componentScore";
 import type { ReviewDraftAction } from "../reviewDraft";
+import { reviewTargetId } from "../reviewNavigation";
 import { ratingRows } from "./displayHelpers";
 
 const REVIEW_STATUSES: ReviewStatus[] = ["待确认", "已确认", "已修改", "已忽略"];
@@ -62,7 +63,7 @@ function ComponentRatingRow({
   const reasonReady = reason.trim() !== "";
 
   return (
-    <tr>
+    <tr id={reviewTargetId("rating", rating.candidate_id)} tabIndex={-1}>
       <td>{componentLabel}</td>
       <td>{formatScore(rating.source_score)}</td>
       <td title={rating.calculated_score === null || rating.calculated_score === undefined ? undefined : String(rating.calculated_score)}>
@@ -182,7 +183,7 @@ export function RatingsSection({ ratings, dispatch, disabled = false }: RatingsS
           </thead>
           <tbody>
             {rows.map((row, index) => (
-              <tr key={`${row.level}-${row.name}-${index}`}>
+              <tr id={reviewTargetId("rating", row.candidateId)} tabIndex={-1} key={`${row.level}-${row.name}-${index}`}>
                 <td>{row.level}</td>
                 <td>{row.name}</td>
                 <td>

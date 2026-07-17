@@ -8,6 +8,7 @@ import type {
   Severity,
   StructurePartRating,
 } from "../contracts/annualInspection";
+import { defectFieldForWarning, type DefectTargetField } from "./reviewNavigation";
 
 // 只读分类 / 统计逻辑，镜像模块 05 规格 §9.1（需要处理）与 §9.2（普通候选）。
 // 本文件不修改任何数据，只从 BridgeAnnualInspectionData 派生只读视图。
@@ -17,6 +18,8 @@ export interface AttentionItem {
   candidateId: string;
   message: string;
   severity: Severity;
+  warningCode?: string;
+  targetField?: DefectTargetField;
 }
 
 // 字段刻意用 snake_case：与后端 ReviewStatistics 的 JSON 线格式（wire shape）逐字段对应，
@@ -80,12 +83,12 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
 
   for (const defect of data.defects) {
     for (const warning of defect.warnings) {
-      items.push({ kind: "defect", candidateId: defect.candidate_id, message: warning.message, severity: warning.severity });
+      items.push({ kind: "defect", candidateId: defect.candidate_id, message: warning.message, severity: warning.severity, warningCode: warning.code, targetField: defectFieldForWarning(warning.code) });
     }
   }
   for (const photo of data.photos) {
     for (const warning of photo.warnings) {
-      items.push({ kind: "photo", candidateId: photo.candidate_id, message: warning.message, severity: warning.severity });
+      items.push({ kind: "photo", candidateId: photo.candidate_id, message: warning.message, severity: warning.severity, warningCode: warning.code });
     }
   }
 
@@ -98,6 +101,8 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
       candidateId: item.target_candidate_id,
       message: item.message,
       severity: item.severity,
+      warningCode: item.code,
+      targetField: defectFieldForWarning(item.code),
     });
   }
 
@@ -109,6 +114,8 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
         candidateId: defect.candidate_id,
         message: "尺寸表达存在数值线索但未能结构化，请人工确认。",
         severity: "warning",
+        warningCode: "measurement_parse_low_confidence",
+        targetField: "measurement_text",
       });
     }
   }
@@ -122,6 +129,8 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
           candidateId: defect.candidate_id,
           message: `照片编号 ${photoNumber} 未匹配到关联图片。`,
           severity: "warning",
+          warningCode: "photo_number_unmatched",
+          targetField: "photo_numbers",
         });
       }
     }
@@ -136,6 +145,7 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
         candidateId: photo.candidate_id,
         message: "照片未关联到任何病害，请人工确认。",
         severity: "warning",
+        warningCode: "photo_not_linked",
       });
     }
 
@@ -150,6 +160,7 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
         candidateId: photo.candidate_id,
         message: "照片归档文件缺失，无法确认入库。",
         severity: "error",
+        warningCode: "photo_archive_missing",
       });
     }
   }
@@ -161,6 +172,7 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
         candidateId: defect.candidate_id,
         message: "病害及照片尚未完成联合确认。",
         severity: "warning",
+        warningCode: "defect_group_pending",
       });
     }
   }
@@ -168,7 +180,7 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
   // 合同 1.2：构件评分对象级 warning + 未解决的评分差异（不一致/无法复算必须人工显式处理）。
   for (const rating of data.ratings.component_ratings) {
     for (const warning of rating.warnings) {
-      items.push({ kind: "rating", candidateId: rating.candidate_id, message: warning.message, severity: warning.severity });
+      items.push({ kind: "rating", candidateId: rating.candidate_id, message: warning.message, severity: warning.severity, warningCode: warning.code });
     }
     if (rating.review_status === "已忽略") {
       continue;

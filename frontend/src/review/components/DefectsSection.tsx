@@ -33,11 +33,12 @@ export function DefectsSection({ draft, importRecordId, baseUrl, selectedCandida
         <div className="table-scroll">
           {/* 每条病害是一张自带标签的表单卡片（DefectPhotoGroup），不再需要共享表头。 */}
           <table className="data-table defect-photo-table">
-            {draft.defects.map((defect) => (
+          {draft.defects.map((defect, index) => (
               <DefectPhotoGroup
                 key={defect.candidate_id}
                 draft={draft}
                 defect={defect}
+                sequenceNumber={index + 1}
                 importRecordId={importRecordId}
                 baseUrl={baseUrl}
                 expanded={selectedCandidateId === defect.candidate_id}

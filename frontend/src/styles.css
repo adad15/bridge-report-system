@@ -1965,3 +1965,29 @@ body {
 .deletion-impact-grid dd { margin: .2rem 0 0; font-size: 1.15rem; font-weight: 700; }
 .delete-year-dialog textarea { min-height: 5rem; resize: vertical; }
 @media (max-width: 720px) { .deletion-impact-grid { grid-template-columns: repeat(2, 1fr); } }
+.defect-sequence-badge {
+  display: inline-flex;
+  margin: 0 0 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--defect-category-color, #2563eb) 12%, white);
+  color: #1f2937;
+  font-weight: 700;
+}
+
+.review-target-highlight {
+  outline: 3px solid #f59e0b !important;
+  outline-offset: 3px;
+  background-color: #fff8d8 !important;
+  transition: background-color 180ms ease, outline-color 180ms ease;
+}
+
+.review-navigation-message {
+  margin: 0 0 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-target-highlight {
+    transition: none;
+  }
+}

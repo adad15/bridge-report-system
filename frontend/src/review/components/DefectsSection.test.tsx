@@ -49,5 +49,7 @@ describe("DefectsSection", () => {
     expect(locationInputs).toHaveLength(2);
     expect(locationInputs[0]).toBeEnabled();
     expect(locationInputs[1]).toBeDisabled();
+    expect(screen.getByText("病害 1")).toBeInTheDocument();
+    expect(screen.getByText("病害 2")).toBeInTheDocument();
   });
 });

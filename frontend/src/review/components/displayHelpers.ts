@@ -13,6 +13,7 @@ export function formatAttentionItem(item: AttentionItem): string {
 }
 
 export interface RatingRow {
+  candidateId: string;
   level: "全桥" | "结构分部" | "评价部件";
   name: string;
   score: number;
@@ -32,6 +33,7 @@ export interface RatingRow {
 export function ratingRows(ratings: Ratings): RatingRow[] {
   const rows: RatingRow[] = [
     {
+      candidateId: "ratings.overall",
       level: "全桥",
       name: "全桥",
       score: ratings.overall.total_score,
@@ -42,8 +44,9 @@ export function ratingRows(ratings: Ratings): RatingRow[] {
     },
   ];
 
-  for (const part of ratings.structure_parts) {
+  ratings.structure_parts.forEach((part, index) => {
     rows.push({
+      candidateId: `ratings.structure_parts[${index}]`,
       level: "结构分部",
       name: part.structure_part,
       score: part.structure_score,
@@ -52,10 +55,11 @@ export function ratingRows(ratings: Ratings): RatingRow[] {
       status: part.review_status,
       target: { part: part.structure_part },
     });
-  }
+  });
 
   ratings.evaluation_parts.forEach((part, index) => {
     rows.push({
+      candidateId: `ratings.evaluation_parts[${index}]`,
       level: "评价部件",
       name: part.evaluation_part,
       score: part.part_score,

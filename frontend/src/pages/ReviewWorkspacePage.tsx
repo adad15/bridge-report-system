@@ -37,6 +37,7 @@ import { buildStatistics, needsAttention } from "../review/grouping";
 import type { ReviewDraftAction } from "../review/reviewDraft";
 import { reviewDraftReducer } from "../review/reviewDraft";
 import { deriveReviewSession, shouldClearDirtyAfterSave } from "../review/reviewSession";
+import { reviewTargetId } from "../review/reviewNavigation";
 import { bridgeOverviewPath, inspectionWorkspacePath } from "../workspace/workspaceState";
 
 export function ReviewWorkspacePage() {
@@ -140,6 +141,9 @@ function ReviewWorkspaceLoaded({
   const [expandedDefectId, setExpandedDefectId] = useState<string | null>(null);
   const [activePhotoCandidateId, setActivePhotoCandidateId] = useState<string | null>(null);
   const [activeGroup, setActiveGroup] = useState<GroupKey>("needs_attention");
+  const [pendingNavigation, setPendingNavigation] = useState<AttentionItem | null>(null);
+  const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
+  const navigationHighlightTimer = useRef<number | null>(null);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
 
   const [saveMessage, setSaveMessage] = useState<SaveMessageState | null>(null);
@@ -279,18 +283,66 @@ function ReviewWorkspaceLoaded({
     return () => window.clearTimeout(timer);
   }, [saveMessage]);
 
-  function selectCandidate(kind: AttentionItem["kind"], candidateId: string) {
-    setSelected({ kind, candidateId });
-    if (kind === "defect") {
-      setExpandedDefectId(candidateId);
+  function selectCandidate(item: AttentionItem) {
+    setSelected({ kind: item.kind, candidateId: item.candidateId });
+    setNavigationMessage(null);
+    setPendingNavigation({ ...item });
+    if (item.kind === "defect") {
+      setExpandedDefectId(item.candidateId);
+      setActivePhotoCandidateId(null);
       setActiveGroup("defect_photos");
-    } else if (kind === "photo") {
-      setActivePhotoCandidateId(candidateId);
-      const linkedDefectId = draft.photos.find((photo) => photo.candidate_id === candidateId)?.linked_defect_candidate_id;
+    } else if (item.kind === "photo") {
+      setActivePhotoCandidateId(item.candidateId);
+      const linkedDefectId = draft.photos.find((photo) => photo.candidate_id === item.candidateId)?.linked_defect_candidate_id;
       if (linkedDefectId) setExpandedDefectId(linkedDefectId);
       setActiveGroup("defect_photos");
+    } else if (item.kind === "rating") {
+      setActiveGroup("ratings");
     }
   }
+
+  useEffect(() => {
+    if (pendingNavigation === null) return;
+    const timer = window.setTimeout(() => {
+      let targetId: string;
+      if (pendingNavigation.kind === "defect") {
+        targetId = pendingNavigation.targetField
+          ? reviewTargetId("defect-field", pendingNavigation.candidateId, pendingNavigation.targetField)
+          : reviewTargetId("defect", pendingNavigation.candidateId);
+      } else if (pendingNavigation.kind === "photo") {
+        const photo = draft.photos.find((candidate) => candidate.candidate_id === pendingNavigation.candidateId);
+        targetId = reviewTargetId(photo?.linked_defect_candidate_id ? "photo" : "unlinked-photo", pendingNavigation.candidateId);
+      } else if (pendingNavigation.kind === "rating") {
+        targetId = reviewTargetId("rating", pendingNavigation.candidateId);
+      } else {
+        setPendingNavigation(null);
+        return;
+      }
+
+      const target = document.getElementById(targetId);
+      if (target === null) {
+        setNavigationMessage("目标数据已变化，请刷新待处理列表。");
+        setPendingNavigation(null);
+        return;
+      }
+      if (navigationHighlightTimer.current !== null) window.clearTimeout(navigationHighlightTimer.current);
+      document.querySelectorAll(".review-target-highlight").forEach((element) => element.classList.remove("review-target-highlight"));
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+      target.scrollIntoView?.({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
+      target.classList.add("review-target-highlight");
+      target.focus({ preventScroll: true });
+      navigationHighlightTimer.current = window.setTimeout(() => {
+        target.classList.remove("review-target-highlight");
+        navigationHighlightTimer.current = null;
+      }, 2000);
+      setPendingNavigation(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [activeGroup, draft.photos, expandedDefectId, activePhotoCandidateId, pendingNavigation]);
+
+  useEffect(() => () => {
+    if (navigationHighlightTimer.current !== null) window.clearTimeout(navigationHighlightTimer.current);
+  }, []);
 
   // 任何编辑草稿的 action 都让上一次入库前检查结果失效：PreflightResponse 只反映
   // "跑检查那一刻"的草稿状态，草稿改了之后旧结果里的 can_confirm 已经不可信，必须
@@ -572,6 +624,7 @@ function ReviewWorkspaceLoaded({
           <div className="review-main-tools">
             <button type="button" disabled={!selected} onClick={() => setEvidenceOpen(true)}>查看来源证据</button>
           </div>
+          {navigationMessage ? <p className="warning-text review-navigation-message">{navigationMessage}</p> : null}
           {activeGroup === "needs_attention" ? (
             <NeedsAttentionSection items={attentionItems} draft={draft} onSelect={selectCandidate} />
           ) : null}
