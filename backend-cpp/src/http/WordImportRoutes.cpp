@@ -84,6 +84,17 @@ void remove_staging(const std::filesystem::path& path) noexcept {
     std::filesystem::remove_all(path, error);
 }
 
+void finish_staging(
+    const std::shared_ptr<db::WordImportRepository>& repository,
+    const std::string& import_record_id,
+    const std::filesystem::path& path
+) noexcept {
+    remove_staging(path);
+    try { repository->clear_active_parse_work_path(import_record_id); }
+    catch (...) {
+    }
+}
+
 void mark_parse_failed_safely(
     const std::shared_ptr<db::WordImportRepository>& repository,
     const std::string& import_record_id,
@@ -167,7 +178,9 @@ void register_word_import_routes(
                     return;
                 }
                 const auto suffix = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-                const auto staging_root = archive_root / "work" / "word-import" / (import_record_id + "-" + suffix);
+                const auto staging_relative = std::filesystem::path("work") / "word-import" /
+                    (import_record_id + "-" + suffix);
+                const auto staging_root = archive::resolve_path_under_root(archive_root, staging_relative);
                 const auto photo_dir = staging_root / "photos";
                 std::filesystem::create_directories(photo_dir);
                 Json::Value python_body;
@@ -177,7 +190,7 @@ void register_word_import_routes(
                     respond_json(callback, make_error_body("invalid_request", error.what()), drogon::k400BadRequest);
                     return;
                 }
-                if (!repository->mark_parsing(import_record_id)) {
+                if (!repository->mark_parsing(import_record_id, staging_relative)) {
                     remove_staging(staging_root);
                     respond_json(callback, make_error_body("import_record_wrong_status", "当前导入记录不能重新解析。"),
                                  drogon::k409Conflict);
@@ -197,7 +210,7 @@ void register_word_import_routes(
                             mark_parse_failed_safely(repository, context.import_record_id,
                                                      "Python Word 解析服务调用失败。",
                                                      config.failed_word_retention_hours);
-                            remove_staging(staging_root);
+                            finish_staging(repository, context.import_record_id, staging_root);
                             respond_json(callback, make_error_body("python_parse_failed", "Word 解析服务未返回有效结果。"),
                                          drogon::k502BadGateway);
                             return;
@@ -208,7 +221,7 @@ void register_word_import_routes(
                                 if (const auto error = extract_python_parse_error(*python_response_body)) {
                                     mark_parse_failed_safely(repository, context.import_record_id, error->message,
                                                              config.failed_word_retention_hours);
-                                    remove_staging(staging_root);
+                                    finish_staging(repository, context.import_record_id, staging_root);
                                     respond_json(callback, make_error_body(error->code, error->message),
                                                  drogon::k400BadRequest);
                                     return;
@@ -217,7 +230,7 @@ void register_word_import_routes(
                             mark_parse_failed_safely(repository, context.import_record_id,
                                                      "Python Word 解析服务调用失败。",
                                                      config.failed_word_retention_hours);
-                            remove_staging(staging_root);
+                            finish_staging(repository, context.import_record_id, staging_root);
                             respond_json(callback, make_error_body("python_parse_failed", "Word 解析服务未返回有效结果。"),
                                          drogon::k502BadGateway);
                             return;
@@ -226,7 +239,7 @@ void register_word_import_routes(
                             mark_parse_failed_safely(repository, context.import_record_id,
                                                      "Python Word 解析服务调用失败。",
                                                      config.failed_word_retention_hours);
-                            remove_staging(staging_root);
+                            finish_staging(repository, context.import_record_id, staging_root);
                             respond_json(callback, make_error_body("python_parse_failed", "Word 解析服务未返回有效结果。"),
                                          drogon::k502BadGateway);
                             return;
@@ -248,9 +261,11 @@ void register_word_import_routes(
                                 archive::cleanup_archived_photo_batch(archive_root, batch);
                                 mark_parse_failed_safely(repository, context.import_record_id, outcome.error_message,
                                                          config.failed_word_retention_hours);
-                                remove_staging(staging_root);
-                                respond_json(callback, make_error_body(outcome.error_code, outcome.error_message),
-                                             drogon::k500InternalServerError);
+                                finish_staging(repository, context.import_record_id, staging_root);
+                                const auto status = outcome.error_code == "import_record_deleted"
+                                    || outcome.error_code == "import_record_wrong_status"
+                                    ? drogon::k409Conflict : drogon::k500InternalServerError;
+                                respond_json(callback, make_error_body(outcome.error_code, outcome.error_message), status);
                                 return;
                             }
                             remove_obsolete_files(archive_root, outcome.obsolete_storage_paths, batch);
@@ -260,12 +275,12 @@ void register_word_import_routes(
                             result_body["photo_candidate_count"] = static_cast<Json::UInt64>(batch.data["photos"].size());
                             result_body["archived_photo_count"] = static_cast<Json::UInt64>(batch.files.size());
                             cleanup_temporary_source_after_success(repository, context, config);
-                            remove_staging(staging_root);
+                            finish_staging(repository, context.import_record_id, staging_root);
                             respond_json(callback, result_body);
                         } catch (const std::exception& error) {
                             mark_parse_failed_safely(repository, context.import_record_id, error.what(),
                                                      config.failed_word_retention_hours);
-                            remove_staging(staging_root);
+                            finish_staging(repository, context.import_record_id, staging_root);
                             respond_json(callback, make_error_body("word_parse_persistence_failed", error.what()),
                                          drogon::k500InternalServerError);
                         }
@@ -273,7 +288,7 @@ void register_word_import_routes(
                 } catch (const std::exception& error) {
                     mark_parse_failed_safely(repository, context->import_record_id, error.what(),
                                              config.failed_word_retention_hours);
-                    remove_staging(staging_root);
+                    finish_staging(repository, context->import_record_id, staging_root);
                     respond_json(callback, make_error_body("python_request_failed", error.what()),
                                  drogon::k502BadGateway);
                 }

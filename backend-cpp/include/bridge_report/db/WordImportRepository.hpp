@@ -44,7 +44,11 @@ public:
         const std::string& import_record_id,
         const archive::ArchivedPhotoBatch& batch
     );
-    bool mark_parsing(const std::string& import_record_id);
+    bool mark_parsing(
+        const std::string& import_record_id,
+        const std::filesystem::path& active_parse_work_relative_path = {}
+    );
+    void clear_active_parse_work_path(const std::string& import_record_id);
     void mark_parse_failed(
         const std::string& import_record_id,
         const std::string& message,

@@ -18,18 +18,25 @@ struct QueueMetadata {
     const char* audit_table;
 };
 
-QueueMetadata metadata(const bool bridge) {
-    return bridge
-        ? QueueMetadata{"bridge_archived_file_deletion_queue", "bridge_deletion_audit_id",
-                        "bridge_deletion_audits"}
-        : QueueMetadata{"archived_file_deletion_queue", "deletion_audit_id",
-                        "inspection_year_deletion_audits"};
+QueueMetadata metadata(const ArchiveFileCleanupCoordinator::QueueKind kind) {
+    if (kind == ArchiveFileCleanupCoordinator::QueueKind::Bridge) {
+        return {"bridge_archived_file_deletion_queue", "bridge_deletion_audit_id",
+                "bridge_deletion_audits"};
+    }
+    if (kind == ArchiveFileCleanupCoordinator::QueueKind::Import) {
+        return {"import_record_file_deletion_queue", "import_record_deletion_audit_id",
+                "import_record_deletion_audits"};
+    }
+    return {"archived_file_deletion_queue", "deletion_audit_id",
+            "inspection_year_deletion_audits"};
 }
 
 struct ClaimedItem {
     std::string id;
     std::string audit_id;
     std::string storage_relative_path;
+    std::string storage_kind;
+    std::string artifact_kind;
     std::string processing_started_at;
     int attempt_count{0};
 };
@@ -50,7 +57,17 @@ ArchiveFileCleanupCoordinator::ArchiveFileCleanupCoordinator(
     drogon::orm::DbClientPtr db_client,
     std::filesystem::path archive_root,
     ArchiveFileCleanupPolicy policy
-) : db_client_(std::move(db_client)), archive_root_(std::move(archive_root)), policy_(policy) {
+) : ArchiveFileCleanupCoordinator(
+        std::move(db_client), archive_root, archive_root, policy
+    ) {}
+
+ArchiveFileCleanupCoordinator::ArchiveFileCleanupCoordinator(
+    drogon::orm::DbClientPtr db_client,
+    std::filesystem::path archive_root,
+    std::filesystem::path temporary_word_root,
+    ArchiveFileCleanupPolicy policy
+) : db_client_(std::move(db_client)), archive_root_(std::move(archive_root)),
+    temporary_word_root_(std::move(temporary_word_root)), policy_(policy) {
     policy_.batch_size = normalized_positive(policy_.batch_size, 25);
     policy_.claim_timeout_seconds = normalized_positive(policy_.claim_timeout_seconds, 900);
     policy_.retry_base_seconds = normalized_positive(policy_.retry_base_seconds, 300);
@@ -67,7 +84,14 @@ FileCleanupSummary ArchiveFileCleanupCoordinator::process_pending() const {
     FileCleanupSummary result;
     result += process_kind(QueueKind::Annual, nullptr);
     result += process_kind(QueueKind::Bridge, nullptr);
+    result += process_kind(QueueKind::Import, nullptr);
     return result;
+}
+
+FileCleanupSummary ArchiveFileCleanupCoordinator::process_import_audit(
+    const std::string& deletion_audit_id
+) const {
+    return process_kind(QueueKind::Import, &deletion_audit_id);
 }
 
 FileCleanupSummary ArchiveFileCleanupCoordinator::process_annual_audit(
@@ -86,7 +110,7 @@ FileCleanupSummary ArchiveFileCleanupCoordinator::process_kind(
     const QueueKind kind,
     const std::string* audit_id
 ) const {
-    const auto spec = metadata(kind == QueueKind::Bridge);
+    const auto spec = metadata(kind);
     std::string sql =
         "with candidates as (select id from " + std::string(spec.queue_table) +
         " where ((status in ('待清理','失败待重试') and next_attempt_at<=now()) "
@@ -98,7 +122,11 @@ FileCleanupSummary ArchiveFileCleanupCoordinator::process_kind(
         " q set status='清理中',processing_started_at=clock_timestamp(),completed_at=null "
         "from candidates c where q.id=c.id returning q.id::text as id,q." +
         std::string(spec.audit_column) +
-        "::text as audit_id,q.storage_relative_path,q.processing_started_at::text as claimed_at,"
+        "::text as audit_id,q.storage_relative_path," +
+        (kind == QueueKind::Import
+            ? std::string("q.storage_kind,q.artifact_kind,")
+            : std::string("'归档存储'::text as storage_kind,'文件'::text as artifact_kind,")) +
+        "q.processing_started_at::text as claimed_at,"
         "q.attempt_count";
 
     drogon::orm::Result rows;
@@ -116,6 +144,8 @@ FileCleanupSummary ArchiveFileCleanupCoordinator::process_kind(
             row["id"].as<std::string>(),
             row["audit_id"].as<std::string>(),
             row["storage_relative_path"].as<std::string>(),
+            row["storage_kind"].as<std::string>(),
+            row["artifact_kind"].as<std::string>(),
             row["claimed_at"].as<std::string>(),
             row["attempt_count"].as<int>()
         });
@@ -123,12 +153,18 @@ FileCleanupSummary ArchiveFileCleanupCoordinator::process_kind(
 
     FileCleanupSummary summary;
     summary.claimed = static_cast<int>(items.size());
-    ArchiveFileDeletionCore core(archive_root_);
     std::set<std::string> affected_audits;
     for (const auto& item : items) {
         affected_audits.insert(item.audit_id);
         try {
-            core.remove(item.storage_relative_path);
+            const auto& root = item.storage_kind == "临时Word存储"
+                ? temporary_word_root_ : archive_root_;
+            ArchiveFileDeletionCore core(root);
+            if (item.artifact_kind == "解析工作目录") {
+                core.remove_tree(item.storage_relative_path, "work/word-import");
+            } else {
+                core.remove(item.storage_relative_path);
+            }
             const auto updated = db_client_->execSqlSync(
                 "update " + std::string(spec.queue_table) +
                 " set status='已完成',attempt_count=attempt_count+1,last_error=null,"
@@ -175,7 +211,7 @@ int ArchiveFileCleanupCoordinator::pending_items(
     const QueueKind kind,
     const std::string& audit_id
 ) const {
-    const auto spec = metadata(kind == QueueKind::Bridge);
+    const auto spec = metadata(kind);
     return db_client_->execSqlSync(
         "select count(*) as count from " + std::string(spec.queue_table) + " where " +
         std::string(spec.audit_column) + "=$1::uuid and status<>'已完成'", audit_id
@@ -188,6 +224,10 @@ int ArchiveFileCleanupCoordinator::pending_annual_items(const std::string& delet
 
 int ArchiveFileCleanupCoordinator::pending_bridge_items(const std::string& deletion_audit_id) const {
     return pending_items(QueueKind::Bridge, deletion_audit_id);
+}
+
+int ArchiveFileCleanupCoordinator::pending_import_items(const std::string& deletion_audit_id) const {
+    return pending_items(QueueKind::Import, deletion_audit_id);
 }
 
 }  // namespace bridge_report::deletion

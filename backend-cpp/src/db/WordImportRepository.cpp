@@ -75,7 +75,10 @@ std::optional<WordImportContext> WordImportRepository::load_context(
     return context;
 }
 
-bool WordImportRepository::mark_parsing(const std::string& import_record_id) {
+bool WordImportRepository::mark_parsing(
+    const std::string& import_record_id,
+    const std::filesystem::path& active_parse_work_relative_path
+) {
     const auto result = db_client_->execSqlSync(
         "with eligible as ("
         " select sf.id from import_source_files sf join import_records ir on ir.id=sf.import_record_id "
@@ -84,12 +87,21 @@ bool WordImportRepository::mark_parsing(const std::string& import_record_id) {
         " for update of sf,ir"
         "), source_update as ("
         " update import_source_files sf set status='解析中',parsing_started_at=now(),expires_at=null,"
-        " last_error=null,updated_at=now() from eligible e where sf.id=e.id returning sf.id"
+        " last_error=null,active_parse_work_relative_path=nullif($2,''),updated_at=now() "
+        " from eligible e where sf.id=e.id returning sf.id"
         ") update import_records ir set import_status='解析中',started_at=now(),error_message=null,updated_at=now() "
         "where ir.id=$1::uuid and exists(select 1 from source_update) returning ir.id",
-        import_record_id
+        import_record_id, active_parse_work_relative_path.generic_string()
     );
     return !result.empty();
+}
+
+void WordImportRepository::clear_active_parse_work_path(const std::string& import_record_id) {
+    db_client_->execSqlSync(
+        "update import_source_files set active_parse_work_relative_path=null,updated_at=now() "
+        "where import_record_id=$1::uuid and active_parse_work_relative_path is not null",
+        import_record_id
+    );
 }
 
 PersistParseOutcome WordImportRepository::persist_parse_result(
@@ -104,9 +116,16 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
         const auto locked = tx->execSqlSync(
             "select bridge_id::text as bridge_id, inspection_year_id::text as inspection_year_id, import_status "
             "from import_records where id = $1::uuid for update", import_record_id);
-        if (locked.empty() || locked[0]["import_status"].as<std::string>() != "解析中") {
+        if (locked.empty()) {
+            tx->rollback();
+            outcome.error_code = "import_record_deleted";
+            outcome.error_message = "导入记录已删除，迟到的解析结果未写入。";
+            return outcome;
+        }
+        if (locked[0]["import_status"].as<std::string>() != "解析中") {
             tx->rollback();
             outcome.error_code = "import_record_wrong_status";
+            outcome.error_message = "导入记录已不处于解析中状态。";
             return outcome;
         }
         const auto old = tx->execSqlSync(

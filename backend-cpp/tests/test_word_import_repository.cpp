@@ -136,6 +136,42 @@ TEST_F(WordImportRepositoryTest, ParsingOnlyStartsFromUploadedOrFailed) {
     EXPECT_TRUE(repository.mark_parsing(import_id_));
 }
 
+TEST_F(WordImportRepositoryTest, ParsingRegistersAndClearsControlledWorkDirectory) {
+    bridge_report::db::WordImportRepository repository(client_);
+    client_->execSqlSync("update import_records set import_status='已上传' where id=$1::uuid", import_id_);
+    client_->execSqlSync(
+        "update import_source_files set status='待解析',parsing_started_at=null where import_record_id=$1::uuid",
+        import_id_);
+    const auto relative = std::filesystem::path("work") / "word-import" / (import_id_ + "-abcdef12");
+
+    ASSERT_TRUE(repository.mark_parsing(import_id_, relative));
+    const auto registered = client_->execSqlSync(
+        "select active_parse_work_relative_path from import_source_files where import_record_id=$1::uuid",
+        import_id_);
+    ASSERT_EQ(registered.size(), 1u);
+    EXPECT_EQ(registered[0]["active_parse_work_relative_path"].as<std::string>(), relative.generic_string());
+
+    repository.clear_active_parse_work_path(import_id_);
+    const auto cleared = client_->execSqlSync(
+        "select active_parse_work_relative_path is null as cleared from import_source_files where import_record_id=$1::uuid",
+        import_id_);
+    ASSERT_EQ(cleared.size(), 1u);
+    EXPECT_TRUE(cleared[0]["cleared"].as<bool>());
+}
+
+TEST_F(WordImportRepositoryTest, LateParseResultReportsDeletedRecordWithoutRecreatingIt) {
+    bridge_report::db::WordImportRepository repository(client_);
+    client_->execSqlSync("delete from import_records where id=$1::uuid", import_id_);
+    bridge_report::archive::ArchivedPhotoBatch batch;
+    batch.data["contract"]["parser_name"] = "liaoning-word-importer";
+
+    const auto outcome = repository.persist_parse_result(import_id_, batch);
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "import_record_deleted");
+    EXPECT_TRUE(client_->execSqlSync("select 1 from import_records where id=$1::uuid", import_id_).empty());
+}
+
 TEST_F(WordImportRepositoryTest, ParseFailureKeepsSourceForConfiguredRetention) {
     bridge_report::db::WordImportRepository repository(client_);
 

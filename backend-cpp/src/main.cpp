@@ -17,6 +17,7 @@
 #include "bridge_report/http/DefectThreadRoutes.hpp"
 #include "bridge_report/http/EditLockRoutes.hpp"
 #include "bridge_report/http/ImportConfirmRoutes.hpp"
+#include "bridge_report/http/ImportRecordDeletionRoutes.hpp"
 #include "bridge_report/http/InspectionYearDeletionRoutes.hpp"
 #include "bridge_report/http/ReviewRoutes.hpp"
 #include "bridge_report/http/WordImportRoutes.hpp"
@@ -179,7 +180,7 @@ int main(int argc, char* argv[]) {
     cleanup_policy.retry_max_seconds = config.cleanup_retry_max_seconds;
     const auto cleanup_coordinator =
         std::make_shared<bridge_report::deletion::ArchiveFileCleanupCoordinator>(
-            db_client, config.archive_root, cleanup_policy);
+            db_client, config.archive_root, config.temporary_word_root, cleanup_policy);
 
     bridge_report::deletion::TemporaryWordCleanupPolicy temporary_cleanup_policy;
     temporary_cleanup_policy.batch_size = config.cleanup_batch_size;
@@ -221,6 +222,7 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_review_routes(db_client, config.archive_root);
     bridge_report::http::register_bridge_administration_routes(db_client, cleanup_coordinator);
     bridge_report::http::register_import_confirm_routes(db_client);
+    bridge_report::http::register_import_record_deletion_routes(db_client, cleanup_coordinator);
     bridge_report::http::register_word_import_routes(db_client, config);
     bridge_report::http::register_workspace_routes(db_client, config);
     bridge_report::http::register_component_archive_routes(db_client, config.archive_root);

@@ -37,3 +37,18 @@ TEST(ArchiveFileDeletionCoreTest, RejectsPathOutsideArchiveRoot) {
 
     std::filesystem::remove_all(root);
 }
+
+TEST(ArchiveFileDeletionCoreTest, RecursivelyDeletesOnlyAWordImportWorkChild) {
+    const auto root = make_root("bridge_report_cleanup_core_tree");
+    const auto work = root / "work" / "word-import" / "00000000-0000-0000-0000-000000000000-abcdef12";
+    std::filesystem::create_directories(work / "photos");
+    std::ofstream(work / "photos" / "photo.jpg") << "photo";
+    bridge_report::deletion::ArchiveFileDeletionCore core(root);
+
+    EXPECT_TRUE(core.remove_tree("work/word-import/00000000-0000-0000-0000-000000000000-abcdef12", "work/word-import"));
+    EXPECT_FALSE(std::filesystem::exists(work));
+    EXPECT_THROW(core.remove_tree("work/word-import", "work/word-import"), std::invalid_argument);
+    EXPECT_THROW(core.remove_tree("inside", "work/word-import"), std::invalid_argument);
+
+    std::filesystem::remove_all(root);
+}

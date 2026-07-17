@@ -27,6 +27,7 @@ add_library(bridge_report_backend_core
     src/db/DefectThreadRepository.cpp
     src/db/EditLockRepository.cpp
     src/db/InspectionYearDeletionRepository.cpp
+    src/db/ImportRecordDeletionRepository.cpp
     src/db/ReviewRepository.cpp
     src/db/WorkspaceRepository.cpp
     src/db/WordImportRepository.cpp
@@ -35,6 +36,7 @@ add_library(bridge_report_backend_core
     src/deletion/ArchivedFileDeletionQueue.cpp
     src/deletion/BridgeDeletionModels.cpp
     src/deletion/InspectionYearDeletionModels.cpp
+    src/deletion/ImportRecordDeletionModels.cpp
     src/deletion/TemporaryWordCleanupCoordinator.cpp
     src/http/AuthRoutes.cpp
     src/http/BridgeAdministrationRoutes.cpp
@@ -43,6 +45,7 @@ add_library(bridge_report_backend_core
     src/http/DefectThreadRoutes.cpp
     src/http/EditLockRoutes.cpp
     src/http/ImportConfirmRoutes.cpp
+    src/http/ImportRecordDeletionRoutes.cpp
     src/http/InspectionYearDeletionRoutes.cpp
     src/http/ReviewRoutes.cpp
     src/http/WordImportRoutes.cpp
@@ -117,6 +120,9 @@ add_executable(bridge_report_backend_tests
     tests/test_inspection_year_deletion_models.cpp
     tests/test_inspection_year_deletion_repository.cpp
     tests/test_inspection_year_deletion_routes.cpp
+    tests/test_import_record_deletion_models.cpp
+    tests/test_import_record_deletion_repository.cpp
+    tests/test_import_record_deletion_routes.cpp
     tests/test_password_hash.cpp
     tests/test_preflight_report.cpp
     tests/test_photo_content.cpp
