@@ -110,6 +110,22 @@ def test_invalid_scale_and_deduction_keep_none_and_warn() -> None:
     assert "defect_deduction_invalid" in codes
 
 
+def test_blank_photo_number_is_a_normal_defect_without_warning() -> None:
+    table = make_liaoning_table(
+        [
+            ["上部承重构件", "1-1#板", "底板", "蜂窝、麻面", "1处", "S=0.3m²", "2", "35", "65", ""],
+        ]
+    )
+
+    defects, _groups, warnings, errors = parse_single_table(table)
+
+    assert errors == []
+    assert "photo_number_missing" not in {warning.code for warning in warnings}
+    assert len(defects) == 1
+    assert defects[0].photo_numbers == []
+    assert "photo_number_missing" not in {warning.code for warning in defects[0].warnings}
+
+
 def test_conflicting_group_scores_keep_first_and_warn() -> None:
     table = make_liaoning_table(
         [

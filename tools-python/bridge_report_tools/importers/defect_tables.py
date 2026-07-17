@@ -135,15 +135,6 @@ def parse_defect_tables(
             measurements, measurement_warnings = parse_measurements(measurement_text, candidate_id)
             photo_numbers = parse_photo_numbers(get_cell(row, photo_index))
             row_warnings = list(measurement_warnings)
-            if not photo_numbers:
-                row_warnings.append(
-                    WarningItem(
-                        code="photo_number_missing",
-                        message="病害行缺少照片编号，请人工确认。",
-                        severity="warning",
-                        target_candidate_id=candidate_id,
-                    )
-                )
 
             defect_scale_value, scale_invalid = parse_optional_number(get_cell(row, scale_index))
             defect_scale: int | None = None

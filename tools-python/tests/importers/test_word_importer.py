@@ -774,7 +774,7 @@ def test_parse_defect_tables_keeps_row_level_warnings() -> None:
     assert len(defects) == 1
     warning_codes = [warning.code for warning in defects[0].warnings]
     assert "measurement_parse_low_confidence" in warning_codes
-    assert "photo_number_missing" in warning_codes
+    assert "photo_number_missing" not in warning_codes
 
 
 def test_extract_and_match_photos_links_caption_to_defect(tmp_path: Path) -> None:
