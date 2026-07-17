@@ -11,6 +11,7 @@
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/AuthRepository.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
+#include "bridge_report/db/StandardRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/BridgeAdministrationRoutes.hpp"
 #include "bridge_report/http/ComponentArchiveRoutes.hpp"
@@ -33,6 +34,7 @@ namespace {
 
 struct StandardStartupState {
     std::shared_ptr<bridge_report::standards::StandardRegistry> registry;
+    std::vector<bridge_report::standards::StandardManifest> manifests;
     std::vector<bridge_report::standards::StandardIssue> issues;
 };
 
@@ -64,11 +66,14 @@ StandardStartupState load_standard_registry(const std::filesystem::path& standar
             continue;
         }
 
+        const auto manifest = load_result.package->manifest;
         auto registration = state.registry->register_package(std::move(*load_result.package));
         if (!registration.accepted && registration.issue.has_value()) {
             std::cerr << "规范包注册失败 [" << registration.issue->code << "]："
                       << registration.issue->message << "\n";
             state.issues.push_back(std::move(*registration.issue));
+        } else if (registration.accepted) {
+            state.manifests.push_back(manifest);
         }
     }
     return state;
@@ -214,9 +219,39 @@ void register_health_routes(
 int main(int argc, char* argv[]) {
     const std::string config_path = argc > 1 ? argv[1] : "config/local.json";
     const auto config = bridge_report::config::load_app_config(config_path);
-    const auto standards = load_standard_registry(config.standards_root);
+    auto standards = load_standard_registry(config.standards_root);
 
     const auto db_client = bridge_report::db::create_db_client(config.postgres);
+
+    // 规则包文件是运行时真源；数据库只同步不可变身份与项目引用所需元数据。
+    // 同身份同版本摘要冲突或数据库暂不可用时不覆盖旧记录，也不阻断 HTTP 启动。
+    try {
+        bridge_report::db::StandardRepository standard_repository(db_client);
+        const auto outcomes = standard_repository.sync_packages(standards.manifests);
+        for (std::size_t index = 0; index < outcomes.size(); ++index) {
+            if (outcomes[index].status !=
+                bridge_report::db::StandardPackageSyncStatus::ChecksumConflict) {
+                continue;
+            }
+            bridge_report::standards::StandardIssue conflict{
+                "package_database_checksum_conflict",
+                "数据库中同一规范身份和包版本已对应其他内容摘要。",
+            };
+            std::cerr << "规范包数据库同步失败 [" << conflict.code << "]："
+                      << standards.manifests[index].standard_code << " "
+                      << standards.manifests[index].package_version << "；"
+                      << conflict.message << "\n";
+            standards.issues.push_back(std::move(conflict));
+        }
+    } catch (const std::exception& error) {
+        bridge_report::standards::StandardIssue sync_issue{
+            "package_database_sync_failed",
+            "规范包元数据暂时无法同步到数据库。",
+        };
+        std::cerr << "规范包数据库同步失败 [" << sync_issue.code << "]："
+                  << error.what() << "\n";
+        standards.issues.push_back(std::move(sync_issue));
+    }
 
     // 默认账号播种：users 表为空时预置 admin/admin123 与 user/user123。
     // 数据库暂不可用时不阻断启动（/health/db 会如实报告），下次重启再播种。
