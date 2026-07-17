@@ -35,6 +35,11 @@ foreach ($migrationFile in $migrationFiles) {
   Invoke-PsqlFile $migrationFile.FullName
 }
 
+# 新迁移必须可在同一数据库上安全复跑；第二遍在 smoke 前即时验证幂等性。
+foreach ($migrationFile in $migrationFiles) {
+  Invoke-PsqlFile $migrationFile.FullName
+}
+
 $smokeFiles = Get-ChildItem "database/tests/*.sql" | Sort-Object Name
 foreach ($smokeFile in $smokeFiles) {
   Invoke-PsqlFile $smokeFile.FullName

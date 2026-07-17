@@ -9,6 +9,11 @@ declare
   v_user_id uuid;
   v_bridge_audit_id uuid;
   v_year_audit_id uuid;
+  v_inventory_package_id uuid;
+  v_generation_batch_id uuid;
+  v_inventory_revision_id uuid;
+  v_inventory_component_id uuid;
+  v_inventory_entry_id uuid;
   v_violation_caught boolean;
   v_bridge_fk uuid;
 begin
@@ -19,6 +24,55 @@ begin
   insert into users (username, display_name, password_hash, role)
   values ('smoke_bridge_delete_admin', '整桥删除测试管理员', 'not-a-real-hash', 'admin')
   returning id into v_user_id;
+
+  insert into standard_packages (
+    standard_family, standard_id, standard_code, standard_name, official_edition,
+    package_version, contract_version, algorithm_id, effective_date, content_checksum
+  ) values (
+    'technical_condition', 'SMOKE-007-INVENTORY', 'SMOKE 007 INVENTORY',
+    '整桥删除构件台账测试标准', '2026', '1.0.0', 1, 'smoke-007-inventory',
+    '2026-01-01', 'sha256:' || repeat('7', 64)
+  ) returning id into v_inventory_package_id;
+
+  insert into bridge_component_generation_batches (
+    bridge_id, template_standard_package_id, template_id, bridge_type_code,
+    input_quantities, generated_by_user_id
+  ) values (
+    v_bridge_id, v_inventory_package_id, 'smoke-007-template', 'smoke.bridge.beam',
+    '{"span_count":1}'::jsonb, v_user_id
+  ) returning id into v_generation_batch_id;
+
+  insert into bridge_component_inventory_revisions (
+    bridge_id, revision_number, created_by_user_id
+  ) values (v_bridge_id, 1, v_user_id)
+  returning id into v_inventory_revision_id;
+
+  insert into bridge_components (
+    bridge_id, structure_part, component_type, business_component_code,
+    normalized_component_key, creation_source
+  ) values (
+    v_bridge_id, '上部结构', '主梁', '1-1#', '007-delete-inventory-component', '人工录入'
+  ) returning id into v_inventory_component_id;
+
+  insert into bridge_component_inventory_entries (
+    inventory_revision_id, bridge_component_id, generation_batch_id,
+    component_number, site_name, site_component_type
+  ) values (
+    v_inventory_revision_id, v_inventory_component_id, v_generation_batch_id,
+    '1-1#', '1-1#主梁', '主梁'
+  ) returning id into v_inventory_entry_id;
+
+  insert into bridge_component_standard_mappings (
+    inventory_entry_id, standard_package_id, standard_bridge_type_id,
+    standard_component_category_id, structure_part, mapping_source
+  ) values (
+    v_inventory_entry_id, v_inventory_package_id, 'smoke.bridge.beam',
+    'smoke.component.main_girder', 'superstructure', '模板生成'
+  );
+
+  update bridge_component_inventory_revisions
+  set status = '已确认', confirmed_by_user_id = v_user_id, confirmed_at = now()
+  where id = v_inventory_revision_id;
 
   insert into bridge_deletion_audits (
     batch_id, bridge_id, bridge_system_number_snapshot, bridge_name_snapshot,
@@ -100,6 +154,21 @@ begin
   delete from archived_file_deletion_queue where deletion_audit_id = v_year_audit_id;
   delete from inspection_year_deletion_audits where id = v_year_audit_id;
   delete from bridges where id = v_bridge_id;
+
+  if exists (
+    select 1 from bridge_component_generation_batches where id = v_generation_batch_id
+  ) or exists (
+    select 1 from bridge_component_inventory_revisions where id = v_inventory_revision_id
+  ) or exists (
+    select 1 from bridge_components where id = v_inventory_component_id
+  ) or exists (
+    select 1 from bridge_component_inventory_entries where id = v_inventory_entry_id
+  ) or exists (
+    select 1 from bridge_component_standard_mappings
+    where inventory_entry_id = v_inventory_entry_id
+  ) then
+    raise exception '007 smoke: bridge inventory hierarchy was not deleted';
+  end if;
 
   select bridge_id into v_bridge_fk
   from bridge_deletion_audits where id = v_bridge_audit_id;
