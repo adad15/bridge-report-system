@@ -1527,7 +1527,7 @@ body {
 
 .review-edit-lock-blocked,
 .review-edit-lock-lost,
-.review-edit-lock-uncertain {
+.review-edit-lock-retrying {
   border-color: #d8b46f;
   background: #fff7e8;
   color: #714f14;

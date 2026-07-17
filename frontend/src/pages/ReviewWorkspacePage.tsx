@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/apiClient";
@@ -111,7 +111,24 @@ export function ReviewWorkspacePage() {
 
 const NO_OP_DISPATCH: (action: ReviewDraftAction) => void = () => {};
 
-type EditLockPhase = "not_required" | "acquiring" | "held" | "blocked" | "uncertain" | "lost";
+type EditLockPhase = "not_required" | "acquiring" | "held" | "blocked" | "retrying" | "lost";
+
+const TERMINAL_EDIT_LOCK_ERROR_CODES = new Set([
+  "edit_lock_invalid",
+  "edit_lock_expired",
+  "edit_lock_force_released",
+  "edit_lock_required",
+]);
+
+// 心跳正常续租只会改变 expires_at。页面不展示该值，也不应仅因此重渲染数百条病害；
+// 真实归属、持有人或取得时间变化时才需要刷新可见锁摘要。
+function hasSameVisibleLockSummary(left: EditLockSummary | null, right: EditLockSummary): boolean {
+  return left !== null
+    && left.owner_username === right.owner_username
+    && left.owner_display_name === right.owner_display_name
+    && left.owned_by_current_user === right.owned_by_current_user
+    && left.acquired_at === right.acquired_at;
+}
 
 function lockSummaryFromError(error: unknown): EditLockSummary | null {
   if (!(error instanceof ApiError) || typeof error.details !== "object" || error.details === null) return null;
@@ -164,13 +181,16 @@ function ReviewWorkspaceLoaded({
   const [dirty, setDirty] = useState(false);
   const draftRevision = useRef(0);
   const lockTokenRef = useRef<string | null>(null);
+  const lockSummaryRef = useRef<EditLockSummary | null>(response.edit_lock);
+  const heartbeatInFlightRef = useRef(false);
+  const leaseExpiryTimerRef = useRef<number | null>(null);
   const [lockToken, setLockToken] = useState<string | null>(null);
   const [lockSummary, setLockSummary] = useState<EditLockSummary | null>(response.edit_lock);
   const [lockPhase, setLockPhase] = useState<EditLockPhase>("not_required");
   const [lockMessage, setLockMessage] = useState<string | null>(null);
 
-  const counts = buildStatistics(draft);
-  const attentionItems = needsAttention(draft);
+  const counts = useMemo(() => buildStatistics(draft), [draft]);
+  const attentionItems = useMemo(() => needsAttention(draft), [draft]);
   const reviewSession = deriveReviewSession(
     sessionImportStatus,
     response.contract_compatibility,
@@ -189,17 +209,46 @@ function ReviewWorkspaceLoaded({
     ? `返回 ${response.inspection_year.inspection_year} 年度工作台`
     : "返回桥梁概览";
 
+  function clearLeaseExpiryTimer(): void {
+    if (leaseExpiryTimerRef.current !== null) {
+      window.clearTimeout(leaseExpiryTimerRef.current);
+      leaseExpiryTimerRef.current = null;
+    }
+  }
+
+  function scheduleLeaseExpiry(summary: EditLockSummary): void {
+    clearLeaseExpiryTimer();
+    const expiresAt = Date.parse(summary.expires_at);
+    if (!Number.isFinite(expiresAt)) return;
+    const expectedExpiry = summary.expires_at;
+    leaseExpiryTimerRef.current = window.setTimeout(() => {
+      if (lockTokenRef.current === null || lockSummaryRef.current?.expires_at !== expectedExpiry) return;
+      if (Date.parse(expectedExpiry) > Date.now()) {
+        scheduleLeaseExpiry(lockSummaryRef.current);
+        return;
+      }
+      forgetLock("lost");
+      setLockMessage("编辑权租约已到期，请刷新页面后重新取得编辑权。");
+    }, Math.max(0, expiresAt - Date.now()) + 50);
+  }
+
   function rememberLock(token: string, summary: EditLockSummary): void {
     lockTokenRef.current = token;
+    lockSummaryRef.current = summary;
     setLockToken(token);
     setLockSummary(summary);
+    scheduleLeaseExpiry(summary);
     setLockPhase("held");
     setLockMessage(null);
   }
 
   function forgetLock(phase: EditLockPhase = "not_required"): void {
+    clearLeaseExpiryTimer();
+    heartbeatInFlightRef.current = false;
     lockTokenRef.current = null;
+    lockSummaryRef.current = null;
     setLockToken(null);
+    setLockSummary(null);
     setLockPhase(phase);
   }
 
@@ -239,32 +288,50 @@ function ReviewWorkspaceLoaded({
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      clearLeaseExpiryTimer();
+      heartbeatInFlightRef.current = false;
       const token = lockTokenRef.current;
       if (token !== null) void releaseEditLock(backendBaseUrl, importRecordId, token, true).catch(() => undefined);
     };
   }, [importRecordId, needsEditLock]);
 
   useEffect(() => {
-    if (lockToken === null || lockPhase !== "held") return;
+    if (lockToken === null) return;
+    let cancelled = false;
     const timer = window.setInterval(() => {
-      setLockPhase("uncertain");
+      if (heartbeatInFlightRef.current) return;
+      heartbeatInFlightRef.current = true;
       heartbeatEditLock(backendBaseUrl, importRecordId, lockToken)
         .then((result) => {
-          setLockSummary(result.lock);
-          setLockPhase("held");
-          setLockMessage(null);
+          if (cancelled) return;
+          const previousSummary = lockSummaryRef.current;
+          lockSummaryRef.current = result.lock;
+          scheduleLeaseExpiry(result.lock);
+          if (!hasSameVisibleLockSummary(previousSummary, result.lock)) setLockSummary(result.lock);
+          setLockPhase((current) => current === "retrying" ? "held" : current);
+          setLockMessage((current) => current === null ? current : null);
         })
         .catch((caught: unknown) => {
-          if (caught instanceof ApiError && ["edit_lock_invalid", "edit_lock_expired", "edit_lock_force_released", "edit_lock_required"].includes(caught.code)) {
+          if (cancelled) return;
+          if (caught instanceof ApiError && TERMINAL_EDIT_LOCK_ERROR_CODES.has(caught.code)) {
+            forgetLock("lost");
+          } else if (lockSummaryRef.current !== null && Date.parse(lockSummaryRef.current.expires_at) <= Date.now()) {
             forgetLock("lost");
           } else {
-            setLockPhase("uncertain");
+            setLockPhase("retrying");
           }
           setLockMessage(caught instanceof ApiError ? caught.message : "编辑锁续租失败，正在等待恢复。" );
+        })
+        .finally(() => {
+          heartbeatInFlightRef.current = false;
         });
     }, 30_000);
-    return () => window.clearInterval(timer);
-  }, [importRecordId, lockToken, lockPhase]);
+    return () => {
+      cancelled = true;
+      heartbeatInFlightRef.current = false;
+      window.clearInterval(timer);
+    };
+  }, [importRecordId, lockToken]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -567,9 +634,9 @@ function ReviewWorkspaceLoaded({
     }
   }
 
-  const lockAllowsEditing = !needsEditLock || lockPhase === "held";
+  const lockAllowsEditing = !needsEditLock || (lockToken !== null && (lockPhase === "held" || lockPhase === "retrying"));
   const effectiveReadOnly = readOnly || !lockAllowsEditing;
-  const actionsDisabled = effectiveReadOnly || busy || lockPhase === "uncertain";
+  const actionsDisabled = effectiveReadOnly || busy;
   const sectionDispatch = effectiveReadOnly ? NO_OP_DISPATCH : dispatch;
 
   // 重开 warnings_only 态：仅带警告的病害可编辑；full 态与正常待校对态全部可编辑。
@@ -582,8 +649,8 @@ function ReviewWorkspaceLoaded({
     ? "你正在编辑此导入记录。"
     : lockPhase === "acquiring"
       ? "正在取得编辑权……"
-      : lockPhase === "uncertain"
-        ? "连接异常，正在确认编辑权；写入操作已暂停。"
+      : lockPhase === "retrying"
+        ? "编辑锁续租暂时失败，正在重试；当前租约到期前仍可继续编辑。"
         : lockSummary !== null
           ? `${lockSummary.owned_by_current_user ? "你已在另一个页面" : lockSummary.owner_display_name}正在编辑此导入记录。`
           : lockMessage ?? (lockPhase === "lost" ? "编辑权已失效，请刷新页面。" : null);
@@ -606,7 +673,7 @@ function ReviewWorkspaceLoaded({
         <div className={`review-edit-lock-banner review-edit-lock-${lockPhase}`}>
           <span>{lockNotice}</span>
           {lockSummary ? <span className="review-reopen-meta">开始时间：{lockSummary.acquired_at}</span> : null}
-          {isAdmin && lockSummary !== null && lockPhase !== "held" ? (
+          {isAdmin && lockSummary !== null && lockPhase === "blocked" ? (
             <button type="button" disabled={busy} onClick={() => void handleForceRelease()}>管理员强制解锁</button>
           ) : null}
         </div>
