@@ -1,0 +1,14 @@
+{
+  "standard_family": "technical_condition",
+  "standard_id": "TEST-TECH-2026",
+  "standard_code": "TEST/T 1-2026",
+  "standard_name": "Test technical condition standard",
+  "official_edition": "2026",
+  "package_version": "1.0.0",
+  "contract_version": 1,
+  "algorithm_id": "test-technical-evaluator",
+  "effective_date": "2026-01-01",
+  "content_checksum": "sha256:7ace4ee24a403a66dc6600eda60aa775da93b7eec7009177b58ff332379f020b",
+  "status": "active",
+  "entry_files": ["rules.json"]
+}

@@ -1,0 +1,14 @@
+{
+  "standard_family": "technical_condition",
+  "standard_id": "TEST-BAD-CHECKSUM",
+  "standard_code": "TEST/T BAD",
+  "standard_name": "Invalid checksum fixture",
+  "official_edition": "2026",
+  "package_version": "1.0.0",
+  "contract_version": 1,
+  "algorithm_id": "test-evaluator",
+  "effective_date": "2026-01-01",
+  "content_checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "status": "active",
+  "entry_files": ["rules.json"]
+}

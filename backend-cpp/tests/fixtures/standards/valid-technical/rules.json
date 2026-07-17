@@ -1,0 +1,6 @@
+{
+  "definitions": [
+    {"id": "component.deck", "references": []},
+    {"id": "defect.crack", "references": ["component.deck"]}
+  ]
+}

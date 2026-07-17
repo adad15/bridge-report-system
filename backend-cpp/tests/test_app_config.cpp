@@ -1,6 +1,8 @@
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <optional>
 
 #include <drogon/drogon.h>
 #include <gtest/gtest.h>
@@ -10,6 +12,39 @@
 #include "bridge_report/runtime/RuntimePaths.hpp"
 
 namespace {
+
+class ScopedStandardsRootEnvironment {
+public:
+    explicit ScopedStandardsRootEnvironment(const std::string& value) {
+        if (const auto* previous = std::getenv("BRIDGE_REPORT_STANDARDS_ROOT"); previous != nullptr) {
+            previous_ = previous;
+        }
+        set(value);
+    }
+
+    ~ScopedStandardsRootEnvironment() {
+        if (previous_.has_value()) {
+            set(*previous_);
+        } else {
+#ifdef _WIN32
+            _putenv_s("BRIDGE_REPORT_STANDARDS_ROOT", "");
+#else
+            unsetenv("BRIDGE_REPORT_STANDARDS_ROOT");
+#endif
+        }
+    }
+
+private:
+    static void set(const std::string& value) {
+#ifdef _WIN32
+        _putenv_s("BRIDGE_REPORT_STANDARDS_ROOT", value.c_str());
+#else
+        setenv("BRIDGE_REPORT_STANDARDS_ROOT", value.c_str(), 1);
+#endif
+    }
+
+    std::optional<std::string> previous_;
+};
 
 std::filesystem::path write_config_file() {
     const auto path = std::filesystem::temp_directory_path() / "bridge_report_test_config.json";
@@ -41,6 +76,9 @@ std::filesystem::path write_config_file() {
   "temporary_storage": {
     "root": "test-runtime/word-imports",
     "failed_word_retention_hours": 48
+  },
+  "standards": {
+    "root": "test-standards"
   }
 })json";
     return path;
@@ -57,6 +95,7 @@ TEST(AppConfigTest, LoadsConfiguredPortsAndArchiveRoot) {
     EXPECT_EQ(config.port, 19080);
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:19081");
     EXPECT_EQ(config.archive_root.generic_string(), "test-archive");
+    EXPECT_EQ(config.standards_root.generic_string(), "test-standards");
     EXPECT_EQ(config.temporary_word_root.generic_string(), "test-runtime/word-imports");
     EXPECT_EQ(config.failed_word_retention_hours, 48);
     EXPECT_EQ(config.word_upload_max_bytes, 1048576u);
@@ -79,6 +118,7 @@ TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
     EXPECT_EQ(config.port, 18080);
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:18081");
     EXPECT_EQ(config.archive_root.generic_string(), "archive");
+    EXPECT_EQ(config.standards_root.generic_string(), "standards");
     EXPECT_EQ(config.temporary_word_root.generic_string(), "runtime/temp/word-imports");
     EXPECT_EQ(config.failed_word_retention_hours, 24);
     EXPECT_EQ(config.word_upload_max_bytes, 256u * 1024u * 1024u);
@@ -92,6 +132,14 @@ TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
     EXPECT_EQ(config.postgres.database, "bridge_report_system");
     EXPECT_EQ(config.postgres.user, "bridge_report");
     EXPECT_EQ(config.postgres.password, "bridge_report_dev");
+}
+
+TEST(AppConfigTest, EnvironmentOverridesStandardsRoot) {
+    ScopedStandardsRootEnvironment environment("environment-standards");
+
+    const auto config = bridge_report::config::load_app_config(write_config_file());
+
+    EXPECT_EQ(config.standards_root.generic_string(), "environment-standards");
 }
 
 TEST(AppConfigTest, AllowsMultipartEnvelopeBeyondConfiguredWordFileLimit) {

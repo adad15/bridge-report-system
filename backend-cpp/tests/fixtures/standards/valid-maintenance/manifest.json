@@ -1,0 +1,14 @@
+{
+  "standard_family": "maintenance",
+  "standard_id": "TEST-MAINT-2026",
+  "standard_code": "TEST/M 1-2026",
+  "standard_name": "Test maintenance standard",
+  "official_edition": "2026",
+  "package_version": "1.0.0",
+  "contract_version": 1,
+  "algorithm_id": "test-maintenance-adapter",
+  "effective_date": "2026-01-01",
+  "content_checksum": "sha256:3e5939a4bc076a48597a382fcab16d25ce3071e7bd1a14b6922e488eb7db42df",
+  "status": "active",
+  "entry_files": ["requirements.json"]
+}

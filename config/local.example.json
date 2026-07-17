@@ -33,6 +33,9 @@
     "root": "runtime/temp/word-imports",
     "failed_word_retention_hours": 24
   },
+  "standards": {
+    "root": "../standards"
+  },
   "logs": {
     "root": "logs"
   },

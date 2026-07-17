@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <drogon/drogon.h>
 #include <drogon/orm/DbClient.h>
@@ -23,12 +24,60 @@
 #include "bridge_report/http/WordImportRoutes.hpp"
 #include "bridge_report/http/WorkspaceRoutes.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
+#include "bridge_report/standards/StandardPackageLoader.hpp"
+#include "bridge_report/standards/StandardRegistry.hpp"
 #include "bridge_report/deletion/ArchiveFileCleanupCoordinator.hpp"
 #include "bridge_report/deletion/TemporaryWordCleanupCoordinator.hpp"
 
 namespace {
 
-Json::Value make_cpp_health_body(const bridge_report::config::AppConfig& config) {
+struct StandardStartupState {
+    std::shared_ptr<bridge_report::standards::StandardRegistry> registry;
+    std::vector<bridge_report::standards::StandardIssue> issues;
+};
+
+StandardStartupState load_standard_registry(const std::filesystem::path& standards_root) {
+    bridge_report::standards::StandardPackageLoader loader;
+    StandardStartupState state;
+    state.registry = std::make_shared<bridge_report::standards::StandardRegistry>();
+
+    std::error_code root_error;
+    if (!std::filesystem::is_directory(standards_root, root_error) || root_error) {
+        bridge_report::standards::StandardIssue root_issue{
+            "standards_root_unavailable",
+            "规范包根目录不存在或不可读取。",
+        };
+        std::cerr << "规范包加载失败 [" << root_issue.code << "]："
+                  << root_issue.message << "\n";
+        state.issues.push_back(std::move(root_issue));
+        return state;
+    }
+
+    for (const auto& package_root : loader.discover(standards_root)) {
+        auto load_result = loader.load(package_root);
+        if (!load_result.ok()) {
+            for (auto& load_issue : load_result.issues) {
+                std::cerr << "规范包加载失败 [" << load_issue.code << "]："
+                          << load_issue.message << "\n";
+                state.issues.push_back(std::move(load_issue));
+            }
+            continue;
+        }
+
+        auto registration = state.registry->register_package(std::move(*load_result.package));
+        if (!registration.accepted && registration.issue.has_value()) {
+            std::cerr << "规范包注册失败 [" << registration.issue->code << "]："
+                      << registration.issue->message << "\n";
+            state.issues.push_back(std::move(*registration.issue));
+        }
+    }
+    return state;
+}
+
+Json::Value make_cpp_health_body(
+    const bridge_report::config::AppConfig& config,
+    const std::size_t standard_package_count,
+    const std::size_t standard_error_count) {
     Json::Value body;
     body["status"] = "ok";
     body["service"] = "bridge-report-cpp-backend";
@@ -37,12 +86,17 @@ Json::Value make_cpp_health_body(const bridge_report::config::AppConfig& config)
     body["port"] = config.port;
     body["python_tools_base_url"] = config.python_tools_base_url;
     body["archive_root"] = config.archive_root.generic_string();
+    body["standards_status"] = standard_error_count == 0 ? "ok" : "degraded";
+    body["standard_package_count"] = static_cast<Json::UInt64>(standard_package_count);
+    body["standard_error_count"] = static_cast<Json::UInt64>(standard_error_count);
     return body;
 }
 
 void register_health_routes(
     const bridge_report::config::AppConfig& config,
-    const drogon::orm::DbClientPtr& db_client
+    const drogon::orm::DbClientPtr& db_client,
+    const std::size_t standard_package_count,
+    const std::size_t standard_error_count
 ) {
     const auto register_options_handler = [](const std::string& path) {
         drogon::app().registerHandler(
@@ -63,9 +117,10 @@ void register_health_routes(
 
     drogon::app().registerHandler(
         "/health",
-        [config](const drogon::HttpRequestPtr&,
+        [config, standard_package_count, standard_error_count](const drogon::HttpRequestPtr&,
                  std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            auto response = drogon::HttpResponse::newHttpJsonResponse(make_cpp_health_body(config));
+            auto response = drogon::HttpResponse::newHttpJsonResponse(
+                make_cpp_health_body(config, standard_package_count, standard_error_count));
             bridge_report::http::apply_local_dev_cors_headers(response);
             callback(response);
         },
@@ -159,6 +214,7 @@ void register_health_routes(
 int main(int argc, char* argv[]) {
     const std::string config_path = argc > 1 ? argv[1] : "config/local.json";
     const auto config = bridge_report::config::load_app_config(config_path);
+    const auto standards = load_standard_registry(config.standards_root);
 
     const auto db_client = bridge_report::db::create_db_client(config.postgres);
 
@@ -216,7 +272,11 @@ int main(int argc, char* argv[]) {
     );
 
     drogon::app().registerMiddleware(std::make_shared<drogon::HttpOptionsMiddleware>());
-    register_health_routes(config, db_client);
+    register_health_routes(
+        config,
+        db_client,
+        standards.registry->package_count(),
+        standards.issues.size());
     bridge_report::http::register_auth_routes(db_client);
     bridge_report::http::register_edit_lock_routes(db_client);
     bridge_report::http::register_review_routes(db_client, config.archive_root);

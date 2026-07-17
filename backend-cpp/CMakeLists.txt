@@ -61,6 +61,9 @@ add_library(bridge_report_backend_core
     src/review/ThreadSuggestions.cpp
     src/review/WorkspaceModels.cpp
     src/runtime/RuntimePaths.cpp
+    src/standards/StandardModels.cpp
+    src/standards/StandardPackageLoader.cpp
+    src/standards/StandardRegistry.cpp
 )
 
 target_include_directories(bridge_report_backend_core
@@ -130,6 +133,8 @@ add_executable(bridge_report_backend_tests
     tests/test_review_repository.cpp
     tests/test_review_statistics.cpp
     tests/test_system_number.cpp
+    tests/test_standard_package_loader.cpp
+    tests/test_standard_registry.cpp
     tests/test_thread_suggestions.cpp
     tests/test_temporary_word_cleanup_coordinator.cpp
     tests/test_word_import_routes.cpp

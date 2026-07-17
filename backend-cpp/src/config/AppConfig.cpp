@@ -1,5 +1,6 @@
 #include "bridge_report/config/AppConfig.hpp"
 
+#include <cstdlib>
 #include <fstream>
 #include <limits>
 
@@ -36,6 +37,13 @@ std::size_t get_size_or_default(const Json::Value& object, const char* key, cons
     return value == 0 ? fallback : static_cast<std::size_t>(value);
 }
 
+void apply_environment_overrides(AppConfig& config) {
+    if (const auto* standards_root = std::getenv("BRIDGE_REPORT_STANDARDS_ROOT");
+        standards_root != nullptr && standards_root[0] != '\0') {
+        config.standards_root = standards_root;
+    }
+}
+
 }  // 匿名命名空间
 
 AppConfig load_app_config(const std::filesystem::path& path) {
@@ -44,6 +52,7 @@ AppConfig load_app_config(const std::filesystem::path& path) {
     // 配置文件缺失或 JSON 无效时，调用方继续使用结构体默认值。
     std::ifstream input(path);
     if (!input.good()) {
+        apply_environment_overrides(config);
         return config;
     }
 
@@ -51,6 +60,7 @@ AppConfig load_app_config(const std::filesystem::path& path) {
     Json::Value root;
     std::string errors;
     if (!Json::parseFromStream(builder, input, &root, &errors)) {
+        apply_environment_overrides(config);
         return config;
     }
 
@@ -102,6 +112,13 @@ AppConfig load_app_config(const std::filesystem::path& path) {
         config.failed_word_retention_hours
     );
 
+    const auto& standards = root["standards"];
+    config.standards_root = get_string_or_default(
+        standards,
+        "root",
+        config.standards_root.generic_string()
+    );
+
     const auto& postgres = root["postgres"];
     config.postgres.host = get_string_or_default(postgres, "host", config.postgres.host);
     config.postgres.port = get_int_or_default(postgres, "port", config.postgres.port);
@@ -113,6 +130,7 @@ AppConfig load_app_config(const std::filesystem::path& path) {
     config.postgres.user = get_string_or_default(postgres, "user", config.postgres.user);
     config.postgres.password = get_string_or_default(postgres, "password", config.postgres.password);
 
+    apply_environment_overrides(config);
     return config;
 }
 
