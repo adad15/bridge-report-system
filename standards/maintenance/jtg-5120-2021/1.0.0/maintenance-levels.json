@@ -1,0 +1,14 @@
+{
+  "definitions": [
+    {
+      "id": "jtg5120.maintenance_level.catalog",
+      "references": ["jtg5120.source.official_pdf"],
+      "source_clause": "3.1.1",
+      "levels": [
+        {"id": "jtg5120.maintenance_level.i", "code": "I", "name": "Ⅰ级养护"},
+        {"id": "jtg5120.maintenance_level.ii", "code": "II", "name": "Ⅱ级养护"},
+        {"id": "jtg5120.maintenance_level.iii", "code": "III", "name": "Ⅲ级养护"}
+      ]
+    }
+  ]
+}

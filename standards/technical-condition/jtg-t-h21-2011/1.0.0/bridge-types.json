@@ -1,0 +1,92 @@
+{
+  "definitions": [
+    {
+      "id": "h21.bridge_type.beam",
+      "references": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general",
+        "h21.component.bearing",
+        "h21.component.lower.pier",
+        "h21.component.lower.abutment",
+        "h21.component.lower.foundation",
+        "h21.component.deck.pavement"
+      ],
+      "code": "beam",
+      "name": "梁式桥",
+      "source_clause": "3.2.2 表3.2.2"
+    },
+    {
+      "id": "h21.bridge_type.arch_slab_rib_box_double",
+      "references": [
+        "h21.component.arch.main_ring",
+        "h21.component.arch.spandrel",
+        "h21.component.arch.deck_slab",
+        "h21.component.lower.pier",
+        "h21.component.lower.abutment",
+        "h21.component.lower.foundation"
+      ],
+      "code": "arch_slab_rib_box_double",
+      "name": "板拱、肋拱、箱形拱及双曲拱桥",
+      "source_clause": "3.2.2 表3.2.2"
+    },
+    {
+      "id": "h21.bridge_type.arch_rigid_frame_truss",
+      "references": [
+        "h21.component.arch.rigid_or_truss_segment",
+        "h21.component.arch.transverse_link",
+        "h21.component.arch.deck_slab",
+        "h21.component.lower.pier",
+        "h21.component.lower.abutment",
+        "h21.component.lower.foundation"
+      ],
+      "code": "arch_rigid_frame_truss",
+      "name": "刚架拱及桁架拱桥",
+      "source_clause": "3.2.2 表3.2.2"
+    },
+    {
+      "id": "h21.bridge_type.arch_steel_concrete_composite",
+      "references": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link",
+        "h21.component.composite_arch.column",
+        "h21.component.composite_arch.hanger",
+        "h21.component.composite_arch.tie_rod",
+        "h21.component.composite_arch.deck_slab_or_beam",
+        "h21.component.bearing"
+      ],
+      "code": "arch_steel_concrete_composite",
+      "name": "钢—混凝土组合拱桥",
+      "source_clause": "3.2.2 表3.2.2"
+    },
+    {
+      "id": "h21.bridge_type.suspension",
+      "references": [
+        "h21.component.suspension.main_cable",
+        "h21.component.suspension.cable_clamp",
+        "h21.component.suspension.hanger",
+        "h21.component.suspension.stiffening_girder",
+        "h21.component.suspension.tower",
+        "h21.component.suspension.anchorage",
+        "h21.component.suspension.anchorage_rod"
+      ],
+      "code": "suspension",
+      "name": "悬索桥",
+      "source_clause": "3.2.2 表3.2.2"
+    },
+    {
+      "id": "h21.bridge_type.cable_stayed",
+      "references": [
+        "h21.component.cable_stayed.cable_system",
+        "h21.component.cable_stayed.main_girder",
+        "h21.component.cable_stayed.tower",
+        "h21.component.bearing",
+        "h21.component.lower.pier",
+        "h21.component.lower.abutment",
+        "h21.component.lower.foundation"
+      ],
+      "code": "cable_stayed",
+      "name": "斜拉桥",
+      "source_clause": "3.2.2 表3.2.2"
+    }
+  ]
+}

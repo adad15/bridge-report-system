@@ -1,0 +1,23 @@
+{
+  "definitions": [
+    {
+      "id": "jtg5120.source.announcement",
+      "references": [],
+      "kind": "official_announcement",
+      "publisher": "中华人民共和国交通运输部",
+      "document_number": "无",
+      "published_date": "2021-08-09",
+      "public_date": "2021-08-20",
+      "effective_date": "2021-11-01",
+      "url": "https://xxgk.mot.gov.cn/jigou/glj/202108/t20210825_3616530.html"
+    },
+    {
+      "id": "jtg5120.source.official_pdf",
+      "references": ["jtg5120.source.announcement"],
+      "kind": "official_standard_pdf",
+      "url": "https://xxgk.mot.gov.cn/jigou/glj/202108/P020240129349058736824.pdf",
+      "pages": 107,
+      "note": "首期只保存养护检查分级、类别、周期和内容的结构化事实及短标签。"
+    }
+  ]
+}

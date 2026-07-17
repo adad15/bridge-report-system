@@ -1,0 +1,24 @@
+{
+  "standard_family": "technical_condition",
+  "standard_id": "JTG_T_H21_2011",
+  "standard_code": "JTG/T H21—2011",
+  "standard_name": "公路桥梁技术状况评定标准",
+  "official_edition": "2011",
+  "package_version": "1.0.0",
+  "contract_version": 1,
+  "algorithm_id": "jtg-h21-2011",
+  "effective_date": "2011-09-01",
+  "content_checksum": "sha256:842f4e5a702d0ae6533be2aa9bea61e7d823c31d866b64a34dbc9a9347fdd898",
+  "status": "active",
+  "entry_files": [
+    "bridge-types.json",
+    "component-taxonomy.json",
+    "inventory-templates.json",
+    "defect-indicators.json",
+    "deduction-rules.json",
+    "weights.json",
+    "grade-boundaries.json",
+    "single-item-controls.json",
+    "sources.json"
+  ]
+}

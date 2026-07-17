@@ -1,0 +1,38 @@
+{
+  "definitions": [
+    {
+      "id": "jtg5120.inspection_type.catalog",
+      "references": ["jtg5120.source.official_pdf"],
+      "source_clauses": ["3.2", "3.3", "3.4", "3.5", "3.6"],
+      "types": [
+        {"id": "jtg5120.inspection_type.initial", "code": "initial", "name": "初始检查", "source_clause": "3.2"},
+        {"id": "jtg5120.inspection_type.daily_patrol", "code": "daily_patrol", "name": "日常巡查", "source_clause": "3.3"},
+        {"id": "jtg5120.inspection_type.routine", "code": "routine", "name": "经常检查", "source_clause": "3.4"},
+        {"id": "jtg5120.inspection_type.periodic", "code": "periodic", "name": "定期检查", "source_clause": "3.5"},
+        {"id": "jtg5120.inspection_type.special", "code": "special", "name": "特殊检查", "source_clause": "3.6"}
+      ]
+    },
+    {
+      "id": "jtg5120.inspection_frequency.daily_patrol",
+      "references": ["jtg5120.maintenance_level.catalog", "jtg5120.inspection_type.catalog", "jtg5120.source.official_pdf"],
+      "source_clause": "3.3.1",
+      "minimum_frequencies": [
+        {"maintenance_level_id": "jtg5120.maintenance_level.i", "interval_days": 1},
+        {"maintenance_level_id": "jtg5120.maintenance_level.ii", "interval_days": 1},
+        {"maintenance_level_id": "jtg5120.maintenance_level.iii", "interval_days": 7}
+      ]
+    },
+    {
+      "id": "jtg5120.inspection_frequency.routine",
+      "references": ["jtg5120.maintenance_level.catalog", "jtg5120.inspection_type.catalog", "jtg5120.source.official_pdf"],
+      "source_clause": "3.4.1",
+      "minimum_frequencies": [
+        {"maintenance_level_id": "jtg5120.maintenance_level.i", "interval_months": 1},
+        {"maintenance_level_id": "jtg5120.maintenance_level.ii", "interval_months": 2},
+        {"maintenance_level_id": "jtg5120.maintenance_level.iii", "interval_months": 3}
+      ],
+      "bearing_interval_months": 3,
+      "increase_after_disaster_or_grade_4_component": true
+    }
+  ]
+}

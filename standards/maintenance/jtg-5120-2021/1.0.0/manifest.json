@@ -1,0 +1,19 @@
+{
+  "standard_family": "maintenance",
+  "standard_id": "JTG_5120_2021",
+  "standard_code": "JTG 5120—2021",
+  "standard_name": "公路桥涵养护规范",
+  "official_edition": "2021",
+  "package_version": "1.0.0",
+  "contract_version": 1,
+  "algorithm_id": "jtg-5120-2021-maintenance-query",
+  "effective_date": "2021-11-01",
+  "content_checksum": "sha256:aa6bf32385b2539fbad711717b265a55a5b66db10350fc3e6b47a18b11271452",
+  "status": "active",
+  "entry_files": [
+    "maintenance-levels.json",
+    "inspection-types.json",
+    "periodic-inspection-requirements.json",
+    "sources.json"
+  ]
+}

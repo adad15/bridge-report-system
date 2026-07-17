@@ -126,6 +126,8 @@ add_executable(bridge_report_backend_tests
     tests/test_import_record_deletion_models.cpp
     tests/test_import_record_deletion_repository.cpp
     tests/test_import_record_deletion_routes.cpp
+    tests/test_jtg_5120_package.cpp
+    tests/test_jtg_h21_package.cpp
     tests/test_password_hash.cpp
     tests/test_preflight_report.cpp
     tests/test_photo_content.cpp

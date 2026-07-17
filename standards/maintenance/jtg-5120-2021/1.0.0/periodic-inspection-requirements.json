@@ -1,0 +1,32 @@
+{
+  "definitions": [
+    {
+      "id": "jtg5120.periodic_inspection.interval",
+      "references": ["jtg5120.maintenance_level.catalog", "jtg5120.inspection_type.catalog", "jtg5120.source.official_pdf"],
+      "source_clause": "3.5.1",
+      "maximum_intervals": [
+        {"maintenance_level_id": "jtg5120.maintenance_level.i", "years": 1},
+        {"maintenance_level_id": "jtg5120.maintenance_level.ii", "years": 3},
+        {"maintenance_level_id": "jtg5120.maintenance_level.iii", "years": 3}
+      ]
+    },
+    {
+      "id": "jtg5120.periodic_inspection.content",
+      "references": ["jtg5120.inspection_type.catalog", "jtg5120.source.official_pdf"],
+      "source_clauses": ["3.5.2", "3.5.3", "3.5.4", "3.5.5", "3.5.6", "3.5.7", "3.5.8", "3.5.9", "3.5.10", "3.5.11", "3.5.12"],
+      "content_groups": [
+        {"id": "jtg5120.periodic_content.records", "name": "桥梁基本状况与历次资料核对"},
+        {"id": "jtg5120.periodic_content.deck_system", "name": "桥面系"},
+        {"id": "jtg5120.periodic_content.concrete_superstructure", "name": "混凝土梁桥上部结构"},
+        {"id": "jtg5120.periodic_content.steel_superstructure", "name": "钢结构上部结构"},
+        {"id": "jtg5120.periodic_content.arch_superstructure", "name": "拱桥上部结构"},
+        {"id": "jtg5120.periodic_content.cable_stayed_superstructure", "name": "斜拉桥上部结构"},
+        {"id": "jtg5120.periodic_content.suspension_superstructure", "name": "悬索桥上部结构"},
+        {"id": "jtg5120.periodic_content.bearings", "name": "支座"},
+        {"id": "jtg5120.periodic_content.piers_abutments_foundations", "name": "桥墩、桥台与基础"},
+        {"id": "jtg5120.periodic_content.accessories", "name": "附属设施"},
+        {"id": "jtg5120.periodic_content.riverbed_and_regulation", "name": "河床与调治构造物"}
+      ]
+    }
+  ]
+}
