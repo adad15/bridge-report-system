@@ -86,6 +86,29 @@ Json::Value WorkspaceInspection::to_json() const {
     return json;
 }
 
+Json::Value WorkspaceStandardPackage::to_json() const {
+    Json::Value json;
+    json["id"] = id;
+    json["family"] = family;
+    json["standard_code"] = standard_code;
+    json["standard_name"] = standard_name;
+    json["official_edition"] = official_edition;
+    json["package_version"] = package_version;
+    json["is_enabled"] = is_enabled;
+    json["sync_status"] = sync_status;
+    return json;
+}
+
+Json::Value WorkspaceStandardProfile::to_json() const {
+    Json::Value json;
+    json["id"] = id;
+    json["revision_number"] = revision_number;
+    json["status"] = status;
+    json["technical_condition"] = technical_condition.to_json();
+    json["maintenance"] = maintenance.to_json();
+    return json;
+}
+
 Json::Value WorkspaceStructureRating::to_json() const {
     Json::Value json;
     json["rating_level"] = rating_level;
@@ -161,6 +184,8 @@ Json::Value InspectionWorkspace::to_json() const {
     Json::Value json;
     json["bridge"] = bridge.to_json();
     json["inspection_year"] = inspection_year.to_json();
+    json["standard_profile"] = standard_profile.has_value()
+        ? standard_profile->to_json() : Json::Value(Json::nullValue);
     json["imports"] = array_json(imports);
     json["pending"] = pending.to_json();
     return json;

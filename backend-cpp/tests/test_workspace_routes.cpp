@@ -36,3 +36,17 @@ TEST(WorkspaceRoutesTest, UploadWordOnlyAcceptsCurrentWordSourceTypes) {
     EXPECT_FALSE(is_supported_word_source_type("Excel病害表"));
     EXPECT_FALSE(is_supported_word_source_type(""));
 }
+
+TEST(WorkspaceRoutesTest, CreateInspectionRequiresBothStandardPackageIds) {
+    bridge_report::http::CreateInspectionRequest parsed;
+    Json::Value valid;
+    valid["inspection_year"] = 2026;
+    valid["technical_condition_package_id"] = "11111111-1111-1111-1111-111111111111";
+    valid["maintenance_package_id"] = "22222222-2222-2222-2222-222222222222";
+    EXPECT_FALSE(bridge_report::http::parse_create_inspection_request(valid, parsed).has_value());
+
+    valid.removeMember("maintenance_package_id");
+    ASSERT_TRUE(bridge_report::http::parse_create_inspection_request(valid, parsed).has_value());
+    EXPECT_EQ(*bridge_report::http::parse_create_inspection_request(valid, parsed),
+              "standard_packages_required");
+}

@@ -56,9 +56,24 @@ describe("InspectionWorkspacePage", () => {
     vi.mocked(fetchInspectionWorkspace).mockResolvedValue({
       bridge: { id: "bridge-1", system_number: "QL-000001", bridge_name: "百股大桥", route_name: "大养线", status: "在用" },
       inspection_year: { id: "year-1", system_number: "NDJC-000001", inspection_year: 2024, status: "待校对", version_number: 1, is_current: true, overall_score: null, overall_grade: null, created_at: null, updated_at: null },
+      standard_profile: {
+        id: "profile-1", revision_number: 1, status: "生效",
+        technical_condition: { id: "technical-1", family: "technical_condition", standard_code: "JTG/T H21—2011", standard_name: "公路桥梁技术状况评定标准", official_edition: "2011", package_version: "1.0.0", is_enabled: true, sync_status: "正常" },
+        maintenance: { id: "maintenance-1", family: "maintenance", standard_code: "JTG 5120—2021", standard_name: "公路桥涵养护规范", official_edition: "2021", package_version: "1.0.0", is_enabled: true, sync_status: "正常" },
+      },
       imports: [],
       pending: { import_count: 0, unbound_observation_count: 0, total_count: 0 },
     });
+  });
+
+  it("shows the locked standard identities and package versions", async () => {
+    render(
+      <MemoryRouter initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
+        <Routes><Route path="/bridges/:bridgeId/inspections/:inspectionYearId" element={<InspectionWorkspacePage />} /></Routes>
+      </MemoryRouter>
+    );
+    expect(await screen.findByText(/JTG\/T H21—2011.*规则包 1.0.0/)).toBeInTheDocument();
+    expect(screen.getByText(/JTG 5120—2021.*规则包 1.0.0/)).toBeInTheDocument();
   });
 
   it("keeps the import dialog mounted while refreshing the annual workspace", async () => {
@@ -84,6 +99,7 @@ describe("InspectionWorkspacePage", () => {
     vi.mocked(fetchInspectionWorkspace).mockResolvedValue({
       bridge: { id: "bridge-1", system_number: "QL-000001", bridge_name: "百股大桥", route_name: "大养线", status: "在用" },
       inspection_year: { id: "year-1", system_number: "NDJC-000001", inspection_year: 2024, status: "待校对", version_number: 1, is_current: true, overall_score: null, overall_grade: null, created_at: null, updated_at: null },
+      standard_profile: null,
       imports: [{
         id: "import-1", system_number: "DRJL-000001", import_name: "百股大桥报告.docx",
         source_type: "软件导出Word", import_status: "解析失败", importer_name: null,
@@ -111,6 +127,7 @@ describe("InspectionWorkspacePage", () => {
     vi.mocked(fetchInspectionWorkspace).mockResolvedValue({
       bridge: { id: "bridge-1", system_number: "QL-000001", bridge_name: "百股大桥", route_name: "大养线", status: "在用" },
       inspection_year: { id: "year-1", system_number: "NDJC-000001", inspection_year: 2024, status: "待校对", version_number: 1, is_current: true, overall_score: null, overall_grade: null, created_at: null, updated_at: null },
+      standard_profile: null,
       imports: [{
         id: "import-1", system_number: "DRJL-000001", import_name: "百股大桥报告.docx",
         source_type: "软件导出Word", import_status: "待校对", importer_name: "liaoning-word-importer",
@@ -138,6 +155,7 @@ describe("InspectionWorkspacePage", () => {
     vi.mocked(fetchInspectionWorkspace).mockResolvedValue({
       bridge: { id: "bridge-1", system_number: "QL-000001", bridge_name: "百股大桥", route_name: "大养线", status: "在用" },
       inspection_year: { id: "year-1", system_number: "NDJC-000001", inspection_year: 2024, status: "待校对", version_number: 1, is_current: true, overall_score: null, overall_grade: null, created_at: null, updated_at: null },
+      standard_profile: null,
       imports: [{
         id: "import-1", system_number: "DRJL-000001", import_name: "百股大桥报告.docx",
         source_type: "软件导出Word", import_status: "待校对", importer_name: null,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include <drogon/orm/DbClient.h>
@@ -20,6 +21,16 @@ Json::Value inspection_year_already_exists_body(
     const std::string& existing_inspection_year_id
 );
 bool is_supported_word_source_type(const std::string& source_type);
+
+struct CreateInspectionRequest {
+    int inspection_year{0};
+    std::string technical_condition_package_id;
+    std::string maintenance_package_id;
+};
+
+std::optional<std::string> parse_create_inspection_request(
+    const Json::Value& body,
+    CreateInspectionRequest& output);
 
 void register_workspace_routes(
     const drogon::orm::DbClientPtr& db_client,

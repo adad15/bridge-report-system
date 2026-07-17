@@ -30,11 +30,16 @@ describe("workspaceApi", () => {
       json: async () => ({ inspection_year: inspection }),
     });
     vi.stubGlobal("fetch", fetchMock);
-    await expect(createInspectionYear("http://backend", "bridge-1", 2027)).resolves.toEqual(inspection);
+    const input = {
+      inspection_year: 2027,
+      technical_condition_package_id: "technical-1",
+      maintenance_package_id: "maintenance-1",
+    };
+    await expect(createInspectionYear("http://backend", "bridge-1", input)).resolves.toEqual(inspection);
     expect(fetchMock).toHaveBeenCalledWith("http://backend/api/bridges/bridge-1/inspection-years", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ inspection_year: 2027 }),
+      body: JSON.stringify(input),
     });
   });
 

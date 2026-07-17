@@ -16,6 +16,10 @@ enum class CreateInspectionYearStatus {
     Created,
     AlreadyExists,
     BridgeNotFound,
+    PackageNotFound,
+    PackageUnavailable,
+    FamilyMismatch,
+    Failed,
 };
 
 struct CreateInspectionYearOutcome {
@@ -42,7 +46,12 @@ public:
 
     std::optional<review::BridgeOverview> get_bridge_overview(const std::string& bridge_id);
     std::optional<review::InspectionWorkspace> get_inspection_workspace(const std::string& inspection_year_id);
-    CreateInspectionYearOutcome create_inspection_year(const std::string& bridge_id, int inspection_year);
+    CreateInspectionYearOutcome create_inspection_year(
+        const std::string& bridge_id,
+        int inspection_year,
+        const std::string& technical_condition_package_id,
+        const std::string& maintenance_package_id,
+        const std::string& created_by_user_id);
     UploadWordOutcome upload_word_import(
         const std::string& inspection_year_id,
         const std::string& source_type,

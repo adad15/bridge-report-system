@@ -27,6 +27,22 @@ protected:
 
         bridge_id_ = insert_id(
             "insert into bridges (bridge_name, route_name) values ('M065工作区测试桥', 'G305') returning id");
+        standard_user_id_ = insert_id(
+            "insert into users (username, display_name, password_hash, role) "
+            "values ($1, '工作区规范测试员', 'not-a-real-hash', 'normal') returning id",
+            "workspace_standard_" + bridge_id_);
+        technical_package_id_ = insert_id(
+            "insert into standard_packages (standard_family, standard_id, standard_code, standard_name, "
+            "official_edition, package_version, contract_version, algorithm_id, effective_date, content_checksum) "
+            "values ('technical_condition', $1, 'TEST H21', '测试技术标准', '2026', '1.0.0', 1, "
+            "'test-h21', '2026-01-01', $2) returning id",
+            "WORKSPACE-TECH-" + bridge_id_, "sha256:" + std::string(64, '6'));
+        maintenance_package_id_ = insert_id(
+            "insert into standard_packages (standard_family, standard_id, standard_code, standard_name, "
+            "official_edition, package_version, contract_version, algorithm_id, effective_date, content_checksum) "
+            "values ('maintenance', $1, 'TEST 5120', '测试养护规范', '2026', '1.0.0', 1, "
+            "'test-maintenance', '2026-01-01', $2) returning id",
+            "WORKSPACE-MAINT-" + bridge_id_, "sha256:" + std::string(64, '7'));
         upload_root_ = std::filesystem::temp_directory_path() / ("bridge-report-upload-" + bridge_id_);
         std::filesystem::remove_all(upload_root_);
 
@@ -83,7 +99,20 @@ protected:
         client_->execSqlSync("delete from defect_threads where bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from bridge_components where bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from inspection_years where bridge_id = $1::uuid", bridge_id_);
+        if (!standard_user_id_.empty()) {
+            client_->execSqlSync(
+                "delete from project_standard_profiles where created_by_user_id=$1::uuid",
+                standard_user_id_);
+        }
+        if (!technical_package_id_.empty() && !maintenance_package_id_.empty()) {
+            client_->execSqlSync(
+                "delete from standard_packages where id in ($1::uuid, $2::uuid)",
+                technical_package_id_, maintenance_package_id_);
+        }
         client_->execSqlSync("delete from bridges where id = $1::uuid", bridge_id_);
+        if (!standard_user_id_.empty()) {
+            client_->execSqlSync("delete from users where id=$1::uuid", standard_user_id_);
+        }
         client_->closeAll();
         std::filesystem::remove_all(upload_root_);
     }
@@ -114,6 +143,9 @@ protected:
     std::string pending_import_id_;
     std::string confirmed_import_id_;
     std::filesystem::path upload_root_;
+    std::string standard_user_id_;
+    std::string technical_package_id_;
+    std::string maintenance_package_id_;
 };
 
 }  // namespace
@@ -183,14 +215,21 @@ TEST_F(WorkspaceRepositoryTest, UnknownIdsReturnNoWorkspace) {
 TEST_F(WorkspaceRepositoryTest, CreatesAnnualInspectionAndReturnsExistingOnDuplicate) {
     bridge_report::db::WorkspaceRepository repository(client_);
 
-    const auto created = repository.create_inspection_year(bridge_id_, 2030);
+    const auto created = repository.create_inspection_year(
+        bridge_id_, 2030, technical_package_id_, maintenance_package_id_, standard_user_id_);
     ASSERT_EQ(created.status, bridge_report::db::CreateInspectionYearStatus::Created);
     ASSERT_TRUE(created.inspection_year.has_value());
     EXPECT_EQ(created.inspection_year->inspection_year, 2030);
     EXPECT_EQ(created.inspection_year->status, "待校对");
     EXPECT_TRUE(created.inspection_year->is_current);
+    const auto workspace = repository.get_inspection_workspace(created.inspection_year->id);
+    ASSERT_TRUE(workspace.has_value());
+    ASSERT_TRUE(workspace->standard_profile.has_value());
+    EXPECT_EQ(workspace->standard_profile->technical_condition.standard_code, "TEST H21");
+    EXPECT_EQ(workspace->standard_profile->maintenance.standard_code, "TEST 5120");
 
-    const auto duplicate = repository.create_inspection_year(bridge_id_, 2030);
+    const auto duplicate = repository.create_inspection_year(
+        bridge_id_, 2030, technical_package_id_, maintenance_package_id_, standard_user_id_);
     ASSERT_EQ(duplicate.status, bridge_report::db::CreateInspectionYearStatus::AlreadyExists);
     ASSERT_TRUE(duplicate.existing_inspection_year_id.has_value());
     EXPECT_EQ(*duplicate.existing_inspection_year_id, created.inspection_year->id);
@@ -199,9 +238,24 @@ TEST_F(WorkspaceRepositoryTest, CreatesAnnualInspectionAndReturnsExistingOnDupli
 TEST_F(WorkspaceRepositoryTest, CreateAnnualInspectionRejectsUnknownBridge) {
     bridge_report::db::WorkspaceRepository repository(client_);
     const auto outcome = repository.create_inspection_year(
-        "11111111-1111-1111-1111-111111111111", 2030);
+        "11111111-1111-1111-1111-111111111111", 2030,
+        technical_package_id_, maintenance_package_id_, standard_user_id_);
     EXPECT_EQ(outcome.status, bridge_report::db::CreateInspectionYearStatus::BridgeNotFound);
     EXPECT_FALSE(outcome.inspection_year.has_value());
+}
+
+TEST_F(WorkspaceRepositoryTest, CreateAnnualInspectionRequiresCorrectEnabledFamilies) {
+    bridge_report::db::WorkspaceRepository repository(client_);
+    const auto mismatch = repository.create_inspection_year(
+        bridge_id_, 2031, maintenance_package_id_, technical_package_id_, standard_user_id_);
+    EXPECT_EQ(mismatch.status, bridge_report::db::CreateInspectionYearStatus::FamilyMismatch);
+
+    client_->execSqlSync(
+        "update standard_packages set is_enabled=false where id=$1::uuid",
+        maintenance_package_id_);
+    const auto unavailable = repository.create_inspection_year(
+        bridge_id_, 2032, technical_package_id_, maintenance_package_id_, standard_user_id_);
+    EXPECT_EQ(unavailable.status, bridge_report::db::CreateInspectionYearStatus::PackageUnavailable);
 }
 
 TEST_F(WorkspaceRepositoryTest, UploadWordCreatesFlatTemporarySourceWithoutArchivedFile) {

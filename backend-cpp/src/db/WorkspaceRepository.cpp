@@ -51,6 +51,22 @@ review::WorkspaceInspection inspection_from_row(const drogon::orm::Row& row) {
     return inspection;
 }
 
+review::WorkspaceStandardPackage standard_package_from_row(
+    const drogon::orm::Row& row,
+    const char* prefix,
+    const char* family) {
+    review::WorkspaceStandardPackage package;
+    package.id = row[std::string(prefix) + "_package_id"].as<std::string>();
+    package.family = family;
+    package.standard_code = row[std::string(prefix) + "_standard_code"].as<std::string>();
+    package.standard_name = row[std::string(prefix) + "_standard_name"].as<std::string>();
+    package.official_edition = row[std::string(prefix) + "_official_edition"].as<std::string>();
+    package.package_version = row[std::string(prefix) + "_package_version"].as<std::string>();
+    package.is_enabled = row[std::string(prefix) + "_is_enabled"].as<bool>();
+    package.sync_status = row[std::string(prefix) + "_sync_status"].as<std::string>();
+    return package;
+}
+
 Json::Value parse_json_or_empty(const std::string& text) {
     Json::CharReaderBuilder builder;
     Json::Value value;
@@ -133,14 +149,39 @@ std::optional<review::InspectionWorkspace> WorkspaceRepository::get_inspection_w
         "b.status as bridge_status, iy.id::text as inspection_id, "
         "iy.system_number as inspection_system_number, iy.inspection_year, iy.status as inspection_status, "
         "iy.version_number, iy.is_current, iy.overall_score, iy.overall_grade, "
-        "iy.created_at::text as inspection_created_at, iy.updated_at::text as inspection_updated_at "
-        "from inspection_years iy join bridges b on b.id = iy.bridge_id where iy.id = $1::uuid",
+        "iy.created_at::text as inspection_created_at, iy.updated_at::text as inspection_updated_at, "
+        "sp.id::text as standard_profile_id, sp.revision_number as standard_profile_revision, "
+        "sp.status as standard_profile_status, "
+        "tp.id::text as technical_package_id, tp.standard_code as technical_standard_code, "
+        "tp.standard_name as technical_standard_name, tp.official_edition as technical_official_edition, "
+        "tp.package_version as technical_package_version, tp.is_enabled as technical_is_enabled, "
+        "tp.sync_status as technical_sync_status, "
+        "mp.id::text as maintenance_package_id, mp.standard_code as maintenance_standard_code, "
+        "mp.standard_name as maintenance_standard_name, mp.official_edition as maintenance_official_edition, "
+        "mp.package_version as maintenance_package_version, mp.is_enabled as maintenance_is_enabled, "
+        "mp.sync_status as maintenance_sync_status "
+        "from inspection_years iy join bridges b on b.id = iy.bridge_id "
+        "left join project_standard_profiles sp on sp.id=iy.standard_profile_id "
+        "left join standard_packages tp on tp.id=sp.technical_condition_package_id "
+        "left join standard_packages mp on mp.id=sp.maintenance_package_id "
+        "where iy.id = $1::uuid",
         inspection_year_id);
     if (context_rows.empty()) return std::nullopt;
 
     review::InspectionWorkspace workspace;
     workspace.bridge = bridge_from_row(context_rows[0]);
     workspace.inspection_year = inspection_from_row(context_rows[0]);
+    if (!context_rows[0]["standard_profile_id"].isNull()) {
+        review::WorkspaceStandardProfile profile;
+        profile.id = context_rows[0]["standard_profile_id"].as<std::string>();
+        profile.revision_number = context_rows[0]["standard_profile_revision"].as<int>();
+        profile.status = context_rows[0]["standard_profile_status"].as<std::string>();
+        profile.technical_condition = standard_package_from_row(
+            context_rows[0], "technical", "technical_condition");
+        profile.maintenance = standard_package_from_row(
+            context_rows[0], "maintenance", "maintenance");
+        workspace.standard_profile = std::move(profile);
+    }
 
     const auto import_rows = db_client_->execSqlSync(
         "select ir.id::text, ir.system_number, ir.import_name, ir.source_type, ir.import_status, "
@@ -194,44 +235,91 @@ std::optional<review::InspectionWorkspace> WorkspaceRepository::get_inspection_w
 
 CreateInspectionYearOutcome WorkspaceRepository::create_inspection_year(
     const std::string& bridge_id,
-    const int inspection_year
+    const int inspection_year,
+    const std::string& technical_condition_package_id,
+    const std::string& maintenance_package_id,
+    const std::string& created_by_user_id
 ) {
-    const auto bridge_rows = db_client_->execSqlSync(
-        "select 1 from bridges where id = $1::uuid", bridge_id);
-    if (bridge_rows.empty()) {
-        return {CreateInspectionYearStatus::BridgeNotFound, std::nullopt, std::nullopt};
-    }
+    std::shared_ptr<drogon::orm::Transaction> transaction;
+    const auto latch = std::make_shared<CommitLatch>();
+    try {
+        transaction = db_client_->newTransaction(latch->callback());
+        transaction->execSqlSync(
+            "select pg_advisory_xact_lock(hashtext($1::text), $2::integer)",
+            bridge_id, inspection_year);
+        const auto bridge_rows = transaction->execSqlSync(
+            "select 1 from bridges where id=$1::uuid for share", bridge_id);
+        if (bridge_rows.empty()) {
+            transaction->rollback();
+            return {CreateInspectionYearStatus::BridgeNotFound, std::nullopt, std::nullopt};
+        }
+        const auto existing_rows = transaction->execSqlSync(
+            "select id::text from inspection_years "
+            "where bridge_id=$1::uuid and inspection_year=$2 and is_current limit 1",
+            bridge_id, inspection_year);
+        if (!existing_rows.empty()) {
+            transaction->rollback();
+            return {CreateInspectionYearStatus::AlreadyExists, std::nullopt,
+                    existing_rows[0]["id"].as<std::string>()};
+        }
 
-    const auto inserted_rows = db_client_->execSqlSync(
-        "insert into inspection_years (bridge_id, inspection_year, status, version_number, is_current) "
-        "values ($1::uuid, $2, '待校对', 1, true) "
-        "on conflict (bridge_id, inspection_year) where is_current do nothing "
-        "returning id::text as inspection_id, system_number as inspection_system_number, inspection_year, "
-        "status as inspection_status, version_number, is_current, overall_score, overall_grade, "
-        "created_at::text as inspection_created_at, updated_at::text as inspection_updated_at",
-        bridge_id, inspection_year);
-    if (!inserted_rows.empty()) {
-        return {
-            CreateInspectionYearStatus::Created,
-            inspection_from_row(inserted_rows[0]),
-            std::nullopt,
-        };
-    }
+        const auto packages = transaction->execSqlSync(
+            "select id::text as id, standard_family, is_enabled, sync_status "
+            "from standard_packages where id in ($1::uuid, $2::uuid)",
+            technical_condition_package_id, maintenance_package_id);
+        if (packages.size() != 2) {
+            transaction->rollback();
+            return {CreateInspectionYearStatus::PackageNotFound, std::nullopt, std::nullopt};
+        }
+        bool technical_ok = false;
+        bool maintenance_ok = false;
+        bool available = true;
+        for (const auto& package : packages) {
+            const auto id = package["id"].as<std::string>();
+            const auto family = package["standard_family"].as<std::string>();
+            technical_ok = technical_ok ||
+                (id == technical_condition_package_id && family == "technical_condition");
+            maintenance_ok = maintenance_ok ||
+                (id == maintenance_package_id && family == "maintenance");
+            available = available && package["is_enabled"].as<bool>() &&
+                package["sync_status"].as<std::string>() == "正常";
+        }
+        if (!technical_ok || !maintenance_ok) {
+            transaction->rollback();
+            return {CreateInspectionYearStatus::FamilyMismatch, std::nullopt, std::nullopt};
+        }
+        if (!available) {
+            transaction->rollback();
+            return {CreateInspectionYearStatus::PackageUnavailable, std::nullopt, std::nullopt};
+        }
 
-    const auto existing_rows = db_client_->execSqlSync(
-        "select id::text from inspection_years "
-        "where bridge_id = $1::uuid and inspection_year = $2 and is_current limit 1",
-        bridge_id, inspection_year);
-    if (!existing_rows.empty()) {
-        return {
-            CreateInspectionYearStatus::AlreadyExists,
-            std::nullopt,
-            existing_rows[0]["id"].as<std::string>(),
-        };
+        const auto profile_rows = transaction->execSqlSync(
+            "insert into project_standard_profiles "
+            "(technical_condition_package_id, maintenance_package_id, created_by_user_id, change_reason) "
+            "values ($1::uuid, $2::uuid, $3::uuid, '创建年度检测时锁定规范组合') "
+            "returning id::text as id",
+            technical_condition_package_id, maintenance_package_id, created_by_user_id);
+        const auto inserted_rows = transaction->execSqlSync(
+            "insert into inspection_years "
+            "(bridge_id, inspection_year, status, version_number, is_current, standard_profile_id) "
+            "values ($1::uuid, $2, '待校对', 1, true, $3::uuid) "
+            "returning id::text as inspection_id, system_number as inspection_system_number, "
+            "inspection_year, status as inspection_status, version_number, is_current, "
+            "overall_score, overall_grade, created_at::text as inspection_created_at, "
+            "updated_at::text as inspection_updated_at",
+            bridge_id, inspection_year, profile_rows[0]["id"].as<std::string>());
+        const auto created = inspection_from_row(inserted_rows[0]);
+        transaction.reset();
+        if (!latch->wait()) {
+            return {CreateInspectionYearStatus::Failed, std::nullopt, std::nullopt};
+        }
+        return {CreateInspectionYearStatus::Created, created, std::nullopt};
+    } catch (...) {
+        if (transaction) {
+            try { transaction->rollback(); } catch (...) {}
+        }
+        return {CreateInspectionYearStatus::Failed, std::nullopt, std::nullopt};
     }
-
-    // 理论上仅会在桥梁被并发删除时发生；对调用方仍按桥梁不存在处理。
-    return {CreateInspectionYearStatus::BridgeNotFound, std::nullopt, std::nullopt};
 }
 
 UploadWordOutcome WorkspaceRepository::upload_word_import(

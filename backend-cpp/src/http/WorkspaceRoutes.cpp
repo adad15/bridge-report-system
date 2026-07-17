@@ -42,6 +42,30 @@ bool is_supported_word_source_type(const std::string& source_type) {
     return source_type == "软件导出Word" || source_type == "正式Word";
 }
 
+std::optional<std::string> parse_create_inspection_request(
+    const Json::Value& body,
+    CreateInspectionRequest& output) {
+    if (!body.isObject() || !body.isMember("inspection_year") ||
+        !body["inspection_year"].isInt()) {
+        return "invalid_inspection_year";
+    }
+    output.inspection_year = body["inspection_year"].asInt();
+    if (output.inspection_year < 1900 || output.inspection_year > 2200) {
+        return "invalid_inspection_year";
+    }
+    if (!body.isMember("technical_condition_package_id") ||
+        !body["technical_condition_package_id"].isString() ||
+        !is_valid_uuid(body["technical_condition_package_id"].asString()) ||
+        !body.isMember("maintenance_package_id") ||
+        !body["maintenance_package_id"].isString() ||
+        !is_valid_uuid(body["maintenance_package_id"].asString())) {
+        return "standard_packages_required";
+    }
+    output.technical_condition_package_id = body["technical_condition_package_id"].asString();
+    output.maintenance_package_id = body["maintenance_package_id"].asString();
+    return std::nullopt;
+}
+
 void register_workspace_routes(
     const drogon::orm::DbClientPtr& db_client,
     const config::AppConfig& config
@@ -115,34 +139,34 @@ void register_workspace_routes(
                 respond_workspace_not_found(callback, WorkspaceResource::Bridge);
                 return;
             }
+            const auto user = authenticate_request(db_client, request);
+            if (!user.has_value()) {
+                respond_unauthorized(callback);
+                return;
+            }
             const auto request_body = request->getJsonObject();
             if (request_body == nullptr) {
                 respond_json(callback, make_error_body("invalid_json_body", "请求体不是合法的 JSON。"),
                              drogon::k400BadRequest);
                 return;
             }
-            if (!request_body->isMember("inspection_year")
-                || !(*request_body)["inspection_year"].isInt()) {
-                respond_json(callback,
-                             make_error_body("invalid_inspection_year", "检测年度必须是 1900 至 2200 的整数。"),
-                             drogon::k400BadRequest);
-                return;
-            }
-            const int inspection_year = (*request_body)["inspection_year"].asInt();
-            if (inspection_year < 1900 || inspection_year > 2200) {
-                respond_json(callback,
-                             make_error_body("invalid_inspection_year", "检测年度必须是 1900 至 2200 的整数。"),
-                             drogon::k400BadRequest);
+            CreateInspectionRequest parsed;
+            if (const auto parse_error = parse_create_inspection_request(*request_body, parsed)) {
+                const auto message = *parse_error == "invalid_inspection_year"
+                    ? "检测年度必须是 1900 至 2200 的整数。"
+                    : "请选择技术状况评定标准和桥涵养护规范。";
+                respond_json(callback, make_error_body(*parse_error, message), drogon::k400BadRequest);
                 return;
             }
 
             try {
-                if (!authenticate_request(db_client, request).has_value()) {
-                    respond_unauthorized(callback);
-                    return;
-                }
                 db::WorkspaceRepository repository(db_client);
-                const auto outcome = repository.create_inspection_year(bridge_id, inspection_year);
+                const auto outcome = repository.create_inspection_year(
+                    bridge_id,
+                    parsed.inspection_year,
+                    parsed.technical_condition_package_id,
+                    parsed.maintenance_package_id,
+                    user->id);
                 if (outcome.status == db::CreateInspectionYearStatus::BridgeNotFound) {
                     respond_workspace_not_found(callback, WorkspaceResource::Bridge);
                     return;
@@ -151,9 +175,31 @@ void register_workspace_routes(
                     respond_json(
                         callback,
                         inspection_year_already_exists_body(
-                            inspection_year, *outcome.existing_inspection_year_id),
+                            parsed.inspection_year, *outcome.existing_inspection_year_id),
                         drogon::k409Conflict
                     );
+                    return;
+                }
+                if (outcome.status == db::CreateInspectionYearStatus::PackageNotFound) {
+                    respond_json(callback,
+                                 make_error_body("standard_package_not_found", "所选规范包不存在。"),
+                                 drogon::k400BadRequest);
+                    return;
+                }
+                if (outcome.status == db::CreateInspectionYearStatus::FamilyMismatch) {
+                    respond_json(callback,
+                                 make_error_body("standard_package_family_mismatch", "所选规范类别不匹配。"),
+                                 drogon::k400BadRequest);
+                    return;
+                }
+                if (outcome.status == db::CreateInspectionYearStatus::PackageUnavailable) {
+                    respond_json(callback,
+                                 make_error_body("standard_package_unavailable", "所选规范已停用或处于故障状态。"),
+                                 drogon::k409Conflict);
+                    return;
+                }
+                if (outcome.status == db::CreateInspectionYearStatus::Failed) {
+                    respond_db_unavailable(callback);
                     return;
                 }
 

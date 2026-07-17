@@ -49,6 +49,7 @@ add_library(bridge_report_backend_core
     src/http/ImportRecordDeletionRoutes.cpp
     src/http/InspectionYearDeletionRoutes.cpp
     src/http/ReviewRoutes.cpp
+    src/http/StandardRoutes.cpp
     src/http/WordImportRoutes.cpp
     src/http/WorkspaceRoutes.cpp
     src/identity/SystemNumber.cpp
@@ -63,6 +64,7 @@ add_library(bridge_report_backend_core
     src/review/WorkspaceModels.cpp
     src/runtime/RuntimePaths.cpp
     src/standards/StandardModels.cpp
+    src/standards/StandardCatalogModels.cpp
     src/standards/StandardPackageLoader.cpp
     src/standards/StandardRegistry.cpp
 )
@@ -138,6 +140,7 @@ add_executable(bridge_report_backend_tests
     tests/test_system_number.cpp
     tests/test_standard_package_loader.cpp
     tests/test_standard_repository.cpp
+    tests/test_standard_routes.cpp
     tests/test_standard_registry.cpp
     tests/test_thread_suggestions.cpp
     tests/test_temporary_word_cleanup_coordinator.cpp

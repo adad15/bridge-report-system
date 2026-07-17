@@ -89,6 +89,8 @@ public:
         standards::StandardFamily family,
         const std::string& standard_id,
         const std::string& package_version);
+    std::optional<StandardPackageRecord> find_package_by_id(const std::string& package_id);
+    std::vector<StandardPackageRecord> list_packages(bool enabled_only);
 
     SetStandardPackageEnabledStatus set_package_enabled(
         const std::string& package_id,

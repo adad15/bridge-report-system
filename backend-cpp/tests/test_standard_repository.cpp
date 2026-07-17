@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdlib>
 #include <memory>
 #include <string>
@@ -137,6 +138,10 @@ TEST_F(StandardRepositoryTest, DistinguishesEnabledDisabledFaultAndAdminAuthoriz
     EXPECT_EQ(
         repository_->set_package_enabled(*synced.package_id, false, "admin"),
         SetStandardPackageEnabledStatus::Updated);
+    const auto enabled_after_disable = repository_->list_packages(true);
+    EXPECT_TRUE(std::none_of(
+        enabled_after_disable.begin(), enabled_after_disable.end(),
+        [&](const auto& item) { return item.id == *synced.package_id; }));
     auto stored = repository_->find_package(source.family, source.standard_id, source.package_version);
     ASSERT_TRUE(stored.has_value());
     EXPECT_FALSE(stored->is_enabled);
@@ -155,6 +160,10 @@ TEST_F(StandardRepositoryTest, DistinguishesEnabledDisabledFaultAndAdminAuthoriz
     EXPECT_EQ(
         repository_->set_package_enabled(*synced.package_id, true, "admin"),
         SetStandardPackageEnabledStatus::FaultBlocked);
+    const auto enabled_after_fault = repository_->list_packages(true);
+    EXPECT_TRUE(std::none_of(
+        enabled_after_fault.begin(), enabled_after_fault.end(),
+        [&](const auto& item) { return item.id == *synced.package_id; }));
 }
 
 TEST_F(StandardRepositoryTest, ProfileRequiresCorrectEnabledFamilies) {

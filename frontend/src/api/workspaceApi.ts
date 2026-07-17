@@ -85,8 +85,26 @@ export interface BridgeOverview {
 export interface InspectionWorkspace {
   bridge: WorkspaceBridge;
   inspection_year: WorkspaceInspection;
+  standard_profile: {
+    id: string;
+    revision_number: number;
+    status: string;
+    technical_condition: WorkspaceStandardPackage;
+    maintenance: WorkspaceStandardPackage;
+  } | null;
   imports: WorkspaceImport[];
   pending: WorkspacePendingSummary;
+}
+
+export interface WorkspaceStandardPackage {
+  id: string;
+  family: "technical_condition" | "maintenance";
+  standard_code: string;
+  standard_name: string;
+  official_edition: string;
+  package_version: string;
+  is_enabled: boolean;
+  sync_status: "正常" | "故障";
 }
 
 export interface InspectionYearDeletionImpact {
@@ -216,11 +234,15 @@ export async function deleteImportRecord(
 export async function createInspectionYear(
   baseUrl: string,
   bridgeId: string,
-  inspectionYear: number
+  input: {
+    inspection_year: number;
+    technical_condition_package_id: string;
+    maintenance_package_id: string;
+  }
 ): Promise<WorkspaceInspection> {
   const body = await request<{ inspection_year: WorkspaceInspection }>(
     `${baseUrl}/api/bridges/${encodeURIComponent(bridgeId)}/inspection-years`,
-    { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({ inspection_year: inspectionYear }) }
+    { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(input) }
   );
   return body.inspection_year;
 }
@@ -248,6 +270,10 @@ export function workspaceErrorMessage(error: unknown): string {
     inspection_year_not_found: "年度检测不存在或已被删除。",
     inspection_year_not_current: "该年度已不是当前版本，不能继续导入资料。",
     inspection_year_already_exists: "该年度已经存在，将进入已有年度。",
+    standard_packages_required: "请选择技术状况评定标准和桥涵养护规范。",
+    standard_package_not_found: "所选规范包不存在，请刷新后重新选择。",
+    standard_package_family_mismatch: "所选规范类别不匹配，请刷新后重新选择。",
+    standard_package_unavailable: "所选规范已停用或处于故障状态，请重新选择。",
     invalid_word_file: "请选择一个非空的 .docx 文件。",
     word_file_too_large: "Word 文件超过允许的上传大小。",
     word_archive_failed: "Word 文件归档失败，请重试。",

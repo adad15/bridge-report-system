@@ -50,6 +50,29 @@ struct WorkspaceInspection {
     Json::Value to_json() const;
 };
 
+struct WorkspaceStandardPackage {
+    std::string id;
+    std::string family;
+    std::string standard_code;
+    std::string standard_name;
+    std::string official_edition;
+    std::string package_version;
+    bool is_enabled{false};
+    std::string sync_status;
+
+    Json::Value to_json() const;
+};
+
+struct WorkspaceStandardProfile {
+    std::string id;
+    int revision_number{0};
+    std::string status;
+    WorkspaceStandardPackage technical_condition;
+    WorkspaceStandardPackage maintenance;
+
+    Json::Value to_json() const;
+};
+
 struct WorkspaceStructureRating {
     std::string rating_level;
     std::string rating_item_name;
@@ -116,6 +139,7 @@ struct BridgeOverview {
 struct InspectionWorkspace {
     WorkspaceBridge bridge;
     WorkspaceInspection inspection_year;
+    std::optional<WorkspaceStandardProfile> standard_profile;
     std::vector<WorkspaceImport> imports;
     WorkspacePendingSummary pending;
 

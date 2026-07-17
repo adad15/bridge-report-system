@@ -174,6 +174,33 @@ std::optional<StandardPackageRecord> StandardRepository::find_package(
     return row_to_package(result[0]);
 }
 
+std::optional<StandardPackageRecord> StandardRepository::find_package_by_id(
+    const std::string& package_id) {
+    const auto result = db_client_->execSqlSync(
+        std::string("select ") + package_columns() +
+            " from standard_packages where id=$1::uuid",
+        package_id);
+    if (result.empty()) {
+        return std::nullopt;
+    }
+    return row_to_package(result[0]);
+}
+
+std::vector<StandardPackageRecord> StandardRepository::list_packages(const bool enabled_only) {
+    const auto result = db_client_->execSqlSync(
+        std::string("select ") + package_columns() +
+            " from standard_packages where (not $1::boolean or "
+            "(is_enabled and sync_status='正常')) "
+            "order by standard_family, standard_code, official_edition, package_version",
+        enabled_only);
+    std::vector<StandardPackageRecord> packages;
+    packages.reserve(result.size());
+    for (const auto& row : result) {
+        packages.push_back(row_to_package(row));
+    }
+    return packages;
+}
+
 SetStandardPackageEnabledStatus StandardRepository::set_package_enabled(
     const std::string& package_id,
     const bool enabled,
