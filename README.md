@@ -294,6 +294,28 @@ POST   /api/bridges/deletion-impact    # admin-only batch impact preview
 DELETE /api/bridges                    # admin-only per-bridge atomic batch deletion
 ```
 
+Each import card in the annual workspace now also has an administrator-only
+`删除导入记录` action. It permanently deletes only an unconfirmed import in
+`已上传`, `解析中`, `解析失败`, `待校对`, or `已取消`; it never cascades into formal
+annual facts. The dialog previews candidate counts and file impact, requires a
+reason plus the exact `永久删除 DRJL-xxxxxx` text, and is blocked by an active
+edit lock, a formal-fact reference, a read-only status, or a stale impact token.
+The deletion audit keeps actor/reason/impact snapshots. Exclusive archived
+photos, the temporary Word, and a registered parse work directory enter a
+durable cleanup queue; shared files remain. A late Python result observes
+`import_record_deleted` and cannot recreate the record.
+
+```text
+GET    /api/import-records/{import_record_id}/deletion-impact  # admin-only live preview
+DELETE /api/import-records/{import_record_id}                  # admin-only permanent deletion
+```
+
+Review candidates display an import-local disease sequence number. Items in
+`需要处理` use business labels and navigate to the exact disease, linked or
+unlinked photo, field, or rating with a temporary highlight. A disease row with
+no photo number is normal and produces no warning; a referenced photo number
+that cannot be matched remains a missing-photo warning.
+
 ## Module 06 Component Defect Archive
 
 Module 06 organizes confirmed annual facts into a read-only component defect

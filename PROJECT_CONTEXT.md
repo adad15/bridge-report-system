@@ -23,7 +23,7 @@
 继续 bridge-report-system 项目。仓库路径：D:\vs2022 code\bridge-report-system。
 当前应该在分支 codex/06-5-interaction-redesign。
 模块 01～06.5 已完成；下一步先由用户决定是否开始模块 07，不要自动进入模块 07 编码。
-请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/modules/06-5-bridge-centric-interaction-redesign.md、docs/superpowers/plans/2026-07-15-module06-5-bridge-workspace-implementation-plan.md，以及模块 05、06 规格。模块 07 未完成需求确认前不要大规模编码。
+请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/modules/06-5-bridge-centric-interaction-redesign.md、docs/superpowers/specs/2026-07-16-import-record-deletion-and-review-navigation-design.md、docs/superpowers/plans/2026-07-17-import-record-deletion-and-review-navigation-implementation-plan.md，以及模块 05、06 规格。模块 07 未完成需求确认前不要大规模编码。
 ```
 
 ## 当前进度
@@ -47,7 +47,8 @@
 - 模块 06.5 已完成实施（2026-07-15）：系统入口改为桥梁档案列表；进入桥梁默认显示“最新正式结论 → 待办 → 历年技术状况 → 病害概况”；年度检测采用左侧年份栏和右侧年度工作台；支持桥梁内并发安全创建年度、受控上传/归档 Word、调用现有解析并进入模块 05 全屏校对；解析失败保留原 Word 并可重试；校对退出返回原年度；构件档案保留线索整理但不作为一级导航。当前仍只有 Word 格式，不实现多来源合并。
 - 模块 06.5 管理员年度删除已实施（2026-07-15，见 `docs/superpowers/specs/modules/06-5-admin-delete-inspection-year.md`）：采用 C1 语义永久删除同桥同年的 V1/V2 等全部版本；前端实时影响预览、原因和精确确认文字三重确认；普通用户无入口且后端强制管理员鉴权；活动编辑锁阻断；影响令牌防止预览后数据变化；事务内删除年度事实并重算跨年病害线索；共享归档文件保留，独占文件经可重试队列物理清理；永久保存删除审计。
 - 模块 06.5 管理员桥梁维护已实施（2026-07-16，见 `docs/superpowers/specs/2026-07-16-bridge-administration-design.md`）：管理员可在桥梁档案页精简新增桥梁，也可用复选框批量预览并逐座永久删除整桥档案；普通用户无入口且后端 403；活动编辑锁、逐桥影响令牌和独立事务保证批量部分成功；永久审计保留桥梁/操作者/原因/数量快照；独占文件进入持久清理队列，共享文件保留；清理器支持立即、启动、每 5 分钟重试、`SKIP LOCKED` 领取、退避和陈旧领取恢复。
-- 模块 06.5 最新验收：Python 115 项通过、1 项环境门控跳过，真实 Word 回归 1 项通过；前端 246 项通过；C++ + PostgreSQL 314 项通过；数据库迁移/烟雾测试、C++ Debug 全量链接和前端生产构建通过。
+- 模块 06.5 导入删除、无照片语义与校对定位补充已实施（2026-07-17，见 `docs/superpowers/specs/2026-07-16-import-record-deletion-and-review-navigation-design.md`）：管理员可在年度资料卡片永久删除尚未形成正式事实的单条导入记录，删除前预览影响并填写原因和精确确认文字；已确认/正式事实引用/活动编辑锁/陈旧影响令牌阻断；删除审计永久保存，独占归档照片、临时 Word 和解析工作目录进入可重试清理队列，共享文件保留；解析中删除后迟到结果不会复活记录。无照片编号病害不再告警，实际引用缺图仍告警；病害显示导入内序号，“需要处理”可按业务标签跳转并高亮病害、字段、照片和评分。
+- 模块 06.5 最新验收：Python 118 项通过、1 项环境门控跳过，真实 Word 回归 1 项通过（25/31/36/31/15 基线保持）；前端 260 项通过；C++ + PostgreSQL 338 项通过；数据库 002—009 迁移/烟雾测试、C++ Debug 全量链接和前端生产构建通过。
 
 ## 已确认方向
 
