@@ -15,6 +15,7 @@
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/BridgeAdministrationRoutes.hpp"
 #include "bridge_report/http/ComponentArchiveRoutes.hpp"
+#include "bridge_report/http/ComponentInventoryRoutes.hpp"
 #include "bridge_report/http/Cors.hpp"
 #include "bridge_report/http/DefectThreadRoutes.hpp"
 #include "bridge_report/http/EditLockRoutes.hpp"
@@ -323,6 +324,7 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_standard_routes(db_client, standards.registry);
     bridge_report::http::register_workspace_routes(db_client, config);
     bridge_report::http::register_component_archive_routes(db_client, config.archive_root);
+    bridge_report::http::register_component_inventory_routes(db_client, standards.registry);
     bridge_report::http::register_defect_thread_routes(db_client);
     bridge_report::http::register_inspection_year_deletion_routes(db_client, cleanup_coordinator);
 

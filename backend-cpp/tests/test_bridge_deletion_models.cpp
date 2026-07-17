@@ -28,3 +28,19 @@ TEST(BridgeDeletionModelsTest, PublicJsonDoesNotExposeFileIdentifiersOrPaths) {
     EXPECT_EQ(serialized.find("secret-id"), std::string::npos);
     EXPECT_EQ(serialized.find("secret/path.docx"), std::string::npos);
 }
+
+TEST(BridgeDeletionModelsTest, InventoryCountsParticipateInPublicImpactAndAggregation) {
+    bridge_report::deletion::BridgeDeletionCounts first;
+    first.component_generation_batches = 1;
+    first.component_inventory_revisions = 2;
+    first.component_inventory_entries = 30;
+    first.component_standard_mappings = 30;
+    bridge_report::deletion::BridgeDeletionCounts second;
+    second.component_inventory_entries = 2;
+    first += second;
+    const auto json = first.to_json();
+    EXPECT_EQ(json["component_generation_batches"].asInt(), 1);
+    EXPECT_EQ(json["component_inventory_revisions"].asInt(), 2);
+    EXPECT_EQ(json["component_inventory_entries"].asInt(), 32);
+    EXPECT_EQ(json["component_standard_mappings"].asInt(), 30);
+}

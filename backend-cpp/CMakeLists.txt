@@ -22,6 +22,7 @@ add_library(bridge_report_backend_core
     src/db/BridgeAdministrationRepository.cpp
     src/db/BridgeDeletionRepository.cpp
     src/db/ComponentArchiveRepository.cpp
+    src/db/ComponentInventoryRepository.cpp
     src/db/DbClientFactory.cpp
     src/db/CommitLatch.cpp
     src/db/DefectThreadRepository.cpp
@@ -42,6 +43,7 @@ add_library(bridge_report_backend_core
     src/http/AuthRoutes.cpp
     src/http/BridgeAdministrationRoutes.cpp
     src/http/ComponentArchiveRoutes.cpp
+    src/http/ComponentInventoryRoutes.cpp
     src/http/Cors.cpp
     src/http/DefectThreadRoutes.cpp
     src/http/EditLockRoutes.cpp
@@ -53,6 +55,8 @@ add_library(bridge_report_backend_core
     src/http/WordImportRoutes.cpp
     src/http/WorkspaceRoutes.cpp
     src/identity/SystemNumber.cpp
+    src/inventory/ComponentInventoryGenerator.cpp
+    src/inventory/ComponentInventoryModels.cpp
     src/review/ComponentScore.cpp
     src/review/ConfirmPlan.cpp
     src/review/ContractCompatibility.cpp
@@ -113,6 +117,9 @@ add_executable(bridge_report_backend_tests
     tests/test_bridge_deletion_repository.cpp
     tests/test_component_archive_repository.cpp
     tests/test_component_archive_routes.cpp
+    tests/test_component_inventory_generator.cpp
+    tests/test_component_inventory_repository.cpp
+    tests/test_component_inventory_routes.cpp
     tests/test_component_score.cpp
     tests/test_confirm_plan.cpp
     tests/test_commit_latch.cpp

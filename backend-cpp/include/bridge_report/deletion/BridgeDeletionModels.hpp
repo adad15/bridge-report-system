@@ -17,6 +17,10 @@ struct BridgeDeletionCounts {
     int bridge_aliases{0};
     int bridge_components{0};
     int component_aliases{0};
+    int component_generation_batches{0};
+    int component_inventory_revisions{0};
+    int component_inventory_entries{0};
+    int component_standard_mappings{0};
     int defect_threads{0};
     int defect_observations{0};
     int defect_measurements{0};

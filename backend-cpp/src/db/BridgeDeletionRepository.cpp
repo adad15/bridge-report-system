@@ -42,6 +42,23 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
         client->execSqlSync("select id from inspection_years where bridge_id=$1::uuid for update", bridge_id);
         client->execSqlSync("select id from import_records where bridge_id=$1::uuid for update", bridge_id);
         client->execSqlSync("select id from bridge_components where bridge_id=$1::uuid for update", bridge_id);
+        client->execSqlSync(
+            "select id from bridge_component_generation_batches where bridge_id=$1::uuid for update",
+            bridge_id);
+        client->execSqlSync(
+            "select id from bridge_component_inventory_revisions where bridge_id=$1::uuid for update",
+            bridge_id);
+        client->execSqlSync(
+            "select e.id from bridge_component_inventory_entries e join "
+            "bridge_component_inventory_revisions r on r.id=e.inventory_revision_id "
+            "where r.bridge_id=$1::uuid for update of e",
+            bridge_id);
+        client->execSqlSync(
+            "select m.id from bridge_component_standard_mappings m join "
+            "bridge_component_inventory_entries e on e.id=m.inventory_entry_id join "
+            "bridge_component_inventory_revisions r on r.id=e.inventory_revision_id "
+            "where r.bridge_id=$1::uuid for update of m",
+            bridge_id);
         client->execSqlSync("select id from defect_threads where bridge_id=$1::uuid for update", bridge_id);
         client->execSqlSync("select id from defect_observations where bridge_id=$1::uuid for update", bridge_id);
     }
@@ -65,6 +82,10 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
         "(select count(*) from bridge_aliases where bridge_id=$1::uuid) as bridge_aliases,"
         "(select count(*) from bridge_components where bridge_id=$1::uuid) as components,"
         "(select count(*) from component_aliases a join bridge_components c on c.id=a.bridge_component_id where c.bridge_id=$1::uuid) as component_aliases,"
+        "(select count(*) from bridge_component_generation_batches where bridge_id=$1::uuid) as component_generation_batches,"
+        "(select count(*) from bridge_component_inventory_revisions where bridge_id=$1::uuid) as component_inventory_revisions,"
+        "(select count(*) from bridge_component_inventory_entries e join bridge_component_inventory_revisions r on r.id=e.inventory_revision_id where r.bridge_id=$1::uuid) as component_inventory_entries,"
+        "(select count(*) from bridge_component_standard_mappings m join bridge_component_inventory_entries e on e.id=m.inventory_entry_id join bridge_component_inventory_revisions r on r.id=e.inventory_revision_id where r.bridge_id=$1::uuid) as component_standard_mappings,"
         "(select count(*) from defect_threads where bridge_id=$1::uuid) as threads,"
         "(select count(*) from defect_observations where bridge_id=$1::uuid) as observations,"
         "(select count(*) from defect_measurements m join defect_observations o on o.id=m.defect_observation_id where o.bridge_id=$1::uuid) as measurements,"
@@ -79,6 +100,10 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
     plan.counts.bridge_aliases = counts["bridge_aliases"].as<int>();
     plan.counts.bridge_components = counts["components"].as<int>();
     plan.counts.component_aliases = counts["component_aliases"].as<int>();
+    plan.counts.component_generation_batches = counts["component_generation_batches"].as<int>();
+    plan.counts.component_inventory_revisions = counts["component_inventory_revisions"].as<int>();
+    plan.counts.component_inventory_entries = counts["component_inventory_entries"].as<int>();
+    plan.counts.component_standard_mappings = counts["component_standard_mappings"].as<int>();
     plan.counts.defect_threads = counts["threads"].as<int>();
     plan.counts.defect_observations = counts["observations"].as<int>();
     plan.counts.defect_measurements = counts["measurements"].as<int>();
@@ -111,6 +136,10 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
         "select 'year:'||id::text||':'||updated_at::text as item from inspection_years where bridge_id=$1::uuid "
         "union all select 'import:'||id::text||':'||updated_at::text from import_records where bridge_id=$1::uuid "
         "union all select 'component:'||id::text||':'||updated_at::text from bridge_components where bridge_id=$1::uuid "
+        "union all select 'component-generation:'||id::text||':'||generated_at::text from bridge_component_generation_batches where bridge_id=$1::uuid "
+        "union all select 'component-inventory:'||id::text||':'||updated_at::text from bridge_component_inventory_revisions where bridge_id=$1::uuid "
+        "union all select 'component-entry:'||e.id::text||':'||e.updated_at::text from bridge_component_inventory_entries e join bridge_component_inventory_revisions r on r.id=e.inventory_revision_id where r.bridge_id=$1::uuid "
+        "union all select 'component-mapping:'||m.id::text||':'||m.updated_at::text from bridge_component_standard_mappings m join bridge_component_inventory_entries e on e.id=m.inventory_entry_id join bridge_component_inventory_revisions r on r.id=e.inventory_revision_id where r.bridge_id=$1::uuid "
         "union all select 'thread:'||id::text||':'||updated_at::text from defect_threads where bridge_id=$1::uuid "
         "union all select 'observation:'||id::text||':'||updated_at::text from defect_observations where bridge_id=$1::uuid "
         "union all select 'comparison:'||id::text||':'||updated_at::text from defect_comparisons where bridge_id=$1::uuid"
@@ -253,7 +282,6 @@ deletion::DeleteBridgeOutcome BridgeDeletionRepository::delete_bridge(
             "(select id from inspection_years where bridge_id=$1::uuid)", bridge_id);
         tx->execSqlSync("delete from inspection_years where bridge_id=$1::uuid", bridge_id);
         tx->execSqlSync("delete from defect_threads where bridge_id=$1::uuid", bridge_id);
-        tx->execSqlSync("delete from bridge_components where bridge_id=$1::uuid", bridge_id);
         tx->execSqlSync("delete from bridge_aliases where bridge_id=$1::uuid", bridge_id);
         for (const auto& file_id : plan->archived_file_ids_to_delete) {
             tx->execSqlSync("delete from archived_files where id=$1::uuid", file_id);
