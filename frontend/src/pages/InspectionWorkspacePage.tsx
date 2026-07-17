@@ -9,6 +9,7 @@ import { backendBaseUrl } from "../config";
 import { CreateInspectionDialog } from "../workspace/CreateInspectionDialog";
 import { ImportWordDialog } from "../workspace/ImportWordDialog";
 import { DeleteInspectionYearDialog } from "../workspace/DeleteInspectionYearDialog";
+import { DeleteImportRecordDialog } from "../workspace/DeleteImportRecordDialog";
 import { useBridgeWorkspace } from "../workspace/BridgeWorkspaceShell";
 import { deriveInspectionProgress, inspectionWorkspacePath, reviewPath } from "../workspace/workspaceState";
 
@@ -38,6 +39,7 @@ export function InspectionWorkspacePage() {
   const [showCreate, setShowCreate] = useState(false);
   const [importDialog, setImportDialog] = useState<ImportDialogState | null>(null);
   const [showDelete, setShowDelete] = useState(false);
+  const [deleteImport, setDeleteImport] = useState<WorkspaceImport | null>(null);
 
   useEffect(() => {
     if (!bridgeId) return;
@@ -126,6 +128,7 @@ export function InspectionWorkspacePage() {
           })}
           canDelete={user?.role === "admin"}
           onDelete={() => setShowDelete(true)}
+          onDeleteImport={setDeleteImport}
         /> : null}
       </section>
 
@@ -155,17 +158,26 @@ export function InspectionWorkspacePage() {
             : `/bridges/${encodeURIComponent(bridgeId)}/inspections`, { replace: true });
         }}
       /> : null}
+      {deleteImport ? <DeleteImportRecordDialog
+        importRecordId={deleteImport.id}
+        onClose={() => setDeleteImport(null)}
+        onDeleted={() => {
+          setDeleteImport(null);
+          refreshAll();
+        }}
+      /> : null}
     </div>
   );
 }
 
-function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry, canDelete, onDelete }: {
+function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry, canDelete, onDelete, onDeleteImport }: {
   workspace: InspectionWorkspace;
   bridgeId: string;
   onImport: () => void;
   onRetry: (item: WorkspaceImport) => void;
   canDelete: boolean;
   onDelete: () => void;
+  onDeleteImport: (item: WorkspaceImport) => void;
 }) {
   const progress = deriveInspectionProgress(workspace.inspection_year, workspace.imports);
   return (
@@ -182,7 +194,10 @@ function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry, canDelete, on
             const lockText = item.edit_lock ? `${item.edit_lock.owner_display_name} 正在编辑` : null;
             return <article className="import-source-card" key={item.id}>
               <div><div className="import-title-row"><h3>{item.import_name}</h3><span className="status-badge">{item.import_status}</span></div><p>{item.system_number} · {item.source_type}</p><p>病害 {item.statistics.defect_count} · 照片 {item.statistics.photo_count} · 评分 {item.statistics.rating_item_count}</p>{item.import_status === "解析失败" && item.error_message ? <p className="error-text">解析失败：{item.error_message}</p> : null}{item.import_status === "解析失败" && item.temporary_source_expires_at ? <p className="muted-text">临时 Word 保留至 {new Date(item.temporary_source_expires_at).toLocaleString()}</p> : null}{item.available_action === "reupload" ? <p className="error-text">原临时 Word 已不可用，请重新上传。</p> : null}{lockText ? <p className="lock-note">{lockText}</p> : null}</div>
-              {label ? item.available_action === "parse" ? <button type="button" onClick={() => onRetry(item)}>{label}</button> : item.available_action === "reupload" ? <button type="button" onClick={onImport}>{label}</button> : <Link to={reviewPath(bridgeId, workspace.inspection_year.id, item.id)}>{label}</Link> : <span className="muted-text">处理中</span>}
+              <div className="import-card-actions">
+                {label ? item.available_action === "parse" ? <button type="button" onClick={() => onRetry(item)}>{label}</button> : item.available_action === "reupload" ? <button type="button" onClick={onImport}>{label}</button> : <Link to={reviewPath(bridgeId, workspace.inspection_year.id, item.id)}>{label}</Link> : <span className="muted-text">处理中</span>}
+                {canDelete ? <button type="button" className="danger-text-button" onClick={() => onDeleteImport(item)}>删除导入记录</button> : null}
+              </div>
             </article>;
           })}</div>
         )}

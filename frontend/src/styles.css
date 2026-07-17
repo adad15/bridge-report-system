@@ -1834,6 +1834,22 @@ body {
   font-size: 13px;
 }
 
+.import-card-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.danger-text-button {
+  color: #b42318;
+  border-color: #f0b4ae !important;
+}
+
+.danger-text-button:hover {
+  background: #fef3f2 !important;
+}
+
 .lock-note {
   color: #8a5b09 !important;
   font-weight: 700;
@@ -1921,6 +1937,10 @@ body {
     flex-direction: column;
   }
 
+  .import-card-actions {
+    justify-content: flex-end;
+  }
+
   .bridge-tabs {
     gap: 14px;
     overflow-x: auto;
@@ -1955,6 +1975,7 @@ body {
 .more-actions > div { position: absolute; z-index: 5; right: 0; top: calc(100% + .35rem); min-width: 8rem; padding: .35rem; border: 1px solid #dbe3ee; border-radius: .5rem; background: #fff; box-shadow: 0 8px 24px rgb(15 23 42 / 14%); }
 .danger-menu-item { width: 100%; border: 0; color: #b42318; background: transparent; text-align: left; }
 .delete-year-dialog { width: min(38rem, calc(100vw - 2rem)); }
+.delete-import-dialog { width: min(38rem, calc(100vw - 2rem)); }
 .danger-callout, .lock-warning { margin: 1rem 0; padding: .9rem 1rem; border-radius: .55rem; }
 .danger-callout { color: #7a271a; background: #fef3f2; border: 1px solid #fecdca; }
 .lock-warning { color: #7a2e0e; background: #fffaeb; border: 1px solid #fedf89; }
@@ -1964,6 +1985,7 @@ body {
 .deletion-impact-grid dt { color: #64748b; font-size: .85rem; }
 .deletion-impact-grid dd { margin: .2rem 0 0; font-size: 1.15rem; font-weight: 700; }
 .delete-year-dialog textarea { min-height: 5rem; resize: vertical; }
+.delete-import-dialog textarea { min-height: 5rem; resize: vertical; }
 @media (max-width: 720px) { .deletion-impact-grid { grid-template-columns: repeat(2, 1fr); } }
 .defect-sequence-badge {
   display: inline-flex;

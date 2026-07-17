@@ -127,6 +127,43 @@ export interface DeleteInspectionYearResult {
   file_cleanup: { completed: number; failed: number };
 }
 
+export interface ImportRecordDeletionImpact {
+  import_record: {
+    id: string;
+    system_number: string;
+    import_name: string;
+    status: string;
+    source_type: string;
+  };
+  bridge: { id: string; system_number: string; bridge_name: string };
+  inspection_year: { id: string; year: number; version_number: number };
+  counts: {
+    defects: number;
+    photos: number;
+    rating_items: number;
+    parsed_images: number;
+    archived_files_to_delete: number;
+    temporary_word_files_to_delete: number;
+    parse_work_directories_to_delete: number;
+    shared_files_retained: number;
+    formal_fact_references: number;
+  };
+  active_edit_locks: InspectionYearDeletionImpact["active_edit_locks"];
+  can_delete: boolean;
+  block_code: string | null;
+  confirmation_text: string;
+  impact_token: string;
+}
+
+export interface DeleteImportRecordResult {
+  deleted: true;
+  deletion_audit_id: string;
+  bridge_id: string;
+  inspection_year_id: string;
+  deleted_counts: ImportRecordDeletionImpact["counts"];
+  file_cleanup: { completed: number; failed: number; pending: number };
+}
+
 export async function fetchBridgeOverview(baseUrl: string, bridgeId: string): Promise<BridgeOverview> {
   return request(`${baseUrl}/api/bridges/${encodeURIComponent(bridgeId)}/overview`);
 }
@@ -151,6 +188,25 @@ export async function deleteInspectionYear(
   input: { impact_token: string; confirmation_text: string; reason: string }
 ): Promise<DeleteInspectionYearResult> {
   return request(`${baseUrl}/api/inspection-years/${encodeURIComponent(inspectionYearId)}`, {
+    method: "DELETE",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(input),
+  });
+}
+
+export async function fetchImportRecordDeletionImpact(
+  baseUrl: string,
+  importRecordId: string
+): Promise<ImportRecordDeletionImpact> {
+  return request(`${baseUrl}/api/import-records/${encodeURIComponent(importRecordId)}/deletion-impact`);
+}
+
+export async function deleteImportRecord(
+  baseUrl: string,
+  importRecordId: string,
+  input: { impact_token: string; confirmation_text: string; reason: string }
+): Promise<DeleteImportRecordResult> {
+  return request(`${baseUrl}/api/import-records/${encodeURIComponent(importRecordId)}`, {
     method: "DELETE",
     headers: JSON_HEADERS,
     body: JSON.stringify(input),
@@ -198,8 +254,14 @@ export function workspaceErrorMessage(error: unknown): string {
     word_temporary_storage_failed: "Word 临时保存失败，请重试。",
     word_upload_failed: "Word 上传处理失败，请重试；若仍失败，请保留当前弹窗并联系管理员。",
     inspection_year_edit_locked: "该年度仍有人正在编辑，暂时不能删除。",
+    import_record_edit_locked: "该导入记录正在被其他人编辑，暂时不能删除。",
+    import_record_not_deletable: "该导入记录已进入正式只读状态，不能单独删除。",
+    import_record_has_formal_facts: "该导入记录已形成正式病害、照片或评分事实，不能单独删除。",
+    import_record_not_found: "导入记录不存在或已被删除。",
+    deletion_confirmation_incorrect: "确认文字不正确，请完整输入提示文字。",
     deletion_impact_changed: "删除影响范围已经变化，请重新核对后再次确认。",
     deletion_reason_required: "请填写删除原因。",
+    deletion_reason_too_long: "删除原因不能超过 1000 个字符。",
   };
   return stable[error.code] ?? error.message;
 }

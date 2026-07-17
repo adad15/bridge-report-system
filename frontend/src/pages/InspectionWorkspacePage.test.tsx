@@ -8,6 +8,7 @@ import { fetchInspectionWorkspace } from "../api/workspaceApi";
 import { InspectionWorkspacePage } from "./InspectionWorkspacePage";
 
 const reloadOverview = vi.fn();
+const authState = vi.hoisted(() => ({ role: "admin" }));
 
 vi.mock("../api/navigationApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../api/navigationApi")>();
@@ -20,7 +21,7 @@ vi.mock("../api/workspaceApi", async (importOriginal) => {
 });
 
 vi.mock("../auth/AuthContext", () => ({
-  useAuth: () => ({ user: { username: "admin", display_name: "管理员", role: "admin" } }),
+  useAuth: () => ({ user: { username: "tester", display_name: "测试用户", role: authState.role } }),
 }));
 
 vi.mock("../workspace/BridgeWorkspaceShell", () => ({
@@ -38,9 +39,16 @@ vi.mock("../workspace/ImportWordDialog", () => ({
   ),
 }));
 
+vi.mock("../workspace/DeleteImportRecordDialog", () => ({
+  DeleteImportRecordDialog: ({ importRecordId }: { importRecordId: string }) => (
+    <section aria-label="删除导入记录测试弹窗">{importRecordId}</section>
+  ),
+}));
+
 describe("InspectionWorkspacePage", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    authState.role = "admin";
     vi.mocked(fetchInspectionYears).mockResolvedValue([{
       id: "year-1", system_number: "NDJC-000001", inspection_year: 2024,
       status: "待校对", version_number: 1, is_current: true,
@@ -97,5 +105,58 @@ describe("InspectionWorkspacePage", () => {
     );
 
     expect(await screen.findByText("解析失败：未识别到表4.1-2总体技术状况评定表。")).toBeInTheDocument();
+  });
+
+  it("opens the import deletion dialog from an import card for an administrator", async () => {
+    vi.mocked(fetchInspectionWorkspace).mockResolvedValue({
+      bridge: { id: "bridge-1", system_number: "QL-000001", bridge_name: "百股大桥", route_name: "大养线", status: "在用" },
+      inspection_year: { id: "year-1", system_number: "NDJC-000001", inspection_year: 2024, status: "待校对", version_number: 1, is_current: true, overall_score: null, overall_grade: null, created_at: null, updated_at: null },
+      imports: [{
+        id: "import-1", system_number: "DRJL-000001", import_name: "百股大桥报告.docx",
+        source_type: "软件导出Word", import_status: "待校对", importer_name: "liaoning-word-importer",
+        created_at: null, updated_at: null, error_message: null,
+        temporary_source_status: "已删除", temporary_source_expires_at: null,
+        statistics: { defect_count: 25, photo_count: 31, rating_item_count: 15, pending_count: 6, confirmed_count: 88, modified_count: 0, ignored_count: 6, object_warning_count: 0 },
+        edit_lock: null, available_action: "continue_review",
+      }],
+      pending: { import_count: 1, unbound_observation_count: 0, total_count: 1 },
+    });
+    render(
+      <MemoryRouter initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
+        <Routes>
+          <Route path="/bridges/:bridgeId/inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: "删除导入记录" }));
+    expect(screen.getByRole("region", { name: "删除导入记录测试弹窗" })).toHaveTextContent("import-1");
+  });
+
+  it("does not show import deletion to a normal user", async () => {
+    authState.role = "normal";
+    vi.mocked(fetchInspectionWorkspace).mockResolvedValue({
+      bridge: { id: "bridge-1", system_number: "QL-000001", bridge_name: "百股大桥", route_name: "大养线", status: "在用" },
+      inspection_year: { id: "year-1", system_number: "NDJC-000001", inspection_year: 2024, status: "待校对", version_number: 1, is_current: true, overall_score: null, overall_grade: null, created_at: null, updated_at: null },
+      imports: [{
+        id: "import-1", system_number: "DRJL-000001", import_name: "百股大桥报告.docx",
+        source_type: "软件导出Word", import_status: "待校对", importer_name: null,
+        created_at: null, updated_at: null, error_message: null,
+        temporary_source_status: null, temporary_source_expires_at: null,
+        statistics: { defect_count: 1, photo_count: 0, rating_item_count: 0, pending_count: 1, confirmed_count: 0, modified_count: 0, ignored_count: 0, object_warning_count: 0 },
+        edit_lock: null, available_action: "continue_review",
+      }],
+      pending: { import_count: 1, unbound_observation_count: 0, total_count: 1 },
+    });
+    render(
+      <MemoryRouter initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
+        <Routes>
+          <Route path="/bridges/:bridgeId/inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("百股大桥报告.docx")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除导入记录" })).not.toBeInTheDocument();
   });
 });

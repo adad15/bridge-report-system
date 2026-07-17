@@ -4,6 +4,8 @@ import { ApiError } from "./apiClient";
 import {
   createInspectionYear,
   deleteInspectionYear,
+  deleteImportRecord,
+  fetchImportRecordDeletionImpact,
   fetchInspectionYearDeletionImpact,
   fetchBridgeOverview,
   uploadWordImport,
@@ -74,9 +76,34 @@ describe("workspaceApi", () => {
     ]);
   });
 
+  it("previews and permanently deletes an encoded import record", async () => {
+    const impact = { impact_token: "sha256:import", confirmation_text: "永久删除 DRJL-000001" };
+    const result = { deleted: true, deletion_audit_id: "audit-1" };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => impact })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => result });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchImportRecordDeletionImpact("http://backend", "import/1")).resolves.toEqual(impact);
+    await expect(deleteImportRecord("http://backend", "import/1", {
+      impact_token: "sha256:import",
+      confirmation_text: "永久删除 DRJL-000001",
+      reason: "重复上传",
+    })).resolves.toEqual(result);
+    expect(fetchMock.mock.calls[1]).toEqual([
+      "http://backend/api/import-records/import%2F1",
+      { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        impact_token: "sha256:import",
+        confirmation_text: "永久删除 DRJL-000001",
+        reason: "重复上传",
+      }) },
+    ]);
+  });
+
   it("maps stable errors and preserves unknown backend messages", () => {
     expect(workspaceErrorMessage(new ApiError("invalid_word_file", "raw"))).toContain(".docx");
     expect(workspaceErrorMessage(new ApiError("word_upload_failed", "raw"))).toContain("Word 上传处理失败");
+    expect(workspaceErrorMessage(new ApiError("import_record_edit_locked", "raw"))).toContain("其他人编辑");
     expect(workspaceErrorMessage(new ApiError(
       "rating_table_not_found",
       "未识别到表4.1-2总体技术状况评定表。"
