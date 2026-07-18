@@ -61,3 +61,39 @@ TEST(StandardRoutesTest, CatalogResponseDoesNotExposePackageFilePaths) {
     EXPECT_EQ(serialized.find("absolute_path"), std::string::npos);
     EXPECT_EQ(serialized.find("standards/technical-condition"), std::string::npos);
 }
+
+TEST(StandardRoutesTest, ParsesMaintenanceQueryContextWithoutCoercion) {
+    Json::Value body;
+    body["maintenance_level_id"] = "jtg5120.maintenance_level.i";
+    body["inspection_type_id"] = "jtg5120.inspection_type.periodic";
+    body["planned_interval_years"] = 1.0;
+    bridge_report::standards::MaintenanceQueryContext context;
+
+    ASSERT_TRUE(bridge_report::http::parse_maintenance_query_context_request(body, context));
+    EXPECT_EQ(context.maintenance_level_id, "jtg5120.maintenance_level.i");
+    EXPECT_EQ(context.inspection_type_id, "jtg5120.inspection_type.periodic");
+    ASSERT_TRUE(context.planned_interval_years.has_value());
+    EXPECT_DOUBLE_EQ(*context.planned_interval_years, 1.0);
+
+    body["planned_interval_years"] = "1";
+    EXPECT_FALSE(bridge_report::http::parse_maintenance_query_context_request(body, context));
+}
+
+TEST(StandardRoutesTest, MaintenanceResponseContainsRulesButNoPackagePaths) {
+    bridge_report::standards::PeriodicInspectionRequirement requirement;
+    requirement.standard_id = "JTG_5120_2021";
+    requirement.package_version = "1.0.0";
+    requirement.maintenance_level_id = "jtg5120.maintenance_level.i";
+    requirement.inspection_type_id = "jtg5120.inspection_type.periodic";
+    requirement.maximum_interval_years = 1.0;
+    requirement.content_groups.push_back({"content-1", "桥面系"});
+    requirement.sources.push_back({"interval-rule", "3.5.1"});
+
+    const auto json = bridge_report::http::periodic_inspection_requirement_json(requirement);
+    const auto serialized = json.toStyledString();
+
+    EXPECT_EQ(json["maximum_interval_years"].asDouble(), 1.0);
+    EXPECT_EQ(json["sources"][0]["source_reference"].asString(), "3.5.1");
+    EXPECT_EQ(serialized.find("source_file"), std::string::npos);
+    EXPECT_EQ(serialized.find("standards/maintenance"), std::string::npos);
+}

@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "bridge_report/standards/H21Evaluator.hpp"
+#include "bridge_report/standards/Jtg5120MaintenanceStandard.hpp"
 
 namespace bridge_report::standards {
 
@@ -11,6 +12,11 @@ StandardRegistry::StandardRegistry() {
         "jtg-h21-2011",
         [](const StandardPackage& package) {
             return std::make_unique<H21Evaluator>(package);
+        });
+    register_algorithm(
+        "jtg-5120-2021-maintenance-query",
+        [](const StandardPackage& package) {
+            return std::make_unique<Jtg5120MaintenanceStandard>(package);
         });
 }
 

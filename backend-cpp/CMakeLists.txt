@@ -70,6 +70,7 @@ add_library(bridge_report_backend_core
     src/standards/StandardModels.cpp
     src/standards/AssessmentModels.cpp
     src/standards/H21Evaluator.cpp
+    src/standards/Jtg5120MaintenanceStandard.cpp
     src/standards/StandardCatalogModels.cpp
     src/standards/StandardPackageLoader.cpp
     src/standards/StandardRegistry.cpp
@@ -143,6 +144,7 @@ add_executable(bridge_report_backend_tests
     tests/test_import_record_deletion_repository.cpp
     tests/test_import_record_deletion_routes.cpp
     tests/test_jtg_5120_package.cpp
+    tests/test_jtg_5120_maintenance_standard.cpp
     tests/test_jtg_h21_package.cpp
     tests/test_password_hash.cpp
     tests/test_preflight_report.cpp
