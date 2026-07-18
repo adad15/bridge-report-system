@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { ComponentInventoryEditor } from "../bridges/ComponentInventoryEditor";
 import { useBridgeWorkspace } from "../workspace/BridgeWorkspaceShell";
 import { componentArchivePath, inspectionsPath, inspectionWorkspacePath } from "../workspace/workspaceState";
 
@@ -18,6 +19,8 @@ export function BridgeOverviewPage() {
         </div>
         <Link className="primary-link" to={inspectionsPath(bridge.id)}>进入年度检测</Link>
       </section>
+
+      <ComponentInventoryEditor bridgeId={bridge.id} />
 
       <section className="workspace-card">
         <div className="card-heading"><div><p className="section-kicker">待处理事项</p><h2>{overview.pending.total_count} 项</h2></div></div>

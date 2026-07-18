@@ -42,10 +42,21 @@ TEST(StandardRoutesTest, CatalogResponseDoesNotExposePackageFilePaths) {
     bridge_type["name"] = "测试桥型";
     bridge_types["definitions"].append(bridge_type);
     package.documents["bridge-types.json"] = bridge_types;
+    Json::Value inventory_templates;
+    inventory_templates["definitions"] = Json::Value(Json::arrayValue);
+    Json::Value inventory_template;
+    inventory_template["id"] = "test.inventory_template";
+    inventory_template["bridge_type_id"] = "test.bridge_type";
+    inventory_template["quantity_inputs"] = Json::Value(Json::arrayValue);
+    inventory_template["quantity_inputs"].append("span_count");
+    inventory_templates["definitions"].append(inventory_template);
+    package.documents["inventory-templates.json"] = inventory_templates;
 
     const auto response = bridge_report::standards::standard_catalog_json(record, package);
     const auto serialized = response.toStyledString();
     EXPECT_EQ(response["bridge_types"].size(), 1u);
+    ASSERT_EQ(response["inventory_templates"].size(), 1u);
+    EXPECT_EQ(response["inventory_templates"][0]["id"].asString(), "test.inventory_template");
     EXPECT_EQ(serialized.find("source_file"), std::string::npos);
     EXPECT_EQ(serialized.find("absolute_path"), std::string::npos);
     EXPECT_EQ(serialized.find("standards/technical-condition"), std::string::npos);

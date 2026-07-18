@@ -26,6 +26,7 @@ Json::Value technical_catalog(const StandardPackage& package) {
     Json::Value catalog;
     catalog["bridge_types"] = definitions(package, "bridge-types.json");
     catalog["component_categories"] = definitions(package, "component-taxonomy.json");
+    catalog["inventory_templates"] = definitions(package, "inventory-templates.json");
     catalog["defect_catalogs"] = definitions(package, "defect-indicators.json");
     catalog["maintenance_levels"] = Json::Value(Json::arrayValue);
     catalog["inspection_types"] = Json::Value(Json::arrayValue);
@@ -37,6 +38,7 @@ Json::Value maintenance_catalog(const StandardPackage& package) {
     Json::Value catalog;
     catalog["bridge_types"] = Json::Value(Json::arrayValue);
     catalog["component_categories"] = Json::Value(Json::arrayValue);
+    catalog["inventory_templates"] = Json::Value(Json::arrayValue);
     catalog["defect_catalogs"] = Json::Value(Json::arrayValue);
     catalog["maintenance_levels"] = definitions(package, "maintenance-levels.json");
     catalog["inspection_types"] = definitions(package, "inspection-types.json");

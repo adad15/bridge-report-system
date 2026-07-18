@@ -22,10 +22,33 @@ export interface StandardPackageSummary {
   sync_error_message: string | null;
 }
 
+export interface StandardBridgeType {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface StandardComponentCategory {
+  id: string;
+  name: string;
+  bridge_type_ids: string[];
+  structure_part: "superstructure" | "substructure" | "deck_system" | "overall" | "other";
+  generatable: boolean;
+}
+
+export interface StandardInventoryTemplate {
+  id: string;
+  references?: string[];
+  bridge_type_id: string;
+  quantity_inputs: string[];
+  numbering_is_user_editable: boolean;
+}
+
 export interface StandardCatalog {
   package: StandardPackageSummary;
-  bridge_types: unknown[];
-  component_categories: unknown[];
+  bridge_types: StandardBridgeType[];
+  component_categories: StandardComponentCategory[];
+  inventory_templates: StandardInventoryTemplate[];
   defect_catalogs: unknown[];
   maintenance_levels: unknown[];
   inspection_types: unknown[];
