@@ -4,36 +4,16 @@
 #include <cmath>
 #include <functional>
 
+#include "bridge_report/standards/H21Evaluator.hpp"
+
 namespace bridge_report::review {
 
 std::optional<ComponentScoreResult> compute_component_score(const std::vector<double>& deductions) {
-    if (deductions.empty()) {
+    const auto result = standards::compute_h21_component_score(deductions);
+    if (!result.has_value()) {
         return std::nullopt;
     }
-    for (const auto value : deductions) {
-        if (value < 0.0 || value > 100.0) {
-            return std::nullopt;
-        }
-    }
-
-    auto ordered = deductions;
-    std::sort(ordered.begin(), ordered.end(), std::greater<double>());
-    if (ordered.front() == 100.0) {
-        return ComponentScoreResult{0.0, std::move(ordered)};
-    }
-
-    double total = 0.0;
-    for (std::size_t index = 1; index <= ordered.size(); ++index) {
-        const auto deduction = ordered[index - 1];
-        double u = 0.0;
-        if (index == 1) {
-            u = deduction;
-        } else {
-            u = deduction / (100.0 * std::sqrt(static_cast<double>(index))) * (100.0 - total);
-        }
-        total += u;
-    }
-    return ComponentScoreResult{100.0 - total, std::move(ordered)};
+    return ComponentScoreResult{result->score, result->ordered_deductions};
 }
 
 double round_score_to_two_decimals(double value) {

@@ -1,0 +1,18 @@
+{
+  "definitions": [
+    {
+      "id":"h21.grade_boundaries.standard",
+      "references":["h21.source.official_pdf"],
+      "source_table":"4.1.5",
+      "interval_semantics":"lower_inclusive_upper_exclusive_except_grade_1_upper_inclusive",
+      "grades":[
+        {"grade":1,"minimum":95,"maximum":100,"maximum_inclusive":true},
+        {"grade":2,"minimum":80,"maximum":95},
+        {"grade":3,"minimum":60,"maximum":80},
+        {"grade":4,"minimum":40,"maximum":60},
+        {"grade":5,"minimum":0,"maximum":40}
+      ],
+      "applies_to":["overall","structure_part","component_category"]
+    }
+  ]
+}

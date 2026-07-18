@@ -20,6 +20,11 @@ std::filesystem::path h21_package_root() {
            "standards/technical-condition/jtg-t-h21-2011/1.0.0";
 }
 
+std::filesystem::path h21_package_root_v101() {
+    return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
+           "standards/technical-condition/jtg-t-h21-2011/1.0.1";
+}
+
 const Json::Value& document(const StandardPackage& package, const std::string& name) {
     const auto found = package.documents.find(name);
     if (found == package.documents.end()) {
@@ -54,6 +59,35 @@ TEST(JtgH21PackageTest, ChecksumCanBeCalculated) {
     StandardPackageLoader loader;
     const auto checksum = loader.calculate_checksum(h21_package_root());
     ASSERT_TRUE(checksum.ok());
+    EXPECT_EQ(
+        *checksum.checksum,
+        "sha256:842f4e5a702d0ae6533be2aa9bea61e7d823c31d866b64a34dbc9a9347fdd898");
+}
+
+TEST(JtgH21PackageTest, Version101AddsOfficialMajorComponentClassification) {
+    StandardPackageLoader loader;
+    const auto checksum = loader.calculate_checksum(h21_package_root_v101());
+    ASSERT_TRUE(checksum.ok());
+    EXPECT_EQ(
+        *checksum.checksum,
+        "sha256:ea5e1377aa19fdfabe8096ef986eb158172e4f6f857b969e73a8bb923f4127be");
+
+    const auto loaded = loader.load(h21_package_root_v101());
+    ASSERT_TRUE(loaded.ok());
+    EXPECT_EQ(loaded.package->manifest.package_version, "1.0.1");
+    std::size_t bridge_type_count = 0;
+    for (const auto& [id, definition] : loaded.package->definitions) {
+        if (!id.starts_with("h21.bridge_type.")) {
+            continue;
+        }
+        ++bridge_type_count;
+        ASSERT_TRUE(definition.payload["major_component_ids"].isArray()) << id;
+        ASSERT_FALSE(definition.payload["major_component_ids"].empty()) << id;
+        for (const auto& component_id : definition.payload["major_component_ids"]) {
+            EXPECT_TRUE(loaded.package->definitions.contains(component_id.asString())) << id;
+        }
+    }
+    EXPECT_EQ(bridge_type_count, 6u);
 }
 
 TEST(JtgH21PackageTest, DigestChangesWhenAnyRuleContentChanges) {

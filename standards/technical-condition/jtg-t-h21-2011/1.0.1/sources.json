@@ -1,0 +1,21 @@
+{
+  "definitions": [
+    {
+      "id": "h21.source.announcement",
+      "references": [],
+      "kind": "official_announcement",
+      "publisher": "中华人民共和国交通运输部",
+      "document_number": "交通运输部公告2011年第41号",
+      "published_date": "2011-07-19",
+      "url": "https://xxgk.mot.gov.cn/2020/jigou/glj/202006/t20200623_3312369.html"
+    },
+    {
+      "id": "h21.source.official_pdf",
+      "references": ["h21.source.announcement"],
+      "kind": "official_standard_pdf",
+      "url": "https://xxgk.mot.gov.cn/2020/jigou/glj/202006/P020240521541427295157.pdf",
+      "pages": 125,
+      "note": "规则条目只保存计算所需结构化事实、表号和短标签，不复制规范正文。"
+    }
+  ]
+}

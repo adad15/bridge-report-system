@@ -1,6 +1,7 @@
 {
   "standard": "JTG/T H21-2011 4.1.1",
   "description": "构件评分纯函数跨语言一致性用例；expected_unrounded 精度断言容差 1e-9，expected_rounded 用统一自实现 round2（半数远离零）。",
+  "migration_status": "C++ 兼容入口已委托给 H21 evaluator；Python 与前端旧入口将在评分权威迁移任务中删除。",
   "cases": [
     {
       "name": "single_35",

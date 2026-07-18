@@ -68,6 +68,8 @@ add_library(bridge_report_backend_core
     src/review/WorkspaceModels.cpp
     src/runtime/RuntimePaths.cpp
     src/standards/StandardModels.cpp
+    src/standards/AssessmentModels.cpp
+    src/standards/H21Evaluator.cpp
     src/standards/StandardCatalogModels.cpp
     src/standards/StandardPackageLoader.cpp
     src/standards/StandardRegistry.cpp
@@ -121,6 +123,10 @@ add_executable(bridge_report_backend_tests
     tests/test_component_inventory_repository.cpp
     tests/test_component_inventory_routes.cpp
     tests/test_component_score.cpp
+    tests/test_h21_bridge_evaluation.cpp
+    tests/test_h21_component_evaluation.cpp
+    tests/test_h21_grade_and_controls.cpp
+    tests/test_h21_part_evaluation.cpp
     tests/test_confirm_plan.cpp
     tests/test_commit_latch.cpp
     tests/test_defect_thread_repository.cpp

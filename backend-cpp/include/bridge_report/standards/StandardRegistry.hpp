@@ -28,6 +28,8 @@ struct StandardRegistrationResult {
 
 class StandardRegistry {
 public:
+    StandardRegistry();
+
     bool register_algorithm(std::string algorithm_id, StandardAlgorithmFactory factory);
     StandardRegistrationResult register_package(StandardPackage package);
 

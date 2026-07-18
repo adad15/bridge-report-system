@@ -1,9 +1,12 @@
+#include <filesystem>
 #include <memory>
 #include <string>
 
 #include <gtest/gtest.h>
 
 #include "bridge_report/standards/StandardRegistry.hpp"
+#include "bridge_report/standards/H21Evaluator.hpp"
+#include "bridge_report/standards/StandardPackageLoader.hpp"
 
 namespace {
 
@@ -115,6 +118,23 @@ TEST(StandardRegistryTest, RegistersAndCreatesNonH21AlgorithmAdapter) {
 
     ASSERT_NE(adapter, nullptr);
     EXPECT_EQ(adapter->algorithm_id(), "future-standard-v3");
+}
+
+TEST(StandardRegistryTest, CreatesBuiltInH21TechnicalConditionEvaluator) {
+    bridge_report::standards::StandardPackageLoader loader;
+    const auto root = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
+        "standards/technical-condition/jtg-t-h21-2011/1.0.1";
+    auto loaded = loader.load(root);
+    ASSERT_TRUE(loaded.ok());
+    const auto key = loaded.package->key();
+    StandardRegistry registry;
+    ASSERT_TRUE(registry.register_package(std::move(*loaded.package)).accepted);
+
+    const auto algorithm = registry.create_algorithm(key);
+
+    ASSERT_NE(algorithm, nullptr);
+    EXPECT_NE(dynamic_cast<bridge_report::standards::H21Evaluator*>(algorithm.get()), nullptr);
+    EXPECT_EQ(algorithm->algorithm_id(), "jtg-h21-2011");
 }
 
 }  // namespace

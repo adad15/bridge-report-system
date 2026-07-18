@@ -2,7 +2,17 @@
 
 #include <utility>
 
+#include "bridge_report/standards/H21Evaluator.hpp"
+
 namespace bridge_report::standards {
+
+StandardRegistry::StandardRegistry() {
+    register_algorithm(
+        "jtg-h21-2011",
+        [](const StandardPackage& package) {
+            return std::make_unique<H21Evaluator>(package);
+        });
+}
 
 bool StandardRegistry::register_algorithm(
     std::string algorithm_id,
