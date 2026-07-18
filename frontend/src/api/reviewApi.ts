@@ -1,5 +1,10 @@
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
-import { isBridgeAnnualInspectionData } from "../contracts/annualInspection";
+import {
+  isBridgeAnnualInspectionData,
+  isLegacyAnnualInspectionData12,
+  projectVersionTwoForLegacyReview,
+  versionTwoWireData,
+} from "../contracts/annualInspection";
 import { ApiError, request } from "./apiClient";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
@@ -43,9 +48,9 @@ export interface ReviewStatistics {
   object_warning_count: number;
 }
 
-// native_1_2：原生 1.2 草稿；legacy_pending_reparse：待校对的 1.0/1.1 旧草稿，
+// native_2_0：原生 2.0 草稿；legacy_pending_reparse：待校对的 1.x 旧草稿，
 // 只读展示并提示重新解析（不做内存补造）；legacy_read_only：旧版终态记录。
-export type ContractCompatibility = "native_1_2" | "legacy_pending_reparse" | "legacy_read_only";
+export type ContractCompatibility = "native_2_0" | "legacy_pending_reparse" | "legacy_read_only";
 
 // 重开校对范围：warnings_only=仅带警告的病害可改（任何登录用户）；
 // full=全部可改（仅管理员可发起）。
@@ -168,11 +173,22 @@ export function photoContentUrl(baseUrl: string, importRecordId: string, photoCa
  * inspection_year/statistics）来自受信任的后端组装，只做结构类型标注，不重复校验。
  */
 export async function fetchReview(baseUrl: string, importRecordId: string): Promise<ReviewResponse> {
-  const body = await request<ReviewResponse>(`${baseUrl}${reviewRoute(importRecordId, "/review")}`);
-  if (!isBridgeAnnualInspectionData(body.parsed_result)) {
-    throw new ApiError("invalid_review_payload", "校对数据不符合 BridgeAnnualInspectionData 契约。");
+  const body = await request<Omit<ReviewResponse, "parsed_result"> & { parsed_result: unknown }>(
+    `${baseUrl}${reviewRoute(importRecordId, "/review")}`,
+  );
+  if (isBridgeAnnualInspectionData(body.parsed_result)) {
+    return {
+      ...body,
+      parsed_result: projectVersionTwoForLegacyReview(body.parsed_result),
+    };
   }
-  return body;
+  if (
+    body.contract_compatibility !== "native_2_0" &&
+    isLegacyAnnualInspectionData12(body.parsed_result)
+  ) {
+    return body as ReviewResponse;
+  }
+  throw new ApiError("invalid_review_payload", "校对数据不符合 BridgeAnnualInspectionData 契约。");
 }
 
 export async function saveReviewDraft(
@@ -184,7 +200,7 @@ export async function saveReviewDraft(
   return request(`${baseUrl}${reviewRoute(importRecordId, "/review-draft")}`, {
     method: "PUT",
     headers: lockHeaders(lockToken, true),
-    body: JSON.stringify(data),
+    body: JSON.stringify(versionTwoWireData(data)),
   });
 }
 

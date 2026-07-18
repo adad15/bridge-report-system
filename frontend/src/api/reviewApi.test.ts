@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
+import type { BridgeAnnualInspectionDataV2 } from "../contracts/annualInspection";
+import {
+  projectVersionTwoForLegacyReview,
+  versionTwoWireData,
+} from "../contracts/annualInspection";
 import { ApiError } from "./apiClient";
 import {
   acquireEditLock,
@@ -17,10 +21,10 @@ import {
 } from "./reviewApi";
 
 // 满足 isBridgeAnnualInspectionData 最小必填字段集合的候选数据骨架，供测试复用。
-const minimalParsedResult: BridgeAnnualInspectionData = {
+const minimalWireResult: BridgeAnnualInspectionDataV2 = {
   contract: {
     name: "BridgeAnnualInspectionData",
-    version: "1.2",
+    version: "2.0",
     generated_at: "2026-07-09T00:00:00+08:00",
     producer: "bridge-report-system",
     parser_name: "test-parser",
@@ -46,24 +50,13 @@ const minimalParsedResult: BridgeAnnualInspectionData = {
   },
   defects: [],
   photos: [],
-  ratings: {
-    overall: {
-      total_score: 90,
-      overall_grade: "1类",
-      source_ref: {},
-      confidence: 0.9,
-      review_status: "待确认",
-    },
-    structure_parts: [],
-    evaluation_parts: [],
-    component_ratings: [],
-    warnings: [],
-  },
   comparison_candidates: [],
   report_text_candidates: [],
   warnings: [],
   errors: [],
 };
+
+const minimalParsedResult = projectVersionTwoForLegacyReview(minimalWireResult);
 
 function reviewResponseBody(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -85,7 +78,7 @@ function reviewResponseBody(overrides: Partial<Record<string, unknown>> = {}) {
       route_name: "S101",
     },
     inspection_year: null,
-    parsed_result: minimalParsedResult,
+    parsed_result: minimalWireResult,
     statistics: {
       defect_count: 0,
       photo_count: 0,
@@ -97,7 +90,7 @@ function reviewResponseBody(overrides: Partial<Record<string, unknown>> = {}) {
       object_warning_count: 0,
     },
     has_current_annual_facts: false,
-    contract_compatibility: "native_1_2",
+    contract_compatibility: "native_2_0",
     ...overrides,
   };
 }
@@ -126,11 +119,18 @@ describe("reviewApi", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/review");
     expect(review.parsed_result).toEqual(minimalParsedResult);
     expect(review.statistics.defect_count).toBe(0);
-    expect(review.contract_compatibility).toBe("native_1_2");
+    expect(review.contract_compatibility).toBe("native_2_0");
   });
 
   it("fetchReview accepts a legacy_pending_reparse response with display-normalized 1.2 data", async () => {
-    const body = reviewResponseBody({ contract_compatibility: "legacy_pending_reparse" });
+    const legacy = {
+      ...minimalParsedResult,
+      contract: { ...minimalParsedResult.contract, version: "1.2" },
+    };
+    const body = reviewResponseBody({
+      parsed_result: legacy,
+      contract_compatibility: "legacy_pending_reparse",
+    });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -144,11 +144,16 @@ describe("reviewApi", () => {
   });
 
   it("fetchReview accepts a legacy_read_only response with display-normalized 1.2 data", async () => {
+    const legacy = {
+      ...minimalParsedResult,
+      contract: { ...minimalParsedResult.contract, version: "1.2" },
+    };
     const body = reviewResponseBody({
       import_record: {
         ...reviewResponseBody().import_record,
         import_status: "已确认",
       },
+      parsed_result: legacy,
       contract_compatibility: "legacy_read_only",
     });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
@@ -191,7 +196,7 @@ describe("reviewApi", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/review-draft", expect.objectContaining({
       method: "PUT",
-      body: JSON.stringify(minimalParsedResult),
+      body: JSON.stringify(versionTwoWireData(minimalParsedResult)),
     }));
     const saveHeaders = new Headers(fetchMock.mock.calls[0][1].headers);
     expect(saveHeaders.get("Content-Type")).toBe("application/json");

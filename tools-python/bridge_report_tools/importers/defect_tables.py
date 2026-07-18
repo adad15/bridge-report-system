@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
 
 from bridge_report_tools.contracts.annual_inspection import DefectCandidate, SourceRef, WarningItem
 from bridge_report_tools.importers.docx_reader import DocxTable
@@ -13,23 +12,6 @@ from bridge_report_tools.importers.word_rules.common import normalize_rule_text
 PHOTO_NUMBER_PATTERN = re.compile(r"(?:照片)?(?P<number>\d+(?:\.\d+)?-\d+)")
 QUANTITY_PATTERN = re.compile(r"(?:共|约)?(?P<quantity>\d+(?:\.\d+)?\s*(?:处|条|个|块|道|孔|座))")
 FUZZY_QUANTITY_PATTERN = re.compile(r"(?P<quantity>多(?:处|条|个|块|道|孔))")
-
-
-@dataclass
-class ComponentScoreGroup:
-    """表 2.x-1 中同一具体构件的病害行分组，用于生成构件评分候选。
-
-    Word 合并单元格在 python-docx 下会把构件编号和构件评分复制到组内每行；
-    也存在仅组首行有值、后续行为空的形态。分组以“构件编号+部件名称”为准，
-    空单元格视为上一组的延续；每组只产出一条评分候选，绝不复制成多条评分事实。
-    """
-
-    structure_part: str
-    component_name: str
-    component_alias: str | None
-    source_score: float | None = None
-    defect_candidate_ids: list[str] = field(default_factory=list)
-    warnings: list[WarningItem] = field(default_factory=list)
 
 
 def parse_optional_number(text: str) -> tuple[float | None, bool]:
@@ -97,15 +79,12 @@ def derive_quantity_text(measurement_text: str | None) -> str | None:
 def parse_defect_tables(
     tables: list[DocxTable],
     rule_set: WordRuleSet,
-) -> tuple[list[DefectCandidate], list[ComponentScoreGroup], list[WarningItem], list[WarningItem]]:
+) -> tuple[list[DefectCandidate], list[WarningItem], list[WarningItem]]:
     defects: list[DefectCandidate] = []
     warnings: list[WarningItem] = []
     errors: list[WarningItem] = []
     defect_table_found = False
     found_table_numbers: set[str] = set()
-    # 同一构件即使行段不连续也只保留一组，键为 (结构分部, 部件名称, 构件编号)。
-    component_groups: dict[tuple[str, str, str | None], ComponentScoreGroup] = {}
-
     for table in tables:
         table_rule = match_defect_table(table, rule_set)
         if table_rule is None:
@@ -121,11 +100,7 @@ def parse_defect_tables(
         measurement_index = header_index(headers, ["病害特征", "尺寸"])
         photo_index = header_index(headers, ["照片编号", "照片"])
         scale_index = header_index(headers, ["标度"])
-        deduction_index = header_index(headers, ["病害扣分"])
-        component_score_index = header_index(headers, ["构件评分"])
         structure_part = table_rule.structure_part
-        # 空构件单元格视为上一组的延续，仅在同一张表内生效。
-        active_group: ComponentScoreGroup | None = None
 
         for row_index, row in enumerate(table.rows[1:], start=1):
             if not any(row):
@@ -152,35 +127,23 @@ def parse_defect_tables(
                     )
                 )
 
-            defect_deduction, deduction_invalid = parse_optional_number(get_cell(row, deduction_index))
-            if defect_deduction is not None and not 0 <= defect_deduction <= 100:
-                defect_deduction = None
-                deduction_invalid = True
-            if deduction_invalid:
-                row_warnings.append(
-                    WarningItem(
-                        code="defect_deduction_invalid",
-                        message=f"病害扣分“{get_cell(row, deduction_index)}”不是 0-100 数值，请人工确认。",
-                        severity="warning",
-                        target_candidate_id=candidate_id,
-                    )
-                )
-
             location = get_cell(row, location_index)
             defect_type = get_cell(row, type_index)
             defect_description = f"{location}{defect_type}".strip() or "未识别病害描述"
             component_name = get_cell(row, component_index) or "未识别构件"
-            component_alias = get_cell(row, component_alias_index) or None
+            component_number = get_cell(row, component_alias_index) or None
             defects.append(
                 DefectCandidate(
                     candidate_id=candidate_id,
-                    structure_part=structure_part,
+                    source_structure_part=structure_part,
                     component_name=component_name,
-                    component_alias=component_alias,
+                    component_number=component_number,
+                    bridge_component_id=None,
+                    standard_component_category_id=None,
+                    resolved_structure_part=None,
                     defect_type=defect_type or "未识别病害",
                     defect_location=location or "未识别位置",
                     defect_scale=defect_scale,
-                    defect_deduction=defect_deduction,
                     defect_description=defect_description,
                     quantity_text=get_cell(row, quantity_index) or derive_quantity_text(measurement_text),
                     measurement_text=measurement_text,
@@ -204,57 +167,6 @@ def parse_defect_tables(
                 )
             )
 
-            # 只有存在“构件评分”列时才产出构件评分候选组。
-            if component_score_index is None:
-                continue
-            raw_component_cell = get_cell(row, component_index)
-            raw_alias_cell = get_cell(row, component_alias_index)
-            if not raw_component_cell and not raw_alias_cell and active_group is not None:
-                group = active_group
-            else:
-                key = (structure_part, component_name, component_alias)
-                group = component_groups.get(key)
-                if group is None:
-                    group = ComponentScoreGroup(
-                        structure_part=structure_part,
-                        component_name=component_name,
-                        component_alias=component_alias,
-                    )
-                    component_groups[key] = group
-            active_group = group
-            group.defect_candidate_ids.append(candidate_id)
-
-            score_text = get_cell(row, component_score_index)
-            score_value, score_invalid = parse_optional_number(score_text)
-            if score_value is not None and not 0 <= score_value <= 100:
-                score_value = None
-                score_invalid = True
-            if score_invalid:
-                group.warnings.append(
-                    WarningItem(
-                        code="component_score_source_invalid",
-                        message=f"构件评分“{score_text}”不是 0-100 数值，请人工确认。",
-                        severity="warning",
-                        target_candidate_id=None,
-                    )
-                )
-            elif score_value is not None:
-                if group.source_score is None:
-                    # 组内向下传播首个非空评分，兼容合并单元格复制与仅首行有值两种形态。
-                    group.source_score = score_value
-                elif group.source_score != score_value:
-                    group.warnings.append(
-                        WarningItem(
-                            code="component_score_source_invalid",
-                            message=(
-                                f"同一构件在组内出现不同评分 {group.source_score} 与 {score_value}，"
-                                "已保留首个值，请人工确认。"
-                            ),
-                            severity="warning",
-                            target_candidate_id=None,
-                        )
-                    )
-
     if defect_table_found:
         for table_rule in rule_set.defect_table_rules:
             if table_rule.table_no in found_table_numbers:
@@ -277,4 +189,4 @@ def parse_defect_tables(
             )
         )
 
-    return defects, list(component_groups.values()), warnings, errors
+    return defects, warnings, errors

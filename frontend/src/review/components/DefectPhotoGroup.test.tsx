@@ -24,7 +24,7 @@ function photo(id: string, number: string): PhotoCandidate {
 
 function data(): BridgeAnnualInspectionData {
   return {
-    contract: { name: "BridgeAnnualInspectionData", version: "1.2", generated_at: "2026-07-12", producer: "test", parser_name: "test", parser_version: "1" },
+    contract: { name: "BridgeAnnualInspectionData", version: "2.0", generated_at: "2026-07-12", producer: "test", parser_name: "test", parser_version: "2" },
     import_context: { source_type: "软件导出Word", file_role: "当前年度检测资料", archived_file_system_number: "GDWJ-1", import_record_system_number: "DRJL-1" },
     bridge_check: { selected_bridge_system_number: "QL-1", match_status: "匹配", warnings: [] },
     inspection: { inspection_year: 2026, inspection_date: "2026-07-12", report_number: "R-1", project_name: "测试", data_role: "当前年度" },

@@ -20,12 +20,20 @@ interface ReviewSidebarProps {
   counts: ReviewCounts;
   active: GroupKey;
   onSelect: (key: GroupKey) => void;
+  showImportedRatings?: boolean;
 }
 
-export function ReviewSidebar({ counts, active, onSelect }: ReviewSidebarProps) {
+export function ReviewSidebar({
+  counts,
+  active,
+  onSelect,
+  showImportedRatings = true,
+}: ReviewSidebarProps) {
   return (
     <nav className="review-sidebar">
-      {GROUPS.map((group) => {
+      {GROUPS.filter(
+        (group) => showImportedRatings || group.key !== "ratings",
+      ).map((group) => {
         const count = group.count(counts);
         return (
           <button

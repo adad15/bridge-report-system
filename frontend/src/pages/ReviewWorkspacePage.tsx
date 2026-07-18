@@ -189,7 +189,11 @@ function ReviewWorkspaceLoaded({
   const [lockPhase, setLockPhase] = useState<EditLockPhase>("not_required");
   const [lockMessage, setLockMessage] = useState<string | null>(null);
 
-  const counts = useMemo(() => buildStatistics(draft), [draft]);
+  const showImportedRatings = response.contract_compatibility !== "native_2_0";
+  const counts = useMemo(
+    () => buildStatistics(draft, showImportedRatings),
+    [draft, showImportedRatings],
+  );
   const attentionItems = useMemo(() => needsAttention(draft), [draft]);
   const reviewSession = deriveReviewSession(
     sessionImportStatus,
@@ -199,8 +203,8 @@ function ReviewWorkspaceLoaded({
   const readOnly = reviewSession.readOnly;
   const isAdmin = user?.role === "admin";
   const hasWarningDefects = draft.defects.some((defect) => defect.warnings.length > 0);
-  // 已确认 + 原生 1.2 才能重开；旧版终态（legacy_read_only）永久只读。
-  const canReopen = sessionImportStatus === "已确认" && response.contract_compatibility === "native_1_2" && !busy;
+  // 已确认 + 原生 2.0 才能重开；旧版终态（legacy_read_only）永久只读。
+  const canReopen = sessionImportStatus === "已确认" && response.contract_compatibility === "native_2_0" && !busy;
   const needsEditLock = !reviewSession.readOnly;
   const returnPath = response.inspection_year
     ? inspectionWorkspacePath(response.bridge.id, response.inspection_year.id)
@@ -686,7 +690,12 @@ function ReviewWorkspaceLoaded({
         </div>
       ) : null}
       <div className="review-body">
-        <ReviewSidebar counts={counts} active={activeGroup} onSelect={setActiveGroup} />
+        <ReviewSidebar
+          counts={counts}
+          active={activeGroup}
+          onSelect={setActiveGroup}
+          showImportedRatings={showImportedRatings}
+        />
         <div className="review-main">
           <div className="review-main-tools">
             <button type="button" disabled={!selected} onClick={() => setEvidenceOpen(true)}>查看来源证据</button>
@@ -712,7 +721,7 @@ function ReviewWorkspaceLoaded({
               isDefectEditable={isDefectEditable}
             />
           ) : null}
-          {activeGroup === "ratings" ? (
+          {activeGroup === "ratings" && showImportedRatings ? (
             <RatingsSection
               ratings={draft.ratings}
               dispatch={sectionDispatch}

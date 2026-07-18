@@ -11,7 +11,7 @@ using bridge_report::review::stored_contract_requires_reparse;
 
 namespace {
 
-Json::Value make_legacy_data(const std::string& version) {
+Json::Value make_contract(const std::string& version) {
     Json::Value data(Json::objectValue);
     data["contract"]["name"] = "BridgeAnnualInspectionData";
     data["contract"]["version"] = version;
@@ -26,74 +26,81 @@ Json::Value make_legacy_data(const std::string& version) {
 
 }  // namespace
 
-TEST(ContractCompatibilityTest, MarksPending10AsLegacyPendingReparseWithDisplayNormalization) {
-    auto data = make_legacy_data("1.0");
-    for (auto& defect : data["defects"]) {
-        defect.removeMember("group_review_status");
-        defect.removeMember("confirmed_missing_photo_numbers");
-    }
+TEST(ContractCompatibilityTest, LeavesNative20DataUnchanged) {
+    auto data = make_contract("2.0");
+    data.removeMember("ratings");
 
     const auto result = normalize_review_contract(data, "待校对");
 
-    EXPECT_EQ(result.compatibility, ContractCompatibility::LegacyPendingReparse);
-    EXPECT_EQ(result.data["contract"]["version"].asString(), "1.2");
-    EXPECT_EQ(result.data["defects"][0]["group_review_status"].asString(), "待确认");
-    EXPECT_TRUE(result.data["defects"][0]["confirmed_missing_photo_numbers"].empty());
-    EXPECT_TRUE(result.data["ratings"]["component_ratings"].isArray());
-    EXPECT_TRUE(result.data["ratings"]["component_ratings"].empty());
-    // 展示规范化只作用于返回克隆，原始数据（即存量 JSON）保持旧版本。
-    EXPECT_EQ(data["contract"]["version"].asString(), "1.0");
-    EXPECT_FALSE(data["defects"][0].isMember("group_review_status"));
-    EXPECT_FALSE(data["ratings"].isMember("component_ratings"));
-}
-
-TEST(ContractCompatibilityTest, MarksPending11AsLegacyPendingReparse) {
-    const auto result = normalize_review_contract(make_legacy_data("1.1"), "待校对");
-
-    EXPECT_EQ(result.compatibility, ContractCompatibility::LegacyPendingReparse);
-    EXPECT_EQ(result.data["contract"]["version"].asString(), "1.2");
-    EXPECT_TRUE(result.data["ratings"]["component_ratings"].isArray());
-}
-
-TEST(ContractCompatibilityTest, MarksConfirmedLegacyAsLegacyReadOnly) {
-    const auto result_10 = normalize_review_contract(make_legacy_data("1.0"), "已确认");
-    const auto result_11 = normalize_review_contract(make_legacy_data("1.1"), "已确认");
-
-    EXPECT_EQ(result_10.compatibility, ContractCompatibility::LegacyReadOnly);
-    EXPECT_EQ(result_11.compatibility, ContractCompatibility::LegacyReadOnly);
-    EXPECT_EQ(result_11.data["contract"]["version"].asString(), "1.2");
-}
-
-TEST(ContractCompatibilityTest, MarksCancelledLegacyAsLegacyReadOnly) {
-    const auto result = normalize_review_contract(make_legacy_data("1.1"), "已取消");
-
-    EXPECT_EQ(result.compatibility, ContractCompatibility::LegacyReadOnly);
-}
-
-TEST(ContractCompatibilityTest, LeavesNative12DataUnchanged) {
-    auto data = make_legacy_data("1.2");
-    data["defects"][0]["group_review_status"] = "已确认";
-    data["defects"][0]["confirmed_missing_photo_numbers"] = Json::Value(Json::arrayValue);
-
-    const auto result = normalize_review_contract(data, "待校对");
-
-    EXPECT_EQ(result.compatibility, ContractCompatibility::Native12);
+    EXPECT_EQ(result.compatibility, ContractCompatibility::Native20);
     EXPECT_EQ(result.data, data);
 }
 
-TEST(ContractCompatibilityTest, NamesCompatibilityValuesExactly) {
-    EXPECT_EQ(bridge_report::review::contract_compatibility_name(ContractCompatibility::Native12), "native_1_2");
+TEST(ContractCompatibilityTest, ExplicitLegacy12GateIsEnabledUntilTask18) {
+    EXPECT_TRUE(
+        bridge_report::review::kLegacyAnnualInspection12ReadEnabled);
+}
+
+TEST(ContractCompatibilityTest, MarksPending12AsLegacyPendingReparse) {
+    const auto data = make_contract("1.2");
+
+    const auto result = normalize_review_contract(data, "待校对");
+
     EXPECT_EQ(
-        bridge_report::review::contract_compatibility_name(ContractCompatibility::LegacyPendingReparse),
+        result.compatibility,
+        ContractCompatibility::LegacyPendingReparse);
+    EXPECT_EQ(result.data, data);
+}
+
+TEST(ContractCompatibilityTest, NormalizesPending10ForLegacyReadOnlyDisplay) {
+    auto data = make_contract("1.0");
+
+    const auto result = normalize_review_contract(data, "待校对");
+
+    EXPECT_EQ(
+        result.compatibility,
+        ContractCompatibility::LegacyPendingReparse);
+    EXPECT_EQ(result.data["contract"]["version"].asString(), "1.2");
+    EXPECT_EQ(
+        result.data["defects"][0]["group_review_status"].asString(),
+        "待确认");
+    EXPECT_TRUE(
+        result.data["defects"][0]["confirmed_missing_photo_numbers"].empty());
+    EXPECT_TRUE(
+        result.data["ratings"]["component_ratings"].isArray());
+    EXPECT_EQ(data["contract"]["version"].asString(), "1.0");
+}
+
+TEST(ContractCompatibilityTest, MarksTerminalLegacyAsReadOnly) {
+    for (const auto* version : {"1.0", "1.1", "1.2"}) {
+        const auto result =
+            normalize_review_contract(make_contract(version), "已确认");
+        EXPECT_EQ(
+            result.compatibility,
+            ContractCompatibility::LegacyReadOnly);
+    }
+}
+
+TEST(ContractCompatibilityTest, NamesCompatibilityValuesExactly) {
+    EXPECT_EQ(
+        bridge_report::review::contract_compatibility_name(
+            ContractCompatibility::Native20),
+        "native_2_0");
+    EXPECT_EQ(
+        bridge_report::review::contract_compatibility_name(
+            ContractCompatibility::LegacyPendingReparse),
         "legacy_pending_reparse");
     EXPECT_EQ(
-        bridge_report::review::contract_compatibility_name(ContractCompatibility::LegacyReadOnly),
+        bridge_report::review::contract_compatibility_name(
+            ContractCompatibility::LegacyReadOnly),
         "legacy_read_only");
 }
 
-TEST(ContractCompatibilityTest, StoredContractRequiresReparseUnlessNative12) {
-    EXPECT_TRUE(stored_contract_requires_reparse(make_legacy_data("1.0")));
-    EXPECT_TRUE(stored_contract_requires_reparse(make_legacy_data("1.1")));
-    EXPECT_TRUE(stored_contract_requires_reparse(Json::Value(Json::objectValue)));
-    EXPECT_FALSE(stored_contract_requires_reparse(make_legacy_data("1.2")));
+TEST(ContractCompatibilityTest, StoredContractRequiresReparseUnlessNative20) {
+    EXPECT_TRUE(stored_contract_requires_reparse(make_contract("1.0")));
+    EXPECT_TRUE(stored_contract_requires_reparse(make_contract("1.1")));
+    EXPECT_TRUE(stored_contract_requires_reparse(make_contract("1.2")));
+    EXPECT_TRUE(
+        stored_contract_requires_reparse(Json::Value(Json::objectValue)));
+    EXPECT_FALSE(stored_contract_requires_reparse(make_contract("2.0")));
 }

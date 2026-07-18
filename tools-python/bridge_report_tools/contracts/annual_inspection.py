@@ -50,6 +50,7 @@ class WarningItem(ContractModel):
 class SourceRef(ContractModel):
     """候选对象的来源证据，用于人工校对时回到 Word 表格行或段落。"""
 
+    source_type: Literal["word", "manual"] = "word"
     chapter: str | None = None
     table_title: str | None = None
     table_index: int | None = Field(default=None, ge=0)
@@ -63,7 +64,7 @@ class SourceRef(ContractModel):
 
 class ContractInfo(ContractModel):
     name: Literal["BridgeAnnualInspectionData"]
-    version: Literal["1.2"]
+    version: Literal["2.0"]
     generated_at: datetime
     producer: str
     parser_name: str
@@ -103,13 +104,15 @@ class DefectCandidate(ContractModel):
     """第二章结构病害检查表中的一条病害候选记录。"""
 
     candidate_id: str
-    structure_part: StructurePart
+    source_structure_part: StructurePart | None = None
     component_name: str
-    component_alias: str | None = None
+    component_number: str | None = None
+    bridge_component_id: str | None = None
+    standard_component_category_id: str | None = None
+    resolved_structure_part: StructurePart | None = None
     defect_type: str
     defect_location: str
-    defect_scale: int | None = Field(default=None, gt=0)
-    defect_deduction: float | None = Field(default=None, ge=0, le=100)
+    defect_scale: int | None = Field(default=None, gt=0, strict=True)
     defect_description: str
     quantity_text: str | None = None
     measurement_text: str | None = None
@@ -303,7 +306,6 @@ class BridgeAnnualInspectionData(ContractModel):
     inspection: InspectionInfo
     defects: list[DefectCandidate]
     photos: list[PhotoCandidate]
-    ratings: Ratings
     comparison_candidates: list[ComparisonCandidate]
     report_text_candidates: list[ReportTextCandidate]
     warnings: list[WarningItem]

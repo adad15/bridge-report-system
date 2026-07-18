@@ -52,7 +52,7 @@ function data(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeAnnual
   return {
     contract: {
       name: "BridgeAnnualInspectionData",
-      version: "1.2",
+      version: "2.0",
       generated_at: "2026-07-11T00:00:00+08:00",
       producer: "test",
       parser_name: "test",

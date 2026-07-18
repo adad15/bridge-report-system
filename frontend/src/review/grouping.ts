@@ -299,15 +299,19 @@ function tallyReviewStatus(
  * 统计视图，与后端 ReviewStatistics::build_review_statistics（backend-cpp/src/review/ReviewStatistics.cpp）
  * 的分桶规则保持一致，另外加上前端专属的 needs_attention_count。
  */
-export function buildStatistics(data: BridgeAnnualInspectionData): ReviewCounts {
+export function buildStatistics(
+  data: BridgeAnnualInspectionData,
+  includeImportedRatings = true,
+): ReviewCounts {
   const counts: ReviewCounts = {
     defect_count: data.defects.length,
     photo_count: data.photos.length,
-    rating_item_count:
-      1 +
-      data.ratings.structure_parts.length +
-      data.ratings.evaluation_parts.length +
-      data.ratings.component_ratings.length,
+    rating_item_count: includeImportedRatings
+      ? 1 +
+        data.ratings.structure_parts.length +
+        data.ratings.evaluation_parts.length +
+        data.ratings.component_ratings.length
+      : 0,
     pending_count: 0,
     confirmed_count: 0,
     modified_count: 0,
@@ -329,17 +333,19 @@ export function buildStatistics(data: BridgeAnnualInspectionData): ReviewCounts 
     }
   }
 
-  tallyReviewStatus(data.ratings.overall.review_status, counts);
-  for (const part of data.ratings.structure_parts) {
-    tallyReviewStatus(part.review_status, counts);
-  }
-  for (const part of data.ratings.evaluation_parts) {
-    tallyReviewStatus(part.review_status, counts);
-  }
-  for (const rating of data.ratings.component_ratings) {
-    tallyReviewStatus(rating.review_status, counts);
-    if (rating.warnings.length > 0) {
-      counts.object_warning_count += 1;
+  if (includeImportedRatings) {
+    tallyReviewStatus(data.ratings.overall.review_status, counts);
+    for (const part of data.ratings.structure_parts) {
+      tallyReviewStatus(part.review_status, counts);
+    }
+    for (const part of data.ratings.evaluation_parts) {
+      tallyReviewStatus(part.review_status, counts);
+    }
+    for (const rating of data.ratings.component_ratings) {
+      tallyReviewStatus(rating.review_status, counts);
+      if (rating.warnings.length > 0) {
+        counts.object_warning_count += 1;
+      }
     }
   }
 

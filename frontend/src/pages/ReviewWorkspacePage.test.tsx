@@ -116,7 +116,7 @@ function reviewResponse(): ReviewResponse {
       object_warning_count: 0,
     },
     has_current_annual_facts: false,
-    contract_compatibility: "native_1_2",
+    contract_compatibility: "native_2_0",
     reopen: null,
     edit_lock: null,
   };
@@ -172,6 +172,7 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     const pendingHeartbeat = deferred<{ renewed: true; lock: EditLockSummary }>();
     vi.mocked(heartbeatEditLock).mockReturnValue(pendingHeartbeat.promise);
     const input = await renderEditableReview();
+    expect(screen.queryByRole("button", { name: /技术状况评定/ })).not.toBeInTheDocument();
     input.focus();
     expect(input).toBeEnabled();
     expect(input).toHaveFocus();

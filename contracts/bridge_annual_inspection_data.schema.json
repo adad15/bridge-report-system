@@ -194,198 +194,6 @@
       "title": "ComparisonMatchBasis",
       "type": "object"
     },
-    "ComponentRatingCandidate": {
-      "additionalProperties": false,
-      "description": "第二章具体构件评分候选，保存 Word 来源分、规范复算分和最终确认分。\n\n`一致` 可预填来源分；`不一致` 与 `无法复算` 必须留空最终分，\n由模块 05 人工显式选择并填写原因后才允许赋值。",
-      "properties": {
-        "candidate_id": {
-          "title": "Candidate Id",
-          "type": "string"
-        },
-        "component_ref": {
-          "$ref": "#/$defs/ComponentRef"
-        },
-        "source_score": {
-          "anyOf": [
-            {
-              "maximum": 100,
-              "minimum": 0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Source Score"
-        },
-        "calculated_score": {
-          "anyOf": [
-            {
-              "maximum": 100,
-              "minimum": 0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Calculated Score"
-        },
-        "confirmed_score": {
-          "anyOf": [
-            {
-              "maximum": 100,
-              "minimum": 0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Confirmed Score"
-        },
-        "score_validation_status": {
-          "enum": [
-            "一致",
-            "不一致",
-            "无法复算",
-            "人工接受Word值",
-            "人工采用复算值"
-          ],
-          "title": "Score Validation Status",
-          "type": "string"
-        },
-        "score_resolution_reason": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Score Resolution Reason"
-        },
-        "deduction_defect_candidate_ids": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Deduction Defect Candidate Ids",
-          "type": "array"
-        },
-        "calculation_details": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ComponentScoreCalculationDetails"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "review_status": {
-          "enum": [
-            "待确认",
-            "已确认",
-            "已修改",
-            "已忽略"
-          ],
-          "title": "Review Status",
-          "type": "string"
-        },
-        "warnings": {
-          "items": {
-            "$ref": "#/$defs/WarningItem"
-          },
-          "title": "Warnings",
-          "type": "array"
-        }
-      },
-      "required": [
-        "candidate_id",
-        "component_ref",
-        "score_validation_status",
-        "deduction_defect_candidate_ids",
-        "review_status",
-        "warnings"
-      ],
-      "title": "ComponentRatingCandidate",
-      "type": "object"
-    },
-    "ComponentRef": {
-      "additionalProperties": false,
-      "description": "第二章病害表中的具体构件标识，与病害候选的构件字段同源。",
-      "properties": {
-        "structure_part": {
-          "enum": [
-            "全桥",
-            "上部结构",
-            "下部结构",
-            "桥面系",
-            "其他"
-          ],
-          "title": "Structure Part",
-          "type": "string"
-        },
-        "component_name": {
-          "title": "Component Name",
-          "type": "string"
-        },
-        "component_alias": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Component Alias"
-        }
-      },
-      "required": [
-        "structure_part",
-        "component_name"
-      ],
-      "title": "ComponentRef",
-      "type": "object"
-    },
-    "ComponentScoreCalculationDetails": {
-      "additionalProperties": false,
-      "description": "JTG/T H21-2011 第 4.1.1 条复算证据：降序扣分序列与展示舍入位数。",
-      "properties": {
-        "standard": {
-          "const": "JTG/T H21-2011 4.1.1",
-          "title": "Standard",
-          "type": "string"
-        },
-        "ordered_deductions": {
-          "items": {
-            "type": "number"
-          },
-          "title": "Ordered Deductions",
-          "type": "array"
-        },
-        "rounding_scale": {
-          "const": 2,
-          "title": "Rounding Scale",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "standard",
-        "ordered_deductions",
-        "rounding_scale"
-      ],
-      "title": "ComponentScoreCalculationDetails",
-      "type": "object"
-    },
     "ContractInfo": {
       "additionalProperties": false,
       "properties": {
@@ -395,7 +203,7 @@
           "type": "string"
         },
         "version": {
-          "const": "1.2",
+          "const": "2.0",
           "title": "Version",
           "type": "string"
         },
@@ -436,22 +244,30 @@
           "title": "Candidate Id",
           "type": "string"
         },
-        "structure_part": {
-          "enum": [
-            "全桥",
-            "上部结构",
-            "下部结构",
-            "桥面系",
-            "其他"
+        "source_structure_part": {
+          "anyOf": [
+            {
+              "enum": [
+                "全桥",
+                "上部结构",
+                "下部结构",
+                "桥面系",
+                "其他"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ],
-          "title": "Structure Part",
-          "type": "string"
+          "default": null,
+          "title": "Source Structure Part"
         },
         "component_name": {
           "title": "Component Name",
           "type": "string"
         },
-        "component_alias": {
+        "component_number": {
           "anyOf": [
             {
               "type": "string"
@@ -461,7 +277,50 @@
             }
           ],
           "default": null,
-          "title": "Component Alias"
+          "title": "Component Number"
+        },
+        "bridge_component_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bridge Component Id"
+        },
+        "standard_component_category_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Standard Component Category Id"
+        },
+        "resolved_structure_part": {
+          "anyOf": [
+            {
+              "enum": [
+                "全桥",
+                "上部结构",
+                "下部结构",
+                "桥面系",
+                "其他"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved Structure Part"
         },
         "defect_type": {
           "title": "Defect Type",
@@ -483,20 +342,6 @@
           ],
           "default": null,
           "title": "Defect Scale"
-        },
-        "defect_deduction": {
-          "anyOf": [
-            {
-              "maximum": 100,
-              "minimum": 0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Defect Deduction"
         },
         "defect_description": {
           "title": "Defect Description",
@@ -626,7 +471,6 @@
       },
       "required": [
         "candidate_id",
-        "structure_part",
         "component_name",
         "defect_type",
         "defect_location",
@@ -641,95 +485,6 @@
         "warnings"
       ],
       "title": "DefectCandidate",
-      "type": "object"
-    },
-    "EvaluationPartRating": {
-      "additionalProperties": false,
-      "properties": {
-        "structure_part": {
-          "enum": [
-            "上部结构",
-            "下部结构",
-            "桥面系"
-          ],
-          "title": "Structure Part",
-          "type": "string"
-        },
-        "category_no": {
-          "minimum": 1,
-          "title": "Category No",
-          "type": "integer"
-        },
-        "evaluation_part": {
-          "title": "Evaluation Part",
-          "type": "string"
-        },
-        "part_score": {
-          "maximum": 100,
-          "minimum": 0,
-          "title": "Part Score",
-          "type": "number"
-        },
-        "score_rows": {
-          "items": {
-            "$ref": "#/$defs/EvaluationScoreRow"
-          },
-          "title": "Score Rows",
-          "type": "array"
-        },
-        "source_ref": {
-          "$ref": "#/$defs/SourceRef"
-        },
-        "confidence": {
-          "maximum": 1,
-          "minimum": 0,
-          "title": "Confidence",
-          "type": "number"
-        },
-        "review_status": {
-          "enum": [
-            "待确认",
-            "已确认",
-            "已修改",
-            "已忽略"
-          ],
-          "title": "Review Status",
-          "type": "string"
-        }
-      },
-      "required": [
-        "structure_part",
-        "category_no",
-        "evaluation_part",
-        "part_score",
-        "score_rows",
-        "source_ref",
-        "confidence",
-        "review_status"
-      ],
-      "title": "EvaluationPartRating",
-      "type": "object"
-    },
-    "EvaluationScoreRow": {
-      "additionalProperties": false,
-      "properties": {
-        "component_count": {
-          "minimum": 0,
-          "title": "Component Count",
-          "type": "integer"
-        },
-        "component_score": {
-          "maximum": 100,
-          "minimum": 0,
-          "title": "Component Score",
-          "type": "number"
-        }
-      },
-      "required": [
-        "component_count",
-        "component_score"
-      ],
-      "title": "EvaluationScoreRow",
       "type": "object"
     },
     "ExtractedPhotoFile": {
@@ -884,49 +639,6 @@
       "title": "Measurement",
       "type": "object"
     },
-    "OverallRating": {
-      "additionalProperties": false,
-      "properties": {
-        "total_score": {
-          "maximum": 100,
-          "minimum": 0,
-          "title": "Total Score",
-          "type": "number"
-        },
-        "overall_grade": {
-          "title": "Overall Grade",
-          "type": "string"
-        },
-        "source_ref": {
-          "$ref": "#/$defs/SourceRef"
-        },
-        "confidence": {
-          "maximum": 1,
-          "minimum": 0,
-          "title": "Confidence",
-          "type": "number"
-        },
-        "review_status": {
-          "enum": [
-            "待确认",
-            "已确认",
-            "已修改",
-            "已忽略"
-          ],
-          "title": "Review Status",
-          "type": "string"
-        }
-      },
-      "required": [
-        "total_score",
-        "overall_grade",
-        "source_ref",
-        "confidence",
-        "review_status"
-      ],
-      "title": "OverallRating",
-      "type": "object"
-    },
     "PhotoCandidate": {
       "additionalProperties": false,
       "properties": {
@@ -1004,52 +716,6 @@
       "title": "PhotoCandidate",
       "type": "object"
     },
-    "Ratings": {
-      "additionalProperties": false,
-      "description": "第四章总体技术状况评定表与第二章构件评分的候选数据。\n\n等级只放在整体和结构分部层级，评价部件只保存评分，不保存 grade。\n`component_ratings` 保存第二章具体构件的评分双值校验候选。",
-      "properties": {
-        "overall": {
-          "$ref": "#/$defs/OverallRating"
-        },
-        "structure_parts": {
-          "items": {
-            "$ref": "#/$defs/StructurePartRating"
-          },
-          "title": "Structure Parts",
-          "type": "array"
-        },
-        "evaluation_parts": {
-          "items": {
-            "$ref": "#/$defs/EvaluationPartRating"
-          },
-          "title": "Evaluation Parts",
-          "type": "array"
-        },
-        "component_ratings": {
-          "items": {
-            "$ref": "#/$defs/ComponentRatingCandidate"
-          },
-          "title": "Component Ratings",
-          "type": "array"
-        },
-        "warnings": {
-          "items": {
-            "$ref": "#/$defs/WarningItem"
-          },
-          "title": "Warnings",
-          "type": "array"
-        }
-      },
-      "required": [
-        "overall",
-        "structure_parts",
-        "evaluation_parts",
-        "component_ratings",
-        "warnings"
-      ],
-      "title": "Ratings",
-      "type": "object"
-    },
     "ReportTextCandidate": {
       "additionalProperties": false,
       "description": "正式报告文本抽取的预留扩展口，第一版不作为病害事实来源。",
@@ -1118,6 +784,15 @@
       "additionalProperties": false,
       "description": "候选对象的来源证据，用于人工校对时回到 Word 表格行或段落。",
       "properties": {
+        "source_type": {
+          "default": "word",
+          "enum": [
+            "word",
+            "manual"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
         "chapter": {
           "anyOf": [
             {
@@ -1239,66 +914,6 @@
       "title": "SourceRef",
       "type": "object"
     },
-    "StructurePartRating": {
-      "additionalProperties": false,
-      "properties": {
-        "structure_part": {
-          "enum": [
-            "上部结构",
-            "下部结构",
-            "桥面系"
-          ],
-          "title": "Structure Part",
-          "type": "string"
-        },
-        "structure_score": {
-          "maximum": 100,
-          "minimum": 0,
-          "title": "Structure Score",
-          "type": "number"
-        },
-        "weight": {
-          "maximum": 1,
-          "minimum": 0,
-          "title": "Weight",
-          "type": "number"
-        },
-        "grade": {
-          "title": "Grade",
-          "type": "string"
-        },
-        "source_ref": {
-          "$ref": "#/$defs/SourceRef"
-        },
-        "confidence": {
-          "maximum": 1,
-          "minimum": 0,
-          "title": "Confidence",
-          "type": "number"
-        },
-        "review_status": {
-          "enum": [
-            "待确认",
-            "已确认",
-            "已修改",
-            "已忽略"
-          ],
-          "title": "Review Status",
-          "type": "string"
-        }
-      },
-      "required": [
-        "structure_part",
-        "structure_score",
-        "weight",
-        "grade",
-        "source_ref",
-        "confidence",
-        "review_status"
-      ],
-      "title": "StructurePartRating",
-      "type": "object"
-    },
     "WarningItem": {
       "additionalProperties": false,
       "properties": {
@@ -1370,9 +985,6 @@
       "title": "Photos",
       "type": "array"
     },
-    "ratings": {
-      "$ref": "#/$defs/Ratings"
-    },
     "comparison_candidates": {
       "items": {
         "$ref": "#/$defs/ComparisonCandidate"
@@ -1409,7 +1021,6 @@
     "inspection",
     "defects",
     "photos",
-    "ratings",
     "comparison_candidates",
     "report_text_candidates",
     "warnings",

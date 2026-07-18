@@ -87,7 +87,7 @@ function makeState(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeA
   return {
     contract: {
       name: "BridgeAnnualInspectionData",
-      version: "1.2",
+      version: "2.0",
       generated_at: "2026-07-09T00:00:00+08:00",
       producer: "bridge-report-system",
       parser_name: "test-parser",

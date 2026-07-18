@@ -190,7 +190,12 @@ DraftValidationResult validate_review_draft(
         return result;
     }
 
-    const auto contract_result = contracts::validate_bridge_annual_inspection_data(body);
+    const auto mode = body["contract"]["version"].isString() &&
+                              body["contract"]["version"].asString() == "1.2"
+                          ? contracts::AnnualInspectionValidationMode::Legacy12Transition
+                          : contracts::AnnualInspectionValidationMode::FinalVersion2;
+    const auto contract_result =
+        contracts::validate_bridge_annual_inspection_data(body, mode);
     if (!contract_result.ok()) {
         result.ok = false;
         result.code = "contract_validation_failed";

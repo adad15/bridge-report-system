@@ -655,7 +655,12 @@ PreflightReport build_preflight_report(const Json::Value& data, const PreflightC
 
     // 检查 2：契约校验。失败时短路返回——契约都不满足时，无法安全定位病害/照片/评分等字段，
     // 继续做检查 3-7 及警告意义不大，且容易因为字段缺失而产生噪声阻断项。
-    const auto contract_result = bridge_report::contracts::validate_bridge_annual_inspection_data(data);
+    const auto mode = data["contract"]["version"].isString() &&
+                              data["contract"]["version"].asString() == "1.2"
+                          ? bridge_report::contracts::AnnualInspectionValidationMode::Legacy12Transition
+                          : bridge_report::contracts::AnnualInspectionValidationMode::FinalVersion2;
+    const auto contract_result =
+        bridge_report::contracts::validate_bridge_annual_inspection_data(data, mode);
     if (!contract_result.ok()) {
         add_issue(report.blocking_errors, "contract_validation_failed", "请求体未通过契约校验：" + contract_result.summary());
         report.can_confirm = report.blocking_errors.empty();

@@ -730,7 +730,12 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         }
 
         const auto data = parse_json_strict(record_row["parsed_result_json"].as<std::string>());
-        const auto contract_result = contracts::validate_bridge_annual_inspection_data(data);
+        const auto mode = data["contract"]["version"].isString() &&
+                                  data["contract"]["version"].asString() == "1.2"
+                              ? contracts::AnnualInspectionValidationMode::Legacy12Transition
+                              : contracts::AnnualInspectionValidationMode::FinalVersion2;
+        const auto contract_result =
+            contracts::validate_bridge_annual_inspection_data(data, mode);
         if (!contract_result.ok()) {
             review::PreflightReport report;
             report.blocking_errors.push_back({"contract_validation_failed", contract_result.summary(), std::string()});

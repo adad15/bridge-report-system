@@ -237,15 +237,15 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                     return;
                 }
 
-                // 存量草稿仍是旧版合同（1.0/1.1）时拒绝保存：旧草稿必须重新解析为 1.2，
-                // 不能靠客户端提交一份"看起来像 1.2"的请求体绕过重解析（变更提案 001 §7）。
+                // 存量草稿仍是旧版合同时拒绝保存：旧草稿必须重新解析为 2.0，
+                // 不能靠客户端提交一份"看起来像 2.0"的请求体绕过重解析（变更提案 001 §7）。
                 if (review::stored_contract_requires_reparse(
                         parse_parsed_result_json(detail->parsed_result_json))) {
                     respond_json(
                         callback,
                         make_error_body(
                             "contract_version_outdated",
-                            "该导入记录的候选数据仍是旧版合同，请先重新解析为 1.2 再校对。"
+                            "该导入记录的候选数据仍是旧版合同，请先重新解析为 2.0 再校对。"
                         ),
                         drogon::k409Conflict
                     );
@@ -378,7 +378,7 @@ void register_cancel_import_record_route(const drogon::orm::DbClientPtr& db_clie
 }
 
 // POST /api/import-records/{import_record_id}/reopen：重开校对。
-// body {scope: "warnings_only" | "full"}。已确认 + 原生 1.2 记录专用：
+// body {scope: "warnings_only" | "full"}。已确认 + 原生 2.0 记录专用：
 // 翻回待校对并快照草稿，之后走既有"保存草稿 -> 入库前检查 -> 确认修订版"生成 v+1。
 // full 范围仅限管理员；warnings_only 要求草稿存在带警告的病害候选。
 void register_reopen_import_record_route(const drogon::orm::DbClientPtr& db_client) {

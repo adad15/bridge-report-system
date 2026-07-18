@@ -103,7 +103,7 @@ function makeData(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeAn
   return {
     contract: {
       name: "BridgeAnnualInspectionData",
-      version: "1.2",
+      version: "2.0",
       generated_at: "2026-07-09T00:00:00+08:00",
       producer: "bridge-report-system",
       parser_name: "test-parser",
@@ -442,6 +442,16 @@ describe("buildStatistics", () => {
       object_warning_count: 0,
       needs_attention_count: 0,
     });
+  });
+
+  it("excludes the temporary imported-rating projection for native 2.0 data", () => {
+    const statistics = buildStatistics(makeData(), false);
+
+    expect(statistics.rating_item_count).toBe(0);
+    expect(statistics.pending_count).toBe(0);
+    expect(statistics.confirmed_count).toBe(0);
+    expect(statistics.modified_count).toBe(0);
+    expect(statistics.ignored_count).toBe(0);
   });
 
   it("tallies defects/photos/ratings across the three status layers plus needs_attention_count", () => {

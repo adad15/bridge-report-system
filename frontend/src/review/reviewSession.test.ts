@@ -17,7 +17,7 @@ describe("review session guards", () => {
 
 describe("deriveReviewSession", () => {
   it("keeps a pending native 1.2 review editable", () => {
-    expect(deriveReviewSession("待校对", "native_1_2")).toEqual({
+    expect(deriveReviewSession("待校对", "native_2_0")).toEqual({
       readOnly: false,
       bannerText: null,
     });
@@ -31,14 +31,14 @@ describe("deriveReviewSession", () => {
   });
 
   it("makes a confirmed review read-only with a confirmed banner", () => {
-    expect(deriveReviewSession("已确认", "native_1_2")).toEqual({
+    expect(deriveReviewSession("已确认", "native_2_0")).toEqual({
       readOnly: true,
       bannerText: "本导入记录已确认入库，页面转为只读。",
     });
   });
 
   it("makes a cancelled review read-only with a cancelled banner", () => {
-    expect(deriveReviewSession("已取消", "native_1_2")).toEqual({
+    expect(deriveReviewSession("已取消", "native_2_0")).toEqual({
       readOnly: true,
       bannerText: "本导入记录已取消，页面转为只读。",
     });
@@ -52,14 +52,14 @@ describe("deriveReviewSession", () => {
   });
 
   it("keeps a reopened warnings_only review editable with a scoped banner", () => {
-    const session = deriveReviewSession("待校对", "native_1_2", "warnings_only");
+    const session = deriveReviewSession("待校对", "native_2_0", "warnings_only");
     expect(session.readOnly).toBe(false);
     expect(session.bannerText).toContain("仅带警告的病害可修改");
     expect(session.bannerText).toContain("修订版入库");
   });
 
   it("keeps a reopened full review editable with a full-scope banner", () => {
-    const session = deriveReviewSession("待校对", "native_1_2", "full");
+    const session = deriveReviewSession("待校对", "native_2_0", "full");
     expect(session.readOnly).toBe(false);
     expect(session.bannerText).toContain("全部病害可修改");
   });

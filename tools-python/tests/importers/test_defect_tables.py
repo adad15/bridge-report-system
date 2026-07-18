@@ -17,8 +17,17 @@ LIAONING_HEADERS = [
 ]
 
 
-def make_liaoning_table(rows: list[list[str]], *, title: str = "表2.1-1 上部结构病害检查表") -> DocxTable:
-    return DocxTable(index=0, title=title, chapter="桥梁外观检查", rows=[LIAONING_HEADERS, *rows])
+def make_liaoning_table(
+    rows: list[list[str]],
+    *,
+    title: str = "表2.1-1 上部结构病害检查表",
+) -> DocxTable:
+    return DocxTable(
+        index=0,
+        title=title,
+        chapter="桥梁外观检查",
+        rows=[LIAONING_HEADERS, *rows],
+    )
 
 
 def parse_single_table(table: DocxTable):
@@ -32,92 +41,48 @@ def test_derives_only_explicit_quantity_expressions() -> None:
     assert derive_quantity_text(None) is None
 
 
-def test_extracts_scale_deduction_and_component_score_columns() -> None:
+def test_extracts_scale_component_number_and_internal_fields() -> None:
     table = make_liaoning_table(
-        [
-            ["上部承重构件", "1-1#板", "底板", "蜂窝、麻面", "1处", "S=0.3m²", "2", "35", "65", "2.1-1"],
-        ]
+        [["上部承重构件", "1-1#板", "底板", "蜂窝、麻面", "1处", "S=0.3m²", "2", "35", "65", "2.1-1"]]
     )
 
-    defects, groups, _warnings, errors = parse_single_table(table)
+    defects, warnings, errors = parse_single_table(table)
 
     assert errors == []
+    assert not any("扣分" in warning.message or "评分" in warning.message for warning in warnings)
     assert len(defects) == 1
-    assert defects[0].defect_scale == 2
-    assert defects[0].defect_deduction == 35.0
-    assert defects[0].defect_location == "底板"
-    assert defects[0].severity is None
-    assert len(groups) == 1
-    group = groups[0]
-    assert group.structure_part == "上部结构"
-    assert group.component_name == "上部承重构件"
-    assert group.component_alias == "1-1#板"
-    assert group.source_score == 65.0
-    assert group.defect_candidate_ids == ["defect_0001"]
+    defect = defects[0]
+    assert defect.source_structure_part == "上部结构"
+    assert defect.component_name == "上部承重构件"
+    assert defect.component_number == "1-1#板"
+    assert defect.defect_scale == 2
+    assert defect.defect_location == "底板"
+    assert defect.bridge_component_id is None
+    assert defect.standard_component_category_id is None
+    assert defect.resolved_structure_part is None
+    assert not hasattr(defect, "defect_deduction")
+    assert not any("扣分" in warning.message or "评分" in warning.message for warning in defect.warnings)
 
 
-def test_component_group_emits_single_rating_for_multiple_rows() -> None:
+def test_invalid_scale_keeps_none_and_warns_without_reading_deduction() -> None:
     table = make_liaoning_table(
-        [
-            ["上部承重构件", "2-1#板", "小桩号侧", "蜂窝、麻面", "1处", "S=0.6×0.1m²", "2", "35", "55.81", "2.1-1"],
-            ["上部承重构件", "2-1#板", "左侧端部", "剥落、掉角", "1处", "长度：0.5m", "2", "20", "55.81", "2.1-2"],
-            ["上部承重构件", "1-1#板", "底板", "蜂窝、麻面", "1处", "S=0.3m²", "2", "35", "65", "2.1-3"],
-        ]
+        [["上部承重构件", "1-1#板", "底板", "蜂窝、麻面", "1处", "S=0.3m²", "轻微", "坏扣分", "坏评分", "2.1-1"]]
     )
 
-    _defects, groups, _warnings, _errors = parse_single_table(table)
-
-    assert [(group.component_alias, group.source_score) for group in groups] == [
-        ("2-1#板", 55.81),
-        ("1-1#板", 65.0),
-    ]
-    assert groups[0].defect_candidate_ids == ["defect_0001", "defect_0002"]
-    assert groups[1].defect_candidate_ids == ["defect_0003"]
-    assert groups[0].warnings == []
-
-
-def test_component_score_propagates_from_group_first_row() -> None:
-    # 仅组首行有构件评分、后续行为空（未合并单元格的形态）。
-    table = make_liaoning_table(
-        [
-            ["上部承重构件", "2-1#板", "小桩号侧", "蜂窝、麻面", "1处", "S=0.6×0.1m²", "2", "35", "55.81", "2.1-1"],
-            ["", "", "左侧端部", "剥落、掉角", "1处", "长度：0.5m", "2", "20", "", "2.1-2"],
-        ]
-    )
-
-    _defects, groups, _warnings, _errors = parse_single_table(table)
-
-    assert len(groups) == 1
-    assert groups[0].source_score == 55.81
-    assert groups[0].defect_candidate_ids == ["defect_0001", "defect_0002"]
-
-
-def test_invalid_scale_and_deduction_keep_none_and_warn() -> None:
-    table = make_liaoning_table(
-        [
-            ["上部承重构件", "1-1#板", "底板", "蜂窝、麻面", "1处", "S=0.3m²", "轻微", "150", "65", "2.1-1"],
-        ]
-    )
-
-    defects, _groups, _warnings, errors = parse_single_table(table)
+    defects, _warnings, errors = parse_single_table(table)
 
     assert errors == []
     defect = defects[0]
     assert defect.defect_scale is None
-    assert defect.defect_deduction is None
-    codes = {warning.code for warning in defect.warnings}
-    assert "defect_scale_invalid" in codes
-    assert "defect_deduction_invalid" in codes
+    assert [warning.code for warning in defect.warnings] == ["defect_scale_invalid"]
 
 
 def test_blank_photo_number_is_a_normal_defect_without_warning() -> None:
     table = make_liaoning_table(
-        [
-            ["上部承重构件", "1-1#板", "底板", "蜂窝、麻面", "1处", "S=0.3m²", "2", "35", "65", ""],
-        ]
+        [["上部承重构件", "1-1#板", "底板", "蜂窝、麻面", "1处", "S=0.3m²", "2", "35", "65", ""]]
     )
 
-    defects, _groups, warnings, errors = parse_single_table(table)
+    defects, warnings, errors = parse_single_table(table)
 
     assert errors == []
     assert "photo_number_missing" not in {warning.code for warning in warnings}
@@ -126,36 +91,20 @@ def test_blank_photo_number_is_a_normal_defect_without_warning() -> None:
     assert "photo_number_missing" not in {warning.code for warning in defects[0].warnings}
 
 
-def test_conflicting_group_scores_keep_first_and_warn() -> None:
-    table = make_liaoning_table(
-        [
-            ["上部承重构件", "2-1#板", "小桩号侧", "蜂窝、麻面", "1处", "S=0.6×0.1m²", "2", "35", "55.81", "2.1-1"],
-            ["上部承重构件", "2-1#板", "左侧端部", "剥落、掉角", "1处", "长度：0.5m", "2", "20", "60", "2.1-2"],
-        ]
-    )
-
-    _defects, groups, _warnings, _errors = parse_single_table(table)
-
-    assert len(groups) == 1
-    assert groups[0].source_score == 55.81
-    assert [warning.code for warning in groups[0].warnings] == ["component_score_source_invalid"]
-
-
-def test_table_without_score_columns_produces_no_groups() -> None:
+def test_table_without_score_columns_still_produces_version_two_defect() -> None:
     table = DocxTable(
         index=0,
         title="表2.1-1 上部结构病害检查表",
         chapter="桥梁外观检查",
         rows=[
-            ["构件", "位置", "病害", "数量", "尺寸", "照片编号"],
-            ["主梁", "第二跨左幅梁底", "裂缝", "1处", "L=0.8m，W=0.12mm", "2.1-1"],
+            ["构件", "构件编号", "位置", "病害", "数量", "尺寸", "照片编号"],
+            ["主梁", "2-3#梁", "第二跨左幅梁底", "裂缝", "1处", "L=0.8m，W=0.12mm", "2.1-1"],
         ],
     )
 
-    defects, groups, _warnings, errors = parse_single_table(table)
+    defects, _warnings, errors = parse_single_table(table)
 
     assert errors == []
     assert len(defects) == 1
+    assert defects[0].component_number == "2-3#梁"
     assert defects[0].defect_scale is None
-    assert defects[0].defect_deduction is None
-    assert groups == []

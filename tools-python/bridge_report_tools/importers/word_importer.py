@@ -12,17 +12,15 @@ from bridge_report_tools.contracts.annual_inspection import (
     InspectionInfo,
     WarningItem,
 )
-from bridge_report_tools.importers.component_ratings import build_component_rating_candidates
 from bridge_report_tools.importers.defect_tables import parse_defect_tables
 from bridge_report_tools.importers.docx_reader import read_docx_blocks
 from bridge_report_tools.importers.photo_extractor import extract_and_match_photos
-from bridge_report_tools.importers.rating_tables import parse_rating_tables
 from bridge_report_tools.importers.word_context import WordImportRequest, WordImportResponse
 from bridge_report_tools.importers.word_errors import WordImportError
 from bridge_report_tools.importers.word_rules import select_rule_set
 
 
-PARSER_VERSION = "0.2.0"
+PARSER_VERSION = "0.3.0"
 
 
 def extract_bridge_name(paragraph_texts: list[str], selected_bridge_name: str) -> str | None:
@@ -69,12 +67,7 @@ def parse_word_import(request: WordImportRequest) -> WordImportResponse:
     rule_set = select_rule_set(request.rule_profile)
 
     document = read_docx_blocks(request.docx_path)
-    defects, component_groups, defect_warnings, defect_errors = parse_defect_tables(document.tables, rule_set)
-    ratings, rating_warnings = parse_rating_tables(document.tables, rule_set)
-    # 第二章构件评分与第四章评定表来源不同，组装后统一挂到 ratings.component_ratings。
-    ratings = ratings.model_copy(
-        update={"component_ratings": build_component_rating_candidates(component_groups, defects)}
-    )
+    defects, defect_warnings, defect_errors = parse_defect_tables(document.tables, rule_set)
     photos, temporary_photo_files, photo_warnings = extract_and_match_photos(
         request.docx_path,
         document,
@@ -87,7 +80,7 @@ def parse_word_import(request: WordImportRequest) -> WordImportResponse:
         data = BridgeAnnualInspectionData(
             contract=ContractInfo(
                 name="BridgeAnnualInspectionData",
-                version="1.2",
+                version="2.0",
                 generated_at=datetime.now(timezone.utc),
                 producer="python-tools",
                 parser_name="word_importer",
@@ -109,10 +102,9 @@ def parse_word_import(request: WordImportRequest) -> WordImportResponse:
             ),
             defects=defects,
             photos=photos,
-            ratings=ratings,
             comparison_candidates=[],
             report_text_candidates=[],
-            warnings=defect_warnings + rating_warnings + photo_warnings,
+            warnings=defect_warnings + photo_warnings,
             errors=defect_errors,
         )
         validated = BridgeAnnualInspectionData.model_validate(data.model_dump())

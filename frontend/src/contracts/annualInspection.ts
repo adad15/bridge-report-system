@@ -33,6 +33,7 @@ export interface WarningItem {
 }
 
 export interface SourceRef {
+  source_type?: "word" | "manual";
   chapter?: string | null;
   table_title?: string | null;
   table_index?: number | null;
@@ -46,7 +47,7 @@ export interface SourceRef {
 
 export interface ContractInfo {
   name: "BridgeAnnualInspectionData";
-  version: "1.2";
+  version: "2.0";
   generated_at: string;
   producer: string;
   parser_name: string;
@@ -82,15 +83,17 @@ export interface Measurement {
   source_text: string;
 }
 
-export interface DefectCandidate {
+export interface DefectCandidateV2 {
   candidate_id: string;
-  structure_part: StructurePart;
+  source_structure_part?: StructurePart | null;
   component_name: string;
-  component_alias?: string | null;
+  component_number?: string | null;
+  bridge_component_id?: string | null;
+  standard_component_category_id?: string | null;
+  resolved_structure_part?: StructurePart | null;
   defect_type: string;
   defect_location: string;
   defect_scale?: number | null;
-  defect_deduction?: number | null;
   defect_description: string;
   quantity_text?: string | null;
   measurement_text?: string | null;
@@ -105,6 +108,14 @@ export interface DefectCandidate {
   review_status: ReviewStatus;
   review_note?: string | null;
   warnings: WarningItem[];
+}
+
+// Task 11—17 的校对工作台内存投影。旧字段不属于 2.0 wire contract，
+// 只为尚未在 Task 13/18 切换完的组件提供只读兼容，保存时必须剥离。
+export interface DefectCandidate extends DefectCandidateV2 {
+  structure_part?: StructurePart;
+  component_alias?: string | null;
+  defect_deduction?: number | null;
 }
 
 export interface ExtractedPhotoFile {
@@ -226,18 +237,27 @@ export interface ReportTextCandidate {
   review_status: ReviewStatus;
 }
 
-export interface BridgeAnnualInspectionData {
+export interface BridgeAnnualInspectionDataV2 {
   contract: ContractInfo;
   import_context: ImportContext;
   bridge_check: BridgeCheck;
   inspection: InspectionInfo;
-  defects: DefectCandidate[];
+  defects: DefectCandidateV2[];
   photos: PhotoCandidate[];
-  ratings: Ratings;
   comparison_candidates: ComparisonCandidate[];
   report_text_candidates: ReportTextCandidate[];
   warnings: WarningItem[];
   errors: WarningItem[];
+}
+
+// 显式过渡门：API 读取 2.0 后生成旧校对工作台所需的内存视图；Task 18 删除。
+export const LEGACY_REVIEW_RATINGS_PROJECTION_ENABLED = true;
+export const LEGACY_ANNUAL_INSPECTION_12_READ_ENABLED = true;
+
+export interface BridgeAnnualInspectionData
+  extends Omit<BridgeAnnualInspectionDataV2, "defects"> {
+  defects: DefectCandidate[];
+  ratings: Ratings;
 }
 
 // 运行时校验只做前端入口防线，完整契约仍以 JSON Schema 和后端校验为准。
@@ -278,6 +298,13 @@ function hasRequiredObjectMembers(value: Record<string, unknown>, members: strin
   return members.every((member) => getRequiredObject(value, member) !== null);
 }
 
+function isValidSourceRef(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    (value.source_type === undefined || value.source_type === "word" || value.source_type === "manual")
+  );
+}
+
 // 可空的 0-100 分值：缺字段、null 或闭区间数值都合法。
 function isNullableScore(value: unknown): boolean {
   return (
@@ -304,9 +331,20 @@ function isValidDefectCandidate(value: unknown): boolean {
   return (
     hasRequiredArrayMembers(value, ["measurements", "photo_numbers", "warnings"]) &&
     hasRequiredObjectMembers(value, ["source_ref"]) &&
+    isValidSourceRef(value.source_ref) &&
+    typeof value.component_name === "string" &&
+    value.component_name.length > 0 &&
+    typeof value.defect_type === "string" &&
+    value.defect_type.length > 0 &&
+    typeof value.defect_location === "string" &&
+    value.defect_location.length > 0 &&
+    typeof value.defect_description === "string" &&
+    value.defect_description.length > 0 &&
+    !hasOwn(value, "structure_part") &&
+    !hasOwn(value, "component_alias") &&
+    !hasOwn(value, "defect_deduction") &&
     (value.group_review_status === "待确认" || value.group_review_status === "已确认") &&
     isNullablePositiveInteger(value.defect_scale) &&
-    isNullableScore(value.defect_deduction) &&
     missingPhotoNumbers !== null &&
     missingPhotoNumbers.every((item) => typeof item === "string") &&
     new Set(missingPhotoNumbers).size === missingPhotoNumbers.length
@@ -368,7 +406,8 @@ function isValidPhotoCandidate(value: unknown): boolean {
     isRecord(value) &&
     hasValidConfidence(value) &&
     hasRequiredArrayMembers(value, ["warnings"]) &&
-    hasRequiredObjectMembers(value, ["extracted_file", "source_ref"])
+    hasRequiredObjectMembers(value, ["extracted_file", "source_ref"]) &&
+    isValidSourceRef(value.source_ref)
   );
 }
 
@@ -401,7 +440,7 @@ function isValidEvaluationPartRating(value: unknown): boolean {
   );
 }
 
-export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnnualInspectionData {
+export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnnualInspectionDataV2 {
   if (!isRecord(value)) {
     return false;
   }
@@ -411,15 +450,18 @@ export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnn
   if (contract === null) {
     return false;
   }
-  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "1.2") {
+  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "2.0") {
+    return false;
+  }
+
+  if (hasOwn(value, "ratings")) {
     return false;
   }
 
   const importContext = getRequiredObject(value, "import_context");
   const bridgeCheck = getRequiredObject(value, "bridge_check");
   const inspection = getRequiredObject(value, "inspection");
-  const ratings = getRequiredObject(value, "ratings");
-  if (importContext === null || bridgeCheck === null || inspection === null || ratings === null) {
+  if (importContext === null || bridgeCheck === null || inspection === null) {
     return false;
   }
 
@@ -444,28 +486,133 @@ export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnn
     return false;
   }
 
+  return (
+    defects.every(isValidDefectCandidate) &&
+    photos.every(isValidPhotoCandidate) &&
+    comparisonCandidates.every(isValidComparisonCandidate)
+  );
+}
+
+function isValidLegacy12DefectCandidate(value: unknown): boolean {
+  if (!isRecord(value) || !hasValidConfidence(value)) {
+    return false;
+  }
+  const missingPhotoNumbers = getRequiredArray(value, "confirmed_missing_photo_numbers");
+  return (
+    typeof value.structure_part === "string" &&
+    typeof value.component_name === "string" &&
+    hasRequiredArrayMembers(value, ["measurements", "photo_numbers", "warnings"]) &&
+    hasRequiredObjectMembers(value, ["source_ref"]) &&
+    (value.group_review_status === "待确认" || value.group_review_status === "已确认") &&
+    isNullablePositiveInteger(value.defect_scale) &&
+    isNullableScore(value.defect_deduction) &&
+    missingPhotoNumbers !== null &&
+    missingPhotoNumbers.every((item) => typeof item === "string") &&
+    new Set(missingPhotoNumbers).size === missingPhotoNumbers.length
+  );
+}
+
+// 仅用于 Task 11—17 的旧记录只读展示；新建、保存和确认仍只接受 2.0。
+export function isLegacyAnnualInspectionData12(value: unknown): boolean {
+  if (!LEGACY_ANNUAL_INSPECTION_12_READ_ENABLED || !isRecord(value)) {
+    return false;
+  }
+  const contract = getRequiredObject(value, "contract");
+  const ratings = getRequiredObject(value, "ratings");
+  const bridgeCheck = getRequiredObject(value, "bridge_check");
+  if (
+    contract?.name !== "BridgeAnnualInspectionData" ||
+    contract.version !== "1.2" ||
+    ratings === null ||
+    bridgeCheck === null ||
+    getRequiredObject(value, "import_context") === null ||
+    getRequiredObject(value, "inspection") === null ||
+    getRequiredArray(bridgeCheck, "warnings") === null
+  ) {
+    return false;
+  }
+  const defects = getRequiredArray(value, "defects");
+  const photos = getRequiredArray(value, "photos");
+  const comparisons = getRequiredArray(value, "comparison_candidates");
   const overall = getRequiredObject(ratings, "overall");
   const structureParts = getRequiredArray(ratings, "structure_parts");
   const evaluationParts = getRequiredArray(ratings, "evaluation_parts");
   const componentRatings = getRequiredArray(ratings, "component_ratings");
-  const ratingWarnings = getRequiredArray(ratings, "warnings");
   if (
+    defects === null ||
+    photos === null ||
+    comparisons === null ||
+    getRequiredArray(value, "report_text_candidates") === null ||
+    getRequiredArray(value, "warnings") === null ||
+    getRequiredArray(value, "errors") === null ||
     overall === null ||
     structureParts === null ||
     evaluationParts === null ||
     componentRatings === null ||
-    ratingWarnings === null
+    getRequiredArray(ratings, "warnings") === null
   ) {
     return false;
   }
-
   return (
-    defects.every(isValidDefectCandidate) &&
+    defects.every(isValidLegacy12DefectCandidate) &&
     photos.every(isValidPhotoCandidate) &&
-    comparisonCandidates.every(isValidComparisonCandidate) &&
+    comparisons.every(isValidComparisonCandidate) &&
     isValidOverallRating(overall) &&
     structureParts.every(isValidStructurePartRating) &&
     evaluationParts.every(isValidEvaluationPartRating) &&
     componentRatings.every(isValidComponentRating)
   );
+}
+
+function emptyLegacyRatingsProjection(): Ratings {
+  return {
+    overall: {
+      total_score: 0,
+      overall_grade: "",
+      source_ref: { source_type: "manual" },
+      confidence: 1,
+      review_status: "已忽略",
+    },
+    structure_parts: [],
+    evaluation_parts: [],
+    component_ratings: [],
+    warnings: [],
+  };
+}
+
+export function projectVersionTwoForLegacyReview(
+  data: BridgeAnnualInspectionDataV2,
+): BridgeAnnualInspectionData {
+  if (!LEGACY_REVIEW_RATINGS_PROJECTION_ENABLED) {
+    throw new Error("legacy review projection is disabled");
+  }
+  return {
+    ...data,
+    defects: data.defects.map((defect) => ({
+      ...defect,
+      structure_part:
+        defect.resolved_structure_part ?? defect.source_structure_part ?? "其他",
+      component_alias: defect.component_number ?? null,
+      defect_deduction: null,
+    })),
+    ratings: emptyLegacyRatingsProjection(),
+  };
+}
+
+export function versionTwoWireData(
+  data: BridgeAnnualInspectionData,
+): BridgeAnnualInspectionDataV2 {
+  const { ratings: _ratings, defects, ...root } = data;
+  return {
+    ...root,
+    defects: defects.map((defect) => {
+      const {
+        structure_part: _structurePart,
+        component_alias: _componentAlias,
+        defect_deduction: _defectDeduction,
+        ...wireDefect
+      } = defect;
+      return wireDefect;
+    }),
+  };
 }
