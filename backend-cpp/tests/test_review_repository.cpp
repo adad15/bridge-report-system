@@ -317,6 +317,30 @@ TEST_F(ReviewRepositoryTest, save_review_draft_updates_parsed_result_and_keeps_s
     EXPECT_EQ(parsed["defects"].size(), 1u);
 }
 
+TEST_F(ReviewRepositoryTest, save_review_draft_appends_defect_change_audit_event) {
+    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.valid.json");
+    Json::Value event(Json::objectValue);
+    event["event_type"] = "draft_defect_structure_change";
+    event["actor_username"] = "editor";
+    event["added_candidate_ids"] = Json::Value(Json::arrayValue);
+    event["added_candidate_ids"].append("manual_defect_uuid_1");
+    event["deleted_candidate_ids"] = Json::Value(Json::arrayValue);
+
+    bridge_report::db::ReviewRepository repository(tx_);
+    ASSERT_TRUE(repository.save_review_draft(
+        import_record_id_, fixture_json, std::nullopt, write_json_compact(event)));
+
+    const auto row = tx_->execSqlSync(
+        "select validation_result_json::text as audit from import_records where id = $1::uuid",
+        import_record_id_);
+    ASSERT_FALSE(row.empty());
+    const auto audit = parse_json_text(row[0]["audit"].as<std::string>());
+    ASSERT_TRUE(audit["draft_audit_events"].isArray());
+    ASSERT_EQ(audit["draft_audit_events"].size(), 1u);
+    EXPECT_EQ(audit["draft_audit_events"][0]["actor_username"].asString(), "editor");
+    EXPECT_TRUE(audit["draft_audit_events"][0]["saved_at"].isString());
+}
+
 TEST_F(ReviewRepositoryTest, save_review_draft_returns_false_and_leaves_json_when_not_pending_review) {
     tx_->execSqlSync(
         "update import_records set import_status = $1 where id = $2::uuid",

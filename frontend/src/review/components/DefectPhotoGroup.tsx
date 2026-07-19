@@ -1,13 +1,12 @@
 import { useEffect, useState, type CSSProperties, type Dispatch, type MouseEvent } from "react";
 
 import { photoContentUrl } from "../../api/reviewApi";
-import type { BridgeAnnualInspectionData, DefectCandidate, ReviewStatus, StructurePart } from "../../contracts/annualInspection";
+import type { BridgeAnnualInspectionData, DefectCandidate, ReviewStatus } from "../../contracts/annualInspection";
 import { categoryColor } from "../categoryColor";
 import { buildDefectPhotoGroup, canConfirmDefectPhotoGroup } from "../defectPhotoGroups";
 import { reviewTargetId } from "../reviewNavigation";
 import type { ReviewDraftAction } from "../reviewDraft";
 
-const STRUCTURE_PARTS: StructurePart[] = ["全桥", "上部结构", "下部结构", "桥面系", "其他"];
 const REVIEW_STATUSES: ReviewStatus[] = ["待确认", "已确认", "已修改", "已忽略"];
 
 interface DefectPhotoGroupProps {
@@ -21,6 +20,7 @@ interface DefectPhotoGroupProps {
   dispatch: Dispatch<ReviewDraftAction>;
   initialPhotoCandidateId?: string | null;
   disabled?: boolean;
+  allowDelete?: boolean;
 }
 
 function parsePhotoNumbers(text: string): string[] {
@@ -41,7 +41,7 @@ function reviewStatusBadgeClass(status: ReviewStatus): string {
 // 禁用策略（逐控件而非外层 fieldset 一揽子禁用）：编辑类控件跟随 disabled；
 // 查看类控件（"查看照片"toggle、缩略图切换、大图展示）永不禁用——
 // 查看是只读动作，已确认/重开范围外的病害也必须能看照片。
-export function DefectPhotoGroup({ draft, defect, sequenceNumber = 1, importRecordId, baseUrl, expanded, onToggle, dispatch, initialPhotoCandidateId, disabled = false }: DefectPhotoGroupProps) {
+export function DefectPhotoGroup({ draft, defect, sequenceNumber = 1, importRecordId, baseUrl, expanded, onToggle, dispatch, initialPhotoCandidateId, disabled = false, allowDelete = false }: DefectPhotoGroupProps) {
   const group = buildDefectPhotoGroup(draft, defect.candidate_id);
   const photos = group?.photos ?? [];
   const [activePhotoId, setActivePhotoId] = useState(initialPhotoCandidateId ?? photos[0]?.candidate_id ?? null);
@@ -71,18 +71,32 @@ export function DefectPhotoGroup({ draft, defect, sequenceNumber = 1, importReco
         <td>
           {/* 整卡统一表单网格：六个汇总字段与数量/尺寸原文/照片编号用同一套"标签 + 输入框"语言，
               标签右对齐同一列、输入框共享左边线，消除汇总行与明细行之间的割裂感。 */}
-          <div className="defect-sequence-badge">病害 {sequenceNumber}</div>
+          <div className="defect-card-heading">
+            <div className="defect-sequence-badge">病害 {sequenceNumber}</div>
+            <button
+              type="button"
+              className="defect-delete-button"
+              disabled={!allowDelete}
+              onClick={() => {
+                if (window.confirm(`确定删除病害 ${sequenceNumber}？已关联照片会移到未关联照片区。`)) {
+                  dispatch({ type: "delete_defect", candidateId: defect.candidate_id });
+                }
+              }}
+            >
+              删除病害
+            </button>
+          </div>
           <div className="defect-fact-grid">
-            <span className="defect-fact-label defect-fact-label-row-start">结构部位</span>
-            <select id={reviewTargetId("defect-field", defect.candidate_id, "structure_part")} aria-label="结构部位" disabled={disabled} value={defect.structure_part} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "structure_part", value: event.target.value as StructurePart })}>{STRUCTURE_PARTS.map((part) => <option key={part}>{part}</option>)}</select>
-            <span className="defect-fact-label">构件类别</span>
+            <span className="defect-fact-label defect-fact-label-row-start">构件类别</span>
             <input id={reviewTargetId("defect-field", defect.candidate_id, "component_name")} aria-label="构件类别" disabled={disabled} value={defect.component_name} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_name", value: event.target.value })} />
             <span className="defect-fact-label">构件编号</span>
-            <input id={reviewTargetId("defect-field", defect.candidate_id, "component_alias")} aria-label="构件编号" disabled={disabled} value={defect.component_alias ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_alias", value: event.target.value || null })} />
+            <input id={reviewTargetId("defect-field", defect.candidate_id, "component_number")} aria-label="构件编号" disabled={disabled} value={defect.component_number ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_number", value: event.target.value || null })} />
             <span className="defect-fact-label defect-fact-label-row-start">位置</span>
             <input id={reviewTargetId("defect-field", defect.candidate_id, "defect_location")} aria-label="位置" disabled={disabled} value={defect.defect_location} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} />
             <span className="defect-fact-label">病害类型</span>
             <input id={reviewTargetId("defect-field", defect.candidate_id, "defect_type")} aria-label="病害类型" disabled={disabled} value={defect.defect_type} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_type", value: event.target.value })} />
+            <span className="defect-fact-label defect-fact-label-row-start">病害描述</span>
+            <input className="defect-fact-span" id={reviewTargetId("defect-field", defect.candidate_id, "defect_description")} aria-label="病害描述" disabled={disabled} value={defect.defect_description} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_description", value: event.target.value })} />
             <span className="defect-fact-label">校对状态</span>
             <select aria-label="校对状态" disabled={disabled} value={defect.review_status} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_status", value: event.target.value as ReviewStatus })}>{REVIEW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select>
             {/* 合同 1.2：规范标度（正整数）与病害扣分（0-100）。空输入回落为 null；
@@ -132,7 +146,7 @@ export function DefectPhotoGroup({ draft, defect, sequenceNumber = 1, importReco
                         <button type="button" disabled={disabled} onClick={() => dispatch({ type: "photo_ignore", candidateId: activePhoto.candidate_id })}>忽略</button>
                       </div>
                       {/* 选项用"构件编号 / 位置 / 病害类型"定位病害（编号缺失时回退到构件类别）。 */}
-                      <label className="defect-photo-relink">重新关联<select disabled={disabled} value={activePhoto.linked_defect_candidate_id ?? ""} onChange={(event) => event.target.value && dispatch({ type: "photo_relink", candidateId: activePhoto.candidate_id, defectCandidateId: event.target.value })}>{draft.defects.map((item) => <option key={item.candidate_id} value={item.candidate_id}>{item.component_alias ?? item.component_name} / {item.defect_location} / {item.defect_type}</option>)}</select></label>
+                      <label className="defect-photo-relink">重新关联<select disabled={disabled} value={activePhoto.linked_defect_candidate_id ?? ""} onChange={(event) => event.target.value && dispatch({ type: "photo_relink", candidateId: activePhoto.candidate_id, defectCandidateId: event.target.value })}>{draft.defects.map((item) => <option key={item.candidate_id} value={item.candidate_id}>{item.component_number ?? item.component_name} / {item.defect_location} / {item.defect_type}</option>)}</select></label>
                     </>
                   ) : null}
                   {photos.length > 0 ? <div className="defect-photo-thumbnails">{photos.map((photo) => <button id={reviewTargetId("photo", photo.candidate_id)} key={photo.candidate_id} type="button" className={photo.candidate_id === activePhoto?.candidate_id ? "active" : ""} aria-label={`查看照片 ${photo.photo_number}`} onClick={() => setActivePhotoId(photo.candidate_id)}><img src={photoContentUrl(baseUrl, importRecordId, photo.candidate_id)} alt="" /><span>{photo.photo_number}</span></button>)}</div> : null}

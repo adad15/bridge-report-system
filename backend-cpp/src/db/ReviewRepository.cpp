@@ -542,26 +542,37 @@ std::optional<PhotoContentRef> ReviewRepository::get_photo_content_ref(
 bool ReviewRepository::save_review_draft(
     const std::string& import_record_id,
     const std::string& parsed_json_text,
-    const std::optional<EditLockCredentials>& edit_lock
+    const std::optional<EditLockCredentials>& edit_lock,
+    const std::string& defect_change_audit_json
 ) {
     // 与 cancel_import_record 同一惯用法：把状态谓词放进 UPDATE，
     // 避免“处理器读到待校对 -> 并发取消/确认 -> 草稿仍写入”的 TOCTOU 竞态。
     const auto result = edit_lock.has_value()
         ? db_client_->execSqlSync(
             "update import_records "
-            "set parsed_result_json = $2::jsonb, updated_at = now() "
+            "set parsed_result_json = $2::jsonb, "
+            "validation_result_json = case when $6::text = '' then validation_result_json else "
+            "jsonb_set(coalesce(validation_result_json, '{}'::jsonb), '{draft_audit_events}', "
+            "coalesce(validation_result_json->'draft_audit_events', '[]'::jsonb) "
+            "|| jsonb_build_array($6::jsonb || jsonb_build_object('saved_at', now())), true) end, "
+            "updated_at = now() "
             "where id = $1::uuid and import_status = '待校对' "
             "and exists(select 1 from import_record_edit_locks l "
             "  where l.import_record_id = import_records.id and l.user_id = $3::uuid "
             "  and l.user_session_id = $4::uuid and l.lock_token_hash = $5 and l.expires_at > now()) "
             "returning id",
             import_record_id, parsed_json_text, edit_lock->user_id, edit_lock->session_id,
-            auth::sha256_hex(edit_lock->lock_token))
+            auth::sha256_hex(edit_lock->lock_token), defect_change_audit_json)
         : db_client_->execSqlSync(
             "update import_records "
-            "set parsed_result_json = $2::jsonb, updated_at = now() "
+            "set parsed_result_json = $2::jsonb, "
+            "validation_result_json = case when $3::text = '' then validation_result_json else "
+            "jsonb_set(coalesce(validation_result_json, '{}'::jsonb), '{draft_audit_events}', "
+            "coalesce(validation_result_json->'draft_audit_events', '[]'::jsonb) "
+            "|| jsonb_build_array($3::jsonb || jsonb_build_object('saved_at', now())), true) end, "
+            "updated_at = now() "
             "where id = $1::uuid and import_status = '待校对' returning id",
-            import_record_id, parsed_json_text);
+            import_record_id, parsed_json_text, defect_change_audit_json);
     return !result.empty();
 }
 
@@ -921,7 +932,9 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             "set import_status = '已确认', finished_at = now(), inspection_year_id = $2::uuid, "
             "    validation_result_json = jsonb_build_object("
             "        'confirmed_at', now(), 'confirmation_note', $3::text, 'written', $4::jsonb"
-            "    ), "
+            "    ) || case when jsonb_typeof(validation_result_json->'draft_audit_events') = 'array' "
+            "        then jsonb_build_object('draft_audit_events', validation_result_json->'draft_audit_events') "
+            "        else '{}'::jsonb end, "
             "    reopened_at = null, reopened_by_username = null, reopen_scope = null, "
             "    reopen_backup_parsed_result_json = null, "
             "    updated_at = now() "

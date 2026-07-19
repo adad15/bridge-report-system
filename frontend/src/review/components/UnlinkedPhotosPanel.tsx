@@ -24,6 +24,12 @@ export function UnlinkedPhotosPanel({ draft, importRecordId, baseUrl, selectedPh
     if (selectedPhotoCandidateId && photos.some((photo) => photo.candidate_id === selectedPhotoCandidateId)) setActiveId(selectedPhotoCandidateId);
   }, [photos, selectedPhotoCandidateId]);
 
+  useEffect(() => {
+    if (!draft.defects.some((defect) => defect.candidate_id === targetDefectId)) {
+      setTargetDefectId(draft.defects[0]?.candidate_id ?? "");
+    }
+  }, [draft.defects, targetDefectId]);
+
   if (photos.length === 0) return null;
   return (
     <div id={reviewTargetId("unlinked-photos", "panel")} tabIndex={-1} className="unlinked-photos-panel">

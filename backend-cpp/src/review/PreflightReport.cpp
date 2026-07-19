@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <iomanip>
+#include <iterator>
 #include <optional>
 #include <sstream>
 #include <vector>
@@ -147,17 +148,35 @@ void check_defect_missing_required_field(const Json::Value& data, std::vector<Pr
     if (!data["defects"].isArray()) {
         return;
     }
+    const bool version_two = data["contract"]["version"].isString()
+        && data["contract"]["version"].asString() == "2.0";
     for (const auto& defect : data["defects"]) {
         if (!is_review_settled(review_status_of(defect))) {
             continue;
         }
-        static const char* required_fields[] = {"structure_part", "component_name", "defect_type", "defect_description"};
-        for (const char* field : required_fields) {
+        static const char* legacy_required_fields[] = {"structure_part", "component_name", "defect_type", "defect_description"};
+        static const char* version_two_required_fields[] = {
+            "component_name", "component_number", "defect_location", "defect_type", "defect_description"
+        };
+        const auto* required_fields = version_two ? version_two_required_fields : legacy_required_fields;
+        const auto required_count = version_two
+            ? std::size(version_two_required_fields)
+            : std::size(legacy_required_fields);
+        for (std::size_t index = 0; index < required_count; ++index) {
+            const char* field = required_fields[index];
             if (is_blank_string_field(defect, field)) {
                 add_issue(blocking, "defect_missing_required_field",
                           "已确认病害 " + candidate_id_of(defect) + " 缺少必填字段 " + field + "。", candidate_id_of(defect));
                 break;  // 每个病害最多一条阻断，字段名已在 message 中说明。
             }
+        }
+        const bool scale_valid = defect.isMember("defect_scale")
+            && defect["defect_scale"].isIntegral()
+            && defect["defect_scale"].asInt64() > 0;
+        if (!scale_valid) {
+            add_issue(blocking, "defect_scale_required",
+                      "已确认病害 " + candidate_id_of(defect) + " 必须填写有效的病害标度。",
+                      candidate_id_of(defect));
         }
     }
 }

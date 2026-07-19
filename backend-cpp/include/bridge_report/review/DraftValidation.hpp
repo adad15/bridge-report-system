@@ -71,4 +71,15 @@ struct DraftValidationResult {
     Json::Value* normalized_draft = nullptr
 );
 
+/**
+ * @brief 比较保存前后的病害 candidate_id，生成可持久化的人工增删审计摘要。
+ *
+ * 没有增删时返回 JSON null；摘要中的 ID 由服务端对比得出，不信任客户端自报计数。
+ */
+[[nodiscard]] Json::Value build_defect_change_audit_event(
+    const Json::Value& stored_draft,
+    const Json::Value& new_draft,
+    const std::string& actor_username
+);
+
 }  // 命名空间 bridge_report::review

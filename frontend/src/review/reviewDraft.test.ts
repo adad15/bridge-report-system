@@ -9,7 +9,7 @@ import type {
   PhotoCandidate,
   StructurePartRating,
 } from "../contracts/annualInspection";
-import { reviewDraftReducer } from "./reviewDraft";
+import { createReviewDraftReducer, reviewDraftReducer } from "./reviewDraft";
 
 function makeDefect(overrides: Partial<DefectCandidate> = {}): DefectCandidate {
   return {
@@ -125,6 +125,110 @@ function makeState(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeA
 }
 
 describe("reviewDraftReducer", () => {
+  it("add_defect creates a complete manual candidate with an injected non-reused id", () => {
+    const ids = ["manual_defect_uuid_1", "manual_defect_uuid_2"];
+    const reducer = createReviewDraftReducer(() => ids.shift() ?? "unexpected");
+    const state = makeState({ defects: [], photos: [] });
+    const input = {
+      componentName: "主梁",
+      componentNumber: "1-1#",
+      bridgeComponentId: "component-1",
+      standardComponentCategoryId: "h21.component.beam",
+      resolvedStructurePart: "上部结构" as const,
+      defectLocation: "第1跨梁底",
+      defectType: "裂缝",
+      defectDescription: "梁底纵向裂缝",
+    };
+
+    const first = reducer(state, { type: "add_defect", input });
+    const second = reducer(first, { type: "add_defect", input });
+
+    expect(second.defects.map((item) => item.candidate_id)).toEqual([
+      "manual_defect_uuid_1",
+      "manual_defect_uuid_2",
+    ]);
+    expect(second.defects[0]).toMatchObject({
+      component_name: "主梁",
+      component_number: "1-1#",
+      bridge_component_id: "component-1",
+      standard_component_category_id: "h21.component.beam",
+      resolved_structure_part: "上部结构",
+      defect_location: "第1跨梁底",
+      defect_type: "裂缝",
+      defect_description: "梁底纵向裂缝",
+      defect_scale: null,
+      source_ref: { source_type: "manual" },
+      review_status: "已修改",
+    });
+    expect(second.defects[0]).not.toHaveProperty("structure_part");
+    expect(second.defects[0]).not.toHaveProperty("component_alias");
+  });
+
+  it("delete_defect removes only the defect and moves linked photos to the unlinked area", () => {
+    const state = makeState({
+      defects: [makeDefect(), makeDefect({ candidate_id: "defect_0002" })],
+      photos: [
+        makePhoto(),
+        makePhoto({ candidate_id: "photo_0002", linked_defect_candidate_id: "defect_0002" }),
+      ],
+    });
+
+    const next = reviewDraftReducer(state, { type: "delete_defect", candidateId: "defect_0001" });
+
+    expect(next.defects.map((item) => item.candidate_id)).toEqual(["defect_0002"]);
+    expect(next.photos).toHaveLength(2);
+    expect(next.photos[0]).toMatchObject({
+      linked_defect_candidate_id: null,
+      match_status: "未关联",
+      review_status: "已修改",
+    });
+    expect(next.photos[1].linked_defect_candidate_id).toBe("defect_0002");
+  });
+
+  it("does not reuse an issued manual id after that defect is deleted", () => {
+    const ids = ["manual_defect_uuid_1", "manual_defect_uuid_1", "manual_defect_uuid_2"];
+    const reducer = createReviewDraftReducer(() => ids.shift() ?? "unexpected");
+    const input = {
+      componentName: "主梁",
+      componentNumber: "1-1#",
+      bridgeComponentId: "component-1",
+      standardComponentCategoryId: "h21.component.beam",
+      resolvedStructurePart: "上部结构" as const,
+      defectLocation: "梁底",
+      defectType: "裂缝",
+      defectDescription: "纵向裂缝",
+    };
+    const added = reducer(makeState({ defects: [], photos: [] }), { type: "add_defect", input });
+    const deleted = reducer(added, { type: "delete_defect", candidateId: "manual_defect_uuid_1" });
+    const addedAgain = reducer(deleted, { type: "add_defect", input });
+
+    expect(addedAgain.defects[0].candidate_id).toBe("manual_defect_uuid_2");
+  });
+
+  it("link_defect_component fills internal mapping fields without exposing a structure edit", () => {
+    const state = makeState();
+    const next = reviewDraftReducer(state, {
+      type: "link_defect_component",
+      candidateId: "defect_0001",
+      component: {
+        componentName: "盖梁",
+        componentNumber: "0#-GL",
+        bridgeComponentId: "component-2",
+        standardComponentCategoryId: "h21.component.cap-beam",
+        resolvedStructurePart: "下部结构",
+      },
+    });
+
+    expect(next.defects[0]).toMatchObject({
+      component_name: "盖梁",
+      component_number: "0#-GL",
+      bridge_component_id: "component-2",
+      standard_component_category_id: "h21.component.cap-beam",
+      resolved_structure_part: "下部结构",
+      review_status: "已修改",
+    });
+  });
+
   it("edit_defect_field updates a whitelisted content field and auto-flips 已确认 -> 已修改", () => {
     const state = makeState({ defects: [makeDefect({ review_status: "已确认" })] });
 

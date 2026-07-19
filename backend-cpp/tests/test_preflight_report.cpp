@@ -366,6 +366,19 @@ TEST(PreflightReportTest, DefectMissingRequiredFieldDescription) {
     ASSERT_TRUE(has_blocking_code(report, "defect_missing_required_field"));
 }
 
+TEST(PreflightReportTest, DefectScaleRequiredBeforeFormalConfirmation) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["defects"][0]["defect_scale"] = Json::Value(Json::nullValue);
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_FALSE(report.can_confirm);
+    const auto* issue = find_blocking(report, "defect_scale_required");
+    ASSERT_NE(issue, nullptr);
+    EXPECT_EQ(issue->target_candidate_id, "defect_0001");
+}
+
 TEST(PreflightReportTest, DefectMissingRequiredFieldSkippedWhenPending) {
     auto data = valid_data();
     // Leave defect as 待确认 (default) with a blank required field; the missing-field

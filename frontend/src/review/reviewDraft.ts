@@ -34,14 +34,35 @@ import { parseMeasurements } from "./measurementParser";
 // 绑死（见下方 union），改为在每个变体里内联 target 形状。
 export type RatingTarget = "overall" | { part: RatingStructurePart } | { evaluation: number };
 
+export interface DefectComponentSelection {
+  componentName: string;
+  componentNumber: string;
+  bridgeComponentId: string;
+  standardComponentCategoryId: string;
+  resolvedStructurePart: StructurePart;
+}
+
+export interface ManualDefectInput extends DefectComponentSelection {
+  defectLocation: string;
+  defectType: string;
+  defectDescription: string;
+  defectScale?: number | null;
+}
+
+export type CandidateIdFactory = () => string;
+
 // 数值字段的 value 一律要求 number，字符串字段一律要求 string——把 field↔value 的合法组合
 // 编译期锁死（模块 05 §8.1/§8.3 可编辑字段白名单）。HTML input 拿到的是字符串，由调用方
 // （UI 组件，Task 13/14）在 dispatch 前用 Number(...) 转好再传进来，reducer 不再做运行时兜底转换。
 export type ReviewDraftAction =
+  | { type: "add_defect"; input: ManualDefectInput }
+  | { type: "delete_defect"; candidateId: string }
+  | { type: "link_defect_component"; candidateId: string; component: DefectComponentSelection }
   // §8.1 病害候选可编辑字段（measurement_text 走它自己的 edit_measurement_text action）。
   | { type: "edit_defect_field"; candidateId: string; field: "structure_part"; value: StructurePart }
   | { type: "edit_defect_field"; candidateId: string; field: "component_name"; value: string }
   | { type: "edit_defect_field"; candidateId: string; field: "component_alias"; value: string | null }
+  | { type: "edit_defect_field"; candidateId: string; field: "component_number"; value: string | null }
   | { type: "edit_defect_field"; candidateId: string; field: "defect_location"; value: string }
   // 合同 1.2：规范标度与病害扣分。标度是提示级别 severity 之外的独立规范字段；
   // 扣分编辑会触发所属构件评分候选的联动重算（见 recomputeComponentRatings）。
@@ -128,6 +149,8 @@ function applyDefectContentEdit(defect: DefectCandidate, action: EditDefectConte
       return { ...defect, component_name: action.value, review_status, group_review_status: "待确认" };
     case "component_alias":
       return { ...defect, component_alias: action.value, review_status, group_review_status: "待确认" };
+    case "component_number":
+      return { ...defect, component_number: action.value, review_status, group_review_status: "待确认" };
     case "defect_location":
       return { ...defect, defect_location: action.value, review_status, group_review_status: "待确认" };
     case "defect_scale":
@@ -321,8 +344,99 @@ function updateComponentRating(
   };
 }
 
-export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: ReviewDraftAction): BridgeAnnualInspectionData {
+function defaultCandidateIdFactory(): string {
+  return `manual_defect_${crypto.randomUUID()}`;
+}
+
+function nextUnusedCandidateId(
+  state: BridgeAnnualInspectionData,
+  factory: CandidateIdFactory,
+  issuedCandidateIds: Set<string>,
+): string {
+  const existing = new Set(state.defects.map((defect) => defect.candidate_id));
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const candidateId = factory();
+    if (candidateId.startsWith("manual_defect_") && !existing.has(candidateId) && !issuedCandidateIds.has(candidateId)) {
+      issuedCandidateIds.add(candidateId);
+      return candidateId;
+    }
+  }
+  throw new Error("无法生成唯一的人工病害编号");
+}
+
+function reduceReviewDraft(
+  state: BridgeAnnualInspectionData,
+  action: ReviewDraftAction,
+  candidateIdFactory: CandidateIdFactory,
+  issuedCandidateIds: Set<string>,
+): BridgeAnnualInspectionData {
   switch (action.type) {
+    case "add_defect": {
+      const input = action.input;
+      const defect: DefectCandidate = {
+        candidate_id: nextUnusedCandidateId(state, candidateIdFactory, issuedCandidateIds),
+        source_structure_part: null,
+        component_name: input.componentName,
+        component_number: input.componentNumber,
+        bridge_component_id: input.bridgeComponentId,
+        standard_component_category_id: input.standardComponentCategoryId,
+        resolved_structure_part: input.resolvedStructurePart,
+        defect_location: input.defectLocation,
+        defect_type: input.defectType,
+        defect_description: input.defectDescription,
+        defect_scale: input.defectScale ?? null,
+        quantity_text: null,
+        measurement_text: null,
+        measurements: [],
+        photo_numbers: [],
+        group_review_status: "待确认",
+        confirmed_missing_photo_numbers: [],
+        severity: null,
+        remark: null,
+        source_ref: { source_type: "manual" },
+        confidence: 1,
+        review_status: "已修改",
+        review_note: null,
+        warnings: [],
+      };
+      return recomputeComponentRatings({ ...state, defects: [...state.defects, defect] });
+    }
+
+    case "delete_defect": {
+      if (!state.defects.some((defect) => defect.candidate_id === action.candidateId)) return state;
+      return recomputeComponentRatings({
+        ...state,
+        defects: state.defects.filter((defect) => defect.candidate_id !== action.candidateId),
+        photos: state.photos.map((photo) =>
+          photo.linked_defect_candidate_id === action.candidateId
+            ? {
+                ...photo,
+                linked_defect_candidate_id: null,
+                match_status: "未关联",
+                review_status: "已修改",
+              }
+            : photo
+        ),
+      });
+    }
+
+    case "link_defect_component": {
+      const component = action.component;
+      return recomputeComponentRatings({
+        ...state,
+        defects: updateDefect(state.defects, action.candidateId, (defect) => ({
+          ...defect,
+          component_name: component.componentName,
+          component_number: component.componentNumber,
+          bridge_component_id: component.bridgeComponentId,
+          standard_component_category_id: component.standardComponentCategoryId,
+          resolved_structure_part: component.resolvedStructurePart,
+          review_status: nextStatusAfterContentEdit(defect.review_status),
+          group_review_status: "待确认",
+        })),
+      });
+    }
+
     case "edit_defect_field": {
       const { candidateId } = action;
       if (action.field === "review_status") {
@@ -581,3 +695,11 @@ export function reviewDraftReducer(state: BridgeAnnualInspectionData, action: Re
     }
   }
 }
+
+export function createReviewDraftReducer(candidateIdFactory: CandidateIdFactory = defaultCandidateIdFactory) {
+  const issuedCandidateIds = new Set<string>();
+  return (state: BridgeAnnualInspectionData, action: ReviewDraftAction): BridgeAnnualInspectionData =>
+    reduceReviewDraft(state, action, candidateIdFactory, issuedCandidateIds);
+}
+
+export const reviewDraftReducer = createReviewDraftReducer();

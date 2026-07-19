@@ -279,10 +279,16 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                 // jsonb 列不保留输入格式，紧凑序列化即可，避免 toStyledString 的缩进开销。
                 Json::StreamWriterBuilder writer_builder;
                 writer_builder["indentation"] = "";
+                const auto stored_draft = parse_parsed_result_json(detail->parsed_result_json);
+                const auto audit_event = review::build_defect_change_audit_event(
+                    stored_draft, draft_to_save, user->username);
+                const auto audit_json = audit_event.isNull()
+                    ? std::string()
+                    : Json::writeString(writer_builder, audit_event);
                 const db::EditLockCredentials edit_lock{
                     user->id, user->session_id, edit_lock_token_from_request(request)};
                 const bool saved = repository.save_review_draft(
-                    import_record_id, Json::writeString(writer_builder, draft_to_save), edit_lock);
+                    import_record_id, Json::writeString(writer_builder, draft_to_save), edit_lock, audit_json);
                 if (!saved) {
                     // UPDATE 带状态谓词未命中：记录状态在加载后被并发改变（已取消/已确认），拒绝写入。
                     respond_json(

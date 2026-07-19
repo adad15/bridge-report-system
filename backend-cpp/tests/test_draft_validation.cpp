@@ -70,6 +70,45 @@ TEST(DraftValidationTest, RejectsWhenImportContextSystemNumberMismatches) {
     EXPECT_EQ(result.code, "import_context_mismatch");
 }
 
+TEST(DraftValidationTest, RejectsDuplicateDefectCandidateIdsInVersionTwo) {
+    auto body = read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    body["defects"].append(body["defects"][0]);
+
+    const auto result = bridge_report::review::validate_review_draft(body, kSystemNumber, "待校对");
+
+    EXPECT_FALSE(result.ok);
+    EXPECT_EQ(result.code, "contract_validation_failed");
+}
+
+TEST(DraftValidationTest, RejectsForgedResolvedStructureWithoutComponentMapping) {
+    auto body = read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    body["defects"][0]["bridge_component_id"] = Json::Value(Json::nullValue);
+    body["defects"][0]["standard_component_category_id"] = Json::Value(Json::nullValue);
+    body["defects"][0]["resolved_structure_part"] = "上部结构";
+
+    const auto result = bridge_report::review::validate_review_draft(body, kSystemNumber, "待校对");
+
+    EXPECT_FALSE(result.ok);
+    EXPECT_EQ(result.code, "defect_component_mapping_invalid");
+}
+
+TEST(DraftValidationTest, BuildsServerDerivedAuditSummaryForManualAddsAndDeletes) {
+    auto stored = read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    auto next = stored;
+    const auto deleted_id = stored["defects"][0]["candidate_id"].asString();
+    next["defects"].clear();
+    auto added = stored["defects"][0];
+    added["candidate_id"] = "manual_defect_uuid_1";
+    next["defects"].append(added);
+
+    const auto event = bridge_report::review::build_defect_change_audit_event(stored, next, "editor");
+
+    ASSERT_TRUE(event.isObject());
+    EXPECT_EQ(event["actor_username"].asString(), "editor");
+    EXPECT_EQ(event["added_candidate_ids"][0].asString(), "manual_defect_uuid_1");
+    EXPECT_EQ(event["deleted_candidate_ids"][0].asString(), deleted_id);
+}
+
 // ---------------------------------------------------------------------------
 // 重开校对（warnings_only）范围校验与警告病害判定。
 // ---------------------------------------------------------------------------
@@ -151,6 +190,19 @@ TEST(WarningsOnlyScopeTest, RejectsAddingOrRemovingDefects) {
 
     EXPECT_FALSE(bridge_report::review::validate_warnings_only_scope(stored, removed).ok);
     EXPECT_FALSE(bridge_report::review::validate_warnings_only_scope(stored, added).ok);
+}
+
+TEST(WarningsOnlyScopeTest, RejectsChangingHiddenComponentMappingFields) {
+    const auto stored = make_draft({make_defect("defect_0001", true, 35.0)});
+    auto next = stored;
+    next["defects"][0]["bridge_component_id"] = "forged-component";
+    next["defects"][0]["standard_component_category_id"] = "forged-category";
+    next["defects"][0]["resolved_structure_part"] = "下部结构";
+
+    const auto result = bridge_report::review::validate_warnings_only_scope(stored, next);
+
+    EXPECT_FALSE(result.ok);
+    EXPECT_EQ(result.code, "reopen_scope_violation");
 }
 
 TEST(WarningsOnlyScopeTest, TreatsIntegralRealAndIntAsEqual) {

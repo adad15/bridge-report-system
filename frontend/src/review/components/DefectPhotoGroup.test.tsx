@@ -35,16 +35,31 @@ function data(): BridgeAnnualInspectionData {
 }
 
 describe("DefectPhotoGroup", () => {
-  it("keeps all disease fields and shows one active large photo", () => {
+  it("shows required disease fields without rendering the internal structure part", () => {
     const draft = data();
+    draft.defects[0].component_number = "2-1#板";
     render(
       <table><DefectPhotoGroup draft={draft} defect={draft.defects[0]} importRecordId="record-1" baseUrl="http://backend" expanded onToggle={vi.fn()} dispatch={vi.fn()} /></table>
     );
 
-    for (const label of ["结构部位", "构件类别", "构件编号", "位置", "病害类型", "数量", "尺寸原文", "照片编号", "校对状态", "备注"]) {
+    for (const label of ["构件类别", "构件编号", "位置", "病害类型", "病害描述", "数量", "尺寸原文", "照片编号", "校对状态", "备注"]) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
+    expect(screen.queryByLabelText("结构部位")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("构件编号")).toHaveValue("2-1#板");
     expect(screen.getAllByRole("img", { name: /照片/ }).filter((item) => item.classList.contains("active"))).toHaveLength(1);
+  });
+
+  it("dispatches delete_defect from the explicit delete control", () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const draft = data();
+    const dispatch = vi.fn();
+    render(
+      <table><DefectPhotoGroup draft={draft} defect={draft.defects[0]} importRecordId="record-1" baseUrl="http://backend" expanded={false} onToggle={vi.fn()} dispatch={dispatch} allowDelete /></table>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "删除病害" }));
+    expect(dispatch).toHaveBeenCalledWith({ type: "delete_defect", candidateId: "defect_0001" });
   });
 
   it("switches the large photo without dispatching a business action", () => {

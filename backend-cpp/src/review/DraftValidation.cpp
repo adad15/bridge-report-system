@@ -78,7 +78,7 @@ std::map<std::string, const Json::Value*> index_defects_by_candidate_id(const Js
 
 const std::set<std::string>& warning_defect_editable_fields() {
     static const std::set<std::string> fields = {
-        "structure_part", "component_name", "component_alias", "defect_location",
+        "structure_part", "component_name", "component_alias", "component_number", "defect_location",
         "defect_scale", "defect_deduction", "defect_type", "defect_description",
         "quantity_text", "measurement_text", "measurements", "review_status",
         "group_review_status", "review_note",
@@ -206,6 +206,29 @@ DraftValidationResult validate_review_draft(
         return result;
     }
 
+    if (mode == contracts::AnnualInspectionValidationMode::FinalVersion2 && body["defects"].isArray()) {
+        for (Json::ArrayIndex index = 0; index < body["defects"].size(); ++index) {
+            const auto& defect = body["defects"][index];
+            const auto has_non_blank_string = [&](const char* field) {
+                return defect.isMember(field) && defect[field].isString() && !defect[field].asString().empty();
+            };
+            const bool has_component_id = has_non_blank_string("bridge_component_id");
+            const bool has_category_id = has_non_blank_string("standard_component_category_id");
+            const bool has_resolved_part = has_non_blank_string("resolved_structure_part");
+            if ((has_component_id || has_category_id || has_resolved_part)
+                && !(has_component_id && has_category_id && has_resolved_part)) {
+                result.ok = false;
+                result.code = "defect_component_mapping_invalid";
+                result.message = "病害的实际构件、规范构件类别和内部结构分部必须成组提供。";
+                result.issues.push_back({
+                    "defects[" + std::to_string(index) + "]",
+                    "bridge_component_id、standard_component_category_id、resolved_structure_part 不完整。"
+                });
+                return result;
+            }
+        }
+    }
+
     const auto& import_context = body["import_context"];
     const auto body_system_number = import_context.isObject() && import_context.isMember("import_record_system_number")
         ? import_context["import_record_system_number"].asString()
@@ -302,6 +325,33 @@ DraftValidationResult validate_warnings_only_scope(
         }
     }
     return result;
+}
+
+Json::Value build_defect_change_audit_event(
+    const Json::Value& stored_draft,
+    const Json::Value& new_draft,
+    const std::string& actor_username
+) {
+    const auto stored = index_defects_by_candidate_id(stored_draft);
+    const auto current = index_defects_by_candidate_id(new_draft);
+    Json::Value added(Json::arrayValue);
+    Json::Value deleted(Json::arrayValue);
+    for (const auto& [candidate_id, defect] : current) {
+        (void)defect;
+        if (stored.find(candidate_id) == stored.end()) added.append(candidate_id);
+    }
+    for (const auto& [candidate_id, defect] : stored) {
+        (void)defect;
+        if (current.find(candidate_id) == current.end()) deleted.append(candidate_id);
+    }
+    if (added.empty() && deleted.empty()) return Json::Value(Json::nullValue);
+
+    Json::Value event(Json::objectValue);
+    event["event_type"] = "draft_defect_structure_change";
+    event["actor_username"] = actor_username;
+    event["added_candidate_ids"] = std::move(added);
+    event["deleted_candidate_ids"] = std::move(deleted);
+    return event;
 }
 
 }  // 命名空间 bridge_report::review

@@ -91,7 +91,8 @@ public:
     bool save_review_draft(
         const std::string& import_record_id,
         const std::string& parsed_json_text,
-        const std::optional<EditLockCredentials>& edit_lock = std::nullopt
+        const std::optional<EditLockCredentials>& edit_lock = std::nullopt,
+        const std::string& defect_change_audit_json = ""
     );
 
     /**

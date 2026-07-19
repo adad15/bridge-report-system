@@ -40,6 +40,15 @@ import { deriveReviewSession, shouldClearDirtyAfterSave } from "../review/review
 import { reviewTargetId } from "../review/reviewNavigation";
 import { bridgeOverviewPath, inspectionWorkspacePath } from "../workspace/workspaceState";
 
+export function canModifyDefectStructure(
+  actionsDisabled: boolean,
+  reopenScope: "warnings_only" | "full" | null | undefined,
+  isAdmin: boolean,
+): boolean {
+  if (actionsDisabled || reopenScope === "warnings_only") return false;
+  return reopenScope !== "full" || isAdmin;
+}
+
 export function ReviewWorkspacePage() {
   const { importRecordId } = useParams<{ importRecordId: string }>();
 
@@ -709,6 +718,7 @@ function ReviewWorkspaceLoaded({
               draft={draft}
               importRecordId={importRecordId}
               baseUrl={backendBaseUrl}
+              bridgeId={response.bridge.id}
               selectedCandidateId={expandedDefectId}
               selectedPhotoCandidateId={activePhotoCandidateId}
               onSelect={(candidateId) => {
@@ -718,6 +728,7 @@ function ReviewWorkspaceLoaded({
               }}
               dispatch={sectionDispatch}
               disabled={actionsDisabled}
+              allowStructureChanges={canModifyDefectStructure(actionsDisabled, reopenState?.scope, isAdmin)}
               isDefectEditable={isDefectEditable}
             />
           ) : null}

@@ -12,7 +12,20 @@ import {
 } from "../api/reviewApi";
 import { ApiError } from "../api/apiClient";
 import { data } from "../review/testFixtures";
-import { ReviewWorkspacePage } from "./ReviewWorkspacePage";
+import { canModifyDefectStructure, ReviewWorkspacePage } from "./ReviewWorkspacePage";
+
+describe("canModifyDefectStructure", () => {
+  it("allows all locked initial editors and only administrators in a full reopen", () => {
+    expect(canModifyDefectStructure(false, null, false)).toBe(true);
+    expect(canModifyDefectStructure(false, "full", true)).toBe(true);
+    expect(canModifyDefectStructure(false, "full", false)).toBe(false);
+  });
+
+  it("rejects warnings-only, read-only, busy, or missing-lock sessions", () => {
+    expect(canModifyDefectStructure(false, "warnings_only", true)).toBe(false);
+    expect(canModifyDefectStructure(true, null, true)).toBe(false);
+  });
+});
 
 const renderCounters = vi.hoisted(() => ({
   defectsSection: 0,
