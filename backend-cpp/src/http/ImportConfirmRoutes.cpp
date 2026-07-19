@@ -8,6 +8,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/ReviewRepository.hpp"
+#include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/EditLockRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/EditLockRoutes.hpp"
@@ -61,8 +62,17 @@ void register_preflight_confirm_route(const drogon::orm::DbClientPtr& db_client)
                 const bool has_current_annual_facts = effective_year.has_value()
                     && repository.has_current_annual_facts(detail->bridge_id, *effective_year);
 
-                const auto context =
-                    review::build_preflight_context(*detail, effective_year, has_current_annual_facts);
+                db::ComponentInventoryRepository inventory_repository(db_client);
+                const auto inventory = inventory_repository.get_latest_revision(detail->bridge_id);
+                const auto context = review::build_preflight_context(
+                    *detail,
+                    effective_year,
+                    has_current_annual_facts,
+                    inventory.has_value()
+                        ? std::optional<std::string>(inventory->id) : std::nullopt,
+                    inventory.has_value()
+                        ? std::optional<bool>(inventory->status == "已确认")
+                        : std::optional<bool>(false));
                 const auto report = review::build_preflight_report(parsed_result, context);
 
                 respond_json(callback, report.to_json());

@@ -93,6 +93,27 @@ void require_optional_nullable_string(
     }
 }
 
+void validate_optional_string_array(
+    const Json::Value& object,
+    const std::string& path,
+    const std::string& member,
+    ContractValidationResult& result) {
+    if (!object.isObject() || !object.isMember(member)) return;
+    const auto& values = object[member];
+    if (!values.isArray()) {
+        result.add_issue(member_path(path, member), "must be an array");
+        return;
+    }
+    std::unordered_set<std::string> unique;
+    for (Json::ArrayIndex index = 0; index < values.size(); ++index) {
+        if (!values[index].isString()) {
+            result.add_issue(indexed_path(member_path(path, member), index), "must be a string");
+        } else if (!unique.insert(values[index].asString()).second) {
+            result.add_issue(member_path(path, member), "must contain unique values");
+        }
+    }
+}
+
 void require_optional_positive_integer(
     const Json::Value& object,
     const std::string& path,
@@ -261,6 +282,21 @@ void validate_defect(
     require_optional_nullable_string(defect, path, "bridge_component_id", result);
     require_optional_nullable_string(
         defect, path, "standard_component_category_id", result);
+    require_optional_nullable_string(
+        defect, path, "component_inventory_revision_id", result);
+    require_optional_nullable_string(
+        defect, path, "component_match_confirmed_by", result);
+    validate_optional_string_array(
+        defect, path, "component_match_candidate_ids", result);
+    if (defect.isMember("component_match_method") &&
+        !defect["component_match_method"].isNull()) {
+        require_enum(
+            defect,
+            path,
+            "component_match_method",
+            {"exact", "confirmed_alias", "normalized_candidate", "manual"},
+            result);
+    }
     if (defect.isMember("source_structure_part") &&
         !defect["source_structure_part"].isNull()) {
         require_enum(

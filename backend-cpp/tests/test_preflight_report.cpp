@@ -379,6 +379,62 @@ TEST(PreflightReportTest, DefectScaleRequiredBeforeFormalConfirmation) {
     EXPECT_EQ(issue->target_candidate_id, "defect_0001");
 }
 
+TEST(PreflightReportTest, UnconfirmedInventoryBlocksFormalConfirmation) {
+    auto data = read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    data["defects"][0]["review_status"] = "已确认";
+    data["defects"][0]["group_review_status"] = "已确认";
+    data["photos"][0]["review_status"] = "已确认";
+    data["photos"][0]["match_status"] = "已确认";
+    auto context = base_context();
+    context.record_system_number =
+        data["import_context"]["import_record_system_number"].asString();
+    context.bridge_system_number =
+        data["bridge_check"]["selected_bridge_system_number"].asString();
+    context.component_inventory_confirmed = false;
+
+    const auto report = build_preflight_report(data, context);
+
+    EXPECT_TRUE(has_blocking_code(report, "component_inventory_unconfirmed"));
+}
+
+TEST(PreflightReportTest, DefectMustLinkTheLatestConfirmedInventoryRevision) {
+    auto data = read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    data["defects"][0]["review_status"] = "已确认";
+    data["defects"][0]["group_review_status"] = "已确认";
+    data["photos"][0]["review_status"] = "已确认";
+    data["photos"][0]["match_status"] = "已确认";
+    auto context = base_context();
+    context.record_system_number =
+        data["import_context"]["import_record_system_number"].asString();
+    context.bridge_system_number =
+        data["bridge_check"]["selected_bridge_system_number"].asString();
+    context.component_inventory_confirmed = true;
+    context.component_inventory_revision_id = "revision-latest";
+
+    auto report = build_preflight_report(data, context);
+    EXPECT_TRUE(has_blocking_code(report, "defect_component_match_required"));
+
+    auto& defect = data["defects"][0];
+    defect["bridge_component_id"] = "component-1";
+    defect["standard_component_category_id"] = "main-girder";
+    defect["resolved_structure_part"] = "上部结构";
+    defect["component_inventory_revision_id"] = "revision-latest";
+    report = build_preflight_report(data, context);
+    EXPECT_FALSE(has_blocking_code(report, "defect_component_match_required"));
+}
+
+TEST(PreflightReportTest, LegacyContractDoesNotRequireVersion2ComponentAssociations) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    auto context = base_context();
+    context.component_inventory_confirmed = false;
+
+    const auto report = build_preflight_report(data, context);
+
+    EXPECT_FALSE(has_blocking_code(report, "component_inventory_unconfirmed"));
+    EXPECT_FALSE(has_blocking_code(report, "defect_component_match_required"));
+}
+
 TEST(PreflightReportTest, DefectMissingRequiredFieldSkippedWhenPending) {
     auto data = valid_data();
     // Leave defect as 待确认 (default) with a blank required field; the missing-field

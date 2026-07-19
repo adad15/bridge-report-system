@@ -222,11 +222,29 @@ void append_components_and_defects(
             continue;
         }
 
-        const auto structure_part = string_member_or_empty(defect, "structure_part");
+        const auto linked_component_id = optional_string_member(defect, "bridge_component_id");
+        const auto structure_part = linked_component_id.has_value()
+            ? string_member_or_empty(defect, "resolved_structure_part")
+            : string_member_or_empty(defect, "structure_part");
         const auto component_name = string_member_or_empty(defect, "component_name");
         const auto component_alias = optional_string_member(defect, "component_alias");
-        const auto key =
-            ensure_component_in_plan(plan, seen_component_keys, structure_part, component_name, component_alias);
+        std::string key;
+        if (linked_component_id.has_value() && !linked_component_id->empty()) {
+            key = "inventory:" + *linked_component_id;
+            if (seen_component_keys.insert(key).second) {
+                ComponentPlan component;
+                component.existing_bridge_component_id = linked_component_id;
+                component.structure_part = structure_part;
+                component.component_type = component_name;
+                component.business_component_code =
+                    string_member_or_empty(defect, "component_number");
+                component.normalized_component_key = key;
+                plan.components.push_back(std::move(component));
+            }
+        } else {
+            key = ensure_component_in_plan(
+                plan, seen_component_keys, structure_part, component_name, component_alias);
+        }
 
         DefectPlan defect_plan;
         defect_plan.candidate_id = candidate_id_of(defect);

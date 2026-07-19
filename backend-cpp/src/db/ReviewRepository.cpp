@@ -140,6 +140,20 @@ struct UpsertedComponent {
 UpsertedComponent upsert_component(
     const TransactionPtr& tx, const std::string& bridge_id, const review::ComponentPlan& component
 ) {
+    if (component.existing_bridge_component_id.has_value()) {
+        const auto owned = tx->execSqlSync(
+            "select 1 from bridge_components where id=$1::uuid and bridge_id=$2::uuid",
+            *component.existing_bridge_component_id,
+            bridge_id);
+        if (owned.empty()) {
+            throw std::runtime_error(
+                "confirm_annual_facts: linked bridge component is not owned by bridge");
+        }
+        return UpsertedComponent{
+            *component.existing_bridge_component_id,
+            component.component_type,
+            component.business_component_code};
+    }
     const auto existing = tx->execSqlSync(
         "select id from bridge_components where bridge_id = $1::uuid and normalized_component_key = $2",
         bridge_id,
@@ -783,6 +797,15 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         context.bridge_system_number = record_row["bridge_number"].as<std::string>();
         context.inspection_year = inspection_year;
         context.has_current_annual_facts = !current.empty() && current[0]["found"].as<bool>();
+        const auto inventory = tx->execSqlSync(
+            "select id::text,status from bridge_component_inventory_revisions "
+            "where bridge_id=$1::uuid order by (status='草稿') desc,revision_number desc limit 1",
+            bridge_id);
+        context.component_inventory_confirmed =
+            !inventory.empty() && inventory[0]["status"].as<std::string>() == "已确认";
+        if (!inventory.empty()) {
+            context.component_inventory_revision_id = inventory[0]["id"].as<std::string>();
+        }
         const auto preflight = review::build_preflight_report(data, context);
         if (!preflight.can_confirm) {
             auto failed = fail("preflight_failed", "最新草稿未通过入库前检查。");
@@ -831,12 +854,14 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         // 无论 target_year_id 来自“复用已挂载行”“新建占位行”还是“修订新建行”都统一在这一步收口。
         const auto year_update_result = tx->execSqlSync(
             "update inspection_years "
-            "set status = '已确认', is_current = true, overall_score = $2, overall_grade = $3, updated_at = now() "
+            "set status = '已确认', is_current = true, overall_score = $2, overall_grade = $3, "
+            "component_inventory_revision_id=nullif($4,'')::uuid, updated_at = now() "
             "where id = $1::uuid "
             "returning version_number",
             target_year_id,
             plan.overall_score,
-            plan.overall_grade
+            plan.overall_grade,
+            context.component_inventory_revision_id.value_or("")
         );
         if (year_update_result.empty()) {
             throw std::runtime_error("confirm_annual_facts: inspection_years row vanished: " + target_year_id);

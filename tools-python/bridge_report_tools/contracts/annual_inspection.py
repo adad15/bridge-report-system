@@ -131,6 +131,14 @@ class DefectCandidate(ContractModel):
     bridge_component_id: str | None = None
     standard_component_category_id: str | None = None
     resolved_structure_part: StructurePart | None = None
+    component_inventory_revision_id: str | None = None
+    component_match_candidate_ids: list[str] = Field(
+        default_factory=list, json_schema_extra={"uniqueItems": True}
+    )
+    component_match_method: Literal[
+        "exact", "confirmed_alias", "normalized_candidate", "manual"
+    ] | None = None
+    component_match_confirmed_by: str | None = None
     defect_type: str
     defect_location: str
     defect_scale: int | None = Field(default=None, gt=0, strict=True)
@@ -156,6 +164,13 @@ class DefectCandidate(ContractModel):
     def require_unique_missing_numbers(cls, value: list[str]) -> list[str]:
         if len(value) != len(set(value)):
             raise ValueError("confirmed_missing_photo_numbers must be unique")
+        return value
+
+    @field_validator("component_match_candidate_ids")
+    @classmethod
+    def require_unique_component_match_candidates(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("component_match_candidate_ids must be unique")
         return value
 
 

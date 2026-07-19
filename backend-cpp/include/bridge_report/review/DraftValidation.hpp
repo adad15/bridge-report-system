@@ -5,6 +5,8 @@
 
 #include <json/value.h>
 
+#include "bridge_report/inventory/ComponentInventoryModels.hpp"
+
 namespace bridge_report::review {
 
 /**
@@ -43,6 +45,12 @@ struct DraftValidationResult {
     const Json::Value& body,
     const std::string& record_system_number,
     const std::string& record_import_status
+);
+
+/** 校验病害中的实际构件 ID、规范类别和内部结构部位均来自当前桥梁最新台账。 */
+[[nodiscard]] DraftValidationResult validate_defect_component_associations(
+    const Json::Value& body,
+    const std::optional<inventory::InventoryRevision>& latest_revision
 );
 
 /**

@@ -40,6 +40,10 @@ const validData: BridgeAnnualInspectionDataV2 = {
       bridge_component_id: null,
       standard_component_category_id: null,
       resolved_structure_part: null,
+      component_inventory_revision_id: null,
+      component_match_candidate_ids: [],
+      component_match_method: null,
+      component_match_confirmed_by: null,
       defect_type: "裂缝",
       defect_location: "第二跨左幅梁底",
       defect_scale: 2,
@@ -171,6 +175,30 @@ describe("isBridgeAnnualInspectionData 2.0", () => {
         ],
       }),
     ).toBe(true);
+  });
+
+  it("accepts audited component matching fields", () => {
+    const data = cloneValidData();
+    Object.assign(data.defects[0], {
+      bridge_component_id: "component-1",
+      standard_component_category_id: "category-1",
+      resolved_structure_part: "上部结构",
+      component_inventory_revision_id: "revision-1",
+      component_match_candidate_ids: ["component-1"],
+      component_match_method: "manual",
+      component_match_confirmed_by: "editor",
+    });
+    expect(isBridgeAnnualInspectionData(data)).toBe(true);
+  });
+
+  it("rejects duplicate candidates and unknown component match methods", () => {
+    const duplicate = cloneValidData();
+    duplicate.defects[0].component_match_candidate_ids = ["component-1", "component-1"];
+    expect(isBridgeAnnualInspectionData(duplicate)).toBe(false);
+
+    const unknown = cloneValidData();
+    Object.assign(unknown.defects[0], { component_match_method: "fuzzy" });
+    expect(isBridgeAnnualInspectionData(unknown)).toBe(false);
   });
 
   it("accepts a manual source without Word coordinates", () => {

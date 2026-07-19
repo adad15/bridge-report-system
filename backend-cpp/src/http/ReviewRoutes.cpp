@@ -11,6 +11,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/ReviewRepository.hpp"
+#include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/EditLockRepository.hpp"
 #include "bridge_report/archive/ArchivePaths.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
@@ -20,6 +21,7 @@
 #include "bridge_report/review/DraftValidation.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
 #include "bridge_report/review/ReviewStatistics.hpp"
+#include "bridge_report/inventory/ComponentInventoryModels.hpp"
 
 namespace bridge_report::http {
 
@@ -145,6 +147,11 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
                 body["edit_lock"] = active_lock.has_value()
                     ? edit_lock_info_to_json(*active_lock, current_user.has_value() ? current_user->id : std::string())
                     : Json::Value(Json::nullValue);
+                db::ComponentInventoryRepository inventory_repository(db_client);
+                const auto inventory = inventory_repository.get_latest_revision(detail->bridge_id);
+                body["component_inventory"] = inventory.has_value()
+                    ? inventory::inventory_revision_json(*inventory)
+                    : Json::Value(Json::nullValue);
 
                 respond_json(callback, body);
             } catch (const drogon::orm::DrogonDbException&) {
@@ -253,6 +260,28 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                 }
 
                 Json::Value draft_to_save = *body_json;
+
+                db::ComponentInventoryRepository inventory_repository(db_client);
+                const auto latest_inventory = inventory_repository.get_latest_revision(detail->bridge_id);
+                const auto association_validation =
+                    review::validate_defect_component_associations(draft_to_save, latest_inventory);
+                if (!association_validation.ok) {
+                    respond_json(
+                        callback,
+                        make_draft_validation_error_body(association_validation),
+                        drogon::k400BadRequest);
+                    return;
+                }
+
+                for (auto& defect : draft_to_save["defects"]) {
+                    const bool manual = defect["component_match_method"].isString() &&
+                        defect["component_match_method"].asString() == "manual" &&
+                        defect["bridge_component_id"].isString() &&
+                        !defect["bridge_component_id"].asString().empty();
+                    defect["component_match_confirmed_by"] = manual
+                        ? Json::Value(user->username)
+                        : Json::Value(Json::nullValue);
+                }
 
                 // 重开态的范围与角色校验（后端兜底，不依赖前端按钮显隐）：
                 //   full 重开由管理员发起，其草稿保存同样只认管理员；

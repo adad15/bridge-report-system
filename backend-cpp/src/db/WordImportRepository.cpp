@@ -2,6 +2,8 @@
 
 #include "bridge_report/archive/ArchivePaths.hpp"
 #include "bridge_report/db/CommitLatch.hpp"
+#include "bridge_report/db/ComponentInventoryRepository.hpp"
+#include "bridge_report/inventory/ComponentMatcher.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -23,6 +25,103 @@ std::string compact_json(const Json::Value& value) {
 std::string parser_member(const Json::Value& data, const char* member) {
     return data["contract"].isObject() && data["contract"][member].isString()
         ? data["contract"][member].asString() : std::string();
+}
+
+std::string contract_structure_part(const std::string& value) {
+    if (value == "superstructure") return "上部结构";
+    if (value == "substructure") return "下部结构";
+    if (value == "deck_system") return "桥面系";
+    if (value == "overall") return "全桥";
+    return "其他";
+}
+
+void append_match_warning(
+    Json::Value& defect,
+    const std::string& code,
+    const std::string& message) {
+    if (!defect["warnings"].isArray()) defect["warnings"] = Json::Value(Json::arrayValue);
+    Json::Value warning(Json::objectValue);
+    warning["code"] = code;
+    warning["message"] = message;
+    warning["severity"] = "warning";
+    warning["target_candidate_id"] = defect["candidate_id"];
+    defect["warnings"].append(std::move(warning));
+}
+
+Json::Value match_imported_defects(
+    const std::shared_ptr<drogon::orm::Transaction>& tx,
+    const std::string& bridge_id,
+    const Json::Value& source) {
+    Json::Value matched = source;
+    if (!matched["defects"].isArray()) return matched;
+
+    ComponentInventoryRepository inventories(tx);
+    const auto revision = inventories.get_latest_revision(bridge_id);
+    if (!revision.has_value()) {
+        for (auto& defect : matched["defects"]) {
+            defect["component_match_candidate_ids"] = Json::Value(Json::arrayValue);
+            defect["component_match_method"] = Json::Value(Json::nullValue);
+            defect["component_inventory_revision_id"] = Json::Value(Json::nullValue);
+            defect["component_match_confirmed_by"] = Json::Value(Json::nullValue);
+            append_match_warning(
+                defect,
+                "defect_component_match_required",
+                "尚未建立构件台账，请选择实际构件后再正式确认。");
+        }
+        return matched;
+    }
+
+    std::vector<inventory::ConfirmedComponentAlias> aliases;
+    const auto alias_rows = tx->execSqlSync(
+        "select ca.bridge_component_id::text,ca.alias_text from component_aliases ca "
+        "join bridge_components c on c.id=ca.bridge_component_id "
+        "where c.bridge_id=$1::uuid and ca.is_manually_confirmed",
+        bridge_id);
+    for (const auto& row : alias_rows) {
+        aliases.push_back({
+            row["bridge_component_id"].as<std::string>(),
+            row["alias_text"].as<std::string>()});
+    }
+
+    for (auto& defect : matched["defects"]) {
+        const inventory::DefectComponentText text{
+            defect["component_number"].isString()
+                ? defect["component_number"].asString() : std::string(),
+            defect["component_name"].isString()
+                ? defect["component_name"].asString() : std::string()};
+        const auto result = inventory::match_defect_component(text, *revision, aliases);
+        defect["component_inventory_revision_id"] = revision->id;
+        defect["component_match_confirmed_by"] = Json::Value(Json::nullValue);
+        defect["component_match_candidate_ids"] = Json::Value(Json::arrayValue);
+        for (const auto& candidate_id : result.candidate_component_ids) {
+            defect["component_match_candidate_ids"].append(candidate_id);
+        }
+        defect["component_match_method"] =
+            result.method == inventory::ComponentMatchMethod::None
+                ? Json::Value(Json::nullValue)
+                : Json::Value(inventory::component_match_method_name(result.method));
+
+        if (result.matched_entry.has_value() && result.matched_mapping.has_value()) {
+            defect["bridge_component_id"] = result.matched_entry->bridge_component_id;
+            defect["standard_component_category_id"] =
+                result.matched_mapping->standard_component_category_id;
+            defect["resolved_structure_part"] =
+                contract_structure_part(result.matched_mapping->structure_part);
+            continue;
+        }
+        defect["bridge_component_id"] = Json::Value(Json::nullValue);
+        defect["standard_component_category_id"] = Json::Value(Json::nullValue);
+        defect["resolved_structure_part"] = Json::Value(Json::nullValue);
+        append_match_warning(
+            defect,
+            result.candidate_component_ids.empty()
+                ? "defect_component_match_required"
+                : "defect_component_match_ambiguous",
+            result.candidate_component_ids.empty()
+                ? "未找到可唯一关联的实际构件，请人工选择。"
+                : "存在构件匹配候选，请人工确认实际构件。");
+    }
+    return matched;
 }
 
 }  // namespace
@@ -150,6 +249,7 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
         }
 
         const auto bridge_id = locked[0]["bridge_id"].as<std::string>();
+        const auto matched_data = match_imported_defects(tx, bridge_id, batch.data);
         const bool has_year = !locked[0]["inspection_year_id"].isNull();
         const auto year_id = has_year ? locked[0]["inspection_year_id"].as<std::string>() : std::string();
         for (const auto& file : batch.files) {
@@ -168,8 +268,8 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
         tx->execSqlSync(
             "update import_records set parsed_result_json = $2::jsonb, importer_name = $3, importer_version = $4, "
             "import_status = '待校对', finished_at = now(), error_message = null, updated_at = now() where id = $1::uuid",
-            import_record_id, compact_json(batch.data), parser_member(batch.data, "parser_name"),
-            parser_member(batch.data, "parser_version"));
+            import_record_id, compact_json(matched_data), parser_member(matched_data, "parser_name"),
+            parser_member(matched_data, "parser_version"));
         tx->execSqlSync(
             "update import_source_files set status='待清理',cleanup_reason='解析成功',expires_at=null,"
             "last_error=null,next_cleanup_at=now(),updated_at=now() "

@@ -6,6 +6,7 @@ import {
   versionTwoWireData,
 } from "../contracts/annualInspection";
 import { ApiError, request } from "./apiClient";
+import type { ComponentInventoryRevision } from "./componentInventoryApi";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
@@ -88,6 +89,7 @@ export interface ReviewResponse {
   contract_compatibility: ContractCompatibility;
   reopen: ReviewReopenState | null;
   edit_lock: EditLockSummary | null;
+  component_inventory?: ComponentInventoryRevision | null;
 }
 
 export interface PreflightIssue {

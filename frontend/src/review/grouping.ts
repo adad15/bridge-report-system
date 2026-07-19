@@ -85,6 +85,22 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
     for (const warning of defect.warnings) {
       items.push({ kind: "defect", candidateId: defect.candidate_id, message: warning.message, severity: warning.severity, warningCode: warning.code, targetField: defectFieldForWarning(warning.code) });
     }
+    if (
+      defect.review_status !== "已忽略" &&
+      !isNonEmptyString(defect.bridge_component_id) &&
+      !defect.warnings.some((warning) =>
+        warning.code === "defect_component_match_required" ||
+        warning.code === "defect_component_match_ambiguous")
+    ) {
+      items.push({
+        kind: "defect",
+        candidateId: defect.candidate_id,
+        message: "病害尚未关联实际构件，请人工选择。",
+        severity: "warning",
+        warningCode: "defect_component_match_required",
+        targetField: "component_match",
+      });
+    }
   }
   for (const photo of data.photos) {
     for (const warning of photo.warnings) {

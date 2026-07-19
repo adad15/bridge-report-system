@@ -181,6 +181,45 @@ void check_defect_missing_required_field(const Json::Value& data, std::vector<Pr
     }
 }
 
+void check_component_inventory_links(
+    const Json::Value& data,
+    const PreflightContext& context,
+    std::vector<PreflightIssue>& blocking) {
+    // 实际构件关联是 2.0 契约新增的正式事实边界。1.2 历史数据仍由过渡路径读取，
+    // 不在此处反向要求其具备新版字段；历史确认入口将在后续迁移任务中统一收口。
+    if (!data["contract"].isObject() ||
+        !data["contract"]["version"].isString() ||
+        data["contract"]["version"].asString() != "2.0") {
+        return;
+    }
+    if (!context.component_inventory_confirmed.has_value()) return;
+    if (!*context.component_inventory_confirmed ||
+        !context.component_inventory_revision_id.has_value()) {
+        add_issue(
+            blocking,
+            "component_inventory_unconfirmed",
+            "桥梁最新构件台账尚未确认，不能正式确认年度病害事实。");
+        return;
+    }
+    if (!data["defects"].isArray()) return;
+    for (const auto& defect : data["defects"]) {
+        if (!is_review_settled(review_status_of(defect))) continue;
+        const bool linked = !string_member_or_empty(defect, "bridge_component_id").empty() &&
+            !string_member_or_empty(defect, "standard_component_category_id").empty() &&
+            !string_member_or_empty(defect, "resolved_structure_part").empty() &&
+            string_member_or_empty(defect, "component_inventory_revision_id") ==
+                *context.component_inventory_revision_id;
+        if (!linked) {
+            add_issue(
+                blocking,
+                "defect_component_match_required",
+                "病害候选 " + candidate_id_of(defect) +
+                    " 尚未关联最新已确认台账中的实际构件。",
+                candidate_id_of(defect));
+        }
+    }
+}
+
 // -----------------------------------------------------------------------
 // 检查 6：已确认/已修改照片的病害关联是否能解析
 // -----------------------------------------------------------------------
@@ -690,6 +729,7 @@ PreflightReport build_preflight_report(const Json::Value& data, const PreflightC
     check_import_context_mismatch(data, context, report.blocking_errors);
     check_candidate_pending_review(data, report.blocking_errors);
     check_defect_missing_required_field(data, report.blocking_errors);
+    check_component_inventory_links(data, context, report.blocking_errors);
     check_photo_link_unresolved(data, report.blocking_errors);
     check_defect_photo_groups(data, report.blocking_errors);
     check_photo_archives(data, report.blocking_errors);
@@ -708,7 +748,9 @@ PreflightReport build_preflight_report(const Json::Value& data, const PreflightC
 PreflightContext build_preflight_context(
     const ImportRecordDetail& detail,
     std::optional<int> effective_inspection_year,
-    bool has_current_annual_facts
+    bool has_current_annual_facts,
+    std::optional<std::string> component_inventory_revision_id,
+    std::optional<bool> component_inventory_confirmed
 ) {
     PreflightContext context;
     context.import_status = detail.import_status;
@@ -716,6 +758,8 @@ PreflightContext build_preflight_context(
     context.bridge_system_number = detail.bridge_system_number;
     context.inspection_year = effective_inspection_year;
     context.has_current_annual_facts = has_current_annual_facts;
+    context.component_inventory_revision_id = std::move(component_inventory_revision_id);
+    context.component_inventory_confirmed = component_inventory_confirmed;
     return context;
 }
 

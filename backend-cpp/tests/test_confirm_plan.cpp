@@ -755,3 +755,27 @@ TEST(ConfirmPlanTest, OverallScoreAndGradeEmptyWhenOverallNotSettled) {
     EXPECT_EQ(plan.overall_grade, "");
     EXPECT_EQ(find_rating(plan, "全桥", "全桥"), nullptr);
 }
+
+TEST(ConfirmPlanTest, VersionTwoDefectUsesSelectedImmutableInventoryComponent) {
+    auto data = read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    auto& defect = data["defects"][0];
+    defect["review_status"] = "已确认";
+    defect["group_review_status"] = "已确认";
+    defect["bridge_component_id"] = "11111111-1111-4111-8111-111111111111";
+    defect["standard_component_category_id"] = "main-girder";
+    defect["resolved_structure_part"] = "上部结构";
+    defect["component_inventory_revision_id"] = "revision-1";
+
+    const auto plan = build_confirm_plan(data);
+
+    ASSERT_EQ(plan.components.size(), 1u);
+    ASSERT_TRUE(plan.components[0].existing_bridge_component_id.has_value());
+    EXPECT_EQ(
+        *plan.components[0].existing_bridge_component_id,
+        "11111111-1111-4111-8111-111111111111");
+    EXPECT_EQ(plan.components[0].structure_part, "上部结构");
+    EXPECT_EQ(plan.components[0].business_component_code, "2-1#梁");
+    ASSERT_EQ(plan.defects.size(), 1u);
+    EXPECT_EQ(plan.defects[0].component_key,
+              "inventory:11111111-1111-4111-8111-111111111111");
+}

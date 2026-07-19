@@ -1,11 +1,13 @@
 import { useEffect, useState, type CSSProperties, type Dispatch, type MouseEvent } from "react";
 
 import { photoContentUrl } from "../../api/reviewApi";
+import type { ComponentInventoryRevision } from "../../api/componentInventoryApi";
 import type { BridgeAnnualInspectionData, DefectCandidate, ReviewStatus } from "../../contracts/annualInspection";
 import { categoryColor } from "../categoryColor";
 import { buildDefectPhotoGroup, canConfirmDefectPhotoGroup } from "../defectPhotoGroups";
 import { reviewTargetId } from "../reviewNavigation";
 import type { ReviewDraftAction } from "../reviewDraft";
+import { ComponentMatchField } from "./ComponentMatchField";
 
 const REVIEW_STATUSES: ReviewStatus[] = ["待确认", "已确认", "已修改", "已忽略"];
 
@@ -21,6 +23,7 @@ interface DefectPhotoGroupProps {
   initialPhotoCandidateId?: string | null;
   disabled?: boolean;
   allowDelete?: boolean;
+  componentInventory?: ComponentInventoryRevision | null;
 }
 
 function parsePhotoNumbers(text: string): string[] {
@@ -41,7 +44,7 @@ function reviewStatusBadgeClass(status: ReviewStatus): string {
 // 禁用策略（逐控件而非外层 fieldset 一揽子禁用）：编辑类控件跟随 disabled；
 // 查看类控件（"查看照片"toggle、缩略图切换、大图展示）永不禁用——
 // 查看是只读动作，已确认/重开范围外的病害也必须能看照片。
-export function DefectPhotoGroup({ draft, defect, sequenceNumber = 1, importRecordId, baseUrl, expanded, onToggle, dispatch, initialPhotoCandidateId, disabled = false, allowDelete = false }: DefectPhotoGroupProps) {
+export function DefectPhotoGroup({ draft, defect, sequenceNumber = 1, importRecordId, baseUrl, expanded, onToggle, dispatch, initialPhotoCandidateId, disabled = false, allowDelete = false, componentInventory = null }: DefectPhotoGroupProps) {
   const group = buildDefectPhotoGroup(draft, defect.candidate_id);
   const photos = group?.photos ?? [];
   const [activePhotoId, setActivePhotoId] = useState(initialPhotoCandidateId ?? photos[0]?.candidate_id ?? null);
@@ -87,10 +90,12 @@ export function DefectPhotoGroup({ draft, defect, sequenceNumber = 1, importReco
             </button>
           </div>
           <div className="defect-fact-grid">
-            <span className="defect-fact-label defect-fact-label-row-start">构件类别</span>
-            <input id={reviewTargetId("defect-field", defect.candidate_id, "component_name")} aria-label="构件类别" disabled={disabled} value={defect.component_name} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_name", value: event.target.value })} />
-            <span className="defect-fact-label">构件编号</span>
-            <input id={reviewTargetId("defect-field", defect.candidate_id, "component_number")} aria-label="构件编号" disabled={disabled} value={defect.component_number ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "component_number", value: event.target.value || null })} />
+            <span className="defect-fact-label defect-fact-label-row-start">构件类别（原文）</span>
+            <input id={reviewTargetId("defect-field", defect.candidate_id, "component_name")} aria-label="构件类别" disabled={disabled} readOnly value={defect.component_name} onClick={keepRowOpen} />
+            <span className="defect-fact-label">构件编号（原文）</span>
+            <input id={reviewTargetId("defect-field", defect.candidate_id, "component_number")} aria-label="构件编号" disabled={disabled} readOnly value={defect.component_number ?? ""} onClick={keepRowOpen} />
+            <span className="defect-fact-label defect-fact-label-row-start">实际构件</span>
+            <ComponentMatchField defect={defect} inventory={componentInventory} dispatch={dispatch} disabled={disabled} />
             <span className="defect-fact-label defect-fact-label-row-start">位置</span>
             <input id={reviewTargetId("defect-field", defect.candidate_id, "defect_location")} aria-label="位置" disabled={disabled} value={defect.defect_location} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} />
             <span className="defect-fact-label">病害类型</span>

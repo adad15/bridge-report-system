@@ -719,6 +719,7 @@ function ReviewWorkspaceLoaded({
               importRecordId={importRecordId}
               baseUrl={backendBaseUrl}
               bridgeId={response.bridge.id}
+              componentInventory={response.component_inventory}
               selectedCandidateId={expandedDefectId}
               selectedPhotoCandidateId={activePhotoCandidateId}
               onSelect={(candidateId) => {

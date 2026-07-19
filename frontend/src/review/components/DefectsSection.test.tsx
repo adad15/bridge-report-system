@@ -70,6 +70,7 @@ describe("DefectsSection", () => {
         bridgeComponentId: "component-1",
         standardComponentCategoryId: "h21.component.beam",
         resolvedStructurePart: "上部结构",
+        inventoryRevisionId: "revision-1",
         defectLocation: "第1跨梁底",
         defectType: "裂缝",
         defectDescription: "梁底纵向裂缝",

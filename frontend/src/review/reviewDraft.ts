@@ -40,6 +40,7 @@ export interface DefectComponentSelection {
   bridgeComponentId: string;
   standardComponentCategoryId: string;
   resolvedStructurePart: StructurePart;
+  inventoryRevisionId: string;
 }
 
 export interface ManualDefectInput extends DefectComponentSelection {
@@ -381,6 +382,10 @@ function reduceReviewDraft(
         bridge_component_id: input.bridgeComponentId,
         standard_component_category_id: input.standardComponentCategoryId,
         resolved_structure_part: input.resolvedStructurePart,
+        component_inventory_revision_id: input.inventoryRevisionId,
+        component_match_candidate_ids: [input.bridgeComponentId],
+        component_match_method: "manual",
+        component_match_confirmed_by: null,
         defect_location: input.defectLocation,
         defect_type: input.defectType,
         defect_description: input.defectDescription,
@@ -426,11 +431,16 @@ function reduceReviewDraft(
         ...state,
         defects: updateDefect(state.defects, action.candidateId, (defect) => ({
           ...defect,
-          component_name: component.componentName,
-          component_number: component.componentNumber,
           bridge_component_id: component.bridgeComponentId,
           standard_component_category_id: component.standardComponentCategoryId,
           resolved_structure_part: component.resolvedStructurePart,
+          component_inventory_revision_id: component.inventoryRevisionId,
+          component_match_candidate_ids: [component.bridgeComponentId],
+          component_match_method: "manual",
+          component_match_confirmed_by: null,
+          warnings: defect.warnings.filter((warning) =>
+            warning.code !== "defect_component_match_required" &&
+            warning.code !== "defect_component_match_ambiguous"),
           review_status: nextStatusAfterContentEdit(defect.review_status),
           group_review_status: "待确认",
         })),

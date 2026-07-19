@@ -29,6 +29,27 @@ Json::Value read_contract_fixture(const std::string& file_name) {
 
 constexpr const char* kSystemNumber = "DRJL-000001";
 
+bridge_report::inventory::InventoryRevision component_revision() {
+    using namespace bridge_report::inventory;
+    InventoryMapping mapping;
+    mapping.standard_component_category_id = "category-main-girder";
+    mapping.structure_part = "superstructure";
+    mapping.is_active = true;
+    InventoryEntry entry;
+    entry.bridge_component_id = "11111111-1111-4111-8111-111111111111";
+    entry.component_number = "2-1#梁";
+    entry.site_name = "主梁";
+    entry.site_component_type = "主梁";
+    entry.is_active = true;
+    entry.mappings.push_back(mapping);
+    InventoryRevision revision;
+    revision.id = "22222222-2222-4222-8222-222222222222";
+    revision.bridge_id = "33333333-3333-4333-8333-333333333333";
+    revision.status = "已确认";
+    revision.entries.push_back(entry);
+    return revision;
+}
+
 }  // namespace
 
 TEST(DraftValidationTest, AcceptsValidDraftWhenPendingReview) {
@@ -107,6 +128,40 @@ TEST(DraftValidationTest, BuildsServerDerivedAuditSummaryForManualAddsAndDeletes
     EXPECT_EQ(event["actor_username"].asString(), "editor");
     EXPECT_EQ(event["added_candidate_ids"][0].asString(), "manual_defect_uuid_1");
     EXPECT_EQ(event["deleted_candidate_ids"][0].asString(), deleted_id);
+}
+
+TEST(DraftValidationTest, AcceptsAssociationFromLatestBridgeInventory) {
+    auto body = read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    auto& defect = body["defects"][0];
+    const auto revision = component_revision();
+    defect["bridge_component_id"] = revision.entries[0].bridge_component_id;
+    defect["standard_component_category_id"] = "category-main-girder";
+    defect["resolved_structure_part"] = "上部结构";
+    defect["component_inventory_revision_id"] = revision.id;
+
+    const auto result =
+        bridge_report::review::validate_defect_component_associations(body, revision);
+
+    EXPECT_TRUE(result.ok) << result.message;
+}
+
+TEST(DraftValidationTest, RejectsForeignComponentIdAndStaleInventoryRevision) {
+    auto body = read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    auto& defect = body["defects"][0];
+    const auto revision = component_revision();
+    defect["bridge_component_id"] = "99999999-9999-4999-8999-999999999999";
+    defect["standard_component_category_id"] = "category-main-girder";
+    defect["resolved_structure_part"] = "上部结构";
+    defect["component_inventory_revision_id"] = revision.id;
+
+    auto result = bridge_report::review::validate_defect_component_associations(body, revision);
+    EXPECT_FALSE(result.ok);
+    EXPECT_EQ(result.code, "defect_component_assignment_invalid");
+
+    defect["bridge_component_id"] = revision.entries[0].bridge_component_id;
+    defect["component_inventory_revision_id"] = "stale-revision";
+    result = bridge_report::review::validate_defect_component_associations(body, revision);
+    EXPECT_FALSE(result.ok);
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +247,7 @@ TEST(WarningsOnlyScopeTest, RejectsAddingOrRemovingDefects) {
     EXPECT_FALSE(bridge_report::review::validate_warnings_only_scope(stored, added).ok);
 }
 
-TEST(WarningsOnlyScopeTest, RejectsChangingHiddenComponentMappingFields) {
+TEST(WarningsOnlyScopeTest, AllowsFixingComponentMappingForWarningDefect) {
     const auto stored = make_draft({make_defect("defect_0001", true, 35.0)});
     auto next = stored;
     next["defects"][0]["bridge_component_id"] = "forged-component";
@@ -201,8 +256,7 @@ TEST(WarningsOnlyScopeTest, RejectsChangingHiddenComponentMappingFields) {
 
     const auto result = bridge_report::review::validate_warnings_only_scope(stored, next);
 
-    EXPECT_FALSE(result.ok);
-    EXPECT_EQ(result.code, "reopen_scope_violation");
+    EXPECT_TRUE(result.ok) << result.message;
 }
 
 TEST(WarningsOnlyScopeTest, TreatsIntegralRealAndIntAsEqual) {

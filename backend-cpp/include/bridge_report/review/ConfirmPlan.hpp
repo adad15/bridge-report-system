@@ -16,6 +16,7 @@ namespace bridge_report::review {
  * DefectPlan::component_key 的关联定位。
  */
 struct ComponentPlan {
+    std::optional<std::string> existing_bridge_component_id;
     std::string structure_part;
     std::string component_type;
     std::string business_component_code;

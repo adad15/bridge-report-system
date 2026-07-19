@@ -57,6 +57,7 @@ add_library(bridge_report_backend_core
     src/identity/SystemNumber.cpp
     src/inventory/ComponentInventoryGenerator.cpp
     src/inventory/ComponentInventoryModels.cpp
+    src/inventory/ComponentMatcher.cpp
     src/review/ComponentScore.cpp
     src/review/ConfirmPlan.cpp
     src/review/ContractCompatibility.cpp
@@ -123,6 +124,7 @@ add_executable(bridge_report_backend_tests
     tests/test_component_inventory_generator.cpp
     tests/test_component_inventory_repository.cpp
     tests/test_component_inventory_routes.cpp
+    tests/test_component_matcher.cpp
     tests/test_component_score.cpp
     tests/test_h21_bridge_evaluation.cpp
     tests/test_h21_component_evaluation.cpp

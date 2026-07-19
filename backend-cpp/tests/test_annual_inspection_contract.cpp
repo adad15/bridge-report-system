@@ -141,6 +141,24 @@ TEST(AnnualInspectionContractTest, AcceptsNullDatabaseAssociationFields) {
     EXPECT_TRUE(result.ok()) << result.summary();
 }
 
+TEST(AnnualInspectionContractTest, ValidatesComponentMatchAuditFields) {
+    auto root =
+        read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    auto& defect = root["defects"][0];
+    defect["component_inventory_revision_id"] = "revision-1";
+    defect["component_match_candidate_ids"].append("component-1");
+    defect["component_match_method"] = "manual";
+    defect["component_match_confirmed_by"] = "editor";
+
+    EXPECT_TRUE(bridge_report::contracts::validate_bridge_annual_inspection_data(root).ok());
+
+    defect["component_match_method"] = "fuzzy";
+    const auto invalid =
+        bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+    EXPECT_FALSE(invalid.ok());
+    expect_summary_contains(invalid, "defects[0].component_match_method");
+}
+
 TEST(AnnualInspectionContractTest, AcceptsManualSourceWithoutWordCoordinates) {
     auto root =
         read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");

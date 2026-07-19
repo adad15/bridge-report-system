@@ -28,6 +28,10 @@ function makeDefect(overrides: Partial<DefectCandidate> = {}): DefectCandidate {
     candidate_id: "defect_0001",
     structure_part: "上部结构",
     component_name: "主梁",
+    component_number: "1-1#",
+    bridge_component_id: "component-1",
+    standard_component_category_id: "main-girder",
+    resolved_structure_part: "上部结构",
     component_alias: null,
     defect_type: "裂缝",
     defect_location: "跨中",
@@ -615,5 +619,20 @@ describe("component rating grouping", () => {
     expect(counts.rating_item_count).toBe(3); // overall + 2 component ratings
     expect(counts.pending_count).toBeGreaterThanOrEqual(2); // overall(待确认) + component_rating_0001
     expect(counts.modified_count).toBe(1);
+  });
+});
+
+describe("component inventory matching attention", () => {
+  it("adds an exact component_match navigation target when a defect is unlinked", () => {
+    const draft = makeData({
+      defects: [makeDefect({ bridge_component_id: null, warnings: [] })],
+    });
+
+    expect(needsAttention(draft)).toContainEqual(expect.objectContaining({
+      kind: "defect",
+      candidateId: "defect_0001",
+      warningCode: "defect_component_match_required",
+      targetField: "component_match",
+    }));
   });
 });

@@ -19,6 +19,8 @@ struct PreflightContext {
     std::string bridge_system_number;      // bridges.system_number
     std::optional<int> inspection_year;    // inspection_years.inspection_year（记录已挂年度时）
     bool has_current_annual_facts{false};
+    std::optional<std::string> component_inventory_revision_id;
+    std::optional<bool> component_inventory_confirmed;
 };
 
 /**
@@ -77,7 +79,9 @@ struct PreflightReport {
 [[nodiscard]] PreflightContext build_preflight_context(
     const ImportRecordDetail& detail,
     std::optional<int> effective_inspection_year,
-    bool has_current_annual_facts
+    bool has_current_annual_facts,
+    std::optional<std::string> component_inventory_revision_id = std::nullopt,
+    std::optional<bool> component_inventory_confirmed = std::nullopt
 );
 
 }  // 命名空间 bridge_report::review

@@ -51,6 +51,9 @@ protected:
         client_->execSqlSync("delete from archived_files where bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from inspection_years where id = $1::uuid", year_id_);
         client_->execSqlSync("delete from bridges where id = $1::uuid", bridge_id_);
+        if (!package_id_.empty()) {
+            client_->execSqlSync("delete from standard_packages where id=$1::uuid", package_id_);
+        }
         client_->closeAll();
         std::filesystem::remove_all(archive_root_);
     }
@@ -61,6 +64,7 @@ protected:
     std::string source_file_id_;
     std::string source_relative_path_;
     std::string import_id_;
+    std::string package_id_;
     std::filesystem::path archive_root_;
 };
 
@@ -94,6 +98,72 @@ TEST_F(WordImportRepositoryTest, PersistsPhotosAndJsonInOneTransaction) {
     ASSERT_EQ(source.size(), 1u);
     EXPECT_EQ(source[0]["status"].as<std::string>(), "待清理");
     EXPECT_EQ(source[0]["cleanup_reason"].as<std::string>(), "解析成功");
+}
+
+TEST_F(WordImportRepositoryTest, PersistsExactDefectMatchAgainstConfirmedInventory) {
+    const auto user_id = client_->execSqlSync(
+        "select id::text from users where username='admin'")[0]["id"].as<std::string>();
+    package_id_ = client_->execSqlSync(
+        "insert into standard_packages(standard_family,standard_id,standard_code,standard_name,"
+        "official_edition,package_version,contract_version,algorithm_id,effective_date,content_checksum) "
+        "values('technical_condition','WORD-MATCH-'||gen_random_uuid()::text,'WORD MATCH',"
+        "'Word匹配测试规范','2026','1.0.0',1,'word-match','2026-01-01',"
+        "'sha256:'||repeat('b',64)) returning id::text")[0]["id"].as<std::string>();
+    const auto component_id = client_->execSqlSync(
+        "insert into bridge_components(bridge_id,structure_part,component_type,business_component_code,"
+        "normalized_component_key,current_status,creation_source) values($1::uuid,'上部结构','主梁',"
+        "'1-1#','word-match-1','已确认','人工录入') returning id::text",
+        bridge_id_)[0]["id"].as<std::string>();
+    const auto revision_id = client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,created_by_user_id) "
+        "values($1::uuid,1,$2::uuid) returning id::text",
+        bridge_id_, user_id)[0]["id"].as<std::string>();
+    const auto entry_id = client_->execSqlSync(
+        "insert into bridge_component_inventory_entries(inventory_revision_id,bridge_component_id,"
+        "component_number,site_name,site_component_type,sort_order) "
+        "values($1::uuid,$2::uuid,'1-1#','主梁','主梁',1) returning id::text",
+        revision_id, component_id)[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "insert into bridge_component_standard_mappings(inventory_entry_id,standard_package_id,"
+        "standard_bridge_type_id,standard_component_category_id,structure_part,mapping_source,"
+        "confirmation_status,confirmed_by_user_id,confirmed_at) "
+        "values($1::uuid,$2::uuid,'beam','main-girder','superstructure','规范模板','已确认',$3::uuid,now())",
+        entry_id, package_id_, user_id);
+    client_->execSqlSync(
+        "update bridge_component_inventory_revisions set status='已确认',"
+        "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
+        revision_id, user_id);
+
+    bridge_report::archive::ArchivedPhotoBatch batch;
+    batch.data["contract"]["parser_name"] = "liaoning-word-importer";
+    batch.data["contract"]["parser_version"] = "2.0.0";
+    batch.data["photos"] = Json::Value(Json::arrayValue);
+    Json::Value defect(Json::objectValue);
+    defect["candidate_id"] = "defect_0001";
+    defect["component_name"] = "主梁";
+    defect["component_number"] = "1-1#";
+    defect["warnings"] = Json::Value(Json::arrayValue);
+    batch.data["defects"].append(defect);
+
+    bridge_report::db::WordImportRepository repository(client_);
+    const auto outcome = repository.persist_parse_result(import_id_, batch);
+
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+    const auto stored = client_->execSqlSync(
+        "select parsed_result_json#>>'{defects,0,bridge_component_id}' as component_id,"
+        "parsed_result_json#>>'{defects,0,standard_component_category_id}' as category_id,"
+        "parsed_result_json#>>'{defects,0,resolved_structure_part}' as structure_part,"
+        "parsed_result_json#>>'{defects,0,component_match_method}' as match_method,"
+        "parsed_result_json#>>'{defects,0,component_inventory_revision_id}' as revision_id "
+        "from import_records where id=$1::uuid",
+        import_id_);
+    ASSERT_EQ(stored.size(), 1u);
+    EXPECT_EQ(stored[0]["component_id"].as<std::string>(), component_id);
+    EXPECT_EQ(stored[0]["category_id"].as<std::string>(), "main-girder");
+    EXPECT_EQ(stored[0]["structure_part"].as<std::string>(), "上部结构");
+    EXPECT_EQ(stored[0]["match_method"].as<std::string>(), "exact");
+    EXPECT_EQ(stored[0]["revision_id"].as<std::string>(), revision_id);
+
 }
 
 TEST_F(WordImportRepositoryTest, LoadsTemporaryCurrentAnnualWordContext) {

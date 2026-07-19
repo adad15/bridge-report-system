@@ -95,6 +95,10 @@ export interface DefectCandidateV2 {
   bridge_component_id?: string | null;
   standard_component_category_id?: string | null;
   resolved_structure_part?: StructurePart | null;
+  component_inventory_revision_id?: string | null;
+  component_match_candidate_ids?: string[];
+  component_match_method?: "exact" | "confirmed_alias" | "normalized_candidate" | "manual" | null;
+  component_match_confirmed_by?: string | null;
   defect_type: string;
   defect_location: string;
   defect_scale?: number | null;
@@ -359,6 +363,8 @@ function isValidDefectCandidate(value: unknown): boolean {
   }
   const missingPhotoNumbers = getRequiredArray(value, "confirmed_missing_photo_numbers");
   const measurements = getRequiredArray(value, "measurements");
+  const matchCandidateIds = value.component_match_candidate_ids;
+  const matchMethod = value.component_match_method;
   return (
     hasRequiredArrayMembers(value, ["measurements", "photo_numbers", "warnings"]) &&
     measurements !== null && measurements.every(isValidMeasurement) &&
@@ -377,6 +383,22 @@ function isValidDefectCandidate(value: unknown): boolean {
     !hasOwn(value, "defect_deduction") &&
     (value.group_review_status === "待确认" || value.group_review_status === "已确认") &&
     isNullablePositiveInteger(value.defect_scale) &&
+    (matchCandidateIds === undefined ||
+      (Array.isArray(matchCandidateIds) &&
+        matchCandidateIds.every((item) => typeof item === "string") &&
+        new Set(matchCandidateIds).size === matchCandidateIds.length)) &&
+    (matchMethod === undefined ||
+      matchMethod === null ||
+      matchMethod === "exact" ||
+      matchMethod === "confirmed_alias" ||
+      matchMethod === "normalized_candidate" ||
+      matchMethod === "manual") &&
+    (value.component_inventory_revision_id === undefined ||
+      value.component_inventory_revision_id === null ||
+      typeof value.component_inventory_revision_id === "string") &&
+    (value.component_match_confirmed_by === undefined ||
+      value.component_match_confirmed_by === null ||
+      typeof value.component_match_confirmed_by === "string") &&
     missingPhotoNumbers !== null &&
     missingPhotoNumbers.every((item) => typeof item === "string") &&
     new Set(missingPhotoNumbers).size === missingPhotoNumbers.length

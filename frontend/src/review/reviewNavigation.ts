@@ -2,6 +2,7 @@ import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
 import type { AttentionItem } from "./grouping";
 
 export type DefectTargetField =
+  | "component_match"
   | "structure_part"
   | "component_name"
   | "component_alias"
@@ -14,6 +15,9 @@ export type DefectTargetField =
   | "measurement_text";
 
 const WARNING_FIELD_MAP: Record<string, DefectTargetField> = {
+  defect_component_match_required: "component_match",
+  defect_component_match_ambiguous: "component_match",
+  defect_component_assignment_invalid: "component_match",
   defect_scale_invalid: "defect_scale",
   defect_deduction_invalid: "defect_deduction",
   measurement_parse_low_confidence: "measurement_text",

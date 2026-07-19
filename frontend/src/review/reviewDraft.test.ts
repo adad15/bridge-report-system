@@ -16,6 +16,10 @@ function makeDefect(overrides: Partial<DefectCandidate> = {}): DefectCandidate {
     candidate_id: "defect_0001",
     structure_part: "上部结构",
     component_name: "主梁",
+    component_number: "1-1#",
+    bridge_component_id: "component-1",
+    standard_component_category_id: "main-girder",
+    resolved_structure_part: "上部结构",
     component_alias: null,
     defect_type: "裂缝",
     defect_location: "跨中",
@@ -135,6 +139,7 @@ describe("reviewDraftReducer", () => {
       bridgeComponentId: "component-1",
       standardComponentCategoryId: "h21.component.beam",
       resolvedStructurePart: "上部结构" as const,
+      inventoryRevisionId: "revision-1",
       defectLocation: "第1跨梁底",
       defectType: "裂缝",
       defectDescription: "梁底纵向裂缝",
@@ -194,6 +199,7 @@ describe("reviewDraftReducer", () => {
       bridgeComponentId: "component-1",
       standardComponentCategoryId: "h21.component.beam",
       resolvedStructurePart: "上部结构" as const,
+      inventoryRevisionId: "revision-1",
       defectLocation: "梁底",
       defectType: "裂缝",
       defectDescription: "纵向裂缝",
@@ -216,15 +222,19 @@ describe("reviewDraftReducer", () => {
         bridgeComponentId: "component-2",
         standardComponentCategoryId: "h21.component.cap-beam",
         resolvedStructurePart: "下部结构",
+        inventoryRevisionId: "revision-2",
       },
     });
 
     expect(next.defects[0]).toMatchObject({
-      component_name: "盖梁",
-      component_number: "0#-GL",
+      component_name: "主梁",
+      component_number: "1-1#",
       bridge_component_id: "component-2",
       standard_component_category_id: "h21.component.cap-beam",
       resolved_structure_part: "下部结构",
+      component_inventory_revision_id: "revision-2",
+      component_match_candidate_ids: ["component-2"],
+      component_match_method: "manual",
       review_status: "已修改",
     });
   });

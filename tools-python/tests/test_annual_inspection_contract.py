@@ -120,6 +120,25 @@ def test_manual_source_reference_is_valid_without_word_location() -> None:
     assert model.defects[0].source_ref.row_index is None
 
 
+def test_component_match_audit_fields_are_validated() -> None:
+    data = valid_payload()
+    data["defects"][0].update(
+        component_inventory_revision_id="revision-1",
+        component_match_candidate_ids=["component-1"],
+        component_match_method="manual",
+        component_match_confirmed_by="editor",
+    )
+
+    model = BridgeAnnualInspectionData.model_validate(data)
+    assert model.defects[0].component_match_method == "manual"
+    assert model.defects[0].component_match_candidate_ids == ["component-1"]
+
+    data["defects"][0]["component_match_candidate_ids"] = ["component-1", "component-1"]
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+    assert "component_match_candidate_ids" in str(exc_info.value)
+
+
 def test_unknown_source_reference_type_is_rejected() -> None:
     data = valid_payload()
     data["defects"][0]["source_ref"] = {"source_type": "spreadsheet"}

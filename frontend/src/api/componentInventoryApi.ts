@@ -34,7 +34,7 @@ export interface ComponentInventoryRevision {
   id: string;
   bridge_id: string;
   revision_number: number;
-  status: "draft" | "confirmed" | string;
+  status: "草稿" | "已确认" | "draft" | "confirmed" | string;
   baseline_revision_id: string | null;
   confirmed_at: string | null;
   entries: ComponentInventoryEntry[];

@@ -82,8 +82,19 @@ const std::set<std::string>& warning_defect_editable_fields() {
         "defect_scale", "defect_deduction", "defect_type", "defect_description",
         "quantity_text", "measurement_text", "measurements", "review_status",
         "group_review_status", "review_note",
+        "bridge_component_id", "standard_component_category_id", "resolved_structure_part",
+        "component_inventory_revision_id", "component_match_candidate_ids",
+        "component_match_method", "component_match_confirmed_by",
     };
     return fields;
+}
+
+std::string contract_structure_part(const std::string& value) {
+    if (value == "superstructure") return "上部结构";
+    if (value == "substructure") return "下部结构";
+    if (value == "deck_system") return "桥面系";
+    if (value == "overall") return "全桥";
+    return "其他";
 }
 
 Json::Value frozen_warning_defect_fields(Json::Value defect) {
@@ -241,6 +252,70 @@ DraftValidationResult validate_review_draft(
     }
 
     result.ok = true;
+    return result;
+}
+
+DraftValidationResult validate_defect_component_associations(
+    const Json::Value& body,
+    const std::optional<inventory::InventoryRevision>& latest_revision) {
+    DraftValidationResult result;
+    result.code = "defect_component_assignment_invalid";
+    result.message = "病害关联的实际构件不属于当前桥梁最新台账，或规范映射已变化。";
+    if (!body["defects"].isArray()) {
+        result.ok = true;
+        result.code.clear();
+        result.message.clear();
+        return result;
+    }
+
+    for (Json::ArrayIndex index = 0; index < body["defects"].size(); ++index) {
+        const auto& defect = body["defects"][index];
+        const auto component_id = string_member_or_empty(defect, "bridge_component_id");
+        const auto category_id = string_member_or_empty(defect, "standard_component_category_id");
+        const auto structure_part = string_member_or_empty(defect, "resolved_structure_part");
+        const auto revision_id = string_member_or_empty(defect, "component_inventory_revision_id");
+        const auto path = "defects[" + std::to_string(index) + "].bridge_component_id";
+
+        if (component_id.empty()) {
+            if (!category_id.empty() || !structure_part.empty()) {
+                result.issues.push_back({path, "未选择实际构件时不能提交规范类别或内部结构部位。"});
+            }
+            continue;
+        }
+        if (!latest_revision.has_value() || revision_id != latest_revision->id) {
+            result.issues.push_back({path, "关联所依据的构件台账已变化，请重新选择。"});
+            continue;
+        }
+        const inventory::InventoryEntry* matched_entry = nullptr;
+        for (const auto& entry : latest_revision->entries) {
+            if (entry.is_active && entry.bridge_component_id == component_id) {
+                matched_entry = &entry;
+                break;
+            }
+        }
+        if (matched_entry == nullptr) {
+            result.issues.push_back({path, "实际构件不属于当前桥梁最新台账。"});
+            continue;
+        }
+        bool mapping_matches = false;
+        for (const auto& mapping : matched_entry->mappings) {
+            if (mapping.is_active &&
+                mapping.standard_component_category_id == category_id &&
+                contract_structure_part(mapping.structure_part) == structure_part) {
+                mapping_matches = true;
+                break;
+            }
+        }
+        if (!mapping_matches) {
+            result.issues.push_back({path, "实际构件的规范类别或内部结构部位与最新映射不一致。"});
+        }
+    }
+
+    result.ok = result.issues.empty();
+    if (result.ok) {
+        result.code.clear();
+        result.message.clear();
+    }
     return result;
 }
 

@@ -12,8 +12,10 @@ export interface DefectPhotoGroupConfirmation {
 }
 
 const REQUIRED_DEFECT_FIELDS: Array<keyof DefectCandidate> = [
-  "structure_part",
   "component_name",
+  "component_number",
+  "bridge_component_id",
+  "standard_component_category_id",
   "defect_location",
   "defect_type",
   "defect_description",
