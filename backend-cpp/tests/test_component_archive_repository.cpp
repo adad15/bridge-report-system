@@ -60,6 +60,11 @@ protected:
         revision_observation_ = insert_observation(year_2024_old_, component_a_, std::nullopt, "旧版病害", "1", 10.0, "已确认");
         component_b_observation_ = insert_observation(
             year_2024_current_, component_b_, std::nullopt, "止水带损坏", std::nullopt, std::nullopt, "已确认");
+        client_->execSqlSync(
+            "insert into defect_measurements (defect_observation_id, measurement_type, value_type, "
+            "minimum_value, maximum_value, unit, is_approximate, raw_text) "
+            "values ($1::uuid, '长度', 'range', 0.5, 4.0, 'm', true, '约0.5~4.0m')",
+            bound_observation_);
 
         // 2025 构件评分：三值校验齐全；2024 为 1.1 风格历史行（新列全空）。
         client_->execSqlSync(
@@ -194,6 +199,13 @@ TEST_F(ComponentArchiveRepositoryTest, DefectArchiveGroupsByThreadAndExcludesRev
     EXPECT_EQ(thread["observations"][0]["id"].asString(), bound_observation_);
     EXPECT_EQ(thread["observations"][0]["scale"].asString(), "2");
     EXPECT_DOUBLE_EQ(thread["observations"][0]["defect_deduction"].asDouble(), 35.0);
+    ASSERT_EQ(thread["observations"][0]["measurements"].size(), 1u);
+    const auto& measurement = thread["observations"][0]["measurements"][0];
+    EXPECT_EQ(measurement["value_type"].asString(), "range");
+    EXPECT_TRUE(measurement["numeric_value"].isNull());
+    EXPECT_DOUBLE_EQ(measurement["minimum_value"].asDouble(), 0.5);
+    EXPECT_DOUBLE_EQ(measurement["maximum_value"].asDouble(), 4.0);
+    EXPECT_TRUE(measurement["is_approximate"].asBool());
     ASSERT_EQ(thread["observations"][0]["photos"].size(), 1u);
     EXPECT_EQ(thread["observations"][0]["photos"][0]["id"].asString(), defect_photo_id_);
 

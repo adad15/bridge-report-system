@@ -196,12 +196,34 @@ describe("needsAttention", () => {
     );
   });
 
+  it("rule 3 does not duplicate an existing measurement parse warning", () => {
+    const data = makeData({
+      defects: [
+        makeDefect({
+          measurement_text: "约20m左右",
+          measurements: [],
+          warnings: [
+            makeWarning({
+              code: "measurement_parse_low_confidence",
+              message: "尺寸表达未能稳定结构化，请人工确认。",
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const items = needsAttention(data).filter(
+      (item) => item.warningCode === "measurement_parse_low_confidence",
+    );
+    expect(items).toHaveLength(1);
+  });
+
   it("rule 3 negative: measurement_text has a hint but measurements[] was already structured", () => {
     const data = makeData({
       defects: [
         makeDefect({
           measurement_text: "L=0.8m",
-          measurements: [{ dimension_type: "长度", value: 0.8, unit: "m", source_text: "L=0.8m" }],
+          measurements: [{ dimension_type: "长度", value_type: "single", value: 0.8, minimum_value: null, maximum_value: null, unit: "m", is_approximate: false, source_text: "L=0.8m" }],
         }),
       ],
     });

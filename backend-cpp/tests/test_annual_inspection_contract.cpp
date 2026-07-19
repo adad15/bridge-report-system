@@ -254,3 +254,37 @@ TEST(AnnualInspectionContractTest, RejectsUnsafeArchivedPhotoPath) {
     expect_summary_contains(
         result, "photos[0].extracted_file.archive_relative_path");
 }
+
+TEST(AnnualInspectionContractTest, AcceptsRangeMeasurement) {
+    auto root =
+        read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    auto& measurement = root["defects"][0]["measurements"][0];
+    measurement["value_type"] = "range";
+    measurement["value"] = Json::Value();
+    measurement["minimum_value"] = 0.5;
+    measurement["maximum_value"] = 4.0;
+    measurement["is_approximate"] = false;
+    measurement["source_text"] = "0.5~4.0m";
+
+    const auto result =
+        bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_TRUE(result.ok()) << result.summary();
+}
+
+TEST(AnnualInspectionContractTest, RejectsInvalidMeasurementInvariantsWithExactPath) {
+    auto root =
+        read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    auto& measurement = root["defects"][0]["measurements"][0];
+    measurement["value_type"] = "range";
+    measurement["value"] = 1.0;
+    measurement["minimum_value"] = 4.0;
+    measurement["maximum_value"] = 0.5;
+    measurement["is_approximate"] = false;
+
+    const auto result =
+        bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+    EXPECT_FALSE(result.ok());
+    expect_summary_contains(result, "defects[0].measurements[0]");
+}

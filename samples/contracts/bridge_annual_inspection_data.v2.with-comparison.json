@@ -44,14 +44,22 @@
       "measurements": [
         {
           "dimension_type": "长度",
+          "value_type": "single",
           "value": 0.8,
+          "minimum_value": null,
+          "maximum_value": null,
           "unit": "m",
+          "is_approximate": false,
           "source_text": "L=0.8m"
         },
         {
           "dimension_type": "宽度",
+          "value_type": "single",
           "value": 0.12,
+          "minimum_value": null,
+          "maximum_value": null,
           "unit": "mm",
+          "is_approximate": false,
           "source_text": "W=0.12mm"
         }
       ],

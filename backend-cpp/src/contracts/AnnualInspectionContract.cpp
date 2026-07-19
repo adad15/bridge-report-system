@@ -198,6 +198,45 @@ void reject_member(
     }
 }
 
+void validate_measurement(
+    const Json::Value& measurement,
+    const std::string& path,
+    ContractValidationResult& result) {
+    if (!measurement.isObject()) {
+        result.add_issue(path, "must be an object");
+        return;
+    }
+    require_non_empty_string(measurement, path, "dimension_type", result);
+    require_non_empty_string(measurement, path, "unit", result);
+    require_non_empty_string(measurement, path, "source_text", result);
+    require_enum(measurement, path, "value_type", {"single", "range"}, result);
+    if (!measurement.isMember("is_approximate") || !measurement["is_approximate"].isBool()) {
+        result.add_issue(member_path(path, "is_approximate"), "must be a boolean");
+    }
+
+    const auto value_type = measurement["value_type"].isString()
+        ? measurement["value_type"].asString()
+        : std::string{};
+    const bool value_is_number = measurement.isMember("value") && measurement["value"].isNumeric();
+    const bool value_is_null = measurement.isMember("value") && measurement["value"].isNull();
+    const bool minimum_is_number = measurement.isMember("minimum_value") && measurement["minimum_value"].isNumeric();
+    const bool minimum_is_null = measurement.isMember("minimum_value") && measurement["minimum_value"].isNull();
+    const bool maximum_is_number = measurement.isMember("maximum_value") && measurement["maximum_value"].isNumeric();
+    const bool maximum_is_null = measurement.isMember("maximum_value") && measurement["maximum_value"].isNull();
+
+    if (value_type == "single") {
+        if (!value_is_number || !minimum_is_null || !maximum_is_null) {
+            result.add_issue(path, "single measurement requires value and null range endpoints");
+        }
+    } else if (value_type == "range") {
+        if (!value_is_null || !minimum_is_number || !maximum_is_number) {
+            result.add_issue(path, "range measurement requires null value and numeric endpoints");
+        } else if (measurement["minimum_value"].asDouble() > measurement["maximum_value"].asDouble()) {
+            result.add_issue(path, "range minimum_value must not exceed maximum_value");
+        }
+    }
+}
+
 void validate_defect(
     const Json::Value& defect,
     const std::string& path,
@@ -239,7 +278,14 @@ void validate_defect(
         reject_member(defect, path, "defect_deduction", result);
     }
 
-    require_array_member(defect, path, "measurements", result);
+    if (require_array_member(defect, path, "measurements", result) && !legacy_1_2) {
+        for (Json::ArrayIndex index = 0; index < defect["measurements"].size(); ++index) {
+            validate_measurement(
+                defect["measurements"][index],
+                indexed_path(member_path(path, "measurements"), index),
+                result);
+        }
+    }
     require_array_member(defect, path, "photo_numbers", result);
     require_array_member(defect, path, "confirmed_missing_photo_numbers", result);
     validate_source_ref(defect, path, result);

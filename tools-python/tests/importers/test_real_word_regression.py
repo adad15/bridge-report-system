@@ -72,3 +72,18 @@ def test_liaoning_real_word_regression(tmp_path: Path) -> None:
     assert all(defect.bridge_component_id is None for defect in response.data.defects)
     assert all(defect.standard_component_category_id is None for defect in response.data.defects)
     assert all(defect.resolved_structure_part is None for defect in response.data.defects)
+
+    measurements = [
+        measurement
+        for defect in response.data.defects
+        for measurement in defect.measurements
+    ]
+    assert measurements
+    assert all(measurement.source_text for measurement in measurements)
+    assert all(
+        measurement.value is not None
+        and measurement.minimum_value is None
+        and measurement.maximum_value is None
+        for measurement in measurements
+        if measurement.value_type == "single"
+    )

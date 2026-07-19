@@ -617,13 +617,58 @@
           "title": "Dimension Type",
           "type": "string"
         },
+        "value_type": {
+          "enum": [
+            "single",
+            "range"
+          ],
+          "title": "Value Type",
+          "type": "string"
+        },
         "value": {
-          "title": "Value",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "minimum_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum Value"
+        },
+        "maximum_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maximum Value"
         },
         "unit": {
           "title": "Unit",
           "type": "string"
+        },
+        "is_approximate": {
+          "default": false,
+          "title": "Is Approximate",
+          "type": "boolean"
         },
         "source_text": {
           "title": "Source Text",
@@ -632,7 +677,7 @@
       },
       "required": [
         "dimension_type",
-        "value",
+        "value_type",
         "unit",
         "source_text"
       ],

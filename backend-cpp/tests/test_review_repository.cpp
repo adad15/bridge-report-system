@@ -867,6 +867,35 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     EXPECT_TRUE(alias_result[0]["is_manually_confirmed"].as<bool>());
 }
 
+TEST_F(ConfirmAnnualFactsTest, ConfirmPersistsRangeMeasurementEndpoints) {
+    bridge_report::db::ReviewRepository repository(client_);
+    auto data = build_confirmed_data();
+    auto& measurement = data["defects"][0]["measurements"][0];
+    measurement["value_type"] = "range";
+    measurement["value"] = Json::Value();
+    measurement["minimum_value"] = 0.5;
+    measurement["maximum_value"] = 4.0;
+    measurement["is_approximate"] = true;
+    measurement["source_text"] = "约0.5~4.0m";
+    ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
+
+    const auto outcome = repository.confirm_annual_facts(import_record_id_, false, "确认区间尺寸");
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+
+    const auto rows = client_->execSqlSync(
+        "select dm.value_type, dm.numeric_value, dm.minimum_value, dm.maximum_value, dm.is_approximate, dm.raw_text "
+        "from defect_measurements dm join defect_observations o on o.id = dm.defect_observation_id "
+        "where o.source_import_record_id = $1::uuid and dm.measurement_type = '长度'",
+        import_record_id_);
+    ASSERT_EQ(rows.size(), 1u);
+    EXPECT_EQ(rows[0]["value_type"].as<std::string>(), "range");
+    EXPECT_TRUE(rows[0]["numeric_value"].isNull());
+    EXPECT_DOUBLE_EQ(rows[0]["minimum_value"].as<double>(), 0.5);
+    EXPECT_DOUBLE_EQ(rows[0]["maximum_value"].as<double>(), 4.0);
+    EXPECT_TRUE(rows[0]["is_approximate"].as<bool>());
+    EXPECT_EQ(rows[0]["raw_text"].as<std::string>(), "约0.5~4.0m");
+}
+
 TEST_F(ConfirmAnnualFactsTest, confirm_requires_revision_when_current_facts_exist) {
     const auto current_year_result = client_->execSqlSync(
         "insert into inspection_years (bridge_id, inspection_year, status, version_number, is_current) "

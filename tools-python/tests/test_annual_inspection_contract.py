@@ -233,6 +233,51 @@ def test_nested_arrays_and_source_refs_are_required(
     assert error_path in str(exc_info.value)
 
 
+@pytest.mark.parametrize(
+    "measurement",
+    [
+        {
+            "dimension_type": "长度",
+            "value_type": "range",
+            "value": None,
+            "minimum_value": 4.0,
+            "maximum_value": 0.5,
+            "unit": "m",
+            "is_approximate": False,
+            "source_text": "4.0~0.5m",
+        },
+        {
+            "dimension_type": "长度",
+            "value_type": "single",
+            "value": 1.0,
+            "minimum_value": 0.5,
+            "maximum_value": None,
+            "unit": "m",
+            "is_approximate": False,
+            "source_text": "1.0m",
+        },
+        {
+            "dimension_type": "长度",
+            "value_type": "range",
+            "value": 1.0,
+            "minimum_value": 0.5,
+            "maximum_value": 4.0,
+            "unit": "m",
+            "is_approximate": False,
+            "source_text": "0.5~4.0m",
+        },
+    ],
+)
+def test_measurement_single_range_invariants_are_enforced(measurement: dict) -> None:
+    data = valid_payload()
+    data["defects"][0]["measurements"] = [measurement]
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "defects.0.measurements.0" in str(exc_info.value)
+
+
 def test_export_bridge_annual_inspection_schema(tmp_path: Path) -> None:
     schema_path = tmp_path / "bridge_annual_inspection_data.schema.json"
 
@@ -242,6 +287,7 @@ def test_export_bridge_annual_inspection_schema(tmp_path: Path) -> None:
     properties = schema["properties"]
     defect_properties = schema["$defs"]["DefectCandidate"]["properties"]
     source_properties = schema["$defs"]["SourceRef"]["properties"]
+    measurement_properties = schema["$defs"]["Measurement"]["properties"]
 
     assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
     assert schema["title"] == "BridgeAnnualInspectionData"
@@ -252,3 +298,7 @@ def test_export_bridge_annual_inspection_schema(tmp_path: Path) -> None:
     assert defect_properties["standard_component_category_id"]["default"] is None
     assert defect_properties["resolved_structure_part"]["default"] is None
     assert set(source_properties["source_type"]["enum"]) == {"word", "manual"}
+    assert set(measurement_properties["value_type"]["enum"]) == {"single", "range"}
+    assert measurement_properties["minimum_value"]["default"] is None
+    assert measurement_properties["maximum_value"]["default"] is None
+    assert measurement_properties["is_approximate"]["default"] is False

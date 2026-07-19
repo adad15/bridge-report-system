@@ -124,8 +124,17 @@ void append_measurements(const Json::Value& defect, DefectPlan& plan) {
             }
             MeasurementPlan measurement;
             measurement.measurement_type = string_member_or_empty(item, "dimension_type");
+            measurement.value_type = optional_string_member(item, "value_type");
             measurement.numeric_value = optional_double_member(item, "value");
+            measurement.minimum_value = optional_double_member(item, "minimum_value");
+            measurement.maximum_value = optional_double_member(item, "maximum_value");
             measurement.unit = optional_string_member(item, "unit");
+            measurement.is_approximate = item.isMember("is_approximate") && item["is_approximate"].isBool()
+                ? item["is_approximate"].asBool()
+                : false;
+            if (!measurement.value_type.has_value() && measurement.numeric_value.has_value()) {
+                measurement.value_type = "single";
+            }
             measurement.raw_text = string_member_or_empty(item, "source_text");
             measurement.is_auto_parsed = true;
             plan.measurements.push_back(std::move(measurement));
@@ -153,6 +162,9 @@ void append_measurements(const Json::Value& defect, DefectPlan& plan) {
             MeasurementPlan measurement;
             measurement.measurement_type = "数量";
             measurement.numeric_value = parse_leading_integer(*quantity_text);
+            if (measurement.numeric_value.has_value()) {
+                measurement.value_type = "single";
+            }
             measurement.raw_text = *quantity_text;
             measurement.is_auto_parsed = false;
             plan.measurements.push_back(std::move(measurement));

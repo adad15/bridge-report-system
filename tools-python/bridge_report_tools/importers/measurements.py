@@ -14,7 +14,8 @@ DIMENSION_LABELS = {
 }
 
 DIMENSION_PATTERN = re.compile(
-    r"(?P<label>[LWSAD])\s*[=:：]\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>m2|m²|㎡|mm|cm|m)",
+    r"(?P<label>[LWSAD])\s*[=:：]\s*(?P<approx>约|大约|约为)?\s*"
+    r"(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>m2|m²|㎡|mm|cm|m)",
     re.IGNORECASE,
 )
 CHINESE_DIMENSION_LABELS = {
@@ -25,8 +26,22 @@ CHINESE_DIMENSION_LABELS = {
     "间距": "间距",
 }
 CHINESE_DIMENSION_PATTERN = re.compile(
-    r"(?P<label>总面积|面积|长度|宽度|间距)\s*[=:：]\s*"
+    r"(?P<label>总面积|面积|长度|宽度|间距)\s*[=:：]?\s*"
+    r"(?P<approx>约|大约|约为)?\s*"
     r"(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>m2|m²|㎡|mm|cm|m)",
+    re.IGNORECASE,
+)
+RANGE_PATTERN = re.compile(
+    r"(?:(?P<label>总面积|面积|长度|宽度|间距|[LWSAD])\s*[=:：]?\s*)?"
+    r"(?P<approx>约|大约|约为)?\s*"
+    r"(?P<minimum>\d+(?:\.\d+)?)\s*(?:~|～|至)\s*"
+    r"(?P<maximum>\d+(?:\.\d+)?)\s*"
+    r"(?P<unit>m2|m²|㎡|mm|cm|m)",
+    re.IGNORECASE,
+)
+APPROXIMATE_SINGLE_PATTERN = re.compile(
+    r"(?P<approx>约|大约|约为)\s*(?P<value>\d+(?:\.\d+)?)\s*"
+    r"(?P<unit>m2|m²|㎡|mm|cm|m)",
     re.IGNORECASE,
 )
 AREA_PRODUCT_PATTERN = re.compile(
@@ -61,6 +76,36 @@ def area_unit(unit: str) -> str:
     return f"{normalized_unit}2"
 
 
+def dimension_type_for(label: str | None, unit: str) -> str:
+    if label:
+        upper = label.upper()
+        if upper in DIMENSION_LABELS:
+            return DIMENSION_LABELS[upper]
+        if label in CHINESE_DIMENSION_LABELS:
+            return CHINESE_DIMENSION_LABELS[label]
+    return "面积" if normalize_unit(unit).endswith("2") else "长度"
+
+
+def single_measurement(
+    dimension_type: str,
+    value: float,
+    unit: str,
+    source_text: str,
+    *,
+    is_approximate: bool = False,
+) -> Measurement:
+    return Measurement(
+        dimension_type=dimension_type,
+        value_type="single",
+        value=value,
+        minimum_value=None,
+        maximum_value=None,
+        unit=unit,
+        is_approximate=is_approximate,
+        source_text=source_text,
+    )
+
+
 def overlaps(span: tuple[int, int], existing_spans: list[tuple[int, int]]) -> bool:
     start, end = span
     return any(start < existing_end and end > existing_start for existing_start, existing_end in existing_spans)
@@ -92,17 +137,37 @@ def parse_measurements(
         return [], []
 
     measurement_matches: list[tuple[tuple[int, int], Measurement]] = []
-    for match in DIMENSION_PATTERN.finditer(measurement_text):
-        label = match.group("label").upper()
-        source_text = match.group(0).replace("：", "=")
+    for match in RANGE_PATTERN.finditer(measurement_text):
+        unit = normalize_unit(match.group("unit"))
         measurement_matches.append(
             (
                 match.span(),
                 Measurement(
-                    dimension_type=DIMENSION_LABELS[label],
-                    value=float(match.group("value")),
-                    unit=normalize_unit(match.group("unit")),
-                    source_text=source_text,
+                    dimension_type=dimension_type_for(match.group("label"), unit),
+                    value_type="range",
+                    value=None,
+                    minimum_value=float(match.group("minimum")),
+                    maximum_value=float(match.group("maximum")),
+                    unit=unit,
+                    is_approximate=match.group("approx") is not None,
+                    source_text=match.group(0),
+                ),
+            )
+        )
+
+    for match in DIMENSION_PATTERN.finditer(measurement_text):
+        if overlaps(match.span(), [item[0] for item in measurement_matches]):
+            continue
+        label = match.group("label").upper()
+        measurement_matches.append(
+            (
+                match.span(),
+                single_measurement(
+                    DIMENSION_LABELS[label],
+                    float(match.group("value")),
+                    normalize_unit(match.group("unit")),
+                    match.group(0),
+                    is_approximate=match.group("approx") is not None,
                 ),
             )
         )
@@ -112,15 +177,33 @@ def parse_measurements(
         existing_spans = [item[0] for item in measurement_matches]
         if overlaps(span, existing_spans):
             continue
-        source_text = match.group(0).replace("：", "=")
         measurement_matches.append(
             (
                 span,
-                Measurement(
-                    dimension_type=CHINESE_DIMENSION_LABELS[match.group("label")],
-                    value=float(match.group("value")),
-                    unit=normalize_unit(match.group("unit")),
-                    source_text=source_text,
+                single_measurement(
+                    CHINESE_DIMENSION_LABELS[match.group("label")],
+                    float(match.group("value")),
+                    normalize_unit(match.group("unit")),
+                    match.group(0),
+                    is_approximate=match.group("approx") is not None,
+                ),
+            )
+        )
+
+    for match in APPROXIMATE_SINGLE_PATTERN.finditer(measurement_text):
+        span = match.span()
+        if overlaps(span, [item[0] for item in measurement_matches]):
+            continue
+        unit = normalize_unit(match.group("unit"))
+        measurement_matches.append(
+            (
+                span,
+                single_measurement(
+                    dimension_type_for(None, unit),
+                    float(match.group("value")),
+                    unit,
+                    match.group(0),
+                    is_approximate=True,
                 ),
             )
         )
@@ -133,15 +216,14 @@ def parse_measurements(
         first = float(match.group("first"))
         second = float(match.group("second"))
         unit = area_unit(match.group("second_unit"))
-        source_text = match.group(0).replace("：", "=")
         measurement_matches.append(
             (
                 span,
-                Measurement(
-                    dimension_type="面积",
-                    value=round(first * second, 6),
-                    unit=unit,
-                    source_text=source_text,
+                single_measurement(
+                    "面积",
+                    round(first * second, 6),
+                    unit,
+                    match.group(0),
                 ),
             )
         )
@@ -155,11 +237,11 @@ def parse_measurements(
         measurement_matches.append(
             (
                 span,
-                Measurement(
-                    dimension_type="数量",
-                    value=float(match.group("value")),
-                    unit=match.group("unit"),
-                    source_text=source_text,
+                single_measurement(
+                    "数量",
+                    float(match.group("value")),
+                    match.group("unit"),
+                    source_text,
                 ),
             )
         )

@@ -433,6 +433,37 @@ TEST(ConfirmPlanTest, MeasurementsMapFromMeasurementsArray) {
     EXPECT_TRUE(width->is_auto_parsed);
 }
 
+TEST(ConfirmPlanTest, RangeMeasurementPreservesEndpoints) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["defects"][0]["quantity_text"] = Json::Value(Json::nullValue);
+    Json::Value measurements(Json::arrayValue);
+    Json::Value range(Json::objectValue);
+    range["dimension_type"] = "长度";
+    range["value_type"] = "range";
+    range["value"] = Json::Value();
+    range["minimum_value"] = 0.5;
+    range["maximum_value"] = 4.0;
+    range["unit"] = "m";
+    range["is_approximate"] = false;
+    range["source_text"] = "0.5~4.0m";
+    measurements.append(range);
+    data["defects"][0]["measurements"] = measurements;
+
+    const auto plan = build_confirm_plan(data);
+    const auto* defect = find_defect(plan, "defect_0001");
+    ASSERT_NE(defect, nullptr);
+    const auto* length = find_measurement(*defect, "长度");
+    ASSERT_NE(length, nullptr);
+    EXPECT_EQ(length->value_type, "range");
+    EXPECT_FALSE(length->numeric_value.has_value());
+    ASSERT_TRUE(length->minimum_value.has_value());
+    ASSERT_TRUE(length->maximum_value.has_value());
+    EXPECT_DOUBLE_EQ(*length->minimum_value, 0.5);
+    EXPECT_DOUBLE_EQ(*length->maximum_value, 4.0);
+    EXPECT_FALSE(length->is_approximate);
+}
+
 TEST(ConfirmPlanTest, MeasurementsEmptyWithMeasurementTextProducesUnrecognizedRow) {
     auto data = valid_data();
     confirm_all_candidates(data);

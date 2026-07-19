@@ -28,8 +28,12 @@ struct ComponentPlan {
  */
 struct MeasurementPlan {
     std::string measurement_type;
+    std::optional<std::string> value_type;
     std::optional<double> numeric_value;
+    std::optional<double> minimum_value;
+    std::optional<double> maximum_value;
     std::optional<std::string> unit;
+    bool is_approximate{false};
     std::string raw_text;
     bool is_auto_parsed{false};
 };

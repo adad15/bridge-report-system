@@ -108,7 +108,14 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
 
   for (const defect of data.defects) {
     const hasHint = isNonEmptyString(defect.measurement_text) && MEASUREMENT_HINT_PATTERN.test(defect.measurement_text);
-    if (hasHint && defect.measurements.length === 0) {
+    const alreadyWarned = defect.warnings.some((warning) => warning.code === "measurement_parse_low_confidence") ||
+      data.warnings.some((warning) =>
+        warning.code === "measurement_parse_low_confidence" && warning.target_candidate_id === defect.candidate_id
+      ) ||
+      data.errors.some((warning) =>
+        warning.code === "measurement_parse_low_confidence" && warning.target_candidate_id === defect.candidate_id
+      );
+    if (hasHint && defect.measurements.length === 0 && !alreadyWarned) {
       items.push({
         kind: "defect",
         candidateId: defect.candidate_id,

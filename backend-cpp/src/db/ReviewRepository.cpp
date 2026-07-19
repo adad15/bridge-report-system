@@ -228,12 +228,17 @@ void insert_defect_measurement(
 ) {
     tx->execSqlSync(
         "insert into defect_measurements "
-        "(defect_observation_id, measurement_type, numeric_value, unit, raw_text, is_auto_parsed, is_manually_confirmed) "
-        "values ($1::uuid, $2, $3, $4, $5, $6, true)",
+        "(defect_observation_id, measurement_type, value_type, numeric_value, minimum_value, maximum_value, unit, "
+        "is_approximate, raw_text, is_auto_parsed, is_manually_confirmed) "
+        "values ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)",
         defect_observation_id,
         measurement.measurement_type,
+        measurement.value_type,
         measurement.numeric_value,
+        measurement.minimum_value,
+        measurement.maximum_value,
         measurement.unit,
+        measurement.is_approximate,
         measurement.raw_text,
         measurement.is_auto_parsed
     );

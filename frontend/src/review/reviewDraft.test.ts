@@ -177,8 +177,8 @@ describe("reviewDraftReducer", () => {
 
     expect(next.defects[0].measurement_text).toBe("L=1.2m，W=0.15m");
     expect(next.defects[0].measurements).toEqual([
-      { dimension_type: "长度", value: 1.2, unit: "m", source_text: "L=1.2m" },
-      { dimension_type: "宽度", value: 0.15, unit: "m", source_text: "W=0.15m" },
+      { dimension_type: "长度", value_type: "single", value: 1.2, minimum_value: null, maximum_value: null, unit: "m", is_approximate: false, source_text: "L=1.2m" },
+      { dimension_type: "宽度", value_type: "single", value: 0.15, minimum_value: null, maximum_value: null, unit: "m", is_approximate: false, source_text: "W=0.15m" },
     ]);
     expect(next.defects[0].review_status).toBe("已修改");
   });

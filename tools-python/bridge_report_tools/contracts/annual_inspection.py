@@ -95,9 +95,30 @@ class InspectionInfo(ContractModel):
 
 class Measurement(ContractModel):
     dimension_type: str
-    value: float
+    value_type: Literal["single", "range"]
+    value: float | None = None
+    minimum_value: float | None = None
+    maximum_value: float | None = None
     unit: str
+    is_approximate: bool = False
     source_text: str
+
+    @model_validator(mode="after")
+    def validate_value_shape(self) -> Measurement:
+        if self.value_type == "single":
+            if self.value is None:
+                raise ValueError("single measurement requires value")
+            if self.minimum_value is not None or self.maximum_value is not None:
+                raise ValueError("single measurement must not contain range endpoints")
+            return self
+
+        if self.value is not None:
+            raise ValueError("range measurement must not contain value")
+        if self.minimum_value is None or self.maximum_value is None:
+            raise ValueError("range measurement requires both endpoints")
+        if self.minimum_value > self.maximum_value:
+            raise ValueError("range measurement minimum must not exceed maximum")
+        return self
 
 
 class DefectCandidate(ContractModel):

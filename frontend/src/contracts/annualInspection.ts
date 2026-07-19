@@ -78,8 +78,12 @@ export interface InspectionInfo {
 
 export interface Measurement {
   dimension_type: string;
-  value: number;
+  value_type: "single" | "range";
+  value: number | null;
+  minimum_value: number | null;
+  maximum_value: number | null;
   unit: string;
+  is_approximate: boolean;
   source_text: string;
 }
 
@@ -323,13 +327,41 @@ function isNullablePositiveInteger(value: unknown): boolean {
   );
 }
 
+function isValidMeasurement(value: unknown): value is Measurement {
+  if (
+    !isRecord(value) ||
+    typeof value.dimension_type !== "string" ||
+    value.dimension_type.length === 0 ||
+    typeof value.unit !== "string" ||
+    value.unit.length === 0 ||
+    typeof value.source_text !== "string" ||
+    value.source_text.length === 0 ||
+    typeof value.is_approximate !== "boolean"
+  ) {
+    return false;
+  }
+  if (value.value_type === "single") {
+    return typeof value.value === "number" && Number.isFinite(value.value) &&
+      value.minimum_value === null && value.maximum_value === null;
+  }
+  if (value.value_type === "range") {
+    return value.value === null &&
+      typeof value.minimum_value === "number" && Number.isFinite(value.minimum_value) &&
+      typeof value.maximum_value === "number" && Number.isFinite(value.maximum_value) &&
+      value.minimum_value <= value.maximum_value;
+  }
+  return false;
+}
+
 function isValidDefectCandidate(value: unknown): boolean {
   if (!isRecord(value) || !hasValidConfidence(value)) {
     return false;
   }
   const missingPhotoNumbers = getRequiredArray(value, "confirmed_missing_photo_numbers");
+  const measurements = getRequiredArray(value, "measurements");
   return (
     hasRequiredArrayMembers(value, ["measurements", "photo_numbers", "warnings"]) &&
+    measurements !== null && measurements.every(isValidMeasurement) &&
     hasRequiredObjectMembers(value, ["source_ref"]) &&
     isValidSourceRef(value.source_ref) &&
     typeof value.component_name === "string" &&

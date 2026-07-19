@@ -49,8 +49,12 @@ const validData: BridgeAnnualInspectionDataV2 = {
       measurements: [
         {
           dimension_type: "长度",
+          value_type: "single",
           value: 0.8,
+          minimum_value: null,
+          maximum_value: null,
           unit: "m",
+          is_approximate: false,
           source_text: "L=0.8m",
         },
       ],
@@ -200,6 +204,36 @@ describe("isBridgeAnnualInspectionData 2.0", () => {
   it("rejects duplicate confirmed missing photo numbers", () => {
     const invalid = cloneValidData();
     invalid.defects[0].confirmed_missing_photo_numbers = ["2.1-1", "2.1-1"];
+
+    expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
+  });
+
+  it.each([
+    {
+      dimension_type: "长度",
+      value_type: "range",
+      value: null,
+      minimum_value: 4,
+      maximum_value: 0.5,
+      unit: "m",
+      is_approximate: false,
+      source_text: "4~0.5m",
+    },
+    {
+      dimension_type: "长度",
+      value_type: "single",
+      value: 1,
+      minimum_value: 0.5,
+      maximum_value: null,
+      unit: "m",
+      is_approximate: false,
+      source_text: "1m",
+    },
+  ])("rejects invalid single/range measurement invariants", (measurement) => {
+    const invalid = cloneValidData() as unknown as {
+      defects: Array<{ measurements: unknown[] }>;
+    };
+    invalid.defects[0].measurements = [measurement];
 
     expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
   });

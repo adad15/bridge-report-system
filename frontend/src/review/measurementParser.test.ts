@@ -9,8 +9,47 @@ describe("parseMeasurements", () => {
     const measurements = parseMeasurements("L=0.8m，W=0.12mm");
 
     expect(measurements.map((item) => item.dimension_type)).toEqual(["长度", "宽度"]);
-    expect(measurements[0]).toEqual({ dimension_type: "长度", value: 0.8, unit: "m", source_text: "L=0.8m" });
-    expect(measurements[1]).toEqual({ dimension_type: "宽度", value: 0.12, unit: "mm", source_text: "W=0.12mm" });
+    expect(measurements[0]).toEqual({ dimension_type: "长度", value_type: "single", value: 0.8, minimum_value: null, maximum_value: null, unit: "m", is_approximate: false, source_text: "L=0.8m" });
+    expect(measurements[1]).toEqual({ dimension_type: "宽度", value_type: "single", value: 0.12, minimum_value: null, maximum_value: null, unit: "mm", is_approximate: false, source_text: "W=0.12mm" });
+  });
+
+  it.each(["0.5~4.0m", "0.5～4.0m", "15至20m"])(
+    "preserves both endpoints for range %s",
+    (sourceText) => {
+      const [measurement] = parseMeasurements(sourceText);
+
+      expect(measurement).toMatchObject({
+        dimension_type: "长度",
+        value_type: "range",
+        value: null,
+        minimum_value: sourceText.startsWith("15") ? 15 : 0.5,
+        maximum_value: sourceText.startsWith("15") ? 20 : 4,
+        unit: "m",
+        is_approximate: false,
+        source_text: sourceText,
+      });
+    },
+  );
+
+  it("keeps approximate single values and Chinese labels without separators", () => {
+    expect(parseMeasurements("总面积约1.0m²")).toEqual([
+      {
+        dimension_type: "总面积",
+        value_type: "single",
+        value: 1,
+        minimum_value: null,
+        maximum_value: null,
+        unit: "m2",
+        is_approximate: true,
+        source_text: "总面积约1.0m²",
+      },
+    ]);
+    expect(parseMeasurements("长度20.0m")[0]).toMatchObject({
+      dimension_type: "长度",
+      value_type: "single",
+      value: 20,
+      is_approximate: false,
+    });
   });
 
   it("parses S=/D= area+spacing and a trailing count expression", () => {
@@ -44,15 +83,15 @@ describe("parseMeasurements", () => {
     const measurements = parseMeasurements("1处蜂窝、麻面，S=0.6×0.1m²");
 
     expect(measurements.map((item) => item.dimension_type)).toEqual(["数量", "面积"]);
-    expect(measurements[1]).toEqual({ dimension_type: "面积", value: 0.06, unit: "m2", source_text: "S=0.6×0.1m²" });
+    expect(measurements[1]).toEqual({ dimension_type: "面积", value_type: "single", value: 0.06, minimum_value: null, maximum_value: null, unit: "m2", is_approximate: false, source_text: "S=0.6×0.1m²" });
   });
 
   it("parses Chinese-label length and total-area expressions using the full-width colon", () => {
     const lengthMeasurements = parseMeasurements("勾缝砂浆脱落,长度：5m");
     const areaMeasurements = parseMeasurements("混凝土剥落，破损掉角,总面积：1m²");
 
-    expect(lengthMeasurements).toEqual([{ dimension_type: "长度", value: 5, unit: "m", source_text: "长度=5m" }]);
-    expect(areaMeasurements).toEqual([{ dimension_type: "总面积", value: 1, unit: "m2", source_text: "总面积=1m²" }]);
+    expect(lengthMeasurements).toEqual([{ dimension_type: "长度", value_type: "single", value: 5, minimum_value: null, maximum_value: null, unit: "m", is_approximate: false, source_text: "长度：5m" }]);
+    expect(areaMeasurements).toEqual([{ dimension_type: "总面积", value_type: "single", value: 1, minimum_value: null, maximum_value: null, unit: "m2", is_approximate: false, source_text: "总面积：1m²" }]);
   });
 
   it("returns an empty array for plain descriptive text with no measurement hint", () => {

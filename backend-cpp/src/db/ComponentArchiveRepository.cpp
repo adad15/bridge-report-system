@@ -218,7 +218,8 @@ Json::Value ComponentArchiveRepository::get_defect_archive(const std::string& co
 
     const auto measurement_rows = db_client_->execSqlSync(
         std::string(
-            "select dm.defect_observation_id, dm.measurement_type, dm.numeric_value, dm.unit, dm.raw_text "
+            "select dm.defect_observation_id, dm.measurement_type, dm.value_type, dm.numeric_value, "
+            "dm.minimum_value, dm.maximum_value, dm.unit, dm.is_approximate, dm.raw_text "
             "from defect_measurements dm "
             "join defect_observations o on o.id = dm.defect_observation_id ") + kCurrentYearJoin +
             "where o.bridge_component_id = $1::uuid and " + kSettledObservation +
@@ -232,8 +233,12 @@ Json::Value ComponentArchiveRepository::get_defect_archive(const std::string& co
         }
         Json::Value measurement;
         measurement["measurement_type"] = row["measurement_type"].as<std::string>();
+        measurement["value_type"] = nullable_string(row, "value_type");
         measurement["numeric_value"] = nullable_double(row, "numeric_value");
+        measurement["minimum_value"] = nullable_double(row, "minimum_value");
+        measurement["maximum_value"] = nullable_double(row, "maximum_value");
         measurement["unit"] = nullable_string(row, "unit");
+        measurement["is_approximate"] = row["is_approximate"].as<bool>();
         measurement["raw_text"] = row["raw_text"].as<std::string>();
         observations[it->second]["measurements"].append(measurement);
     }

@@ -46,8 +46,12 @@ export interface ArchivePhoto {
 
 export interface ArchiveMeasurement {
   measurement_type: string;
+  value_type: "single" | "range" | null;
   numeric_value: number | null;
+  minimum_value: number | null;
+  maximum_value: number | null;
   unit: string | null;
+  is_approximate: boolean;
   raw_text: string;
 }
 

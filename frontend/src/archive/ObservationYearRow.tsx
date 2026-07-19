@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { ArchiveObservation, ObservationEvidence } from "../api/componentArchiveApi";
+import type { ArchiveMeasurement, ArchiveObservation, ObservationEvidence } from "../api/componentArchiveApi";
 import { defectPhotoContentUrl, fetchObservationEvidence } from "../api/componentArchiveApi";
 import { ApiError } from "../api/apiClient";
 import { backendBaseUrl } from "../config";
@@ -9,6 +9,22 @@ interface ObservationYearRowProps {
   observation: ArchiveObservation;
   /** T14：已绑定观测的"重新绑定"入口；未提供时不显示按钮（如修订历史只读视图）。 */
   onRebind?: (observation: ArchiveObservation) => void;
+}
+
+export function formatArchiveMeasurementValue(measurement: ArchiveMeasurement): string {
+  const prefix = measurement.is_approximate ? "约" : "";
+  const unit = measurement.unit ?? "";
+  if (
+    measurement.value_type === "range" &&
+    measurement.minimum_value !== null &&
+    measurement.maximum_value !== null
+  ) {
+    return `（${prefix}${measurement.minimum_value}~${measurement.maximum_value}${unit}）`;
+  }
+  if (measurement.numeric_value !== null) {
+    return `（${prefix}${measurement.numeric_value}${unit}）`;
+  }
+  return "";
 }
 
 // 病害线索卡片内的年度观测行（模块 06 §7.2）：
@@ -62,7 +78,7 @@ export function ObservationYearRow({ observation, onRebind }: ObservationYearRow
               {observation.measurements.map((item, index) => (
                 <li key={`${item.raw_text}-${index}`}>
                   {item.measurement_type}：{item.raw_text}
-                  {item.numeric_value !== null ? `（${item.numeric_value}${item.unit ?? ""}）` : ""}
+                  {formatArchiveMeasurementValue(item)}
                 </li>
               ))}
             </ul>
