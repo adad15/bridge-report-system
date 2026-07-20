@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { BridgeAnnualInspectionDataV2 } from "../contracts/annualInspection";
-import {
-  projectVersionTwoForLegacyReview,
-  versionTwoWireData,
-} from "../contracts/annualInspection";
+import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
 import { ApiError } from "./apiClient";
 import {
   acquireEditLock,
@@ -21,7 +17,7 @@ import {
 } from "./reviewApi";
 
 // 满足 isBridgeAnnualInspectionData 最小必填字段集合的候选数据骨架，供测试复用。
-const minimalWireResult: BridgeAnnualInspectionDataV2 = {
+const minimalWireResult: BridgeAnnualInspectionData = {
   contract: {
     name: "BridgeAnnualInspectionData",
     version: "2.0",
@@ -56,7 +52,7 @@ const minimalWireResult: BridgeAnnualInspectionDataV2 = {
   errors: [],
 };
 
-const minimalParsedResult = projectVersionTwoForLegacyReview(minimalWireResult);
+const minimalParsedResult = minimalWireResult;
 
 function reviewResponseBody(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -133,53 +129,6 @@ describe("reviewApi", () => {
     expect(review.component_inventory?.id).toBe("revision-1");
   });
 
-  it("fetchReview accepts a legacy_pending_reparse response with display-normalized 1.2 data", async () => {
-    const legacy = {
-      ...minimalParsedResult,
-      contract: { ...minimalParsedResult.contract, version: "1.2" },
-    };
-    const body = reviewResponseBody({
-      parsed_result: legacy,
-      contract_compatibility: "legacy_pending_reparse",
-    });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => body,
-    }));
-
-    const review = await fetchReview("http://127.0.0.1:18080", "record-1");
-
-    expect(review.contract_compatibility).toBe("legacy_pending_reparse");
-    expect(review.parsed_result.contract.version).toBe("1.2");
-  });
-
-  it("fetchReview accepts a legacy_read_only response with display-normalized 1.2 data", async () => {
-    const legacy = {
-      ...minimalParsedResult,
-      contract: { ...minimalParsedResult.contract, version: "1.2" },
-    };
-    const body = reviewResponseBody({
-      import_record: {
-        ...reviewResponseBody().import_record,
-        import_status: "已确认",
-      },
-      parsed_result: legacy,
-      contract_compatibility: "legacy_read_only",
-    });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => body,
-    }));
-
-    const review = await fetchReview("http://127.0.0.1:18080", "record-1");
-
-    expect(review.import_record.import_status).toBe("已确认");
-    expect(review.contract_compatibility).toBe("legacy_read_only");
-    expect(review.parsed_result.contract.version).toBe("1.2");
-  });
-
   it("fetchReview throws ApiError when parsed_result fails the contract guard", async () => {
     const body = reviewResponseBody({ parsed_result: { not: "a valid contract" } });
     const fetchMock = vi.fn().mockResolvedValue({
@@ -207,7 +156,7 @@ describe("reviewApi", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/review-draft", expect.objectContaining({
       method: "PUT",
-      body: JSON.stringify(versionTwoWireData(minimalParsedResult)),
+      body: JSON.stringify(minimalParsedResult),
     }));
     const saveHeaders = new Headers(fetchMock.mock.calls[0][1].headers);
     expect(saveHeaders.get("Content-Type")).toBe("application/json");

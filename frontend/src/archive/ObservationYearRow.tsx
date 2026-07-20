@@ -56,7 +56,6 @@ export function ObservationYearRow({ observation, onRebind }: ObservationYearRow
       <button type="button" className="archive-observation-summary" onClick={() => setExpanded(!expanded)}>
         <strong>{observation.inspection_year}</strong>
         <span>标度 {observation.scale ?? "-"}</span>
-        <span>扣分 {observation.defect_deduction ?? "-"}</span>
         <span className="archive-observation-measurement" title={measurementSummary}>
           {measurementSummary}
         </span>

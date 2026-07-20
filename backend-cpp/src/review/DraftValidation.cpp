@@ -1,14 +1,11 @@
 #include "bridge_report/review/DraftValidation.hpp"
 
-#include <cmath>
 #include <map>
 #include <optional>
 #include <set>
 #include <string>
-#include <vector>
 
 #include "bridge_report/contracts/AnnualInspectionContract.hpp"
-#include "bridge_report/review/ComponentScore.hpp"
 #include "bridge_report/review/JsonAccessors.hpp"
 
 namespace bridge_report::review {
@@ -16,13 +13,6 @@ namespace {
 
 bool defect_has_warnings(const Json::Value& defect) {
     return defect["warnings"].isArray() && !defect["warnings"].empty();
-}
-
-std::optional<double> optional_numeric_member(const Json::Value& object, const char* member) {
-    if (!object.isObject() || !object.isMember(member) || !object[member].isNumeric()) {
-        return std::nullopt;
-    }
-    return object[member].asDouble();
 }
 
 // 数值语义等价的深比较：jsonb -> 文本 -> 前端 JSON.parse/stringify 的往返会把
@@ -78,8 +68,8 @@ std::map<std::string, const Json::Value*> index_defects_by_candidate_id(const Js
 
 const std::set<std::string>& warning_defect_editable_fields() {
     static const std::set<std::string> fields = {
-        "structure_part", "component_name", "component_alias", "component_number", "defect_location",
-        "defect_scale", "defect_deduction", "defect_type", "defect_description",
+        "source_structure_part", "component_name", "component_number", "defect_location",
+        "defect_scale", "defect_type", "defect_description",
         "quantity_text", "measurement_text", "measurements", "review_status",
         "group_review_status", "review_note",
         "bridge_component_id", "standard_component_category_id", "resolved_structure_part",
@@ -104,87 +94,6 @@ Json::Value frozen_warning_defect_fields(Json::Value defect) {
     return defect;
 }
 
-bool component_ref_matches_defect(const Json::Value& component_ref, const Json::Value& defect) {
-    return string_member_or_empty(component_ref, "structure_part") == string_member_or_empty(defect, "structure_part")
-        && string_member_or_empty(component_ref, "component_name") == string_member_or_empty(defect, "component_name")
-        && string_member_or_empty(component_ref, "component_alias") == string_member_or_empty(defect, "component_alias");
-}
-
-bool same_string_array(const Json::Value& current, const Json::Value& expected) {
-    return current.isArray() && expected.isArray() && json_semantically_equal(current, expected);
-}
-
-void rebuild_component_ratings(Json::Value& draft) {
-    if (!draft.isObject() || !draft.isMember("ratings") || !draft["ratings"].isObject()
-        || !draft["ratings"].isMember("component_ratings")) {
-        return;
-    }
-    auto& component_ratings = draft["ratings"]["component_ratings"];
-    if (!component_ratings.isArray() || !draft["defects"].isArray()) {
-        return;
-    }
-
-    for (auto& rating : component_ratings) {
-        Json::Value deduction_ids(Json::arrayValue);
-        std::vector<double> deductions;
-        bool deductions_complete = true;
-        for (const auto& defect : draft["defects"]) {
-            if (review_status_of(defect) == "已忽略"
-                || !component_ref_matches_defect(rating["component_ref"], defect)) {
-                continue;
-            }
-            deduction_ids.append(candidate_id_of(defect));
-            const auto deduction = optional_numeric_member(defect, "defect_deduction");
-            if (deduction.has_value()) {
-                deductions.push_back(*deduction);
-            } else {
-                deductions_complete = false;
-            }
-        }
-
-        const auto recalculated = deductions_complete && !deductions.empty()
-            ? compute_component_score(deductions)
-            : std::nullopt;
-        const auto current_calculated = optional_numeric_member(rating, "calculated_score");
-        const bool same_calculated = (!recalculated.has_value() && !current_calculated.has_value())
-            || (recalculated.has_value() && current_calculated.has_value()
-                && std::abs(recalculated->score - *current_calculated) <= 1e-9);
-        if (same_string_array(rating["deduction_defect_candidate_ids"], deduction_ids) && same_calculated) {
-            continue;
-        }
-
-        rating["deduction_defect_candidate_ids"] = deduction_ids;
-        if (recalculated.has_value()) {
-            rating["calculated_score"] = recalculated->score;
-            Json::Value details(Json::objectValue);
-            details["standard"] = "JTG/T H21-2011 4.1.1";
-            details["rounding_scale"] = 2;
-            details["ordered_deductions"] = Json::Value(Json::arrayValue);
-            for (const auto deduction : recalculated->ordered_deductions) {
-                details["ordered_deductions"].append(deduction);
-            }
-            rating["calculation_details"] = std::move(details);
-        } else {
-            rating["calculated_score"] = Json::Value(Json::nullValue);
-            rating["calculation_details"] = Json::Value(Json::nullValue);
-        }
-
-        const auto source = optional_numeric_member(rating, "source_score");
-        const auto status = classify_score_validation(
-            source,
-            recalculated.has_value() ? std::optional<double>(recalculated->score) : std::nullopt
-        );
-        rating["score_validation_status"] = status;
-        if (status == "一致" && source.has_value()) {
-            rating["confirmed_score"] = round_score_to_two_decimals(*source);
-        } else {
-            rating["confirmed_score"] = Json::Value(Json::nullValue);
-        }
-        rating["score_resolution_reason"] = Json::Value(Json::nullValue);
-        rating["review_status"] = "待确认";
-    }
-}
-
 }  // namespace
 
 DraftValidationResult validate_review_draft(
@@ -201,12 +110,8 @@ DraftValidationResult validate_review_draft(
         return result;
     }
 
-    const auto mode = body["contract"]["version"].isString() &&
-                              body["contract"]["version"].asString() == "1.2"
-                          ? contracts::AnnualInspectionValidationMode::Legacy12Transition
-                          : contracts::AnnualInspectionValidationMode::FinalVersion2;
     const auto contract_result =
-        contracts::validate_bridge_annual_inspection_data(body, mode);
+        contracts::validate_bridge_annual_inspection_data(body);
     if (!contract_result.ok()) {
         result.ok = false;
         result.code = "contract_validation_failed";
@@ -217,7 +122,7 @@ DraftValidationResult validate_review_draft(
         return result;
     }
 
-    if (mode == contracts::AnnualInspectionValidationMode::FinalVersion2 && body["defects"].isArray()) {
+    if (body["defects"].isArray()) {
         for (Json::ArrayIndex index = 0; index < body["defects"].size(); ++index) {
             const auto& defect = body["defects"][index];
             const auto has_non_blank_string = [&](const char* field) {
@@ -372,7 +277,7 @@ DraftValidationResult validate_warnings_only_scope(
     expected["defects"] = new_draft["defects"];
 
     for (const auto& member : stored_draft.getMemberNames()) {
-        if (member == "defects" || member == "ratings") {
+        if (member == "defects") {
             continue;
         }
         if (!new_draft.isMember(member)
@@ -381,15 +286,10 @@ DraftValidationResult validate_warnings_only_scope(
         }
     }
     for (const auto& member : new_draft.getMemberNames()) {
-        if (member != "defects" && member != "ratings" && !stored_draft.isMember(member)) {
+        if (member != "defects" && !stored_draft.isMember(member)) {
             result.issues.push_back({member, "warnings_only 重开不允许新增顶层字段 " + member + "。"});
         }
     }
-    if (!json_semantically_equal(expected["ratings"], new_draft["ratings"])) {
-        result.issues.push_back(
-            {"ratings", "Word 评分仅供报告对照，warnings_only 重开不允许修改。"});
-    }
-
     result.ok = result.issues.empty();
     if (result.ok) {
         result.code.clear();

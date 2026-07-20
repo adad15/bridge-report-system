@@ -24,7 +24,7 @@ it("renders blocking errors separately from warnings", () => {
 
 it("shows a business defect sequence and returns the complete attention item", () => {
   const draft = data();
-  const item = { kind: "defect" as const, candidateId: draft.defects[0].candidate_id, message: "构件编号为空", severity: "warning" as const, targetField: "component_alias" as const };
+  const item = { kind: "defect" as const, candidateId: draft.defects[0].candidate_id, message: "构件编号为空", severity: "warning" as const, targetField: "component_number" as const };
   const onSelect = vi.fn();
 
   render(<NeedsAttentionSection items={[item]} draft={draft} onSelect={onSelect} />);

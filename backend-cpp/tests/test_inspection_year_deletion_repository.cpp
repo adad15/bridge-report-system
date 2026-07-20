@@ -33,8 +33,6 @@ protected:
         client_->execSqlSync(
             "insert into defect_measurements(defect_observation_id,measurement_type,numeric_value,raw_text) values($1::uuid,'数量',2,'2处')", observation_2026_);
         client_->execSqlSync(
-            "insert into condition_ratings(inspection_year_id,rating_level,structure_part,bridge_component_id,rating_item_name,score) values($1::uuid,'构件','上部结构',$2::uuid,'2-1#板',65)", year_v2_, component_id_);
-        client_->execSqlSync(
             "insert into defect_comparisons(bridge_id,current_inspection_year_id,compared_inspection_year_id,comparison_result) values($1::uuid,$2::uuid,$3::uuid,'延续')",
             bridge_id_, year_v2_, year_2025_);
         exclusive_file_id_ = archived_file(year_v2_, "delete-tests/exclusive.docx");
@@ -99,7 +97,7 @@ TEST_F(InspectionYearDeletionRepositoryTest, DeletesAllVersionsAndRetainsOtherYe
     EXPECT_EQ(preview->counts.import_records, 1);
     EXPECT_EQ(preview->counts.defect_observations, 1);
     EXPECT_EQ(preview->counts.defect_measurements, 1);
-    EXPECT_EQ(preview->counts.condition_ratings, 1);
+    EXPECT_EQ(preview->counts.condition_ratings, 0);
     EXPECT_EQ(preview->counts.defect_comparisons, 1);
     EXPECT_EQ(preview->counts.archived_files_to_delete, 1);
     EXPECT_EQ(preview->counts.temporary_source_files_to_delete, 1);
@@ -135,8 +133,8 @@ TEST_F(InspectionYearDeletionRepositoryTest, ActiveEditLockBlocksAndChangedImpac
 
     client_->execSqlSync("delete from import_record_edit_locks where import_record_id=$1::uuid", import_id_);
     client_->execSqlSync(
-        "insert into condition_ratings(inspection_year_id,rating_level,structure_part,rating_item_name,score) "
-        "values($1::uuid,'全桥','全桥','全桥',80)", year_v2_);
+        "insert into defect_measurements(defect_observation_id,measurement_type,numeric_value,raw_text) "
+        "values($1::uuid,'宽度',0.2,'0.2mm')", observation_2026_);
     const auto changed = repository.delete_year(year_v2_, preview->impact_token(), "永久删除 2026", "误建年度", actor());
     EXPECT_EQ(changed.status, bridge_report::deletion::DeleteInspectionYearStatus::ImpactChanged);
 }

@@ -225,7 +225,7 @@ function ReviewWorkspaceLoaded({
   const readOnly = reviewSession.readOnly;
   const isAdmin = user?.role === "admin";
   const hasWarningDefects = draft.defects.some((defect) => defect.warnings.length > 0);
-  // 已确认 + 原生 2.0 才能重开；旧版终态（legacy_read_only）永久只读。
+  // 只有已确认的 2.0 记录允许进入受控重开流程。
   const canReopen = sessionImportStatus === "已确认" && response.contract_compatibility === "native_2_0" && !busy;
   const needsEditLock = !reviewSession.readOnly;
   const returnPath = response.inspection_year
@@ -470,17 +470,6 @@ function ReviewWorkspaceLoaded({
     } finally {
       setBusy(false);
     }
-  }
-
-  // 批量确认要把"确认后的草稿"发给后端保存，但 dispatch 是异步排队的——dispatch 完
-  // 之后，本次函数体里的 draft 变量仍然是旧值，只有下一次渲染才会拿到新 state。
-  // 这里改用同一个 reviewDraftReducer 在本地先手算出 nextDraft：dispatch 只用来让
-  // React state（继而是 UI）与之同步，真正发给后端保存的是这个手算值，而不是闭包里
-  // 还没更新的 draft。
-  async function handleBatchConfirmNormal(): Promise<void> {
-    const nextDraft = reviewDraftReducer(draft, { type: "batch_confirm_normal_ratings" });
-    dispatch({ type: "batch_confirm_normal_ratings" });
-    await handleSaveDraft(nextDraft);
   }
 
   async function handlePreflight(): Promise<void> {
@@ -803,10 +792,6 @@ function ReviewWorkspaceLoaded({
           onBackToBridge={() => void handleBackToBridge()}
           backLabel={returnLabel}
           onSaveDraft={actionsDisabled ? undefined : () => void handleSaveDraft(draft)}
-          onBatchConfirmNormal={
-            // warnings_only 重开态隐藏批量确认：该操作会批量改动评分候选，超出"修正警告病害"的语义。
-            actionsDisabled || reopenState?.scope === "warnings_only" ? undefined : () => void handleBatchConfirmNormal()
-          }
           onPreflight={canRunPreflight(dirty, busy, effectiveReadOnly) ? () => void handlePreflight() : undefined}
           onConfirmImport={actionsDisabled || !canPressConfirm(preflight) ? undefined : handleConfirmImportClick}
           onCancelImport={actionsDisabled || reopenState !== null ? undefined : () => void handleCancelImport()}

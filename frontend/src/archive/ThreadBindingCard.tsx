@@ -110,7 +110,7 @@ export function ThreadBindingCard({ observation, onResolved, onDismiss }: Thread
         </span>
         <span>{observation.defect_type}</span>
         <span>位置：{observation.defect_location ?? "未记录"}</span>
-        <span>标度 {observation.scale ?? "-"}｜扣分 {observation.defect_deduction ?? "-"}</span>
+        <span>标度 {observation.scale ?? "-"}</span>
       </header>
       {observation.measurements.length > 0 ? (
         <p className="archive-binding-measurements">

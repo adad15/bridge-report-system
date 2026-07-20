@@ -13,7 +13,6 @@ function makeObservation(overrides: Partial<ArchiveObservation> = {}): ArchiveOb
     defect_type: "蜂窝、麻面",
     defect_location: "左侧端部",
     scale: "2",
-    defect_deduction: 35,
     defect_description: "左侧端部蜂窝、麻面",
     review_status: "已确认",
     updated_at: "token",

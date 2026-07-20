@@ -47,20 +47,15 @@ TEST(AnnualInspectionContractTest, AcceptsValidVersionTwoContractFixture) {
     EXPECT_TRUE(result.ok()) << result.summary();
 }
 
-TEST(AnnualInspectionContractTest, AcceptsVersionOneTwoOnlyInExplicitTransitionMode) {
-    const auto root =
-        read_contract_fixture("bridge_annual_inspection_data.valid.json");
+TEST(AnnualInspectionContractTest, RejectsVersionOneTwoWithoutTransitionMode) {
+    auto root =
+        read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    root["contract"]["version"] = "1.2";
 
     const auto final_result =
         bridge_report::contracts::validate_bridge_annual_inspection_data(root);
-    const auto transition_result =
-        bridge_report::contracts::validate_bridge_annual_inspection_data(
-            root,
-            bridge_report::contracts::AnnualInspectionValidationMode::Legacy12Transition);
-
     EXPECT_FALSE(final_result.ok());
     expect_summary_contains(final_result, "contract.version: must be 2.0");
-    EXPECT_TRUE(transition_result.ok()) << transition_result.summary();
 }
 
 TEST(AnnualInspectionContractTest, AcceptsComparisonCandidateFixture) {

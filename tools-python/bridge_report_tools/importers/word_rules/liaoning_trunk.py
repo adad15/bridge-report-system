@@ -4,7 +4,6 @@ import re
 
 from bridge_report_tools.importers.word_rules.rule_set import (
     DefectTableRule,
-    RatingTableRule,
     WordRuleSet,
 )
 
@@ -31,18 +30,6 @@ def build_liaoning_trunk_rule_set() -> WordRuleSet:
                 table_no="表2.3-1",
                 title_keywords=("表2.3-1", "桥面系", "病害检查表"),
                 structure_part="桥面系",
-            ),
-        ),
-        rating_table_rules=(
-            RatingTableRule(
-                table_no="表4.1-1",
-                title_keywords=("表4.1-1", "桥梁部件权重计算表"),
-                table_kind="weight",
-            ),
-            RatingTableRule(
-                table_no="表4.1-2",
-                title_keywords=("表4.1-2", "总体技术状况评定表"),
-                table_kind="overall",
             ),
         ),
         disease_photo_pattern=DISEASE_PHOTO_PATTERN,

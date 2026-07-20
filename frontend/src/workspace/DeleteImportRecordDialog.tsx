@@ -89,7 +89,6 @@ export function DeleteImportRecordDialog({ importRecordId, onClose, onDeleted }:
           <dl className="deletion-impact-grid">
             <div><dt>候选病害</dt><dd>{impact.counts.defects}</dd></div>
             <div><dt>照片候选</dt><dd>{impact.counts.photos}</dd></div>
-            <div><dt>评分项</dt><dd>{impact.counts.rating_items}</dd></div>
             <div><dt>归档文件</dt><dd>{impact.counts.archived_files_to_delete}</dd></div>
             <div><dt>临时 Word</dt><dd>{impact.counts.temporary_word_files_to_delete}</dd></div>
             <div><dt>解析工作目录</dt><dd>{impact.counts.parse_work_directories_to_delete}</dd></div>

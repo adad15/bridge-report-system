@@ -64,7 +64,6 @@ Json::Value observation_to_json(const Row& row) {
     item["defect_type"] = row["defect_type"].template as<std::string>();
     item["defect_location"] = nullable_string(row, "defect_location");
     item["scale"] = nullable_string(row, "scale");
-    item["defect_deduction"] = nullable_double(row, "defect_deduction");
     item["defect_description"] = row["defect_description_raw"].template as<std::string>();
     item["review_status"] = row["review_status"].template as<std::string>();
     item["updated_at"] = row["updated_at"].template as<std::string>();
@@ -171,9 +170,7 @@ Json::Value ComponentArchiveRepository::get_defect_archive(const std::string& co
 
     // 各当前有效年度的构件级评分；正式系统评定同时返回运行 ID 与永久计算明细。
     const auto rating_rows = db_client_->execSqlSync(
-        "select iy.inspection_year, cr.score, cr.source_score, cr.calculated_score, "
-        "cr.score_validation_status, cr.score_resolution_reason, "
-        "cr.calculation_details_json::text as legacy_calculation_details,"
+        "select iy.inspection_year, cr.score, "
         "cr.assessment_run_id::text as assessment_run_id,"
         "acr.result_json::text as system_calculation_details "
         "from condition_ratings cr "
@@ -190,27 +187,11 @@ Json::Value ComponentArchiveRepository::get_defect_archive(const std::string& co
         Json::Value item;
         item["inspection_year"] = row["inspection_year"].as<int>();
         item["score"] = nullable_double(row, "score");
-        const bool system_assessment = !row["assessment_run_id"].isNull();
-        item["is_system_assessment"] = system_assessment;
-        item["assessment_run_id"] = system_assessment
-            ? Json::Value(row["assessment_run_id"].as<std::string>())
-            : Json::Value(Json::nullValue);
-        item["source_score"] = system_assessment
-            ? Json::Value(Json::nullValue) : nullable_double(row, "source_score");
-        item["calculated_score"] = system_assessment
-            ? nullable_double(row, "score") : nullable_double(row, "calculated_score");
-        item["score_validation_status"] = system_assessment
-            ? Json::Value("系统评定") : nullable_string(row, "score_validation_status");
-        item["score_resolution_reason"] = system_assessment
-            ? Json::Value(Json::nullValue) : nullable_string(row, "score_resolution_reason");
-        const auto details_column = system_assessment
-            ? "system_calculation_details" : "legacy_calculation_details";
-        item["calculation_details"] = row[details_column].isNull()
+        item["assessment_run_id"] = row["assessment_run_id"].as<std::string>();
+        item["calculation_details"] = row["system_calculation_details"].isNull()
             ? Json::Value(Json::objectValue)
             : parse_json_or_default(
-                row[details_column].as<std::string>(), Json::Value(Json::objectValue));
-        item["has_validation_details"] = system_assessment ||
-            !row["score_validation_status"].isNull();
+                row["system_calculation_details"].as<std::string>(), Json::Value(Json::objectValue));
         ratings.append(item);
     }
 
@@ -221,7 +202,7 @@ Json::Value ComponentArchiveRepository::get_defect_archive(const std::string& co
     const auto observation_rows = db_client_->execSqlSync(
         std::string(
             "select o.id, o.system_number, iy.inspection_year, o.defect_thread_id, o.defect_type, "
-            "o.defect_location, o.scale, o.defect_deduction, o.defect_description_raw, o.review_status, "
+            "o.defect_location, o.scale, o.defect_description_raw, o.review_status, "
             "o.updated_at::text as updated_at "
             "from defect_observations o ") + kCurrentYearJoin +
             "where o.bridge_component_id = $1::uuid and " + kSettledObservation +
@@ -291,7 +272,7 @@ Json::Value ComponentArchiveRepository::get_revisions(const std::string& compone
     // 旧修订版：is_current=false 的版本行（含"已被修订"），只读展示，不入默认统计。
     const auto rows = db_client_->execSqlSync(
         "select o.id, o.system_number, iy.inspection_year, o.defect_thread_id, o.defect_type, "
-        "o.defect_location, o.scale, o.defect_deduction, o.defect_description_raw, o.review_status, "
+        "o.defect_location, o.scale, o.defect_description_raw, o.review_status, "
         "o.updated_at::text as updated_at, iy.version_number, iy.status as inspection_status "
         "from defect_observations o "
         "join inspection_years iy on iy.id = o.inspection_year_id and iy.is_current = false "
@@ -344,7 +325,7 @@ Json::Value ComponentArchiveRepository::list_unbound_observations(const std::str
     const auto rows = db_client_->execSqlSync(
         std::string(
             "select o.id, o.system_number, iy.inspection_year, o.defect_thread_id, o.defect_type, "
-            "o.defect_location, o.scale, o.defect_deduction, o.defect_description_raw, o.review_status, "
+            "o.defect_location, o.scale, o.defect_description_raw, o.review_status, "
             "o.updated_at::text as updated_at, "
             "bc.id as component_id, bc.system_number as component_system_number, bc.structure_part, "
             "bc.component_type, bc.business_component_code "

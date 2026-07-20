@@ -6,7 +6,8 @@ import { DefectPhotoGroup } from "./DefectPhotoGroup";
 
 function defect(): DefectCandidate {
   return {
-    candidate_id: "defect_0001", structure_part: "上部结构", component_name: "主梁", component_alias: null,
+    candidate_id: "defect_0001", source_structure_part: "上部结构", component_name: "主梁", component_number: "2-1#梁",
+    bridge_component_id: "component-1", standard_component_category_id: "category-1", resolved_structure_part: "上部结构",
     defect_type: "裂缝", defect_location: "第二跨", defect_description: "梁底裂缝", quantity_text: "1处",
     measurement_text: "L=0.8m", measurements: [], photo_numbers: ["2.1-1", "2.1-2"],
     group_review_status: "待确认", confirmed_missing_photo_numbers: [], severity: null, remark: null,
@@ -29,7 +30,6 @@ function data(): BridgeAnnualInspectionData {
     bridge_check: { selected_bridge_system_number: "QL-1", match_status: "匹配", warnings: [] },
     inspection: { inspection_year: 2026, inspection_date: "2026-07-12", report_number: "R-1", project_name: "测试", data_role: "当前年度" },
     defects: [defect()], photos: [photo("photo_0001", "2.1-1"), photo("photo_0002", "2.1-2")],
-    ratings: { overall: { total_score: 90, overall_grade: "1类", source_ref: {}, confidence: 1, review_status: "已确认" }, structure_parts: [], evaluation_parts: [], component_ratings: [], warnings: [] },
     comparison_candidates: [], report_text_candidates: [], warnings: [], errors: [],
   };
 }

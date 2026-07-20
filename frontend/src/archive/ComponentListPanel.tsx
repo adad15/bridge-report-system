@@ -1,7 +1,10 @@
 import { useState } from "react";
 
 import type { ComponentSummary } from "../api/componentArchiveApi";
-import { roundScoreToTwoDecimals } from "../review/componentScore";
+
+function roundScoreToTwoDecimals(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
 
 interface ComponentListPanelProps {
   components: ComponentSummary[];

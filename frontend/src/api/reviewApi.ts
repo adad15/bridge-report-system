@@ -1,10 +1,5 @@
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
-import {
-  isBridgeAnnualInspectionData,
-  isLegacyAnnualInspectionData12,
-  projectVersionTwoForLegacyReview,
-  versionTwoWireData,
-} from "../contracts/annualInspection";
+import { isBridgeAnnualInspectionData } from "../contracts/annualInspection";
 import { ApiError, request } from "./apiClient";
 import type { ComponentInventoryRevision } from "./componentInventoryApi";
 
@@ -49,9 +44,7 @@ export interface ReviewStatistics {
   object_warning_count: number;
 }
 
-// native_2_0：原生 2.0 草稿；legacy_pending_reparse：待校对的 1.x 旧草稿，
-// 只读展示并提示重新解析（不做内存补造）；legacy_read_only：旧版终态记录。
-export type ContractCompatibility = "native_2_0" | "legacy_pending_reparse" | "legacy_read_only";
+export type ContractCompatibility = "native_2_0";
 
 // 重开校对范围：warnings_only=仅带警告的病害可改（任何登录用户）；
 // full=全部可改（仅管理员可发起）。
@@ -184,16 +177,7 @@ export async function fetchReview(baseUrl: string, importRecordId: string): Prom
     `${baseUrl}${reviewRoute(importRecordId, "/review")}`,
   );
   if (isBridgeAnnualInspectionData(body.parsed_result)) {
-    return {
-      ...body,
-      parsed_result: projectVersionTwoForLegacyReview(body.parsed_result),
-    };
-  }
-  if (
-    body.contract_compatibility !== "native_2_0" &&
-    isLegacyAnnualInspectionData12(body.parsed_result)
-  ) {
-    return body as ReviewResponse;
+    return { ...body, parsed_result: body.parsed_result };
   }
   throw new ApiError("invalid_review_payload", "校对数据不符合 BridgeAnnualInspectionData 契约。");
 }
@@ -207,7 +191,7 @@ export async function saveReviewDraft(
   return request(`${baseUrl}${reviewRoute(importRecordId, "/review-draft")}`, {
     method: "PUT",
     headers: lockHeaders(lockToken, true),
-    body: JSON.stringify(versionTwoWireData(data)),
+    body: JSON.stringify(data),
   });
 }
 

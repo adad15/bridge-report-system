@@ -1,12 +1,8 @@
 import type {
   BridgeAnnualInspectionData,
-  ComponentRatingCandidate,
   DefectCandidate,
-  EvaluationPartRating,
-  OverallRating,
   PhotoCandidate,
   Severity,
-  StructurePartRating,
 } from "../contracts/annualInspection";
 import type { AssessmentIssue } from "../api/assessmentApi";
 import { defectFieldForWarning, type DefectTargetField } from "./reviewNavigation";
@@ -24,8 +20,8 @@ export interface AttentionItem {
 }
 
 const ASSESSMENT_DEFECT_FIELDS = new Set<DefectTargetField>([
-  "component_match", "structure_part", "component_name", "component_alias",
-  "defect_location", "defect_type", "defect_scale", "defect_deduction",
+  "component_match", "component_name", "component_number",
+  "defect_location", "defect_type", "defect_scale",
   "quantity_text", "photo_numbers", "measurement_text",
 ]);
 
@@ -66,13 +62,7 @@ function isNonEmptyString(value: string | null | undefined): value is string {
   return typeof value === "string" && value.trim() !== "";
 }
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-// 目标候选按 candidate_id 归类：先在 defects/photos 里找，找不到再按 "ratings." 前缀识别评分候选
-// （与后端 PreflightReport.cpp 生成的 "ratings.overall" / "ratings.structure_parts[i]" /
-// "ratings.evaluation_parts[i]" 格式一致）；都不匹配时归为 import 级（无法定位到具体候选对象）。
+// 评分问题来自系统试算接口，不再来自导入合同中的 ratings；历史前缀只用于兼容旧提示的导航。
 function classifyCandidateId(data: BridgeAnnualInspectionData, candidateId: string): AttentionItem["kind"] {
   if (data.defects.some((defect) => defect.candidate_id === candidateId)) {
     return "defect";
@@ -222,25 +212,6 @@ export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[
     }
   }
 
-  // 合同 1.2：构件评分对象级 warning + 未解决的评分差异（不一致/无法复算必须人工显式处理）。
-  for (const rating of data.ratings.component_ratings) {
-    for (const warning of rating.warnings) {
-      items.push({ kind: "rating", candidateId: rating.candidate_id, message: warning.message, severity: warning.severity, warningCode: warning.code });
-    }
-    if (rating.review_status === "已忽略") {
-      continue;
-    }
-    if (rating.score_validation_status === "不一致" || rating.score_validation_status === "无法复算") {
-      const componentLabel = rating.component_ref.component_alias ?? rating.component_ref.component_name;
-      items.push({
-        kind: "rating",
-        candidateId: rating.candidate_id,
-        message: `构件 ${componentLabel} 的评分校验状态为「${rating.score_validation_status}」，请显式选择最终分并填写原因。`,
-        severity: "warning",
-      });
-    }
-  }
-
   return items;
 }
 
@@ -260,8 +231,11 @@ export function isNormalDefect(defect: DefectCandidate, data: BridgeAnnualInspec
     return false;
   }
   if (
-    !isNonEmptyString(defect.structure_part) ||
+    !isNonEmptyString(defect.bridge_component_id) ||
+    !isNonEmptyString(defect.standard_component_category_id) ||
     !isNonEmptyString(defect.component_name) ||
+    !isNonEmptyString(defect.component_number) ||
+    !isNonEmptyString(defect.defect_location) ||
     !isNonEmptyString(defect.defect_type) ||
     !isNonEmptyString(defect.defect_description)
   ) {
@@ -279,49 +253,6 @@ export function isNormalPhoto(photo: PhotoCandidate): boolean {
     photo.warnings.length === 0 &&
     photo.match_status === "高置信候选" &&
     isNonEmptyString(photo.linked_defect_candidate_id)
-  );
-}
-
-function isOverallRating(
-  item: OverallRating | StructurePartRating | EvaluationPartRating
-): item is OverallRating {
-  return "total_score" in item;
-}
-
-function isStructurePartRating(
-  item: OverallRating | StructurePartRating | EvaluationPartRating
-): item is StructurePartRating {
-  return "structure_score" in item;
-}
-
-/**
- * §9.2 普通评分项：待确认 + 分数已填写；全桥评分额外要求等级非空
- * （结构分部/评价部件的等级、权重等其余字段第一版不在批量确认门槛内，用户仍可在
- * “技术状况评定”分组里单独编辑或确认它们）。
- */
-export function isNormalRating(item: OverallRating | StructurePartRating | EvaluationPartRating): boolean {
-  if (item.review_status !== "待确认") {
-    return false;
-  }
-  if (isOverallRating(item)) {
-    return isFiniteNumber(item.total_score) && isNonEmptyString(item.overall_grade);
-  }
-  if (isStructurePartRating(item)) {
-    return isFiniteNumber(item.structure_score);
-  }
-  return isFiniteNumber(item.part_score);
-}
-
-/**
- * §9.2 普通构件评分：待确认 + 无对象级 warning + 校验状态自动「一致」。
- * 「不一致/无法复算」必须人工显式处理，人工已解决的候选 review_status 已是「已修改」，
- * 两类都不进入批量确认。
- */
-export function isNormalComponentRating(rating: ComponentRatingCandidate): boolean {
-  return (
-    rating.review_status === "待确认" &&
-    rating.warnings.length === 0 &&
-    rating.score_validation_status === "一致"
   );
 }
 
@@ -346,17 +277,12 @@ function tallyReviewStatus(
  */
 export function buildStatistics(
   data: BridgeAnnualInspectionData,
-  includeImportedRatings = true,
+  _includeImportedRatings = true,
 ): ReviewCounts {
   const counts: ReviewCounts = {
     defect_count: data.defects.length,
     photo_count: data.photos.length,
-    rating_item_count: includeImportedRatings
-      ? 1 +
-        data.ratings.structure_parts.length +
-        data.ratings.evaluation_parts.length +
-        data.ratings.component_ratings.length
-      : 0,
+    rating_item_count: 0,
     pending_count: 0,
     confirmed_count: 0,
     modified_count: 0,
@@ -375,22 +301,6 @@ export function buildStatistics(
     tallyReviewStatus(photo.review_status, counts);
     if (photo.warnings.length > 0) {
       counts.object_warning_count += 1;
-    }
-  }
-
-  if (includeImportedRatings) {
-    tallyReviewStatus(data.ratings.overall.review_status, counts);
-    for (const part of data.ratings.structure_parts) {
-      tallyReviewStatus(part.review_status, counts);
-    }
-    for (const part of data.ratings.evaluation_parts) {
-      tallyReviewStatus(part.review_status, counts);
-    }
-    for (const rating of data.ratings.component_ratings) {
-      tallyReviewStatus(rating.review_status, counts);
-      if (rating.warnings.length > 0) {
-        counts.object_warning_count += 1;
-      }
     }
   }
 

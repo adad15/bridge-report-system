@@ -1,7 +1,6 @@
 from bridge_report_tools.importers.word_rules.rule_set import (
     DefectTableRule,
     PhotoCaption,
-    RatingTableRule,
     WordRuleSet,
     select_rule_set,
 )
@@ -9,7 +8,6 @@ from bridge_report_tools.importers.word_rules.rule_set import (
 __all__ = [
     "DefectTableRule",
     "PhotoCaption",
-    "RatingTableRule",
     "WordRuleSet",
     "select_rule_set",
 ]

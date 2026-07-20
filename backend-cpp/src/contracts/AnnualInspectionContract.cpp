@@ -173,7 +173,6 @@ const std::unordered_set<std::string>& structure_parts() {
 
 void validate_contract_info(
     const Json::Value& root,
-    bool legacy_1_2,
     ContractValidationResult& result) {
     if (!require_object_member(root, "", "contract", result)) {
         return;
@@ -186,7 +185,7 @@ void validate_contract_info(
     const auto version = contract["version"].isString()
                              ? contract["version"].asString()
                              : std::string{};
-    if (version != "2.0" && !(legacy_1_2 && version == "1.2")) {
+    if (version != "2.0") {
         result.add_issue("contract.version", "must be 2.0");
     }
 }
@@ -261,7 +260,6 @@ void validate_measurement(
 void validate_defect(
     const Json::Value& defect,
     const std::string& path,
-    bool legacy_1_2,
     ContractValidationResult& result) {
     if (!defect.isObject()) {
         result.add_issue(path, "must be an object");
@@ -269,12 +267,10 @@ void validate_defect(
     }
 
     require_non_empty_string(defect, path, "candidate_id", result);
-    if (!legacy_1_2) {
-        require_non_empty_string(defect, path, "component_name", result);
-        require_non_empty_string(defect, path, "defect_type", result);
-        require_non_empty_string(defect, path, "defect_location", result);
-        require_non_empty_string(defect, path, "defect_description", result);
-    }
+    require_non_empty_string(defect, path, "component_name", result);
+    require_non_empty_string(defect, path, "defect_type", result);
+    require_non_empty_string(defect, path, "defect_location", result);
+    require_non_empty_string(defect, path, "defect_description", result);
     require_enum(defect, path, "review_status", review_statuses(), result);
     require_enum(defect, path, "group_review_status", {"待确认", "已确认"}, result);
     require_optional_positive_integer(defect, path, "defect_scale", result);
@@ -308,13 +304,11 @@ void validate_defect(
             defect, path, "resolved_structure_part", structure_parts(), result);
     }
 
-    if (!legacy_1_2) {
-        reject_member(defect, path, "structure_part", result);
-        reject_member(defect, path, "component_alias", result);
-        reject_member(defect, path, "defect_deduction", result);
-    }
+    reject_member(defect, path, "structure_part", result);
+    reject_member(defect, path, "component_alias", result);
+    reject_member(defect, path, "defect_deduction", result);
 
-    if (require_array_member(defect, path, "measurements", result) && !legacy_1_2) {
+    if (require_array_member(defect, path, "measurements", result)) {
         for (Json::ArrayIndex index = 0; index < defect["measurements"].size(); ++index) {
             validate_measurement(
                 defect["measurements"][index],
@@ -511,20 +505,14 @@ std::string ContractValidationResult::summary() const {
 }
 
 ContractValidationResult validate_bridge_annual_inspection_data(
-    const Json::Value& root,
-    AnnualInspectionValidationMode mode) {
+    const Json::Value& root) {
     ContractValidationResult result;
     if (!root.isObject()) {
         result.add_issue("$", "must be an object");
         return result;
     }
 
-    const bool legacy_1_2 =
-        mode == AnnualInspectionValidationMode::Legacy12Transition &&
-        kLegacyAnnualInspection12ValidationEnabled &&
-        root["contract"]["version"].isString() &&
-        root["contract"]["version"].asString() == "1.2";
-    validate_contract_info(root, legacy_1_2, result);
+    validate_contract_info(root, result);
     require_object_member(root, "", "import_context", result);
     require_object_member(root, "", "bridge_check", result);
     require_object_member(root, "", "inspection", result);
@@ -534,16 +522,12 @@ ContractValidationResult validate_bridge_annual_inspection_data(
     require_array_member(root, "", "report_text_candidates", result);
     require_array_member(root, "", "warnings", result);
     require_array_member(root, "", "errors", result);
-    if (legacy_1_2) {
-        require_object_member(root, "", "ratings", result);
-    } else {
-        reject_member(root, "", "ratings", result);
-    }
+    reject_member(root, "", "ratings", result);
 
     if (root["defects"].isArray()) {
         for (Json::ArrayIndex index = 0; index < root["defects"].size(); ++index) {
             validate_defect(
-                root["defects"][index], indexed_path("defects", index), legacy_1_2, result);
+                root["defects"][index], indexed_path("defects", index), result);
         }
     }
     if (root["photos"].isArray()) {

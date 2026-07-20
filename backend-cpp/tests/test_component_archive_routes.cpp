@@ -84,7 +84,7 @@ TEST(AssembleDefectArchiveTest, PassesRatingsThroughVerbatim) {
     Json::Value rating;
     rating["inspection_year"] = 2025;
     rating["score"] = 55.81;
-    rating["has_validation_details"] = true;
+    rating["assessment_run_id"] = "run-2025";
     ratings.append(rating);
 
     const auto body = assemble_defect_archive(
@@ -92,5 +92,5 @@ TEST(AssembleDefectArchiveTest, PassesRatingsThroughVerbatim) {
 
     ASSERT_EQ(body["ratings"].size(), 1u);
     EXPECT_EQ(body["ratings"][0]["inspection_year"].asInt(), 2025);
-    EXPECT_TRUE(body["ratings"][0]["has_validation_details"].asBool());
+    EXPECT_EQ(body["ratings"][0]["assessment_run_id"].asString(), "run-2025");
 }

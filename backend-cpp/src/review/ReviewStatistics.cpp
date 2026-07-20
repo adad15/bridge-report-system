@@ -76,41 +76,6 @@ ReviewStatistics build_review_statistics(const Json::Value& parsed_result) {
         }
     }
 
-    if (parsed_result.isMember("ratings") && parsed_result["ratings"].isObject()) {
-        const auto& ratings = parsed_result["ratings"];
-
-        if (ratings.isMember("overall") && ratings["overall"].isObject()) {
-            ++stats.rating_item_count;
-            tally_review_status(ratings["overall"], stats);
-        }
-
-        if (ratings.isMember("structure_parts") && ratings["structure_parts"].isArray()) {
-            const auto& structure_parts = ratings["structure_parts"];
-            stats.rating_item_count += static_cast<int>(structure_parts.size());
-            for (const auto& part : structure_parts) {
-                tally_review_status(part, stats);
-            }
-        }
-
-        if (ratings.isMember("evaluation_parts") && ratings["evaluation_parts"].isArray()) {
-            const auto& evaluation_parts = ratings["evaluation_parts"];
-            stats.rating_item_count += static_cast<int>(evaluation_parts.size());
-            for (const auto& part : evaluation_parts) {
-                tally_review_status(part, stats);
-            }
-        }
-
-        // 合同 1.2：第二章构件评分候选计入评分统计（旧 1.0/1.1 数据缺该数组时按空处理）。
-        if (ratings.isMember("component_ratings") && ratings["component_ratings"].isArray()) {
-            const auto& component_ratings = ratings["component_ratings"];
-            stats.rating_item_count += static_cast<int>(component_ratings.size());
-            for (const auto& rating : component_ratings) {
-                tally_review_status(rating, stats);
-                tally_object_warnings(rating, stats);
-            }
-        }
-    }
-
     return stats;
 }
 

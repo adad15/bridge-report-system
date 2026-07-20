@@ -20,7 +20,7 @@ $env:PGCLIENTENCODING = "UTF8"
 
 $sampleBridgeName = "绕阳河二号桥（模块05样例）"
 $seedSqlPath = Join-Path $repoRoot "database/dev/seed_module05_review_sample.sql"
-$sampleJsonPath = Join-Path $repoRoot "samples/contracts/bridge_annual_inspection_data.valid.json"
+$sampleJsonPath = Join-Path $repoRoot "samples/contracts/bridge_annual_inspection_data.v2.valid.json"
 $archiveRoot = $env:BRIDGE_REPORT_ARCHIVE_ROOT
 if ([string]::IsNullOrWhiteSpace($archiveRoot)) {
   $archiveRoot = Join-Path $repoRoot "backend-cpp/archive"

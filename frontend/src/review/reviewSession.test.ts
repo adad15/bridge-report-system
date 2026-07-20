@@ -16,17 +16,10 @@ describe("review session guards", () => {
 });
 
 describe("deriveReviewSession", () => {
-  it("keeps a pending native 1.2 review editable", () => {
+  it("keeps a pending native 2.0 review editable", () => {
     expect(deriveReviewSession("待校对", "native_2_0")).toEqual({
       readOnly: false,
       bannerText: null,
-    });
-  });
-
-  it("makes a pending legacy draft read-only and asks for a re-parse", () => {
-    expect(deriveReviewSession("待校对", "legacy_pending_reparse")).toEqual({
-      readOnly: true,
-      bannerText: "该草稿为旧版合同（1.0/1.1），请重新解析为 1.2 后再校对。",
     });
   });
 
@@ -44,13 +37,6 @@ describe("deriveReviewSession", () => {
     });
   });
 
-  it("makes legacy terminal data read-only even when its status says pending", () => {
-    expect(deriveReviewSession("待校对", "legacy_read_only")).toEqual({
-      readOnly: true,
-      bannerText: "本导入记录为旧版终态数据，页面转为只读。",
-    });
-  });
-
   it("keeps a reopened warnings_only review editable with a scoped banner", () => {
     const session = deriveReviewSession("待校对", "native_2_0", "warnings_only");
     expect(session.readOnly).toBe(false);
@@ -64,8 +50,4 @@ describe("deriveReviewSession", () => {
     expect(session.bannerText).toContain("全部病害可修改");
   });
 
-  it("ignores the reopen scope when the stored draft is legacy", () => {
-    // 重开端点不会放行旧版合同记录；即便状态异常组合出现，也保持只读。
-    expect(deriveReviewSession("待校对", "legacy_pending_reparse", "full").readOnly).toBe(true);
-  });
 });

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { BridgeAnnualInspectionDataV2 } from "./annualInspection";
+import type { BridgeAnnualInspectionData } from "./annualInspection";
 import { isBridgeAnnualInspectionData } from "./annualInspection";
 
-const validData: BridgeAnnualInspectionDataV2 = {
+const validData: BridgeAnnualInspectionData = {
   contract: {
     name: "BridgeAnnualInspectionData",
     version: "2.0",
@@ -102,8 +102,8 @@ const validData: BridgeAnnualInspectionDataV2 = {
   errors: [],
 };
 
-function cloneValidData(): BridgeAnnualInspectionDataV2 {
-  return JSON.parse(JSON.stringify(validData)) as BridgeAnnualInspectionDataV2;
+function cloneValidData(): BridgeAnnualInspectionData {
+  return JSON.parse(JSON.stringify(validData)) as BridgeAnnualInspectionData;
 }
 
 describe("isBridgeAnnualInspectionData 2.0", () => {

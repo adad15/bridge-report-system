@@ -124,7 +124,7 @@ TEST_F(ImportRecordDeletionRepositoryTest, PreviewCountsBusinessDataAndRetainsSh
     EXPECT_TRUE(plan->can_delete());
     EXPECT_EQ(plan->counts.defects, 2);
     EXPECT_EQ(plan->counts.photos, 1);
-    EXPECT_EQ(plan->counts.rating_items, 2);
+    EXPECT_EQ(plan->counts.rating_items, 0);
     EXPECT_EQ(plan->counts.archived_files_to_delete, 1);
     EXPECT_EQ(plan->counts.shared_files_retained, 1);
     EXPECT_EQ(plan->counts.temporary_word_files_to_delete, 1);

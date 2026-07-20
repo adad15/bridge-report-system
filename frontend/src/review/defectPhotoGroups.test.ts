@@ -6,13 +6,12 @@ import { buildDefectPhotoGroup, canConfirmDefectPhotoGroup } from "./defectPhoto
 function defect(overrides: Partial<DefectCandidate> = {}): DefectCandidate {
   return {
     candidate_id: "defect_0001",
-    structure_part: "上部结构",
+    source_structure_part: "上部结构",
     component_name: "主梁",
     component_number: "2-1#梁",
     bridge_component_id: "component-1",
     standard_component_category_id: "main-girder",
     resolved_structure_part: "上部结构",
-    component_alias: null,
     defect_type: "裂缝",
     defect_location: "第二跨",
     defect_description: "跨中横向裂缝",
@@ -78,13 +77,6 @@ function data(overrides: Partial<BridgeAnnualInspectionData> = {}): BridgeAnnual
     },
     defects: [defect()],
     photos: [photo()],
-    ratings: {
-      overall: { total_score: 90, overall_grade: "2类", source_ref: {}, confidence: 0.9, review_status: "已确认" },
-      structure_parts: [],
-      evaluation_parts: [],
-      component_ratings: [],
-      warnings: [],
-    },
     comparison_candidates: [],
     report_text_candidates: [],
     warnings: [],

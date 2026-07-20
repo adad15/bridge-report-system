@@ -227,7 +227,7 @@ TEST_F(ReviewRepositoryTest, list_inspection_years_returns_empty_for_unknown_bri
 }
 
 TEST_F(ReviewRepositoryTest, get_import_record_detail_returns_bridge_year_and_parsed_result) {
-    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.valid.json");
+    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.v2.valid.json");
     tx_->execSqlSync(
         "update import_records set parsed_result_json = $1::jsonb where id = $2::uuid",
         fixture_json,
@@ -301,7 +301,7 @@ TEST_F(ReviewRepositoryTest, has_current_annual_facts_reflects_inspection_year_s
 }
 
 TEST_F(ReviewRepositoryTest, save_review_draft_updates_parsed_result_and_keeps_status) {
-    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.valid.json");
+    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.v2.valid.json");
 
     bridge_report::db::ReviewRepository repository(tx_);
     const bool saved = repository.save_review_draft(import_record_id_, fixture_json);
@@ -321,7 +321,7 @@ TEST_F(ReviewRepositoryTest, save_review_draft_updates_parsed_result_and_keeps_s
 }
 
 TEST_F(ReviewRepositoryTest, save_review_draft_appends_defect_change_audit_event) {
-    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.valid.json");
+    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.v2.valid.json");
     Json::Value event(Json::objectValue);
     event["event_type"] = "draft_defect_structure_change";
     event["actor_username"] = "editor";
@@ -350,7 +350,7 @@ TEST_F(ReviewRepositoryTest, save_review_draft_returns_false_and_leaves_json_whe
         "已取消",
         import_record_id_
     );
-    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.valid.json");
+    const auto fixture_json = read_fixture_text("bridge_annual_inspection_data.v2.valid.json");
 
     bridge_report::db::ReviewRepository repository(tx_);
     const bool saved = repository.save_review_draft(import_record_id_, fixture_json);
@@ -444,13 +444,13 @@ TEST_F(ReviewRepositoryTest, preflight_flow_blocks_on_pending_candidates_then_co
     const auto initial_detail = repository.get_import_record_detail(import_record_id_);
     ASSERT_TRUE(initial_detail.has_value());
 
-    auto data = parse_json_text(read_fixture_text("bridge_annual_inspection_data.valid.json"));
+    auto data = parse_json_text(read_fixture_text("bridge_annual_inspection_data.v2.valid.json"));
     data["import_context"]["import_record_system_number"] = initial_detail->system_number;
     data["bridge_check"]["selected_bridge_system_number"] = initial_detail->bridge_system_number;
     ASSERT_TRUE(initial_detail->inspection_year.has_value());
     data["inspection"]["inspection_year"] = *initial_detail->inspection_year;
 
-    // 样例默认所有候选都是“待确认”，直接保存即可满足“有待确认候选”场景。
+    // 样例默认病害和照片候选都是“待确认”，直接保存即可覆盖候选阻断场景。
     ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
 
     const auto pending_report = run_preflight_flow(repository, import_record_id_);
@@ -465,7 +465,7 @@ TEST_F(ReviewRepositoryTest, preflight_flow_blocks_on_pending_candidates_then_co
     }
     EXPECT_TRUE(has_pending_candidate_issue);
 
-    // 把三层候选全部改为“已确认”后重新保存，再走一遍流程应当放行。
+    // 把病害和照片候选全部改为“已确认”后重新保存，再走一遍流程应当放行。
     confirm_all_candidates(data);
     ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
 
@@ -660,6 +660,10 @@ protected:
         }
         // 正式评定在生产中永久不可删；集成测试必须回收隔离夹具数据，因此仅在
         // 精确删除本夹具年度的运行期间短暂关闭保护触发器，随后立即恢复。
+        for (auto it = tracked_year_ids_.rbegin(); it != tracked_year_ids_.rend(); ++it) {
+            client_->execSqlSync(
+                "delete from condition_ratings where inspection_year_id=$1::uuid", *it);
+        }
         client_->execSqlSync(
             "alter table assessment_runs disable trigger trg_assessment_runs_completed_formal_immutable");
         for (auto it = tracked_year_ids_.rbegin(); it != tracked_year_ids_.rend(); ++it) {
@@ -692,9 +696,9 @@ protected:
         client_->closeAll();
     }
 
-    // 组装与本 fixture 生成的桥梁/导入记录标识对齐、且三层候选全部“已确认”的样例数据。
+    // 组装与本 fixture 标识对齐、且病害和照片候选全部“已确认”的 2.0 样例数据。
     Json::Value build_confirmed_data() const {
-        auto data = parse_json_text(read_fixture_text("bridge_annual_inspection_data.valid.json"));
+        auto data = parse_json_text(read_fixture_text("bridge_annual_inspection_data.v2.valid.json"));
         data["import_context"]["import_record_system_number"] = import_record_system_number_;
         data["bridge_check"]["selected_bridge_system_number"] = bridge_system_number_;
         data["inspection"]["inspection_year"] = kInspectionYear;
@@ -705,10 +709,11 @@ protected:
         }
         data["defects"][0]["bridge_component_id"] = bearing->second;
         data["defects"][0]["standard_component_category_id"] = "h21.component.bearing";
-        data["defects"][0]["structure_part"] = "上部结构";
+        data["defects"][0]["component_inventory_revision_id"] = inventory_revision_id_;
+        data["defects"][0]["source_structure_part"] = "上部结构";
         data["defects"][0]["resolved_structure_part"] = "上部结构";
         data["defects"][0]["component_name"] = "支座";
-        data["defects"][0]["component_alias"] = "TEST-BEARING";
+        data["defects"][0]["component_number"] = "TEST-BEARING";
         data["defects"][0]["defect_type"] = "板式支座老化变质、开裂";
         data["defects"][0]["defect_scale"] = 2;
         return data;
@@ -902,7 +907,7 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     EXPECT_GT(outcome.written.assessment_rule_traces, 0);
 
     const auto observation_result = client_->execSqlSync(
-        "select id, scale, defect_deduction, defect_description_raw, part_name, component_type, "
+        "select id, scale, defect_description_raw, part_name, component_type, "
         "business_component_code, review_status, bridge_component_id "
         "from defect_observations where source_import_record_id = $1::uuid",
         import_record_id_
@@ -911,7 +916,6 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     const auto observation_id = observation_result[0]["id"].as<std::string>();
     // severity="warning" 不再进入 scale；标度只来自 defect_scale=2。
     EXPECT_EQ(observation_result[0]["scale"].as<std::string>(), "2");
-    EXPECT_DOUBLE_EQ(observation_result[0]["defect_deduction"].as<double>(), 35.0);
     EXPECT_EQ(observation_result[0]["defect_description_raw"].as<std::string>(), "梁底发现纵向裂缝，需现场复核。");
     EXPECT_EQ(observation_result[0]["part_name"].as<std::string>(), "TEST-BEARING");
     EXPECT_EQ(observation_result[0]["component_type"].as<std::string>(), "h21.component.bearing");
@@ -956,19 +960,15 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     EXPECT_GT(part_count, 0);
     EXPECT_EQ(component_count, static_cast<int>(component_id_by_type_.size()));
 
-    // 构件级投影只保存系统结果和正式运行引用，不再保存 Word 来源分或人工选择状态。
+    // 构件级投影只保存系统结果和正式运行引用。
     const auto component_rating_result = client_->execSqlSync(
-        "select structure_part, bridge_component_id, rating_item_name, score, source_score, calculated_score, "
-        "score_validation_status, score_resolution_reason, assessment_run_id::text as assessment_run_id, review_status "
+        "select structure_part, bridge_component_id, rating_item_name, score, "
+        "assessment_run_id::text as assessment_run_id, review_status "
         "from condition_ratings where source_import_record_id = $1::uuid and rating_level = '构件'",
         import_record_id_
     );
     ASSERT_EQ(component_rating_result.size(), component_id_by_type_.size());
     for (const auto& row : component_rating_result) {
-        EXPECT_TRUE(row["source_score"].isNull());
-        EXPECT_TRUE(row["calculated_score"].isNull());
-        EXPECT_TRUE(row["score_validation_status"].isNull());
-        EXPECT_TRUE(row["score_resolution_reason"].isNull());
         EXPECT_EQ(row["assessment_run_id"].as<std::string>(), outcome.assessment_run_id);
         EXPECT_EQ(row["review_status"].as<std::string>(), "已确认");
     }
@@ -1168,37 +1168,30 @@ TEST_F(ConfirmAnnualFactsTest, confirm_blocks_wrong_status) {
     EXPECT_EQ(observation_count[0]["n"].as<int64_t>(), 0);
 }
 
-TEST_F(ConfirmAnnualFactsTest, duplicate_imported_component_rating_is_ignored_by_formal_assessment) {
-    bridge_report::db::ReviewRepository repository(client_, registry_);
-    auto data = build_confirmed_data();
-    Json::Value duplicate = data["ratings"]["component_ratings"][0];
-    duplicate["candidate_id"] = "component_rating_0002";
-    data["ratings"]["component_ratings"].append(duplicate);
-    ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
-
-    const auto outcome = repository.confirm_annual_facts(
-        import_record_id_, /*confirm_revision=*/false, "", confirmed_by_user_id_);
-
-    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
-    const auto rating_count = client_->execSqlSync(
-        "select count(*) as n from condition_ratings where source_import_record_id = $1::uuid", import_record_id_
-    );
-    EXPECT_EQ(rating_count[0]["n"].as<int64_t>(), outcome.written.condition_ratings);
-    const auto record_row = client_->execSqlSync(
-        "select import_status from import_records where id = $1::uuid", import_record_id_
-    );
-    EXPECT_EQ(record_row[0]["import_status"].as<std::string>(), "已确认");
-}
-
 TEST_F(ConfirmAnnualFactsTest, confirm_rolls_back_on_failure) {
     bridge_report::db::ReviewRepository repository(client_, registry_);
-    // 预置同年度同构件投影，令正式评分写到 condition_ratings 时触发唯一约束；
-    // 该失败发生在病害事实和正式评定明细已写入之后，可验证整笔事务完整回滚。
+    // 预置一个带合法系统运行来源的同年度同构件投影，令确认事务在写评分投影时
+    // 触发唯一约束；失败发生在病害事实和评定明细写入之后，可验证整笔事务回滚。
+    const auto package_row = client_->execSqlSync(
+        "select content_checksum from standard_packages where id=$1::uuid", technical_package_id_);
+    ASSERT_EQ(package_row.size(), 1u);
+    const auto conflicting_run = client_->execSqlSync(
+        "insert into assessment_runs(inspection_year_id,run_kind,formal_revision_number,"
+        "technical_condition_package_id,standard_profile_id,component_inventory_revision_id,"
+        "result_status,input_summary_json,input_checksum,rule_package_summary_json,rule_package_checksum,"
+        "result_summary_json,created_by_user_id,confirmed_by_user_id,confirmed_at) "
+        "values($1::uuid,'正式',99,$2::uuid,$3::uuid,$4::uuid,'成功','{\"source\":\"conflict-test\"}'::jsonb,"
+        "$5,'{\"package\":\"conflict-test\"}'::jsonb,$6,'{}'::jsonb,$7::uuid,$7::uuid,now()) "
+        "returning id::text as id",
+        placeholder_year_id_, technical_package_id_, standard_profile_id_, inventory_revision_id_,
+        "sha256:" + std::string(64, 'd'),
+        package_row[0]["content_checksum"].as<std::string>(), confirmed_by_user_id_);
     client_->execSqlSync(
         "insert into condition_ratings(inspection_year_id,rating_level,structure_part,"
-        "bridge_component_id,rating_item_name,score,review_status) "
-        "values($1::uuid,'构件','上部结构',$2::uuid,'冲突占位',88,'已确认')",
-        placeholder_year_id_, component_id_by_type_.at("h21.component.bearing"));
+        "bridge_component_id,rating_item_name,score,review_status,assessment_run_id) "
+        "values($1::uuid,'构件','上部结构',$2::uuid,'冲突占位',88,'已确认',$3::uuid)",
+        placeholder_year_id_, component_id_by_type_.at("h21.component.bearing"),
+        conflicting_run[0]["id"].as<std::string>());
 
     const auto outcome =
         repository.confirm_annual_facts(

@@ -125,28 +125,23 @@ protected:
             "values ($1::uuid, $2::uuid, '蜂窝、麻面｜左侧端部', '蜂窝、麻面', '左侧端部', "
             "$3::uuid, $3::uuid, '人工已确认') returning id", bridge_id_, component_a_, year_2025_);
 
-        bound_observation_ = insert_observation(year_2025_, component_a_, thread_id_, "蜂窝、麻面", "2", 35.0, "已确认");
-        unbound_observation_ = insert_observation(year_2024_current_, component_a_, std::nullopt, "剥落、掉角", "2", 20.0, "已修改");
-        revision_observation_ = insert_observation(year_2024_old_, component_a_, std::nullopt, "旧版病害", "1", 10.0, "已确认");
+        bound_observation_ = insert_observation(year_2025_, component_a_, thread_id_, "蜂窝、麻面", "2", "已确认");
+        unbound_observation_ = insert_observation(year_2024_current_, component_a_, std::nullopt, "剥落、掉角", "2", "已修改");
+        revision_observation_ = insert_observation(year_2024_old_, component_a_, std::nullopt, "旧版病害", "1", "已确认");
         component_b_observation_ = insert_observation(
-            year_2024_current_, component_b_, std::nullopt, "止水带损坏", std::nullopt, std::nullopt, "已确认");
+            year_2024_current_, component_b_, std::nullopt, "止水带损坏", std::nullopt, "已确认");
         client_->execSqlSync(
             "insert into defect_measurements (defect_observation_id, measurement_type, value_type, "
             "minimum_value, maximum_value, unit, is_approximate, raw_text) "
             "values ($1::uuid, '长度', 'range', 0.5, 4.0, 'm', true, '约0.5~4.0m')",
             bound_observation_);
 
-        // 2025 是系统运行投影；2024 是没有 assessment_run_id 的 Word 旧评分，不再进入正式档案。
+        // 档案评分只允许由成功的正式系统评定运行投影。
         client_->execSqlSync(
             "insert into condition_ratings (inspection_year_id, rating_level, structure_part, bridge_component_id, "
-            "rating_item_name, score, calculated_score, review_status, assessment_run_id) "
-            "values ($1::uuid, '构件', '上部结构', $2::uuid, '2-1#板', 55.81, 55.81, '已确认', $3::uuid)",
+            "rating_item_name, score, review_status, assessment_run_id) "
+            "values ($1::uuid, '构件', '上部结构', $2::uuid, '2-1#板', 55.81, '已确认', $3::uuid)",
             year_2025_, component_a_, assessment_run_id_);
-        client_->execSqlSync(
-            "insert into condition_ratings (inspection_year_id, rating_level, structure_part, bridge_component_id, "
-            "rating_item_name, score, review_status) "
-            "values ($1::uuid, '构件', '上部结构', $2::uuid, '2-1#板', 60.00, '已确认')",
-            year_2024_current_, component_a_);
 
         archived_file_id_ = insert_returning_id(
             "insert into archived_files (bridge_id, original_file_name, current_file_name, storage_relative_path, "
@@ -205,17 +200,15 @@ protected:
         const std::optional<std::string>& thread_id,
         const std::string& defect_type,
         const std::optional<std::string>& scale,
-        const std::optional<double>& deduction,
         const std::string& review_status
     ) {
         return insert_returning_id(
             "insert into defect_observations (inspection_year_id, bridge_id, bridge_component_id, defect_thread_id, "
-            "structure_part, defect_type, defect_location, defect_description_raw, scale, defect_deduction, "
-            "review_status) "
-            "values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, '上部结构', $5, '左侧端部', $6, $7, $8, $9) "
+            "structure_part, defect_type, defect_location, defect_description_raw, scale, review_status) "
+            "values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, '上部结构', $5, '左侧端部', $6, $7, $8) "
             "returning id",
             inspection_year_id, bridge_id_, component_id, thread_id, defect_type,
-            defect_type + "描述", scale, deduction, review_status);
+            defect_type + "描述", scale, review_status);
     }
 
     drogon::orm::DbClientPtr client_;
@@ -288,7 +281,7 @@ TEST_F(ComponentArchiveRepositoryTest, DefectArchiveGroupsByThreadAndExcludesRev
     ASSERT_EQ(thread["observations"].size(), 1u);
     EXPECT_EQ(thread["observations"][0]["id"].asString(), bound_observation_);
     EXPECT_EQ(thread["observations"][0]["scale"].asString(), "2");
-    EXPECT_DOUBLE_EQ(thread["observations"][0]["defect_deduction"].asDouble(), 35.0);
+    EXPECT_FALSE(thread["observations"][0].isMember("defect_deduction"));
     ASSERT_EQ(thread["observations"][0]["measurements"].size(), 1u);
     const auto& measurement = thread["observations"][0]["measurements"][0];
     EXPECT_EQ(measurement["value_type"].asString(), "range");
@@ -305,14 +298,10 @@ TEST_F(ComponentArchiveRepositoryTest, DefectArchiveGroupsByThreadAndExcludesRev
     // 旧修订版观测绝不进入默认档案。
     EXPECT_EQ(find_by_id(body["unbound_observations"], revision_observation_), nullptr);
 
-    // 档案只读取 assessment_run 投影，不把 2024 Word 旧评分伪装成正式结果。
+    // 档案只读取 assessment_run 投影。
     ASSERT_EQ(body["ratings"].size(), 1u);
     EXPECT_EQ(body["ratings"][0]["inspection_year"].asInt(), 2025);
-    EXPECT_TRUE(body["ratings"][0]["is_system_assessment"].asBool());
     EXPECT_EQ(body["ratings"][0]["assessment_run_id"].asString(), assessment_run_id_);
-    EXPECT_TRUE(body["ratings"][0]["has_validation_details"].asBool());
-    EXPECT_EQ(body["ratings"][0]["score_validation_status"].asString(), "系统评定");
-    EXPECT_TRUE(body["ratings"][0]["source_score"].isNull());
     EXPECT_EQ(body["ratings"][0]["calculation_details"]["ordered_deductions"].size(), 2u);
 }
 

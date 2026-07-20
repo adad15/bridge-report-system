@@ -5,32 +5,27 @@ Python tools, and React frontend.
 
 ## BridgeAnnualInspectionData
 
-- Current contract version: `1.2`
+- Current and only accepted runtime contract version: `2.0`
 - Schema: `contracts/bridge_annual_inspection_data.schema.json`
 - Source model: `tools-python/bridge_report_tools/contracts/annual_inspection.py`
-- Valid sample: `samples/contracts/bridge_annual_inspection_data.valid.json`
+- Valid sample: `samples/contracts/bridge_annual_inspection_data.v2.valid.json`
+- Comparison sample: `samples/contracts/bridge_annual_inspection_data.v2.with-comparison.json`
 
-Version `1.1` requires every defect candidate to include
-`group_review_status` (`待确认` or `已确认`) and the unique string array
-`confirmed_missing_photo_numbers`.
-
-Version `1.2` additionally introduces the regulatory defect fields
-`defect_scale` (nullable positive integer) and `defect_deduction`
-(nullable 0-100 number) on every defect candidate — both fully separate
-from the review-hint `severity` — and the required array
-`ratings.component_ratings`. Each component rating carries
-`source_score` / `calculated_score` / `confirmed_score`,
-`score_validation_status` (`一致`, `不一致`, `无法复算`,
-`人工接受Word值`, `人工采用复算值`), `score_resolution_reason`,
-`deduction_defect_candidate_ids`, and `calculation_details`
-(JTG/T H21-2011 4.1.1 ordered deductions). When the status is `不一致`
-or `无法复算`, `confirmed_score` and `score_resolution_reason` must be
-null until a reviewer makes an explicit choice with a reason.
+Version `2.0` carries only import and review candidates: bridge context,
+inspection metadata, defects, photos, comparison candidates, and report-text
+candidates. Defects contain the imported `defect_scale` and the fields needed
+to associate them with an actual component (`component_name`,
+`component_number`, and the nullable database association fields). The
+contract deliberately has no `ratings`, Word deduction, imported score, or
+reviewer score-choice fields. Runtime validators reject every pre-2.0 version
+and reject those removed fields instead of silently normalizing them.
 
 `BridgeAnnualInspectionData` is candidate data stored in
 `import_records.parsed_result_json`. It is not the formal source of truth.
-After review and confirmation, the C++ backend writes the confirmed data to
-PostgreSQL.
+After review and confirmation, the C++ backend writes the confirmed defect and
+photo facts to PostgreSQL. Technical-condition scores are then calculated by
+the selected versioned standard evaluator and persisted as projections linked
+to a successful formal `assessment_run`; Word scores are not imported.
 
 ## Regenerate
 

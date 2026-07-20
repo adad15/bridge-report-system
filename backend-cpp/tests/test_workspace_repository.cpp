@@ -85,8 +85,7 @@ protected:
         client_->execSqlSync(
             "insert into condition_ratings (inspection_year_id, rating_level, structure_part, rating_item_name, "
             "score, grade, review_status, assessment_run_id) values "
-            "($1::uuid, '结构分部', '上部结构', '上部结构', 87.45, '2类', '已确认', $2::uuid), "
-            "($1::uuid, '结构分部', '桥面系', '桥面系（Word旧评分）', 99.99, '1类', '已确认', null)",
+            "($1::uuid, '结构分部', '上部结构', '上部结构', 87.45, '2类', '已确认', $2::uuid)",
             confirmed_year_id_, assessment_run_id_);
 
         component_id_ = insert_id(
@@ -222,7 +221,7 @@ TEST_F(WorkspaceRepositoryTest, InspectionWorkspaceIsolatesImportsAndReusesRevie
     ASSERT_EQ(workspace->imports.size(), 1u);
     EXPECT_EQ(workspace->imports[0].id, pending_import_id_);
     EXPECT_EQ(workspace->imports[0].statistics.defect_count, 1);
-    EXPECT_EQ(workspace->imports[0].statistics.rating_item_count, 1);
+    EXPECT_EQ(workspace->imports[0].statistics.rating_item_count, 0);
     EXPECT_EQ(workspace->imports[0].statistics.pending_count, 1);
     ASSERT_TRUE(workspace->imports[0].error_message.has_value());
     EXPECT_EQ(*workspace->imports[0].error_message, "Python 返回的具体解析错误");

@@ -1,8 +1,7 @@
-import type { BridgeAnnualInspectionData, BridgeAnnualInspectionDataV2 } from "../contracts/annualInspection";
-import { projectVersionTwoForLegacyReview } from "../contracts/annualInspection";
+import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
 
 export function data(): BridgeAnnualInspectionData {
-  const wire: BridgeAnnualInspectionDataV2 = {
+  return {
     contract: { name: "BridgeAnnualInspectionData", version: "2.0", generated_at: "2026-07-12", producer: "test", parser_name: "test", parser_version: "2" },
     import_context: { source_type: "软件导出Word", file_role: "当前年度检测资料", archived_file_system_number: "GDWJ-1", import_record_system_number: "DRJL-1" },
     bridge_check: { selected_bridge_system_number: "QL-1", match_status: "匹配", warnings: [] },
@@ -11,5 +10,4 @@ export function data(): BridgeAnnualInspectionData {
     photos: [{ candidate_id: "photo_0001", photo_number: "2.1-1", linked_defect_candidate_id: "defect_0001", extracted_file: { temporary_file_name: "photo.jpg", original_caption: "主梁裂缝", archive_relative_path: "photos/photo.jpg" }, match_status: "已确认", source_ref: {}, confidence: 0.9, review_status: "已确认", warnings: [] }],
     comparison_candidates: [], report_text_candidates: [], warnings: [], errors: [],
   };
-  return projectVersionTwoForLegacyReview(wire);
 }

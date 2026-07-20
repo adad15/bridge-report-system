@@ -104,12 +104,9 @@ export function DefectPhotoGroup({ draft, defect, sequenceNumber = 1, importReco
             <input className="defect-fact-span" id={reviewTargetId("defect-field", defect.candidate_id, "defect_description")} aria-label="病害描述" disabled={disabled} value={defect.defect_description} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_description", value: event.target.value })} />
             <span className="defect-fact-label">校对状态</span>
             <select aria-label="校对状态" disabled={disabled} value={defect.review_status} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_status", value: event.target.value as ReviewStatus })}>{REVIEW_STATUSES.map((status) => <option key={status}>{status}</option>)}</select>
-            {/* 合同 1.2：规范标度（正整数）与病害扣分（0-100）。空输入回落为 null；
-                扣分编辑会触发所属构件评分候选的复算校验联动。 */}
+            {/* 合同 2.0 只保留病害标度候选；扣分和评分由后端规范 evaluator 计算。 */}
             <span className="defect-fact-label defect-fact-label-row-start">标度</span>
             <input id={reviewTargetId("defect-field", defect.candidate_id, "defect_scale")} aria-label="标度" disabled={disabled} type="number" min={1} step={1} value={defect.defect_scale ?? ""} onClick={keepRowOpen} onChange={(event) => { const raw = event.target.value; const parsed = raw === "" ? null : Number.parseInt(raw, 10); if (parsed !== null && (!Number.isInteger(parsed) || parsed <= 0)) return; dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_scale", value: parsed }); }} />
-            <span className="defect-fact-label">病害扣分</span>
-            <input id={reviewTargetId("defect-field", defect.candidate_id, "defect_deduction")} aria-label="病害扣分" disabled={disabled} type="number" min={0} max={100} step={0.1} value={defect.defect_deduction ?? ""} onClick={keepRowOpen} onChange={(event) => { const raw = event.target.value; const parsed = raw === "" ? null : Number(raw); if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0 || parsed > 100)) return; dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_deduction", value: parsed }); }} />
             <span className="defect-fact-label defect-fact-label-row-start">数量</span>
             <input id={reviewTargetId("defect-field", defect.candidate_id, "quantity_text")} aria-label="数量" disabled={disabled} value={defect.quantity_text ?? ""} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "quantity_text", value: event.target.value })} />
             <span className="defect-fact-label">照片编号</span>

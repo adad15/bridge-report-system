@@ -24,8 +24,8 @@ struct ReviewStatistics {
  * @brief 根据解析结果 JSON（parsed_result）构造校对统计。纯函数，不访问数据库。
  *
  * - defect_count / photo_count：defects / photos 数组长度
- * - rating_item_count：ratings.overall（若存在计 1）+ ratings.structure_parts 条数 + ratings.evaluation_parts 条数
- * - pending/confirmed/modified/ignored_count：defects + photos + ratings（overall + structure_parts + evaluation_parts）
+ * - rating_item_count：固定为 0；系统评分由独立评定接口返回，不属于导入候选
+ * - pending/confirmed/modified/ignored_count：defects + photos
  *   三层候选的 review_status 汇总（待确认/已确认/已修改/已忽略）
  * - object_warning_count：defects 和 photos 中对象级 warnings[] 非空的候选数
  *

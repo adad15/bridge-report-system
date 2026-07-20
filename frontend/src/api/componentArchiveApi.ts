@@ -30,14 +30,8 @@ export interface ArchiveComponent {
 export interface ComponentYearRating {
   inspection_year: number;
   score: number | null;
-  source_score: number | null;
-  calculated_score: number | null;
-  score_validation_status: string | null;
-  score_resolution_reason: string | null;
   calculation_details: { standard?: string; ordered_deductions?: number[]; rounding_scale?: number };
-  has_validation_details: boolean;
-  is_system_assessment?: boolean;
-  assessment_run_id?: string | null;
+  assessment_run_id: string;
 }
 
 export interface ArchivePhoto {
@@ -65,7 +59,6 @@ export interface ArchiveObservation {
   defect_type: string;
   defect_location: string | null;
   scale: string | null;
-  defect_deduction: number | null;
   defect_description: string;
   review_status: string;
   updated_at: string;

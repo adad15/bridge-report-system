@@ -41,24 +41,6 @@ def test_liaoning_trunk_rejects_old_generic_defect_title() -> None:
     assert rule_set.match_defect_table_title("上部结构病害检查表") is None
 
 
-def test_liaoning_trunk_matches_rating_table_titles() -> None:
-    rule_set = select_rule_set("辽宁国省干线")
-
-    weight = rule_set.match_rating_table_title("表4.1-1桥梁部件权重计算表")
-    overall = rule_set.match_rating_table_title("表4.1-2  总体技术状况评定表")
-
-    assert weight is not None
-    assert weight.table_kind == "weight"
-    assert overall is not None
-    assert overall.table_kind == "overall"
-
-
-def test_liaoning_trunk_does_not_use_appendix_rating_title() -> None:
-    rule_set = select_rule_set("辽宁国省干线")
-
-    assert rule_set.match_rating_table_title("附录1 桥梁技术状况评定表") is None
-
-
 def test_liaoning_trunk_classifies_disease_photo_captions() -> None:
     rule_set = select_rule_set("辽宁国省干线")
 

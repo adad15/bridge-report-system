@@ -215,13 +215,13 @@ std::string insert_defect_observation(
         "(inspection_year_id, bridge_id, bridge_component_id, source_import_record_id, "
         " source_table_title, source_table_index, source_row_number, source_raw_cells_json, "
         " structure_part, part_name, component_type, business_component_code, "
-        " defect_location, defect_type, defect_description_raw, scale, defect_deduction, "
+        " defect_location, defect_type, defect_description_raw, scale, "
         " extraction_confidence, review_status, review_note) "
         "values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, "
         "        $5, $6, $7, $8::jsonb, "
         "        $9, $10, $11, $12, "
-        "        $13, $14, $15, $16, $17, "
-        "        $18, $19, $20) "
+        "        $13, $14, $15, $16, "
+        "        $17, $18, $19) "
         "returning id",
         inspection_year_id,
         bridge_id,
@@ -239,7 +239,6 @@ std::string insert_defect_observation(
         defect.defect_type,
         defect.defect_description_raw,
         defect.scale,
-        defect.defect_deduction,
         defect.extraction_confidence,
         defect.review_status,
         defect.review_note
@@ -296,62 +295,6 @@ Json::Value parse_json_strict(const std::string& text) {
         throw std::runtime_error("stored parsed_result_json is invalid: " + errors);
     }
     return data;
-}
-
-void insert_condition_rating(
-    const TransactionPtr& tx,
-    const std::string& inspection_year_id,
-    const std::string& import_record_id,
-    const review::RatingPlan& rating
-) {
-    tx->execSqlSync(
-        "insert into condition_ratings "
-        "(inspection_year_id, source_import_record_id, rating_level, structure_part, rating_item_name, "
-        " score, grade, weight, remarks, review_status) "
-        "values ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10)",
-        inspection_year_id,
-        import_record_id,
-        rating.rating_level,
-        rating.structure_part,
-        rating.rating_item_name,
-        rating.score,
-        rating.grade,
-        rating.weight,
-        rating.remarks,
-        rating.review_status
-    );
-}
-
-// 构件级评分：rating_level='构件'，绑定 bridge_component_id，并落迁移 003 的
-// 三值校验列（score 为最终确认分；来源分/复算分/状态/原因/计算明细分别入列）。
-// 同检测版本同构件的唯一性由部分唯一索引 ux_condition_ratings_component_per_inspection
-// 兜底；预检的 component_rating_duplicate_component 是第一道防线。
-void insert_component_condition_rating(
-    const TransactionPtr& tx,
-    const std::string& inspection_year_id,
-    const std::string& import_record_id,
-    const std::string& bridge_component_id,
-    const review::ComponentRatingPlan& rating
-) {
-    tx->execSqlSync(
-        "insert into condition_ratings "
-        "(inspection_year_id, source_import_record_id, rating_level, structure_part, bridge_component_id, "
-        " rating_item_name, score, source_score, calculated_score, score_validation_status, "
-        " score_resolution_reason, calculation_details_json, review_status) "
-        "values ($1::uuid, $2::uuid, '构件', $3, $4::uuid, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)",
-        inspection_year_id,
-        import_record_id,
-        rating.structure_part,
-        bridge_component_id,
-        rating.rating_item_name,
-        rating.score,
-        rating.source_score,
-        rating.calculated_score,
-        rating.score_validation_status,
-        rating.score_resolution_reason,
-        rating.calculation_details_json,
-        rating.review_status
-    );
 }
 
 }  // 匿名命名空间
@@ -777,12 +720,8 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         }
 
         const auto data = parse_json_strict(record_row["parsed_result_json"].as<std::string>());
-        const auto mode = data["contract"]["version"].isString() &&
-                                  data["contract"]["version"].asString() == "1.2"
-                              ? contracts::AnnualInspectionValidationMode::Legacy12Transition
-                              : contracts::AnnualInspectionValidationMode::FinalVersion2;
         const auto contract_result =
-            contracts::validate_bridge_annual_inspection_data(data, mode);
+            contracts::validate_bridge_annual_inspection_data(data);
         if (!contract_result.ok()) {
             review::PreflightReport report;
             report.blocking_errors.push_back({"contract_validation_failed", contract_result.summary(), std::string()});

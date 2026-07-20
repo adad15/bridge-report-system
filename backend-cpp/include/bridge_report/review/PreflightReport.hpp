@@ -54,15 +54,15 @@ struct PreflightReport {
  *   1. import_record_wrong_status - context.import_status 不是“待校对”
  *   2. contract_validation_failed - 契约校验不通过
  *
- * 检查 1、2 总是执行；一旦契约校验失败，直接短路返回（不再评估依赖字段结构的检查 3-7 与警告，
- * 因为契约都不满足时无法安全定位病害/照片/评分字段）。契约通过后才继续：
+ * 检查 1、2 总是执行；一旦契约校验失败，直接短路返回（不再评估依赖字段结构的后续检查，
+ * 因为契约都不满足时无法安全定位病害和照片字段）。契约通过后才继续：
  *   3. import_context_mismatch - 导入上下文与记录/桥梁/年度不一致
  *   4. candidate_pending_review - 仍有候选处于待确认状态
  *   5. defect_missing_required_field - 已确认/已修改病害缺核心字段
- *   6. photo_link_unresolved - 已确认/已修改照片的病害关联无法解析
- *   7. rating_overall_missing - 全桥评分缺总分或等级
+ *   6. component_inventory_unconfirmed / defect_component_match_required - 构件台账或关联不满足
+ *   7. photo_link_unresolved / group_confirmation_required / photo_archive_missing - 照片组或归档不满足
  * 以及非阻断警告：defect_without_photo / unreferenced_photo_ignored /
- * measurement_unstructured_kept / rating_parts_incomplete。
+ * measurement_unstructured_kept。
  */
 [[nodiscard]] PreflightReport build_preflight_report(const Json::Value& data, const PreflightContext& context);
 

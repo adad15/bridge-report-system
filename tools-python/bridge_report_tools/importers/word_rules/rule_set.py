@@ -19,13 +19,6 @@ class DefectTableRule:
 
 
 @dataclass(frozen=True)
-class RatingTableRule:
-    table_no: str
-    title_keywords: tuple[str, ...]
-    table_kind: Literal["weight", "overall"]
-
-
-@dataclass(frozen=True)
 class PhotoCaption:
     number: str
     raw_text: str
@@ -36,18 +29,11 @@ class PhotoCaption:
 class WordRuleSet:
     profile: str
     defect_table_rules: tuple[DefectTableRule, ...]
-    rating_table_rules: tuple[RatingTableRule, ...]
     disease_photo_pattern: re.Pattern[str]
     any_caption_pattern: re.Pattern[str]
 
     def match_defect_table_title(self, title: str | None) -> DefectTableRule | None:
         for rule in self.defect_table_rules:
-            if contains_all(title, rule.title_keywords):
-                return rule
-        return None
-
-    def match_rating_table_title(self, title: str | None) -> RatingTableRule | None:
-        for rule in self.rating_table_rules:
             if contains_all(title, rule.title_keywords):
                 return rule
         return None

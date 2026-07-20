@@ -19,56 +19,14 @@ ContractCompatibilityResult normalize_review_contract(
     Json::Value data,
     std::string_view import_status
 ) {
-    const auto version = contract_version_of(data);
-    if (version == "2.0") {
-        return {std::move(data), ContractCompatibility::Native20};
-    }
-
-    // 只识别历史上真实存在过的旧版本；无法识别的形状原样返回，
-    // 交由严格校验器判定，避免把垃圾数据误标成旧版可读记录。
-    if (version != "1.0" && version != "1.1" && version != "1.2") {
-        return {std::move(data), ContractCompatibility::Native20};
-    }
-    if (!kLegacyAnnualInspection12ReadEnabled) {
-        return {std::move(data), ContractCompatibility::Native20};
-    }
-
-    if (version == "1.0" || version == "1.1") {
-        // 仅内存展示规范化：补上旧前端 1.2 守卫要求的成员，绝不落库。
-        data["contract"]["version"] = "1.2";
-        if (data["defects"].isArray()) {
-            for (auto& defect : data["defects"]) {
-                if (!defect.isObject()) {
-                    continue;
-                }
-                if (!defect.isMember("group_review_status")) {
-                    defect["group_review_status"] = "待确认";
-                }
-                if (!defect.isMember("confirmed_missing_photo_numbers")) {
-                    defect["confirmed_missing_photo_numbers"] = Json::Value(Json::arrayValue);
-                }
-            }
-        }
-        if (data["ratings"].isObject() &&
-            !data["ratings"].isMember("component_ratings")) {
-            data["ratings"]["component_ratings"] = Json::Value(Json::arrayValue);
-        }
-    }
-
-    const auto compatibility = import_status == "待校对"
-        ? ContractCompatibility::LegacyPendingReparse
-        : ContractCompatibility::LegacyReadOnly;
-    return {std::move(data), compatibility};
+    (void)import_status;
+    return {std::move(data), ContractCompatibility::Native20};
 }
 
 std::string_view contract_compatibility_name(ContractCompatibility value) {
     switch (value) {
     case ContractCompatibility::Native20:
         return "native_2_0";
-    case ContractCompatibility::LegacyPendingReparse:
-        return "legacy_pending_reparse";
-    case ContractCompatibility::LegacyReadOnly:
-        return "legacy_read_only";
     }
     return "native_2_0";
 }

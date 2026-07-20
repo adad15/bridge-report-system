@@ -1,6 +1,5 @@
 interface ReviewActionBarProps {
   onSaveDraft?: () => void;
-  onBatchConfirmNormal?: () => void;
   onPreflight?: () => void;
   onConfirmImport?: () => void;
   onCancelImport?: () => void;
@@ -22,7 +21,6 @@ interface ReviewActionBarProps {
 // 整条换成只读横幅 + 返回按钮 + 可选的重开校对入口）。
 export function ReviewActionBar({
   onSaveDraft,
-  onBatchConfirmNormal,
   onPreflight,
   onConfirmImport,
   onCancelImport,
@@ -72,9 +70,6 @@ export function ReviewActionBar({
       <span className="review-action-dirty">{dirty ? "● 有未保存的修改，请先保存草稿再进行入库前检查" : null}</span>
       <button type="button" disabled={!onSaveDraft} onClick={onSaveDraft}>
         保存草稿
-      </button>
-      <button type="button" disabled={!onBatchConfirmNormal} onClick={onBatchConfirmNormal}>
-        批量确认普通评分
       </button>
       <button type="button" disabled={!onPreflight} onClick={onPreflight}>
         入库前检查

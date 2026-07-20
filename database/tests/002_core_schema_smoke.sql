@@ -13,7 +13,6 @@ declare
   v_observation_id uuid;
   v_measurement_count integer;
   v_photo_count integer;
-  v_rating_count integer;
   v_current_count integer;
   v_defect_rows integer;
 begin
@@ -263,8 +262,6 @@ begin
     defect_type,
     defect_description_raw,
     scale,
-    defect_deduction,
-    component_score,
     is_repaired,
     extraction_confidence,
     review_status
@@ -288,8 +285,6 @@ begin
     '横向裂缝',
     '底板横向裂缝 L=1.2m，W=0.15mm',
     '2',
-    5.00,
-    90.00,
     '否',
     0.9500,
     '已确认'
@@ -356,37 +351,6 @@ begin
     '照片2.1-1',
     '2-1#板底板横向裂缝',
     '病害检查表照片编号与照片区标题一致',
-    '已确认'
-  );
-
-  insert into condition_ratings (
-    inspection_year_id,
-    source_import_record_id,
-    source_file_id,
-    rating_level,
-    structure_part,
-    bridge_component_id,
-    rating_item_name,
-    score,
-    grade,
-    weight,
-    deduction,
-    rating_text_raw,
-    review_status
-  )
-  values (
-    v_inspection_id,
-    v_import_record_id,
-    v_source_file_id,
-    '全桥',
-    '全桥',
-    null,
-    '全桥技术状况',
-    88.50,
-    '2类',
-    null,
-    null,
-    '全桥技术状况评定为2类。',
     '已确认'
   );
 
@@ -459,10 +423,6 @@ begin
   from defect_photos
   where defect_observation_id = v_observation_id;
 
-  select count(*) into v_rating_count
-  from condition_ratings
-  where inspection_year_id = v_inspection_id;
-
   select count(*) into v_current_count
   from inspection_years
   where bridge_id = v_bridge_id
@@ -472,7 +432,6 @@ begin
   select count(*) into v_defect_rows
   from defect_observations o
   join defect_photos p on p.defect_observation_id = o.id
-  join condition_ratings r on r.inspection_year_id = o.inspection_year_id
   where o.bridge_id = v_bridge_id
     and o.inspection_year_id = v_inspection_id
     and o.review_status = '已确认';
@@ -485,16 +444,12 @@ begin
     raise exception 'Expected 1 photo, got %', v_photo_count;
   end if;
 
-  if v_rating_count <> 1 then
-    raise exception 'Expected 1 condition rating, got %', v_rating_count;
-  end if;
-
   if v_current_count <> 1 then
     raise exception 'Expected exactly 1 current inspection after revision, got %', v_current_count;
   end if;
 
   if v_defect_rows <> 1 then
-    raise exception 'Expected query to find confirmed defect/photo/rating row, got %', v_defect_rows;
+    raise exception 'Expected query to find confirmed defect/photo row, got %', v_defect_rows;
   end if;
 end $$;
 

@@ -45,21 +45,19 @@ powershell -ExecutionPolicy Bypass -File scripts/dev/check-module02-db.ps1
 
 The check applies `database/migrations/002_core_schema_and_archive.sql` and runs the rollback-only smoke test in `database/tests/002_core_schema_smoke.sql`.
 
-For module 06 (contract 1.2 component ratings and defect-thread archive), run the
-combined check instead. It applies migrations 002 and 003 in order — both are
-idempotent and safe to re-run — and executes both rollback-only smoke tests:
+For the current schema, run the complete check. It applies every migration in
+name order twice (including `014_remove_imported_rating_legacy.sql`) and then
+runs every database smoke test:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/dev/check-module06-db.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/check-database.ps1
 ```
 
-Migration `003_component_rating_validation_and_thread_binding.sql` adds the
-component-score validation columns (`source_score`, `calculated_score`,
-`score_validation_status`, `score_resolution_reason`, `calculation_details_json`)
-to `condition_ratings`, enforces one component-level rating per inspection
-version per component, and clears legacy `severity` values that were previously
-mis-written into `defect_observations.scale`. Confirmed 1.1-era rows stay
-readable with the new columns as `NULL`; nothing is backfilled.
+Migration `014_remove_imported_rating_legacy.sql` is the final cutover to
+system-owned assessment. It refuses to run while legacy Word ratings or imported
+deductions still contain business data, removes their old columns, and requires
+every `condition_ratings` row to reference a successful formal
+`assessment_run`.
 
 ## Module 03 Annual Inspection Contract
 
@@ -73,7 +71,10 @@ Artifacts:
 - C++ validator: `backend-cpp/include/bridge_report/contracts/AnnualInspectionContract.hpp`
 - Frontend types and guard: `frontend/src/contracts/annualInspection.ts`
 
-The contract represents candidate data stored in `import_records.parsed_result_json`. Confirmed bridge facts still live in PostgreSQL after user review and C++ backend confirmation.
+The only accepted runtime contract is version 2.0. It represents candidate data
+stored in `import_records.parsed_result_json` and intentionally contains no
+imported ratings or Word deductions. Confirmed bridge facts live in PostgreSQL;
+scores are calculated by the selected versioned technical-condition standard.
 
 ## Module 04 Word Importer Prototype
 
@@ -324,12 +325,12 @@ only writes are creating a defect thread and binding/rebinding an observation
 to one — annual defect facts themselves are never modified here, and no
 progress/repair conclusions are produced (those belong to module 07).
 
-Contract 1.2 (see `contracts/README.md`) is the prerequisite: defect candidates
-carry `defect_scale` / `defect_deduction`, and `ratings.component_ratings[]`
-carries the Word source score, the JTG/T H21-2011 4.1.1 recalculated score, and
-the reviewer-confirmed final score. The shared scoring fixture lives in
-`samples/scoring/component_score_cases.json` and is consumed by the Python,
-C++, and TypeScript implementations of the same pure function.
+Contract 2.0 (see `contracts/README.md`) carries reviewed defects, imported
+scales, photos, and actual-component associations, but no imported score or
+deduction. After formal fact confirmation, the backend runs the bridge's locked
+technical-condition standard package. Formal scores and structured calculation
+traces are immutable system results linked to the exact standard profile and
+component-inventory revision used for that run.
 
 Frontend routes:
 
@@ -360,8 +361,7 @@ until module 07 revokes the conclusion. Default queries only read current-valid
 inspection versions (`is_current` and `已确认`); superseded revisions are shown
 through the separate revisions entry and never inherit thread bindings.
 
-Legacy data policy: pending 1.0/1.1 drafts open read-only as
-`legacy_pending_reparse` and must be re-parsed to 1.2 via
-`POST /api/import-records/{id}/parse-word`; confirmed 1.1-era rating rows stay
-readable and the archive marks them as lacking score-validation details instead
-of guessing.
+Legacy data policy: runtime services accept only contract 2.0 and do not
+normalize 1.x drafts. Existing legacy bridge/year data must be removed using the
+controlled deletion workflow before migration 014; the migration blocks rather
+than silently dropping non-empty imported ratings or deductions.
