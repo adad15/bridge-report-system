@@ -121,17 +121,37 @@ TEST(ComponentInventoryRoutesTest, ExtraCategoryGroupsBeyondTemplateAreAllowed) 
     input.input_quantities.removeMember("pavement_count");
     input.groups[1].quantity_key = "component.pavement";
 
-    // 额外分组同样必须在 input_quantities 中提供一致数量。
+    // 额外分组数量之和必须与 input_quantities 一致。
     input.input_quantities["component.pavement"] = 3;
     EXPECT_FALSE(http::validate_inventory_generation_standard(input, package, code, message));
     EXPECT_EQ(code, "inventory_group_quantity_mismatch");
     input.input_quantities["component.pavement"] = 1;
 
-    // 同一规范类别的额外分组只能出现一次。
+    // 额外类别可以拆成多个种类分组，数量之和等于数量项时通过。
     input.groups.push_back(input.groups[1]);
+    input.groups[2].site_component_type = "人行道铺装";
+    input.groups[2].site_name = "人行道铺装";
     EXPECT_FALSE(http::validate_inventory_generation_standard(input, package, code, message));
     EXPECT_EQ(code, "inventory_group_quantity_mismatch");
+    input.input_quantities["component.pavement"] = 2;
+    EXPECT_TRUE(http::validate_inventory_generation_standard(input, package, code, message));
+    input.input_quantities["component.pavement"] = 1;
     input.groups.pop_back();
+
+    // 模板数量项同样可以拆分为多个种类分组。
+    input.groups[0].quantity = 1;
+    auto second_kind = input.groups[0];
+    second_kind.site_component_type = "横隔板";
+    second_kind.site_name = "横隔板";
+    input.groups.push_back(second_kind);
+    EXPECT_TRUE(http::validate_inventory_generation_standard(input, package, code, message));
+
+    // 之和不等于模板数量项时拒绝。
+    input.groups.back().quantity = 2;
+    EXPECT_FALSE(http::validate_inventory_generation_standard(input, package, code, message));
+    EXPECT_EQ(code, "inventory_template_quantity_group_incomplete");
+    input.groups.pop_back();
+    input.groups[0].quantity = 2;
 
     // 不可生成的类别（如河床）仍被拒绝。
     input.groups[1].standard_component_category_id = "component.riverbed";

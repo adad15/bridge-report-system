@@ -14,13 +14,17 @@ import {
 } from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
 
-interface GroupDraft {
-  categoryId: string;
-  siteName: string;
-  siteType: string;
+interface KindDraft {
+  name: string;
+  quantity: string;
   numberingMode: NumberingMode;
   prefix: string;
   suffix: string;
+}
+
+interface CardDraft {
+  categoryId: string;
+  kinds: KindDraft[];
 }
 
 export interface InventoryPreviewItem {
@@ -91,26 +95,27 @@ function compatibleCategories(catalog: StandardCatalog, bridgeTypeId: string, re
   );
 }
 
-function defaultGroup(key: string): GroupDraft {
-  return {
-    categoryId: "",
-    siteName: "",
-    siteType: "",
-    numberingMode: key.includes("per_span") ? "span_member" : "sequential",
-    prefix: "",
-    suffix: "#",
-  };
+function templateNumberingMode(key: string): NumberingMode {
+  return key.includes("per_span") ? "span_member" : "sequential";
 }
 
-function extraGroupDefault(category: StandardComponentCategory): GroupDraft {
-  return {
-    categoryId: category.id,
-    siteName: category.name,
-    siteType: category.name,
-    numberingMode: "sequential",
-    prefix: "",
-    suffix: "#",
-  };
+function newKind(name: string, numberingMode: NumberingMode, quantity: string): KindDraft {
+  return { name, quantity, numberingMode, prefix: "", suffix: "#" };
+}
+
+function defaultTemplateCard(key: string): CardDraft {
+  return { categoryId: "", kinds: [newKind("", templateNumberingMode(key), "")] };
+}
+
+function defaultExtraCard(category: StandardComponentCategory): CardDraft {
+  return { categoryId: category.id, kinds: [newKind(category.name, "sequential", "0")] };
+}
+
+function kindTotal(card: CardDraft): number {
+  return card.kinds.reduce((total, kind) => {
+    const value = Number(kind.quantity);
+    return Number.isInteger(value) && value > 0 ? total + value : total;
+  }, 0);
 }
 
 export function BridgeInventoryWizard({
@@ -121,8 +126,8 @@ export function BridgeInventoryWizard({
   const [catalogs, setCatalogs] = useState<StandardCatalog[]>([]);
   const [packageId, setPackageId] = useState("");
   const [bridgeTypeId, setBridgeTypeId] = useState("");
-  const [quantities, setQuantities] = useState<Record<string, string>>({});
-  const [groups, setGroups] = useState<Record<string, GroupDraft>>({});
+  const [spanCount, setSpanCount] = useState("");
+  const [cards, setCards] = useState<Record<string, CardDraft>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -173,169 +178,216 @@ export function BridgeInventoryWizard({
     [catalog, template, bridgeTypeId, categories]
   );
 
+  const derived = useMemo(() => {
+    if (!catalog || !template) return null;
+    const parsedQuantities: Record<string, number> = {};
+    const groups: InventoryGenerationGroup[] = [];
+    let valid = true;
+
+    if (template.quantity_inputs.includes("span_count")) {
+      const value = Number(spanCount);
+      if (spanCount === "" || !Number.isInteger(value) || value < 0 || value > 1000) valid = false;
+      parsedQuantities.span_count = spanCount === "" ? 0 : value;
+    }
+
+    const collect = (
+      key: string,
+      card: CardDraft,
+      category: StandardComponentCategory | undefined,
+      blankIsZero: boolean
+    ): number => {
+      let sum = 0;
+      for (const kind of card.kinds) {
+        const raw = kind.quantity === "" && blankIsZero ? "0" : kind.quantity;
+        const value = Number(raw);
+        if (raw === "" || !Number.isInteger(value) || value < 0 || value > 10000) {
+          valid = false;
+          continue;
+        }
+        sum += value;
+        if (value === 0) continue;
+        if (!category || !kind.name.trim()) {
+          valid = false;
+          continue;
+        }
+        if (kind.numberingMode === "span_member" && !(parsedQuantities.span_count > 0)) valid = false;
+        groups.push({
+          site_component_type: kind.name.trim(),
+          site_name: kind.name.trim(),
+          standard_component_category_id: category.id,
+          structure_part: category.structure_part,
+          numbering_mode: kind.numberingMode,
+          quantity: value,
+          quantity_key: key,
+          number_prefix: kind.prefix,
+          number_suffix: kind.suffix,
+        });
+      }
+      if (sum > 10000) valid = false;
+      return sum;
+    };
+
+    for (const key of template.quantity_inputs) {
+      if (key === "span_count") continue;
+      const card = cards[key] ?? defaultTemplateCard(key);
+      const category = categories.find((item) => item.id === card.categoryId);
+      parsedQuantities[key] = collect(key, card, category, false);
+    }
+    for (const category of extraCategories) {
+      const card = cards[category.id] ?? defaultExtraCard(category);
+      const sum = collect(category.id, card, category, true);
+      if (sum > 0) parsedQuantities[category.id] = sum;
+    }
+    if (groups.length === 0) valid = false;
+    return { parsedQuantities, groups, valid };
+  }, [catalog, template, categories, extraCategories, cards, spanCount]);
+
   useEffect(() => {
-    if (!template || !catalog) {
+    if (!derived || !template) {
       onPlanChange(null);
       return;
     }
-    const parsedQuantities: Record<string, number> = {};
-    let valid = true;
-    for (const key of template.quantity_inputs) {
-      const raw = quantities[key] ?? "";
-      const value = Number(raw);
-      if (raw === "" || !Number.isInteger(value) || value < 0 || value > 10000) valid = false;
-      parsedQuantities[key] = value;
-    }
-    const generationGroups: InventoryGenerationGroup[] = [];
-    for (const key of template.quantity_inputs) {
-      if (key === "span_count" || !(parsedQuantities[key] > 0)) continue;
-      const draft = groups[key];
-      const category = categories.find((item) => item.id === draft?.categoryId);
-      if (!draft || !category || !draft.siteName.trim() || !draft.siteType.trim()) {
-        valid = false;
-        continue;
-      }
-      if (draft.numberingMode === "span_member" && !(parsedQuantities.span_count > 0)) valid = false;
-      generationGroups.push({
-        site_component_type: draft.siteType.trim(),
-        site_name: draft.siteName.trim(),
-        standard_component_category_id: category.id,
-        structure_part: category.structure_part,
-        numbering_mode: draft.numberingMode,
-        quantity: parsedQuantities[key],
-        quantity_key: key,
-        number_prefix: draft.prefix,
-        number_suffix: draft.suffix,
-      });
-    }
-    for (const category of extraCategories) {
-      const raw = quantities[category.id] ?? "0";
-      const value = Number(raw);
-      if (raw === "" || !Number.isInteger(value) || value < 0 || value > 10000) {
-        valid = false;
-        continue;
-      }
-      if (value === 0) continue;
-      parsedQuantities[category.id] = value;
-      const draft = groups[category.id] ?? extraGroupDefault(category);
-      if (!draft.siteName.trim() || !draft.siteType.trim()) {
-        valid = false;
-        continue;
-      }
-      if (draft.numberingMode === "span_member" && !(parsedQuantities.span_count > 0)) valid = false;
-      generationGroups.push({
-        site_component_type: draft.siteType.trim(),
-        site_name: draft.siteName.trim(),
-        standard_component_category_id: category.id,
-        structure_part: category.structure_part,
-        numbering_mode: draft.numberingMode,
-        quantity: value,
-        quantity_key: category.id,
-        number_prefix: draft.prefix,
-        number_suffix: draft.suffix,
-      });
-    }
-    if (generationGroups.length === 0) valid = false;
     onPlanChange(
-      valid
+      derived.valid
         ? {
             standard_package_id: packageId,
             template_id: template.id,
             bridge_type_id: bridgeTypeId,
-            span_count: parsedQuantities.span_count ?? 0,
-            input_quantities: parsedQuantities,
-            groups: generationGroups,
+            span_count: derived.parsedQuantities.span_count ?? 0,
+            input_quantities: derived.parsedQuantities,
+            groups: derived.groups,
           }
         : null
     );
-  }, [bridgeTypeId, catalog, categories, extraCategories, groups, onPlanChange, packageId, quantities, template]);
+  }, [bridgeTypeId, derived, onPlanChange, packageId, template]);
 
   function resetForPackage(nextPackageId: string) {
     setPackageId(nextPackageId);
     setBridgeTypeId("");
-    setQuantities({});
-    setGroups({});
+    setSpanCount("");
+    setCards({});
   }
 
   function resetForBridgeType(nextBridgeTypeId: string) {
     setBridgeTypeId(nextBridgeTypeId);
-    setQuantities({});
-    setGroups({});
+    setSpanCount("");
+    setCards({});
   }
 
-  function setQuantity(key: string, value: string) {
-    setQuantities((current) => ({ ...current, [key]: value }));
-    if (key !== "span_count" && Number(value) > 0) {
-      setGroups((current) => ({ ...current, [key]: current[key] ?? defaultGroup(key) }));
-    }
+  function updateCard(key: string, fallback: () => CardDraft, mutate: (card: CardDraft) => CardDraft) {
+    setCards((current) => ({ ...current, [key]: mutate(current[key] ?? fallback()) }));
   }
 
-  function setExtraQuantity(category: StandardComponentCategory, value: string) {
-    setQuantities((current) => ({ ...current, [category.id]: value }));
-    if (Number(value) > 0) {
-      setGroups((current) => ({
-        ...current,
-        [category.id]: current[category.id] ?? extraGroupDefault(category),
-      }));
-    }
+  function updateKind(key: string, fallback: () => CardDraft, index: number, patch: Partial<KindDraft>) {
+    updateCard(key, fallback, (card) => ({
+      ...card,
+      kinds: card.kinds.map((kind, i) => (i === index ? { ...kind, ...patch } : kind)),
+    }));
   }
 
-  function updateGroup(key: string, update: Partial<GroupDraft>, fallback?: GroupDraft) {
-    setGroups((current) => ({
-      ...current,
-      [key]: { ...(current[key] ?? fallback ?? defaultGroup(key)), ...update },
+  function addKind(key: string, fallback: () => CardDraft, quantity: string, numberingMode: NumberingMode) {
+    updateCard(key, fallback, (card) => ({
+      ...card,
+      kinds: [...card.kinds, newKind("", numberingMode, quantity)],
+    }));
+  }
+
+  function removeKind(key: string, fallback: () => CardDraft, index: number) {
+    updateCard(key, fallback, (card) => ({
+      ...card,
+      kinds: card.kinds.filter((_, i) => i !== index),
     }));
   }
 
   function selectCategory(key: string, category: StandardComponentCategory | undefined) {
-    updateGroup(
-      key,
-      category
-        ? { categoryId: category.id, siteName: category.name, siteType: category.name }
-        : { categoryId: "", siteName: "", siteType: "" }
-    );
+    updateCard(key, () => defaultTemplateCard(key), (card) => {
+      const previous = categories.find((item) => item.id === card.categoryId);
+      return {
+        categoryId: category?.id ?? "",
+        kinds: card.kinds.map((kind) =>
+          kind.name.trim() === "" || (previous != null && kind.name === previous.name)
+            ? { ...kind, name: category?.name ?? "" }
+            : kind
+        ),
+      };
+    });
   }
 
-  const readyGroups = template
-    ? template.quantity_inputs
-        .filter((key) => key !== "span_count" && Number(quantities[key]) > 0)
-        .flatMap((key) => {
-          const draft = groups[key];
-          const category = categories.find((item) => item.id === draft?.categoryId);
-          if (!draft || !category) return [];
-          return [{
-            site_component_type: draft.siteType,
-            site_name: draft.siteName,
-            standard_component_category_id: category.id,
-            structure_part: category.structure_part,
-            numbering_mode: draft.numberingMode,
-            quantity: Number(quantities[key]),
-            quantity_key: key,
-            number_prefix: draft.prefix,
-            number_suffix: draft.suffix,
-          } satisfies InventoryGenerationGroup];
-        })
-    : [];
-  const extraReadyGroups = extraCategories.flatMap((category) => {
-    const value = Number(quantities[category.id] ?? "0");
-    if (!(value > 0)) return [];
-    const draft = groups[category.id] ?? extraGroupDefault(category);
-    return [{
-      site_component_type: draft.siteType,
-      site_name: draft.siteName,
-      standard_component_category_id: category.id,
-      structure_part: category.structure_part,
-      numbering_mode: draft.numberingMode,
-      quantity: value,
-      quantity_key: category.id,
-      number_prefix: draft.prefix,
-      number_suffix: draft.suffix,
-    } satisfies InventoryGenerationGroup];
-  });
-  const preview = previewInventoryNumbers(
-    [...readyGroups, ...extraReadyGroups],
-    Number(quantities.span_count) || 0
-  );
+  function renderKindRow(
+    labelBase: string,
+    key: string,
+    fallback: () => CardDraft,
+    kind: KindDraft,
+    index: number,
+    removable: boolean
+  ) {
+    return (
+      <div className="inventory-kind-row" key={index}>
+        <label>
+          构件名称
+          <input
+            aria-label={`${labelBase} 构件名称 ${index + 1}`}
+            value={kind.name}
+            onChange={(event) => updateKind(key, fallback, index, { name: event.target.value })}
+          />
+        </label>
+        <label>
+          数量
+          <input
+            aria-label={`${labelBase} 数量 ${index + 1}`}
+            type="number"
+            min={0}
+            max={10000}
+            step={1}
+            value={kind.quantity}
+            onChange={(event) => updateKind(key, fallback, index, { quantity: event.target.value })}
+          />
+        </label>
+        <label>
+          编号方式
+          <select
+            aria-label={`${labelBase} 编号方式 ${index + 1}`}
+            value={kind.numberingMode}
+            onChange={(event) => updateKind(key, fallback, index, { numberingMode: event.target.value as NumberingMode })}
+          >
+            <option value="sequential">连续（1#、2#…）</option>
+            <option value="span_member">按跨（1-1#、1-2#…）</option>
+          </select>
+        </label>
+        <details className="inventory-affix-details">
+          <summary>编号前后缀</summary>
+          <div className="inventory-affix-fields">
+            <label>
+              编号前缀
+              <input
+                aria-label={`${labelBase} 编号前缀 ${index + 1}`}
+                value={kind.prefix}
+                onChange={(event) => updateKind(key, fallback, index, { prefix: event.target.value })}
+              />
+            </label>
+            <label>
+              编号后缀
+              <input
+                aria-label={`${labelBase} 编号后缀 ${index + 1}`}
+                value={kind.suffix}
+                onChange={(event) => updateKind(key, fallback, index, { suffix: event.target.value })}
+              />
+            </label>
+          </div>
+        </details>
+        {removable ? (
+          <button
+            type="button"
+            className="inventory-kind-remove"
+            aria-label={`${labelBase} 移除 ${index + 1}`}
+            onClick={() => removeKind(key, fallback, index)}
+          >
+            移除
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <section className="inventory-wizard" aria-labelledby="inventory-wizard-title">
@@ -384,130 +436,83 @@ export function BridgeInventoryWizard({
       {template ? (
         <div className="inventory-quantity-list">
           <h4>填写构件数量</h4>
-          {template.quantity_inputs.map((key) => {
-            const value = quantities[key] ?? "";
-            const positive = key !== "span_count" && Number(value) > 0;
-            const draft = groups[key] ?? defaultGroup(key);
-            return (
-              <div className="inventory-quantity-card" key={key}>
-                <label>
-                  {quantityLabel(key)}
-                  <input
-                    aria-label={quantityLabel(key)}
-                    type="number"
-                    min={0}
-                    max={key === "span_count" ? 1000 : 10000}
-                    step={1}
-                    value={value}
-                    onChange={(event) => setQuantity(key, event.target.value)}
-                  />
-                </label>
-                {positive ? (
-                  <div className="inventory-group-fields">
-                    <label>
-                      对应构件类别
-                      <select
-                        value={draft.categoryId}
-                        onChange={(event) => selectCategory(
-                          key,
-                          categories.find((item) => item.id === event.target.value)
-                        )}
-                      >
-                        <option value="">请选择类别</option>
-                        {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                      </select>
-                    </label>
-                    <label>
-                      现场构件名称
-                      <input value={draft.siteName} onChange={(event) => updateGroup(key, { siteName: event.target.value })} />
-                    </label>
-                    <label>
-                      构件类型
-                      <input value={draft.siteType} onChange={(event) => updateGroup(key, { siteType: event.target.value })} />
-                    </label>
-                    <label>
-                      编号方式
-                      <select value={draft.numberingMode} onChange={(event) => updateGroup(key, { numberingMode: event.target.value as NumberingMode })}>
-                        <option value="sequential">连续编号（1#、2#…）</option>
-                        <option value="span_member">按跨编号（1-1#、1-2#…）</option>
-                      </select>
-                    </label>
-                    <label>
-                      编号前缀
-                      <input value={draft.prefix} onChange={(event) => updateGroup(key, { prefix: event.target.value })} />
-                    </label>
-                    <label>
-                      编号后缀
-                      <input value={draft.suffix} onChange={(event) => updateGroup(key, { suffix: event.target.value })} />
-                    </label>
+          {template.quantity_inputs.includes("span_count") ? (
+            <div className="inventory-quantity-card">
+              <label>
+                跨数
+                <input
+                  aria-label="跨数"
+                  type="number"
+                  min={0}
+                  max={1000}
+                  step={1}
+                  value={spanCount}
+                  onChange={(event) => setSpanCount(event.target.value)}
+                />
+              </label>
+            </div>
+          ) : null}
+          {template.quantity_inputs
+            .filter((key) => key !== "span_count")
+            .map((key) => {
+              const fallback = () => defaultTemplateCard(key);
+              const card = cards[key] ?? fallback();
+              const labelBase = quantityLabel(key);
+              return (
+                <div className="inventory-quantity-card" key={key}>
+                  <div className="inventory-card-heading">
+                    <strong>{labelBase}</strong>
+                    <span className="inventory-card-total">合计 {kindTotal(card)}</span>
                   </div>
-                ) : null}
-              </div>
-            );
-          })}
+                  <label>
+                    对应构件类别
+                    <select
+                      aria-label={`${labelBase} 对应构件类别`}
+                      value={card.categoryId}
+                      onChange={(event) => selectCategory(
+                        key,
+                        categories.find((item) => item.id === event.target.value)
+                      )}
+                    >
+                      <option value="">请选择类别</option>
+                      {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                    </select>
+                  </label>
+                  {card.kinds.map((kind, index) =>
+                    renderKindRow(labelBase, key, fallback, kind, index, card.kinds.length > 1))}
+                  <button
+                    type="button"
+                    className="inventory-add-kind"
+                    aria-label={`${labelBase} 添加一种构件`}
+                    onClick={() => addKind(key, fallback, "", templateNumberingMode(key))}
+                  >
+                    ＋ 添加一种构件
+                  </button>
+                </div>
+              );
+            })}
           {extraCategories.length > 0 ? (
             <div className="inventory-extra-categories">
               <h4>其他部件（桥上没有的填 0）</h4>
               {extraCategories.map((category) => {
-                const value = quantities[category.id] ?? "0";
-                const positive = Number(value) > 0;
-                const draft = groups[category.id] ?? extraGroupDefault(category);
+                const fallback = () => defaultExtraCard(category);
+                const card = cards[category.id] ?? fallback();
                 return (
                   <div className="inventory-quantity-card" key={category.id}>
-                    <label>
-                      {category.name}数量
-                      <input
-                        aria-label={`${category.name}数量`}
-                        type="number"
-                        min={0}
-                        max={10000}
-                        step={1}
-                        value={value}
-                        onChange={(event) => setExtraQuantity(category, event.target.value)}
-                      />
-                    </label>
-                    {positive ? (
-                      <div className="inventory-group-fields">
-                        <label>
-                          现场构件名称
-                          <input
-                            value={draft.siteName}
-                            onChange={(event) => updateGroup(category.id, { siteName: event.target.value }, extraGroupDefault(category))}
-                          />
-                        </label>
-                        <label>
-                          构件类型
-                          <input
-                            value={draft.siteType}
-                            onChange={(event) => updateGroup(category.id, { siteType: event.target.value }, extraGroupDefault(category))}
-                          />
-                        </label>
-                        <label>
-                          编号方式
-                          <select
-                            value={draft.numberingMode}
-                            onChange={(event) => updateGroup(category.id, { numberingMode: event.target.value as NumberingMode }, extraGroupDefault(category))}
-                          >
-                            <option value="sequential">连续编号（1#、2#…）</option>
-                            <option value="span_member">按跨编号（1-1#、1-2#…）</option>
-                          </select>
-                        </label>
-                        <label>
-                          编号前缀
-                          <input
-                            value={draft.prefix}
-                            onChange={(event) => updateGroup(category.id, { prefix: event.target.value }, extraGroupDefault(category))}
-                          />
-                        </label>
-                        <label>
-                          编号后缀
-                          <input
-                            value={draft.suffix}
-                            onChange={(event) => updateGroup(category.id, { suffix: event.target.value }, extraGroupDefault(category))}
-                          />
-                        </label>
-                      </div>
-                    ) : null}
+                    <div className="inventory-card-heading">
+                      <strong>{category.name}</strong>
+                      <span className="inventory-card-total">合计 {kindTotal(card)}</span>
+                    </div>
+                    {card.kinds.map((kind, index) =>
+                      renderKindRow(category.name, category.id, fallback, kind, index, card.kinds.length > 1))}
+                    <button
+                      type="button"
+                      className="inventory-add-kind"
+                      aria-label={`${category.name} 添加一种构件`}
+                      onClick={() => addKind(category.id, fallback, "0", "sequential")}
+                    >
+                      ＋ 添加一种构件
+                    </button>
                   </div>
                 );
               })}
@@ -515,11 +520,11 @@ export function BridgeInventoryWizard({
           ) : null}
         </div>
       ) : null}
-      {preview.length > 0 ? (
+      {derived && derived.groups.length > 0 ? (
         <div className="inventory-number-preview">
           <h4>编号预览</h4>
-          {preview.map((item) => (
-            <p key={item.quantityKey}>
+          {previewInventoryNumbers(derived.groups, Number(spanCount) || 0).map((item) => (
+            <p key={`${item.quantityKey}:${item.siteType}`}>
               <strong>{item.siteType}</strong>：共 {item.count} 个；{item.numbers.join("、")}
               {item.count > item.numbers.length ? "…" : ""}
             </p>

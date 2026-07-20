@@ -2216,6 +2216,62 @@ body {
   color: #294969;
 }
 
+.inventory-card-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.6rem;
+  color: #294969;
+}
+
+.inventory-card-total {
+  font-size: 0.85rem;
+  color: #5b7891;
+  white-space: nowrap;
+}
+
+.inventory-kind-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.5fr) auto auto;
+  gap: 0.6rem;
+  align-items: end;
+}
+
+.inventory-affix-details {
+  align-self: end;
+  font-size: 0.85rem;
+  padding-bottom: 0.35rem;
+}
+
+.inventory-affix-details summary {
+  cursor: pointer;
+  color: #5b7891;
+  white-space: nowrap;
+}
+
+.inventory-affix-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+  min-width: 16rem;
+}
+
+.inventory-kind-remove {
+  align-self: end;
+}
+
+.inventory-add-kind {
+  justify-self: start;
+}
+
+@media (max-width: 900px) {
+  .inventory-kind-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+}
+
 .inventory-quantity-card {
   display: grid;
   gap: 0.8rem;

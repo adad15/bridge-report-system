@@ -142,19 +142,20 @@ bool validate_inventory_generation_standard(
     }
 
     std::map<std::string, int> group_counts;
+    std::map<std::string, long long> group_sums;
     for (const auto& group : input.groups) {
         const bool template_quantity = allowed_quantity_keys.contains(group.quantity_key);
         if (group.quantity_key == "span_count" ||
             (!template_quantity &&
              group.quantity_key != group.standard_component_category_id) ||
             !input.input_quantities.isMember(group.quantity_key) ||
-            !input.input_quantities[group.quantity_key].isInt() ||
-            input.input_quantities[group.quantity_key].asInt() != group.quantity) {
+            !input.input_quantities[group.quantity_key].isInt()) {
             error_code = "inventory_group_quantity_mismatch";
-            error_message = "构件分组数量必须对应模板数量项或该组规范类别的同名数量项。";
+            error_message = "构件分组必须对应模板数量项或该组规范类别的同名数量项。";
             return false;
         }
         ++group_counts[group.quantity_key];
+        group_sums[group.quantity_key] += group.quantity;
         const auto category = package.definitions.find(group.standard_component_category_id);
         if (category == package.definitions.end() ||
             category->second.source_file != "component-taxonomy.json" ||
@@ -168,17 +169,19 @@ bool validate_inventory_generation_standard(
     }
     for (const auto& key : allowed_quantity_keys) {
         if (key == "span_count") continue;
-        const auto expected_groups = input.input_quantities[key].asInt() > 0 ? 1 : 0;
-        if (group_counts[key] != expected_groups) {
+        const long long expected = input.input_quantities[key].asInt();
+        if ((expected > 0 && (group_counts[key] == 0 || group_sums[key] != expected)) ||
+            (expected == 0 && group_counts[key] != 0)) {
             error_code = "inventory_template_quantity_group_incomplete";
-            error_message = "每个非零模板数量项必须且只能对应一个构件生成分组。";
+            error_message = "每个非零模板数量项必须对应至少一个构件生成分组，且各分组数量之和等于该数量项。";
             return false;
         }
     }
-    for (const auto& [key, count] : group_counts) {
-        if (!allowed_quantity_keys.contains(key) && count != 1) {
+    for (const auto& [key, sum] : group_sums) {
+        if (!allowed_quantity_keys.contains(key) &&
+            sum != input.input_quantities[key].asInt()) {
             error_code = "inventory_group_quantity_mismatch";
-            error_message = "同一规范类别的额外部件分组只能出现一次。";
+            error_message = "同一规范类别的额外部件分组数量之和必须等于该数量项。";
             return false;
         }
     }
