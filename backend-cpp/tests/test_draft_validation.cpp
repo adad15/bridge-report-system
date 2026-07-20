@@ -323,25 +323,16 @@ TEST(WarningsOnlyScopeTest, RejectsChangingPhotosOrOtherRatingLevels) {
     EXPECT_FALSE(bridge_report::review::validate_warnings_only_scope(stored, inspection_changed).ok);
 }
 
-TEST(WarningsOnlyScopeTest, AcceptsOnlyBackendDerivedComponentRatingAfterDeductionChange) {
+TEST(WarningsOnlyScopeTest, KeepsImportedRatingsUnchangedWhenWarningDefectChanges) {
     auto stored = read_contract_fixture("bridge_annual_inspection_data.valid.json");
     add_warning(stored["defects"][0]);
     auto next = stored;
     next["defects"][0]["defect_deduction"] = 20.0;
-    auto& rating = next["ratings"]["component_ratings"][0];
-    rating["calculated_score"] = 80.0;
-    rating["calculation_details"]["ordered_deductions"] = Json::Value(Json::arrayValue);
-    rating["calculation_details"]["ordered_deductions"].append(20.0);
-    rating["score_validation_status"] = "不一致";
-    rating["confirmed_score"] = Json::Value(Json::nullValue);
-    rating["score_resolution_reason"] = Json::Value(Json::nullValue);
-    rating["review_status"] = "待确认";
-
     Json::Value normalized;
     const auto result = bridge_report::review::validate_warnings_only_scope(stored, next, &normalized);
 
     EXPECT_TRUE(result.ok) << result.message;
-    EXPECT_EQ(normalized["ratings"]["component_ratings"][0]["calculated_score"].asDouble(), 80.0);
+    EXPECT_EQ(normalized["ratings"], stored["ratings"]);
 
     auto forged = next;
     forged["ratings"]["component_ratings"][0]["confirmed_score"] = 99.0;

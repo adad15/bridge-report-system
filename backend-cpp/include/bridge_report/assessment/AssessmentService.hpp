@@ -67,6 +67,9 @@ AssessmentPreview calculate_assessment_preview(
     const Json::Value& draft,
     int client_revision);
 
+Json::Value assessment_result_to_json(
+    const standards::BridgeAssessmentResult& result);
+
 enum class AssessmentServiceStatus {
     Completed,
     Blocked,

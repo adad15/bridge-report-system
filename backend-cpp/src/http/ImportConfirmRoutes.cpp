@@ -8,6 +8,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/ReviewRepository.hpp"
+#include "bridge_report/assessment/AssessmentConfirmationService.hpp"
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/EditLockRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
@@ -27,10 +28,12 @@ namespace {
 // POST /api/import-records/{import_record_id}/preflight-confirm：入库前检查。
 // 无请求体，只读——不修改导入记录状态，只是把当前 parsed_result_json 跑一遍
 // build_preflight_report 并把报告原样返回，供前端在真正确认入库前展示阻断项/警告。
-void register_preflight_confirm_route(const drogon::orm::DbClientPtr& db_client) {
+void register_preflight_confirm_route(
+    const drogon::orm::DbClientPtr& db_client,
+    std::shared_ptr<const standards::StandardRegistry> registry) {
     drogon::app().registerHandler(
         "/api/import-records/{import_record_id}/preflight-confirm",
-        [db_client](
+        [db_client, registry = std::move(registry)](
             const drogon::HttpRequestPtr& request,
             HttpCallback&& callback,
             const std::string& import_record_id
@@ -73,7 +76,20 @@ void register_preflight_confirm_route(const drogon::orm::DbClientPtr& db_client)
                     inventory.has_value()
                         ? std::optional<bool>(inventory->status == "已确认")
                         : std::optional<bool>(false));
-                const auto report = review::build_preflight_report(parsed_result, context);
+                auto report = review::build_preflight_report(parsed_result, context);
+                if (report.can_confirm && detail->inspection_year_id.has_value()) {
+                    assessment::AssessmentConfirmationService assessment_service(
+                        db_client, registry);
+                    const auto assessment = assessment_service.calculate(
+                        *detail->inspection_year_id, parsed_result);
+                    if (assessment.status != assessment::AssessmentConfirmationStatus::Completed) {
+                        for (const auto& item : assessment.preview.issues) {
+                            report.blocking_errors.push_back(
+                                {item.code, item.message, item.entity_id});
+                        }
+                        report.can_confirm = false;
+                    }
+                }
 
                 respond_json(callback, report.to_json());
             } catch (const drogon::orm::DrogonDbException&) {
@@ -111,6 +127,10 @@ Json::Value written_counts_to_json(const db::ConfirmWrittenCounts& written) {
     json["defect_measurements"] = written.defect_measurements;
     json["defect_photos"] = written.defect_photos;
     json["condition_ratings"] = written.condition_ratings;
+    json["assessment_component_results"] = written.assessment_component_results;
+    json["assessment_part_results"] = written.assessment_part_results;
+    json["assessment_control_results"] = written.assessment_control_results;
+    json["assessment_rule_traces"] = written.assessment_rule_traces;
     return json;
 }
 
@@ -160,10 +180,12 @@ void respond_confirm_outcome_failure(const HttpCallback& callback, const db::Con
 // POST /api/import-records/{import_record_id}/confirm：正式入库——唯一会写入
 // defect_observations / defect_measurements / defect_photos / condition_ratings /
 // bridge_components / inspection_years 等正式事实表的路径。
-void register_confirm_route(const drogon::orm::DbClientPtr& db_client) {
+void register_confirm_route(
+    const drogon::orm::DbClientPtr& db_client,
+    std::shared_ptr<const standards::StandardRegistry> registry) {
     drogon::app().registerHandler(
         "/api/import-records/{import_record_id}/confirm",
-        [db_client](
+        [db_client, registry = std::move(registry)](
             const drogon::HttpRequestPtr& request,
             HttpCallback&& callback,
             const std::string& import_record_id
@@ -200,7 +222,7 @@ void register_confirm_route(const drogon::orm::DbClientPtr& db_client) {
                     return;
                 }
 
-                db::ReviewRepository repository(db_client);
+                db::ReviewRepository repository(db_client, registry);
                 const auto detail = repository.get_import_record_detail(import_record_id);
                 if (!detail.has_value()) {
                     respond_import_record_not_found(callback);
@@ -211,6 +233,7 @@ void register_confirm_route(const drogon::orm::DbClientPtr& db_client) {
                     import_record_id,
                     confirm_revision,
                     confirmation_note,
+                    user->id,
                     db::EditLockCredentials{
                         user->id, user->session_id, edit_lock_token_from_request(request)}
                 );
@@ -224,6 +247,7 @@ void register_confirm_route(const drogon::orm::DbClientPtr& db_client) {
                 response_body["confirmed"] = true;
                 response_body["inspection_year_id"] = outcome.inspection_year_id;
                 response_body["version_number"] = outcome.version_number;
+                response_body["assessment_run_id"] = outcome.assessment_run_id;
                 response_body["written"] = written_counts_to_json(outcome.written);
                 respond_json(callback, response_body);
             } catch (const drogon::orm::DrogonDbException&) {
@@ -238,12 +262,14 @@ void register_confirm_route(const drogon::orm::DbClientPtr& db_client) {
 
 }  // 匿名命名空间
 
-void register_import_confirm_routes(const drogon::orm::DbClientPtr& db_client) {
+void register_import_confirm_routes(
+    const drogon::orm::DbClientPtr& db_client,
+    std::shared_ptr<const standards::StandardRegistry> registry) {
     register_options_handler("/api/import-records/{import_record_id}/preflight-confirm");
     register_options_handler("/api/import-records/{import_record_id}/confirm");
 
-    register_preflight_confirm_route(db_client);
-    register_confirm_route(db_client);
+    register_preflight_confirm_route(db_client, registry);
+    register_confirm_route(db_client, std::move(registry));
 }
 
 }  // 命名空间 bridge_report::http

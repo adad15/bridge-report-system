@@ -351,6 +351,7 @@ TEST(ConfirmPlanTest, SeverityNeverReachesScaleWhenDefectScaleIsNull) {
 // Rule 8: component rating mapping (rating_level='构件')
 // ---------------------------------------------------------------------------
 
+#if 0  // Task 18 将删除的旧 Word 构件评分写计划测试。
 TEST(ConfirmPlanTest, SettledComponentRatingProducesComponentRatingPlan) {
     auto data = valid_data();
     confirm_all_candidates(data);
@@ -397,6 +398,22 @@ TEST(ConfirmPlanTest, ComponentRatingWithoutMatchingDefectStillSeedsComponent) {
 
     ASSERT_EQ(plan.component_ratings.size(), 1u);
     EXPECT_EQ(plan.components.size(), 2u);
+}
+#endif
+
+TEST(ConfirmPlanTest, ImportedRatingsNeverEnterFormalFactPlan) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["ratings"]["overall"]["total_score"] = 1.0;
+    data["ratings"]["component_ratings"].append(
+        data["ratings"]["component_ratings"][0]);
+
+    const auto plan = build_confirm_plan(data);
+
+    EXPECT_TRUE(plan.ratings.empty());
+    EXPECT_TRUE(plan.component_ratings.empty());
+    EXPECT_FALSE(plan.overall_score.has_value());
+    EXPECT_TRUE(plan.overall_grade.empty());
 }
 
 // ---------------------------------------------------------------------------
@@ -639,6 +656,7 @@ TEST(ConfirmPlanTest, PhotoModifiedStatusEntersPlan) {
 // Rule 6/7: ratings three-layer mapping + overall top-level sync
 // ---------------------------------------------------------------------------
 
+#if 0  // Task 18 将删除的旧 Word 评分层级映射测试。
 TEST(ConfirmPlanTest, RatingOverallMapsToFullBridgeLevel) {
     auto data = valid_data();
     confirm_all_candidates(data);
@@ -755,6 +773,7 @@ TEST(ConfirmPlanTest, OverallScoreAndGradeEmptyWhenOverallNotSettled) {
     EXPECT_EQ(plan.overall_grade, "");
     EXPECT_EQ(find_rating(plan, "全桥", "全桥"), nullptr);
 }
+#endif
 
 TEST(ConfirmPlanTest, VersionTwoDefectUsesSelectedImmutableInventoryComponent) {
     auto data = read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");

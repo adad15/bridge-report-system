@@ -110,12 +110,17 @@ export interface ConfirmWrittenCounts {
   defect_measurements: number;
   defect_photos: number;
   condition_ratings: number;
+  assessment_component_results: number;
+  assessment_part_results: number;
+  assessment_control_results: number;
+  assessment_rule_traces: number;
 }
 
 export interface ConfirmResponse {
   confirmed: true;
   inspection_year_id: string;
   version_number: number;
+  assessment_run_id: string;
   written: ConfirmWrittenCounts;
 }
 

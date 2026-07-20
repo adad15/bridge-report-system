@@ -1,4 +1,4 @@
-import type { PreflightResponse } from "../api/reviewApi";
+import type { ConfirmResponse, PreflightResponse } from "../api/reviewApi";
 
 // 确认入库按钮解锁逻辑（模块 05 §7.5/§9.3）：必须先跑过一次入库前检查
 // （POST .../preflight-confirm）且返回 can_confirm=true，才允许点击"确认年度事实入库"。
@@ -50,4 +50,11 @@ export function parsePreflightDetails(details: unknown): PreflightResponse | nul
   if (typeof details.requires_revision_confirmation !== "boolean") return null;
   if (!Array.isArray(details.blocking_errors) || !Array.isArray(details.warnings)) return null;
   return details as unknown as PreflightResponse;
+}
+
+export function formatConfirmSuccess(result: ConfirmResponse): string {
+  return `已确认系统评定：病害 ${result.written.defect_observations}、尺寸 ${result.written.defect_measurements}、` +
+    `照片 ${result.written.defect_photos}；系统评分投影 ${result.written.condition_ratings}、` +
+    `构件结果 ${result.written.assessment_component_results}、评定层级 ${result.written.assessment_part_results}、` +
+    `计算轨迹 ${result.written.assessment_rule_traces}；年度版本 v${result.version_number}。`;
 }

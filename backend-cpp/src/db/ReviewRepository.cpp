@@ -1,6 +1,7 @@
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/contracts/AnnualInspectionContract.hpp"
 #include "bridge_report/auth/PasswordHash.hpp"
+#include "bridge_report/assessment/AssessmentConfirmationService.hpp"
 #include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
 
@@ -71,7 +72,9 @@ std::optional<std::string> resolve_target_inspection_year_id(
     const std::string& bridge_id,
     int inspection_year,
     const std::optional<std::string>& existing_inspection_year_id,
-    bool confirm_revision
+    bool confirm_revision,
+    const std::string& standard_profile_id,
+    const std::string& inventory_revision_id
 ) {
     const auto current_result = tx->execSqlSync(
         "select id, version_number from inspection_years "
@@ -101,13 +104,16 @@ std::optional<std::string> resolve_target_inspection_year_id(
 
         const auto inserted = tx->execSqlSync(
             "insert into inspection_years "
-            "(bridge_id, inspection_year, version_number, status, is_current, revision_source_inspection_id) "
-            "values ($1::uuid, $2, $3, '待校对', true, $4::uuid) "
+            "(bridge_id, inspection_year, version_number, status, is_current, revision_source_inspection_id,"
+            " standard_profile_id,component_inventory_revision_id) "
+            "values ($1::uuid, $2, $3, '待校对', true, $4::uuid,$5::uuid,$6::uuid) "
             "returning id",
             bridge_id,
             inspection_year,
             current_version + 1,
-            current_year_id
+            current_year_id,
+            standard_profile_id,
+            inventory_revision_id
         );
         return inserted[0]["id"].as<std::string>();
     }
@@ -117,11 +123,14 @@ std::optional<std::string> resolve_target_inspection_year_id(
     }
 
     const auto inserted = tx->execSqlSync(
-        "insert into inspection_years (bridge_id, inspection_year, version_number, status, is_current) "
-        "values ($1::uuid, $2, 1, '待校对', false) "
+        "insert into inspection_years (bridge_id, inspection_year, version_number, status, is_current,"
+        " standard_profile_id,component_inventory_revision_id) "
+        "values ($1::uuid, $2, 1, '待校对', false,$3::uuid,$4::uuid) "
         "returning id",
         bridge_id,
-        inspection_year
+        inspection_year,
+        standard_profile_id,
+        inventory_revision_id
     );
     return inserted[0]["id"].as<std::string>();
 }
@@ -142,7 +151,8 @@ UpsertedComponent upsert_component(
 ) {
     if (component.existing_bridge_component_id.has_value()) {
         const auto owned = tx->execSqlSync(
-            "select 1 from bridge_components where id=$1::uuid and bridge_id=$2::uuid",
+            "select component_type,business_component_code from bridge_components "
+            "where id=$1::uuid and bridge_id=$2::uuid",
             *component.existing_bridge_component_id,
             bridge_id);
         if (owned.empty()) {
@@ -151,8 +161,8 @@ UpsertedComponent upsert_component(
         }
         return UpsertedComponent{
             *component.existing_bridge_component_id,
-            component.component_type,
-            component.business_component_code};
+            owned[0]["component_type"].as<std::string>(),
+            owned[0]["business_component_code"].as<std::string>()};
     }
     const auto existing = tx->execSqlSync(
         "select id from bridge_components where bridge_id = $1::uuid and normalized_component_key = $2",
@@ -346,7 +356,11 @@ void insert_component_condition_rating(
 
 }  // 匿名命名空间
 
-ReviewRepository::ReviewRepository(drogon::orm::DbClientPtr db_client) : db_client_(std::move(db_client)) {}
+ReviewRepository::ReviewRepository(
+    drogon::orm::DbClientPtr db_client,
+    std::shared_ptr<const standards::StandardRegistry> standard_registry)
+    : db_client_(std::move(db_client)),
+      standard_registry_(std::move(standard_registry)) {}
 
 std::vector<review::BridgeSummary> ReviewRepository::list_bridges() {
     const auto result = db_client_->execSqlSync(
@@ -682,6 +696,7 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
     const std::string& import_record_id,
     bool confirm_revision,
     const std::string& confirmation_note,
+    const std::string& confirmed_by_user_id,
     const std::optional<EditLockCredentials>& edit_lock
 ) {
     // db_client_ 必须是裸 DbClient（不能已经是另一个 Transaction）——newTransaction()
@@ -713,7 +728,9 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             "select ir.import_status, ir.bridge_id::text as bridge_id, "
             "ir.inspection_year_id::text as inspection_year_id, ir.parsed_result_json::text as parsed_result_json, "
             "ir.system_number as import_number, b.system_number as bridge_number, iy.inspection_year, "
-            "iy.bridge_id::text as inspection_year_bridge_id "
+            "iy.bridge_id::text as inspection_year_bridge_id,"
+            "iy.standard_profile_id::text as standard_profile_id,"
+            "iy.component_inventory_revision_id::text as inventory_revision_id "
             "from import_records ir join bridges b on b.id = ir.bridge_id "
             "left join inspection_years iy on iy.id = ir.inspection_year_id "
             "where ir.id = $1::uuid for update of ir",
@@ -797,14 +814,18 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         context.bridge_system_number = record_row["bridge_number"].as<std::string>();
         context.inspection_year = inspection_year;
         context.has_current_annual_facts = !current.empty() && current[0]["found"].as<bool>();
-        const auto inventory = tx->execSqlSync(
-            "select id::text,status from bridge_component_inventory_revisions "
-            "where bridge_id=$1::uuid order by (status='草稿') desc,revision_number desc limit 1",
-            bridge_id);
-        context.component_inventory_confirmed =
-            !inventory.empty() && inventory[0]["status"].as<std::string>() == "已确认";
-        if (!inventory.empty()) {
-            context.component_inventory_revision_id = inventory[0]["id"].as<std::string>();
+        context.component_inventory_revision_id =
+            optional_text(record_row, "inventory_revision_id");
+        if (context.component_inventory_revision_id.has_value()) {
+            const auto inventory = tx->execSqlSync(
+                "select status from bridge_component_inventory_revisions "
+                "where id=$1::uuid and bridge_id=$2::uuid for update",
+                *context.component_inventory_revision_id,
+                bridge_id);
+            context.component_inventory_confirmed = !inventory.empty() &&
+                inventory[0]["status"].as<std::string>() == "已确认";
+        } else {
+            context.component_inventory_confirmed = false;
         }
         const auto preflight = review::build_preflight_report(data, context);
         if (!preflight.can_confirm) {
@@ -814,6 +835,39 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         }
         if (preflight.requires_revision_confirmation && !confirm_revision) {
             return fail("revision_confirmation_required", "同桥同年已有当前有效事实，需显式确认修订版。");
+        }
+
+        const auto standard_profile_id = optional_text(record_row, "standard_profile_id");
+        if (!existing_inspection_year_id.has_value() || !standard_profile_id.has_value() ||
+            !context.component_inventory_revision_id.has_value()) {
+            review::PreflightReport report = preflight;
+            report.blocking_errors.push_back({
+                "assessment_context_incomplete",
+                "检测年度尚未锁定规范组合和已确认构件台账。",
+                std::string()});
+            report.can_confirm = false;
+            auto failed = fail("preflight_failed", "系统评定上下文不完整。");
+            failed.preflight_details = report.to_json();
+            return failed;
+        }
+
+        assessment::AssessmentConfirmationOutcome assessment_outcome;
+        {
+            assessment::AssessmentConfirmationService assessment_service(
+                tx, standard_registry_);
+            assessment_outcome = assessment_service.calculate(
+                *existing_inspection_year_id, data);
+        }
+        if (assessment_outcome.status != assessment::AssessmentConfirmationStatus::Completed) {
+            review::PreflightReport report = preflight;
+            for (const auto& item : assessment_outcome.preview.issues) {
+                report.blocking_errors.push_back(
+                    {item.code, item.message, item.entity_id});
+            }
+            report.can_confirm = false;
+            auto failed = fail("preflight_failed", "系统自主评定未通过。");
+            failed.preflight_details = report.to_json();
+            return failed;
         }
 
         const auto plan = review::build_confirm_plan(data);
@@ -843,7 +897,9 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
 
         // 步骤 2/3：解析目标年度行（含修订判定与降级/新建）。
         const auto target_year_id_opt = resolve_target_inspection_year_id(
-            tx, bridge_id, *inspection_year, existing_inspection_year_id, confirm_revision
+            tx, bridge_id, *inspection_year, existing_inspection_year_id,
+            confirm_revision, *standard_profile_id,
+            *context.component_inventory_revision_id
         );
         if (!target_year_id_opt.has_value()) {
             return fail("revision_confirmation_required", "同桥同年已有当前有效事实，需显式确认修订版。");
@@ -859,8 +915,8 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             "where id = $1::uuid "
             "returning version_number",
             target_year_id,
-            plan.overall_score,
-            plan.overall_grade,
+            assessment_outcome.preview.result->overall_score,
+            std::to_string(assessment_outcome.preview.result->final_grade) + "类",
             context.component_inventory_revision_id.value_or("")
         );
         if (year_update_result.empty()) {
@@ -920,28 +976,19 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             ++written_defect_photos;
         }
 
-        // 步骤 6c：condition_ratings（全桥/结构分部/部件）。
-        int written_condition_ratings = 0;
-        for (const auto& rating : plan.ratings) {
-            insert_condition_rating(tx, target_year_id, import_record_id, rating);
-            ++written_condition_ratings;
+        // 步骤 6c：保存系统正式评定、各级结果、控制、轨迹和档案查询投影。
+        assessment::AssessmentConfirmationWritten assessment_written;
+        {
+            assessment::AssessmentConfirmationService assessment_service(
+                tx, standard_registry_);
+            assessment_written = assessment_service.persist(
+                assessment_outcome.preview,
+                target_year_id,
+                import_record_id,
+                confirmed_by_user_id);
         }
-
-        // 步骤 6d：构件级 condition_ratings，经构件 upsert 映射回填 bridge_component_id。
-        int written_component_ratings = 0;
-        for (const auto& rating : plan.component_ratings) {
-            const auto component_it = component_by_key.find(rating.component_key);
-            if (component_it == component_by_key.end()) {
-                // 不应发生：build_confirm_plan 把构件评分引用的构件也加入沉淀集合。
-                throw std::runtime_error(
-                    "confirm_annual_facts: component rating key not found in plan: " + rating.component_key
-                );
-            }
-            insert_component_condition_rating(
-                tx, target_year_id, import_record_id, component_it->second.bridge_component_id, rating);
-            ++written_component_ratings;
-            ++written_condition_ratings;
-        }
+        const int written_condition_ratings =
+            assessment_written.condition_rating_projections;
 
         // 步骤 7：导入记录终态化。
         Json::Value written_json;
@@ -949,7 +996,11 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         written_json["defect_measurements"] = written_defect_measurements;
         written_json["defect_photos"] = written_defect_photos;
         written_json["condition_ratings"] = written_condition_ratings;
-        written_json["component_condition_ratings"] = written_component_ratings;
+        written_json["assessment_run_id"] = assessment_written.assessment_run_id;
+        written_json["assessment_component_results"] = assessment_written.component_results;
+        written_json["assessment_part_results"] = assessment_written.part_results;
+        written_json["assessment_control_results"] = assessment_written.control_results;
+        written_json["assessment_rule_traces"] = assessment_written.rule_traces;
 
         // 重开列一并清空：重开后的再确认（修订版）完成即退出重开态，备份快照不再需要。
         tx->execSqlSync(
@@ -1005,10 +1056,15 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         ConfirmOutcome outcome;
         outcome.inspection_year_id = target_year_id;
         outcome.version_number = version_number;
+        outcome.assessment_run_id = assessment_written.assessment_run_id;
         outcome.written.defect_observations = written_defect_observations;
         outcome.written.defect_measurements = written_defect_measurements;
         outcome.written.defect_photos = written_defect_photos;
         outcome.written.condition_ratings = written_condition_ratings;
+        outcome.written.assessment_component_results = assessment_written.component_results;
+        outcome.written.assessment_part_results = assessment_written.part_results;
+        outcome.written.assessment_control_results = assessment_written.control_results;
+        outcome.written.assessment_rule_traces = assessment_written.rule_traces;
         tx.reset();
         if (!latch->wait()) {
             outcome.success = false;

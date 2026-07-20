@@ -103,6 +103,7 @@ Json::Value ComponentArchiveRepository::list_components(const std::string& bridg
         "join inspection_years iy on iy.id = cr.inspection_year_id and iy.is_current and iy.status = '已确认' "
         "join bridge_components bc on bc.id = cr.bridge_component_id "
         "where bc.bridge_id = $1::uuid and cr.rating_level = '构件' "
+        "and cr.assessment_run_id is not null "
         "order by cr.bridge_component_id, iy.inspection_year desc",
         bridge_id
     );
@@ -168,14 +169,19 @@ std::optional<Json::Value> ComponentArchiveRepository::get_component(const std::
 Json::Value ComponentArchiveRepository::get_defect_archive(const std::string& component_id) {
     const auto component = get_component(component_id);
 
-    // 各当前有效年度的构件级评分：来源分/复算分/最终分/状态/原因/计算明细。
+    // 各当前有效年度的构件级评分；正式系统评定同时返回运行 ID 与永久计算明细。
     const auto rating_rows = db_client_->execSqlSync(
         "select iy.inspection_year, cr.score, cr.source_score, cr.calculated_score, "
         "cr.score_validation_status, cr.score_resolution_reason, "
-        "cr.calculation_details_json::text as calculation_details "
+        "cr.calculation_details_json::text as legacy_calculation_details,"
+        "cr.assessment_run_id::text as assessment_run_id,"
+        "acr.result_json::text as system_calculation_details "
         "from condition_ratings cr "
         "join inspection_years iy on iy.id = cr.inspection_year_id and iy.is_current and iy.status = '已确认' "
+        "left join assessment_component_results acr on acr.assessment_run_id=cr.assessment_run_id "
+        "and acr.bridge_component_id=cr.bridge_component_id "
         "where cr.bridge_component_id = $1::uuid and cr.rating_level = '构件' "
+        "and cr.assessment_run_id is not null "
         "order by iy.inspection_year desc",
         component_id
     );
@@ -184,14 +190,27 @@ Json::Value ComponentArchiveRepository::get_defect_archive(const std::string& co
         Json::Value item;
         item["inspection_year"] = row["inspection_year"].as<int>();
         item["score"] = nullable_double(row, "score");
-        item["source_score"] = nullable_double(row, "source_score");
-        item["calculated_score"] = nullable_double(row, "calculated_score");
-        item["score_validation_status"] = nullable_string(row, "score_validation_status");
-        item["score_resolution_reason"] = nullable_string(row, "score_resolution_reason");
-        item["calculation_details"] =
-            parse_json_or_default(row["calculation_details"].as<std::string>(), Json::Value(Json::objectValue));
-        // 旧 1.1 年度没有校验明细：前端据此显示"历史数据缺少评分校验明细"，不做猜测。
-        item["has_validation_details"] = !row["score_validation_status"].isNull();
+        const bool system_assessment = !row["assessment_run_id"].isNull();
+        item["is_system_assessment"] = system_assessment;
+        item["assessment_run_id"] = system_assessment
+            ? Json::Value(row["assessment_run_id"].as<std::string>())
+            : Json::Value(Json::nullValue);
+        item["source_score"] = system_assessment
+            ? Json::Value(Json::nullValue) : nullable_double(row, "source_score");
+        item["calculated_score"] = system_assessment
+            ? nullable_double(row, "score") : nullable_double(row, "calculated_score");
+        item["score_validation_status"] = system_assessment
+            ? Json::Value("系统评定") : nullable_string(row, "score_validation_status");
+        item["score_resolution_reason"] = system_assessment
+            ? Json::Value(Json::nullValue) : nullable_string(row, "score_resolution_reason");
+        const auto details_column = system_assessment
+            ? "system_calculation_details" : "legacy_calculation_details";
+        item["calculation_details"] = row[details_column].isNull()
+            ? Json::Value(Json::objectValue)
+            : parse_json_or_default(
+                row[details_column].as<std::string>(), Json::Value(Json::objectValue));
+        item["has_validation_details"] = system_assessment ||
+            !row["score_validation_status"].isNull();
         ratings.append(item);
     }
 

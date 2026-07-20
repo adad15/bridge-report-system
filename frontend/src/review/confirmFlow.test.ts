@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PreflightResponse } from "../api/reviewApi";
-import { canPressConfirm, canRunPreflight, parsePreflightDetails, validateRevisionForm } from "./confirmFlow";
+import { canPressConfirm, canRunPreflight, formatConfirmSuccess, parsePreflightDetails, validateRevisionForm } from "./confirmFlow";
 
 function preflight(overrides: Partial<PreflightResponse> = {}): PreflightResponse {
   return {
@@ -74,5 +74,32 @@ describe("parsePreflightDetails", () => {
     expect(parsePreflightDetails(undefined)).toBeNull();
     expect(parsePreflightDetails("oops")).toBeNull();
     expect(parsePreflightDetails({ code: "some_unrelated_error" })).toBeNull();
+  });
+});
+
+describe("formatConfirmSuccess", () => {
+  it("describes formal system assessment counts instead of imported ratings", () => {
+    const text = formatConfirmSuccess({
+      confirmed: true,
+      inspection_year_id: "year-1",
+      version_number: 2,
+      assessment_run_id: "run-1",
+      written: {
+        defect_observations: 3,
+        defect_measurements: 4,
+        defect_photos: 5,
+        condition_ratings: 36,
+        assessment_component_results: 16,
+        assessment_part_results: 20,
+        assessment_control_results: 1,
+        assessment_rule_traces: 48,
+      },
+    });
+
+    expect(text).toContain("已确认系统评定");
+    expect(text).toContain("系统评分投影 36");
+    expect(text).toContain("构件结果 16");
+    expect(text).toContain("计算轨迹 48");
+    expect(text).toContain("年度版本 v2");
   });
 });

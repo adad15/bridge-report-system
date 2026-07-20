@@ -28,10 +28,37 @@ protected:
 
         bridge_id_ = insert_returning_id(
             "insert into bridges (bridge_name) values ('M06档案测试桥') returning id");
+        user_id_ = insert_returning_id(
+            "insert into users (username, display_name, password_hash, role) "
+            "values ($1, '构件档案系统评定测试员', 'not-a-real-hash', 'normal') returning id",
+            "component_archive_assessment_" + bridge_id_);
+        technical_package_id_ = insert_returning_id(
+            "insert into standard_packages (standard_family, standard_id, standard_code, standard_name, "
+            "official_edition, package_version, contract_version, algorithm_id, effective_date, content_checksum) "
+            "values ('technical_condition', $1, 'TEST H21', '档案测试技术标准', '2026', '1.0.0', 1, "
+            "'test-h21', '2026-01-01', $2) returning id",
+            "ARCHIVE-TECH-" + bridge_id_, "sha256:" + std::string(64, 'c'));
+        maintenance_package_id_ = insert_returning_id(
+            "insert into standard_packages (standard_family, standard_id, standard_code, standard_name, "
+            "official_edition, package_version, contract_version, algorithm_id, effective_date, content_checksum) "
+            "values ('maintenance', $1, 'TEST 5120', '档案测试养护规范', '2026', '1.0.0', 1, "
+            "'test-maintenance', '2026-01-01', $2) returning id",
+            "ARCHIVE-MAINT-" + bridge_id_, "sha256:" + std::string(64, 'd'));
+        standard_profile_id_ = insert_returning_id(
+            "insert into project_standard_profiles (technical_condition_package_id, maintenance_package_id, "
+            "created_by_user_id, change_reason) values ($1::uuid, $2::uuid, $3::uuid, '档案系统评定测试') "
+            "returning id",
+            technical_package_id_, maintenance_package_id_, user_id_);
+        inventory_revision_id_ = insert_returning_id(
+            "insert into bridge_component_inventory_revisions (bridge_id, revision_number, status, "
+            "created_by_user_id) values ($1::uuid, 1, '草稿', $2::uuid) returning id",
+            bridge_id_, user_id_);
 
         year_2025_ = insert_returning_id(
-            "insert into inspection_years (bridge_id, inspection_year, status, version_number, is_current) "
-            "values ($1::uuid, 2025, '已确认', 1, true) returning id", bridge_id_);
+            "insert into inspection_years (bridge_id, inspection_year, status, version_number, is_current, "
+            "standard_profile_id, component_inventory_revision_id) "
+            "values ($1::uuid, 2025, '待校对', 1, true, $2::uuid, $3::uuid) returning id",
+            bridge_id_, standard_profile_id_, inventory_revision_id_);
         year_2024_old_ = insert_returning_id(
             "insert into inspection_years (bridge_id, inspection_year, status, version_number, is_current) "
             "values ($1::uuid, 2024, '已被修订', 1, false) returning id", bridge_id_);
@@ -48,6 +75,49 @@ protected:
             "insert into bridge_components (bridge_id, structure_part, component_type, business_component_code, "
             "normalized_component_key) values ($1::uuid, '桥面系', '伸缩缝', '伸缩缝装置', "
             "'桥面系|伸缩缝|伸缩缝装置') returning id", bridge_id_);
+
+        inventory_entry_id_ = insert_returning_id(
+            "insert into bridge_component_inventory_entries (inventory_revision_id, bridge_component_id, "
+            "component_number, site_name, site_component_type, sort_order) "
+            "values ($1::uuid, $2::uuid, '2-1#板', '上部结构', '上部承重构件', 1) returning id",
+            inventory_revision_id_, component_a_);
+        client_->execSqlSync(
+            "insert into bridge_component_standard_mappings (inventory_entry_id, standard_package_id, "
+            "standard_bridge_type_id, standard_component_category_id, structure_part, mapping_source, "
+            "confirmation_status, confirmed_by_user_id, confirmed_at) "
+            "values ($1::uuid, $2::uuid, 'beam_bridge', 'superstructure.main_girder', 'superstructure', "
+            "'档案测试', '已确认', $3::uuid, now())",
+            inventory_entry_id_, technical_package_id_, user_id_);
+        client_->execSqlSync(
+            "update bridge_component_inventory_revisions set status='已确认', confirmed_by_user_id=$2::uuid, "
+            "confirmed_at=now(), confirmation_note='档案系统评定测试' where id=$1::uuid",
+            inventory_revision_id_, user_id_);
+        client_->execSqlSync(
+            "update inspection_years set status='已确认' where id=$1::uuid",
+            year_2025_);
+
+        assessment_run_id_ = insert_returning_id(
+            "insert into assessment_runs (inspection_year_id, run_kind, result_status, input_summary_json, "
+            "input_checksum, rule_package_summary_json, rule_package_checksum, result_summary_json, "
+            "created_by_user_id, formal_revision_number, technical_condition_package_id, standard_profile_id, "
+            "component_inventory_revision_id) "
+            "values ($1::uuid, '正式', '运行中', '{\"source\":\"archive-test\"}'::jsonb, "
+            "$2, '{\"package\":\"archive-test\"}'::jsonb, $3, '{}'::jsonb, $4::uuid, "
+            "1, $5::uuid, $6::uuid, $7::uuid) "
+            "returning id",
+            year_2025_, "sha256:" + std::string(64, 'a'),
+            "sha256:" + std::string(64, 'c'), user_id_, technical_package_id_,
+            standard_profile_id_, inventory_revision_id_);
+        client_->execSqlSync(
+            "insert into assessment_component_results (assessment_run_id, bridge_component_id, "
+            "standard_component_category_id, structure_part, score, deduction, result_json) "
+            "values ($1::uuid, $2::uuid, 'superstructure.main_girder', 'superstructure', 55.81, 44.19, "
+            "'{\"standard\":\"JTG/T H21-2011\",\"ordered_deductions\":[35.0,20.0],\"rounding_scale\":2}'::jsonb)",
+            assessment_run_id_, component_a_);
+        client_->execSqlSync(
+            "update assessment_runs set result_status='成功', is_current=true, confirmed_by_user_id=$2::uuid, "
+            "confirmed_at=now(), result_summary_json='{\"score\":55.81}'::jsonb where id=$1::uuid",
+            assessment_run_id_, user_id_);
 
         thread_id_ = insert_returning_id(
             "insert into defect_threads (bridge_id, bridge_component_id, thread_name, defect_type, defect_location, "
@@ -66,15 +136,12 @@ protected:
             "values ($1::uuid, '长度', 'range', 0.5, 4.0, 'm', true, '约0.5~4.0m')",
             bound_observation_);
 
-        // 2025 构件评分：三值校验齐全；2024 为 1.1 风格历史行（新列全空）。
+        // 2025 是系统运行投影；2024 是没有 assessment_run_id 的 Word 旧评分，不再进入正式档案。
         client_->execSqlSync(
             "insert into condition_ratings (inspection_year_id, rating_level, structure_part, bridge_component_id, "
-            "rating_item_name, score, source_score, calculated_score, score_validation_status, "
-            "calculation_details_json, review_status) "
-            "values ($1::uuid, '构件', '上部结构', $2::uuid, '2-1#板', 55.81, 55.81, 55.8076118446, '一致', "
-            "'{\"standard\":\"JTG/T H21-2011 4.1.1\",\"ordered_deductions\":[35.0,20.0],\"rounding_scale\":2}'::jsonb, "
-            "'已确认')",
-            year_2025_, component_a_);
+            "rating_item_name, score, calculated_score, review_status, assessment_run_id) "
+            "values ($1::uuid, '构件', '上部结构', $2::uuid, '2-1#板', 55.81, 55.81, '已确认', $3::uuid)",
+            year_2025_, component_a_, assessment_run_id_);
         client_->execSqlSync(
             "insert into condition_ratings (inspection_year_id, rating_level, structure_part, bridge_component_id, "
             "rating_item_name, score, review_status) "
@@ -100,13 +167,29 @@ protected:
         client_->execSqlSync(
             "delete from condition_ratings where bridge_component_id in "
             "(select id from bridge_components where bridge_id = $1::uuid)", bridge_id_);
-        client_->execSqlSync("delete from defect_threads where bridge_id = $1::uuid", bridge_id_);
-        client_->execSqlSync("delete from bridge_components where bridge_id = $1::uuid", bridge_id_);
-        client_->execSqlSync("delete from archived_files where id = $1::uuid", archived_file_id_);
-        client_->execSqlSync("delete from inspection_years where id = $1::uuid", year_2024_current_);
-        client_->execSqlSync("delete from inspection_years where id = $1::uuid", year_2024_old_);
-        client_->execSqlSync("delete from inspection_years where id = $1::uuid", year_2025_);
+        if (!assessment_run_id_.empty()) {
+            client_->execSqlSync(
+                "alter table assessment_runs disable trigger trg_assessment_runs_completed_formal_immutable");
+            client_->execSqlSync("delete from assessment_runs where id = $1::uuid", assessment_run_id_);
+            client_->execSqlSync(
+                "alter table assessment_runs enable trigger trg_assessment_runs_completed_formal_immutable");
+        }
+        for (const auto* year_id : {&year_2024_current_, &year_2024_old_, &year_2025_}) {
+            if (!year_id->empty()) {
+                client_->execSqlSync("delete from inspection_years where id = $1::uuid", *year_id);
+            }
+        }
         client_->execSqlSync("delete from bridges where id = $1::uuid", bridge_id_);
+        if (!standard_profile_id_.empty()) {
+            client_->execSqlSync(
+                "delete from project_standard_profiles where id = $1::uuid", standard_profile_id_);
+        }
+        if (!technical_package_id_.empty() && !maintenance_package_id_.empty()) {
+            client_->execSqlSync(
+                "delete from standard_packages where id in ($1::uuid, $2::uuid)",
+                technical_package_id_, maintenance_package_id_);
+        }
+        client_->execSqlSync("delete from users where id = $1::uuid", user_id_);
         client_->closeAll();
     }
 
@@ -149,6 +232,13 @@ protected:
     std::string component_b_observation_;
     std::string archived_file_id_;
     std::string defect_photo_id_;
+    std::string user_id_;
+    std::string technical_package_id_;
+    std::string maintenance_package_id_;
+    std::string standard_profile_id_;
+    std::string inventory_revision_id_;
+    std::string inventory_entry_id_;
+    std::string assessment_run_id_;
 };
 
 const Json::Value* find_by_id(const Json::Value& items, const std::string& id) {
@@ -215,15 +305,15 @@ TEST_F(ComponentArchiveRepositoryTest, DefectArchiveGroupsByThreadAndExcludesRev
     // 旧修订版观测绝不进入默认档案。
     EXPECT_EQ(find_by_id(body["unbound_observations"], revision_observation_), nullptr);
 
-    // 构件评分：2025 有完整校验明细；2024 为 1.1 历史行，明确标记缺少明细。
-    ASSERT_EQ(body["ratings"].size(), 2u);
+    // 档案只读取 assessment_run 投影，不把 2024 Word 旧评分伪装成正式结果。
+    ASSERT_EQ(body["ratings"].size(), 1u);
     EXPECT_EQ(body["ratings"][0]["inspection_year"].asInt(), 2025);
+    EXPECT_TRUE(body["ratings"][0]["is_system_assessment"].asBool());
+    EXPECT_EQ(body["ratings"][0]["assessment_run_id"].asString(), assessment_run_id_);
     EXPECT_TRUE(body["ratings"][0]["has_validation_details"].asBool());
-    EXPECT_EQ(body["ratings"][0]["score_validation_status"].asString(), "一致");
+    EXPECT_EQ(body["ratings"][0]["score_validation_status"].asString(), "系统评定");
+    EXPECT_TRUE(body["ratings"][0]["source_score"].isNull());
     EXPECT_EQ(body["ratings"][0]["calculation_details"]["ordered_deductions"].size(), 2u);
-    EXPECT_EQ(body["ratings"][1]["inspection_year"].asInt(), 2024);
-    EXPECT_FALSE(body["ratings"][1]["has_validation_details"].asBool());
-    EXPECT_TRUE(body["ratings"][1]["score_validation_status"].isNull());
 }
 
 TEST_F(ComponentArchiveRepositoryTest, RevisionsEntryReturnsSupersededObservationsOnly) {

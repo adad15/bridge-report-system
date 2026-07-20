@@ -56,6 +56,17 @@ function RatingRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  if (rating.is_system_assessment) {
+    return (
+      <tr>
+        <td>{rating.inspection_year}</td>
+        <td>-</td>
+        <td>{formatScore(rating.calculated_score)}</td>
+        <td>{formatScore(rating.score)}</td>
+        <td colSpan={3}><span className="severity-badge severity-info">系统评定</span></td>
+      </tr>
+    );
+  }
   if (!rating.has_validation_details) {
     return (
       <tr>

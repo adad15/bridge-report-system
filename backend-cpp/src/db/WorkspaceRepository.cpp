@@ -113,7 +113,8 @@ std::optional<review::BridgeOverview> WorkspaceRepository::get_bridge_overview(c
         overview.latest_inspection = overview.recent_inspections.front();
         const auto rating_rows = db_client_->execSqlSync(
             "select rating_level, rating_item_name, score, grade from condition_ratings "
-            "where inspection_year_id = $1::uuid and rating_level in ('结构分部','部件') "
+            "where inspection_year_id = $1::uuid and assessment_run_id is not null "
+            "and rating_level in ('结构分部','部件') "
             "and review_status in ('已确认','已修改') order by rating_level, rating_item_name",
             overview.latest_inspection->id);
         for (const auto& row : rating_rows) {

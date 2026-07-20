@@ -2,6 +2,8 @@
 
 #include <drogon/orm/DbClient.h>
 
+#include "bridge_report/standards/StandardRegistry.hpp"
+
 namespace bridge_report::http {
 
 /**
@@ -9,6 +11,8 @@ namespace bridge_report::http {
  *   POST /api/import-records/{import_record_id}/preflight-confirm
  *   POST /api/import-records/{import_record_id}/confirm
  */
-void register_import_confirm_routes(const drogon::orm::DbClientPtr& db_client);
+void register_import_confirm_routes(
+    const drogon::orm::DbClientPtr& db_client,
+    std::shared_ptr<const standards::StandardRegistry> registry);
 
 }  // 命名空间 bridge_report::http

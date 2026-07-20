@@ -467,7 +467,8 @@ ConfirmPlan build_confirm_plan(const Json::Value& data) {
 
     append_components_and_defects(data, plan, seen_component_keys, defect_ids_in_plan);
     append_photos(data, defect_ids_in_plan, plan);
-    append_ratings(data, plan, seen_component_keys);
+    // Word 中的评分仅供用户对照，不再进入正式事实写计划。正式评分由后端
+    // AssessmentConfirmationService 使用锁定规范包和构件台账生成。
 
     return plan;
 }

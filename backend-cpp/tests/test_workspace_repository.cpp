@@ -43,13 +43,24 @@ protected:
             "values ('maintenance', $1, 'TEST 5120', '测试养护规范', '2026', '1.0.0', 1, "
             "'test-maintenance', '2026-01-01', $2) returning id",
             "WORKSPACE-MAINT-" + bridge_id_, "sha256:" + std::string(64, '7'));
+        standard_profile_id_ = insert_id(
+            "insert into project_standard_profiles (technical_condition_package_id, maintenance_package_id, "
+            "created_by_user_id, change_reason) values ($1::uuid, $2::uuid, $3::uuid, '工作区系统评定测试') "
+            "returning id",
+            technical_package_id_, maintenance_package_id_, standard_user_id_);
+        inventory_revision_id_ = insert_id(
+            "insert into bridge_component_inventory_revisions (bridge_id, revision_number, status, "
+            "created_by_user_id, confirmed_by_user_id, confirmed_at, confirmation_note) "
+            "values ($1::uuid, 1, '已确认', $2::uuid, $2::uuid, now(), '工作区系统评定测试') returning id",
+            bridge_id_, standard_user_id_);
         upload_root_ = std::filesystem::temp_directory_path() / ("bridge-report-upload-" + bridge_id_);
         std::filesystem::remove_all(upload_root_);
 
         confirmed_year_id_ = insert_id(
             "insert into inspection_years (bridge_id, inspection_year, status, version_number, is_current, "
-            "overall_score, overall_grade) values ($1::uuid, 2025, '已确认', 1, true, 85.61, '2类') returning id",
-            bridge_id_);
+            "overall_score, overall_grade, standard_profile_id, component_inventory_revision_id) "
+            "values ($1::uuid, 2025, '已确认', 1, true, 85.61, '2类', $2::uuid, $3::uuid) returning id",
+            bridge_id_, standard_profile_id_, inventory_revision_id_);
         superseded_year_id_ = insert_id(
             "insert into inspection_years (bridge_id, inspection_year, status, version_number, is_current, "
             "overall_score, overall_grade) values ($1::uuid, 2026, '已被修订', 1, false, 99.99, '1类') returning id",
@@ -58,10 +69,25 @@ protected:
             "insert into inspection_years (bridge_id, inspection_year, status, version_number, is_current) "
             "values ($1::uuid, 2027, '待校对', 1, true) returning id", bridge_id_);
 
+        assessment_run_id_ = insert_id(
+            "insert into assessment_runs (inspection_year_id, run_kind, result_status, input_summary_json, "
+            "input_checksum, rule_package_summary_json, rule_package_checksum, result_summary_json, "
+            "created_by_user_id, formal_revision_number, technical_condition_package_id, "
+            "standard_profile_id, component_inventory_revision_id, is_current, confirmed_by_user_id, confirmed_at) "
+            "values ($1::uuid, '正式', '成功', '{\"source\":\"workspace-test\"}'::jsonb, "
+            "$2, '{\"package\":\"workspace-test\"}'::jsonb, $3, '{\"score\":85.61}'::jsonb, $4::uuid, "
+            "1, $5::uuid, $6::uuid, $7::uuid, true, $4::uuid, now()) "
+            "returning id",
+            confirmed_year_id_, "sha256:" + std::string(64, '8'),
+            "sha256:" + std::string(64, '6'), standard_user_id_, technical_package_id_,
+            standard_profile_id_, inventory_revision_id_);
+
         client_->execSqlSync(
             "insert into condition_ratings (inspection_year_id, rating_level, structure_part, rating_item_name, "
-            "score, grade, review_status) values ($1::uuid, '结构分部', '上部结构', '上部结构', 87.45, '2类', '已确认')",
-            confirmed_year_id_);
+            "score, grade, review_status, assessment_run_id) values "
+            "($1::uuid, '结构分部', '上部结构', '上部结构', 87.45, '2类', '已确认', $2::uuid), "
+            "($1::uuid, '结构分部', '桥面系', '桥面系（Word旧评分）', 99.99, '1类', '已确认', null)",
+            confirmed_year_id_, assessment_run_id_);
 
         component_id_ = insert_id(
             "insert into bridge_components (bridge_id, structure_part, component_type, business_component_code, "
@@ -96,9 +122,19 @@ protected:
         client_->execSqlSync("delete from defect_observations where bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from condition_ratings where inspection_year_id in ($1::uuid, $2::uuid, $3::uuid)",
                              confirmed_year_id_, superseded_year_id_, pending_year_id_);
+        if (!assessment_run_id_.empty()) {
+            client_->execSqlSync(
+                "alter table assessment_runs disable trigger trg_assessment_runs_completed_formal_immutable");
+            client_->execSqlSync("delete from assessment_runs where id=$1::uuid", assessment_run_id_);
+            client_->execSqlSync(
+                "alter table assessment_runs enable trigger trg_assessment_runs_completed_formal_immutable");
+        }
         client_->execSqlSync("delete from defect_threads where bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from bridge_components where bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from inspection_years where bridge_id = $1::uuid", bridge_id_);
+        client_->execSqlSync(
+            "delete from bridge_component_inventory_revisions where id=$1::uuid",
+            inventory_revision_id_);
         if (!standard_user_id_.empty()) {
             client_->execSqlSync(
                 "delete from project_standard_profiles where created_by_user_id=$1::uuid",
@@ -146,6 +182,9 @@ protected:
     std::string standard_user_id_;
     std::string technical_package_id_;
     std::string maintenance_package_id_;
+    std::string standard_profile_id_;
+    std::string inventory_revision_id_;
+    std::string assessment_run_id_;
 };
 
 }  // namespace

@@ -36,6 +36,8 @@ export interface ComponentYearRating {
   score_resolution_reason: string | null;
   calculation_details: { standard?: string; ordered_deductions?: number[]; rounding_scale?: number };
   has_validation_details: boolean;
+  is_system_assessment?: boolean;
+  assessment_run_id?: string | null;
 }
 
 export interface ArchivePhoto {

@@ -99,38 +99,7 @@ void check_candidate_pending_review(const Json::Value& data, std::vector<Preflig
         }
     }
 
-    const auto& ratings = data["ratings"];
-    if (ratings.isObject()) {
-        if (ratings.isMember("overall") && review_status_of(ratings["overall"]) == kPending) {
-            add_issue(blocking, "candidate_pending_review", "全桥评分仍处于待确认状态。", "ratings.overall");
-        }
-        if (ratings["structure_parts"].isArray()) {
-            const auto& structure_parts = ratings["structure_parts"];
-            for (Json::ArrayIndex index = 0; index < structure_parts.size(); ++index) {
-                if (review_status_of(structure_parts[index]) == kPending) {
-                    const auto target = "ratings.structure_parts[" + std::to_string(index) + "]";
-                    add_issue(blocking, "candidate_pending_review", "结构分部评分 " + target + " 仍处于待确认状态。", target);
-                }
-            }
-        }
-        if (ratings["evaluation_parts"].isArray()) {
-            const auto& evaluation_parts = ratings["evaluation_parts"];
-            for (Json::ArrayIndex index = 0; index < evaluation_parts.size(); ++index) {
-                if (review_status_of(evaluation_parts[index]) == kPending) {
-                    const auto target = "ratings.evaluation_parts[" + std::to_string(index) + "]";
-                    add_issue(blocking, "candidate_pending_review", "评价部件评分 " + target + " 仍处于待确认状态。", target);
-                }
-            }
-        }
-        if (ratings["component_ratings"].isArray()) {
-            for (const auto& rating : ratings["component_ratings"]) {
-                if (review_status_of(rating) == kPending) {
-                    add_issue(blocking, "candidate_pending_review",
-                              "构件评分候选 " + candidate_id_of(rating) + " 仍处于待确认状态。", candidate_id_of(rating));
-                }
-            }
-        }
-    }
+    // Word 评分仅供对照，不再属于需要确认的正式输入候选。
 }
 
 // -----------------------------------------------------------------------
@@ -733,13 +702,11 @@ PreflightReport build_preflight_report(const Json::Value& data, const PreflightC
     check_photo_link_unresolved(data, report.blocking_errors);
     check_defect_photo_groups(data, report.blocking_errors);
     check_photo_archives(data, report.blocking_errors);
-    check_component_ratings(data, report.blocking_errors);
-    check_rating_overall_missing(data, report.blocking_errors);
+    // Word 评分只作对照，不再是正式确认输入，因此不参与阻断判断。
 
     check_defect_without_photo(data, report.warnings);
     check_unreferenced_photo_ignored(data, report.warnings);
     check_measurement_unstructured_kept(data, report.warnings);
-    check_rating_parts_incomplete(data, report.warnings);
 
     report.can_confirm = report.blocking_errors.empty();
     return report;

@@ -53,7 +53,7 @@ Json::Value component_result_json(const standards::ComponentAssessmentResult& re
     return json;
 }
 
-Json::Value result_json(const standards::BridgeAssessmentResult& result) {
+Json::Value result_json_impl(const standards::BridgeAssessmentResult& result) {
     Json::Value json;
     json["standard_id"] = result.standard_id;
     json["package_version"] = result.package_version;
@@ -200,13 +200,18 @@ Json::Value AssessmentPreview::to_json() const {
     json["input_checksum"] = input_checksum;
     json["input_summary"] = input_summary;
     json["standard"] = standard_identity;
-    json["result"] = result.has_value() ? result_json(*result) : Json::Value(Json::nullValue);
+    json["result"] = result.has_value() ? assessment_result_to_json(*result) : Json::Value(Json::nullValue);
     json["issues"] = Json::Value(Json::arrayValue);
     for (const auto& item : issues) json["issues"].append(item.to_json());
     json["assessment_run_id"] = assessment_run_id.has_value()
         ? Json::Value(*assessment_run_id)
         : Json::Value(Json::nullValue);
     return json;
+}
+
+Json::Value assessment_result_to_json(
+    const standards::BridgeAssessmentResult& result) {
+    return result_json_impl(result);
 }
 
 AssessmentPreview calculate_assessment_preview(

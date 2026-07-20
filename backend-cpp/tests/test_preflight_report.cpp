@@ -269,6 +269,7 @@ TEST(PreflightReportTest, CandidatePendingReviewForPhoto) {
     EXPECT_TRUE(found);
 }
 
+#if 0  // Task 18 将删除的旧 Word 评分候选预检测试。
 TEST(PreflightReportTest, CandidatePendingReviewForRatingOverall) {
     auto data = valid_data();
     confirm_all_candidates(data);
@@ -318,6 +319,23 @@ TEST(PreflightReportTest, CandidatePendingReviewForRatingEvaluationPart) {
         }
     }
     EXPECT_TRUE(found);
+}
+#endif
+
+TEST(PreflightReportTest, ImportedRatingCandidatesDoNotBlockFormalConfirmation) {
+    auto data = valid_data();
+    confirm_all_candidates(data);
+    data["ratings"]["overall"]["review_status"] = "待确认";
+    data["ratings"]["overall"]["total_score"] = Json::Value(Json::nullValue);
+    data["ratings"]["component_ratings"].append(
+        data["ratings"]["component_ratings"][0]);
+
+    const auto report = build_preflight_report(data, base_context());
+
+    EXPECT_TRUE(report.can_confirm);
+    EXPECT_FALSE(has_blocking_code(report, "candidate_pending_review"));
+    EXPECT_FALSE(has_blocking_code(report, "rating_overall_missing"));
+    EXPECT_FALSE(has_blocking_code(report, "component_rating_duplicate_component"));
 }
 
 TEST(PreflightReportTest, DefectMissingRequiredFieldStructurePart) {
@@ -521,6 +539,7 @@ TEST(PreflightReportTest, PhotoLinkResolvedFineWhenMatchStatusUnrelated) {
     EXPECT_FALSE(has_blocking_code(report, "photo_link_unresolved"));
 }
 
+#if 0  // Task 18 将删除的旧 Word 全桥评分完整性预检测试。
 TEST(PreflightReportTest, RatingOverallMissingTotalScore) {
     auto data = valid_data();
     confirm_all_candidates(data);
@@ -565,6 +584,7 @@ TEST(PreflightReportTest, RatingOverallMissingTotalScoreNonNumeric) {
     EXPECT_FALSE(report.can_confirm);
     ASSERT_TRUE(has_blocking_code(report, "rating_overall_missing"));
 }
+#endif
 
 // ---------------------------------------------------------------------------
 // Warnings
@@ -670,6 +690,7 @@ TEST(PreflightReportTest, MeasurementUnstructuredKeptAbsentWhenMeasurementTextEm
     EXPECT_FALSE(has_warning_code(report, "measurement_unstructured_kept"));
 }
 
+#if 0  // Task 18 将删除的旧 Word 评分层级完整性告警测试。
 TEST(PreflightReportTest, RatingPartsIncompleteWhenStructurePartsTooFew) {
     auto data = valid_data();
     confirm_all_candidates(data);
@@ -702,6 +723,7 @@ TEST(PreflightReportTest, RatingPartsIncompleteAbsentWhenPartsSufficient) {
 
     EXPECT_FALSE(has_warning_code(report, "rating_parts_incomplete"));
 }
+#endif
 
 // ---------------------------------------------------------------------------
 // to_json
@@ -749,19 +771,15 @@ TEST(PreflightReportTest, ToJsonBlockingErrorIncludesTargetCandidateId) {
 }
 
 TEST(PreflightReportTest, ToJsonEmitsNullTargetCandidateIdWhenEmpty) {
-    auto data = valid_data();
-    confirm_all_candidates(data);
-    Json::Value structure_parts(Json::arrayValue);
-    structure_parts.append(data["ratings"]["structure_parts"][0]);
-    data["ratings"]["structure_parts"] = structure_parts;
-
-    const auto report = build_preflight_report(data, base_context());
+    PreflightReport report;
+    report.can_confirm = true;
+    report.warnings.push_back({"test_warning", "测试告警", std::string()});
     const auto json = report.to_json();
 
     ASSERT_FALSE(json["warnings"].empty());
     bool found_null_target = false;
     for (const auto& warning : json["warnings"]) {
-        if (warning["code"].asString() == "rating_parts_incomplete") {
+        if (warning["code"].asString() == "test_warning") {
             EXPECT_TRUE(warning["target_candidate_id"].isNull());
             found_null_target = true;
         }
@@ -773,6 +791,7 @@ TEST(PreflightReportTest, ToJsonEmitsNullTargetCandidateIdWhenEmpty) {
 // Contract 1.2: component rating resolution and independent recalculation
 // ---------------------------------------------------------------------------
 
+#if 0  // Task 18 将删除的旧 Word 构件评分复算与人工决策预检测试。
 TEST(PreflightReportTest, PendingComponentRatingBlocksConfirm) {
     auto data = valid_data();
     confirm_all_candidates(data);
@@ -1007,3 +1026,4 @@ TEST(PreflightReportTest, AcceptWordValueWithComputableEvidenceButNoStoredCalcBl
     EXPECT_FALSE(report.can_confirm);
     EXPECT_TRUE(has_blocking_code(report, "component_score_recalc_mismatch"));
 }
+#endif

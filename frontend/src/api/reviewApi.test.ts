@@ -243,11 +243,16 @@ describe("reviewApi", () => {
       confirmed: true,
       inspection_year_id: "year-1",
       version_number: 2,
+      assessment_run_id: "run-1",
       written: {
         defect_observations: 3,
         defect_measurements: 1,
         defect_photos: 2,
         condition_ratings: 4,
+        assessment_component_results: 3,
+        assessment_part_results: 4,
+        assessment_control_results: 1,
+        assessment_rule_traces: 9,
       },
     };
     const fetchMock = vi.fn().mockResolvedValue({

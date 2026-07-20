@@ -19,7 +19,7 @@ import {
 } from "../api/reviewApi";
 import { useAuth } from "../auth/AuthContext";
 import { backendBaseUrl } from "../config";
-import { canPressConfirm, canRunPreflight, parsePreflightDetails, validateRevisionForm } from "../review/confirmFlow";
+import { canPressConfirm, canRunPreflight, formatConfirmSuccess, parsePreflightDetails, validateRevisionForm } from "../review/confirmFlow";
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
 import { DefectsSection } from "../review/components/DefectsSection";
 import type { SelectedCandidate } from "../review/components/EvidencePanel";
@@ -725,9 +725,7 @@ function ReviewWorkspaceLoaded({
   const readOnlyNotice = effectiveReadOnly
     ? `${!readOnly && lockNotice ? lockNotice : reviewSession.bannerText ?? ""}${
         confirmResult
-          ? ` 已入库：病害 ${confirmResult.written.defect_observations}、尺寸 ${confirmResult.written.defect_measurements}、` +
-            `照片 ${confirmResult.written.defect_photos}、评分 ${confirmResult.written.condition_ratings}；` +
-            `年度版本 v${confirmResult.version_number}。`
+          ? ` ${formatConfirmSuccess(confirmResult)}`
           : ""
       }`
     : undefined;

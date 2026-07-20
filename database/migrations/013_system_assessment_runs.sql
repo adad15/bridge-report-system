@@ -209,6 +209,12 @@ begin
   end if;
 
   if tg_op = 'DELETE' then
+    -- inspection_years 的外键级联删除属于父业务对象清理，不是绕过审计的直接删除。
+    if not exists (
+      select 1 from inspection_years where id = old.inspection_year_id
+    ) then
+      return old;
+    end if;
     raise exception using
       errcode = '23514',
       constraint = 'assessment_runs_completed_formal_immutable',
@@ -217,13 +223,19 @@ begin
 
   v_normalized := new;
   v_normalized.is_current := old.is_current;
+  -- source_import_record_id 的外键定义为 on delete set null；允许且仅允许该引用
+  -- 随来源导入记录删除而置空，评分上下文、输入和结果仍保持不可变。
+  if old.source_import_record_id is not null
+     and new.source_import_record_id is null then
+    v_normalized.source_import_record_id := old.source_import_record_id;
+  end if;
   v_normalized.updated_at := old.updated_at;
   if old.is_current and not new.is_current
      and v_normalized is not distinct from old then
     return new;
   end if;
 
-  if new is distinct from old then
+  if v_normalized is distinct from old then
     raise exception using
       errcode = '23514',
       constraint = 'assessment_runs_completed_formal_immutable',

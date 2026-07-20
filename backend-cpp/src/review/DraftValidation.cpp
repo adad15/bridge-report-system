@@ -370,7 +370,6 @@ DraftValidationResult validate_warnings_only_scope(
 
     Json::Value expected = stored_draft;
     expected["defects"] = new_draft["defects"];
-    rebuild_component_ratings(expected);
 
     for (const auto& member : stored_draft.getMemberNames()) {
         if (member == "defects" || member == "ratings") {
@@ -388,7 +387,7 @@ DraftValidationResult validate_warnings_only_scope(
     }
     if (!json_semantically_equal(expected["ratings"], new_draft["ratings"])) {
         result.issues.push_back(
-            {"ratings", "评分数据必须保持不变，或严格等于警告病害扣分变化产生的后端复算结果。"});
+            {"ratings", "Word 评分仅供报告对照，warnings_only 重开不允许修改。"});
     }
 
     result.ok = result.issues.empty();

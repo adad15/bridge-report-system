@@ -8,6 +8,7 @@
 
 #include "bridge_report/review/ConfirmPlan.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
+#include "bridge_report/standards/StandardRegistry.hpp"
 
 namespace bridge_report::db {
 
@@ -19,6 +20,10 @@ struct ConfirmWrittenCounts {
     int defect_measurements{0};
     int defect_photos{0};
     int condition_ratings{0};
+    int assessment_component_results{0};
+    int assessment_part_results{0};
+    int assessment_control_results{0};
+    int assessment_rule_traces{0};
 };
 
 struct EditLockCredentials {
@@ -42,6 +47,7 @@ struct ConfirmOutcome {
     std::string error_message;
     std::string inspection_year_id;
     int version_number{0};
+    std::string assessment_run_id;
     ConfirmWrittenCounts written;
     Json::Value preflight_details;
 };
@@ -60,7 +66,9 @@ struct PhotoContentRef {
  */
 class ReviewRepository {
 public:
-    explicit ReviewRepository(drogon::orm::DbClientPtr db_client);
+    explicit ReviewRepository(
+        drogon::orm::DbClientPtr db_client,
+        std::shared_ptr<const standards::StandardRegistry> standard_registry = nullptr);
 
     std::vector<review::BridgeSummary> list_bridges();
     std::vector<review::InspectionYearSummary> list_inspection_years(const std::string& bridge_id);
@@ -144,11 +152,13 @@ public:
         const std::string& import_record_id,
         bool confirm_revision,
         const std::string& confirmation_note,
+        const std::string& confirmed_by_user_id,
         const std::optional<EditLockCredentials>& edit_lock = std::nullopt
     );
 
 private:
     drogon::orm::DbClientPtr db_client_;
+    std::shared_ptr<const standards::StandardRegistry> standard_registry_;
 };
 
 }  // 命名空间 bridge_report::db
