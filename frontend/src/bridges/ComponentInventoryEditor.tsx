@@ -94,7 +94,6 @@ export function inventoryGroupSummaries(
 ): InventoryGroupSummary[] {
   const groups = new Map<string, InventoryGroupSummary>();
   for (const entry of revision.entries) {
-    if (!entry.is_active) continue;
     let group = groups.get(entry.site_component_type);
     if (!group) {
       group = {
@@ -109,8 +108,9 @@ export function inventoryGroupSummaries(
       };
       groups.set(entry.site_component_type, group);
     }
-    group.activeCount += 1;
     group.lastNumber = entry.component_number;
+    if (!entry.is_active) continue;
+    group.activeCount += 1;
     const mapping = entry.mappings.find((item) => item.is_active);
     if (!mapping) {
       group.unmappedCount += 1;
@@ -140,6 +140,8 @@ function groupStatusText(group: InventoryGroupSummary): string {
 }
 
 const kMaxIndividualBlockers = 30;
+const kEntriesPageSize = 100;
+const kMaxSearchResults = 50;
 
 export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   const [revision, setRevision] = useState<ComponentInventoryRevision | null>(null);
@@ -156,6 +158,10 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   const [newEntry, setNewEntry] = useState<InventoryEntryInput>({
     component_number: "", site_name: "", site_component_type: "", span_or_location: "", remarks: "",
   });
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const [groupPage, setGroupPage] = useState(0);
+  const [search, setSearch] = useState("");
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   const load = useCallback(async () => {
@@ -221,6 +227,34 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       }),
     [blockers, entriesById]
   );
+  const searchTerm = search.trim();
+  const searchMatches = useMemo(
+    () =>
+      searchTerm
+        ? (revision?.entries ?? []).filter((entry) => entry.component_number.includes(searchTerm))
+        : [],
+    [revision, searchTerm]
+  );
+  const expandedGroupEntries = useMemo(
+    () =>
+      expandedGroup
+        ? (revision?.entries ?? []).filter((entry) => entry.site_component_type === expandedGroup)
+        : [],
+    [revision, expandedGroup]
+  );
+  const pageCount = Math.max(1, Math.ceil(expandedGroupEntries.length / kEntriesPageSize));
+  const page = Math.min(groupPage, pageCount - 1);
+  const pageEntries = expandedGroupEntries.slice(page * kEntriesPageSize, (page + 1) * kEntriesPageSize);
+
+  useEffect(() => {
+    if (!pendingFocusId) return;
+    const row = rowRefs.current[pendingFocusId];
+    if (row) {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      row.focus();
+      setPendingFocusId(null);
+    }
+  }, [pendingFocusId, expandedGroup, page, revision]);
 
   async function mutate(action: () => Promise<ComponentInventoryRevision>) {
     setBusy(true);
@@ -244,9 +278,21 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   }
 
   function focusEntry(entryId: string) {
-    const row = rowRefs.current[entryId];
-    row?.scrollIntoView({ behavior: "smooth", block: "center" });
-    row?.focus();
+    const entry = entriesById.get(entryId);
+    if (!entry) return;
+    setSearch("");
+    setExpandedGroup(entry.site_component_type);
+    const groupEntries = (revision?.entries ?? []).filter(
+      (item) => item.site_component_type === entry.site_component_type
+    );
+    const index = groupEntries.findIndex((item) => item.id === entryId);
+    setGroupPage(index >= 0 ? Math.floor(index / kEntriesPageSize) : 0);
+    setPendingFocusId(entryId);
+  }
+
+  function toggleGroup(siteComponentType: string) {
+    setGroupPage(0);
+    setExpandedGroup((current) => (current === siteComponentType ? null : siteComponentType));
   }
 
   async function generate() {
@@ -317,6 +363,78 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     if (ok) setMappingDrafts((current) => { const next = { ...current }; delete next[entryId]; return next; });
   }
 
+  function renderEntryRow(entry: ComponentInventoryEntry) {
+    if (!revision) return null;
+    const draft = drafts[entry.id] ?? entryDraft(entry);
+    const activeMapping = entry.mappings.find((item) => item.is_active);
+    const activeMappingCatalog = catalogs.find((item) => item.package.id === activeMapping?.standard_package_id);
+    const activeMappingCategory = activeMappingCatalog?.component_categories.find(
+      (item) => item.id === activeMapping?.standard_component_category_id
+    );
+    const mappingDraft = mappingDrafts[entry.id];
+    const mappingCatalog = catalogs.find((item) => item.package.id === mappingDraft?.packageId);
+    const mappingCategories = mappingCatalog?.component_categories.filter(
+      (item) => item.bridge_type_ids.includes(mappingDraft?.bridgeTypeId ?? "")
+    ) ?? [];
+    return (
+      <tr
+        key={entry.id}
+        ref={(node) => { rowRefs.current[entry.id] = node; }}
+        tabIndex={-1}
+        className={!entry.is_active ? "inventory-entry-inactive" : undefined}
+      >
+        <td><input aria-label={`构件编号 ${entry.component_number}`} value={draft.component_number} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, component_number: event.target.value } }))} /></td>
+        <td><input aria-label={`构件类别 ${entry.component_number}`} value={draft.site_component_type} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, site_component_type: event.target.value } }))} /></td>
+        <td><input aria-label={`现场名称 ${entry.component_number}`} value={draft.site_name} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, site_name: event.target.value } }))} /></td>
+        <td><input aria-label={`所属跨或位置 ${entry.component_number}`} value={draft.span_or_location ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, span_or_location: event.target.value } }))} /></td>
+        <td>
+          {activeMapping ? (
+            <div className="inventory-mapping-state">
+              <span>
+                {activeMappingCatalog?.package.standard_code ?? "技术评定规范"} · {activeMappingCategory?.name ?? "构件类别"} · {activeMapping.confirmation_status}
+              </span>
+              {activeMapping.confirmation_status !== "已确认" ? <button type="button" disabled={busy} onClick={() => void confirmExistingMapping(entry)}>确认映射</button> : null}
+            </div>
+          ) : mappingDraft ? (
+            <div className="inventory-mapping-editor">
+              <select aria-label={`映射规范 ${entry.component_number}`} value={mappingDraft.packageId} onChange={(event) => {
+                const nextCatalog = catalogs.find((item) => item.package.id === event.target.value);
+                updateMappingDraft(entry.id, { packageId: event.target.value, bridgeTypeId: nextCatalog?.bridge_types[0]?.id ?? "", categoryId: "" });
+              }}>
+                {catalogs.map((item) => <option key={item.package.id} value={item.package.id}>{item.package.standard_code}</option>)}
+              </select>
+              <select aria-label={`映射桥型 ${entry.component_number}`} value={mappingDraft.bridgeTypeId} onChange={(event) => updateMappingDraft(entry.id, { bridgeTypeId: event.target.value, categoryId: "" })}>
+                {mappingCatalog?.bridge_types.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+              <select aria-label={`映射类别 ${entry.component_number}`} value={mappingDraft.categoryId} onChange={(event) => updateMappingDraft(entry.id, { categoryId: event.target.value })}>
+                <option value="">请选择类别</option>
+                {mappingCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+              <button type="button" disabled={busy || !mappingDraft.categoryId} onClick={() => void saveMapping(entry.id)}>保存映射</button>
+            </div>
+          ) : (
+            <button type="button" disabled={busy || catalogs.length === 0} onClick={() => beginMapping(entry.id)}>设置规范映射</button>
+          )}
+        </td>
+        <td>
+          <div className="inventory-row-actions">
+            <button type="button" disabled={busy || !entry.is_active} onClick={() => void saveEntry(entry)}>保存</button>
+            {entry.is_active && !entry.is_referenced ? (
+              <button type="button" className="danger-button" disabled={busy} onClick={() => void mutate(() => deleteComponentInventoryEntry(backendBaseUrl, revision.id, entry.id))}>删除</button>
+            ) : null}
+            {entry.is_active && entry.is_referenced ? (
+              <>
+                <input aria-label={`停用原因 ${entry.component_number}`} placeholder="停用原因" value={deactivationReasons[entry.id] ?? ""} onChange={(event) => setDeactivationReasons((current) => ({ ...current, [entry.id]: event.target.value }))} />
+                <button type="button" disabled={busy || !(deactivationReasons[entry.id] ?? "").trim()} onClick={() => void mutate(() => deactivateComponentInventoryEntry(backendBaseUrl, revision.id, entry.id, deactivationReasons[entry.id].trim()))}>停用</button>
+              </>
+            ) : null}
+            {!entry.is_active ? <span>已停用</span> : null}
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
   if (loading) return <section className="workspace-card"><h1>实际构件台账</h1><p>加载中…</p></section>;
 
   if (notCreated) {
@@ -372,15 +490,24 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
                     <td>{group.mappingLabel || "—"}</td>
                     <td>{groupStatusText(group)}</td>
                     <td>
-                      {group.pendingCount > 0 && revision.status === "草稿" ? (
+                      <div className="inventory-row-actions">
                         <button
                           type="button"
-                          disabled={busy}
-                          onClick={() => void confirmPendingMappings(group.siteComponentType)}
+                          aria-label={`查看构件 ${group.siteComponentType}`}
+                          onClick={() => toggleGroup(group.siteComponentType)}
                         >
-                          确认该组映射
+                          {expandedGroup === group.siteComponentType ? "收起" : "查看构件"}
                         </button>
-                      ) : null}
+                        {group.pendingCount > 0 && revision.status === "草稿" ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void confirmPendingMappings(group.siteComponentType)}
+                          >
+                            确认该组映射
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -420,83 +547,51 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
         <p className="inventory-confirmation-summary">共 {revision.entries.filter((entry) => entry.is_active).length} 个启用构件；编号无重复；规范映射均已确认。</p>
       )}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
-      <div className="inventory-table-scroll">
-        <table className="data-table component-inventory-table">
-          <thead><tr><th>构件编号</th><th>构件类别</th><th>现场名称</th><th>所属跨或位置</th><th>规范映射</th><th>操作</th></tr></thead>
-          <tbody>
-            {revision.entries.map((entry) => {
-              const draft = drafts[entry.id] ?? entryDraft(entry);
-              const activeMapping = entry.mappings.find((item) => item.is_active);
-              const activeMappingCatalog = catalogs.find((item) => item.package.id === activeMapping?.standard_package_id);
-              const activeMappingCategory = activeMappingCatalog?.component_categories.find(
-                (item) => item.id === activeMapping?.standard_component_category_id
-              );
-              const mappingDraft = mappingDrafts[entry.id];
-              const mappingCatalog = catalogs.find((item) => item.package.id === mappingDraft?.packageId);
-              const mappingCategories = mappingCatalog?.component_categories.filter(
-                (item) => item.bridge_type_ids.includes(mappingDraft?.bridgeTypeId ?? "")
-              ) ?? [];
-              return (
-                <tr
-                  key={entry.id}
-                  ref={(node) => { rowRefs.current[entry.id] = node; }}
-                  tabIndex={-1}
-                  className={!entry.is_active ? "inventory-entry-inactive" : undefined}
-                >
-                  <td><input aria-label={`构件编号 ${entry.component_number}`} value={draft.component_number} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, component_number: event.target.value } }))} /></td>
-                  <td><input aria-label={`构件类别 ${entry.component_number}`} value={draft.site_component_type} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, site_component_type: event.target.value } }))} /></td>
-                  <td><input aria-label={`现场名称 ${entry.component_number}`} value={draft.site_name} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, site_name: event.target.value } }))} /></td>
-                  <td><input aria-label={`所属跨或位置 ${entry.component_number}`} value={draft.span_or_location ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, span_or_location: event.target.value } }))} /></td>
-                  <td>
-                    {activeMapping ? (
-                      <div className="inventory-mapping-state">
-                        <span>
-                          {activeMappingCatalog?.package.standard_code ?? "技术评定规范"} · {activeMappingCategory?.name ?? "构件类别"} · {activeMapping.confirmation_status}
-                        </span>
-                        {activeMapping.confirmation_status !== "已确认" ? <button type="button" disabled={busy} onClick={() => void confirmExistingMapping(entry)}>确认映射</button> : null}
-                      </div>
-                    ) : mappingDraft ? (
-                      <div className="inventory-mapping-editor">
-                        <select aria-label={`映射规范 ${entry.component_number}`} value={mappingDraft.packageId} onChange={(event) => {
-                          const nextCatalog = catalogs.find((item) => item.package.id === event.target.value);
-                          updateMappingDraft(entry.id, { packageId: event.target.value, bridgeTypeId: nextCatalog?.bridge_types[0]?.id ?? "", categoryId: "" });
-                        }}>
-                          {catalogs.map((item) => <option key={item.package.id} value={item.package.id}>{item.package.standard_code}</option>)}
-                        </select>
-                        <select aria-label={`映射桥型 ${entry.component_number}`} value={mappingDraft.bridgeTypeId} onChange={(event) => updateMappingDraft(entry.id, { bridgeTypeId: event.target.value, categoryId: "" })}>
-                          {mappingCatalog?.bridge_types.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                        </select>
-                        <select aria-label={`映射类别 ${entry.component_number}`} value={mappingDraft.categoryId} onChange={(event) => updateMappingDraft(entry.id, { categoryId: event.target.value })}>
-                          <option value="">请选择类别</option>
-                          {mappingCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                        </select>
-                        <button type="button" disabled={busy || !mappingDraft.categoryId} onClick={() => void saveMapping(entry.id)}>保存映射</button>
-                      </div>
-                    ) : (
-                      <button type="button" disabled={busy || catalogs.length === 0} onClick={() => beginMapping(entry.id)}>设置规范映射</button>
-                    )}
-                  </td>
-                  <td>
-                    <div className="inventory-row-actions">
-                      <button type="button" disabled={busy || !entry.is_active} onClick={() => void saveEntry(entry)}>保存</button>
-                      {entry.is_active && !entry.is_referenced ? (
-                        <button type="button" className="danger-button" disabled={busy} onClick={() => revision && void mutate(() => deleteComponentInventoryEntry(backendBaseUrl, revision.id, entry.id))}>删除</button>
-                      ) : null}
-                      {entry.is_active && entry.is_referenced ? (
-                        <>
-                          <input aria-label={`停用原因 ${entry.component_number}`} placeholder="停用原因" value={deactivationReasons[entry.id] ?? ""} onChange={(event) => setDeactivationReasons((current) => ({ ...current, [entry.id]: event.target.value }))} />
-                          <button type="button" disabled={busy || !(deactivationReasons[entry.id] ?? "").trim()} onClick={() => revision && void mutate(() => deactivateComponentInventoryEntry(backendBaseUrl, revision.id, entry.id, deactivationReasons[entry.id].trim()))}>停用</button>
-                        </>
-                      ) : null}
-                      {!entry.is_active ? <span>已停用</span> : null}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="inventory-entry-tools">
+        <label>
+          按编号搜索构件
+          <input
+            aria-label="按编号搜索构件"
+            placeholder="如 3-5#"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
       </div>
+      {searchTerm ? (
+        <div className="inventory-entry-section">
+          <h2>搜索结果</h2>
+          <p>
+            匹配 {searchMatches.length} 个构件
+            {searchMatches.length > kMaxSearchResults ? `，显示前 ${kMaxSearchResults} 个` : ""}。
+          </p>
+          <div className="inventory-table-scroll">
+            <table className="data-table component-inventory-table">
+              <thead><tr><th>构件编号</th><th>构件类别</th><th>现场名称</th><th>所属跨或位置</th><th>规范映射</th><th>操作</th></tr></thead>
+              <tbody>{searchMatches.slice(0, kMaxSearchResults).map((entry) => renderEntryRow(entry))}</tbody>
+            </table>
+          </div>
+        </div>
+      ) : expandedGroup && expandedGroupEntries.length > 0 ? (
+        <div className="inventory-entry-section">
+          <h2>{expandedGroup} 构件</h2>
+          <div className="inventory-table-scroll">
+            <table className="data-table component-inventory-table">
+              <thead><tr><th>构件编号</th><th>构件类别</th><th>现场名称</th><th>所属跨或位置</th><th>规范映射</th><th>操作</th></tr></thead>
+              <tbody>{pageEntries.map((entry) => renderEntryRow(entry))}</tbody>
+            </table>
+          </div>
+          {pageCount > 1 ? (
+            <div className="inventory-pagination">
+              <button type="button" disabled={busy || page === 0} onClick={() => setGroupPage(page - 1)}>上一页</button>
+              <span>第 {page + 1} / {pageCount} 页</span>
+              <button type="button" disabled={busy || page + 1 >= pageCount} onClick={() => setGroupPage(page + 1)}>下一页</button>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <p className="inventory-entry-hint">在分组核对表中点击“查看构件”展开该组的构件行，或使用编号搜索。</p>
+      )}
       {adding ? (
         <div className="inventory-add-form">
           <label>构件编号<input value={newEntry.component_number} onChange={(event) => setNewEntry((current) => ({ ...current, component_number: event.target.value }))} /></label>

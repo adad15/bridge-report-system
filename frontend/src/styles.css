@@ -2278,6 +2278,43 @@ body {
   color: #294969;
 }
 
+.inventory-entry-tools {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.inventory-entry-tools input {
+  max-width: 16rem;
+}
+
+.inventory-entry-section {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.inventory-entry-section h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #294969;
+}
+
+.inventory-entry-section > p {
+  margin: 0;
+  color: #5b7891;
+  font-size: 0.9rem;
+}
+
+.inventory-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.inventory-entry-hint {
+  color: #5b7891;
+}
+
 .inventory-add-kind {
   justify-self: start;
 }

@@ -58,6 +58,7 @@ describe("ComponentInventoryEditor", () => {
 
   it("keeps internal component ids hidden and referenced entries deactivate-only", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
+    await userEvent.click(await screen.findByRole("button", { name: "查看构件 主梁" }));
     const numberInput = await screen.findByLabelText("构件编号 1-1#");
     const row = numberInput.closest("tr") as HTMLElement;
     expect(screen.queryByText("internal-component-id")).not.toBeInTheDocument();
@@ -70,7 +71,8 @@ describe("ComponentInventoryEditor", () => {
   it("centralizes unresolved mappings and confirms an existing generated mapping", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     expect(await screen.findByText(/确认前还需处理 1 项/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "确认映射" }));
+    await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
+    await userEvent.click(await screen.findByRole("button", { name: "确认映射" }));
     expect(setComponentInventoryMapping).toHaveBeenCalledWith(expect.any(String), "revision-1", "entry-1", expect.objectContaining({
       standard_component_category_id: "girder",
       mapping_source: "用户确认",
@@ -103,6 +105,45 @@ describe("ComponentInventoryEditor", () => {
     await userEvent.click(await screen.findByRole("button", { name: "一键确认全部待确认映射" }));
     expect(confirmPendingComponentInventoryMappings).toHaveBeenCalledWith(
       expect.any(String), "revision-1", undefined);
+  });
+
+  it("renders entry rows only for the expanded group or number search", async () => {
+    render(<ComponentInventoryEditor bridgeId="bridge-1" />);
+    await screen.findByText("分组核对");
+    expect(screen.queryByLabelText("构件编号 1-1#")).not.toBeInTheDocument();
+    expect(screen.getByText(/在分组核对表中点击/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
+    expect(await screen.findByLabelText("构件编号 1-1#")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
+    expect(screen.queryByLabelText("构件编号 1-1#")).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText("按编号搜索构件"), "1-1");
+    expect(await screen.findByLabelText("构件编号 1-1#")).toBeInTheDocument();
+    expect(screen.getByText(/匹配 1 个构件/)).toBeInTheDocument();
+  });
+
+  it("paginates a large expanded group", async () => {
+    const confirmedMapping = { ...revision.entries[0].mappings[0], confirmation_status: "已确认" };
+    vi.mocked(fetchLatestComponentInventory).mockResolvedValue({
+      ...revision,
+      entries: Array.from({ length: 120 }, (_, index) => ({
+        ...revision.entries[0],
+        id: `entry-${index + 1}`,
+        bridge_component_id: `component-${index + 1}`,
+        component_number: `${index + 1}#`,
+        mappings: [{ ...confirmedMapping, id: `mapping-${index + 1}` }],
+      })),
+    });
+    render(<ComponentInventoryEditor bridgeId="bridge-1" />);
+    await userEvent.click(await screen.findByRole("button", { name: "查看构件 主梁" }));
+
+    expect(await screen.findByLabelText("构件编号 1#")).toBeInTheDocument();
+    expect(screen.queryByLabelText("构件编号 101#")).not.toBeInTheDocument();
+    expect(screen.getByText("第 1 / 2 页")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "下一页" }));
+    expect(await screen.findByLabelText("构件编号 101#")).toBeInTheDocument();
+    expect(screen.queryByLabelText("构件编号 1#")).not.toBeInTheDocument();
   });
 
   it("summarizes generated groups for checking", () => {
