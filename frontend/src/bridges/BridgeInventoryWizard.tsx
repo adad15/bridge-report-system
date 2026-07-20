@@ -102,6 +102,17 @@ function defaultGroup(key: string): GroupDraft {
   };
 }
 
+function extraGroupDefault(category: StandardComponentCategory): GroupDraft {
+  return {
+    categoryId: category.id,
+    siteName: category.name,
+    siteType: category.name,
+    numberingMode: "sequential",
+    prefix: "",
+    suffix: "#",
+  };
+}
+
 export function BridgeInventoryWizard({
   onPlanChange,
 }: {
@@ -149,6 +160,18 @@ export function BridgeInventoryWizard({
         : [],
     [catalog, template, bridgeTypeId]
   );
+  const extraCategories = useMemo(
+    () =>
+      catalog && template
+        ? catalog.component_categories.filter(
+            (category) =>
+              category.generatable &&
+              category.bridge_type_ids.includes(bridgeTypeId) &&
+              !categories.some((item) => item.id === category.id)
+          )
+        : [],
+    [catalog, template, bridgeTypeId, categories]
+  );
 
   useEffect(() => {
     if (!template || !catalog) {
@@ -185,6 +208,33 @@ export function BridgeInventoryWizard({
         number_suffix: draft.suffix,
       });
     }
+    for (const category of extraCategories) {
+      const raw = quantities[category.id] ?? "0";
+      const value = Number(raw);
+      if (raw === "" || !Number.isInteger(value) || value < 0 || value > 10000) {
+        valid = false;
+        continue;
+      }
+      if (value === 0) continue;
+      parsedQuantities[category.id] = value;
+      const draft = groups[category.id] ?? extraGroupDefault(category);
+      if (!draft.siteName.trim() || !draft.siteType.trim()) {
+        valid = false;
+        continue;
+      }
+      if (draft.numberingMode === "span_member" && !(parsedQuantities.span_count > 0)) valid = false;
+      generationGroups.push({
+        site_component_type: draft.siteType.trim(),
+        site_name: draft.siteName.trim(),
+        standard_component_category_id: category.id,
+        structure_part: category.structure_part,
+        numbering_mode: draft.numberingMode,
+        quantity: value,
+        quantity_key: category.id,
+        number_prefix: draft.prefix,
+        number_suffix: draft.suffix,
+      });
+    }
     if (generationGroups.length === 0) valid = false;
     onPlanChange(
       valid
@@ -198,7 +248,7 @@ export function BridgeInventoryWizard({
           }
         : null
     );
-  }, [bridgeTypeId, catalog, categories, groups, onPlanChange, packageId, quantities, template]);
+  }, [bridgeTypeId, catalog, categories, extraCategories, groups, onPlanChange, packageId, quantities, template]);
 
   function resetForPackage(nextPackageId: string) {
     setPackageId(nextPackageId);
@@ -220,8 +270,21 @@ export function BridgeInventoryWizard({
     }
   }
 
-  function updateGroup(key: string, update: Partial<GroupDraft>) {
-    setGroups((current) => ({ ...current, [key]: { ...(current[key] ?? defaultGroup(key)), ...update } }));
+  function setExtraQuantity(category: StandardComponentCategory, value: string) {
+    setQuantities((current) => ({ ...current, [category.id]: value }));
+    if (Number(value) > 0) {
+      setGroups((current) => ({
+        ...current,
+        [category.id]: current[category.id] ?? extraGroupDefault(category),
+      }));
+    }
+  }
+
+  function updateGroup(key: string, update: Partial<GroupDraft>, fallback?: GroupDraft) {
+    setGroups((current) => ({
+      ...current,
+      [key]: { ...(current[key] ?? fallback ?? defaultGroup(key)), ...update },
+    }));
   }
 
   function selectCategory(key: string, category: StandardComponentCategory | undefined) {
@@ -253,7 +316,26 @@ export function BridgeInventoryWizard({
           } satisfies InventoryGenerationGroup];
         })
     : [];
-  const preview = previewInventoryNumbers(readyGroups, Number(quantities.span_count) || 0);
+  const extraReadyGroups = extraCategories.flatMap((category) => {
+    const value = Number(quantities[category.id] ?? "0");
+    if (!(value > 0)) return [];
+    const draft = groups[category.id] ?? extraGroupDefault(category);
+    return [{
+      site_component_type: draft.siteType,
+      site_name: draft.siteName,
+      standard_component_category_id: category.id,
+      structure_part: category.structure_part,
+      numbering_mode: draft.numberingMode,
+      quantity: value,
+      quantity_key: category.id,
+      number_prefix: draft.prefix,
+      number_suffix: draft.suffix,
+    } satisfies InventoryGenerationGroup];
+  });
+  const preview = previewInventoryNumbers(
+    [...readyGroups, ...extraReadyGroups],
+    Number(quantities.span_count) || 0
+  );
 
   return (
     <section className="inventory-wizard" aria-labelledby="inventory-wizard-title">
@@ -363,6 +445,74 @@ export function BridgeInventoryWizard({
               </div>
             );
           })}
+          {extraCategories.length > 0 ? (
+            <div className="inventory-extra-categories">
+              <h4>其他部件（桥上没有的填 0）</h4>
+              {extraCategories.map((category) => {
+                const value = quantities[category.id] ?? "0";
+                const positive = Number(value) > 0;
+                const draft = groups[category.id] ?? extraGroupDefault(category);
+                return (
+                  <div className="inventory-quantity-card" key={category.id}>
+                    <label>
+                      {category.name}数量
+                      <input
+                        aria-label={`${category.name}数量`}
+                        type="number"
+                        min={0}
+                        max={10000}
+                        step={1}
+                        value={value}
+                        onChange={(event) => setExtraQuantity(category, event.target.value)}
+                      />
+                    </label>
+                    {positive ? (
+                      <div className="inventory-group-fields">
+                        <label>
+                          现场构件名称
+                          <input
+                            value={draft.siteName}
+                            onChange={(event) => updateGroup(category.id, { siteName: event.target.value }, extraGroupDefault(category))}
+                          />
+                        </label>
+                        <label>
+                          构件类型
+                          <input
+                            value={draft.siteType}
+                            onChange={(event) => updateGroup(category.id, { siteType: event.target.value }, extraGroupDefault(category))}
+                          />
+                        </label>
+                        <label>
+                          编号方式
+                          <select
+                            value={draft.numberingMode}
+                            onChange={(event) => updateGroup(category.id, { numberingMode: event.target.value as NumberingMode }, extraGroupDefault(category))}
+                          >
+                            <option value="sequential">连续编号（1#、2#…）</option>
+                            <option value="span_member">按跨编号（1-1#、1-2#…）</option>
+                          </select>
+                        </label>
+                        <label>
+                          编号前缀
+                          <input
+                            value={draft.prefix}
+                            onChange={(event) => updateGroup(category.id, { prefix: event.target.value }, extraGroupDefault(category))}
+                          />
+                        </label>
+                        <label>
+                          编号后缀
+                          <input
+                            value={draft.suffix}
+                            onChange={(event) => updateGroup(category.id, { suffix: event.target.value }, extraGroupDefault(category))}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       ) : null}
       {preview.length > 0 ? (

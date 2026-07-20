@@ -143,11 +143,15 @@ bool validate_inventory_generation_standard(
 
     std::map<std::string, int> group_counts;
     for (const auto& group : input.groups) {
-        if (!allowed_quantity_keys.contains(group.quantity_key) ||
-            group.quantity_key == "span_count" ||
+        const bool template_quantity = allowed_quantity_keys.contains(group.quantity_key);
+        if (group.quantity_key == "span_count" ||
+            (!template_quantity &&
+             group.quantity_key != group.standard_component_category_id) ||
+            !input.input_quantities.isMember(group.quantity_key) ||
+            !input.input_quantities[group.quantity_key].isInt() ||
             input.input_quantities[group.quantity_key].asInt() != group.quantity) {
             error_code = "inventory_group_quantity_mismatch";
-            error_message = "构件分组数量必须对应规范模板中的同名数量项。";
+            error_message = "构件分组数量必须对应模板数量项或该组规范类别的同名数量项。";
             return false;
         }
         ++group_counts[group.quantity_key];
@@ -168,6 +172,13 @@ bool validate_inventory_generation_standard(
         if (group_counts[key] != expected_groups) {
             error_code = "inventory_template_quantity_group_incomplete";
             error_message = "每个非零模板数量项必须且只能对应一个构件生成分组。";
+            return false;
+        }
+    }
+    for (const auto& [key, count] : group_counts) {
+        if (!allowed_quantity_keys.contains(key) && count != 1) {
+            error_code = "inventory_group_quantity_mismatch";
+            error_message = "同一规范类别的额外部件分组只能出现一次。";
             return false;
         }
     }

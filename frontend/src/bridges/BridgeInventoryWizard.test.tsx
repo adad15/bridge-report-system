@@ -27,6 +27,8 @@ const catalog = {
   component_categories: [
     { id: "girder", name: "主梁", bridge_type_ids: ["beam"], structure_part: "superstructure" as const, generatable: true },
     { id: "arch-ring", name: "主拱圈", bridge_type_ids: ["arch"], structure_part: "superstructure" as const, generatable: true },
+    { id: "pavement", name: "桥面铺装", bridge_type_ids: ["beam", "arch"], structure_part: "deck_system" as const, generatable: true },
+    { id: "riverbed", name: "河床", bridge_type_ids: ["beam", "arch"], structure_part: "substructure" as const, generatable: false },
   ],
   inventory_templates: [
     { id: "beam-template", references: ["girder"], bridge_type_id: "beam", quantity_inputs: ["span_count", "upper_bearing_members_per_span"], numbering_is_user_editable: true },
@@ -85,6 +87,53 @@ describe("BridgeInventoryWizard", () => {
       span_count: 2,
       input_quantities: { span_count: 2, upper_bearing_members_per_span: 3 },
       groups: [expect.objectContaining({ quantity_key: "upper_bearing_members_per_span", quantity: 3 })],
+    })));
+  });
+
+  it("lists extra generatable categories with a zero default that keeps the plan valid", async () => {
+    const onPlanChange = vi.fn();
+    render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
+    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "beam");
+    await userEvent.type(screen.getByLabelText("跨数"), "2");
+    await userEvent.type(screen.getByLabelText("每跨上部承重构件数"), "3");
+    await userEvent.selectOptions(screen.getByLabelText("对应构件类别"), "girder");
+
+    expect(screen.getByText("其他部件（桥上没有的填 0）")).toBeInTheDocument();
+    expect(screen.getByLabelText("桥面铺装数量")).toHaveValue(0);
+    expect(screen.queryByLabelText("河床数量")).not.toBeInTheDocument();
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      input_quantities: { span_count: 2, upper_bearing_members_per_span: 3 },
+      groups: [expect.objectContaining({ quantity_key: "upper_bearing_members_per_span" })],
+    })));
+  });
+
+  it("adds a prefilled extra category group when its quantity is positive", async () => {
+    const onPlanChange = vi.fn();
+    render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
+    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "beam");
+    await userEvent.type(screen.getByLabelText("跨数"), "2");
+    await userEvent.type(screen.getByLabelText("每跨上部承重构件数"), "3");
+    await userEvent.selectOptions(screen.getByLabelText("对应构件类别"), "girder");
+
+    const pavementCount = screen.getByLabelText("桥面铺装数量");
+    await userEvent.clear(pavementCount);
+    await userEvent.type(pavementCount, "1");
+    expect(screen.getAllByDisplayValue("桥面铺装").length).toBe(2);
+
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      input_quantities: { span_count: 2, upper_bearing_members_per_span: 3, pavement: 1 },
+      groups: [
+        expect.objectContaining({ quantity_key: "upper_bearing_members_per_span" }),
+        expect.objectContaining({
+          quantity_key: "pavement",
+          standard_component_category_id: "pavement",
+          structure_part: "deck_system",
+          quantity: 1,
+          site_name: "桥面铺装",
+          site_component_type: "桥面铺装",
+          numbering_mode: "sequential",
+        }),
+      ],
     })));
   });
 });
