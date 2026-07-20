@@ -45,4 +45,8 @@ foreach ($smokeFile in $smokeFiles) {
   Invoke-PsqlFile $smokeFile.FullName
 }
 
-Write-Host "Full database migration and smoke check passed."
+Write-Host (
+  "Full database migration and smoke check passed: {0} migrations applied twice; {1} smoke files passed." -f
+    $migrationFiles.Count,
+    $smokeFiles.Count
+)
