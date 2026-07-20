@@ -38,12 +38,18 @@ Json::Value mapping_json(const InventoryMapping& mapping) {
 
 std::optional<NumberingMode> parse_numbering_mode(const std::string& value) {
     if (value == "span_member") return NumberingMode::SpanMember;
+    if (value == "pier_line") return NumberingMode::PierLine;
     if (value == "sequential") return NumberingMode::Sequential;
     return std::nullopt;
 }
 
 std::string to_string(const NumberingMode mode) {
-    return mode == NumberingMode::SpanMember ? "span_member" : "sequential";
+    switch (mode) {
+        case NumberingMode::SpanMember: return "span_member";
+        case NumberingMode::PierLine: return "pier_line";
+        case NumberingMode::Sequential: return "sequential";
+    }
+    return "sequential";
 }
 
 Json::Value inventory_revision_json(const InventoryRevision& revision) {

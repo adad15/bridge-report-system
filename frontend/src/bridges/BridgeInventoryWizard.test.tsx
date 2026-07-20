@@ -103,6 +103,42 @@ describe("BridgeInventoryWizard", () => {
     })));
   });
 
+  it("divides pier-line numbering by span count minus one", async () => {
+    const onPlanChange = vi.fn();
+    render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
+    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "beam");
+    await userEvent.type(screen.getByLabelText("跨数"), "3");
+    await userEvent.selectOptions(
+      screen.getByLabelText("上部承重构件数（全桥） 对应构件类别"), "girder");
+    await userEvent.type(screen.getByLabelText("上部承重构件数（全桥） 数量 1"), "6");
+    await userEvent.selectOptions(
+      screen.getByLabelText("上部承重构件数（全桥） 编号方式 1"), "pier_line");
+
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      input_quantities: { span_count: 3, upper_bearing_members_per_span: 3 },
+      groups: [expect.objectContaining({ quantity: 3, numbering_mode: "pier_line" })],
+    })));
+
+    const quantity = screen.getByLabelText("上部承重构件数（全桥） 数量 1");
+    await userEvent.clear(quantity);
+    await userEvent.type(quantity, "5");
+    expect(
+      screen.getByText("按墩位编号时，全桥数量必须能被“跨数减 1”整除（两端为桥台）。")
+    ).toBeInTheDocument();
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(null));
+  });
+
+  it("previews pier-line numbers with span count minus one lines", () => {
+    expect(previewInventoryNumbers([{
+      site_component_type: "桥墩", site_name: "桥墩", standard_component_category_id: "pier",
+      structure_part: "substructure", numbering_mode: "pier_line", quantity: 2,
+      quantity_key: "pier_count", number_prefix: "", number_suffix: "#",
+    }], 3)).toEqual([{
+      quantityKey: "pier_count", siteType: "桥墩", count: 4,
+      numbers: ["1-1#", "1-2#", "2-1#", "2-2#"],
+    }]);
+  });
+
   it("rejects a whole-bridge quantity that spans cannot divide evenly", async () => {
     const onPlanChange = vi.fn();
     render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);

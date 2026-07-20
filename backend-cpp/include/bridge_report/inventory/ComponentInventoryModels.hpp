@@ -8,7 +8,7 @@
 
 namespace bridge_report::inventory {
 
-enum class NumberingMode { SpanMember, Sequential };
+enum class NumberingMode { SpanMember, PierLine, Sequential };
 
 std::optional<NumberingMode> parse_numbering_mode(const std::string& value);
 std::string to_string(NumberingMode mode);

@@ -47,9 +47,20 @@ InventoryGenerationResult generate_component_inventory(const GenerateInventoryIn
             result.error_message = "按跨编号时必须填写有效跨数。";
             return result;
         }
+        // 桥墩按墩位编号：两端为桥台，墩位数 = 跨数 - 1。
+        if (group.numbering_mode == NumberingMode::PierLine &&
+            (input.span_count <= 1 || input.span_count > 1000)) {
+            result.entries.clear();
+            result.error_code = "span_count_required_for_numbering";
+            result.error_message = "按墩位编号时跨数至少为 2。";
+            return result;
+        }
 
         const int outer_count = group.numbering_mode == NumberingMode::SpanMember
-            ? input.span_count : 1;
+            ? input.span_count
+            : group.numbering_mode == NumberingMode::PierLine
+                ? input.span_count - 1
+                : 1;
         const int inner_count = group.quantity;
         if (static_cast<long long>(outer_count) * inner_count > 50000) {
             result.entries.clear();
@@ -60,9 +71,9 @@ InventoryGenerationResult generate_component_inventory(const GenerateInventoryIn
         for (int outer = 1; outer <= outer_count; ++outer) {
             for (int inner = 1; inner <= inner_count; ++inner) {
                 GeneratedInventoryEntry entry;
-                entry.component_number = group.numbering_mode == NumberingMode::SpanMember
-                    ? span_member_number(group, outer, inner)
-                    : sequential_number(group, inner);
+                entry.component_number = group.numbering_mode == NumberingMode::Sequential
+                    ? sequential_number(group, inner)
+                    : span_member_number(group, outer, inner);
                 if (entry.component_number.empty() ||
                     !unique_numbers.emplace(group.site_component_type,
                                             entry.component_number).second) {
@@ -80,6 +91,8 @@ InventoryGenerationResult generate_component_inventory(const GenerateInventoryIn
                 entry.sort_order = ++sort_order;
                 if (group.numbering_mode == NumberingMode::SpanMember) {
                     entry.span_or_location = "第" + std::to_string(outer) + "跨";
+                } else if (group.numbering_mode == NumberingMode::PierLine) {
+                    entry.span_or_location = "第" + std::to_string(outer) + "墩位";
                 }
                 result.entries.push_back(std::move(entry));
             }

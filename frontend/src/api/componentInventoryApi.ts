@@ -1,7 +1,7 @@
 import { ApiError, request } from "./apiClient";
 
 export type StructurePart = "superstructure" | "substructure" | "deck_system" | "overall" | "other";
-export type NumberingMode = "span_member" | "sequential";
+export type NumberingMode = "span_member" | "pier_line" | "sequential";
 
 export interface ComponentMapping {
   id: string;

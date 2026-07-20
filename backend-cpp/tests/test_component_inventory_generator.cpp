@@ -42,6 +42,34 @@ TEST(ComponentInventoryGeneratorTest, CategoriesCanUseDifferentNumberingStrategi
     EXPECT_EQ(result.entries[6].component_number, "P3");
 }
 
+TEST(ComponentInventoryGeneratorTest, PierLineNumberingUsesSpanCountMinusOne) {
+    EXPECT_EQ(inventory::parse_numbering_mode("pier_line"), inventory::NumberingMode::PierLine);
+    EXPECT_EQ(inventory::to_string(inventory::NumberingMode::PierLine), "pier_line");
+
+    inventory::GenerateInventoryInput input;
+    input.span_count = 5;
+    input.groups.push_back({
+        "桥墩", "桥墩", "h21.component.lower.pier", "substructure",
+        inventory::NumberingMode::PierLine, 4, "", "#"});
+
+    const auto result = inventory::generate_component_inventory(input);
+    ASSERT_TRUE(result.ok()) << result.error_message;
+    ASSERT_EQ(result.entries.size(), 16u);
+    EXPECT_EQ(result.entries.front().component_number, "1-1#");
+    EXPECT_EQ(result.entries.front().span_or_location, "第1墩位");
+    EXPECT_EQ(result.entries.back().component_number, "4-4#");
+    EXPECT_EQ(result.entries.back().span_or_location, "第4墩位");
+
+    inventory::GenerateInventoryInput single_span;
+    single_span.span_count = 1;
+    single_span.groups.push_back({
+        "桥墩", "桥墩", "h21.component.lower.pier", "substructure",
+        inventory::NumberingMode::PierLine, 2, "", "#"});
+    EXPECT_EQ(
+        inventory::generate_component_inventory(single_span).error_code,
+        "span_count_required_for_numbering");
+}
+
 TEST(ComponentInventoryGeneratorTest, InvalidCountsAndDuplicateNumbersAreRejected) {
     inventory::GenerateInventoryInput missing_span;
     missing_span.span_count = 0;

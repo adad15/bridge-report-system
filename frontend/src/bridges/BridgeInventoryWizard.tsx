@@ -71,13 +71,17 @@ export function previewInventoryNumbers(
 ): InventoryPreviewItem[] {
   return groups.map((group) => {
     const numbers: string[] = [];
-    const outerCount = group.numbering_mode === "span_member" ? spanCount : 1;
+    const outerCount = group.numbering_mode === "span_member"
+      ? spanCount
+      : group.numbering_mode === "pier_line"
+        ? Math.max(spanCount - 1, 0)
+        : 1;
     const total = outerCount * group.quantity;
     for (let outer = 1; outer <= outerCount && numbers.length < limit; outer += 1) {
       for (let inner = 1; inner <= group.quantity && numbers.length < limit; inner += 1) {
         numbers.push(
           `${group.number_prefix ?? ""}${
-            group.numbering_mode === "span_member" ? `${outer}-${inner}` : inner
+            group.numbering_mode === "sequential" ? inner : `${outer}-${inner}`
           }${group.number_suffix ?? "#"}`
         );
       }
@@ -209,15 +213,16 @@ export function BridgeInventoryWizard({
           valid = false;
           continue;
         }
-        // 数量一律按全桥填写；按跨编号时换算为每跨数量，除不尽视为无效。
+        // 数量一律按全桥填写；按跨编号除以跨数，按墩位编号除以（跨数-1），除不尽视为无效。
         let quantity = value;
-        if (kind.numberingMode === "span_member") {
+        if (kind.numberingMode !== "sequential") {
           const spans = parsedQuantities.span_count ?? 0;
-          if (!(spans > 0) || value % spans !== 0) {
+          const divisor = kind.numberingMode === "span_member" ? spans : spans - 1;
+          if (!(divisor > 0) || value % divisor !== 0) {
             valid = false;
             continue;
           }
-          quantity = value / spans;
+          quantity = value / divisor;
         }
         inputSum += quantity;
         groups.push({
@@ -332,11 +337,19 @@ export function BridgeInventoryWizard({
   ) {
     const spanValue = Number(spanCount);
     const total = Number(kind.quantity);
+    const divisor = kind.numberingMode === "span_member"
+      ? spanValue
+      : kind.numberingMode === "pier_line"
+        ? spanValue - 1
+        : 0;
     const spanIssue =
-      kind.numberingMode === "span_member" &&
+      kind.numberingMode !== "sequential" &&
       Number.isInteger(total) &&
       total > 0 &&
-      (!(spanValue > 0) || total % spanValue !== 0);
+      (!(divisor > 0) || total % divisor !== 0);
+    const spanIssueText = kind.numberingMode === "pier_line"
+      ? "按墩位编号时，全桥数量必须能被“跨数减 1”整除（两端为桥台）。"
+      : "按跨编号时，全桥数量必须能被跨数整除。";
     return (
       <div className="inventory-kind-row" key={index}>
         <label>
@@ -368,6 +381,7 @@ export function BridgeInventoryWizard({
           >
             <option value="sequential">连续（1#、2#…）</option>
             <option value="span_member">按跨（1-1#、1-2#…）</option>
+            <option value="pier_line">按墩位（1-1#、1-2#…，墩位=跨数-1）</option>
           </select>
         </label>
         <details className="inventory-affix-details">
@@ -402,9 +416,7 @@ export function BridgeInventoryWizard({
           </button>
         ) : null}
         {spanIssue ? (
-          <p className="error-text inventory-kind-hint">
-            按跨编号时，全桥数量必须能被跨数整除。
-          </p>
+          <p className="error-text inventory-kind-hint">{spanIssueText}</p>
         ) : null}
       </div>
     );
