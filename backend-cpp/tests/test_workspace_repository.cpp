@@ -134,6 +134,9 @@ protected:
         client_->execSqlSync(
             "delete from bridge_component_inventory_revisions where id=$1::uuid",
             inventory_revision_id_);
+        // 先删父桥梁，让数据库级联清除任何测试过程中新增、但未被上面逐项跟踪的年度事实。
+        // 否则正式年度仍引用规范组合时，规范组合保护触发器会拒绝删除并遗留测试包。
+        client_->execSqlSync("delete from bridges where id = $1::uuid", bridge_id_);
         if (!standard_user_id_.empty()) {
             client_->execSqlSync(
                 "delete from project_standard_profiles where created_by_user_id=$1::uuid",
@@ -144,7 +147,6 @@ protected:
                 "delete from standard_packages where id in ($1::uuid, $2::uuid)",
                 technical_package_id_, maintenance_package_id_);
         }
-        client_->execSqlSync("delete from bridges where id = $1::uuid", bridge_id_);
         if (!standard_user_id_.empty()) {
             client_->execSqlSync("delete from users where id=$1::uuid", standard_user_id_);
         }

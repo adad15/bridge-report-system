@@ -45,28 +45,41 @@ export function StandardsAdminPanel({ onClose }: Props) {
   return (
     <div className="dialog-backdrop" role="presentation">
       <section className="workspace-dialog standards-admin-panel" role="dialog" aria-modal="true" aria-labelledby="standards-title">
-        <h2 id="standards-title">规范管理</h2>
-        <p>停用只影响新建年度；历史年度仍保留原规范版本。</p>
-        {error ? <p className="error-text" role="alert">{error}</p> : null}
-        {packages === null && !error ? <p>正在加载规范目录…</p> : null}
-        {packages?.map((item) => (
-          <article className="standard-package-row" key={item.id}>
-            <div>
-              <strong>{item.standard_code} · {item.official_edition}</strong>
-              <p>{familyName(item.family)} · 规则包 {item.package_version}</p>
-              <span className={item.sync_status === "正常" ? "status-badge" : "warning-badge"}>
-                {item.sync_status === "正常" ? (item.is_enabled ? "已启用" : "已停用") : "故障"}
-              </span>
-            </div>
-            <button
-              type="button"
-              disabled={busyId !== null || item.sync_status === "故障"}
-              onClick={() => void toggle(item)}
-            >
-              {busyId === item.id ? "正在保存…" : item.is_enabled ? "停用" : "启用"}
-            </button>
-          </article>
-        ))}
+        <header className="standards-admin-header">
+          <h2 id="standards-title">规范管理</h2>
+          <button
+            type="button"
+            className="standards-admin-close"
+            aria-label="关闭规范管理"
+            disabled={busyId !== null}
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </header>
+        <div className="standards-admin-scroll">
+          <p className="standards-admin-note">停用只影响新建年度；历史年度仍保留原规范版本。</p>
+          {error ? <p className="error-text" role="alert">{error}</p> : null}
+          {packages === null && !error ? <p>正在加载规范目录…</p> : null}
+          {packages?.map((item) => (
+            <article className="standard-package-row" key={item.id}>
+              <div>
+                <strong>{item.standard_code} · {item.official_edition}</strong>
+                <p>{familyName(item.family)} · 规则包 {item.package_version}</p>
+                <span className={item.sync_status === "正常" ? "status-badge" : "warning-badge"}>
+                  {item.sync_status === "正常" ? (item.is_enabled ? "已启用" : "已停用") : "故障"}
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={busyId !== null || item.sync_status === "故障"}
+                onClick={() => void toggle(item)}
+              >
+                {busyId === item.id ? "正在保存…" : item.is_enabled ? "停用" : "启用"}
+              </button>
+            </article>
+          ))}
+        </div>
         <div className="dialog-actions"><button type="button" onClick={onClose} disabled={busyId !== null}>关闭</button></div>
       </section>
     </div>

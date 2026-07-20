@@ -38,4 +38,17 @@ describe("StandardsAdminPanel", () => {
     expect(setStandardPackageEnabled).toHaveBeenCalledWith(expect.any(String), "technical-1", false);
     expect(await screen.findByText("已停用")).toBeInTheDocument();
   });
+
+  it("keeps a dedicated close control available above a long package list", async () => {
+    const onClose = vi.fn();
+    vi.mocked(fetchStandardPackages).mockResolvedValue(
+      Array.from({ length: 20 }, (_, index) => ({ ...technical, id: `technical-${index}` })),
+    );
+    render(<StandardsAdminPanel onClose={onClose} />);
+
+    const closeButton = await screen.findByRole("button", { name: "关闭规范管理" });
+    await userEvent.click(closeButton);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });
