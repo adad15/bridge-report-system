@@ -161,6 +161,17 @@ export function setComponentInventoryMapping(
   );
 }
 
+export function confirmPendingComponentInventoryMappings(
+  baseUrl: string,
+  revisionId: string,
+  siteComponentType?: string
+) {
+  return revisionRequest(
+    `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/mappings/confirm-pending`,
+    json("POST", siteComponentType ? { site_component_type: siteComponentType } : {})
+  );
+}
+
 export function confirmComponentInventory(baseUrl: string, revisionId: string, note = "") {
   return revisionRequest(
     `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/confirm`,

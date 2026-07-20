@@ -254,8 +254,10 @@ void register_component_inventory_routes(
     const std::string deactivate_path = entry_path + "/deactivate";
     const std::string mapping_path = entry_path + "/mapping";
     const std::string confirm_path = revision_path + "/confirm";
+    const std::string confirm_mappings_path = revision_path + "/mappings/confirm-pending";
     for (const auto& path : {generate_path, latest_path, revision_path, entries_path,
-                             entry_path, deactivate_path, mapping_path, confirm_path})
+                             entry_path, deactivate_path, mapping_path, confirm_path,
+                             confirm_mappings_path})
         register_options_handler(path);
 
     drogon::app().registerHandler(
@@ -467,6 +469,33 @@ void register_component_inventory_routes(
                     revision_id, entry_id, user->id, mapping));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Put});
+
+    drogon::app().registerHandler(
+        confirm_mappings_path,
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                    const std::string& revision_id) {
+            if (!is_valid_uuid(revision_id)) {
+                respond_json(callback, make_error_body("component_inventory_not_found", "构件台账不存在。"),
+                             drogon::k404NotFound); return;
+            }
+            try {
+                const auto user = require_user(db_client, request, callback);
+                if (!user.has_value()) return;
+                const auto body = request->getJsonObject();
+                std::string site_component_type;
+                if (body != nullptr && body->isMember("site_component_type")) {
+                    if (!(*body)["site_component_type"].isString()) {
+                        respond_json(callback, make_error_body(
+                            "invalid_component_mapping", "构件类别筛选必须是文本。"),
+                            drogon::k400BadRequest); return;
+                    }
+                    site_component_type = (*body)["site_component_type"].asString();
+                }
+                db::ComponentInventoryRepository repository(db_client);
+                respond_inventory_outcome(callback, repository.confirm_pending_mappings(
+                    revision_id, user->id, site_component_type));
+            } catch (...) { respond_db_unavailable(callback); }
+        }, {drogon::Post});
 
     drogon::app().registerHandler(
         confirm_path,

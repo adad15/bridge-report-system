@@ -82,6 +82,10 @@ public:
         const std::string& entry_id,
         const std::string& user_id,
         const InventoryMappingUpdate& mapping);
+    ComponentInventoryOutcome confirm_pending_mappings(
+        const std::string& revision_id,
+        const std::string& user_id,
+        const std::string& site_component_type);
     ComponentInventoryOutcome confirm_revision(
         const std::string& revision_id,
         const std::string& user_id,

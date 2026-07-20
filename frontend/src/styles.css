@@ -2267,6 +2267,17 @@ body {
   font-size: 0.85rem;
 }
 
+.inventory-group-summary {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.inventory-group-summary h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #294969;
+}
+
 .inventory-add-kind {
   justify-self: start;
 }

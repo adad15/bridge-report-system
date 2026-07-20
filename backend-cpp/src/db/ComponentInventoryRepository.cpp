@@ -320,13 +320,16 @@ ComponentInventoryOutcome ComponentInventoryRepository::generate_draft(
                 revision_id, component[0]["id"].as<std::string>(), batch_id,
                 item.component_number, item.site_name, item.site_component_type,
                 item.span_or_location.value_or(""), item.sort_order);
+            // 向导中的规范类别由用户逐组显式选择，生成即视为该用户确认映射。
             tx->execSqlSync(
                 "insert into bridge_component_standard_mappings "
                 "(inventory_entry_id,standard_package_id,standard_bridge_type_id,"
-                "standard_component_category_id,structure_part,mapping_source) "
-                "values($1::uuid,$2::uuid,$3,$4,$5,'模板生成')",
+                "standard_component_category_id,structure_part,mapping_source,"
+                "confirmation_status,confirmed_by_user_id,confirmed_at) "
+                "values($1::uuid,$2::uuid,$3,$4,$5,'模板生成','已确认',$6::uuid,now())",
                 entry[0]["id"].as<std::string>(), input.standard_package_id,
-                input.bridge_type_id, item.standard_component_category_id, item.structure_part);
+                input.bridge_type_id, item.standard_component_category_id, item.structure_part,
+                user_id);
         }
         auto outcome = finish(tx, latch, revision_id);
         if (outcome.status == ComponentInventoryStatus::Ok) {
@@ -520,6 +523,42 @@ ComponentInventoryOutcome ComponentInventoryRepository::set_mapping(
         auto outcome = finish(tx, latch, target.revision_id, target.entry_id);
         if (outcome.status == ComponentInventoryStatus::Ok)
             outcome.revision = get_revision(target.revision_id);
+        return outcome;
+    } catch (...) {
+        if (tx) { try { tx->rollback(); } catch (...) {} }
+        return {ComponentInventoryStatus::Failed};
+    }
+}
+
+ComponentInventoryOutcome ComponentInventoryRepository::confirm_pending_mappings(
+    const std::string& revision_id,
+    const std::string& user_id,
+    const std::string& site_component_type) {
+    TransactionPtr tx;
+    const auto latch = std::make_shared<CommitLatch>();
+    try {
+        tx = db_client_->newTransaction(latch->callback());
+        const auto revision = tx->execSqlSync(
+            "select status from bridge_component_inventory_revisions "
+            "where id=$1::uuid for update",
+            revision_id);
+        if (revision.empty()) { tx->rollback(); return {ComponentInventoryStatus::NotFound}; }
+        if (revision[0]["status"].as<std::string>() != "草稿") {
+            tx->rollback();
+            return {ComponentInventoryStatus::Conflict};
+        }
+        tx->execSqlSync(
+            "update bridge_component_standard_mappings m "
+            "set confirmation_status='已确认',confirmed_by_user_id=$2::uuid,"
+            "confirmed_at=now(),updated_at=now() "
+            "from bridge_component_inventory_entries e "
+            "where m.inventory_entry_id=e.id and e.inventory_revision_id=$1::uuid "
+            "and e.is_active and m.is_active and m.confirmation_status='待确认' "
+            "and ($3='' or e.site_component_type=$3)",
+            revision_id, user_id, site_component_type);
+        auto outcome = finish(tx, latch, revision_id);
+        if (outcome.status == ComponentInventoryStatus::Ok)
+            outcome.revision = get_revision(revision_id);
         return outcome;
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }

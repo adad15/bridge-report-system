@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   confirmComponentInventory,
+  confirmPendingComponentInventoryMappings,
   deleteComponentInventoryEntry,
   fetchLatestComponentInventory,
   generateComponentInventory,
@@ -55,6 +56,23 @@ describe("componentInventoryApi", () => {
       "http://backend/api/bridges/bridge-1/component-inventories/generate",
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }
     );
+  });
+
+  it("confirms pending mappings for one group or the whole revision", async () => {
+    const revision = { id: "revision/1", entries: [] };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ revision }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await confirmPendingComponentInventoryMappings("http://backend", "revision/1", "主梁");
+    await confirmPendingComponentInventoryMappings("http://backend", "revision/1");
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "http://backend/api/component-inventories/revision%2F1/mappings/confirm-pending",
+      "http://backend/api/component-inventories/revision%2F1/mappings/confirm-pending",
+    ]);
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST");
+    expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ site_component_type: "主梁" }));
+    expect(fetchMock.mock.calls[1][1].body).toBe(JSON.stringify({}));
   });
 
   it("updates, maps, confirms, and deletes through revision-scoped endpoints", async () => {

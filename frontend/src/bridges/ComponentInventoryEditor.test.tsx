@@ -3,17 +3,23 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  confirmPendingComponentInventoryMappings,
   fetchLatestComponentInventory,
   setComponentInventoryMapping,
   type ComponentInventoryRevision,
 } from "../api/componentInventoryApi";
 import { fetchStandardPackages } from "../api/standardsApi";
-import { ComponentInventoryEditor, inventoryConfirmationBlockers } from "./ComponentInventoryEditor";
+import {
+  ComponentInventoryEditor,
+  inventoryConfirmationBlockers,
+  inventoryGroupSummaries,
+} from "./ComponentInventoryEditor";
 
 vi.mock("../api/componentInventoryApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../api/componentInventoryApi")>();
   return {
     ...original,
+    confirmPendingComponentInventoryMappings: vi.fn(),
     fetchLatestComponentInventory: vi.fn(),
     setComponentInventoryMapping: vi.fn(),
   };
@@ -52,7 +58,8 @@ describe("ComponentInventoryEditor", () => {
 
   it("keeps internal component ids hidden and referenced entries deactivate-only", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
-    const row = await screen.findByRole("row", { name: /1-1#/ });
+    const numberInput = await screen.findByLabelText("构件编号 1-1#");
+    const row = numberInput.closest("tr") as HTMLElement;
     expect(screen.queryByText("internal-component-id")).not.toBeInTheDocument();
     expect(within(row).queryByRole("button", { name: "删除" })).not.toBeInTheDocument();
     expect(within(row).getByRole("button", { name: "停用" })).toBeDisabled();
@@ -69,6 +76,58 @@ describe("ComponentInventoryEditor", () => {
       mapping_source: "用户确认",
     }));
     expect(await screen.findByText(/规范映射均已确认/)).toBeInTheDocument();
+  });
+
+  it("confirms pending mappings by group and in one click", async () => {
+    const confirmedRevision = {
+      ...revision,
+      entries: [{
+        ...revision.entries[0],
+        mappings: [{ ...revision.entries[0].mappings[0], confirmation_status: "已确认" }],
+      }],
+    };
+    vi.mocked(confirmPendingComponentInventoryMappings).mockResolvedValue(confirmedRevision);
+    render(<ComponentInventoryEditor bridgeId="bridge-1" />);
+
+    expect(await screen.findByText("分组核对")).toBeInTheDocument();
+    expect(screen.getByText(/1 个构件的规范映射待确认/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "确认该组映射" }));
+    expect(confirmPendingComponentInventoryMappings).toHaveBeenCalledWith(
+      expect.any(String), "revision-1", "主梁");
+    expect(await screen.findByText(/规范映射均已确认/)).toBeInTheDocument();
+
+    vi.mocked(fetchLatestComponentInventory).mockResolvedValue(revision);
+    vi.mocked(confirmPendingComponentInventoryMappings).mockClear();
+    vi.mocked(confirmPendingComponentInventoryMappings).mockResolvedValue(confirmedRevision);
+    render(<ComponentInventoryEditor bridgeId="bridge-1" />);
+    await userEvent.click(await screen.findByRole("button", { name: "一键确认全部待确认映射" }));
+    expect(confirmPendingComponentInventoryMappings).toHaveBeenCalledWith(
+      expect.any(String), "revision-1", undefined);
+  });
+
+  it("summarizes generated groups for checking", () => {
+    const summaries = inventoryGroupSummaries({
+      ...revision,
+      entries: [
+        revision.entries[0],
+        { ...revision.entries[0], id: "entry-2", component_number: "2-1#" },
+        {
+          ...revision.entries[0], id: "entry-3", component_number: "P1",
+          site_component_type: "桥墩", site_name: "桥墩", mappings: [],
+        },
+      ],
+    }, []);
+    expect(summaries).toEqual([
+      expect.objectContaining({
+        siteComponentType: "主梁", activeCount: 2, firstNumber: "1-1#", lastNumber: "2-1#",
+        pendingCount: 2, confirmedCount: 0, unmappedCount: 0,
+        mappingLabel: "技术评定规范 · girder",
+      }),
+      expect.objectContaining({
+        siteComponentType: "桥墩", activeCount: 1, firstNumber: "P1", lastNumber: "P1",
+        pendingCount: 0, unmappedCount: 1, mappingLabel: "",
+      }),
+    ]);
   });
 
   it("reports duplicate numbers before confirmation", () => {

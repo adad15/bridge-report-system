@@ -5,6 +5,7 @@ import {
   addComponentInventoryEntry,
   componentInventoryErrorMessage,
   confirmComponentInventory,
+  confirmPendingComponentInventoryMappings,
   deactivateComponentInventoryEntry,
   deleteComponentInventoryEntry,
   fetchLatestComponentInventory,
@@ -76,6 +77,70 @@ function inventoryStatus(status: string) {
   return status === "已确认" ? "已确认" : status === "草稿" ? "草稿" : status;
 }
 
+export interface InventoryGroupSummary {
+  siteComponentType: string;
+  activeCount: number;
+  firstNumber: string;
+  lastNumber: string;
+  mappingLabel: string;
+  confirmedCount: number;
+  pendingCount: number;
+  unmappedCount: number;
+}
+
+export function inventoryGroupSummaries(
+  revision: ComponentInventoryRevision,
+  catalogs: StandardCatalog[]
+): InventoryGroupSummary[] {
+  const groups = new Map<string, InventoryGroupSummary>();
+  for (const entry of revision.entries) {
+    if (!entry.is_active) continue;
+    let group = groups.get(entry.site_component_type);
+    if (!group) {
+      group = {
+        siteComponentType: entry.site_component_type,
+        activeCount: 0,
+        firstNumber: entry.component_number,
+        lastNumber: entry.component_number,
+        mappingLabel: "",
+        confirmedCount: 0,
+        pendingCount: 0,
+        unmappedCount: 0,
+      };
+      groups.set(entry.site_component_type, group);
+    }
+    group.activeCount += 1;
+    group.lastNumber = entry.component_number;
+    const mapping = entry.mappings.find((item) => item.is_active);
+    if (!mapping) {
+      group.unmappedCount += 1;
+      continue;
+    }
+    if (mapping.confirmation_status === "已确认") group.confirmedCount += 1;
+    else group.pendingCount += 1;
+    if (!group.mappingLabel) {
+      const catalog = catalogs.find((item) => item.package.id === mapping.standard_package_id);
+      const category = catalog?.component_categories.find(
+        (item) => item.id === mapping.standard_component_category_id
+      );
+      group.mappingLabel = `${catalog?.package.standard_code ?? "技术评定规范"} · ${
+        category?.name ?? mapping.standard_component_category_id
+      }`;
+    }
+  }
+  return [...groups.values()];
+}
+
+function groupStatusText(group: InventoryGroupSummary): string {
+  const parts: string[] = [];
+  if (group.confirmedCount > 0) parts.push(`已确认 ${group.confirmedCount}`);
+  if (group.pendingCount > 0) parts.push(`待确认 ${group.pendingCount}`);
+  if (group.unmappedCount > 0) parts.push(`无映射 ${group.unmappedCount}`);
+  return parts.join("、") || "—";
+}
+
+const kMaxIndividualBlockers = 30;
+
 export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   const [revision, setRevision] = useState<ComponentInventoryRevision | null>(null);
   const [notCreated, setNotCreated] = useState(false);
@@ -133,6 +198,29 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   }, []);
 
   const blockers = useMemo(() => revision ? inventoryConfirmationBlockers(revision) : [], [revision]);
+  const groupSummaries = useMemo(
+    () => (revision ? inventoryGroupSummaries(revision, catalogs) : []),
+    [revision, catalogs]
+  );
+  const entriesById = useMemo(
+    () => new Map((revision?.entries ?? []).map((entry) => [entry.id, entry])),
+    [revision]
+  );
+  const pendingMappingCount = useMemo(
+    () => groupSummaries.reduce((total, group) => total + group.pendingCount, 0),
+    [groupSummaries]
+  );
+  const individualBlockers = useMemo(
+    () =>
+      blockers.filter((blocker) => {
+        if (blocker.code !== "component_mapping_required") return true;
+        const entry = entriesById.get(blocker.entity_id);
+        return !entry?.mappings.some(
+          (mapping) => mapping.is_active && mapping.confirmation_status === "待确认"
+        );
+      }),
+    [blockers, entriesById]
+  );
 
   async function mutate(action: () => Promise<ComponentInventoryRevision>) {
     setBusy(true);
@@ -179,6 +267,12 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       setNewEntry({ component_number: "", site_name: "", site_component_type: "", span_or_location: "", remarks: "" });
       setAdding(false);
     }
+  }
+
+  async function confirmPendingMappings(siteComponentType?: string) {
+    if (!revision) return;
+    await mutate(() =>
+      confirmPendingComponentInventoryMappings(backendBaseUrl, revision.id, siteComponentType));
   }
 
   async function confirmExistingMapping(entry: ComponentInventoryEntry) {
@@ -258,16 +352,68 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       </div>
       <p>构件编号和现场名称可修改。内部实际构件 ID 不在页面显示，修改编号不会改变其身份。</p>
       {revision.status === "已确认" ? <p className="inventory-standard-notice">修改已确认台账时，系统会自动创建下一版草稿，原确认版本保持不变。</p> : null}
+      {groupSummaries.length > 0 ? (
+        <div className="inventory-group-summary">
+          <h2>分组核对</h2>
+          <div className="inventory-table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr><th>构件类别</th><th>数量</th><th>编号范围</th><th>规范映射</th><th>映射状态</th><th>操作</th></tr>
+              </thead>
+              <tbody>
+                {groupSummaries.map((group) => (
+                  <tr key={group.siteComponentType}>
+                    <td>{group.siteComponentType}</td>
+                    <td>{group.activeCount}</td>
+                    <td>
+                      {group.firstNumber}
+                      {group.activeCount > 1 ? ` … ${group.lastNumber}` : ""}
+                    </td>
+                    <td>{group.mappingLabel || "—"}</td>
+                    <td>{groupStatusText(group)}</td>
+                    <td>
+                      {group.pendingCount > 0 && revision.status === "草稿" ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void confirmPendingMappings(group.siteComponentType)}
+                        >
+                          确认该组映射
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
       {blockers.length > 0 ? (
         <div className="inventory-blockers" role="status">
           <strong>确认前还需处理 {blockers.length} 项</strong>
           <ul>
-            {blockers.map((blocker, index) => (
+            {pendingMappingCount > 0 ? (
+              <li>
+                {pendingMappingCount} 个构件的规范映射待确认；可在分组核对表按组确认，或
+                <button
+                  type="button"
+                  disabled={busy || revision.status !== "草稿"}
+                  onClick={() => void confirmPendingMappings()}
+                >
+                  一键确认全部待确认映射
+                </button>
+              </li>
+            ) : null}
+            {individualBlockers.slice(0, kMaxIndividualBlockers).map((blocker, index) => (
               <li key={`${blocker.code}-${blocker.entity_id}-${index}`}>
                 {blocker.message}
                 {blocker.entity_type === "inventory_entry" ? <button type="button" onClick={() => focusEntry(blocker.entity_id)}>定位</button> : null}
               </li>
             ))}
+            {individualBlockers.length > kMaxIndividualBlockers ? (
+              <li>……其余 {individualBlockers.length - kMaxIndividualBlockers} 项处理后依次显示。</li>
+            ) : null}
           </ul>
         </div>
       ) : (

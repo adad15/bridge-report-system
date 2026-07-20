@@ -192,6 +192,79 @@ TEST_F(ComponentInventoryRepositoryTest, ConfirmedEditCreatesDraftAndReferencedC
     EXPECT_EQ(deactivated.revision->entries[0].deactivation_reason, "现场已停用");
 }
 
+TEST_F(ComponentInventoryRepositoryTest, GeneratedMappingsAreConfirmedByGeneratingUser) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(2, 3);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    const auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    ASSERT_EQ(created.revision->entries.size(), 6u);
+    for (const auto& entry : created.revision->entries) {
+        ASSERT_EQ(entry.mappings.size(), 1u);
+        EXPECT_EQ(entry.mappings[0].confirmation_status, "已确认");
+        EXPECT_EQ(entry.mappings[0].mapping_source, "模板生成");
+    }
+    // 生成后的台账不再有映射阻塞，可直接确认。
+    EXPECT_EQ(
+        repository.confirm_revision(created.revision->id, user_id, "生成即确认").status,
+        db::ComponentInventoryStatus::Ok);
+}
+
+TEST_F(ComponentInventoryRepositoryTest, PendingMappingsCanBeConfirmedInBatch) {
+    if (!client) GTEST_SKIP();
+    auto input = girder_input(1, 2);
+    input.input_quantities["diaphragm_count"] = 2;
+    input.groups.push_back({
+        "横隔板", "横隔板", "test.component.diaphragm", "superstructure",
+        inventory::NumberingMode::Sequential, 2, "", "#"});
+    input.groups.back().quantity_key = "diaphragm_count";
+    const auto generated = inventory::generate_component_inventory(input);
+    ASSERT_TRUE(generated.ok());
+    db::ComponentInventoryRepository repository(client);
+    const auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = created.revision->id;
+
+    // 模拟旧数据：全部映射退回待确认。
+    client->execSqlSync(
+        "update bridge_component_standard_mappings m set confirmation_status='待确认',"
+        "confirmed_by_user_id=null,confirmed_at=null "
+        "from bridge_component_inventory_entries e "
+        "where m.inventory_entry_id=e.id and e.inventory_revision_id=$1::uuid",
+        revision_id);
+
+    // 按构件类别只确认横隔板。
+    auto partial = repository.confirm_pending_mappings(revision_id, user_id, "横隔板");
+    ASSERT_EQ(partial.status, db::ComponentInventoryStatus::Ok);
+    for (const auto& entry : partial.revision->entries) {
+        const auto expected = entry.site_component_type == "横隔板" ? "已确认" : "待确认";
+        ASSERT_EQ(entry.mappings.size(), 1u);
+        EXPECT_EQ(entry.mappings[0].confirmation_status, expected);
+    }
+
+    // 不带筛选时确认全部剩余映射。
+    auto all = repository.confirm_pending_mappings(revision_id, user_id, "");
+    ASSERT_EQ(all.status, db::ComponentInventoryStatus::Ok);
+    for (const auto& entry : all.revision->entries) {
+        ASSERT_EQ(entry.mappings.size(), 1u);
+        EXPECT_EQ(entry.mappings[0].confirmation_status, "已确认");
+    }
+
+    // 已确认版本不允许再批量确认映射。
+    ASSERT_EQ(
+        repository.confirm_revision(revision_id, user_id, "批量确认后定稿").status,
+        db::ComponentInventoryStatus::Ok);
+    EXPECT_EQ(
+        repository.confirm_pending_mappings(revision_id, user_id, "").status,
+        db::ComponentInventoryStatus::Conflict);
+
+    EXPECT_EQ(
+        repository.confirm_pending_mappings(
+            "00000000-0000-0000-0000-000000000000", user_id, "").status,
+        db::ComponentInventoryStatus::NotFound);
+}
+
 TEST_F(ComponentInventoryRepositoryTest, ConfirmationReportsUnmappedManualEntry) {
     if (!client) GTEST_SKIP();
     const auto input = girder_input(1, 1);
