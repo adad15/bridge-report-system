@@ -2261,6 +2261,12 @@ body {
   align-self: end;
 }
 
+.inventory-kind-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .inventory-add-kind {
   justify-self: start;
 }

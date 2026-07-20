@@ -36,8 +36,8 @@ export interface InventoryPreviewItem {
 
 const quantityLabels: Record<string, string> = {
   span_count: "跨数",
-  upper_bearing_members_per_span: "每跨上部承重构件数",
-  upper_general_members_per_span: "每跨上部一般构件数",
+  upper_bearing_members_per_span: "上部承重构件数（全桥）",
+  upper_general_members_per_span: "上部一般构件数（全桥）",
   bearings_per_support_line: "支座数量",
   pier_count: "桥墩数量",
   abutment_count: "桥台数量",
@@ -196,7 +196,7 @@ export function BridgeInventoryWizard({
       category: StandardComponentCategory | undefined,
       blankIsZero: boolean
     ): number => {
-      let sum = 0;
+      let inputSum = 0;
       for (const kind of card.kinds) {
         const raw = kind.quantity === "" && blankIsZero ? "0" : kind.quantity;
         const value = Number(raw);
@@ -204,27 +204,36 @@ export function BridgeInventoryWizard({
           valid = false;
           continue;
         }
-        sum += value;
         if (value === 0) continue;
         if (!category || !kind.name.trim()) {
           valid = false;
           continue;
         }
-        if (kind.numberingMode === "span_member" && !(parsedQuantities.span_count > 0)) valid = false;
+        // 数量一律按全桥填写；按跨编号时换算为每跨数量，除不尽视为无效。
+        let quantity = value;
+        if (kind.numberingMode === "span_member") {
+          const spans = parsedQuantities.span_count ?? 0;
+          if (!(spans > 0) || value % spans !== 0) {
+            valid = false;
+            continue;
+          }
+          quantity = value / spans;
+        }
+        inputSum += quantity;
         groups.push({
           site_component_type: kind.name.trim(),
           site_name: kind.name.trim(),
           standard_component_category_id: category.id,
           structure_part: category.structure_part,
           numbering_mode: kind.numberingMode,
-          quantity: value,
+          quantity,
           quantity_key: key,
           number_prefix: kind.prefix,
           number_suffix: kind.suffix,
         });
       }
-      if (sum > 10000) valid = false;
-      return sum;
+      if (inputSum > 10000) valid = false;
+      return inputSum;
     };
 
     for (const key of template.quantity_inputs) {
@@ -321,6 +330,13 @@ export function BridgeInventoryWizard({
     index: number,
     removable: boolean
   ) {
+    const spanValue = Number(spanCount);
+    const total = Number(kind.quantity);
+    const spanIssue =
+      kind.numberingMode === "span_member" &&
+      Number.isInteger(total) &&
+      total > 0 &&
+      (!(spanValue > 0) || total % spanValue !== 0);
     return (
       <div className="inventory-kind-row" key={index}>
         <label>
@@ -384,6 +400,11 @@ export function BridgeInventoryWizard({
           >
             移除
           </button>
+        ) : null}
+        {spanIssue ? (
+          <p className="error-text inventory-kind-hint">
+            按跨编号时，全桥数量必须能被跨数整除。
+          </p>
         ) : null}
       </div>
     );
@@ -462,7 +483,7 @@ export function BridgeInventoryWizard({
                 <div className="inventory-quantity-card" key={key}>
                   <div className="inventory-card-heading">
                     <strong>{labelBase}</strong>
-                    <span className="inventory-card-total">合计 {kindTotal(card)}</span>
+                    <span className="inventory-card-total">全桥合计 {kindTotal(card)}</span>
                   </div>
                   <label>
                     对应构件类别
@@ -501,7 +522,7 @@ export function BridgeInventoryWizard({
                   <div className="inventory-quantity-card" key={category.id}>
                     <div className="inventory-card-heading">
                       <strong>{category.name}</strong>
-                      <span className="inventory-card-total">合计 {kindTotal(card)}</span>
+                      <span className="inventory-card-total">全桥合计 {kindTotal(card)}</span>
                     </div>
                     {card.kinds.map((kind, index) =>
                       renderKindRow(category.name, category.id, fallback, kind, index, card.kinds.length > 1))}

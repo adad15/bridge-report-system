@@ -41,8 +41,8 @@ async function fillBeamTemplate() {
   await userEvent.selectOptions(await screen.findByLabelText("桥型"), "beam");
   await userEvent.type(screen.getByLabelText("跨数"), "2");
   await userEvent.selectOptions(
-    screen.getByLabelText("每跨上部承重构件数 对应构件类别"), "girder");
-  await userEvent.type(screen.getByLabelText("每跨上部承重构件数 数量 1"), "3");
+    screen.getByLabelText("上部承重构件数（全桥） 对应构件类别"), "girder");
+  await userEvent.type(screen.getByLabelText("上部承重构件数（全桥） 数量 1"), "6");
 }
 
 describe("BridgeInventoryWizard", () => {
@@ -68,7 +68,7 @@ describe("BridgeInventoryWizard", () => {
     expect(spanCount).toHaveValue(5);
     await userEvent.selectOptions(bridgeType, "arch");
     expect(screen.getByLabelText("跨数")).toHaveValue(null);
-    expect(screen.queryByText("每跨上部承重构件数")).not.toBeInTheDocument();
+    expect(screen.queryByText("上部承重构件数（全桥）")).not.toBeInTheDocument();
   });
 
   it("builds the same span-member number preview as the backend", () => {
@@ -82,12 +82,13 @@ describe("BridgeInventoryWizard", () => {
     }]);
   });
 
-  it("emits a complete generation plan after category and quantities are filled", async () => {
+  it("converts whole-bridge quantities into per-span groups for span numbering", async () => {
     const onPlanChange = vi.fn();
     render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
     await fillBeamTemplate();
 
-    expect(screen.getByLabelText("每跨上部承重构件数 构件名称 1")).toHaveValue("主梁");
+    expect(screen.getByLabelText("上部承重构件数（全桥） 构件名称 1")).toHaveValue("主梁");
+    expect(screen.getByText("全桥合计 6")).toBeInTheDocument();
     await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(expect.objectContaining({
       template_id: "beam-template",
       span_count: 2,
@@ -102,28 +103,48 @@ describe("BridgeInventoryWizard", () => {
     })));
   });
 
+  it("rejects a whole-bridge quantity that spans cannot divide evenly", async () => {
+    const onPlanChange = vi.fn();
+    render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
+    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "beam");
+    await userEvent.type(screen.getByLabelText("跨数"), "2");
+    await userEvent.selectOptions(
+      screen.getByLabelText("上部承重构件数（全桥） 对应构件类别"), "girder");
+    await userEvent.type(screen.getByLabelText("上部承重构件数（全桥） 数量 1"), "3");
+
+    expect(screen.getByText("按跨编号时，全桥数量必须能被跨数整除。")).toBeInTheDocument();
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(null));
+
+    await userEvent.type(screen.getByLabelText("上部承重构件数（全桥） 数量 1"), "0");
+    expect(screen.queryByText("按跨编号时，全桥数量必须能被跨数整除。")).not.toBeInTheDocument();
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      input_quantities: { span_count: 2, upper_bearing_members_per_span: 15 },
+      groups: [expect.objectContaining({ quantity: 15 })],
+    })));
+  });
+
   it("splits one category into multiple kinds whose quantities sum into the template input", async () => {
     const onPlanChange = vi.fn();
     render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
     await fillBeamTemplate();
 
-    await userEvent.click(screen.getByLabelText("每跨上部承重构件数 添加一种构件"));
-    await userEvent.type(screen.getByLabelText("每跨上部承重构件数 构件名称 2"), "横隔板");
-    await userEvent.type(screen.getByLabelText("每跨上部承重构件数 数量 2"), "2");
+    await userEvent.click(screen.getByLabelText("上部承重构件数（全桥） 添加一种构件"));
+    await userEvent.type(screen.getByLabelText("上部承重构件数（全桥） 构件名称 2"), "横隔板");
+    await userEvent.type(screen.getByLabelText("上部承重构件数（全桥） 数量 2"), "2");
 
     await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(expect.objectContaining({
-      input_quantities: { span_count: 2, upper_bearing_members_per_span: 5 },
+      input_quantities: { span_count: 2, upper_bearing_members_per_span: 4 },
       groups: [
         expect.objectContaining({
           quantity_key: "upper_bearing_members_per_span", quantity: 3, site_component_type: "主梁",
         }),
         expect.objectContaining({
-          quantity_key: "upper_bearing_members_per_span", quantity: 2, site_component_type: "横隔板",
+          quantity_key: "upper_bearing_members_per_span", quantity: 1, site_component_type: "横隔板",
         }),
       ],
     })));
 
-    await userEvent.click(screen.getByLabelText("每跨上部承重构件数 移除 2"));
+    await userEvent.click(screen.getByLabelText("上部承重构件数（全桥） 移除 2"));
     await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(expect.objectContaining({
       input_quantities: { span_count: 2, upper_bearing_members_per_span: 3 },
     })));
@@ -176,6 +197,6 @@ describe("BridgeInventoryWizard", () => {
 
     const affix = screen.getAllByText("编号前后缀")[0];
     expect(affix.closest("details")?.open).toBeFalsy();
-    expect(screen.getByLabelText("每跨上部承重构件数 编号后缀 1")).toHaveValue("#");
+    expect(screen.getByLabelText("上部承重构件数（全桥） 编号后缀 1")).toHaveValue("#");
   });
 });
