@@ -11,6 +11,7 @@ import type {
   WarningItem,
 } from "../contracts/annualInspection";
 import {
+  assessmentIssueToAttention,
   buildStatistics,
   isNormalComponentRating,
   isNormalDefect,
@@ -18,6 +19,24 @@ import {
   isNormalRating,
   needsAttention,
 } from "./grouping";
+
+describe("assessment issue navigation", () => {
+  it("maps blockers into the existing defect field target model", () => {
+    expect(assessmentIssueToAttention({
+      code: "assessment_defect_scale_required",
+      message: "缺少标度",
+      entity_type: "defect",
+      entity_id: "defect-1",
+      field_path: "defect_scale",
+      rule_id: "",
+    })).toMatchObject({
+      kind: "defect",
+      candidateId: "defect-1",
+      targetField: "defect_scale",
+      severity: "error",
+    });
+  });
+});
 
 function makeWarning(overrides: Partial<WarningItem> = {}): WarningItem {
   return { code: "some_warning", message: "需要人工确认。", severity: "warning", target_candidate_id: null, ...overrides };

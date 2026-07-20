@@ -10,6 +10,7 @@ import {
   type EditLockSummary,
   type ReviewResponse,
 } from "../api/reviewApi";
+import { previewAssessment, type AssessmentPreviewResponse } from "../api/assessmentApi";
 import { ApiError } from "../api/apiClient";
 import { data } from "../review/testFixtures";
 import { canModifyDefectStructure, ReviewWorkspacePage } from "./ReviewWorkspacePage";
@@ -44,6 +45,11 @@ vi.mock("../api/reviewApi", async (importOriginal) => {
   };
 });
 
+vi.mock("../api/assessmentApi", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../api/assessmentApi")>();
+  return { ...original, previewAssessment: vi.fn() };
+});
+
 vi.mock("../auth/AuthContext", () => ({
   useAuth: () => ({ user: { username: "tester", display_name: "测试用户", role: "normal" } }),
 }));
@@ -64,9 +70,10 @@ vi.mock("../review/grouping", async (importOriginal) => {
 });
 
 vi.mock("../review/components/DefectsSection", () => ({
-  DefectsSection: ({ disabled }: { disabled?: boolean }) => {
+  DefectsSection: ({ disabled, draft, dispatch }: { disabled?: boolean; draft: ReturnType<typeof data>; dispatch: (action: unknown) => void }) => {
     renderCounters.defectsSection += 1;
-    return <input aria-label="测试病害位置" disabled={disabled} defaultValue="第二跨" />;
+    const defect = draft.defects[0];
+    return <input aria-label="测试病害位置" disabled={disabled} value={defect.defect_location} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} />;
   },
 }));
 
@@ -135,6 +142,18 @@ function reviewResponse(): ReviewResponse {
   };
 }
 
+function assessmentResponse(revision: number): AssessmentPreviewResponse {
+  return {
+    client_revision: revision,
+    input_checksum: `sha256:${"a".repeat(64)}`,
+    input_summary: {},
+    standard: { standard_id: "H21", standard_code: "JTG/T H21—2011", standard_name: "公路桥梁技术状况评定标准", official_edition: "2011", package_version: "1.0.1", content_checksum: `sha256:${"b".repeat(64)}`, algorithm_id: "h21" },
+    result: null,
+    issues: [],
+    assessment_run_id: null,
+  };
+}
+
 async function renderEditableReview(): Promise<HTMLInputElement> {
   render(
     <MemoryRouter initialEntries={["/imports/import-1/review"]}>
@@ -174,6 +193,7 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
       lock,
     });
     vi.mocked(releaseEditLock).mockResolvedValue({ released: true });
+    vi.mocked(previewAssessment).mockImplementation(async (_baseUrl, _recordId, _draft, revision) => assessmentResponse(revision));
   });
 
   afterEach(() => {
@@ -185,7 +205,7 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     const pendingHeartbeat = deferred<{ renewed: true; lock: EditLockSummary }>();
     vi.mocked(heartbeatEditLock).mockReturnValue(pendingHeartbeat.promise);
     const input = await renderEditableReview();
-    expect(screen.queryByRole("button", { name: /技术状况评定/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /系统技术状况评定/ })).toBeInTheDocument();
     input.focus();
     expect(input).toBeEnabled();
     expect(input).toHaveFocus();
@@ -218,6 +238,11 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     const pendingHeartbeat = deferred<{ renewed: true; lock: EditLockSummary }>();
     vi.mocked(heartbeatEditLock).mockReturnValue(pendingHeartbeat.promise);
     await renderEditableReview();
+    await act(async () => {
+      vi.advanceTimersByTime(650);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     const before = { ...renderCounters };
 
     await act(async () => {
@@ -287,5 +312,47 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     expect(heartbeatEditLock).toHaveBeenCalledTimes(1);
     expect(input).toBeDisabled();
     expect(screen.getAllByText(/租约已到期/).length).toBeGreaterThan(0);
+  });
+
+  it("merges assessment edits for 650ms without disabling or stealing focus", async () => {
+    const pending = deferred<AssessmentPreviewResponse>();
+    vi.mocked(previewAssessment).mockReturnValue(pending.promise);
+    const input = await renderEditableReview();
+    input.focus();
+
+    await act(async () => {
+      vi.advanceTimersByTime(649);
+      await Promise.resolve();
+    });
+    expect(previewAssessment).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+    expect(previewAssessment).toHaveBeenCalledTimes(1);
+    expect(input).toBeEnabled();
+    expect(input).toHaveFocus();
+  });
+
+  it("aborts the older assessment request after a newer draft is submitted", async () => {
+    const pending = deferred<AssessmentPreviewResponse>();
+    vi.mocked(previewAssessment).mockReturnValue(pending.promise);
+    const input = await renderEditableReview();
+    await act(async () => {
+      vi.advanceTimersByTime(650);
+      await Promise.resolve();
+    });
+    const firstSignal = vi.mocked(previewAssessment).mock.calls[0][5];
+    expect(firstSignal?.aborted).toBe(false);
+
+    fireEvent.change(input, { target: { value: "第三跨" } });
+    await act(async () => {
+      vi.advanceTimersByTime(650);
+      await Promise.resolve();
+    });
+    expect(previewAssessment).toHaveBeenCalledTimes(2);
+    expect(firstSignal?.aborted).toBe(true);
+    expect(vi.mocked(previewAssessment).mock.calls[1][3]).toBe(1);
   });
 });

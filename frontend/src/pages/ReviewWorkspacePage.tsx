@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/apiClient";
+import { previewAssessment, type AssessmentIssue } from "../api/assessmentApi";
 import type { ConfirmResponse, EditLockSummary, PreflightResponse, ReopenScope, ReviewResponse } from "../api/reviewApi";
 import {
   acquireEditLock,
@@ -25,7 +26,7 @@ import type { SelectedCandidate } from "../review/components/EvidencePanel";
 import { EvidencePanel } from "../review/components/EvidencePanel";
 import { NeedsAttentionSection } from "../review/components/NeedsAttentionSection";
 import { OverviewHeader } from "../review/components/OverviewHeader";
-import { RatingsSection } from "../review/components/RatingsSection";
+import { AssessmentSection } from "../review/components/AssessmentSection";
 import { RawJsonSection } from "../review/components/RawJsonSection";
 import { ReviewActionBar } from "../review/components/ReviewActionBar";
 import type { SaveMessageState } from "../review/components/ReviewMessageDock";
@@ -33,7 +34,8 @@ import { ReviewMessageDock } from "../review/components/ReviewMessageDock";
 import type { GroupKey } from "../review/components/ReviewSidebar";
 import { ReviewSidebar } from "../review/components/ReviewSidebar";
 import type { AttentionItem } from "../review/grouping";
-import { buildStatistics, needsAttention } from "../review/grouping";
+import { assessmentIssueToAttention, buildStatistics, needsAttention } from "../review/grouping";
+import { assessmentReducer, initialAssessmentState } from "../review/assessmentState";
 import type { ReviewDraftAction } from "../review/reviewDraft";
 import { reviewDraftReducer } from "../review/reviewDraft";
 import { deriveReviewSession, shouldClearDirtyAfterSave } from "../review/reviewSession";
@@ -197,13 +199,24 @@ function ReviewWorkspaceLoaded({
   const [lockSummary, setLockSummary] = useState<EditLockSummary | null>(response.edit_lock);
   const [lockPhase, setLockPhase] = useState<EditLockPhase>("not_required");
   const [lockMessage, setLockMessage] = useState<string | null>(null);
+  const [assessmentState, assessmentDispatch] = useReducer(assessmentReducer, initialAssessmentState);
+  const assessmentAbortRef = useRef<AbortController | null>(null);
 
-  const showImportedRatings = response.contract_compatibility !== "native_2_0";
   const counts = useMemo(
-    () => buildStatistics(draft, showImportedRatings),
-    [draft, showImportedRatings],
+    () => buildStatistics(draft, false),
+    [draft],
   );
-  const attentionItems = useMemo(() => needsAttention(draft), [draft]);
+  const attentionItems = useMemo(() => [
+    ...needsAttention(draft).filter((item) => item.kind !== "rating"),
+    ...(assessmentState.response?.issues ?? []).map(assessmentIssueToAttention),
+  ], [draft, assessmentState.response]);
+  const displayedCounts = useMemo(() => ({
+    ...counts,
+    rating_item_count: assessmentState.response?.result
+      ? 1 + assessmentState.response.result.structure_parts.length
+      : assessmentState.response?.issues.length ?? 0,
+    needs_attention_count: attentionItems.length,
+  }), [counts, assessmentState.response, attentionItems.length]);
   const reviewSession = deriveReviewSession(
     sessionImportStatus,
     response.contract_compatibility,
@@ -652,6 +665,46 @@ function ReviewWorkspaceLoaded({
   const actionsDisabled = effectiveReadOnly || busy;
   const sectionDispatch = effectiveReadOnly ? NO_OP_DISPATCH : dispatch;
 
+  const runAssessment = useCallback(() => {
+    if (lockToken === null || effectiveReadOnly) return;
+    assessmentAbortRef.current?.abort();
+    const controller = new AbortController();
+    assessmentAbortRef.current = controller;
+    const revision = draftRevision.current;
+    assessmentDispatch({ type: "requested", revision });
+    previewAssessment(backendBaseUrl, importRecordId, draft, revision, lockToken, controller.signal)
+      .then((assessmentResponse) => {
+        assessmentDispatch({ type: "resolved", response: assessmentResponse, currentRevision: draftRevision.current });
+      })
+      .catch((caught: unknown) => {
+        if (controller.signal.aborted) return;
+        assessmentDispatch({
+          type: "failed",
+          revision,
+          currentRevision: draftRevision.current,
+          message: caught instanceof ApiError ? caught.message : "系统评定试算失败。",
+        });
+      });
+  }, [draft, effectiveReadOnly, importRecordId, lockToken]);
+
+  useEffect(() => {
+    if (effectiveReadOnly || lockToken === null) return;
+    const timer = window.setTimeout(runAssessment, 650);
+    return () => window.clearTimeout(timer);
+  }, [effectiveReadOnly, lockToken, runAssessment]);
+
+  useEffect(() => () => assessmentAbortRef.current?.abort(), []);
+
+  function selectAssessmentIssue(issue: AssessmentIssue): void {
+    const item = assessmentIssueToAttention(issue);
+    if (item.kind === "import") {
+      setActiveGroup("needs_attention");
+      setNavigationMessage(item.message);
+      return;
+    }
+    selectCandidate(item);
+  }
+
   // 重开 warnings_only 态：仅带警告的病害可编辑；full 态与正常待校对态全部可编辑。
   const isDefectEditable =
     reopenState?.scope === "warnings_only"
@@ -700,10 +753,9 @@ function ReviewWorkspaceLoaded({
       ) : null}
       <div className="review-body">
         <ReviewSidebar
-          counts={counts}
+          counts={displayedCounts}
           active={activeGroup}
           onSelect={setActiveGroup}
-          showImportedRatings={showImportedRatings}
         />
         <div className="review-main">
           <div className="review-main-tools">
@@ -733,11 +785,13 @@ function ReviewWorkspaceLoaded({
               isDefectEditable={isDefectEditable}
             />
           ) : null}
-          {activeGroup === "ratings" && showImportedRatings ? (
-            <RatingsSection
-              ratings={draft.ratings}
-              dispatch={sectionDispatch}
-              disabled={actionsDisabled || reopenState?.scope === "warnings_only"}
+          {activeGroup === "ratings" ? (
+            <AssessmentSection
+              phase={assessmentState.phase}
+              response={assessmentState.response}
+              error={assessmentState.error}
+              onRetry={runAssessment}
+              onSelectIssue={selectAssessmentIssue}
             />
           ) : null}
           {activeGroup === "raw_json" ? <RawJsonSection draft={draft} /> : null}

@@ -11,6 +11,7 @@ find_package(GTest CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 add_library(bridge_report_backend_core
+    src/assessment/AssessmentService.cpp
     src/archive/ArchivePaths.cpp
     src/archive/ExtractedPhotoArchive.cpp
     src/archive/TemporaryWordStorage.cpp
@@ -41,6 +42,7 @@ add_library(bridge_report_backend_core
     src/deletion/ImportRecordDeletionModels.cpp
     src/deletion/TemporaryWordCleanupCoordinator.cpp
     src/http/AuthRoutes.cpp
+    src/http/AssessmentRoutes.cpp
     src/http/BridgeAdministrationRoutes.cpp
     src/http/ComponentArchiveRoutes.cpp
     src/http/ComponentInventoryRoutes.cpp
@@ -114,6 +116,8 @@ add_executable(bridge_report_backend_tests
     tests/test_archive_file_cleanup_coordinator.cpp
     tests/test_archive_file_deletion_core.cpp
     tests/test_archive_paths.cpp
+    tests/test_assessment_routes.cpp
+    tests/test_assessment_service.cpp
     tests/test_archived_file_deletion_queue.cpp
     tests/test_bridge_deletion_models.cpp
     tests/test_bridge_administration_repository.cpp

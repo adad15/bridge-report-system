@@ -8,6 +8,7 @@ import type {
   Severity,
   StructurePartRating,
 } from "../contracts/annualInspection";
+import type { AssessmentIssue } from "../api/assessmentApi";
 import { defectFieldForWarning, type DefectTargetField } from "./reviewNavigation";
 
 // 只读分类 / 统计逻辑，镜像模块 05 规格 §9.1（需要处理）与 §9.2（普通候选）。
@@ -20,6 +21,27 @@ export interface AttentionItem {
   severity: Severity;
   warningCode?: string;
   targetField?: DefectTargetField;
+}
+
+const ASSESSMENT_DEFECT_FIELDS = new Set<DefectTargetField>([
+  "component_match", "structure_part", "component_name", "component_alias",
+  "defect_location", "defect_type", "defect_scale", "defect_deduction",
+  "quantity_text", "photo_numbers", "measurement_text",
+]);
+
+export function assessmentIssueToAttention(issue: AssessmentIssue): AttentionItem {
+  const isDefect = issue.entity_type === "defect" && issue.entity_id.trim() !== "";
+  const targetField = isDefect && ASSESSMENT_DEFECT_FIELDS.has(issue.field_path as DefectTargetField)
+    ? issue.field_path as DefectTargetField
+    : undefined;
+  return {
+    kind: isDefect ? "defect" : "import",
+    candidateId: issue.entity_id,
+    message: issue.message,
+    severity: "error",
+    warningCode: issue.code,
+    targetField,
+  };
 }
 
 // 字段刻意用 snake_case：与后端 ReviewStatistics 的 JSON 线格式（wire shape）逐字段对应，

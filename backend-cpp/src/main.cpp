@@ -13,6 +13,7 @@
 #include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/db/StandardRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
+#include "bridge_report/http/AssessmentRoutes.hpp"
 #include "bridge_report/http/BridgeAdministrationRoutes.hpp"
 #include "bridge_report/http/ComponentArchiveRoutes.hpp"
 #include "bridge_report/http/ComponentInventoryRoutes.hpp"
@@ -322,6 +323,7 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_import_record_deletion_routes(db_client, cleanup_coordinator);
     bridge_report::http::register_word_import_routes(db_client, config);
     bridge_report::http::register_standard_routes(db_client, standards.registry);
+    bridge_report::http::register_assessment_routes(db_client, standards.registry);
     bridge_report::http::register_workspace_routes(db_client, config);
     bridge_report::http::register_component_archive_routes(db_client, config.archive_root);
     bridge_report::http::register_component_inventory_routes(db_client, standards.registry);
