@@ -2,9 +2,54 @@
 
 #include <set>
 #include <string>
+#include <utility>
+
+#include "bridge_report/inventory/BeamBridgePartCatalog.hpp"
+#include "bridge_report/inventory/NumberingTemplate.hpp"
 
 namespace bridge_report::inventory {
 namespace {
+
+// 目录路径：按《构件编号规则》模板 + 用户数量逐部件展开。
+InventoryGenerationResult generate_from_catalog(const GenerateInventoryInput& input) {
+    InventoryGenerationResult result;
+    const auto& parts = beam_bridge_parts();
+    std::set<std::pair<std::string, std::string>> unique_numbers;
+    int sort_order = 0;
+    for (const auto& selection : input.part_selections) {
+        const auto* part = find_part(parts, selection.part_key);
+        if (part == nullptr) {
+            result.entries.clear();
+            result.error_code = "unknown_part_key";
+            result.error_message = "构件部件不在梁式桥目录中：" + selection.part_key;
+            return result;
+        }
+        const std::string name =
+            selection.site_name.empty() ? part->default_name : selection.site_name;
+        const auto numbers = expand(part->number_template_with(name, selection.counts),
+                                    NumberingContext{input.span_count});
+        for (const auto& generated : numbers) {
+            if (generated.number.empty() ||
+                !unique_numbers.emplace(name, generated.number).second) {
+                result.entries.clear();
+                result.error_code = "duplicate_inventory_component_number";
+                result.error_message = "同一现场构件类型内生成了重复编号。";
+                return result;
+            }
+            GeneratedInventoryEntry entry;
+            entry.component_number = generated.number;
+            entry.site_component_type = name;
+            entry.site_name = name;
+            entry.standard_component_category_id = part->standard_component_category_id;
+            entry.structure_part = part->structure_part;
+            if (!generated.location.empty()) entry.span_or_location = generated.location;
+            entry.sort_order = ++sort_order;
+            entry.generation_key = selection.part_key + ":" + std::to_string(entry.sort_order);
+            result.entries.push_back(std::move(entry));
+        }
+    }
+    return result;
+}
 
 std::string sequential_number(const GenerationGroupInput& group, const int index) {
     return group.number_prefix + std::to_string(index) + group.number_suffix;
@@ -21,6 +66,9 @@ std::string span_member_number(
 }  // namespace
 
 InventoryGenerationResult generate_component_inventory(const GenerateInventoryInput& input) {
+    // 新路径：按部件目录 + 模板生成；旧 groups 路径保留至清理任务。
+    if (!input.part_selections.empty()) return generate_from_catalog(input);
+
     InventoryGenerationResult result;
     if (input.groups.empty()) {
         result.error_code = "inventory_groups_required";

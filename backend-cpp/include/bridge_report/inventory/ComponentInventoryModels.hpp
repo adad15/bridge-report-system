@@ -25,6 +25,13 @@ struct GenerationGroupInput {
     std::string quantity_key;
 };
 
+// 台账向导里用户对一个部件的选择：目录部件键 + 现场名（可改）+ 各数量维。
+struct PartSelection {
+    std::string part_key;
+    std::string site_name;    // 现场名；空则取目录 default_name
+    std::vector<int> counts;  // 按目录 count_inputs 顺序
+};
+
 struct GenerateInventoryInput {
     std::string standard_package_id;
     std::string template_id;
@@ -32,6 +39,7 @@ struct GenerateInventoryInput {
     int span_count{0};
     Json::Value input_quantities{Json::objectValue};
     std::vector<GenerationGroupInput> groups;
+    std::vector<PartSelection> part_selections;
 };
 
 struct GeneratedInventoryEntry {
