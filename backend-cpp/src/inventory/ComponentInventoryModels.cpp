@@ -102,6 +102,48 @@ Json::Value inventory_blockers_json(const std::vector<InventoryBlocker>& blocker
     return value;
 }
 
+// 目录路径：孔数 + 逐部件选择（part_key/site_name/counts）。
+bool parse_part_selections(
+    const Json::Value& body,
+    GenerateInventoryInput& output,
+    std::string& error_code,
+    std::string& error_message) {
+    output.part_selections.clear();
+    for (const auto& item : body["part_selections"]) {
+        PartSelection selection;
+        if (!item.isObject() || !non_empty_string(item, "part_key", selection.part_key)) {
+            error_code = "invalid_inventory_part_selection";
+            error_message = "构件部件选择必须包含部件键。";
+            return false;
+        }
+        if (item.isMember("site_name")) {
+            if (!item["site_name"].isString()) {
+                error_code = "invalid_inventory_part_selection";
+                error_message = "构件现场名称必须是文本。";
+                return false;
+            }
+            selection.site_name = item["site_name"].asString();
+        }
+        if (item.isMember("counts")) {
+            if (!item["counts"].isArray()) {
+                error_code = "invalid_inventory_part_selection";
+                error_message = "构件数量必须是整数数组。";
+                return false;
+            }
+            for (const auto& count : item["counts"]) {
+                if (!count.isInt() || count.asInt() < 0 || count.asInt() > 10000) {
+                    error_code = "invalid_inventory_part_selection";
+                    error_message = "构件数量必须是 0 到 10000 之间的整数。";
+                    return false;
+                }
+                selection.counts.push_back(count.asInt());
+            }
+        }
+        output.part_selections.push_back(std::move(selection));
+    }
+    return true;
+}
+
 bool parse_generate_inventory_input(
     const Json::Value& body,
     GenerateInventoryInput& output,
@@ -109,11 +151,19 @@ bool parse_generate_inventory_input(
     std::string& error_message) {
     if (!body.isObject() ||
         !non_empty_string(body, "standard_package_id", output.standard_package_id) ||
-        !non_empty_string(body, "template_id", output.template_id) ||
         !non_empty_string(body, "bridge_type_id", output.bridge_type_id)) {
         error_code = "invalid_inventory_generation_context";
-        error_message = "规范包、构件模板和桥型不能为空。";
+        error_message = "规范包和桥型不能为空。";
         return false;
+    }
+    // template_id 仅旧 groups 路径需要；目录路径由部件目录承担。
+    if (body.isMember("template_id")) {
+        if (!body["template_id"].isString()) {
+            error_code = "invalid_inventory_generation_context";
+            error_message = "构件模板 ID 必须是文本。";
+            return false;
+        }
+        output.template_id = body["template_id"].asString();
     }
     if (!body.isMember("span_count") || !body["span_count"].isInt() ||
         body["span_count"].asInt() < 0 || body["span_count"].asInt() > 1000) {
@@ -127,6 +177,23 @@ bool parse_generate_inventory_input(
     if (!output.input_quantities.isObject()) {
         error_code = "invalid_inventory_quantities";
         error_message = "构件数量输入必须是对象。";
+        return false;
+    }
+
+    // 目录路径优先：body 含非空 part_selections 时按部件目录解析。
+    if (body.isMember("part_selections")) {
+        if (!body["part_selections"].isArray() || body["part_selections"].empty()) {
+            error_code = "inventory_part_selections_required";
+            error_message = "至少需要选择一个构件生成部件。";
+            return false;
+        }
+        return parse_part_selections(body, output, error_code, error_message);
+    }
+
+    // 旧 groups 路径（待清理）：template_id 必填。
+    if (output.template_id.empty()) {
+        error_code = "invalid_inventory_generation_context";
+        error_message = "构件模板不能为空。";
         return false;
     }
     if (!body.isMember("groups") || !body["groups"].isArray() || body["groups"].empty()) {

@@ -182,3 +182,60 @@ TEST(ComponentInventoryRoutesTest, GenerationParserRejectsInvalidQuantity) {
     EXPECT_FALSE(inventory::parse_generate_inventory_input(body, output, code, message));
     EXPECT_EQ(code, "invalid_inventory_generation_group");
 }
+
+TEST(ComponentInventoryRoutesTest, ParsesPartSelections) {
+    Json::Value body;
+    body["standard_package_id"] = "11111111-1111-1111-1111-111111111111";
+    body["bridge_type_id"] = "h21.bridge_type.beam";
+    body["span_count"] = 5;  // 目录路径无需 template_id
+    Json::Value selection;
+    selection["part_key"] = "beam.girder";
+    selection["site_name"] = "空心板";
+    selection["counts"].append(13);
+    body["part_selections"].append(selection);
+
+    inventory::GenerateInventoryInput output;
+    std::string code, message;
+    ASSERT_TRUE(inventory::parse_generate_inventory_input(body, output, code, message)) << message;
+    ASSERT_EQ(output.part_selections.size(), 1u);
+    EXPECT_EQ(output.part_selections[0].part_key, "beam.girder");
+    EXPECT_EQ(output.part_selections[0].site_name, "空心板");
+    ASSERT_EQ(output.part_selections[0].counts.size(), 1u);
+    EXPECT_EQ(output.part_selections[0].counts[0], 13);
+    EXPECT_TRUE(output.groups.empty());
+}
+
+TEST(ComponentInventoryRoutesTest, ValidatesPartSelectionsAgainstCatalogAndTaxonomy) {
+    bridge_report::standards::StandardPackage package;
+    bridge_report::standards::StandardDefinition category;
+    category.id = "h21.component.beam.upper_bearing";
+    category.source_file = "component-taxonomy.json";
+    category.payload["bridge_type_ids"].append("h21.bridge_type.beam");
+    category.payload["structure_part"] = "superstructure";
+    category.payload["generatable"] = true;
+    package.definitions.emplace(category.id, category);
+
+    inventory::GenerateInventoryInput input;
+    input.bridge_type_id = "h21.bridge_type.beam";
+    input.span_count = 5;
+    input.part_selections.push_back({"beam.girder", "空心板", {13}});
+    std::string code, message;
+    EXPECT_TRUE(http::validate_inventory_generation_standard(input, package, code, message))
+        << message;
+
+    // 部件不在梁式桥目录。
+    input.part_selections = {{"beam.nope", "?", {1}}};
+    EXPECT_FALSE(http::validate_inventory_generation_standard(input, package, code, message));
+    EXPECT_EQ(code, "unknown_part_key");
+
+    // 数量维个数与目录定义不符（梁片数缺失）。
+    input.part_selections = {{"beam.girder", "空心板", {}}};
+    EXPECT_FALSE(http::validate_inventory_generation_standard(input, package, code, message));
+    EXPECT_EQ(code, "inventory_part_count_mismatch");
+
+    // 规范包缺少该部件的规范类别，不能静默归类。
+    input.part_selections = {{"beam.girder", "空心板", {13}}};
+    bridge_report::standards::StandardPackage empty_package;
+    EXPECT_FALSE(http::validate_inventory_generation_standard(input, empty_package, code, message));
+    EXPECT_EQ(code, "inventory_component_category_not_supported");
+}

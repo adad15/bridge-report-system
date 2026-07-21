@@ -9,7 +9,9 @@
 #include "bridge_report/db/StandardRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
+#include "bridge_report/inventory/BeamBridgePartCatalog.hpp"
 #include "bridge_report/inventory/ComponentInventoryGenerator.hpp"
+#include "bridge_report/inventory/NumberingTemplate.hpp"
 
 namespace bridge_report::http {
 namespace {
@@ -96,6 +98,67 @@ bool valid_path_ids(std::initializer_list<std::string> values) {
     return true;
 }
 
+// 逐维乘算展开规模，任一维只物化自身取值（≤1万），不构建全笛卡尔积。
+long long expected_generation_size(
+    const inventory::NumberingTemplate& tpl, const inventory::NumberingContext& ctx) {
+    long long size = 1;
+    for (const auto& slot : tpl.slots) {
+        size *= static_cast<long long>(
+            inventory::placeholder_values(ctx, slot.placeholder, slot.count).size());
+        if (size > 50000) break;
+    }
+    return size;
+}
+
+// 目录路径校验：每个选中部件在梁式桥目录中、其规范类别在包 taxonomy 且适用桥型且可生成、
+// 数量维数量与目录一致、生成总规模不超 50000。
+bool validate_part_selection_standard(
+    const inventory::GenerateInventoryInput& input,
+    const standards::StandardPackage& package,
+    std::string& error_code,
+    std::string& error_message) {
+    if (input.part_selections.empty()) {
+        error_code = "inventory_part_selections_required";
+        error_message = "至少需要选择一个构件生成部件。";
+        return false;
+    }
+    const auto& parts = inventory::beam_bridge_parts();
+    long long total = 0;
+    for (const auto& selection : input.part_selections) {
+        const auto* part = inventory::find_part(parts, selection.part_key);
+        if (part == nullptr) {
+            error_code = "unknown_part_key";
+            error_message = "构件部件不在梁式桥目录中：" + selection.part_key;
+            return false;
+        }
+        if (selection.counts.size() != part->count_inputs.size()) {
+            error_code = "inventory_part_count_mismatch";
+            error_message = "构件数量维的个数与目录定义不一致：" + selection.part_key;
+            return false;
+        }
+        const auto category = package.definitions.find(part->standard_component_category_id);
+        if (category == package.definitions.end() ||
+            category->second.source_file != "component-taxonomy.json" ||
+            !definition_supports_bridge_type(category->second, input.bridge_type_id) ||
+            category->second.payload["structure_part"].asString() != part->structure_part ||
+            !category->second.payload.get("generatable", false).asBool()) {
+            error_code = "inventory_component_category_not_supported";
+            error_message = "构件类别不属于所选规范和桥型，不能静默归入其他类别。";
+            return false;
+        }
+        const std::string name =
+            selection.site_name.empty() ? part->default_name : selection.site_name;
+        total += expected_generation_size(part->number_template_with(name, selection.counts),
+                                          inventory::NumberingContext{input.span_count});
+        if (total > 50000) {
+            error_code = "inventory_generation_too_large";
+            error_message = "单次生成的构件数量不能超过 50000。";
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace
 
 bool validate_inventory_generation_standard(
@@ -103,6 +166,10 @@ bool validate_inventory_generation_standard(
     const standards::StandardPackage& package,
     std::string& error_code,
     std::string& error_message) {
+    // 目录路径优先；旧 groups 路径保留至清理任务。
+    if (!input.part_selections.empty())
+        return validate_part_selection_standard(input, package, error_code, error_message);
+
     const auto template_it = package.definitions.find(input.template_id);
     if (template_it == package.definitions.end() ||
         template_it->second.source_file != "inventory-templates.json" ||
