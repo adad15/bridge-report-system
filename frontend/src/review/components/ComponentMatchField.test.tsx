@@ -68,4 +68,40 @@ describe("ComponentMatchField", () => {
     render(<ComponentMatchField defect={data().defects[0]} inventory={{ ...inventory, status: "草稿" }} dispatch={vi.fn()} />);
     expect(screen.getByText(/当前台账尚未确认/)).toBeInTheDocument();
   });
+
+  it("renders only linked/candidate/search entries instead of the whole inventory", () => {
+    const bigInventory: ComponentInventoryRevision = {
+      ...inventory,
+      entries: Array.from({ length: 500 }, (_, index) => ({
+        ...inventory.entries[0],
+        id: `entry-${index + 1}`,
+        bridge_component_id: `component-${index + 1}`,
+        component_number: `1-${index + 1}#`,
+        mappings: [{ ...inventory.entries[0].mappings[0], id: `mapping-${index + 1}` }],
+      })),
+    };
+    const defect = { ...data().defects[0], component_match_candidate_ids: ["component-2"] };
+    const { rerender } = render(<ComponentMatchField defect={defect} inventory={bigInventory} dispatch={vi.fn()} />);
+
+    // 默认只有占位项 + 候选，不渲染全量台账。
+    expect(screen.getAllByRole("option").length).toBe(2);
+    expect(screen.getByText("候选 · 1-2# / 主梁")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("搜索实际构件"), { target: { value: "1-49" } });
+    // 匹配 1-49#、1-490#…1-499#，仍在上限之内；候选保留。
+    const options = screen.getAllByRole("option").map((option) => option.textContent);
+    expect(options).toContain("1-49# / 主梁");
+    expect(options.length).toBeLessThanOrEqual(22);
+
+    // 无候选的病害搜索不到任何构件时，显示"没有匹配"占位。
+    rerender(
+      <ComponentMatchField
+        defect={{ ...data().defects[0], component_match_candidate_ids: [] }}
+        inventory={bigInventory}
+        dispatch={vi.fn()}
+      />
+    );
+    fireEvent.change(screen.getByLabelText("搜索实际构件"), { target: { value: "不存在" } });
+    expect(screen.getByText("没有匹配的构件")).toBeInTheDocument();
+  });
 });

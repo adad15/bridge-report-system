@@ -126,4 +126,38 @@ describe("DefectsSection", () => {
     expect(screen.getByText("病害 1")).toBeInTheDocument();
     expect(screen.getByText("病害 2")).toBeInTheDocument();
   });
+
+  it("paginates defect cards and jumps to the selected defect's page", () => {
+    const draft = data();
+    const template = draft.defects[0];
+    draft.defects = Array.from({ length: 60 }, (_, index) => ({
+      ...template,
+      candidate_id: `defect_${String(index + 1).padStart(4, "0")}`,
+      photo_numbers: [],
+    }));
+    const props = {
+      importRecordId: "record-1",
+      baseUrl: "http://backend",
+      bridgeId: "bridge-1",
+      onSelect: vi.fn(),
+      dispatch: vi.fn(),
+    };
+
+    const { rerender } = render(
+      <DefectsSection draft={draft} selectedCandidateId={null} {...props} />
+    );
+    expect(screen.getByText("病害 1")).toBeInTheDocument();
+    expect(screen.queryByText("病害 51")).not.toBeInTheDocument();
+    expect(screen.getByText(/第 1 \/ 2 页（共 60 条病害）/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+    expect(screen.getByText("病害 51")).toBeInTheDocument();
+    expect(screen.queryByText("病害 1")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "上一页" }));
+
+    // 待处理跳转选中第 55 条 -> 自动翻到它所在的第 2 页。
+    rerender(<DefectsSection draft={draft} selectedCandidateId="defect_0055" {...props} />);
+    expect(screen.getByText("病害 55")).toBeInTheDocument();
+    expect(screen.queryByText("病害 1")).not.toBeInTheDocument();
+  });
 });

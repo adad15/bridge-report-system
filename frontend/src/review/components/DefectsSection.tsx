@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type FormEvent } from "react";
+import { useRef, useState, type Dispatch, type FormEvent } from "react";
 
 import { componentInventoryErrorMessage, fetchLatestComponentInventory, type ComponentInventoryEntry, type ComponentInventoryRevision, type StructurePart as InventoryStructurePart } from "../../api/componentInventoryApi";
 import type { BridgeAnnualInspectionData, DefectCandidate } from "../../contracts/annualInspection";
@@ -49,6 +49,10 @@ const EMPTY_MANUAL_DEFECT: ManualDefectFormState = {
   defectScale: "",
 };
 
+// 数百条病害一次性全渲染会拖垮页面（每卡十余个输入框），分页渲染并在
+// 待处理跳转选中某条病害时自动翻到它所在页。
+const DEFECT_PAGE_SIZE = 50;
+
 // 禁用策略改为逐控件（DefectPhotoGroup / UnlinkedPhotosPanel 内部处理），
 // 不再用 fieldset disabled 一揽子禁用——那样会连"查看照片"等只读动作一起杀掉。
 export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, dispatch, disabled = false, allowStructureChanges = false, componentInventory = null, isDefectEditable }: DefectsSectionProps) {
@@ -58,6 +62,25 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const [loadingInventory, setLoadingInventory] = useState(false);
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState<ManualDefectFormState>(EMPTY_MANUAL_DEFECT);
+  const [page, setPage] = useState(0);
+  const lastSelectedRef = useRef<string | null>(null);
+
+  const pageCount = Math.max(1, Math.ceil(draft.defects.length / DEFECT_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  // 选中病害变化时（待处理跳转/展开）同步翻到它所在页；渲染期 setState 让同一次提交
+  // 就渲染出目标页，父层的滚动定位随后就能找到对应 DOM 锚点。
+  if (selectedCandidateId && selectedCandidateId !== lastSelectedRef.current) {
+    lastSelectedRef.current = selectedCandidateId;
+    const index = draft.defects.findIndex((defect) => defect.candidate_id === selectedCandidateId);
+    if (index >= 0) {
+      const targetPage = Math.floor(index / DEFECT_PAGE_SIZE);
+      if (targetPage !== currentPage) setPage(targetPage);
+    }
+  }
+  const pageDefects = draft.defects.slice(
+    currentPage * DEFECT_PAGE_SIZE,
+    (currentPage + 1) * DEFECT_PAGE_SIZE
+  );
 
   const openAddForm = async () => {
     setShowAddForm(true);
@@ -147,12 +170,12 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         <div className="table-scroll">
           {/* 每条病害是一张自带标签的表单卡片（DefectPhotoGroup），不再需要共享表头。 */}
           <table className="data-table defect-photo-table">
-          {draft.defects.map((defect, index) => (
+          {pageDefects.map((defect, index) => (
               <DefectPhotoGroup
                 key={defect.candidate_id}
                 draft={draft}
                 defect={defect}
-                sequenceNumber={index + 1}
+                sequenceNumber={currentPage * DEFECT_PAGE_SIZE + index + 1}
                 importRecordId={importRecordId}
                 baseUrl={baseUrl}
                 expanded={selectedCandidateId === defect.candidate_id}
@@ -166,6 +189,13 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
             ))}
           </table>
         </div>
+        {pageCount > 1 ? (
+          <div className="defect-pagination">
+            <button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button>
+            <span>第 {currentPage + 1} / {pageCount} 页（共 {draft.defects.length} 条病害）</span>
+            <button type="button" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</button>
+          </div>
+        ) : null}
         <UnlinkedPhotosPanel draft={draft} importRecordId={importRecordId} baseUrl={baseUrl} selectedPhotoCandidateId={selectedPhotoCandidateId} dispatch={dispatch} disabled={disabled} />
       </fieldset>
     </section>

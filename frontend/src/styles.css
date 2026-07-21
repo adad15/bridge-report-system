@@ -584,6 +584,17 @@ body {
   margin-top: 10px;
 }
 
+.defect-pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+}
+
+.component-match-field .component-match-search {
+  margin-bottom: 4px;
+}
+
 .defect-photo-table {
   width: 100%;
   min-width: 0;
