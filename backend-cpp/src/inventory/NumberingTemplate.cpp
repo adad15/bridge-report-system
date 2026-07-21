@@ -1,6 +1,15 @@
 #include "bridge_report/inventory/NumberingTemplate.hpp"
 
 namespace bridge_report::inventory {
+namespace {
+
+std::string replace_first(std::string value, const std::string& from, const std::string& to) {
+    const auto pos = value.find(from);
+    if (pos != std::string::npos) value.replace(pos, from.size(), to);
+    return value;
+}
+
+}  // namespace
 
 std::vector<PlaceValue> placeholder_values(
     const NumberingContext& ctx, const Placeholder placeholder, const int count) {
@@ -35,6 +44,26 @@ std::vector<PlaceValue> placeholder_values(
             break;
     }
     return values;
+}
+
+std::vector<GeneratedNumber> expand(const NumberingTemplate& tpl, const NumberingContext& ctx) {
+    std::vector<GeneratedNumber> results{{tpl.pattern, ""}};
+    for (const auto& slot : tpl.slots) {
+        const auto values = placeholder_values(ctx, slot.placeholder, slot.count);
+        std::vector<GeneratedNumber> next;
+        next.reserve(results.size() * values.size());
+        for (const auto& acc : results) {
+            for (const auto& value : values) {
+                GeneratedNumber item;
+                item.number = replace_first(acc.number, slot.token, value.token);
+                // 位置取最外层有位置的占位符：当前还没有位置且本维有位置时填。
+                item.location = acc.location.empty() ? value.location : acc.location;
+                next.push_back(std::move(item));
+            }
+        }
+        results = std::move(next);
+    }
+    return results;
 }
 
 }  // namespace bridge_report::inventory

@@ -25,3 +25,63 @@ TEST(NumberingRangeTest, SkeletonRangesFollowTopology) {
     EXPECT_EQ(nt::placeholder_values(ctx, nt::Placeholder::Count, 3),
               (std::vector<nt::PlaceValue>{{"1", ""}, {"2", ""}, {"3", ""}}));
 }
+
+TEST(NumberingExpandTest, TwoLevelSpanMember) {
+    nt::NumberingTemplate tpl;
+    tpl.pattern = "{span}-{c1}#梁";
+    tpl.slots = {{"{span}", nt::Placeholder::Span, 0}, {"{c1}", nt::Placeholder::Count, 13}};
+    const auto out = nt::expand(tpl, nt::NumberingContext{5});
+    ASSERT_EQ(out.size(), 65u);
+    EXPECT_EQ(out.front().number, "1-1#梁");
+    EXPECT_EQ(out.front().location, "第1孔");
+    EXPECT_EQ(out.back().number, "5-13#梁");
+    EXPECT_EQ(out.back().location, "第5孔");
+}
+
+TEST(NumberingExpandTest, ThreeLevelDiaphragm) {
+    nt::NumberingTemplate tpl;
+    tpl.pattern = "{span}-{c1}-{c2}#横隔梁";
+    tpl.slots = {{"{span}", nt::Placeholder::Span, 0},
+                 {"{c1}", nt::Placeholder::Count, 12},
+                 {"{c2}", nt::Placeholder::Count, 2}};
+    const auto out = nt::expand(tpl, nt::NumberingContext{5});
+    ASSERT_EQ(out.size(), 5u * 12u * 2u);
+    EXPECT_EQ(out.front().number, "1-1-1#横隔梁");
+    EXPECT_EQ(out.back().number, "5-12-2#横隔梁");
+}
+
+TEST(NumberingExpandTest, SupportLineAndAbutmentAndSide) {
+    nt::NumberingTemplate base;
+    base.pattern = "{line}基础";
+    base.slots = {{"{line}", nt::Placeholder::SupportLine, 0}};
+    const auto base_out = nt::expand(base, nt::NumberingContext{5});
+    ASSERT_EQ(base_out.size(), 6u);
+    EXPECT_EQ(base_out.front().number, "0#台基础");
+    EXPECT_EQ(base_out[1].number, "1#墩基础");
+    EXPECT_EQ(base_out.back().number, "5#台基础");
+
+    nt::NumberingTemplate wing;
+    wing.pattern = "{ab}#台{side}侧翼墙";
+    wing.slots = {{"{ab}", nt::Placeholder::Abutment, 0}, {"{side}", nt::Placeholder::Side, 0}};
+    const auto wing_out = nt::expand(wing, nt::NumberingContext{5});
+    ASSERT_EQ(wing_out.size(), 4u);
+    EXPECT_EQ(wing_out.front().number, "0#台左侧翼墙");
+    EXPECT_EQ(wing_out.back().number, "5#台右侧翼墙");
+
+    nt::NumberingTemplate walk;
+    walk.pattern = "{side}侧人行道";
+    walk.slots = {{"{side}", nt::Placeholder::Side, 0}};
+    const auto walk_out = nt::expand(walk, nt::NumberingContext{5});
+    ASSERT_EQ(walk_out.size(), 2u);
+    EXPECT_EQ(walk_out.front().number, "左侧人行道");
+}
+
+TEST(NumberingExpandTest, WholeBridgeNoPlaceholder) {
+    nt::NumberingTemplate tpl;
+    tpl.pattern = "排水系统";
+    tpl.slots = {};
+    const auto out = nt::expand(tpl, nt::NumberingContext{5});
+    ASSERT_EQ(out.size(), 1u);
+    EXPECT_EQ(out.front().number, "排水系统");
+    EXPECT_EQ(out.front().location, "");
+}
