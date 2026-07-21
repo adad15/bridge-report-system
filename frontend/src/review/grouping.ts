@@ -278,6 +278,7 @@ function tallyReviewStatus(
 export function buildStatistics(
   data: BridgeAnnualInspectionData,
   _includeImportedRatings = true,
+  precomputedAttentionCount?: number,
 ): ReviewCounts {
   const counts: ReviewCounts = {
     defect_count: data.defects.length,
@@ -304,7 +305,9 @@ export function buildStatistics(
     }
   }
 
-  counts.needs_attention_count = needsAttention(data).length;
+  // 大量病害时 needsAttention 不便宜；调用方（ReviewWorkspacePage）已单独算过一次时
+  // 直接传入长度，避免每次 draft 变动重复计算同一份结果。
+  counts.needs_attention_count = precomputedAttentionCount ?? needsAttention(data).length;
 
   return counts;
 }

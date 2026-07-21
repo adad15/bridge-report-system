@@ -571,6 +571,13 @@ body {
   font-size: 16px;
 }
 
+.attention-pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
 .defect-photo-table {
   width: 100%;
   min-width: 0;

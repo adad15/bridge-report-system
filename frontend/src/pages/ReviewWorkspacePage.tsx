@@ -202,14 +202,17 @@ function ReviewWorkspaceLoaded({
   const [assessmentState, assessmentDispatch] = useReducer(assessmentReducer, initialAssessmentState);
   const assessmentAbortRef = useRef<AbortController | null>(null);
 
+  // needsAttention 对上千条病害是 O(n) 级扫描；这里算一次，counts 与 attentionItems 复用同一份，
+  // 避免每次 draft 变动重复计算（buildStatistics 收到长度后就不再自己算一遍）。
+  const draftAttention = useMemo(() => needsAttention(draft), [draft]);
   const counts = useMemo(
-    () => buildStatistics(draft, false),
-    [draft],
+    () => buildStatistics(draft, false, draftAttention.length),
+    [draft, draftAttention],
   );
   const attentionItems = useMemo(() => [
-    ...needsAttention(draft).filter((item) => item.kind !== "rating"),
+    ...draftAttention.filter((item) => item.kind !== "rating"),
     ...(assessmentState.response?.issues ?? []).map(assessmentIssueToAttention),
-  ], [draft, assessmentState.response]);
+  ], [draftAttention, assessmentState.response]);
   const displayedCounts = useMemo(() => ({
     ...counts,
     rating_item_count: assessmentState.response?.result
