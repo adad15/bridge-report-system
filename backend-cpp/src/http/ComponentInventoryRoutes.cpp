@@ -9,7 +9,7 @@
 #include "bridge_report/db/StandardRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
-#include "bridge_report/inventory/BeamBridgePartCatalog.hpp"
+#include "bridge_report/inventory/ComponentPartCatalog.hpp"
 #include "bridge_report/inventory/ComponentInventoryGenerator.hpp"
 #include "bridge_report/inventory/NumberingTemplate.hpp"
 
@@ -122,7 +122,7 @@ bool validate_part_selection_standard(
         error_message = "至少需要选择一个构件生成部件。";
         return false;
     }
-    const auto& parts = inventory::beam_bridge_parts();
+    const auto& parts = inventory::component_parts();
     long long total = 0;
     for (const auto& selection : input.part_selections) {
         const auto* part = inventory::find_part(parts, selection.part_key);

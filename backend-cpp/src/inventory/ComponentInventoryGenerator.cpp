@@ -4,7 +4,7 @@
 #include <string>
 #include <utility>
 
-#include "bridge_report/inventory/BeamBridgePartCatalog.hpp"
+#include "bridge_report/inventory/ComponentPartCatalog.hpp"
 #include "bridge_report/inventory/NumberingTemplate.hpp"
 
 namespace bridge_report::inventory {
@@ -13,7 +13,7 @@ namespace {
 // 目录路径：按《构件编号规则》模板 + 用户数量逐部件展开。
 InventoryGenerationResult generate_from_catalog(const GenerateInventoryInput& input) {
     InventoryGenerationResult result;
-    const auto& parts = beam_bridge_parts();
+    const auto& parts = component_parts();
     std::set<std::pair<std::string, std::string>> unique_numbers;
     int sort_order = 0;
     for (const auto& selection : input.part_selections) {
