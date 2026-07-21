@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  advanceBridgeCleanup,
   bridgeAdministrationError,
   deleteBridges,
   fetchBridgeDeletionImpact,
+  type BridgeCleanupProgress,
   type BridgeDeletionPreview,
   type DeleteBridgesResult,
 } from "../api/bridgeAdministrationApi";
@@ -24,12 +26,82 @@ export function DeleteBridgesDialog({ bridgeIds, onClose, onSelectionChanged, on
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DeleteBridgesResult | null>(null);
+  const [progress, setProgress] = useState<Record<string, BridgeCleanupProgress>>({});
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
 
   useEffect(() => {
+    // 删除完成后不再重新拉取影响预览：此时桥梁已不存在，重拉必然 404，
+    // 会在成功结果旁误报“删除影响加载失败”。
+    if (result) return;
     fetchBridgeDeletionImpact(backendBaseUrl, bridgeIds)
       .then(setPreview)
       .catch(() => setError("删除影响加载失败。"));
-  }, [bridgeIds]);
+  }, [bridgeIds, result]);
+
+  // 删除成功后轮询推进独占文件清理：每轮对每个未清完的审计调用一次 advance，
+  // 后端每轮再领一批，直到清完或某一轮不再有进展（余下的交给后台定时器按退避重试）。
+  useEffect(() => {
+    if (!result) return;
+    const audits = result.results
+      .filter((item) => item.status === "deleted" && item.audit_id && (item.total_file_count ?? 0) > 0)
+      .map((item) => ({
+        auditId: item.audit_id as string,
+        total: item.total_file_count ?? 0,
+        pending: item.pending_file_count ?? 0,
+      }));
+    if (audits.length === 0) return;
+
+    setProgress((current) => {
+      const next = { ...current };
+      for (const audit of audits) {
+        if (!next[audit.auditId]) {
+          next[audit.auditId] = {
+            total: audit.total,
+            completed: Math.max(audit.total - audit.pending, 0),
+            failed: 0,
+            pending: audit.pending,
+            done: audit.pending === 0,
+          };
+        }
+      }
+      return next;
+    });
+
+    let cancelled = false;
+    let timer: number | undefined;
+    const settled = new Set(audits.filter((audit) => audit.pending === 0).map((audit) => audit.auditId));
+
+    const pump = async () => {
+      await Promise.all(
+        audits
+          .filter((audit) => !settled.has(audit.auditId))
+          .map(async (audit) => {
+            try {
+              const next = await advanceBridgeCleanup(backendBaseUrl, audit.auditId);
+              if (cancelled) return;
+              const previous = progressRef.current[audit.auditId];
+              // 本轮没有新增已清理且仍有待清理 -> 余下的处于退避重试，继续轮询也无用，就地收尾。
+              if (next.done || (previous && next.completed <= previous.completed)) {
+                settled.add(audit.auditId);
+              }
+              setProgress((current) => ({ ...current, [audit.auditId]: next }));
+            } catch {
+              // 单次推进失败不致命：交给后台定时器兜底，下一轮继续尝试。
+            }
+          })
+      );
+      if (cancelled) return;
+      if (settled.size >= audits.length) return;
+      timer = window.setTimeout(() => void pump(), 800);
+    };
+    void pump();
+
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [result]);
 
   const canDelete = useMemo(
     () => Boolean(preview && reason.trim() && confirmation === preview.confirmation_text && !busy),
@@ -64,7 +136,7 @@ export function DeleteBridgesDialog({ bridgeIds, onClose, onSelectionChanged, on
     <div className="dialog-backdrop" role="presentation">
       <section className="workspace-dialog delete-bridges-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-bridges-title">
         <h2 id="delete-bridges-title">永久删除桥梁档案</h2>
-        {!preview && !error ? <p>正在核对删除影响…</p> : null}
+        {!preview && !error && !result ? <p>正在核对删除影响…</p> : null}
         {preview && !result ? (
           <>
             <div className="danger-callout">
@@ -92,14 +164,39 @@ export function DeleteBridgesDialog({ bridgeIds, onClose, onSelectionChanged, on
         {result ? (
           <div>
             <h3>已处理</h3>
-            {result.results.map((item) => (
-              <p key={item.bridge_id}>
-                {item.status === "deleted" ? "✓" : "✗"} {item.system_number} {item.bridge_name}：
-                {item.status === "deleted" && item.file_cleanup_status === "pending"
-                  ? `业务档案已完整删除；${item.pending_file_count} 个孤立归档文件等待后台清理`
-                  : item.status === "deleted" ? "已删除" : item.message}
-              </p>
-            ))}
+            {result.results.map((item) => {
+              const bar = item.status === "deleted" && item.audit_id ? progress[item.audit_id] : undefined;
+              return (
+                <div className="bridge-delete-result" key={item.bridge_id}>
+                  <p>
+                    {item.status === "deleted" ? "✓" : "✗"} {item.system_number} {item.bridge_name}：
+                    {item.status === "deleted" ? "业务档案已完整删除" : item.message}
+                  </p>
+                  {bar && bar.total > 0 ? (
+                    <div className="cleanup-progress">
+                      <div
+                        className="cleanup-progress-track"
+                        role="progressbar"
+                        aria-label={`${item.bridge_name} 归档文件清理进度`}
+                        aria-valuemin={0}
+                        aria-valuemax={bar.total}
+                        aria-valuenow={bar.completed}
+                      >
+                        <div
+                          className="cleanup-progress-fill"
+                          style={{ width: `${Math.round((bar.completed / bar.total) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="cleanup-progress-label">
+                        {bar.done
+                          ? `归档文件已全部清理（共 ${bar.total} 个）`
+                          : `已清理 ${bar.completed} / ${bar.total}，剩余 ${bar.pending} 个由后台继续清理`}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         ) : null}
         {error ? <p className="error-text" role="alert">{error}</p> : null}

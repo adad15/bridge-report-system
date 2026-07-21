@@ -220,7 +220,8 @@ void register_bridge_administration_routes(
                             pending = cleanup_coordinator->pending_bridge_items(*outcome.deletion_audit_id);
                         } catch (...) {}
                         result["file_cleanup_status"] = pending == 0 ? "completed" : "pending";
-                        result["pending_file_count"] = pending; break;
+                        result["pending_file_count"] = pending;
+                        result["total_file_count"] = item.plan.counts.archived_files_to_delete; break;
                     }
                     case deletion::DeleteBridgeStatus::Locked: result["status"] = "locked"; result["message"] = "该桥梁有导入记录正在编辑。"; break;
                     case deletion::DeleteBridgeStatus::ImpactChanged: result["status"] = "impact_changed"; result["message"] = "删除影响范围已经变化，请重新预览。"; break;
@@ -232,6 +233,45 @@ void register_bridge_administration_routes(
             respond_json(callback, response);
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Delete});
+
+    // 删除后前端轮询：每次调用先推进一批独占文件清理，再回报进度。既给确定性进度条，
+    // 又不必等 5 分钟一次的后台定时器，也不依赖后端是否被频繁重启。
+    register_options_handler("/api/bridge-deletion-audits/{audit_id}/cleanup/advance");
+    drogon::app().registerHandler(
+        "/api/bridge-deletion-audits/{audit_id}/cleanup/advance",
+        [db_client, cleanup_coordinator](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                                         const std::string& audit_id) {
+            try {
+                std::optional<db::AuthUser> user;
+                if (!require_admin(db_client, request, callback, user)) return;
+                if (!is_valid_uuid(audit_id)) {
+                    respond_json(callback, make_error_body("bridge_deletion_audit_not_found", "删除审计不存在。"),
+                                 drogon::k404NotFound); return;
+                }
+                const auto exists = db_client->execSqlSync(
+                    "select 1 from bridge_deletion_audits where id=$1::uuid", audit_id);
+                if (exists.empty()) {
+                    respond_json(callback, make_error_body("bridge_deletion_audit_not_found", "删除审计不存在。"),
+                                 drogon::k404NotFound); return;
+                }
+                try { cleanup_coordinator->process_bridge_audit(audit_id); } catch (...) {}
+                const auto counts = db_client->execSqlSync(
+                    "select count(*)::int as total,"
+                    "count(*) filter (where status='已完成')::int as completed,"
+                    "count(*) filter (where status='失败待重试')::int as failed,"
+                    "count(*) filter (where status<>'已完成')::int as pending "
+                    "from bridge_archived_file_deletion_queue where bridge_deletion_audit_id=$1::uuid",
+                    audit_id);
+                Json::Value body;
+                const int pending = counts[0]["pending"].as<int>();
+                body["total"] = counts[0]["total"].as<int>();
+                body["completed"] = counts[0]["completed"].as<int>();
+                body["failed"] = counts[0]["failed"].as<int>();
+                body["pending"] = pending;
+                body["done"] = pending == 0;
+                respond_json(callback, body);
+            } catch (...) { respond_db_unavailable(callback); }
+        }, {drogon::Post});
 }
 
 }  // namespace bridge_report::http

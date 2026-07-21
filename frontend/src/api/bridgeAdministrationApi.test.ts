@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createBridge, deleteBridges, fetchBridgeDeletionImpact } from "./bridgeAdministrationApi";
+import { advanceBridgeCleanup, createBridge, deleteBridges, fetchBridgeDeletionImpact } from "./bridgeAdministrationApi";
 
 describe("bridgeAdministrationApi", () => {
   beforeEach(() => vi.stubGlobal("fetch", vi.fn()));
@@ -14,5 +14,15 @@ describe("bridgeAdministrationApi", () => {
     expect(vi.mocked(fetch).mock.calls[0][1]).toMatchObject({ method: "POST" });
     expect(vi.mocked(fetch).mock.calls[1][0]).toBe("http://backend/api/bridges/deletion-impact");
     expect(vi.mocked(fetch).mock.calls[2][1]).toMatchObject({ method: "DELETE" });
+  });
+
+  it("advances bridge file cleanup with an encoded audit id", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ total: 10, completed: 4, failed: 0, pending: 6, done: false }), { status: 200 })
+    );
+    const progress = await advanceBridgeCleanup("http://backend", "audit/1");
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("http://backend/api/bridge-deletion-audits/audit%2F1/cleanup/advance");
+    expect(vi.mocked(fetch).mock.calls[0][1]).toMatchObject({ method: "POST" });
+    expect(progress).toEqual({ total: 10, completed: 4, failed: 0, pending: 6, done: false });
   });
 });

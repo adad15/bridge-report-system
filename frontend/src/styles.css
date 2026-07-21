@@ -74,6 +74,12 @@ body {
 .bridge-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 .bridge-delete-impact { border: 1px solid #d8dee9; border-radius: 8px; padding: 0.75rem; margin: 0.75rem 0; }
 .delete-bridges-dialog { width: min(760px, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow: auto; }
+.bridge-delete-result { margin: 0.5rem 0; }
+.bridge-delete-result p { margin: 0; }
+.cleanup-progress { display: grid; gap: 0.3rem; margin: 0.35rem 0 0.6rem; }
+.cleanup-progress-track { height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+.cleanup-progress-fill { height: 100%; background: #2456c9; border-radius: 999px; transition: width 0.3s ease; }
+.cleanup-progress-label { font-size: 0.85rem; color: #5b7891; }
 
 .top-nav-logout {
   border: 1px solid #d9e0e8;
