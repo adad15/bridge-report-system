@@ -7,14 +7,14 @@ describe("expandTemplate", () => {
     const out = expandTemplate("{span}-{c1}#{name}", "梁", [13], 5);
     expect(out.length).toBe(65);
     expect(out[0]).toEqual({ number: "1-1#梁", location: "第1孔" });
-    expect(out.at(-1)).toEqual({ number: "5-13#梁", location: "第5孔" });
+    expect(out[out.length - 1]).toEqual({ number: "5-13#梁", location: "第5孔" });
   });
 
   it("expands three-level diaphragm", () => {
     const out = expandTemplate("{span}-{c1}-{c2}#{name}", "横隔梁", [12, 2], 5);
     expect(out.length).toBe(120);
     expect(out[0].number).toBe("1-1-1#横隔梁");
-    expect(out.at(-1)!.number).toBe("5-12-2#横隔梁");
+    expect(out[out.length - 1].number).toBe("5-12-2#横隔梁");
   });
 
   it("expands support line, abutment×side", () => {

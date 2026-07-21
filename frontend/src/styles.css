@@ -2403,6 +2403,65 @@ body {
   overflow-wrap: anywhere;
 }
 
+.inventory-part-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.inventory-part-group {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.inventory-part-group h5 {
+  margin: 0.4rem 0 0;
+  color: #5a6b7b;
+}
+
+.inventory-part-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #dce3ea;
+  border-radius: 9px;
+  background: #fbfcfe;
+}
+
+.inventory-part-enable {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.inventory-part-enable input {
+  width: auto;
+}
+
+.inventory-provisional-badge {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: #fff1d6;
+  color: #7a5410;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.inventory-part-body {
+  display: grid;
+  gap: 0.6rem;
+  padding-left: 1.6rem;
+}
+
+.inventory-part-preview {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: #f5f7fa;
+  color: #405061;
+  overflow-wrap: anywhere;
+}
+
 .inventory-blockers {
   padding: 0.9rem 1rem;
   border: 1px solid #edc36b;

@@ -1,125 +1,44 @@
 import { useEffect, useMemo, useState } from "react";
 
-import type {
-  GenerateComponentInventoryInput,
-  InventoryGenerationGroup,
-  NumberingMode,
+import {
+  componentInventoryErrorMessage,
+  fetchPartCatalog,
+  type CatalogPart,
+  type GenerateComponentInventoryInput,
+  type PartSelection,
 } from "../api/componentInventoryApi";
 import {
   fetchStandardCatalog,
   fetchStandardPackages,
   standardsErrorMessage,
   type StandardCatalog,
-  type StandardComponentCategory,
 } from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
+import { expandTemplate } from "./inventoryNumbering";
 
-interface KindDraft {
-  name: string;
-  quantity: string;
-  numberingMode: NumberingMode;
-  prefix: string;
-  suffix: string;
-}
-
-interface CardDraft {
-  categoryId: string;
-  kinds: KindDraft[];
-}
-
-export interface InventoryPreviewItem {
-  quantityKey: string;
-  siteType: string;
-  count: number;
-  numbers: string[];
-}
-
-const quantityLabels: Record<string, string> = {
-  span_count: "跨数",
-  upper_bearing_members_per_span: "上部承重构件数（全桥）",
-  upper_general_members_per_span: "上部一般构件数（全桥）",
-  bearings_per_support_line: "支座数量",
-  pier_count: "桥墩数量",
-  abutment_count: "桥台数量",
-  main_arch_ring_count: "主拱圈数量",
-  spandrel_structure_count: "拱上结构数量",
-  deck_slab_count: "桥面板数量",
-  arch_segment_count: "拱片数量",
-  transverse_link_count: "横向联结系数量",
-  arch_rib_count: "拱肋数量",
-  column_count: "立柱数量",
-  hanger_count: "吊杆／吊索数量",
-  tie_rod_count: "系杆数量",
-  deck_slab_or_beam_count: "桥面板（梁）数量",
-  main_cable_count: "主缆数量",
-  cable_clamp_count: "索夹数量",
-  stiffening_girder_count: "加劲梁数量",
-  tower_count: "索塔数量",
-  anchorage_count: "锚碇数量",
-  stay_cable_count: "斜拉索系统数量",
-  main_girder_count: "主梁数量",
+const structurePartLabels: Record<string, string> = {
+  superstructure: "上部结构",
+  substructure: "下部结构",
+  deck_system: "桥面系",
+  overall: "整体",
+  other: "其他",
 };
+const structurePartOrder = ["superstructure", "substructure", "deck_system", "overall", "other"];
 
-export function quantityLabel(key: string): string {
-  return quantityLabels[key] ?? key;
+function validSpanCount(raw: string): boolean {
+  const value = Number(raw);
+  return raw !== "" && Number.isInteger(value) && value >= 0 && value <= 1000;
 }
 
-export function previewInventoryNumbers(
-  groups: InventoryGenerationGroup[],
-  spanCount: number,
-  limit = 8
-): InventoryPreviewItem[] {
-  return groups.map((group) => {
-    const numbers: string[] = [];
-    const outerCount = group.numbering_mode === "span_member"
-      ? spanCount
-      : group.numbering_mode === "pier_line"
-        ? Math.max(spanCount - 1, 0)
-        : 1;
-    const total = outerCount * group.quantity;
-    for (let outer = 1; outer <= outerCount && numbers.length < limit; outer += 1) {
-      for (let inner = 1; inner <= group.quantity && numbers.length < limit; inner += 1) {
-        numbers.push(
-          `${group.number_prefix ?? ""}${
-            group.numbering_mode === "sequential" ? inner : `${outer}-${inner}`
-          }${group.number_suffix ?? "#"}`
-        );
-      }
-    }
-    return { quantityKey: group.quantity_key, siteType: group.site_component_type, count: total, numbers };
-  });
-}
-
-function compatibleCategories(catalog: StandardCatalog, bridgeTypeId: string, references: string[]) {
-  return catalog.component_categories.filter(
-    (category) =>
-      category.generatable &&
-      category.bridge_type_ids.includes(bridgeTypeId) &&
-      (references.length === 0 || references.includes(category.id))
-  );
-}
-
-function templateNumberingMode(key: string): NumberingMode {
-  return key.includes("per_span") ? "span_member" : "sequential";
-}
-
-function newKind(name: string, numberingMode: NumberingMode, quantity: string): KindDraft {
-  return { name, quantity, numberingMode, prefix: "", suffix: "#" };
-}
-
-function defaultTemplateCard(key: string): CardDraft {
-  return { categoryId: "", kinds: [newKind("", templateNumberingMode(key), "")] };
-}
-
-function defaultExtraCard(category: StandardComponentCategory): CardDraft {
-  return { categoryId: category.id, kinds: [newKind(category.name, "sequential", "0")] };
-}
-
-function kindTotal(card: CardDraft): number {
-  return card.kinds.reduce((total, kind) => {
-    const value = Number(kind.quantity);
-    return Number.isInteger(value) && value > 0 ? total + value : total;
-  }, 0);
+// 把某部件的数量维字符串解析为整数数组；任一维空或越界返回 null。
+function parseCounts(raw: string[]): number[] | null {
+  const parsed: number[] = [];
+  for (const item of raw) {
+    const value = Number(item);
+    if (item === "" || !Number.isInteger(value) || value < 0 || value > 10000) return null;
+    parsed.push(value);
+  }
+  return parsed;
 }
 
 export function BridgeInventoryWizard({
@@ -131,9 +50,13 @@ export function BridgeInventoryWizard({
   const [packageId, setPackageId] = useState("");
   const [bridgeTypeId, setBridgeTypeId] = useState("");
   const [spanCount, setSpanCount] = useState("");
-  const [cards, setCards] = useState<Record<string, CardDraft>>({});
+  const [parts, setParts] = useState<CatalogPart[]>([]);
+  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [counts, setCounts] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [partsError, setPartsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,264 +84,127 @@ export function BridgeInventoryWizard({
   }, []);
 
   const catalog = catalogs.find((item) => item.package.id === packageId) ?? null;
-  const template = catalog?.inventory_templates.find((item) => item.bridge_type_id === bridgeTypeId) ?? null;
-  const categories = useMemo(
-    () =>
-      catalog && template
-        ? compatibleCategories(catalog, bridgeTypeId, template.references ?? [])
-        : [],
-    [catalog, template, bridgeTypeId]
-  );
-  const extraCategories = useMemo(
-    () =>
-      catalog && template
-        ? catalog.component_categories.filter(
-            (category) =>
-              category.generatable &&
-              category.bridge_type_ids.includes(bridgeTypeId) &&
-              !categories.some((item) => item.id === category.id)
-          )
-        : [],
-    [catalog, template, bridgeTypeId, categories]
-  );
 
-  const derived = useMemo(() => {
-    if (!catalog || !template) return null;
-    const parsedQuantities: Record<string, number> = {};
-    const groups: InventoryGenerationGroup[] = [];
-    let valid = true;
-
-    if (template.quantity_inputs.includes("span_count")) {
-      const value = Number(spanCount);
-      if (spanCount === "" || !Number.isInteger(value) || value < 0 || value > 1000) valid = false;
-      parsedQuantities.span_count = spanCount === "" ? 0 : value;
-    }
-
-    const collect = (
-      key: string,
-      card: CardDraft,
-      category: StandardComponentCategory | undefined,
-      blankIsZero: boolean
-    ): number => {
-      let inputSum = 0;
-      for (const kind of card.kinds) {
-        const raw = kind.quantity === "" && blankIsZero ? "0" : kind.quantity;
-        const value = Number(raw);
-        if (raw === "" || !Number.isInteger(value) || value < 0 || value > 10000) {
-          valid = false;
-          continue;
-        }
-        if (value === 0) continue;
-        if (!category || !kind.name.trim()) {
-          valid = false;
-          continue;
-        }
-        // 数量一律按全桥填写；按跨编号除以跨数，按墩位编号除以（跨数-1），除不尽视为无效。
-        let quantity = value;
-        if (kind.numberingMode !== "sequential") {
-          const spans = parsedQuantities.span_count ?? 0;
-          const divisor = kind.numberingMode === "span_member" ? spans : spans - 1;
-          if (!(divisor > 0) || value % divisor !== 0) {
-            valid = false;
-            continue;
-          }
-          quantity = value / divisor;
-        }
-        inputSum += quantity;
-        groups.push({
-          site_component_type: kind.name.trim(),
-          site_name: kind.name.trim(),
-          standard_component_category_id: category.id,
-          structure_part: category.structure_part,
-          numbering_mode: kind.numberingMode,
-          quantity,
-          quantity_key: key,
-          number_prefix: kind.prefix,
-          number_suffix: kind.suffix,
-        });
-      }
-      if (inputSum > 10000) valid = false;
-      return inputSum;
-    };
-
-    for (const key of template.quantity_inputs) {
-      if (key === "span_count") continue;
-      const card = cards[key] ?? defaultTemplateCard(key);
-      const category = categories.find((item) => item.id === card.categoryId);
-      parsedQuantities[key] = collect(key, card, category, false);
-    }
-    for (const category of extraCategories) {
-      const card = cards[category.id] ?? defaultExtraCard(category);
-      const sum = collect(category.id, card, category, true);
-      if (sum > 0) parsedQuantities[category.id] = sum;
-    }
-    if (groups.length === 0) valid = false;
-    return { parsedQuantities, groups, valid };
-  }, [catalog, template, categories, extraCategories, cards, spanCount]);
-
+  // 选定规范包 + 桥型后拉取该桥型可用部件目录。
   useEffect(() => {
-    if (!derived || !template) {
-      onPlanChange(null);
+    if (!packageId || !bridgeTypeId) {
+      setParts([]);
+      setPartsError(null);
       return;
     }
+    let cancelled = false;
+    fetchPartCatalog(backendBaseUrl, packageId, bridgeTypeId)
+      .then((loaded) => {
+        if (cancelled) return;
+        setParts(loaded);
+        setPartsError(null);
+      })
+      .catch((caught) => {
+        if (cancelled) return;
+        setParts([]);
+        setPartsError(componentInventoryErrorMessage(caught));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [packageId, bridgeTypeId]);
+
+  const partName = (part: CatalogPart) => names[part.part_key] ?? part.default_name;
+  const partCounts = (part: CatalogPart) =>
+    counts[part.part_key] ?? part.count_inputs.map(() => "");
+
+  const derived = useMemo(() => {
+    const spanValid = validSpanCount(spanCount);
+    const span = spanValid ? Number(spanCount) : 0;
+    const selections: PartSelection[] = [];
+    let valid = spanValid;
+    for (const part of parts) {
+      if (!enabled[part.part_key]) continue;
+      const name = partName(part).trim();
+      const parsed = parseCounts(partCounts(part));
+      if (!name || parsed === null) {
+        valid = false;
+        continue;
+      }
+      selections.push({ part_key: part.part_key, site_name: name, counts: parsed });
+    }
+    if (selections.length === 0) valid = false;
+    return { selections, valid, span };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parts, enabled, names, counts, spanCount]);
+
+  useEffect(() => {
     onPlanChange(
       derived.valid
         ? {
             standard_package_id: packageId,
-            template_id: template.id,
             bridge_type_id: bridgeTypeId,
-            span_count: derived.parsedQuantities.span_count ?? 0,
-            input_quantities: derived.parsedQuantities,
-            groups: derived.groups,
+            span_count: derived.span,
+            part_selections: derived.selections,
           }
         : null
     );
-  }, [bridgeTypeId, derived, onPlanChange, packageId, template]);
+  }, [derived, onPlanChange, packageId, bridgeTypeId]);
 
   function resetForPackage(nextPackageId: string) {
     setPackageId(nextPackageId);
     setBridgeTypeId("");
     setSpanCount("");
-    setCards({});
+    setEnabled({});
+    setNames({});
+    setCounts({});
   }
 
   function resetForBridgeType(nextBridgeTypeId: string) {
     setBridgeTypeId(nextBridgeTypeId);
     setSpanCount("");
-    setCards({});
+    setEnabled({});
+    setNames({});
+    setCounts({});
   }
 
-  function updateCard(key: string, fallback: () => CardDraft, mutate: (card: CardDraft) => CardDraft) {
-    setCards((current) => ({ ...current, [key]: mutate(current[key] ?? fallback()) }));
+  function toggle(part: CatalogPart, on: boolean) {
+    setEnabled((current) => ({ ...current, [part.part_key]: on }));
   }
 
-  function updateKind(key: string, fallback: () => CardDraft, index: number, patch: Partial<KindDraft>) {
-    updateCard(key, fallback, (card) => ({
-      ...card,
-      kinds: card.kinds.map((kind, i) => (i === index ? { ...kind, ...patch } : kind)),
-    }));
+  function setName(part: CatalogPart, value: string) {
+    setNames((current) => ({ ...current, [part.part_key]: value }));
   }
 
-  function addKind(key: string, fallback: () => CardDraft, quantity: string, numberingMode: NumberingMode) {
-    updateCard(key, fallback, (card) => ({
-      ...card,
-      kinds: [...card.kinds, newKind("", numberingMode, quantity)],
-    }));
-  }
-
-  function removeKind(key: string, fallback: () => CardDraft, index: number) {
-    updateCard(key, fallback, (card) => ({
-      ...card,
-      kinds: card.kinds.filter((_, i) => i !== index),
-    }));
-  }
-
-  function selectCategory(key: string, category: StandardComponentCategory | undefined) {
-    updateCard(key, () => defaultTemplateCard(key), (card) => {
-      const previous = categories.find((item) => item.id === card.categoryId);
-      return {
-        categoryId: category?.id ?? "",
-        kinds: card.kinds.map((kind) =>
-          kind.name.trim() === "" || (previous != null && kind.name === previous.name)
-            ? { ...kind, name: category?.name ?? "" }
-            : kind
-        ),
-      };
+  function setCount(part: CatalogPart, index: number, value: string) {
+    setCounts((current) => {
+      const existing = current[part.part_key] ?? part.count_inputs.map(() => "");
+      const next = existing.slice();
+      next[index] = value;
+      return { ...current, [part.part_key]: next };
     });
   }
 
-  function renderKindRow(
-    labelBase: string,
-    key: string,
-    fallback: () => CardDraft,
-    kind: KindDraft,
-    index: number,
-    removable: boolean
-  ) {
-    const spanValue = Number(spanCount);
-    const total = Number(kind.quantity);
-    const divisor = kind.numberingMode === "span_member"
-      ? spanValue
-      : kind.numberingMode === "pier_line"
-        ? spanValue - 1
-        : 0;
-    const spanIssue =
-      kind.numberingMode !== "sequential" &&
-      Number.isInteger(total) &&
-      total > 0 &&
-      (!(divisor > 0) || total % divisor !== 0);
-    const spanIssueText = kind.numberingMode === "pier_line"
-      ? "按墩位编号时，全桥数量必须能被“跨数减 1”整除（两端为桥台）。"
-      : "按跨编号时，全桥数量必须能被跨数整除。";
+  const groups = useMemo(
+    () =>
+      structurePartOrder
+        .map((key) => ({ key, items: parts.filter((part) => part.structure_part === key) }))
+        .filter((group) => group.items.length > 0),
+    [parts]
+  );
+
+  function renderPreview(part: CatalogPart) {
+    if (!validSpanCount(spanCount)) return null;
+    const parsed = parseCounts(partCounts(part));
+    if (parsed === null) return null;
+    const numbers = expandTemplate(
+      part.number_template,
+      partName(part).trim() || part.default_name,
+      parsed,
+      Number(spanCount)
+    );
+    if (numbers.length === 0) return null;
+    const shown = numbers.slice(0, 6).map((item) => item.number);
     return (
-      <div className="inventory-kind-row" key={index}>
-        <label>
-          构件名称
-          <input
-            aria-label={`${labelBase} 构件名称 ${index + 1}`}
-            value={kind.name}
-            onChange={(event) => updateKind(key, fallback, index, { name: event.target.value })}
-          />
-        </label>
-        <label>
-          数量
-          <input
-            aria-label={`${labelBase} 数量 ${index + 1}`}
-            type="number"
-            min={0}
-            max={10000}
-            step={1}
-            value={kind.quantity}
-            onChange={(event) => updateKind(key, fallback, index, { quantity: event.target.value })}
-          />
-        </label>
-        <label>
-          编号方式
-          <select
-            aria-label={`${labelBase} 编号方式 ${index + 1}`}
-            value={kind.numberingMode}
-            onChange={(event) => updateKind(key, fallback, index, { numberingMode: event.target.value as NumberingMode })}
-          >
-            <option value="sequential">连续（1#、2#…）</option>
-            <option value="span_member">按跨（1-1#、1-2#…）</option>
-            <option value="pier_line">按墩位（1-1#、1-2#…，墩位=跨数-1）</option>
-          </select>
-        </label>
-        <details className="inventory-affix-details">
-          <summary>编号前后缀</summary>
-          <div className="inventory-affix-fields">
-            <label>
-              编号前缀
-              <input
-                aria-label={`${labelBase} 编号前缀 ${index + 1}`}
-                value={kind.prefix}
-                onChange={(event) => updateKind(key, fallback, index, { prefix: event.target.value })}
-              />
-            </label>
-            <label>
-              编号后缀
-              <input
-                aria-label={`${labelBase} 编号后缀 ${index + 1}`}
-                value={kind.suffix}
-                onChange={(event) => updateKind(key, fallback, index, { suffix: event.target.value })}
-              />
-            </label>
-          </div>
-        </details>
-        {removable ? (
-          <button
-            type="button"
-            className="inventory-kind-remove"
-            aria-label={`${labelBase} 移除 ${index + 1}`}
-            onClick={() => removeKind(key, fallback, index)}
-          >
-            移除
-          </button>
-        ) : null}
-        {spanIssue ? (
-          <p className="error-text inventory-kind-hint">{spanIssueText}</p>
-        ) : null}
-      </div>
+      <p className="inventory-part-preview">
+        共 {numbers.length} 个：{shown.join("、")}
+        {numbers.length > shown.length ? "…" : ""}
+      </p>
     );
   }
 
@@ -427,20 +213,20 @@ export function BridgeInventoryWizard({
       <div className="inventory-section-heading">
         <div>
           <p className="section-kicker">初始构件台账</p>
-          <h3 id="inventory-wizard-title">按规范模板生成实际构件</h3>
+          <h3 id="inventory-wizard-title">按规范生成实际构件</h3>
         </div>
         <span className="inventory-status-badge">可稍后修改编号</span>
       </div>
       <p className="inventory-standard-notice">
         这里选择的规范只用于生成初始构件台账，不会绑定或限制以后检测项目采用的评分规范。
       </p>
-      {loading ? <p>正在加载规范模板…</p> : null}
+      {loading ? <p>正在加载规范…</p> : null}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
       {!loading && !error && catalogs.length === 0 ? <p>当前没有可用的技术评定规范包。</p> : null}
       {catalogs.length > 0 ? (
         <div className="inventory-wizard-grid">
           <label>
-            初始台账模板来源
+            初始台账规范来源
             <select value={packageId} onChange={(event) => resetForPackage(event.target.value)}>
               <option value="">请选择规范</option>
               {catalogs.map((item) => (
@@ -465,102 +251,76 @@ export function BridgeInventoryWizard({
           </label>
         </div>
       ) : null}
-      {bridgeTypeId && !template ? <p className="error-text">所选桥型没有可用的构件生成模板。</p> : null}
-      {template ? (
-        <div className="inventory-quantity-list">
-          <h4>填写构件数量</h4>
-          {template.quantity_inputs.includes("span_count") ? (
-            <div className="inventory-quantity-card">
-              <label>
-                跨数
-                <input
-                  aria-label="跨数"
-                  type="number"
-                  min={0}
-                  max={1000}
-                  step={1}
-                  value={spanCount}
-                  onChange={(event) => setSpanCount(event.target.value)}
-                />
-              </label>
-            </div>
-          ) : null}
-          {template.quantity_inputs
-            .filter((key) => key !== "span_count")
-            .map((key) => {
-              const fallback = () => defaultTemplateCard(key);
-              const card = cards[key] ?? fallback();
-              const labelBase = quantityLabel(key);
-              return (
-                <div className="inventory-quantity-card" key={key}>
-                  <div className="inventory-card-heading">
-                    <strong>{labelBase}</strong>
-                    <span className="inventory-card-total">全桥合计 {kindTotal(card)}</span>
-                  </div>
-                  <label>
-                    对应构件类别
-                    <select
-                      aria-label={`${labelBase} 对应构件类别`}
-                      value={card.categoryId}
-                      onChange={(event) => selectCategory(
-                        key,
-                        categories.find((item) => item.id === event.target.value)
-                      )}
-                    >
-                      <option value="">请选择类别</option>
-                      {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                    </select>
-                  </label>
-                  {card.kinds.map((kind, index) =>
-                    renderKindRow(labelBase, key, fallback, kind, index, card.kinds.length > 1))}
-                  <button
-                    type="button"
-                    className="inventory-add-kind"
-                    aria-label={`${labelBase} 添加一种构件`}
-                    onClick={() => addKind(key, fallback, "", templateNumberingMode(key))}
-                  >
-                    ＋ 添加一种构件
-                  </button>
-                </div>
-              );
-            })}
-          {extraCategories.length > 0 ? (
-            <div className="inventory-extra-categories">
-              <h4>其他部件（桥上没有的填 0）</h4>
-              {extraCategories.map((category) => {
-                const fallback = () => defaultExtraCard(category);
-                const card = cards[category.id] ?? fallback();
+      {partsError ? <p className="error-text" role="alert">{partsError}</p> : null}
+      {bridgeTypeId ? (
+        <div className="inventory-quantity-card">
+          <label>
+            跨数
+            <input
+              aria-label="跨数"
+              type="number"
+              min={0}
+              max={1000}
+              step={1}
+              value={spanCount}
+              onChange={(event) => setSpanCount(event.target.value)}
+            />
+          </label>
+        </div>
+      ) : null}
+      {bridgeTypeId && parts.length > 0 ? (
+        <div className="inventory-part-list">
+          <h4>勾选桥上有的部件并填数量</h4>
+          {groups.map((group) => (
+            <div className="inventory-part-group" key={group.key}>
+              <h5>{structurePartLabels[group.key] ?? group.key}</h5>
+              {group.items.map((part) => {
+                const on = !!enabled[part.part_key];
                 return (
-                  <div className="inventory-quantity-card" key={category.id}>
-                    <div className="inventory-card-heading">
-                      <strong>{category.name}</strong>
-                      <span className="inventory-card-total">全桥合计 {kindTotal(card)}</span>
-                    </div>
-                    {card.kinds.map((kind, index) =>
-                      renderKindRow(category.name, category.id, fallback, kind, index, card.kinds.length > 1))}
-                    <button
-                      type="button"
-                      className="inventory-add-kind"
-                      aria-label={`${category.name} 添加一种构件`}
-                      onClick={() => addKind(category.id, fallback, "0", "sequential")}
-                    >
-                      ＋ 添加一种构件
-                    </button>
+                  <div className="inventory-part-card" key={part.part_key}>
+                    <label className="inventory-part-enable">
+                      <input
+                        type="checkbox"
+                        aria-label={`启用 ${part.default_name}`}
+                        checked={on}
+                        onChange={(event) => toggle(part, event.target.checked)}
+                      />
+                      <strong>{part.default_name}</strong>
+                      {part.provisional ? (
+                        <span className="inventory-provisional-badge">临时编号（待校准）</span>
+                      ) : null}
+                    </label>
+                    {on ? (
+                      <div className="inventory-part-body">
+                        <label>
+                          现场名称
+                          <input
+                            aria-label={`${part.default_name} 名称`}
+                            value={partName(part)}
+                            onChange={(event) => setName(part, event.target.value)}
+                          />
+                        </label>
+                        {part.count_inputs.map((countInput, index) => (
+                          <label key={countInput.key}>
+                            {countInput.label}
+                            <input
+                              aria-label={`${part.default_name} ${countInput.label}`}
+                              type="number"
+                              min={0}
+                              max={10000}
+                              step={1}
+                              value={partCounts(part)[index] ?? ""}
+                              onChange={(event) => setCount(part, index, event.target.value)}
+                            />
+                          </label>
+                        ))}
+                        {renderPreview(part)}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}
             </div>
-          ) : null}
-        </div>
-      ) : null}
-      {derived && derived.groups.length > 0 ? (
-        <div className="inventory-number-preview">
-          <h4>编号预览</h4>
-          {previewInventoryNumbers(derived.groups, Number(spanCount) || 0).map((item) => (
-            <p key={`${item.quantityKey}:${item.siteType}`}>
-              <strong>{item.siteType}</strong>：共 {item.count} 个；{item.numbers.join("、")}
-              {item.count > item.numbers.length ? "…" : ""}
-            </p>
           ))}
         </div>
       ) : null}
