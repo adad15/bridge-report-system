@@ -290,9 +290,9 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     setPendingFocusId(entryId);
   }
 
-  function toggleGroup(siteComponentType: string) {
+  function openGroup(siteComponentType: string) {
     setGroupPage(0);
-    setExpandedGroup((current) => (current === siteComponentType ? null : siteComponentType));
+    setExpandedGroup(siteComponentType);
   }
 
   async function generate() {
@@ -494,9 +494,9 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
                         <button
                           type="button"
                           aria-label={`查看构件 ${group.siteComponentType}`}
-                          onClick={() => toggleGroup(group.siteComponentType)}
+                          onClick={() => openGroup(group.siteComponentType)}
                         >
-                          {expandedGroup === group.siteComponentType ? "收起" : "查看构件"}
+                          查看构件
                         </button>
                         {group.pendingCount > 0 && revision.status === "草稿" ? (
                           <button
@@ -546,7 +546,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       ) : (
         <p className="inventory-confirmation-summary">共 {revision.entries.filter((entry) => entry.is_active).length} 个启用构件；编号无重复；规范映射均已确认。</p>
       )}
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
+      {error && !expandedGroup ? <p className="error-text" role="alert">{error}</p> : null}
       <div className="inventory-entry-tools">
         <label>
           按编号搜索构件
@@ -572,26 +572,44 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
             </table>
           </div>
         </div>
-      ) : expandedGroup && expandedGroupEntries.length > 0 ? (
-        <div className="inventory-entry-section">
-          <h2>{expandedGroup} 构件</h2>
-          <div className="inventory-table-scroll">
-            <table className="data-table component-inventory-table">
-              <thead><tr><th>构件编号</th><th>构件类别</th><th>现场名称</th><th>所属跨或位置</th><th>规范映射</th><th>操作</th></tr></thead>
-              <tbody>{pageEntries.map((entry) => renderEntryRow(entry))}</tbody>
-            </table>
-          </div>
-          {pageCount > 1 ? (
-            <div className="inventory-pagination">
-              <button type="button" disabled={busy || page === 0} onClick={() => setGroupPage(page - 1)}>上一页</button>
-              <span>第 {page + 1} / {pageCount} 页</span>
-              <button type="button" disabled={busy || page + 1 >= pageCount} onClick={() => setGroupPage(page + 1)}>下一页</button>
-            </div>
-          ) : null}
-        </div>
       ) : (
-        <p className="inventory-entry-hint">在分组核对表中点击“查看构件”展开该组的构件行，或使用编号搜索。</p>
+        <p className="inventory-entry-hint">在分组核对表中点击“查看构件”，在弹窗中查看并编辑该组构件；或使用编号搜索。</p>
       )}
+      {expandedGroup ? (
+        <div className="dialog-backdrop" role="presentation">
+          <section
+            className="workspace-dialog inventory-group-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="inventory-group-dialog-title"
+          >
+            <div className="inventory-group-dialog-header">
+              <h2 id="inventory-group-dialog-title">
+                {expandedGroup} 构件（共 {expandedGroupEntries.length} 个）
+              </h2>
+              {error ? <p className="error-text" role="alert">{error}</p> : null}
+            </div>
+            <div className="inventory-table-scroll inventory-group-dialog-body">
+              <table className="data-table component-inventory-table">
+                <thead><tr><th>构件编号</th><th>构件类别</th><th>现场名称</th><th>所属跨或位置</th><th>规范映射</th><th>操作</th></tr></thead>
+                <tbody>{pageEntries.map((entry) => renderEntryRow(entry))}</tbody>
+              </table>
+            </div>
+            <div className="inventory-group-dialog-footer">
+              {pageCount > 1 ? (
+                <div className="inventory-pagination">
+                  <button type="button" disabled={busy || page === 0} onClick={() => setGroupPage(page - 1)}>上一页</button>
+                  <span>第 {page + 1} / {pageCount} 页</span>
+                  <button type="button" disabled={busy || page + 1 >= pageCount} onClick={() => setGroupPage(page + 1)}>下一页</button>
+                </div>
+              ) : <span />}
+              <div className="dialog-actions">
+                <button type="button" disabled={busy} onClick={() => setExpandedGroup(null)}>关闭</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {adding ? (
         <div className="inventory-add-form">
           <label>构件编号<input value={newEntry.component_number} onChange={(event) => setNewEntry((current) => ({ ...current, component_number: event.target.value }))} /></label>

@@ -107,15 +107,17 @@ describe("ComponentInventoryEditor", () => {
       expect.any(String), "revision-1", undefined);
   });
 
-  it("renders entry rows only for the expanded group or number search", async () => {
+  it("shows entry rows in a dialog for the opened group or via number search", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     await screen.findByText("分组核对");
     expect(screen.queryByLabelText("构件编号 1-1#")).not.toBeInTheDocument();
     expect(screen.getByText(/在分组核对表中点击/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
-    expect(await screen.findByLabelText("构件编号 1-1#")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
+    expect(await screen.findByRole("dialog", { name: /主梁 构件（共 1 个）/ })).toBeInTheDocument();
+    expect(screen.getByLabelText("构件编号 1-1#")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "关闭" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("构件编号 1-1#")).not.toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText("按编号搜索构件"), "1-1");

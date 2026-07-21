@@ -2315,6 +2315,39 @@ body {
   color: #5b7891;
 }
 
+.inventory-group-dialog {
+  width: min(1100px, calc(100vw - 2rem));
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.inventory-group-dialog-header {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.inventory-group-dialog-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #294969;
+}
+
+.inventory-group-dialog-body {
+  overflow: auto;
+  min-height: 0;
+}
+
+.inventory-group-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.inventory-group-dialog-footer .dialog-actions {
+  margin-top: 0;
+}
+
 .inventory-add-kind {
   justify-self: start;
 }
