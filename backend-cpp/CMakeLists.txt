@@ -62,6 +62,7 @@ add_library(bridge_report_backend_core
     src/inventory/ComponentInventoryModels.cpp
     src/inventory/ComponentMatcher.cpp
     src/inventory/NumberingTemplate.cpp
+    src/inventory/BeamBridgePartCatalog.cpp
     src/review/ConfirmPlan.cpp
     src/review/ContractCompatibility.cpp
     src/review/DraftValidation.cpp
@@ -152,6 +153,7 @@ add_executable(bridge_report_backend_tests
     tests/test_import_record_deletion_routes.cpp
     tests/test_jtg_5120_package.cpp
     tests/test_numbering_template.cpp
+    tests/test_beam_bridge_part_catalog.cpp
     tests/test_jtg_5120_maintenance_standard.cpp
     tests/test_jtg_h21_package.cpp
     tests/test_password_hash.cpp
