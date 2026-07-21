@@ -239,3 +239,36 @@ TEST(ComponentInventoryRoutesTest, ValidatesPartSelectionsAgainstCatalogAndTaxon
     EXPECT_FALSE(http::validate_inventory_generation_standard(input, empty_package, code, message));
     EXPECT_EQ(code, "inventory_component_category_not_supported");
 }
+
+TEST(ComponentInventoryRoutesTest, SerializesPartCatalogForBridgeType) {
+    bridge_report::standards::StandardPackage package;
+    bridge_report::standards::StandardDefinition girder_cat;
+    girder_cat.id = "h21.component.beam.upper_bearing";
+    girder_cat.source_file = "component-taxonomy.json";
+    girder_cat.payload["bridge_type_ids"].append("h21.bridge_type.beam");
+    girder_cat.payload["structure_part"] = "superstructure";
+    girder_cat.payload["generatable"] = true;
+    package.definitions.emplace(girder_cat.id, girder_cat);
+
+    const Json::Value out = http::serialize_part_catalog(package, "h21.bridge_type.beam");
+    ASSERT_TRUE(out.isArray());
+
+    bool has_girder = false;
+    for (const auto& part : out) {
+        EXPECT_NE(part["part_key"].asString().rfind("arch.", 0), 0u);  // 包里无拱类别 → 无拱部件
+        if (part["part_key"].asString() == "beam.girder") {
+            has_girder = true;
+            EXPECT_EQ(part["default_name"].asString(), "梁");
+            EXPECT_EQ(part["structure_part"].asString(), "superstructure");
+            EXPECT_EQ(part["standard_component_category_id"].asString(),
+                      "h21.component.beam.upper_bearing");
+            EXPECT_EQ(part["number_template"].asString(), "{span}-{c1}#{name}");
+            EXPECT_FALSE(part["provisional"].asBool());
+            ASSERT_TRUE(part["count_inputs"].isArray());
+            ASSERT_EQ(part["count_inputs"].size(), 1u);
+            EXPECT_EQ(part["count_inputs"][0]["key"].asString(), "girders_per_span");
+            EXPECT_EQ(part["count_inputs"][0]["label"].asString(), "每孔梁片数");
+        }
+    }
+    EXPECT_TRUE(has_girder);
+}

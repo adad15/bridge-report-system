@@ -161,6 +161,36 @@ bool validate_part_selection_standard(
 
 }  // namespace
 
+Json::Value serialize_part_catalog(
+    const standards::StandardPackage& package, const std::string& bridge_type_id) {
+    Json::Value parts(Json::arrayValue);
+    for (const auto& part : inventory::component_parts()) {
+        const auto category = package.definitions.find(part.standard_component_category_id);
+        if (category == package.definitions.end() ||
+            category->second.source_file != "component-taxonomy.json" ||
+            !definition_supports_bridge_type(category->second, bridge_type_id) ||
+            category->second.payload["structure_part"].asString() != part.structure_part ||
+            !category->second.payload.get("generatable", false).asBool())
+            continue;
+        Json::Value item;
+        item["part_key"] = part.part_key;
+        item["default_name"] = part.default_name;
+        item["structure_part"] = part.structure_part;
+        item["standard_component_category_id"] = part.standard_component_category_id;
+        item["number_template"] = part.number_template;
+        item["provisional"] = part.provisional;
+        item["count_inputs"] = Json::Value(Json::arrayValue);
+        for (const auto& count_input : part.count_inputs) {
+            Json::Value entry;
+            entry["key"] = count_input.key;
+            entry["label"] = count_input.label;
+            item["count_inputs"].append(std::move(entry));
+        }
+        parts.append(std::move(item));
+    }
+    return parts;
+}
+
 bool validate_inventory_generation_standard(
     const inventory::GenerateInventoryInput& input,
     const standards::StandardPackage& package,
@@ -314,6 +344,7 @@ void register_component_inventory_routes(
     const drogon::orm::DbClientPtr& db_client,
     std::shared_ptr<const standards::StandardRegistry> registry) {
     const std::string generate_path = "/api/bridges/{bridge_id}/component-inventories/generate";
+    const std::string part_catalog_path = "/api/component-inventories/part-catalog";
     const std::string latest_path = "/api/bridges/{bridge_id}/component-inventories/latest";
     const std::string revision_path = "/api/component-inventories/{revision_id}";
     const std::string entries_path = "/api/component-inventories/{revision_id}/entries";
@@ -322,8 +353,8 @@ void register_component_inventory_routes(
     const std::string mapping_path = entry_path + "/mapping";
     const std::string confirm_path = revision_path + "/confirm";
     const std::string confirm_mappings_path = revision_path + "/mappings/confirm-pending";
-    for (const auto& path : {generate_path, latest_path, revision_path, entries_path,
-                             entry_path, deactivate_path, mapping_path, confirm_path,
+    for (const auto& path : {generate_path, part_catalog_path, latest_path, revision_path,
+                             entries_path, entry_path, deactivate_path, mapping_path, confirm_path,
                              confirm_mappings_path})
         register_options_handler(path);
 
@@ -373,6 +404,35 @@ void register_component_inventory_routes(
                         bridge_id, user->id, input, generated.entries), drogon::k201Created);
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
+
+    drogon::app().registerHandler(
+        part_catalog_path,
+        [db_client, registry](const drogon::HttpRequestPtr& request, HttpCallback&& callback) {
+            try {
+                if (!require_user(db_client, request, callback).has_value()) return;
+                const std::string package_id = request->getParameter("standard_package_id");
+                const std::string bridge_type_id = request->getParameter("bridge_type_id");
+                if (!is_valid_uuid(package_id)) {
+                    respond_json(callback, make_error_body(
+                        "invalid_standard_package_id", "规范包 ID 无效。"),
+                        drogon::k400BadRequest); return;
+                }
+                if (bridge_type_id.empty()) {
+                    respond_json(callback, make_error_body(
+                        "invalid_bridge_type_id", "桥型 ID 不能为空。"),
+                        drogon::k400BadRequest); return;
+                }
+                const auto* package = load_request_package(db_client, registry, package_id);
+                if (package == nullptr) {
+                    respond_json(callback, make_error_body(
+                        "standard_package_unavailable", "所选技术评定规范包不可用。"),
+                        drogon::k409Conflict); return;
+                }
+                Json::Value body;
+                body["parts"] = serialize_part_catalog(*package, bridge_type_id);
+                respond_json(callback, body);
+            } catch (...) { respond_db_unavailable(callback); }
+        }, {drogon::Get});
 
     drogon::app().registerHandler(
         latest_path,

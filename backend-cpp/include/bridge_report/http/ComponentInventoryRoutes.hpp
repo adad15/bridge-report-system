@@ -17,6 +17,11 @@ bool validate_inventory_generation_standard(
     const standards::StandardPackage& package,
     std::string& error_code,
     std::string& error_message);
+
+// 按规范包 taxonomy 对某桥型 generatable 的类别，返回该桥型可用的部件目录（JSON 数组）。
+Json::Value serialize_part_catalog(
+    const standards::StandardPackage& package,
+    const std::string& bridge_type_id);
 bool parse_inventory_entry_update(
     const Json::Value& body,
     db::InventoryEntryUpdate& output,
