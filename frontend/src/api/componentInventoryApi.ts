@@ -52,13 +52,36 @@ export interface InventoryGenerationGroup {
   number_suffix?: string;
 }
 
+export interface CatalogPartCountInput {
+  key: string;
+  label: string;
+}
+
+export interface CatalogPart {
+  part_key: string;
+  default_name: string;
+  structure_part: StructurePart;
+  standard_component_category_id: string;
+  number_template: string;
+  provisional: boolean;
+  count_inputs: CatalogPartCountInput[];
+}
+
+export interface PartSelection {
+  part_key: string;
+  site_name: string;
+  counts: number[];
+}
+
 export interface GenerateComponentInventoryInput {
   standard_package_id: string;
-  template_id: string;
   bridge_type_id: string;
   span_count: number;
-  input_quantities: Record<string, number>;
-  groups: InventoryGenerationGroup[];
+  part_selections?: PartSelection[];
+  // 旧模板/分组路径（待清理），目录路径不需要。
+  template_id?: string;
+  input_quantities?: Record<string, number>;
+  groups?: InventoryGenerationGroup[];
 }
 
 export interface InventoryEntryInput {
@@ -102,6 +125,20 @@ export function fetchLatestComponentInventory(baseUrl: string, bridgeId: string)
 
 export function fetchComponentInventory(baseUrl: string, revisionId: string) {
   return revisionRequest(`${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}`);
+}
+
+export async function fetchPartCatalog(
+  baseUrl: string,
+  standardPackageId: string,
+  bridgeTypeId: string
+): Promise<CatalogPart[]> {
+  const query = new URLSearchParams({
+    standard_package_id: standardPackageId,
+    bridge_type_id: bridgeTypeId,
+  });
+  return (
+    await request<{ parts: CatalogPart[] }>(`${baseUrl}/api/component-inventories/part-catalog?${query}`)
+  ).parts;
 }
 
 export function generateComponentInventory(baseUrl: string, bridgeId: string, input: GenerateComponentInventoryInput) {

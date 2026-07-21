@@ -5,6 +5,7 @@ import {
   confirmPendingComponentInventoryMappings,
   deleteComponentInventoryEntry,
   fetchLatestComponentInventory,
+  fetchPartCatalog,
   generateComponentInventory,
   setComponentInventoryMapping,
   updateComponentInventoryEntry,
@@ -56,6 +57,46 @@ describe("componentInventoryApi", () => {
       "http://backend/api/bridges/bridge-1/component-inventories/generate",
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }
     );
+  });
+
+  it("fetches the part catalog for a bridge type", async () => {
+    const parts = [
+      {
+        part_key: "beam.girder",
+        default_name: "梁",
+        structure_part: "superstructure" as const,
+        standard_component_category_id: "h21.component.beam.upper_bearing",
+        number_template: "{span}-{c1}#{name}",
+        provisional: false,
+        count_inputs: [{ key: "girders_per_span", label: "每孔梁片数" }],
+      },
+    ];
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ parts }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      fetchPartCatalog("http://backend", "package-1", "h21.bridge_type.beam")
+    ).resolves.toEqual(parts);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://backend/api/component-inventories/part-catalog?standard_package_id=package-1&bridge_type_id=h21.bridge_type.beam"
+    );
+  });
+
+  it("generates a draft from part_selections without legacy groups", async () => {
+    const revision = { id: "revision-1", entries: [] };
+    const input = {
+      standard_package_id: "package-1",
+      bridge_type_id: "h21.bridge_type.beam",
+      span_count: 5,
+      part_selections: [{ part_key: "beam.girder", site_name: "空心板", counts: [13] }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201, json: async () => ({ revision }) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(generateComponentInventory("http://backend", "bridge-1", input)).resolves.toEqual(revision);
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.part_selections[0].part_key).toBe("beam.girder");
+    expect(body.groups).toBeUndefined();
   });
 
   it("confirms pending mappings for one group or the whole revision", async () => {
