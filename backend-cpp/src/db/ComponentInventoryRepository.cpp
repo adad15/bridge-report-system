@@ -284,12 +284,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::generate_draft(
             tx->rollback();
             return {ComponentInventoryStatus::Conflict};
         }
+        // 目录路径没有版本化模板，用哨兵标记生成方式（DB 溯源列要求非空）。
+        const std::string template_marker =
+            input.template_id.empty() ? std::string("part-catalog") : input.template_id;
         const auto batch = tx->execSqlSync(
             "insert into bridge_component_generation_batches "
             "(bridge_id,template_standard_package_id,template_id,bridge_type_code,"
             "input_quantities,generated_by_user_id) "
             "values($1::uuid,$2::uuid,$3,$4,$5::jsonb,$6::uuid) returning id::text",
-            bridge_id, input.standard_package_id, input.template_id, input.bridge_type_id,
+            bridge_id, input.standard_package_id, template_marker, input.bridge_type_id,
             compact_json(input.input_quantities), user_id);
         const auto baseline = tx->execSqlSync(
             "select id::text from bridge_component_inventory_revisions "

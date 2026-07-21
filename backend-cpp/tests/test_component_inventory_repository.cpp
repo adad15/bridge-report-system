@@ -57,14 +57,9 @@ protected:
     inventory::GenerateInventoryInput girder_input(int spans, int per_span) const {
         inventory::GenerateInventoryInput input;
         input.standard_package_id = package_id;
-        input.template_id = "test.inventory.beam";
         input.bridge_type_id = "test.bridge.beam";
         input.span_count = spans;
-        input.input_quantities["span_count"] = spans;
-        input.input_quantities["members_per_span"] = per_span;
-        input.groups.push_back({
-            "主梁", "主梁", "test.component.main_girder", "superstructure",
-            inventory::NumberingMode::SpanMember, per_span, "", "#"});
+        input.part_selections.push_back({"beam.girder", "主梁", {per_span}});
         return input;
     }
 
@@ -214,11 +209,7 @@ TEST_F(ComponentInventoryRepositoryTest, GeneratedMappingsAreConfirmedByGenerati
 TEST_F(ComponentInventoryRepositoryTest, PendingMappingsCanBeConfirmedInBatch) {
     if (!client) GTEST_SKIP();
     auto input = girder_input(1, 2);
-    input.input_quantities["diaphragm_count"] = 2;
-    input.groups.push_back({
-        "横隔板", "横隔板", "test.component.diaphragm", "superstructure",
-        inventory::NumberingMode::Sequential, 2, "", "#"});
-    input.groups.back().quantity_key = "diaphragm_count";
+    input.part_selections.push_back({"beam.diaphragm", "横隔板", {1, 2}});
     const auto generated = inventory::generate_component_inventory(input);
     ASSERT_TRUE(generated.ok());
     db::ComponentInventoryRepository repository(client);
