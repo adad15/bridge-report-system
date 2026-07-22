@@ -39,12 +39,28 @@ const beamParts = [
   {
     part_key: "beam.girder", default_name: "梁", structure_part: "superstructure" as const,
     standard_component_category_id: "h21.component.beam.upper_bearing",
+    standard_component_category_name: "上部承重构件",
     number_template: "{span}-{c1}#{name}", provisional: false,
     count_inputs: [{ key: "girders_per_span", label: "每孔梁片数" }],
   },
   {
+    part_key: "beam.wet_joint", default_name: "湿接缝", structure_part: "superstructure" as const,
+    standard_component_category_id: "h21.component.beam.upper_general",
+    standard_component_category_name: "上部一般构件",
+    number_template: "{span}-{c1}#{name}", provisional: false,
+    count_inputs: [{ key: "joints_per_span", label: "每孔湿接缝条数" }],
+  },
+  {
+    part_key: "beam.diaphragm", default_name: "横隔梁", structure_part: "superstructure" as const,
+    standard_component_category_id: "h21.component.beam.upper_general",
+    standard_component_category_name: "上部一般构件",
+    number_template: "{span}-{c1}-{c2}#{name}", provisional: false,
+    count_inputs: [{ key: "gaps", label: "每孔梁间数" }, { key: "beams", label: "每梁间道数" }],
+  },
+  {
     part_key: "deck.drainage", default_name: "排水系统", structure_part: "deck_system" as const,
     standard_component_category_id: "h21.component.deck.drainage",
+    standard_component_category_name: "排水系统",
     number_template: "{name}", provisional: false, count_inputs: [],
   },
 ];
@@ -53,6 +69,7 @@ const cableParts = [
   {
     part_key: "cs.tower", default_name: "索塔", structure_part: "superstructure" as const,
     standard_component_category_id: "h21.component.cable_stayed.tower",
+    standard_component_category_name: "索塔",
     number_template: "{c1}#{name}", provisional: true,
     count_inputs: [{ key: "tower_count", label: "索塔数量" }],
   },
@@ -70,6 +87,17 @@ describe("BridgeInventoryWizard", () => {
   it("explains that the template source does not bind future scoring standards", async () => {
     render(<BridgeInventoryWizard onPlanChange={vi.fn()} />);
     expect(await screen.findByText(/不会绑定或限制以后检测项目采用的评分规范/)).toBeInTheDocument();
+  });
+
+  it("nests parts under 结构分部 then 部件类别 headings", async () => {
+    render(<BridgeInventoryWizard onPlanChange={vi.fn()} />);
+    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "h21.bridge_type.beam");
+    expect(await screen.findByRole("heading", { name: "上部结构" })).toBeInTheDocument();
+    // 部件类别表头：承重在前、一般在后；一般类别下含湿接缝 + 横隔梁两个部件。
+    expect(screen.getByRole("heading", { name: "上部承重构件" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "上部一般构件" })).toBeInTheDocument();
+    expect(screen.getByLabelText("启用 湿接缝")).toBeInTheDocument();
+    expect(screen.getByLabelText("启用 横隔梁")).toBeInTheDocument();
   });
 
   it("emits part_selections for enabled parts with counts and previews numbers", async () => {

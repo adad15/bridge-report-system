@@ -49,6 +49,7 @@ export interface CatalogPart {
   default_name: string;
   structure_part: StructurePart;
   standard_component_category_id: string;
+  standard_component_category_name: string;
   number_template: string;
   provisional: boolean;
   count_inputs: CatalogPartCountInput[];

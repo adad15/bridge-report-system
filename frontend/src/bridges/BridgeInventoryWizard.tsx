@@ -180,11 +180,27 @@ export function BridgeInventoryWizard({
     });
   }
 
+  // 三层结构：结构分部 → 部件类别（16 个规范类别）→ 部件（细分），均按目录顺序。
   const groups = useMemo(
     () =>
       structurePartOrder
-        .map((key) => ({ key, items: parts.filter((part) => part.structure_part === key) }))
-        .filter((group) => group.items.length > 0),
+        .map((key) => {
+          const sectionParts = parts.filter((part) => part.structure_part === key);
+          const order: string[] = [];
+          const byCategory = new Map<string, { name: string; parts: CatalogPart[] }>();
+          for (const part of sectionParts) {
+            const categoryId = part.standard_component_category_id;
+            let bucket = byCategory.get(categoryId);
+            if (!bucket) {
+              bucket = { name: part.standard_component_category_name, parts: [] };
+              byCategory.set(categoryId, bucket);
+              order.push(categoryId);
+            }
+            bucket.parts.push(part);
+          }
+          return { key, categories: order.map((id) => ({ id, ...byCategory.get(id)! })) };
+        })
+        .filter((group) => group.categories.length > 0),
     [parts]
   );
 
@@ -273,53 +289,60 @@ export function BridgeInventoryWizard({
           <h4>勾选桥上有的部件并填数量</h4>
           {groups.map((group) => (
             <div className="inventory-part-group" key={group.key}>
-              <h5>{structurePartLabels[group.key] ?? group.key}</h5>
-              {group.items.map((part) => {
-                const on = !!enabled[part.part_key];
-                return (
-                  <div className="inventory-part-card" key={part.part_key}>
-                    <label className="inventory-part-enable">
-                      <input
-                        type="checkbox"
-                        aria-label={`启用 ${part.default_name}`}
-                        checked={on}
-                        onChange={(event) => toggle(part, event.target.checked)}
-                      />
-                      <strong>{part.default_name}</strong>
-                      {part.provisional ? (
-                        <span className="inventory-provisional-badge">临时编号（待校准）</span>
-                      ) : null}
-                    </label>
-                    {on ? (
-                      <div className="inventory-part-body">
-                        <label>
-                          现场名称
+              <h4 className="inventory-structure-heading">
+                {structurePartLabels[group.key] ?? group.key}
+              </h4>
+              {group.categories.map((category) => (
+                <div className="inventory-category-group" key={category.id}>
+                  <h5 className="inventory-category-heading">{category.name}</h5>
+                  {category.parts.map((part) => {
+                    const on = !!enabled[part.part_key];
+                    return (
+                      <div className="inventory-part-card" key={part.part_key}>
+                        <label className="inventory-part-enable">
                           <input
-                            aria-label={`${part.default_name} 名称`}
-                            value={partName(part)}
-                            onChange={(event) => setName(part, event.target.value)}
+                            type="checkbox"
+                            aria-label={`启用 ${part.default_name}`}
+                            checked={on}
+                            onChange={(event) => toggle(part, event.target.checked)}
                           />
+                          <strong>{part.default_name}</strong>
+                          {part.provisional ? (
+                            <span className="inventory-provisional-badge">临时编号（待校准）</span>
+                          ) : null}
                         </label>
-                        {part.count_inputs.map((countInput, index) => (
-                          <label key={countInput.key}>
-                            {countInput.label}
-                            <input
-                              aria-label={`${part.default_name} ${countInput.label}`}
-                              type="number"
-                              min={0}
-                              max={10000}
-                              step={1}
-                              value={partCounts(part)[index] ?? ""}
-                              onChange={(event) => setCount(part, index, event.target.value)}
-                            />
-                          </label>
-                        ))}
-                        {renderPreview(part)}
+                        {on ? (
+                          <div className="inventory-part-body">
+                            <label>
+                              现场名称
+                              <input
+                                aria-label={`${part.default_name} 名称`}
+                                value={partName(part)}
+                                onChange={(event) => setName(part, event.target.value)}
+                              />
+                            </label>
+                            {part.count_inputs.map((countInput, index) => (
+                              <label key={countInput.key}>
+                                {countInput.label}
+                                <input
+                                  aria-label={`${part.default_name} ${countInput.label}`}
+                                  type="number"
+                                  min={0}
+                                  max={10000}
+                                  step={1}
+                                  value={partCounts(part)[index] ?? ""}
+                                  onChange={(event) => setCount(part, index, event.target.value)}
+                                />
+                              </label>
+                            ))}
+                            {renderPreview(part)}
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           ))}
         </div>
