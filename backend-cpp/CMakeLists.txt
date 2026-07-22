@@ -51,6 +51,7 @@ add_library(bridge_report_backend_core
     src/http/Cors.cpp
     src/http/DefectThreadRoutes.cpp
     src/http/EditLockRoutes.cpp
+    src/http/ImportBindingRoutes.cpp
     src/http/ImportConfirmRoutes.cpp
     src/http/ImportRecordDeletionRoutes.cpp
     src/http/InspectionYearDeletionRoutes.cpp
@@ -133,6 +134,7 @@ add_executable(bridge_report_backend_tests
     tests/test_component_inventory_generator.cpp
     tests/test_component_inventory_repository.cpp
     tests/test_component_inventory_routes.cpp
+    tests/test_import_binding_routes.cpp
     tests/test_component_matcher.cpp
     tests/test_h21_bridge_evaluation.cpp
     tests/test_h21_component_evaluation.cpp
