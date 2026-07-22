@@ -4,6 +4,8 @@
 #include <cctype>
 #include <set>
 
+#include "bridge_report/inventory/ComponentCategoryLexicon.hpp"
+
 namespace bridge_report::inventory {
 namespace {
 
@@ -31,11 +33,6 @@ const InventoryMapping* active_mapping(const InventoryEntry& entry) {
         return mapping.is_active;
     });
     return found == entry.mappings.end() ? nullptr : &*found;
-}
-
-bool name_matches_entry(const std::string& name, const InventoryEntry& entry) {
-    const auto trimmed = trim_ascii(name);
-    return trimmed == trim_ascii(entry.site_component_type) || trimmed == trim_ascii(entry.site_name);
 }
 
 bool name_matches_confirmed_alias(
@@ -88,7 +85,6 @@ std::string component_match_method_name(ComponentMatchMethod method) {
     switch (method) {
         case ComponentMatchMethod::Exact: return "exact";
         case ComponentMatchMethod::ConfirmedAlias: return "confirmed_alias";
-        case ComponentMatchMethod::NormalizedCandidate: return "normalized_candidate";
         case ComponentMatchMethod::None: return "none";
     }
     return "none";
@@ -117,23 +113,34 @@ ComponentMatchResult match_defect_component(
     const std::vector<ConfirmedComponentAlias>& confirmed_aliases
 ) {
     const auto entries = usable_entries(revision);
-    std::vector<const InventoryEntry*> exact;
-    for (const auto* entry : entries) {
-        if (trim_ascii(entry->component_number) == trim_ascii(defect.component_number)
-            && name_matches_entry(defect.component_name, *entry)) {
-            exact.push_back(entry);
-        }
-    }
     const bool inventory_confirmed =
         revision.status == "已确认" || revision.status == "confirmed";
-    if (exact.size() == 1 && inventory_confirmed) {
-        return matched_result(ComponentMatchMethod::Exact, *exact.front());
-    }
-    if (!exact.empty()) return candidate_result(ComponentMatchMethod::Exact, exact);
+    const auto normalized_number = normalize_component_number(defect.component_number);
+    if (normalized_number.empty()) return {};
 
+    // 主路径：部件类别（报告部件名称→对照表）+ 归一化编号（保留类型词）精确。
+    const auto categories = resolve_component_categories(defect.component_name);
+    if (!categories.empty()) {
+        std::vector<const InventoryEntry*> hits;
+        for (const auto* entry : entries) {
+            const auto* mapping = active_mapping(*entry);
+            if (mapping != nullptr
+                && std::find(categories.begin(), categories.end(),
+                             mapping->standard_component_category_id) != categories.end()
+                && normalize_component_number(entry->component_number) == normalized_number) {
+                hits.push_back(entry);
+            }
+        }
+        if (hits.size() == 1 && inventory_confirmed) {
+            return matched_result(ComponentMatchMethod::Exact, *hits.front());
+        }
+        if (!hits.empty()) return candidate_result(ComponentMatchMethod::Exact, hits);
+    }
+
+    // 兜底：人工确认别名（归一化编号 + 别名文本 == 报告部件名称）。
     std::vector<const InventoryEntry*> aliases;
     for (const auto* entry : entries) {
-        if (trim_ascii(entry->component_number) == trim_ascii(defect.component_number)
+        if (normalize_component_number(entry->component_number) == normalized_number
             && name_matches_confirmed_alias(defect.component_name, *entry, confirmed_aliases)) {
             aliases.push_back(entry);
         }
@@ -143,19 +150,7 @@ ComponentMatchResult match_defect_component(
     }
     if (!aliases.empty()) return candidate_result(ComponentMatchMethod::ConfirmedAlias, aliases);
 
-    const auto normalized_number = normalize_component_number(defect.component_number);
-    if (normalized_number.empty()) return {};
-    std::vector<const InventoryEntry*> normalized;
-    for (const auto* entry : entries) {
-        const bool name_matches = name_matches_entry(defect.component_name, *entry)
-            || name_matches_confirmed_alias(defect.component_name, *entry, confirmed_aliases);
-        if (name_matches && normalize_component_number(entry->component_number) == normalized_number) {
-            normalized.push_back(entry);
-        }
-    }
-    return normalized.empty()
-        ? ComponentMatchResult{}
-        : candidate_result(ComponentMatchMethod::NormalizedCandidate, normalized);
+    return {};
 }
 
 }  // namespace bridge_report::inventory

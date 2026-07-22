@@ -20,9 +20,8 @@ struct DefectComponentText {
 
 enum class ComponentMatchMethod {
     None,
-    Exact,
-    ConfirmedAlias,
-    NormalizedCandidate,
+    Exact,           // 部件类别 + 归一化编号（保留类型词）精确
+    ConfirmedAlias,  // 人工确认别名 + 归一化编号 兜底
 };
 
 struct ComponentMatchResult {
@@ -36,10 +35,11 @@ struct ComponentMatchResult {
 [[nodiscard]] std::string normalize_component_number(const std::string& value);
 
 /**
- * @brief 按“完全匹配 -> 已确认别名 -> 规范化编号候选”的固定顺序匹配病害。
+ * @brief 按“部件类别 + 编号 -> 已确认别名”匹配病害。
  *
- * 只有已确认台账中的唯一完全匹配或唯一已确认别名匹配会自动落实际构件；
- * 规范化编号以及未确认台账只返回候选，必须人工选择。
+ * 部件类别由报告“部件名称”经对照表解析（可多候选，靠台账实际类别消歧）；
+ * 构件编号做无害归一化后精确比对（保留类型词），构件名不参与匹配。
+ * 只有已确认台账中的唯一命中会自动落实际构件；否则返回候选，必须人工选择。
  */
 [[nodiscard]] ComponentMatchResult match_defect_component(
     const DefectComponentText& defect,
