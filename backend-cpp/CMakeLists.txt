@@ -35,6 +35,7 @@ add_library(bridge_report_backend_core
     src/db/StandardRepository.cpp
     src/db/WorkspaceRepository.cpp
     src/db/WordImportRepository.cpp
+    src/db/ImportBindingRepository.cpp
     src/deletion/ArchiveFileCleanupCoordinator.cpp
     src/deletion/ArchiveFileDeletionCore.cpp
     src/deletion/ArchivedFileDeletionQueue.cpp
@@ -173,6 +174,7 @@ add_executable(bridge_report_backend_tests
     tests/test_temporary_word_cleanup_coordinator.cpp
     tests/test_word_import_routes.cpp
     tests/test_word_import_repository.cpp
+    tests/test_import_binding_repository.cpp
     tests/test_word_input_archive.cpp
     tests/test_workspace_models.cpp
     tests/test_workspace_repository.cpp
