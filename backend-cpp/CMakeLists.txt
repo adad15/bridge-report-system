@@ -61,6 +61,7 @@ add_library(bridge_report_backend_core
     src/inventory/ComponentInventoryGenerator.cpp
     src/inventory/ComponentInventoryModels.cpp
     src/inventory/ComponentMatcher.cpp
+    src/inventory/ComponentCategoryLexicon.cpp
     src/inventory/NumberingTemplate.cpp
     src/inventory/ComponentPartCatalog.cpp
     src/review/ConfirmPlan.cpp
@@ -154,6 +155,7 @@ add_executable(bridge_report_backend_tests
     tests/test_jtg_5120_package.cpp
     tests/test_numbering_template.cpp
     tests/test_component_part_catalog.cpp
+    tests/test_component_category_lexicon.cpp
     tests/test_jtg_5120_maintenance_standard.cpp
     tests/test_jtg_h21_package.cpp
     tests/test_password_hash.cpp
