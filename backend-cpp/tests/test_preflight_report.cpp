@@ -105,6 +105,20 @@ TEST(PreflightReportTest, ActualComponentAssociationMustUseLatestRevision) {
     EXPECT_TRUE(has_code(report.blocking_errors, "defect_component_match_required"));
 }
 
+TEST(PreflightReportTest, MarkedMissingDefectDoesNotBlockConfirmation) {
+    auto data = fixture();
+    settle(data);
+    auto& defect = data["defects"][0];
+    // 绑定界面标记缺失：未关联实际构件，但显式标记 → 不再阻塞。
+    defect["bridge_component_id"] = "";
+    defect["standard_component_category_id"] = "";
+    defect["resolved_structure_part"] = "";
+    defect["component_inventory_revision_id"] = "";
+    defect["component_match_method"] = "missing";
+    const auto report = bridge_report::review::build_preflight_report(data, context());
+    EXPECT_FALSE(has_code(report.blocking_errors, "defect_component_match_required"));
+}
+
 TEST(PreflightReportTest, GroupConfirmationBlocks) {
     auto data = fixture();
     settle(data);

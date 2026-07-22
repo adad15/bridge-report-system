@@ -151,12 +151,15 @@ void check_component_inventory_links(
             !string_member_or_empty(defect, "resolved_structure_part").empty() &&
             string_member_or_empty(defect, "component_inventory_revision_id") ==
                 *context.component_inventory_revision_id;
-        if (!linked) {
+        // 绑定界面"标记缺失"表示台账确无此构件：视为已处理，不落实际构件、不阻塞。
+        const bool marked_missing =
+            string_member_or_empty(defect, "component_match_method") == "missing";
+        if (!linked && !marked_missing) {
             add_issue(
                 blocking,
                 "defect_component_match_required",
                 "病害候选 " + candidate_id_of(defect) +
-                    " 尚未关联最新已确认台账中的实际构件。",
+                    " 尚未关联实际构件，请在绑定界面绑定或标记缺失。",
                 candidate_id_of(defect));
         }
     }
