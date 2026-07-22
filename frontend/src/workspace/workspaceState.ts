@@ -38,3 +38,5 @@ export const inspectionWorkspacePath = (bridgeId: string, inspectionYearId: stri
 export const componentArchivePath = (bridgeId: string) => `${bridgeOverviewPath(bridgeId)}/components`;
 export const reviewPath = (bridgeId: string, inspectionYearId: string, importRecordId: string) =>
   `${inspectionWorkspacePath(bridgeId, inspectionYearId)}/imports/${segment(importRecordId)}/review`;
+export const componentBindingPath = (bridgeId: string, inspectionYearId: string, importRecordId: string) =>
+  `${inspectionWorkspacePath(bridgeId, inspectionYearId)}/imports/${segment(importRecordId)}/binding`;
