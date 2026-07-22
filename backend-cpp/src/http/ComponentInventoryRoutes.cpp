@@ -177,6 +177,9 @@ Json::Value serialize_part_catalog(
         item["default_name"] = part.default_name;
         item["structure_part"] = part.structure_part;
         item["standard_component_category_id"] = part.standard_component_category_id;
+        item["standard_component_category_name"] =
+            category->second.payload["name"].isString()
+                ? category->second.payload["name"].asString() : part.standard_component_category_id;
         item["number_template"] = part.number_template;
         item["provisional"] = part.provisional;
         item["count_inputs"] = Json::Value(Json::arrayValue);

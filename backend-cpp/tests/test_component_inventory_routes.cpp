@@ -94,6 +94,7 @@ TEST(ComponentInventoryRoutesTest, SerializesPartCatalogForBridgeType) {
     girder_cat.source_file = "component-taxonomy.json";
     girder_cat.payload["bridge_type_ids"].append("h21.bridge_type.beam");
     girder_cat.payload["structure_part"] = "superstructure";
+    girder_cat.payload["name"] = "上部承重构件";
     girder_cat.payload["generatable"] = true;
     package.definitions.emplace(girder_cat.id, girder_cat);
 
@@ -109,6 +110,7 @@ TEST(ComponentInventoryRoutesTest, SerializesPartCatalogForBridgeType) {
             EXPECT_EQ(part["structure_part"].asString(), "superstructure");
             EXPECT_EQ(part["standard_component_category_id"].asString(),
                       "h21.component.beam.upper_bearing");
+            EXPECT_EQ(part["standard_component_category_name"].asString(), "上部承重构件");
             EXPECT_EQ(part["number_template"].asString(), "{span}-{c1}#{name}");
             EXPECT_FALSE(part["provisional"].asBool());
             ASSERT_TRUE(part["count_inputs"].isArray());

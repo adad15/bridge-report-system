@@ -54,10 +54,6 @@ NumberingTemplate CatalogPart::number_template_with(
 
 const std::vector<CatalogPart>& component_parts() {
     static const std::vector<CatalogPart> parts = {
-        // A. 共享 · 支座（superstructure）
-        {"bearing.support", "支座", "h21.component.bearing", "superstructure",
-         "{span}-{c1}-{c2}#{name}", {{"piers_per_span", "每孔墩数"}, {"bearings_per_pier", "每墩支座数"}}},
-
         // B. 共享 · 下部结构（梁 / 3 拱 / 斜拉；悬索桥另有特例下部见 G）
         {"lower.pier_column", "墩柱", "h21.component.lower.pier", "substructure",
          "{pier}-{c1}#{name}", {{"columns_per_pier", "每墩柱数"}}},
@@ -155,6 +151,10 @@ const std::vector<CatalogPart>& component_parts() {
          "{c1}#{name}", {{"foundation_count", "索塔基础数量"}}, true},
         {"sp.splay_saddle", "散索鞍", "h21.component.suspension.splay_saddle", "substructure",
          "{c1}#{name}", {{"saddle_count", "散索鞍数量"}}, true},
+
+        // H. 共享 · 支座（superstructure）——列在各桥型上部承重/一般构件之后。
+        {"bearing.support", "支座", "h21.component.bearing", "superstructure",
+         "{span}-{c1}-{c2}#{name}", {{"piers_per_span", "每孔墩数"}, {"bearings_per_pier", "每墩支座数"}}},
     };
     return parts;
 }
