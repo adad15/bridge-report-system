@@ -23,6 +23,7 @@ export function CreateBridgeDialog({
   const [region, setRegion] = useState("");
   const [station, setStation] = useState("");
   const [status, setStatus] = useState("在用");
+  const [scale, setScale] = useState("");
   const [plan, setPlan] = useState<GenerateComponentInventoryInput | null>(null);
   const [createdBridge, setCreatedBridge] = useState<BridgeAdminSummary | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,6 +50,7 @@ export function CreateBridgeDialog({
           administrative_region: region.trim(),
           station_mark: station.trim(),
           status,
+          bridge_scale: scale || undefined,
         });
         setCreatedBridge(bridge);
       }
@@ -93,6 +95,15 @@ export function CreateBridgeDialog({
               <label>路线名称<input maxLength={200} value={routeName} onChange={(event) => setRouteName(event.target.value)} /></label>
               <label>行政区划<input maxLength={200} value={region} onChange={(event) => setRegion(event.target.value)} /></label>
               <label>桩号<input maxLength={100} value={station} onChange={(event) => setStation(event.target.value)} /></label>
+              <label>
+                桥梁规模
+                <select aria-label="桥梁规模" value={scale} onChange={(event) => setScale(event.target.value)}>
+                  <option value="">未填写</option>
+                  <option value="大桥">大桥</option>
+                  <option value="中桥">中桥</option>
+                  <option value="小桥">小桥</option>
+                </select>
+              </label>
               <label>
                 状态
                 <select value={status} onChange={(event) => setStatus(event.target.value)}>

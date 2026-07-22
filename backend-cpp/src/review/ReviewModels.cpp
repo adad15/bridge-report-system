@@ -11,6 +11,7 @@ Json::Value BridgeSummary::to_json() const {
     json["bridge_name"] = bridge_name;
     json["route_name"] = route_name.has_value() ? Json::Value(*route_name) : Json::Value(Json::nullValue);
     json["status"] = status;
+    json["bridge_scale"] = bridge_scale.has_value() ? Json::Value(*bridge_scale) : Json::Value(Json::nullValue);
     json["latest_inspection_year"] = latest_inspection_year.has_value()
         ? Json::Value(*latest_inspection_year) : Json::Value(Json::nullValue);
     json["latest_overall_score"] = latest_overall_score.has_value()

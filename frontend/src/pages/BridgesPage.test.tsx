@@ -27,8 +27,8 @@ describe("BridgesPage", () => {
     vi.mocked(useAuth).mockReturnValue({ user: { username: "admin", display_name: "管理员", role: "admin" } } as never);
     vi.mocked(fetchStandardPackages).mockResolvedValue([]);
     vi.mocked(fetchBridges).mockResolvedValue([
-      { id: "b1", system_number: "QL-000001", bridge_name: "绕阳河二号桥", route_name: "G305", status: "在用", latest_inspection_year: 2026, latest_overall_score: 85.61, latest_overall_grade: "2类", pending_count: 2 },
-      { id: "b2", system_number: "QL-000002", bridge_name: "测试桥", route_name: "S101", status: "在用", latest_inspection_year: null, latest_overall_score: null, latest_overall_grade: null, pending_count: 0 },
+      { id: "b1", system_number: "QL-000001", bridge_name: "绕阳河二号桥", route_name: "G305", status: "在用", bridge_scale: "大桥", latest_inspection_year: 2026, latest_overall_score: 85.61, latest_overall_grade: "2类", pending_count: 2 },
+      { id: "b2", system_number: "QL-000002", bridge_name: "测试桥", route_name: "S101", status: "在用", bridge_scale: null, latest_inspection_year: null, latest_overall_score: null, latest_overall_grade: null, pending_count: 0 },
     ]);
   });
 

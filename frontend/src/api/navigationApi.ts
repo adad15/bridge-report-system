@@ -11,6 +11,7 @@ export interface BridgeSummary {
   bridge_name: string;
   route_name: string | null;
   status: string;
+  bridge_scale: string | null;
   latest_inspection_year: number | null;
   latest_overall_score: number | null;
   latest_overall_grade: string | null;

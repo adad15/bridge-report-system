@@ -34,7 +34,7 @@ describe("CreateBridgeDialog", () => {
     vi.resetAllMocks();
     vi.mocked(createBridge).mockResolvedValue({
       id: "bridge-1", system_number: "QL-000001", bridge_name: "测试桥", route_number: null,
-      route_name: null, administrative_region: null, station_mark: null, status: "在用",
+      route_name: null, administrative_region: null, station_mark: null, status: "在用", bridge_scale: null,
     });
     vi.mocked(generateComponentInventory).mockResolvedValue({
       id: "revision-1", bridge_id: "bridge-1", revision_number: 1, status: "draft",

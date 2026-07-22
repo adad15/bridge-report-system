@@ -307,7 +307,7 @@ ReviewRepository::ReviewRepository(
 
 std::vector<review::BridgeSummary> ReviewRepository::list_bridges() {
     const auto result = db_client_->execSqlSync(
-        "select b.id, b.system_number, b.bridge_name, b.route_name, b.status, "
+        "select b.id, b.system_number, b.bridge_name, b.route_name, b.status, b.bridge_scale, "
         "latest.inspection_year as latest_inspection_year, latest.overall_score as latest_overall_score, "
         "latest.overall_grade as latest_overall_grade, "
         "(coalesce((select count(*) from import_records ir "
@@ -334,6 +334,7 @@ std::vector<review::BridgeSummary> ReviewRepository::list_bridges() {
         summary.bridge_name = row["bridge_name"].as<std::string>();
         summary.route_name = optional_text(row, "route_name");
         summary.status = row["status"].as<std::string>();
+        summary.bridge_scale = optional_text(row, "bridge_scale");
         if (!row["latest_inspection_year"].isNull()) {
             summary.latest_inspection_year = row["latest_inspection_year"].as<int>();
         }
