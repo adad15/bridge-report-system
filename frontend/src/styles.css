@@ -2462,6 +2462,85 @@ body {
   overflow-wrap: anywhere;
 }
 
+.component-binding-workspace {
+  display: grid;
+  gap: 1rem;
+}
+
+.binding-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.binding-progress {
+  color: #5a6b7b;
+  font-size: 0.9rem;
+}
+
+.binding-group {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #dce3ea;
+  border-radius: 9px;
+  background: #fbfcfe;
+}
+
+.binding-group-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.binding-group-counts {
+  color: #5a6b7b;
+  font-size: 0.85rem;
+}
+
+.binding-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid #eef2f6;
+}
+
+.binding-row-number {
+  font-weight: 600;
+  min-width: 6rem;
+}
+
+.binding-row-refs {
+  color: #5a6b7b;
+  font-size: 0.85rem;
+}
+
+.binding-status {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.binding-status-bound { background: #e3f4e6; color: #1f6b34; }
+.binding-status-missing { background: #eceff2; color: #5a6b7b; }
+.binding-status-unmatched { background: #fdeaea; color: #a4302a; }
+.binding-status-ambiguous { background: #fff1d6; color: #7a5410; }
+
+.binding-row-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.binding-footer {
+  display: flex;
+  gap: 0.75rem;
+}
+
 .inventory-blockers {
   padding: 0.9rem 1rem;
   border: 1px solid #edc36b;
