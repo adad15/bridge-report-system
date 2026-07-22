@@ -19,6 +19,20 @@ TEST(BridgeAdministrationRoutesTest, ParsesCreateAndDeleteRequests) {
     EXPECT_EQ(delete_request.items.size(), 1u);
 }
 
+TEST(BridgeAdministrationRoutesTest, ParsesAndValidatesBridgeScale) {
+    Json::Value body;
+    body["bridge_name"] = "测试桥";
+    body["bridge_scale"] = "大桥";
+    bridge_report::db::CreateBridgeRequest request;
+    EXPECT_FALSE(bridge_report::http::parse_create_bridge_request(body, request));
+    ASSERT_TRUE(request.bridge_scale.has_value());
+    EXPECT_EQ(*request.bridge_scale, "大桥");
+
+    body["bridge_scale"] = "特大桥";  // 不在 大/中/小 集合
+    bridge_report::db::CreateBridgeRequest invalid;
+    EXPECT_EQ(bridge_report::http::parse_create_bridge_request(body, invalid), "invalid_bridge_scale");
+}
+
 TEST(BridgeAdministrationRoutesTest, RejectsDuplicateOrOversizedSelection) {
     Json::Value body;
     body["bridge_ids"].append("11111111-1111-4111-8111-111111111111");

@@ -14,6 +14,7 @@ struct CreateBridgeRequest {
     std::optional<std::string> administrative_region;
     std::optional<std::string> station_mark;
     std::string status{"在用"};
+    std::optional<std::string> bridge_scale;  // 大桥/中桥/小桥，用户手工录入
 };
 
 struct BridgeAdministrationSummary {
@@ -25,6 +26,7 @@ struct BridgeAdministrationSummary {
     std::optional<std::string> administrative_region;
     std::optional<std::string> station_mark;
     std::string status;
+    std::optional<std::string> bridge_scale;
 };
 
 enum class CreateBridgeStatus { Created, Duplicate, Invalid, Failed };

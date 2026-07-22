@@ -41,6 +41,7 @@ Json::Value bridge_summary_json(const db::BridgeAdministrationSummary& bridge) {
     json["administrative_region"] = bridge.administrative_region ? Json::Value(*bridge.administrative_region) : Json::Value(Json::nullValue);
     json["station_mark"] = bridge.station_mark ? Json::Value(*bridge.station_mark) : Json::Value(Json::nullValue);
     json["status"] = bridge.status;
+    json["bridge_scale"] = bridge.bridge_scale ? Json::Value(*bridge.bridge_scale) : Json::Value(Json::nullValue);
     return json;
 }
 
@@ -76,6 +77,14 @@ std::optional<std::string> parse_create_bridge_request(
         ? trim(body["status"].asString()) : "在用";
     if (output.status != "在用" && output.status != "停用" && output.status != "拆除")
         return "invalid_bridge_status";
+    if (body.isMember("bridge_scale") && !body["bridge_scale"].isNull()) {
+        if (!body["bridge_scale"].isString()) return "invalid_bridge_field";
+        const auto scale = trim(body["bridge_scale"].asString());
+        if (!scale.empty()) {
+            if (scale != "大桥" && scale != "中桥" && scale != "小桥") return "invalid_bridge_scale";
+            output.bridge_scale = scale;
+        }
+    }
     return std::nullopt;
 }
 

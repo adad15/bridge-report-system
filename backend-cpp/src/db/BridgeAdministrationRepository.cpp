@@ -32,7 +32,8 @@ BridgeAdministrationSummary summary(const drogon::orm::Row& row) {
         row["id"].as<std::string>(), row["system_number"].as<std::string>(),
         row["bridge_name"].as<std::string>(), nullable(row["route_number"]),
         nullable(row["route_name"]), nullable(row["administrative_region"]),
-        nullable(row["station_mark"]), row["status"].as<std::string>()
+        nullable(row["station_mark"]), row["status"].as<std::string>(),
+        nullable(row["bridge_scale"])
     };
 }
 
@@ -62,7 +63,7 @@ CreateBridgeOutcome BridgeAdministrationRepository::create_bridge(const CreateBr
         );
         const auto existing = tx->execSqlSync(
             "select id::text as id,system_number,bridge_name,route_number,route_name,"
-            "administrative_region,station_mark,status from bridges "
+            "administrative_region,station_mark,status,bridge_scale from bridges "
             "where lower(btrim(bridge_name))=lower(btrim($1)) "
             "and lower(btrim(coalesce(route_number,'')))=lower(btrim($2)) "
             "and lower(btrim(coalesce(station_mark,'')))=lower(btrim($3)) limit 1",
@@ -72,13 +73,14 @@ CreateBridgeOutcome BridgeAdministrationRepository::create_bridge(const CreateBr
             tx->rollback();
             return {CreateBridgeStatus::Duplicate, summary(existing[0])};
         }
+        const auto scale = normalized_optional(request.bridge_scale);
         const auto inserted = tx->execSqlSync(
-            "insert into bridges(bridge_name,route_number,route_name,administrative_region,station_mark,status) "
-            "values($1,nullif($2,''),nullif($3,''),nullif($4,''),nullif($5,''),$6) "
+            "insert into bridges(bridge_name,route_number,route_name,administrative_region,station_mark,status,bridge_scale) "
+            "values($1,nullif($2,''),nullif($3,''),nullif($4,''),nullif($5,''),$6,nullif($7,'')) "
             "returning id::text as id,system_number,bridge_name,route_number,route_name,"
-            "administrative_region,station_mark,status",
+            "administrative_region,station_mark,status,bridge_scale",
             name, route_number.value_or(""), route_name.value_or(""), region.value_or(""),
-            station.value_or(""), request.status
+            station.value_or(""), request.status, scale.value_or("")
         );
         const auto created = summary(inserted[0]);
         tx.reset();
