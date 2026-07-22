@@ -121,13 +121,14 @@ TEST_F(WordImportRepositoryTest, PersistsExactDefectMatchAgainstConfirmedInvento
     const auto entry_id = client_->execSqlSync(
         "insert into bridge_component_inventory_entries(inventory_revision_id,bridge_component_id,"
         "component_number,site_name,site_component_type,sort_order) "
-        "values($1::uuid,$2::uuid,'1-1#','主梁','主梁',1) returning id::text",
+        "values($1::uuid,$2::uuid,'1-1#梁','空心板','空心板',1) returning id::text",
         revision_id, component_id)[0]["id"].as<std::string>();
     client_->execSqlSync(
         "insert into bridge_component_standard_mappings(inventory_entry_id,standard_package_id,"
         "standard_bridge_type_id,standard_component_category_id,structure_part,mapping_source,"
         "confirmation_status,confirmed_by_user_id,confirmed_at) "
-        "values($1::uuid,$2::uuid,'beam','main-girder','superstructure','规范模板','已确认',$3::uuid,now())",
+        "values($1::uuid,$2::uuid,'h21.bridge_type.beam','h21.component.beam.upper_bearing',"
+        "'superstructure','规范模板','已确认',$3::uuid,now())",
         entry_id, package_id_, user_id);
     client_->execSqlSync(
         "update bridge_component_inventory_revisions set status='已确认',"
@@ -140,8 +141,8 @@ TEST_F(WordImportRepositoryTest, PersistsExactDefectMatchAgainstConfirmedInvento
     batch.data["photos"] = Json::Value(Json::arrayValue);
     Json::Value defect(Json::objectValue);
     defect["candidate_id"] = "defect_0001";
-    defect["component_name"] = "主梁";
-    defect["component_number"] = "1-1#";
+    defect["component_name"] = "上部承重构件";  // 报告部件名称（规范固定用词）→ 类别
+    defect["component_number"] = "1-1#梁";        // 含类型词，需原文保真
     defect["warnings"] = Json::Value(Json::arrayValue);
     batch.data["defects"].append(defect);
 
@@ -154,15 +155,20 @@ TEST_F(WordImportRepositoryTest, PersistsExactDefectMatchAgainstConfirmedInvento
         "parsed_result_json#>>'{defects,0,standard_component_category_id}' as category_id,"
         "parsed_result_json#>>'{defects,0,resolved_structure_part}' as structure_part,"
         "parsed_result_json#>>'{defects,0,component_match_method}' as match_method,"
-        "parsed_result_json#>>'{defects,0,component_inventory_revision_id}' as revision_id "
+        "parsed_result_json#>>'{defects,0,component_inventory_revision_id}' as revision_id,"
+        "parsed_result_json#>>'{defects,0,component_number}' as component_number,"
+        "parsed_result_json#>>'{defects,0,component_name}' as component_name "
         "from import_records where id=$1::uuid",
         import_id_);
     ASSERT_EQ(stored.size(), 1u);
     EXPECT_EQ(stored[0]["component_id"].as<std::string>(), component_id);
-    EXPECT_EQ(stored[0]["category_id"].as<std::string>(), "main-girder");
+    EXPECT_EQ(stored[0]["category_id"].as<std::string>(), "h21.component.beam.upper_bearing");
     EXPECT_EQ(stored[0]["structure_part"].as<std::string>(), "上部结构");
     EXPECT_EQ(stored[0]["match_method"].as<std::string>(), "exact");
     EXPECT_EQ(stored[0]["revision_id"].as<std::string>(), revision_id);
+    // 导入保真：构件编号/部件名称按报告原文存储，不裁剪类型词、不归一化。
+    EXPECT_EQ(stored[0]["component_number"].as<std::string>(), "1-1#梁");
+    EXPECT_EQ(stored[0]["component_name"].as<std::string>(), "上部承重构件");
 
 }
 
