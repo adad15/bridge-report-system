@@ -18,11 +18,8 @@ vi.mock("../api/componentInventoryApi", async (importOriginal) => {
 });
 
 const plan = {
-  standard_package_id: "package-1", template_id: "template-1", bridge_type_id: "beam",
-  span_count: 1, input_quantities: { span_count: 1, girders: 1 },
-  groups: [{ site_component_type: "主梁", site_name: "主梁", standard_component_category_id: "girder",
-    structure_part: "superstructure" as const, numbering_mode: "span_member" as const,
-    quantity: 1, quantity_key: "girders" }],
+  standard_package_id: "package-1", bridge_type_id: "h21.bridge_type.beam", span_count: 1,
+  part_selections: [{ part_key: "beam.girder", site_name: "主梁", counts: [1] }],
 };
 
 vi.mock("./BridgeInventoryWizard", () => ({

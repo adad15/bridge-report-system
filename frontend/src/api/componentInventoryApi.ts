@@ -1,7 +1,6 @@
 import { ApiError, request } from "./apiClient";
 
 export type StructurePart = "superstructure" | "substructure" | "deck_system" | "overall" | "other";
-export type NumberingMode = "span_member" | "pier_line" | "sequential";
 
 export interface ComponentMapping {
   id: string;
@@ -40,18 +39,6 @@ export interface ComponentInventoryRevision {
   entries: ComponentInventoryEntry[];
 }
 
-export interface InventoryGenerationGroup {
-  site_component_type: string;
-  site_name: string;
-  standard_component_category_id: string;
-  structure_part: StructurePart;
-  numbering_mode: NumberingMode;
-  quantity: number;
-  quantity_key: string;
-  number_prefix?: string;
-  number_suffix?: string;
-}
-
 export interface CatalogPartCountInput {
   key: string;
   label: string;
@@ -77,11 +64,7 @@ export interface GenerateComponentInventoryInput {
   standard_package_id: string;
   bridge_type_id: string;
   span_count: number;
-  part_selections?: PartSelection[];
-  // 旧模板/分组路径（待清理），目录路径不需要。
-  template_id?: string;
-  input_quantities?: Record<string, number>;
-  groups?: InventoryGenerationGroup[];
+  part_selections: PartSelection[];
 }
 
 export interface InventoryEntryInput {

@@ -29,36 +29,6 @@ describe("componentInventoryApi", () => {
     );
   });
 
-  it("generates a draft with the complete template contract", async () => {
-    const revision = { id: "revision-1", entries: [] };
-    const input = {
-      standard_package_id: "package-1",
-      template_id: "template-1",
-      bridge_type_id: "beam",
-      span_count: 2,
-      input_quantities: { span_count: 2, girders: 3 },
-      groups: [
-        {
-          site_component_type: "主梁",
-          site_name: "主梁",
-          standard_component_category_id: "category-1",
-          structure_part: "superstructure" as const,
-          numbering_mode: "span_member" as const,
-          quantity: 3,
-          quantity_key: "girders",
-        },
-      ],
-    };
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201, json: async () => ({ revision }) });
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(generateComponentInventory("http://backend", "bridge-1", input)).resolves.toEqual(revision);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://backend/api/bridges/bridge-1/component-inventories/generate",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }
-    );
-  });
-
   it("fetches the part catalog for a bridge type", async () => {
     const parts = [
       {

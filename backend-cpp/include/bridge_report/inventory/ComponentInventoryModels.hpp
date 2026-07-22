@@ -8,23 +8,6 @@
 
 namespace bridge_report::inventory {
 
-enum class NumberingMode { SpanMember, PierLine, Sequential };
-
-std::optional<NumberingMode> parse_numbering_mode(const std::string& value);
-std::string to_string(NumberingMode mode);
-
-struct GenerationGroupInput {
-    std::string site_component_type;
-    std::string site_name;
-    std::string standard_component_category_id;
-    std::string structure_part;
-    NumberingMode numbering_mode{NumberingMode::Sequential};
-    int quantity{0};
-    std::string number_prefix;
-    std::string number_suffix{"#"};
-    std::string quantity_key;
-};
-
 // 台账向导里用户对一个部件的选择：目录部件键 + 现场名（可改）+ 各数量维。
 struct PartSelection {
     std::string part_key;
@@ -34,11 +17,10 @@ struct PartSelection {
 
 struct GenerateInventoryInput {
     std::string standard_package_id;
-    std::string template_id;
+    std::string template_id;  // 溯源；目录路径留空，仓库写哨兵
     std::string bridge_type_id;
     int span_count{0};
-    Json::Value input_quantities{Json::objectValue};
-    std::vector<GenerationGroupInput> groups;
+    Json::Value input_quantities{Json::objectValue};  // 溯源
     std::vector<PartSelection> part_selections;
 };
 

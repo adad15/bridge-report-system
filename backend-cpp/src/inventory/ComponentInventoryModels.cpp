@@ -1,8 +1,5 @@
 #include "bridge_report/inventory/ComponentInventoryModels.hpp"
 
-#include <array>
-#include <string_view>
-
 namespace bridge_report::inventory {
 namespace {
 
@@ -10,15 +7,6 @@ bool non_empty_string(const Json::Value& value, const char* key, std::string& ou
     if (!value.isMember(key) || !value[key].isString()) return false;
     output = value[key].asString();
     return !output.empty();
-}
-
-bool valid_structure_part(const std::string& value) {
-    static constexpr std::array<std::string_view, 5> values{
-        "superstructure", "substructure", "deck_system", "overall", "other"};
-    for (const auto candidate : values) {
-        if (value == candidate) return true;
-    }
-    return false;
 }
 
 Json::Value mapping_json(const InventoryMapping& mapping) {
@@ -35,22 +23,6 @@ Json::Value mapping_json(const InventoryMapping& mapping) {
 }
 
 }  // namespace
-
-std::optional<NumberingMode> parse_numbering_mode(const std::string& value) {
-    if (value == "span_member") return NumberingMode::SpanMember;
-    if (value == "pier_line") return NumberingMode::PierLine;
-    if (value == "sequential") return NumberingMode::Sequential;
-    return std::nullopt;
-}
-
-std::string to_string(const NumberingMode mode) {
-    switch (mode) {
-        case NumberingMode::SpanMember: return "span_member";
-        case NumberingMode::PierLine: return "pier_line";
-        case NumberingMode::Sequential: return "sequential";
-    }
-    return "sequential";
-}
 
 Json::Value inventory_revision_json(const InventoryRevision& revision) {
     Json::Value value;
@@ -180,77 +152,13 @@ bool parse_generate_inventory_input(
         return false;
     }
 
-    // 目录路径优先：body 含非空 part_selections 时按部件目录解析。
-    if (body.isMember("part_selections")) {
-        if (!body["part_selections"].isArray() || body["part_selections"].empty()) {
-            error_code = "inventory_part_selections_required";
-            error_message = "至少需要选择一个构件生成部件。";
-            return false;
-        }
-        return parse_part_selections(body, output, error_code, error_message);
-    }
-
-    // 旧 groups 路径（待清理）：template_id 必填。
-    if (output.template_id.empty()) {
-        error_code = "invalid_inventory_generation_context";
-        error_message = "构件模板不能为空。";
+    if (!body.isMember("part_selections") || !body["part_selections"].isArray() ||
+        body["part_selections"].empty()) {
+        error_code = "inventory_part_selections_required";
+        error_message = "至少需要选择一个构件生成部件。";
         return false;
     }
-    if (!body.isMember("groups") || !body["groups"].isArray() || body["groups"].empty()) {
-        error_code = "inventory_groups_required";
-        error_message = "至少需要一个构件生成分组。";
-        return false;
-    }
-
-    output.groups.clear();
-    for (const auto& item : body["groups"]) {
-        GenerationGroupInput group;
-        std::string numbering;
-        if (!item.isObject() ||
-            !non_empty_string(item, "site_component_type", group.site_component_type) ||
-            !non_empty_string(item, "site_name", group.site_name) ||
-            !non_empty_string(item, "standard_component_category_id",
-                              group.standard_component_category_id) ||
-            !non_empty_string(item, "structure_part", group.structure_part) ||
-            !non_empty_string(item, "numbering_mode", numbering) ||
-            !item.isMember("quantity") || !item["quantity"].isInt()) {
-            error_code = "invalid_inventory_generation_group";
-            error_message = "构件生成分组字段不完整。";
-            return false;
-        }
-        const auto mode = parse_numbering_mode(numbering);
-        if (!mode.has_value() || !valid_structure_part(group.structure_part) ||
-            item["quantity"].asInt() <= 0 || item["quantity"].asInt() > 10000) {
-            error_code = "invalid_inventory_generation_group";
-            error_message = "构件数量、编号方式或内部结构部位无效。";
-            return false;
-        }
-        group.numbering_mode = *mode;
-        group.quantity = item["quantity"].asInt();
-        if (!non_empty_string(item, "quantity_key", group.quantity_key)) {
-            error_code = "invalid_inventory_quantity_key";
-            error_message = "构件生成分组必须关联规范模板中的数量项。";
-            return false;
-        }
-        if (item.isMember("number_prefix")) {
-            if (!item["number_prefix"].isString()) {
-                error_code = "invalid_inventory_number_affix";
-                error_message = "编号前缀必须是文本。";
-                return false;
-            }
-            group.number_prefix = item["number_prefix"].asString();
-        }
-        if (item.isMember("number_suffix")) {
-            if (!item["number_suffix"].isString()) {
-                error_code = "invalid_inventory_number_affix";
-                error_message = "编号后缀必须是文本。";
-                return false;
-            }
-            group.number_suffix = item["number_suffix"].asString();
-        }
-        output.groups.push_back(std::move(group));
-    }
-    return true;
+    return parse_part_selections(body, output, error_code, error_message);
 }
 
 }  // namespace bridge_report::inventory
