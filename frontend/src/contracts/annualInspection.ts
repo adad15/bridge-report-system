@@ -90,7 +90,7 @@ export interface DefectCandidate {
   resolved_structure_part?: StructurePart | null;
   component_inventory_revision_id?: string | null;
   component_match_candidate_ids?: string[];
-  component_match_method?: "exact" | "confirmed_alias" | "normalized_candidate" | "manual" | null;
+  component_match_method?: "exact" | "confirmed_alias" | "normalized_candidate" | "manual" | "missing" | null;
   component_match_confirmed_by?: string | null;
   defect_type: string;
   defect_location: string;
@@ -289,7 +289,8 @@ function isValidDefectCandidate(value: unknown): boolean {
       matchMethod === "exact" ||
       matchMethod === "confirmed_alias" ||
       matchMethod === "normalized_candidate" ||
-      matchMethod === "manual") &&
+      matchMethod === "manual" ||
+      matchMethod === "missing") &&
     (value.component_inventory_revision_id === undefined ||
       value.component_inventory_revision_id === null ||
       typeof value.component_inventory_revision_id === "string") &&

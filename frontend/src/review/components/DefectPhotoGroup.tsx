@@ -95,7 +95,7 @@ export function DefectPhotoGroup({ draft, defect, sequenceNumber = 1, importReco
             <span className="defect-fact-label">构件编号（原文）</span>
             <input id={reviewTargetId("defect-field", defect.candidate_id, "component_number")} aria-label="构件编号" disabled={disabled} readOnly value={defect.component_number ?? ""} onClick={keepRowOpen} />
             <span className="defect-fact-label defect-fact-label-row-start">实际构件</span>
-            <ComponentMatchField defect={defect} inventory={componentInventory} dispatch={dispatch} disabled={disabled} />
+            <ComponentMatchField defect={defect} inventory={componentInventory} />
             <span className="defect-fact-label defect-fact-label-row-start">位置</span>
             <input id={reviewTargetId("defect-field", defect.candidate_id, "defect_location")} aria-label="位置" disabled={disabled} value={defect.defect_location} onClick={keepRowOpen} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} />
             <span className="defect-fact-label">病害类型</span>
