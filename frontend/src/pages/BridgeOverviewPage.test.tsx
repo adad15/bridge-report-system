@@ -24,12 +24,9 @@ vi.mock("../bridges/ComponentInventoryEditor", () => ({
 
 describe("BridgeOverviewPage", () => {
   // 台账构件可达数千条，挂在总览页会让每次进桥、每次切回都先等它整份加载完。
-  // 总览页只留入口，真正的台账在 /bridges/:id/inventory。
-  it("links to the inventory page instead of loading the inventory itself", () => {
+  // 台账在 /bridges/:id/inventory，入口由工作区标签导航提供，总览页不碰它。
+  it("does not load the inventory", () => {
     render(<MemoryRouter><BridgeOverviewPage /></MemoryRouter>);
-
     expect(screen.queryByText("台账桥梁：bridge-1")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "查看构件台账" }))
-      .toHaveAttribute("href", "/bridges/bridge-1/inventory");
   });
 });
