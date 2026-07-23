@@ -1,8 +1,12 @@
 import { Link } from "react-router-dom";
 
-import { ComponentInventoryEditor } from "../bridges/ComponentInventoryEditor";
 import { useBridgeWorkspace } from "../workspace/BridgeWorkspaceShell";
-import { componentArchivePath, inspectionsPath, inspectionWorkspacePath } from "../workspace/workspaceState";
+import {
+  componentArchivePath,
+  componentInventoryPath,
+  inspectionsPath,
+  inspectionWorkspacePath,
+} from "../workspace/workspaceState";
 
 const show = (value: string | number | null | undefined) => value ?? "—";
 
@@ -20,7 +24,14 @@ export function BridgeOverviewPage() {
         <Link className="primary-link" to={inspectionsPath(bridge.id)}>进入年度检测</Link>
       </section>
 
-      <ComponentInventoryEditor bridgeId={bridge.id} />
+      {/* 台账只放入口，不在总览页加载：构件可达数千条，否则每次进桥都要先等它。 */}
+      <section className="workspace-card">
+        <div className="card-heading">
+          <div><p className="section-kicker">实际构件台账</p><h2>按规范生成的实际构件</h2></div>
+          <Link to={componentInventoryPath(bridge.id)}>查看构件台账</Link>
+        </div>
+        <p className="empty-hint">在台账页查看分组核对、编辑构件编号与规范映射。</p>
+      </section>
 
       <section className="workspace-card">
         <div className="card-heading"><div><p className="section-kicker">待处理事项</p><h2>{overview.pending.total_count} 项</h2></div></div>

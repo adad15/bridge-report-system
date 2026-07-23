@@ -36,6 +36,9 @@ export const inspectionsPath = (bridgeId: string) => `${bridgeOverviewPath(bridg
 export const inspectionWorkspacePath = (bridgeId: string, inspectionYearId: string) =>
   `${inspectionsPath(bridgeId)}/${segment(inspectionYearId)}`;
 export const componentArchivePath = (bridgeId: string) => `${bridgeOverviewPath(bridgeId)}/components`;
+// 台账单列一页：构件可达数千条，挂在总览页会让每次进桥都先等它加载完。
+export const componentInventoryPath = (bridgeId: string) =>
+  `${bridgeOverviewPath(bridgeId)}/inventory`;
 export const reviewPath = (bridgeId: string, inspectionYearId: string, importRecordId: string) =>
   `${inspectionWorkspacePath(bridgeId, inspectionYearId)}/imports/${segment(importRecordId)}/review`;
 export const componentBindingPath = (bridgeId: string, inspectionYearId: string, importRecordId: string) =>
