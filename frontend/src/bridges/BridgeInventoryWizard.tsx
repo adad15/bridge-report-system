@@ -13,6 +13,7 @@ import {
   standardsErrorMessage,
   type StandardCatalog,
 } from "../api/standardsApi";
+import { readCached, standardCatalogsCacheKey, writeCached } from "../api/resourceCache";
 import { backendBaseUrl } from "../config";
 import { expandTemplate } from "./inventoryNumbering";
 import { structurePartLabel, structurePartOrder } from "./structureParts";
@@ -56,13 +57,22 @@ export function BridgeInventoryWizard({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // 规范目录是全局参考数据，与台账用同一份缓存，避免每次打开向导重拉。
+    const cached = readCached<StandardCatalog[]>(standardCatalogsCacheKey);
+    if (cached) {
+      setCatalogs(cached);
+      if (cached.length === 1) setPackageId(cached[0].package.id);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     fetchStandardPackages(backendBaseUrl)
       .then(async (packages) => {
         const available = packages.filter(
           (item) => item.family === "technical_condition" && item.is_enabled && item.sync_status === "正常"
         );
         const loaded = await Promise.all(available.map((item) => fetchStandardCatalog(backendBaseUrl, item.id)));
+        writeCached(standardCatalogsCacheKey, loaded);
         if (cancelled) return;
         setCatalogs(loaded);
         if (loaded.length === 1) setPackageId(loaded[0].package.id);

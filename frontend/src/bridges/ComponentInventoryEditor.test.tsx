@@ -8,7 +8,7 @@ import {
   setComponentInventoryMapping,
   type ComponentInventoryRevision,
 } from "../api/componentInventoryApi";
-import { fetchStandardPackages } from "../api/standardsApi";
+import { fetchStandardCatalog, fetchStandardPackages } from "../api/standardsApi";
 import { clearCachedForTests } from "../api/resourceCache";
 import {
   ComponentInventoryEditor,
@@ -29,7 +29,7 @@ vi.mock("../api/componentInventoryApi", async (importOriginal) => {
 
 vi.mock("../api/standardsApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../api/standardsApi")>();
-  return { ...original, fetchStandardPackages: vi.fn() };
+  return { ...original, fetchStandardPackages: vi.fn(), fetchStandardCatalog: vi.fn() };
 });
 
 const revision: ComponentInventoryRevision = {
@@ -52,7 +52,14 @@ describe("ComponentInventoryEditor", () => {
     clearCachedForTests();  // 缓存是模块作用域的，不清会让用例顺序影响结果
     vi.resetAllMocks();
     vi.mocked(fetchLatestComponentInventory).mockResolvedValue(revision);
-    vi.mocked(fetchStandardPackages).mockResolvedValue([]);
+    // 规范目录决定映射列显示的是友好名称还是原始 ID，必须给出真实形状。
+    vi.mocked(fetchStandardPackages).mockResolvedValue([
+      { id: "package-1", family: "technical_condition", is_enabled: true, sync_status: "正常" } as never,
+    ]);
+    vi.mocked(fetchStandardCatalog).mockResolvedValue({
+      package: { id: "package-1", standard_code: "JTG/T H21—2011" },
+      component_categories: [{ id: "girder", name: "上部承重构件" }],
+    } as never);
     vi.mocked(setComponentInventoryMapping).mockResolvedValue({
       ...revision,
       entries: [{ ...revision.entries[0], mappings: [{ ...revision.entries[0].mappings[0], confirmation_status: "已确认" }] }],
@@ -89,6 +96,19 @@ describe("ComponentInventoryEditor", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText(/规范映射：/)).toBeInTheDocument();
     expect(within(dialog).queryByRole("columnheader", { name: "规范映射" })).not.toBeInTheDocument();
+  });
+
+  // 规范目录是另一条请求。台账现在能瞬时渲染，目录还在路上的那段窗口里，
+  // 不能把 h21.component.* 这类原始 ID 当作映射名显示给用户。
+  it("leaves the mapping label empty until the standard catalog arrives", () => {
+    const withoutCatalogs = inventoryGroupSummaries(revision, []);
+    expect(withoutCatalogs[0].mappingLabel).toBe("");
+
+    const withCatalogs = inventoryGroupSummaries(revision, [{
+      package: { id: "package-1", standard_code: "JTG/T H21—2011" },
+      component_categories: [{ id: "girder", name: "上部承重构件" }],
+    } as never]);
+    expect(withCatalogs[0].mappingLabel).toBe("JTG/T H21—2011 · 上部承重构件");
   });
 
   it("shows a check instead of restating the count once every mapping is confirmed", () => {
@@ -211,7 +231,8 @@ describe("ComponentInventoryEditor", () => {
       expect.objectContaining({
         siteComponentType: "主梁", activeCount: 2, firstNumber: "1-1#", lastNumber: "2-1#",
         pendingCount: 2, confirmedCount: 0, unmappedCount: 0,
-        mappingLabel: "技术评定规范 · girder",
+        // 目录未加载（此处传空数组）时不给标签，避免显示原始类别 ID。
+        mappingLabel: "",
       }),
       expect.objectContaining({
         siteComponentType: "桥墩", activeCount: 1, firstNumber: "P1", lastNumber: "P1",

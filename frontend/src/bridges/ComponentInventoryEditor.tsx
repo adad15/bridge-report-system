@@ -22,6 +22,7 @@ import {
   dropCached,
   inventoryCacheKey,
   readCached,
+  standardCatalogsCacheKey,
   writeCached,
 } from "../api/resourceCache";
 import {
@@ -130,7 +131,9 @@ export function inventoryGroupSummaries(
     // 结构分部取自已生效的规范映射；没有映射的构件留在"其他"。
     if (group.structurePart === "other" && mapping.structure_part)
       group.structurePart = mapping.structure_part;
-    if (!group.mappingLabel) {
+    // 规范目录是另一条请求，未到达前不要回退成 h21.component.* 这类原始 ID——
+    // 那对用户是噪声。空标签由渲染层显示为 "—"，目录到达后本 memo 会重算。
+    if (!group.mappingLabel && catalogs.length > 0) {
       const catalog = catalogs.find((item) => item.package.id === mapping.standard_package_id);
       const category = catalog?.component_categories.find(
         (item) => item.id === mapping.standard_component_category_id
@@ -216,15 +219,22 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     setDrafts(Object.fromEntries(revision.entries.map((entry) => [entry.id, entryDraft(entry)])));
   }, [revision]);
 
+  // 规范目录是另一条独立请求，且是全局参考数据（与桥无关），同样缓存：
+  // 台账已能瞬时渲染，目录若还在路上，规范映射列会先显示原始类别 ID。
   useEffect(() => {
     let cancelled = false;
+    const cached = readCached<StandardCatalog[]>(standardCatalogsCacheKey);
+    if (cached) setCatalogs(cached);
     fetchStandardPackages(backendBaseUrl)
       .then((packages) => Promise.all(
         packages
           .filter((item) => item.family === "technical_condition" && item.is_enabled && item.sync_status === "正常")
           .map((item) => fetchStandardCatalog(backendBaseUrl, item.id))
       ))
-      .then((loaded) => { if (!cancelled) setCatalogs(loaded); })
+      .then((loaded) => {
+        writeCached(standardCatalogsCacheKey, loaded);
+        if (!cancelled) setCatalogs(loaded);
+      })
       .catch(() => { /* 台账读取与编辑不因目录展示失败而整体失效。 */ });
     return () => { cancelled = true; };
   }, []);

@@ -26,6 +26,8 @@ export function clearCachedForTests(): void {
 }
 
 export const inventoryCacheKey = (bridgeId: string) => `inventory:${bridgeId}`;
+// 规范目录与桥无关，是全局参考数据，只需一个键。
+export const standardCatalogsCacheKey = "standard-catalogs";
 export const inspectionYearsCacheKey = (bridgeId: string) => `inspection-years:${bridgeId}`;
 export const inspectionWorkspaceCacheKey = (inspectionYearId: string) =>
   `inspection-workspace:${inspectionYearId}`;
