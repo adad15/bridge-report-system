@@ -11,6 +11,7 @@ namespace bridge_report::inventory {
 struct PartCountInput {
     std::string key;
     std::string label;
+    std::string hint;  // 口径说明，消除"数一跨还是两跨"这类歧义；空则不显示
 };
 
 struct CatalogPart {
@@ -21,6 +22,9 @@ struct CatalogPart {
     std::string number_template;                 // 含 {span}/{c1}…/{name}
     std::vector<PartCountInput> count_inputs;     // Count 占位符对应的用户数量键
     bool provisional{false};                      // 临时编号形状（待真实报告校准）
+    // 展开出的位置在真实桥上不一定都存在（翼墙/锥坡/护坡），向导逐个给复选框，
+    // 用户去掉的位置经 PartSelection::excluded_numbers 回传。
+    bool instance_selectable{false};
 
     // 填入各 Count 数量（{name} 保持原样）。
     NumberingTemplate number_template_with_counts(const std::vector<int>& counts) const;

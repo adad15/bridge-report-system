@@ -13,6 +13,8 @@ struct PartSelection {
     std::string part_key;
     std::string site_name;    // 现场名；空则取目录 default_name
     std::vector<int> counts;  // 按目录 count_inputs 顺序
+    // 用户在向导里去掉的位置（仅 instance_selectable 部件用），元素须是该部件展开出的编号。
+    std::vector<std::string> excluded_numbers;
 };
 
 struct GenerateInventoryInput {

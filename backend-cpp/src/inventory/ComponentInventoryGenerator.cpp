@@ -32,7 +32,16 @@ InventoryGenerationResult generate_component_inventory(const GenerateInventoryIn
             selection.site_name.empty() ? part->default_name : selection.site_name;
         const auto numbers = expand(part->number_template_with(name, selection.counts),
                                     NumberingContext{input.span_count});
+        // 用户在向导里去掉的位置（如某台没有翼墙）直接不生成；未命中的排除项说明前后端
+        // 展开不一致，宁可报错也不静默忽略。
+        const std::set<std::string> excluded(
+            selection.excluded_numbers.begin(), selection.excluded_numbers.end());
+        std::set<std::string> matched_exclusions;
         for (const auto& generated : numbers) {
+            if (excluded.count(generated.number) != 0) {
+                matched_exclusions.insert(generated.number);
+                continue;
+            }
             if (generated.number.empty() ||
                 !unique_numbers.emplace(name, generated.number).second) {
                 result.entries.clear();
@@ -50,6 +59,12 @@ InventoryGenerationResult generate_component_inventory(const GenerateInventoryIn
             entry.sort_order = ++sort_order;
             entry.generation_key = selection.part_key + ":" + std::to_string(entry.sort_order);
             result.entries.push_back(std::move(entry));
+        }
+        if (matched_exclusions.size() != excluded.size()) {
+            result.entries.clear();
+            result.error_code = "unknown_excluded_component_number";
+            result.error_message = "排除的构件编号不在该部件生成结果中：" + selection.part_key;
+            return result;
         }
     }
     return result;

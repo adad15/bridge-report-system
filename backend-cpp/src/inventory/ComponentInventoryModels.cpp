@@ -111,6 +111,21 @@ bool parse_part_selections(
                 selection.counts.push_back(count.asInt());
             }
         }
+        if (item.isMember("excluded_numbers")) {
+            if (!item["excluded_numbers"].isArray()) {
+                error_code = "invalid_inventory_part_selection";
+                error_message = "构件排除编号必须是文本数组。";
+                return false;
+            }
+            for (const auto& excluded : item["excluded_numbers"]) {
+                if (!excluded.isString() || excluded.asString().empty()) {
+                    error_code = "invalid_inventory_part_selection";
+                    error_message = "构件排除编号必须是非空文本。";
+                    return false;
+                }
+                selection.excluded_numbers.push_back(excluded.asString());
+            }
+        }
         output.part_selections.push_back(std::move(selection));
     }
     return true;

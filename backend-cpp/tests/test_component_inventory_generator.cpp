@@ -30,6 +30,37 @@ TEST(ComponentInventoryGeneratorTest, GeneratesFromPartCatalog) {
     EXPECT_EQ(result.entries[65].component_number, "1#跨桥面铺装");
 }
 
+// 翼墙几何上是 2 台 × 2 侧 = 4 个，但真实桥常缺其中几处，用户去掉的不生成。
+TEST(ComponentInventoryGeneratorTest, DropsExcludedInstances) {
+    inventory::GenerateInventoryInput input;
+    input.span_count = 33;
+    inventory::PartSelection wing;
+    wing.part_key = "lower.wing_wall";
+    wing.site_name = "翼墙";
+    wing.excluded_numbers = {"0#台右侧翼墙", "33#台左侧翼墙"};
+    input.part_selections.push_back(wing);
+
+    const auto result = inventory::generate_component_inventory(input);
+    ASSERT_TRUE(result.ok()) << result.error_message;
+    ASSERT_EQ(result.entries.size(), 2u);
+    EXPECT_EQ(result.entries.front().component_number, "0#台左侧翼墙");
+    EXPECT_EQ(result.entries.back().component_number, "33#台右侧翼墙");
+}
+
+// 排除项对不上展开结果说明前后端不一致，必须报错而不是静默忽略。
+TEST(ComponentInventoryGeneratorTest, RejectsExcludedNumberOutsideExpansion) {
+    inventory::GenerateInventoryInput input;
+    input.span_count = 33;
+    inventory::PartSelection slope;
+    slope.part_key = "lower.protection_slope";
+    slope.site_name = "护坡";
+    slope.excluded_numbers = {"7#台护坡"};  // 只会展开 0#/33#
+    input.part_selections.push_back(slope);
+
+    EXPECT_EQ(inventory::generate_component_inventory(input).error_code,
+              "unknown_excluded_component_number");
+}
+
 TEST(ComponentInventoryGeneratorTest, RejectsUnknownPartAndEmptySelections) {
     inventory::GenerateInventoryInput unknown;
     unknown.span_count = 3;

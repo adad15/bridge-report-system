@@ -182,11 +182,13 @@ Json::Value serialize_part_catalog(
                 ? category->second.payload["name"].asString() : part.standard_component_category_id;
         item["number_template"] = part.number_template;
         item["provisional"] = part.provisional;
+        item["instance_selectable"] = part.instance_selectable;
         item["count_inputs"] = Json::Value(Json::arrayValue);
         for (const auto& count_input : part.count_inputs) {
             Json::Value entry;
             entry["key"] = count_input.key;
             entry["label"] = count_input.label;
+            entry["hint"] = count_input.hint;
             item["count_inputs"].append(std::move(entry));
         }
         parts.append(std::move(item));

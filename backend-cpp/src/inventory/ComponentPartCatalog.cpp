@@ -68,12 +68,13 @@ const std::vector<CatalogPart>& component_parts() {
          "{ab}#{name}", {}},
         {"lower.foundation", "基础", "h21.component.lower.foundation", "substructure",
          "{line}{name}", {}},
+        // 翼墙/锥坡/护坡：几何上每台每侧各一个，但真实桥常缺其中几处，故逐个可勾选。
         {"lower.wing_wall", "翼墙", "h21.component.lower.wing_or_ear_wall", "substructure",
-         "{ab}#台{side}侧{name}", {}},
+         "{ab}#台{side}侧{name}", {}, false, true},
         {"lower.cone_slope", "锥坡", "h21.component.lower.cone_or_protection_slope", "substructure",
-         "{ab}#台{side}侧{name}", {}},
+         "{ab}#台{side}侧{name}", {}, false, true},
         {"lower.protection_slope", "护坡", "h21.component.lower.cone_or_protection_slope", "substructure",
-         "{ab}#台{name}", {}},
+         "{ab}#台{name}", {}, false, true},
         {"lower.regulation", "调治构造物", "h21.component.lower.regulation_structure", "substructure",
          "{c1}#{name}", {{"regulation_count", "数量"}}, true},
 
@@ -157,7 +158,9 @@ const std::vector<CatalogPart>& component_parts() {
         // 《构件编号规则》第10条：N-A-B#支座 = 第N孔第A号墩第B个支座。A 是一孔两个支承，
         // 由几何派生（恒 2），不问用户；用户只填每墩支座数。
         {"bearing.support", "支座", "h21.component.bearing", "superstructure",
-         "{span}-{sup}-{c1}#{name}", {{"bearings_per_pier", "每墩支座数"}}},
+         "{span}-{sup}-{c1}#{name}",
+         {{"bearings_per_pier", "每孔每墩支座数",
+           "只数一个孔落在这个墩上的支座，不含相邻孔。例：每孔 25 块板、每板每端 2 个角 → 填 50。"}}},
     };
     return parts;
 }

@@ -80,7 +80,9 @@ TEST(PartCatalogTest, BearingFollowsRuleArticle10) {
     EXPECT_EQ(bearing->number_template, "{span}-{sup}-{c1}#{name}");
     ASSERT_EQ(bearing->count_inputs.size(), 1u);
     EXPECT_EQ(bearing->count_inputs.front().key, "bearings_per_pier");
-    EXPECT_EQ(bearing->count_inputs.front().label, "每墩支座数");
+    // 一个墩上落着相邻两孔的支座，标签必须说清只数一个孔的，否则用户不知填一跨还是两跨。
+    EXPECT_EQ(bearing->count_inputs.front().label, "每孔每墩支座数");
+    EXPECT_FALSE(bearing->count_inputs.front().hint.empty());
 
     const auto out =
         nt::expand(bearing->number_template_with("支座", {4}), nt::NumberingContext{2});

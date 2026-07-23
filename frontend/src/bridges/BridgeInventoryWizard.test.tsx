@@ -40,28 +40,47 @@ const beamParts = [
     part_key: "beam.girder", default_name: "梁", structure_part: "superstructure" as const,
     standard_component_category_id: "h21.component.beam.upper_bearing",
     standard_component_category_name: "上部承重构件",
-    number_template: "{span}-{c1}#{name}", provisional: false,
-    count_inputs: [{ key: "girders_per_span", label: "每孔梁片数" }],
+    number_template: "{span}-{c1}#{name}", provisional: false, instance_selectable: false,
+    count_inputs: [{ key: "girders_per_span", label: "每孔梁片数", hint: "" }],
   },
   {
     part_key: "beam.wet_joint", default_name: "湿接缝", structure_part: "superstructure" as const,
     standard_component_category_id: "h21.component.beam.upper_general",
     standard_component_category_name: "上部一般构件",
-    number_template: "{span}-{c1}#{name}", provisional: false,
-    count_inputs: [{ key: "joints_per_span", label: "每孔湿接缝条数" }],
+    number_template: "{span}-{c1}#{name}", provisional: false, instance_selectable: false,
+    count_inputs: [{ key: "joints_per_span", label: "每孔湿接缝条数", hint: "" }],
   },
   {
     part_key: "beam.diaphragm", default_name: "横隔梁", structure_part: "superstructure" as const,
     standard_component_category_id: "h21.component.beam.upper_general",
     standard_component_category_name: "上部一般构件",
-    number_template: "{span}-{c1}-{c2}#{name}", provisional: false,
-    count_inputs: [{ key: "gaps", label: "每孔梁间数" }, { key: "beams", label: "每梁间道数" }],
+    number_template: "{span}-{c1}-{c2}#{name}", provisional: false, instance_selectable: false,
+    count_inputs: [
+      { key: "gaps", label: "每孔梁间数", hint: "" },
+      { key: "beams", label: "每梁间道数", hint: "" },
+    ],
+  },
+  {
+    part_key: "bearing.support", default_name: "支座", structure_part: "superstructure" as const,
+    standard_component_category_id: "h21.component.bearing",
+    standard_component_category_name: "支座",
+    number_template: "{span}-{sup}-{c1}#{name}", provisional: false, instance_selectable: false,
+    count_inputs: [
+      { key: "bearings_per_pier", label: "每孔每墩支座数", hint: "只数一个孔落在这个墩上的支座。" },
+    ],
+  },
+  {
+    part_key: "lower.wing_wall", default_name: "翼墙", structure_part: "substructure" as const,
+    standard_component_category_id: "h21.component.lower.wing_or_ear_wall",
+    standard_component_category_name: "翼墙、耳墙",
+    number_template: "{ab}#台{side}侧{name}", provisional: false, instance_selectable: true,
+    count_inputs: [],
   },
   {
     part_key: "deck.drainage", default_name: "排水系统", structure_part: "deck_system" as const,
     standard_component_category_id: "h21.component.deck.drainage",
     standard_component_category_name: "排水系统",
-    number_template: "{name}", provisional: false, count_inputs: [],
+    number_template: "{name}", provisional: false, instance_selectable: false, count_inputs: [],
   },
 ];
 
@@ -70,8 +89,8 @@ const cableParts = [
     part_key: "cs.tower", default_name: "索塔", structure_part: "superstructure" as const,
     standard_component_category_id: "h21.component.cable_stayed.tower",
     standard_component_category_name: "索塔",
-    number_template: "{c1}#{name}", provisional: true,
-    count_inputs: [{ key: "tower_count", label: "索塔数量" }],
+    number_template: "{c1}#{name}", provisional: true, instance_selectable: false,
+    count_inputs: [{ key: "tower_count", label: "索塔数量", hint: "" }],
   },
 ];
 
@@ -152,6 +171,37 @@ describe("BridgeInventoryWizard", () => {
     expect(await screen.findByLabelText("启用 索塔")).toBeInTheDocument();
     expect(screen.getByLabelText("跨数")).toHaveValue(null);
     await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(null));
+  });
+
+  it("shows the disambiguating hint on the bearing count", async () => {
+    render(<BridgeInventoryWizard onPlanChange={vi.fn()} />);
+    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "h21.bridge_type.beam");
+    await userEvent.type(screen.getByLabelText("跨数"), "2");
+    await userEvent.click(await screen.findByLabelText("启用 支座"));
+    // 一个墩上落着相邻两孔的支座，标签与提示都必须说清只数一个孔的。
+    expect(screen.getByLabelText("支座 每孔每墩支座数")).toBeInTheDocument();
+    expect(screen.getByText(/只数一个孔落在这个墩上的支座/)).toBeInTheDocument();
+  });
+
+  it("lets the user drop wing wall positions the bridge does not have", async () => {
+    const onPlanChange = vi.fn();
+    render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
+    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "h21.bridge_type.beam");
+    await userEvent.type(screen.getByLabelText("跨数"), "2");
+    await userEvent.click(await screen.findByLabelText("启用 翼墙"));
+
+    // 几何上 2 台 × 2 侧 = 4 个，逐个可勾选。
+    for (const number of ["0#台左侧翼墙", "0#台右侧翼墙", "2#台左侧翼墙", "2#台右侧翼墙"])
+      expect(screen.getByLabelText(number)).toBeChecked();
+
+    await userEvent.click(screen.getByLabelText("0#台右侧翼墙"));
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      part_selections: [
+        { part_key: "lower.wing_wall", site_name: "翼墙", counts: [],
+          excluded_numbers: ["0#台右侧翼墙"] },
+      ],
+    })));
+    expect(screen.getByText("共 3 个")).toBeInTheDocument();
   });
 
   it("emits null until at least one enabled part has complete counts", async () => {

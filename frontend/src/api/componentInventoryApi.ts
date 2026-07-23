@@ -42,6 +42,7 @@ export interface ComponentInventoryRevision {
 export interface CatalogPartCountInput {
   key: string;
   label: string;
+  hint: string;
 }
 
 export interface CatalogPart {
@@ -52,6 +53,8 @@ export interface CatalogPart {
   standard_component_category_name: string;
   number_template: string;
   provisional: boolean;
+  // 展开出的位置真实桥上不一定都有（翼墙/锥坡/护坡），向导逐个给复选框。
+  instance_selectable: boolean;
   count_inputs: CatalogPartCountInput[];
 }
 
@@ -59,6 +62,7 @@ export interface PartSelection {
   part_key: string;
   site_name: string;
   counts: number[];
+  excluded_numbers?: string[];
 }
 
 export interface GenerateComponentInventoryInput {

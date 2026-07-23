@@ -54,6 +54,9 @@ export function BridgeInventoryWizard({
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [names, setNames] = useState<Record<string, string>>({});
   const [counts, setCounts] = useState<Record<string, string[]>>({});
+  // 逐实例复选记的是展开顺序里的下标，不是编号：改现场名或改跨数后编号会变，
+  // 下标仍指向同一个位置（如"0#台左侧"），用户的取舍不会丢。
+  const [excludedIndexes, setExcludedIndexes] = useState<Record<string, number[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [partsError, setPartsError] = useState<string | null>(null);
@@ -113,6 +116,19 @@ export function BridgeInventoryWizard({
   const partCounts = (part: CatalogPart) =>
     counts[part.part_key] ?? part.count_inputs.map(() => "");
 
+  // 该部件按当前跨数/数量展开出的全部编号；跨数或数量不合法时为空。
+  const partNumbers = (part: CatalogPart) => {
+    if (!validSpanCount(spanCount)) return [];
+    const parsed = parseCounts(partCounts(part));
+    if (parsed === null) return [];
+    return expandTemplate(
+      part.number_template,
+      partName(part).trim() || part.default_name,
+      parsed,
+      Number(spanCount)
+    );
+  };
+
   const derived = useMemo(() => {
     const spanValid = validSpanCount(spanCount);
     const span = spanValid ? Number(spanCount) : 0;
@@ -126,12 +142,23 @@ export function BridgeInventoryWizard({
         valid = false;
         continue;
       }
-      selections.push({ part_key: part.part_key, site_name: name, counts: parsed });
+      const selection: PartSelection = { part_key: part.part_key, site_name: name, counts: parsed };
+      if (part.instance_selectable) {
+        const numbers = partNumbers(part);
+        const dropped = excludedIndexes[part.part_key] ?? [];
+        // 下标转成编号再回传，后端按自己展开的结果校验，前后端不一致会明确报错。
+        selection.excluded_numbers = dropped
+          .map((index) => numbers[index]?.number)
+          .filter((number): number is string => !!number);
+        // 全部去掉等于这个部件不存在，不必生成。
+        if (selection.excluded_numbers.length === numbers.length) continue;
+      }
+      selections.push(selection);
     }
     if (selections.length === 0) valid = false;
     return { selections, valid, span };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parts, enabled, names, counts, spanCount]);
+  }, [parts, enabled, names, counts, spanCount, excludedIndexes]);
 
   useEffect(() => {
     onPlanChange(
@@ -153,6 +180,7 @@ export function BridgeInventoryWizard({
     setEnabled({});
     setNames({});
     setCounts({});
+    setExcludedIndexes({});
   }
 
   function resetForBridgeType(nextBridgeTypeId: string) {
@@ -161,6 +189,19 @@ export function BridgeInventoryWizard({
     setEnabled({});
     setNames({});
     setCounts({});
+    setExcludedIndexes({});
+  }
+
+  function toggleInstance(part: CatalogPart, index: number, on: boolean) {
+    setExcludedIndexes((current) => {
+      const dropped = current[part.part_key] ?? [];
+      const next = on
+        ? dropped.filter((item) => item !== index)
+        : dropped.includes(index)
+          ? dropped
+          : [...dropped, index];
+      return { ...current, [part.part_key]: next };
+    });
   }
 
   function toggle(part: CatalogPart, on: boolean) {
@@ -204,16 +245,34 @@ export function BridgeInventoryWizard({
     [parts]
   );
 
-  function renderPreview(part: CatalogPart) {
-    if (!validSpanCount(spanCount)) return null;
-    const parsed = parseCounts(partCounts(part));
-    if (parsed === null) return null;
-    const numbers = expandTemplate(
-      part.number_template,
-      partName(part).trim() || part.default_name,
-      parsed,
-      Number(spanCount)
+  // 展开出的位置逐个可勾选：真实桥常缺其中几处（如只有一侧有翼墙）。
+  function renderInstances(part: CatalogPart) {
+    const numbers = partNumbers(part);
+    if (numbers.length === 0) return null;
+    const dropped = excludedIndexes[part.part_key] ?? [];
+    return (
+      <fieldset className="inventory-instance-list">
+        <legend>桥上实际有哪些（去掉没有的）</legend>
+        {numbers.map((item, index) => (
+          <label className="inventory-instance-option" key={item.number}>
+            <input
+              type="checkbox"
+              aria-label={item.number}
+              checked={!dropped.includes(index)}
+              onChange={(event) => toggleInstance(part, index, event.target.checked)}
+            />
+            <span>{item.number}</span>
+          </label>
+        ))}
+        <p className="inventory-part-preview">
+          共 {numbers.length - dropped.length} 个
+        </p>
+      </fieldset>
     );
+  }
+
+  function renderPreview(part: CatalogPart) {
+    const numbers = partNumbers(part);
     if (numbers.length === 0) return null;
     const shown = numbers.slice(0, 6).map((item) => item.number);
     return (
@@ -333,9 +392,12 @@ export function BridgeInventoryWizard({
                                   value={partCounts(part)[index] ?? ""}
                                   onChange={(event) => setCount(part, index, event.target.value)}
                                 />
+                                {countInput.hint ? (
+                                  <span className="inventory-count-hint">{countInput.hint}</span>
+                                ) : null}
                               </label>
                             ))}
-                            {renderPreview(part)}
+                            {part.instance_selectable ? renderInstances(part) : renderPreview(part)}
                           </div>
                         ) : null}
                       </div>
