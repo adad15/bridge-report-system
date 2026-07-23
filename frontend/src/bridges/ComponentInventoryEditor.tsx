@@ -25,6 +25,7 @@ import {
 } from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
 import { BridgeInventoryWizard } from "./BridgeInventoryWizard";
+import { structurePartLabel, structurePartOrder } from "./structureParts";
 
 interface MappingDraft {
   packageId: string;
@@ -79,6 +80,7 @@ function inventoryStatus(status: string) {
 
 export interface InventoryGroupSummary {
   siteComponentType: string;
+  structurePart: string;
   activeCount: number;
   firstNumber: string;
   lastNumber: string;
@@ -98,6 +100,7 @@ export function inventoryGroupSummaries(
     if (!group) {
       group = {
         siteComponentType: entry.site_component_type,
+        structurePart: "other",
         activeCount: 0,
         firstNumber: entry.component_number,
         lastNumber: entry.component_number,
@@ -118,6 +121,9 @@ export function inventoryGroupSummaries(
     }
     if (mapping.confirmation_status === "已确认") group.confirmedCount += 1;
     else group.pendingCount += 1;
+    // 结构分部取自已生效的规范映射；没有映射的构件留在"其他"。
+    if (group.structurePart === "other" && mapping.structure_part)
+      group.structurePart = mapping.structure_part;
     if (!group.mappingLabel) {
       const catalog = catalogs.find((item) => item.package.id === mapping.standard_package_id);
       const category = catalog?.component_categories.find(
@@ -131,12 +137,14 @@ export function inventoryGroupSummaries(
   return [...groups.values()];
 }
 
-function groupStatusText(group: InventoryGroupSummary): string {
+// 全部确认时只给一个对勾：数量列已经写了同一个数字，再写"已确认 N"没有信息量。
+// 只有存在待确认或无映射时才列出问题项。
+export function groupStatusText(group: InventoryGroupSummary): string {
   const parts: string[] = [];
-  if (group.confirmedCount > 0) parts.push(`已确认 ${group.confirmedCount}`);
   if (group.pendingCount > 0) parts.push(`待确认 ${group.pendingCount}`);
   if (group.unmappedCount > 0) parts.push(`无映射 ${group.unmappedCount}`);
-  return parts.join("、") || "—";
+  if (parts.length > 0) return parts.join("、");
+  return group.confirmedCount > 0 ? "✓" : "—";
 }
 
 const kMaxIndividualBlockers = 30;
@@ -207,6 +215,17 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   const groupSummaries = useMemo(
     () => (revision ? inventoryGroupSummaries(revision, catalogs) : []),
     [revision, catalogs]
+  );
+  // 按结构分部分段，顺序与向导一致（上部 → 下部 → 桥面系），空分部不显示。
+  const groupSections = useMemo(
+    () =>
+      structurePartOrder
+        .map((key) => ({
+          key,
+          groups: groupSummaries.filter((group) => group.structurePart === key),
+        }))
+        .filter((section) => section.groups.length > 0),
+    [groupSummaries]
   );
   const entriesById = useMemo(
     () => new Map((revision?.entries ?? []).map((entry) => [entry.id, entry])),
@@ -384,8 +403,8 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
         className={!entry.is_active ? "inventory-entry-inactive" : undefined}
       >
         <td><input aria-label={`构件编号 ${entry.component_number}`} value={draft.component_number} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, component_number: event.target.value } }))} /></td>
-        <td><input aria-label={`构件类别 ${entry.component_number}`} value={draft.site_component_type} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, site_component_type: event.target.value } }))} /></td>
-        <td><input aria-label={`现场名称 ${entry.component_number}`} value={draft.site_name} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, site_name: event.target.value } }))} /></td>
+        {/* 现场名称与构件类别在生成时就是同一个值，页面不再单列，改类别时同步跟随。 */}
+        <td><input aria-label={`构件类别 ${entry.component_number}`} value={draft.site_component_type} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, site_component_type: event.target.value, site_name: event.target.value } }))} /></td>
         <td><input aria-label={`所属跨或位置 ${entry.component_number}`} value={draft.span_or_location ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, span_or_location: event.target.value } }))} /></td>
         <td>
           {activeMapping ? (
@@ -478,8 +497,12 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
               <thead>
                 <tr><th>构件类别</th><th>数量</th><th>编号范围</th><th>规范映射</th><th>映射状态</th><th>操作</th></tr>
               </thead>
-              <tbody>
-                {groupSummaries.map((group) => (
+              {groupSections.map((section) => (
+                <tbody key={section.key}>
+                  <tr className="inventory-structure-row">
+                    <th scope="colgroup" colSpan={6}>{structurePartLabel(section.key)}</th>
+                  </tr>
+                  {section.groups.map((group) => (
                   <tr key={group.siteComponentType}>
                     <td>{group.siteComponentType}</td>
                     <td>{group.activeCount}</td>
@@ -510,8 +533,9 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
+                  ))}
+                </tbody>
+              ))}
             </table>
           </div>
         </div>
@@ -567,7 +591,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
           </p>
           <div className="inventory-table-scroll">
             <table className="data-table component-inventory-table">
-              <thead><tr><th>构件编号</th><th>构件类别</th><th>现场名称</th><th>所属跨或位置</th><th>规范映射</th><th>操作</th></tr></thead>
+              <thead><tr><th>构件编号</th><th>构件类别</th><th>所属跨或位置</th><th>规范映射</th><th>操作</th></tr></thead>
               <tbody>{searchMatches.slice(0, kMaxSearchResults).map((entry) => renderEntryRow(entry))}</tbody>
             </table>
           </div>
@@ -591,7 +615,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
             </div>
             <div className="inventory-table-scroll inventory-group-dialog-body">
               <table className="data-table component-inventory-table">
-                <thead><tr><th>构件编号</th><th>构件类别</th><th>现场名称</th><th>所属跨或位置</th><th>规范映射</th><th>操作</th></tr></thead>
+                <thead><tr><th>构件编号</th><th>构件类别</th><th>所属跨或位置</th><th>规范映射</th><th>操作</th></tr></thead>
                 <tbody>{pageEntries.map((entry) => renderEntryRow(entry))}</tbody>
               </table>
             </div>
@@ -613,8 +637,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       {adding ? (
         <div className="inventory-add-form">
           <label>构件编号<input value={newEntry.component_number} onChange={(event) => setNewEntry((current) => ({ ...current, component_number: event.target.value }))} /></label>
-          <label>构件类别<input value={newEntry.site_component_type} onChange={(event) => setNewEntry((current) => ({ ...current, site_component_type: event.target.value }))} /></label>
-          <label>现场名称<input value={newEntry.site_name} onChange={(event) => setNewEntry((current) => ({ ...current, site_name: event.target.value }))} /></label>
+          <label>构件类别<input value={newEntry.site_component_type} onChange={(event) => setNewEntry((current) => ({ ...current, site_component_type: event.target.value, site_name: event.target.value }))} /></label>
           <label>所属跨或位置<input value={newEntry.span_or_location ?? ""} onChange={(event) => setNewEntry((current) => ({ ...current, span_or_location: event.target.value }))} /></label>
           <button type="button" disabled={busy || !newEntry.component_number.trim() || !newEntry.site_component_type.trim() || !newEntry.site_name.trim()} onClick={() => void addEntry()}>添加到草稿</button>
           <button type="button" disabled={busy} onClick={() => setAdding(false)}>取消</button>

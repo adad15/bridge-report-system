@@ -2481,6 +2481,15 @@ body {
   overflow-wrap: anywhere;
 }
 
+.inventory-structure-row th {
+  padding: 0.55rem 0.75rem;
+  background: #eef2f7;
+  color: #33445a;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+}
+
 .inventory-count-hint {
   display: block;
   margin-top: 0.25rem;

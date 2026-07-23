@@ -11,6 +11,7 @@ import {
 import { fetchStandardPackages } from "../api/standardsApi";
 import {
   ComponentInventoryEditor,
+  groupStatusText,
   inventoryConfirmationBlockers,
   inventoryGroupSummaries,
 } from "./ComponentInventoryEditor";
@@ -54,6 +55,29 @@ describe("ComponentInventoryEditor", () => {
       ...revision,
       entries: [{ ...revision.entries[0], mappings: [{ ...revision.entries[0].mappings[0], confirmation_status: "已确认" }] }],
     });
+  });
+
+  it("groups the review table by structure part and drops the redundant 现场名称 column", async () => {
+    render(<ComponentInventoryEditor bridgeId="bridge-1" />);
+    // 分部表头来自映射的 structure_part，顺序与向导一致。
+    expect(await screen.findByRole("columnheader", { name: "上部结构" })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
+    // 现场名称与构件类别生成时同值，页面只留构件类别。
+    expect(await screen.findByLabelText("构件类别 1-1#")).toBeInTheDocument();
+    expect(screen.queryByLabelText("现场名称 1-1#")).not.toBeInTheDocument();
+  });
+
+  it("shows a check instead of restating the count once every mapping is confirmed", () => {
+    const base = {
+      siteComponentType: "主梁", structurePart: "superstructure", activeCount: 3,
+      firstNumber: "1-1#", lastNumber: "1-3#", mappingLabel: "", unmappedCount: 0,
+    };
+    // 数量列已经写了同一个数字，全确认时不再重复"已确认 3"。
+    expect(groupStatusText({ ...base, confirmedCount: 3, pendingCount: 0 })).toBe("✓");
+    expect(groupStatusText({ ...base, confirmedCount: 1, pendingCount: 2 })).toBe("待确认 2");
+    expect(groupStatusText({ ...base, confirmedCount: 0, pendingCount: 0, unmappedCount: 3 }))
+      .toBe("无映射 3");
   });
 
   it("keeps internal component ids hidden and referenced entries deactivate-only", async () => {

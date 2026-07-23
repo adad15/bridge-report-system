@@ -15,15 +15,8 @@ import {
 } from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
 import { expandTemplate } from "./inventoryNumbering";
+import { structurePartLabel, structurePartOrder } from "./structureParts";
 
-const structurePartLabels: Record<string, string> = {
-  superstructure: "上部结构",
-  substructure: "下部结构",
-  deck_system: "桥面系",
-  overall: "整体",
-  other: "其他",
-};
-const structurePartOrder = ["superstructure", "substructure", "deck_system", "overall", "other"];
 
 function validSpanCount(raw: string): boolean {
   const value = Number(raw);
@@ -348,9 +341,7 @@ export function BridgeInventoryWizard({
           <h4>勾选桥上有的部件并填数量</h4>
           {groups.map((group) => (
             <div className="inventory-part-group" key={group.key}>
-              <h4 className="inventory-structure-heading">
-                {structurePartLabels[group.key] ?? group.key}
-              </h4>
+              <h4 className="inventory-structure-heading">{structurePartLabel(group.key)}</h4>
               {group.categories.map((category) => (
                 <div className="inventory-category-group" key={category.id}>
                   <h5 className="inventory-category-heading">{category.name}</h5>
