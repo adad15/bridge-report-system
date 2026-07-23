@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,6 +9,7 @@ import {
   type ComponentInventoryRevision,
 } from "../api/componentInventoryApi";
 import { fetchStandardPackages } from "../api/standardsApi";
+import { clearCachedForTests } from "../api/resourceCache";
 import {
   ComponentInventoryEditor,
   groupStatusText,
@@ -48,6 +49,7 @@ const revision: ComponentInventoryRevision = {
 
 describe("ComponentInventoryEditor", () => {
   beforeEach(() => {
+    clearCachedForTests();  // 缓存是模块作用域的，不清会让用例顺序影响结果
     vi.resetAllMocks();
     vi.mocked(fetchLatestComponentInventory).mockResolvedValue(revision);
     vi.mocked(fetchStandardPackages).mockResolvedValue([]);
@@ -55,6 +57,22 @@ describe("ComponentInventoryEditor", () => {
       ...revision,
       entries: [{ ...revision.entries[0], mappings: [{ ...revision.entries[0].mappings[0], confirmation_status: "已确认" }] }],
     });
+  });
+
+  // 切换页签会卸载路由组件；再挂载时应立即用上次结果渲染，同时后台重新校验，
+  // 而不是每次都从"加载中…"开始等几秒。
+  it("renders from cache on remount while still revalidating", async () => {
+    const first = render(<ComponentInventoryEditor bridgeId="bridge-1" />);
+    await screen.findByText("分组核对");
+    expect(fetchLatestComponentInventory).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    render(<ComponentInventoryEditor bridgeId="bridge-1" />);
+    // 立即可见，无需等待，也不出现加载态。
+    expect(screen.getByText("分组核对")).toBeInTheDocument();
+    expect(screen.queryByText("加载中…")).not.toBeInTheDocument();
+    // 但仍然重新拉了一次，避免停留在过期数据上。
+    await waitFor(() => expect(fetchLatestComponentInventory).toHaveBeenCalledTimes(2));
   });
 
   it("groups the review table by structure part and drops the redundant 现场名称 column", async () => {

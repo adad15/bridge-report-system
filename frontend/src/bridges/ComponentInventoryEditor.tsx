@@ -19,6 +19,12 @@ import {
   type InventoryEntryInput,
 } from "../api/componentInventoryApi";
 import {
+  dropCached,
+  inventoryCacheKey,
+  readCached,
+  writeCached,
+} from "../api/resourceCache";
+import {
   fetchStandardCatalog,
   fetchStandardPackages,
   type StandardCatalog,
@@ -173,14 +179,26 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // 有上次的结果就先渲染它、不显示"加载中"，再在后台重新校验：
+    // 台账有数千条构件，每次切回页签都从头等一遍不符合正常网页的观感。
+    const cacheKey = inventoryCacheKey(bridgeId);
+    const cached = readCached<ComponentInventoryRevision>(cacheKey);
+    if (cached) {
+      setRevision(cached);
+      setNotCreated(false);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
       const latest = await fetchLatestComponentInventory(backendBaseUrl, bridgeId);
+      writeCached(cacheKey, latest);
       setRevision(latest);
       setNotCreated(false);
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === "component_inventory_not_found") {
+        dropCached(cacheKey);
         setRevision(null);
         setNotCreated(true);
       } else {
@@ -284,6 +302,8 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     setError(null);
     try {
       const next = await action();
+      // 改动后的结果直接写回缓存，下次挂载不会闪出改动前的旧台账。
+      writeCached(inventoryCacheKey(bridgeId), next);
       setRevision(next);
       setNotCreated(false);
       return true;

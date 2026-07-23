@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchInspectionYears } from "../api/navigationApi";
+import { clearCachedForTests } from "../api/resourceCache";
 import { fetchInspectionWorkspace } from "../api/workspaceApi";
 import { InspectionWorkspacePage } from "./InspectionWorkspacePage";
 
@@ -47,6 +48,7 @@ vi.mock("../workspace/DeleteImportRecordDialog", () => ({
 
 describe("InspectionWorkspacePage", () => {
   beforeEach(() => {
+    clearCachedForTests();  // 缓存是模块作用域的，不清会让用例顺序影响结果
     vi.resetAllMocks();
     authState.role = "admin";
     vi.mocked(fetchInspectionYears).mockResolvedValue([{

@@ -4,6 +4,13 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../api/apiClient";
 import { useAuth } from "../auth/AuthContext";
 import { fetchInspectionYears, type InspectionYearSummary } from "../api/navigationApi";
+import {
+  dropCached,
+  inspectionWorkspaceCacheKey,
+  inspectionYearsCacheKey,
+  readCached,
+  writeCached,
+} from "../api/resourceCache";
 import { fetchInspectionWorkspace, type InspectionWorkspace, type WorkspaceImport } from "../api/workspaceApi";
 import { backendBaseUrl } from "../config";
 import { CreateInspectionDialog } from "../workspace/CreateInspectionDialog";
@@ -44,9 +51,17 @@ export function InspectionWorkspacePage() {
   useEffect(() => {
     if (!bridgeId) return;
     let cancelled = false;
+    // 有上次的结果就先渲染，再后台校验；切回页签时不再从空白开始。
+    const cacheKey = inspectionYearsCacheKey(bridgeId);
+    const cached = readCached<InspectionYearSummary[]>(cacheKey);
+    if (cached) setYears(cached);
     fetchInspectionYears(backendBaseUrl, bridgeId)
       .then((items) => {
-        if (!cancelled) setYears(items.filter((item) => item.is_current).sort((a, b) => b.inspection_year - a.inspection_year));
+        const current = items
+          .filter((item) => item.is_current)
+          .sort((a, b) => b.inspection_year - a.inspection_year);
+        writeCached(cacheKey, current);
+        if (!cancelled) setYears(current);
       })
       .catch((caught) => {
         if (!cancelled) setError(caught instanceof ApiError ? caught.message : "年度列表加载失败。");
@@ -65,7 +80,9 @@ export function InspectionWorkspacePage() {
       return;
     }
     let cancelled = false;
-    setWorkspace(null);
+    // 用缓存打底而不是清成 null：后者会让每次切回都先闪一次加载态。
+    const cacheKey = inspectionWorkspaceCacheKey(inspectionYearId);
+    setWorkspace(readCached<InspectionWorkspace>(cacheKey) ?? null);
     setError(null);
     fetchInspectionWorkspace(backendBaseUrl, inspectionYearId)
       .then((body) => {
@@ -74,6 +91,7 @@ export function InspectionWorkspacePage() {
           setError("该年度不属于当前桥梁。");
           return;
         }
+        writeCached(cacheKey, body);
         setWorkspace(body);
       })
       .catch((caught) => {
@@ -89,6 +107,10 @@ export function InspectionWorkspacePage() {
   if (!bridgeId) return <p className="error-text">缺少桥梁标识。</p>;
 
   const refresh = () => {
+    // 显式刷新（新建年度、导入、删除等）必须丢弃缓存：这些场景下先闪一下改动前的
+    // 旧内容比多等一会儿更糟。页签切换不走这里，仍然享受缓存。
+    dropCached(inspectionYearsCacheKey(bridgeId));
+    if (inspectionYearId) dropCached(inspectionWorkspaceCacheKey(inspectionYearId));
     setVersion((current) => current + 1);
   };
 
