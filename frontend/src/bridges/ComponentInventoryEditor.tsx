@@ -28,6 +28,7 @@ import {
 import {
   fetchStandardCatalog,
   fetchStandardPackages,
+  standardsErrorMessage,
   type StandardCatalog,
 } from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
@@ -171,6 +172,8 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   const [deactivationReasons, setDeactivationReasons] = useState<Record<string, string>>({});
   const [mappingDrafts, setMappingDrafts] = useState<Record<string, MappingDraft>>({});
   const [catalogs, setCatalogs] = useState<StandardCatalog[]>([]);
+  // 规范目录取不到时，规范映射列会全是"—"；单独记错误并提示，避免无从判断。
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newEntry, setNewEntry] = useState<InventoryEntryInput>({
     component_number: "", site_name: "", site_component_type: "", span_or_location: "", remarks: "",
@@ -233,9 +236,16 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       ))
       .then((loaded) => {
         writeCached(standardCatalogsCacheKey, loaded);
-        if (!cancelled) setCatalogs(loaded);
+        if (!cancelled) {
+          setCatalogs(loaded);
+          setCatalogError(loaded.length === 0 ? "未取到可用的技术评定规范包。" : null);
+        }
       })
-      .catch(() => { /* 台账读取与编辑不因目录展示失败而整体失效。 */ });
+      .catch((caught) => {
+        // 台账读取与编辑不因目录展示失败而整体失效，但也不能静默：
+        // 之前这里吞掉异常，规范映射列会永久停在"—"，从界面上看不出任何原因。
+        if (!cancelled) setCatalogError(standardsErrorMessage(caught));
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -518,6 +528,11 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       {groupSummaries.length > 0 ? (
         <div className="inventory-group-summary">
           <h2>分组核对</h2>
+          {catalogError ? (
+            <p className="inventory-standard-notice" role="status">
+              规范映射名称暂时取不到（{catalogError}）；构件与编号不受影响，可稍后重试。
+            </p>
+          ) : null}
           <div className="inventory-table-scroll">
             <table className="data-table">
               <thead>
