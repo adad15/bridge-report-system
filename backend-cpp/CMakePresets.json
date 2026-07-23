@@ -20,6 +20,12 @@
       "name": "vs2022-x64-debug",
       "configurePreset": "vs2022-x64-debug",
       "configuration": "Debug"
+    },
+    {
+      "name": "vs2022-x64-release",
+      "displayName": "Release（日常使用）",
+      "configurePreset": "vs2022-x64-debug",
+      "configuration": "Release"
     }
   ],
   "testPresets": [
@@ -27,6 +33,14 @@
       "name": "vs2022-x64-debug",
       "configurePreset": "vs2022-x64-debug",
       "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "vs2022-x64-release",
+      "configurePreset": "vs2022-x64-debug",
+      "configuration": "Release",
       "output": {
         "outputOnFailure": true
       }
