@@ -14,4 +14,6 @@ Set-Location backend-cpp
 cmake --preset vs2022-x64-debug
 cmake --build --preset ("vs2022-x64-" + $Configuration.ToLower())
 
-& (Join-Path ".\build\vs-debug" $Configuration "bridge-report-backend.exe") ..\config\local.example.json
+# 不用 Join-Path 拼三段：它的多段形式是 PowerShell 6+ 才有的，5.1 下会报
+# "找不到接受实际参数的位置形式参数"。
+& ".\build\vs-debug\$Configuration\bridge-report-backend.exe" ..\config\local.example.json
