@@ -9,11 +9,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Set-Location backend-cpp
+# 由脚本自身定位仓库根，不依赖调用方的工作目录（start-all.ps1 以 backend-cpp 作
+# 工作目录调用本脚本）。
+$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 
+# 构建要在 backend-cpp 下进行：CMake 预设在那里。
+Set-Location (Join-Path $repositoryRoot "backend-cpp")
 cmake --preset vs2022-x64-debug
 cmake --build --preset ("vs2022-x64-" + $Configuration.ToLower())
 
-# 不用 Join-Path 拼三段：它的多段形式是 PowerShell 6+ 才有的，5.1 下会报
-# "找不到接受实际参数的位置形式参数"。
-& ".\build\vs-debug\$Configuration\bridge-report-backend.exe" ..\config\local.example.json
+# 但必须回到仓库根再启动后端。配置里的 archive.root 是相对路径 "archive"，
+# 按进程工作目录解析；若留在 backend-cpp 启动，归档会写进 backend-cpp\archive，
+# 与仓库根的 archive（.gitkeep 所标记的正式位置）分叉，表现为照片时有时无。
+Set-Location $repositoryRoot
+& "backend-cpp\build\vs-debug\$Configuration\bridge-report-backend.exe" "config\local.example.json"

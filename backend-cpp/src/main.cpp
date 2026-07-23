@@ -1,5 +1,7 @@
+#include <filesystem>
 #include <functional>
 #include <iostream>
+#include <system_error>
 #include <memory>
 #include <string>
 #include <vector>
@@ -95,6 +97,14 @@ Json::Value make_cpp_health_body(
     body["port"] = config.port;
     body["python_tools_base_url"] = config.python_tools_base_url;
     body["archive_root"] = config.archive_root.generic_string();
+    // 配置里的归档根通常是相对路径，按进程工作目录解析。从不同目录启动后端会写到
+    // 不同的归档目录，症状是"照片时有时无"且极难定位，故把解析后的绝对路径也报出来。
+    std::error_code archive_root_error;
+    const auto absolute_archive_root =
+        std::filesystem::absolute(config.archive_root, archive_root_error);
+    body["archive_root_absolute"] =
+        archive_root_error ? config.archive_root.generic_string()
+                           : absolute_archive_root.generic_string();
     body["standards_status"] = standard_error_count == 0 ? "ok" : "degraded";
     body["standard_package_count"] = static_cast<Json::UInt64>(standard_package_count);
     body["standard_error_count"] = static_cast<Json::UInt64>(standard_error_count);
