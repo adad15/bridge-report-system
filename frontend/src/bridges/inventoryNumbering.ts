@@ -6,7 +6,7 @@ export interface GeneratedNumber {
   location: string;
 }
 
-type Placeholder = "span" | "pier" | "abutment" | "line" | "side" | "count";
+type Placeholder = "span" | "pier" | "abutment" | "line" | "spanSupport" | "side" | "count";
 
 interface PlaceValue {
   token: string;
@@ -33,6 +33,11 @@ function placeholderValues(placeholder: Placeholder, count: number, n: number): 
         values.push({ token: label, location: label });
       }
       break;
+    // 一孔恒有两个支承（左右各一）。《规则》第10条支座自右至左编号，故记作 1、2。
+    case "spanSupport":
+      values.push({ token: "1", location: "第1号墩" });
+      values.push({ token: "2", location: "第2号墩" });
+      break;
     case "side":
       values.push({ token: "左", location: "左侧" });
       values.push({ token: "右", location: "右侧" });
@@ -55,6 +60,7 @@ const TOKENS: ReadonlyArray<readonly [string, Placeholder]> = [
   ["{pier}", "pier"],
   ["{ab}", "abutment"],
   ["{line}", "line"],
+  ["{sup}", "spanSupport"],
   ["{side}", "side"],
   ["{c1}", "count"],
   ["{c2}", "count"],

@@ -35,6 +35,12 @@ std::vector<PlaceValue> placeholder_values(
                 values.push_back({label, label});
             }
             break;
+        // 一孔恒有两个支承（左右各一）。《构件编号规则》第10条：支座在桥孔和桥墩编号的
+        // 基础上自右至左编号，故两个支承记作 1、2，1 为右侧。孔数不参与，是几何常量。
+        case Placeholder::SpanSupport:
+            values.push_back({"1", "第1号墩"});
+            values.push_back({"2", "第2号墩"});
+            break;
         case Placeholder::Side:
             values.push_back({"左", "左侧"});
             values.push_back({"右", "右侧"});

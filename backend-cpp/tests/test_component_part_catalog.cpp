@@ -72,6 +72,37 @@ TEST(PartCatalogTest, DeckPavementAndFoundationFollowDoc) {
     EXPECT_EQ(base_out.front().number, "0#台基础");
 }
 
+// 《构件编号规则》第10条：N-A-B#支座 = 第N孔第A号墩第B个支座。
+// A（一孔两个支承）由几何派生恒为 2，用户只填每墩支座数这一个维度。
+TEST(PartCatalogTest, BearingFollowsRuleArticle10) {
+    const auto* bearing = nt::find_part(nt::component_parts(), "bearing.support");
+    ASSERT_NE(bearing, nullptr);
+    EXPECT_EQ(bearing->number_template, "{span}-{sup}-{c1}#{name}");
+    ASSERT_EQ(bearing->count_inputs.size(), 1u);
+    EXPECT_EQ(bearing->count_inputs.front().key, "bearings_per_pier");
+    EXPECT_EQ(bearing->count_inputs.front().label, "每墩支座数");
+
+    const auto out =
+        nt::expand(bearing->number_template_with("支座", {4}), nt::NumberingContext{2});
+    ASSERT_EQ(out.size(), 16u);  // 2 孔 × 2 墩 × 4
+    EXPECT_EQ(out.front().number, "1-1-1#支座");
+    EXPECT_EQ(out[4].number, "1-2-1#支座");
+    EXPECT_EQ(out.back().number, "2-2-4#支座");
+    EXPECT_EQ(out.front().location, "第1孔");
+}
+
+// 真实算例：33 孔、每孔 25 块板、每板 4 个支座（两端各 2 个角）
+// ⇒ 每墩支座数 = 25 × 2 = 50，全桥 33 × 2 × 50 = 3300 = 825 块板 × 4。
+TEST(PartCatalogTest, BearingMatchesRealSlabBridgeTally) {
+    const auto* bearing = nt::find_part(nt::component_parts(), "bearing.support");
+    ASSERT_NE(bearing, nullptr);
+    const auto out =
+        nt::expand(bearing->number_template_with("支座", {50}), nt::NumberingContext{33});
+    ASSERT_EQ(out.size(), 3300u);
+    EXPECT_EQ(out.front().number, "1-1-1#支座");
+    EXPECT_EQ(out.back().number, "33-2-50#支座");
+}
+
 TEST(PartCatalogTest, ProvisionalSuperstructureExpandsSanely) {
     const auto* ring = nt::find_part(nt::component_parts(), "arch.main_ring");
     ASSERT_NE(ring, nullptr);

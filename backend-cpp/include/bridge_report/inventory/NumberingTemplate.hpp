@@ -5,7 +5,7 @@
 
 namespace bridge_report::inventory {
 
-enum class Placeholder { Span, Pier, Abutment, SupportLine, Side, Count };
+enum class Placeholder { Span, Pier, Abutment, SupportLine, SpanSupport, Side, Count };
 
 struct NumberingContext {
     int span_count{0};

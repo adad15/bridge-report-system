@@ -24,6 +24,7 @@ NumberingTemplate assemble(const std::string& pattern, const std::vector<int>& c
     add("{pier}", Placeholder::Pier, false);
     add("{ab}", Placeholder::Abutment, false);
     add("{line}", Placeholder::SupportLine, false);
+    add("{sup}", Placeholder::SpanSupport, false);
     add("{side}", Placeholder::Side, false);
     add("{c1}", Placeholder::Count, true);
     add("{c2}", Placeholder::Count, true);
@@ -153,8 +154,10 @@ const std::vector<CatalogPart>& component_parts() {
          "{c1}#{name}", {{"saddle_count", "散索鞍数量"}}, true},
 
         // H. 共享 · 支座（superstructure）——列在各桥型上部承重/一般构件之后。
+        // 《构件编号规则》第10条：N-A-B#支座 = 第N孔第A号墩第B个支座。A 是一孔两个支承，
+        // 由几何派生（恒 2），不问用户；用户只填每墩支座数。
         {"bearing.support", "支座", "h21.component.bearing", "superstructure",
-         "{span}-{c1}-{c2}#{name}", {{"piers_per_span", "每孔墩数"}, {"bearings_per_pier", "每墩支座数"}}},
+         "{span}-{sup}-{c1}#{name}", {{"bearings_per_pier", "每墩支座数"}}},
     };
     return parts;
 }
