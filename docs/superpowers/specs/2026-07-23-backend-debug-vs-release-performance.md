@@ -76,14 +76,30 @@ Debug CRT 的堆会在每次分配的前后写入哨兵字节、用固定模式�
 ## 处理
 
 1. **新增 Release 构建预设。** Visual Studio 是多配置生成器，同一个 `build/vs-debug` 目录可直接产出 Release，无需重新 configure，也不影响既有 Debug 产物。
-2. **启动脚本默认改用 Release**，保留 `-Configuration Debug` 作为退路：
+2. **启动脚本保持默认 Debug，Release 作为显式选项**：
 
    ```powershell
-   .\scripts\dev\start-cpp-backend.ps1                        # Release（日常）
-   .\scripts\dev\start-cpp-backend.ps1 -Configuration Debug   # 需要断点调试时
+   .\scripts\dev\start-cpp-backend.ps1                          # Debug（默认，开发期）
+   .\scripts\dev\start-cpp-backend.ps1 -Configuration Release   # 用真实数据量点界面时
    ```
 
+   这里曾一度把默认改为 Release，随后按开发期的实际需要改了回来。取舍见下节。
+
 3. **推荐前先验证 Release 的正确性**：Release 构建针对全新 schema 跑完全量 **389 项测试全部通过**。优化构建可能暴露未定义行为或改变时序，未验证就切换是拿正确性换速度——这一步不能省。
+
+## 开发期该用哪个
+
+两者不是二选一，取决于当下在做什么。**Debug 的价值不只是断点**，更重要的是 `_ITERATOR_DEBUG_LEVEL=2` 与调试堆构成的 bug 探测器：迭代器失效、越界访问、缓冲区溢出会当场断言，而不是几个月后变成一次诡异崩溃。这层安全网在 Release 下完全静默，不应轻易放弃。
+
+| 场景 | 用哪个 | 理由 |
+| --- | --- | --- |
+| 跑测试 | **Debug** | 安全网最该在此生效；3.8 s 与 1.0 s 的差别在这里无关紧要 |
+| 调后端逻辑、需要断点 | **Debug** | 变量不被优化掉，单步准确 |
+| 用真实数据量点界面、导入、看台账 | **Release** | 此时验证的是业务流程而非 C++ 内部，Debug 的等待纯属摩擦 |
+
+`scripts/dev/check-backend-tests.ps1` 始终使用 Debug 产物，不受本次改动影响——即每次 C++ 改动跑的 389 项测试都带着完整的检查。
+
+Release 下若后端崩溃，栈信息可读性差很多；**遇到后端异常应先换回 Debug 重现**。
 
 ## 这个改动解决什么、不解决什么
 
