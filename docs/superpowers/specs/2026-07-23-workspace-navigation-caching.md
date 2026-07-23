@@ -4,7 +4,7 @@
 >
 > 分支：`codex/06-5-interaction-redesign`
 >
-> 涉及提交：`92d236c`
+> 涉及提交：`92d236c`、`4714509`
 >
 > 触发背景：把台账移出总览页（见 [2026-07-23-bugfix-inventory-route-and-import-dialog.md](2026-07-23-bugfix-inventory-route-and-import-dialog.md)）之后，落地页不再受拖累，但"构件台账"与"年度检测"这两个页签本身仍是每次切回都要等几秒。用户指出这不符合正常网页的观感：首次加载可以等，之后切换不该再等。
 
@@ -57,6 +57,44 @@ setWorkspace(null);   // 拉取前先清空
 
 新增用例锁定行为：卸载后重新挂载时不出现加载态，但 `fetchLatestComponentInventory` 仍被调用第二次——即"立即可见"与"仍会校验"两件事同时成立。
 
+## 后续：加速暴露出的原始 ID 回退
+
+提交：`4714509`（fix(inventory): stop showing raw category ids while the standard catalog loads）
+
+### 现象
+
+上述缓存生效后，切到构件台账时出现新的观感问题：分组核对表的"规范映射"列先显示
+
+```
+技术评定规范 · h21.component.beam.upper_bearing
+技术评定规范 · h21.component.lower.pier
+```
+
+数秒后才变成 `JTG/T H21—2011 · 上部承重构件（主梁、挂梁）`。
+
+### 根因
+
+映射的友好名称并不来自台账本身，而是**另一条独立请求**——规范目录（`fetchStandardPackages` + `fetchStandardCatalog`）。`inventoryGroupSummaries` 在目录缺失时有一段回退：
+
+```ts
+`${catalog?.package.standard_code ?? "技术评定规范"} · ${
+  category?.name ?? mapping.standard_component_category_id   // 回退成原始 ID
+}`
+```
+
+这段回退一直存在，只是此前被台账自身数秒的加载耗时掩盖——台账渲染出来时目录早已到达。**缓存把台账变成瞬时渲染后，这个窗口才第一次可见。** 因此它不是本次引入的缺陷，而是被本次加速暴露的既有问题。
+
+### 修复
+
+- **目录未加载时不再回退成原始 ID。** `h21.component.*` 对用户没有意义，属于噪声；标签留空，由渲染层显示为 `—`，目录到达后 memo 重算即得到正确名称。宁可先空着，也不显示看不懂的内容。
+- **把规范目录纳入同一份缓存。** 它是与桥无关的全局参考数据，本就不必每次重拉；台账页与向导共用同一个键，切回页签时目录立即可用，上述空窗口基本不再出现。
+
+### 测试
+
+新增用例锁定：目录为空时 `mappingLabel` 必须为空；目录到位后必须解析为 `JTG/T H21—2011 · 上部承重构件`。
+
+同时修正了测试本身的缺陷——原先 `fetchStandardPackages` 被 mock 成返回空数组、`fetchStandardCatalog` 根本没有 mock，等于映射名称的解析路径从未被真正覆盖，那段回退逻辑因此长期无人发现。
+
 ## 边界
 
 - **仅限当前会话**：缓存不持久化、不设过期，刷新浏览器即清空。这是导航加速，不是离线能力。
@@ -67,11 +105,12 @@ setWorkspace(null);   // 拉取前先清空
 
 - `frontend/src/api/resourceCache.ts`（新增）
 - `frontend/src/bridges/ComponentInventoryEditor.tsx` 及测试
+- `frontend/src/bridges/BridgeInventoryWizard.tsx`（共用规范目录缓存）
 - `frontend/src/pages/InspectionWorkspacePage.tsx` 及测试
 
 ## 回归
 
-前端 247 → 248 项通过，`tsc -b && vite build` 通过。纯前端改动，后端无需重启。
+前端 247 → 249 项通过（缓存重挂载 1 条、目录未到不显示原始 ID 1 条），`tsc -b && vite build` 通过。纯前端改动，后端无需重启。
 
 ## 经验
 
@@ -79,3 +118,6 @@ setWorkspace(null);   // 拉取前先清空
 2. **加缓存的风险不在读，而在写之后。** 真正会出问题的是"用户刚改完，却看见改动前的内容"。因此凡是显式的变更动作，要么把新结果写回缓存，要么直接丢弃缓存，不能沿用旧值。
 3. **模块作用域的缓存会破坏测试隔离，且症状是间歇性的。** 用例顺序变化才暴露，全绿并不代表隔离成立——引入这类全局状态时，应同时提供测试用的重置入口。
 4. **加载慢未必是查询慢。** 年度列表只有几行却也要等，症结在"每次都完整重来"这一策略上；如果一开始就扎进 SQL 优化，方向就错了。
+5. **提速会暴露被耗时掩盖的缺陷。** 原始 ID 回退早就存在，只因页面本来就要等几秒而从未显形。优化之后应当重新审视页面的中间状态——那些"反正没人看得见"的过渡态会突然变成主要观感。
+6. **回退值要按"用户能否理解"来选，而不是"能否填满"。** `h21.component.beam.upper_bearing` 填满了单元格，却不传达任何信息；`—` 反而诚实。数据未就绪时留白优于显示内部标识。
+7. **mock 返回空集合会让整条分支不被覆盖。** 本例中目录被 mock 成空数组、另一个接口干脆没 mock，于是映射名称的解析路径从未被执行过，回退逻辑长期无人发现。给 mock 填真实形状的数据，比只求"测试能跑通"重要。
