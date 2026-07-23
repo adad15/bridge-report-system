@@ -66,6 +66,11 @@ describe("ComponentInventoryEditor", () => {
     // 现场名称与构件类别生成时同值，页面只留构件类别。
     expect(await screen.findByLabelText("构件类别 1-1#")).toBeInTheDocument();
     expect(screen.queryByLabelText("现场名称 1-1#")).not.toBeInTheDocument();
+
+    // 整组共用同一个映射：弹窗标题说明一次，不再逐行占一列。
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(/规范映射：/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole("columnheader", { name: "规范映射" })).not.toBeInTheDocument();
   });
 
   it("shows a check instead of restating the count once every mapping is confirmed", () => {

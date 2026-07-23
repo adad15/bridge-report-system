@@ -2372,6 +2372,12 @@ body {
   margin-top: 0;
 }
 
+.inventory-group-dialog-mapping {
+  margin: 0.35rem 0 0;
+  color: #5a6b7b;
+  font-size: 0.85rem;
+}
+
 .inventory-add-kind {
   justify-self: start;
 }
@@ -2648,6 +2654,63 @@ body {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+/* 台账页的按钮此前没有任何样式，呈现为浏览器默认外观，与页面其余部分不一致。
+   统一为页面既有规范：次要按钮白底描边，主操作蓝底，危险操作红字。 */
+.inventory-group-summary button,
+.inventory-row-actions button,
+.inventory-panel-actions button,
+.inventory-pagination button,
+.inventory-add-form button,
+.inventory-blockers button {
+  font: inherit;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #18202a;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.inventory-group-summary button:not(:disabled):hover,
+.inventory-row-actions button:not(:disabled):hover,
+.inventory-panel-actions button:not(:disabled):hover,
+.inventory-pagination button:not(:disabled):hover,
+.inventory-add-form button:not(:disabled):hover,
+.inventory-blockers button:not(:disabled):hover {
+  background: #f3f5f8;
+}
+
+.inventory-group-summary button:disabled,
+.inventory-row-actions button:disabled,
+.inventory-panel-actions button:disabled,
+.inventory-pagination button:disabled,
+.inventory-add-form button:disabled {
+  color: #97a2ae;
+  background: #f7f9fb;
+  cursor: not-allowed;
+}
+
+/* 确认本版台账是该页的主操作。 */
+.inventory-panel-actions button:last-child:not(:disabled) {
+  border-color: #2456c9;
+  background: #2456c9;
+  color: #fff;
+}
+
+.inventory-panel-actions button:last-child:not(:disabled):hover {
+  background: #1d47a8;
+}
+
+.inventory-row-actions .danger-button:not(:disabled) {
+  border-color: #f0c4bf;
+  color: #b42318;
+}
+
+.inventory-row-actions .danger-button:not(:disabled):hover {
+  background: #fef3f2;
 }
 
 .inventory-mapping-editor {

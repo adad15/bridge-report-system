@@ -261,6 +261,10 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
         : [],
     [revision, expandedGroup]
   );
+  const expandedGroupMapping = useMemo(
+    () => groupSummaries.find((group) => group.siteComponentType === expandedGroup)?.mappingLabel ?? "",
+    [groupSummaries, expandedGroup]
+  );
   const pageCount = Math.max(1, Math.ceil(expandedGroupEntries.length / kEntriesPageSize));
   const page = Math.min(groupPage, pageCount - 1);
   const pageEntries = expandedGroupEntries.slice(page * kEntriesPageSize, (page + 1) * kEntriesPageSize);
@@ -386,10 +390,6 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     if (!revision) return null;
     const draft = drafts[entry.id] ?? entryDraft(entry);
     const activeMapping = entry.mappings.find((item) => item.is_active);
-    const activeMappingCatalog = catalogs.find((item) => item.package.id === activeMapping?.standard_package_id);
-    const activeMappingCategory = activeMappingCatalog?.component_categories.find(
-      (item) => item.id === activeMapping?.standard_component_category_id
-    );
     const mappingDraft = mappingDrafts[entry.id];
     const mappingCatalog = catalogs.find((item) => item.package.id === mappingDraft?.packageId);
     const mappingCategories = mappingCatalog?.component_categories.filter(
@@ -407,37 +407,33 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
         <td><input aria-label={`构件类别 ${entry.component_number}`} value={draft.site_component_type} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, site_component_type: event.target.value, site_name: event.target.value } }))} /></td>
         <td><input aria-label={`所属跨或位置 ${entry.component_number}`} value={draft.span_or_location ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, span_or_location: event.target.value } }))} /></td>
         <td>
-          {activeMapping ? (
-            <div className="inventory-mapping-state">
-              <span>
-                {activeMappingCatalog?.package.standard_code ?? "技术评定规范"} · {activeMappingCategory?.name ?? "构件类别"} · {activeMapping.confirmation_status}
-              </span>
-              {activeMapping.confirmation_status !== "已确认" ? <button type="button" disabled={busy} onClick={() => void confirmExistingMapping(entry)}>确认映射</button> : null}
-            </div>
-          ) : mappingDraft ? (
-            <div className="inventory-mapping-editor">
-              <select aria-label={`映射规范 ${entry.component_number}`} value={mappingDraft.packageId} onChange={(event) => {
-                const nextCatalog = catalogs.find((item) => item.package.id === event.target.value);
-                updateMappingDraft(entry.id, { packageId: event.target.value, bridgeTypeId: nextCatalog?.bridge_types[0]?.id ?? "", categoryId: "" });
-              }}>
-                {catalogs.map((item) => <option key={item.package.id} value={item.package.id}>{item.package.standard_code}</option>)}
-              </select>
-              <select aria-label={`映射桥型 ${entry.component_number}`} value={mappingDraft.bridgeTypeId} onChange={(event) => updateMappingDraft(entry.id, { bridgeTypeId: event.target.value, categoryId: "" })}>
-                {mappingCatalog?.bridge_types.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-              <select aria-label={`映射类别 ${entry.component_number}`} value={mappingDraft.categoryId} onChange={(event) => updateMappingDraft(entry.id, { categoryId: event.target.value })}>
-                <option value="">请选择类别</option>
-                {mappingCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-              <button type="button" disabled={busy || !mappingDraft.categoryId} onClick={() => void saveMapping(entry.id)}>保存映射</button>
-            </div>
-          ) : (
-            <button type="button" disabled={busy || catalogs.length === 0} onClick={() => beginMapping(entry.id)}>设置规范映射</button>
-          )}
-        </td>
-        <td>
           <div className="inventory-row-actions">
             <button type="button" disabled={busy || !entry.is_active} onClick={() => void saveEntry(entry)}>保存</button>
+            {/* 已确认的映射整组一致、分组核对表已经显示，这里只在需要处理时才出现。 */}
+            {activeMapping && activeMapping.confirmation_status !== "已确认" ? (
+              <button type="button" disabled={busy} onClick={() => void confirmExistingMapping(entry)}>确认映射</button>
+            ) : null}
+            {!activeMapping && mappingDraft ? (
+              <div className="inventory-mapping-editor">
+                <select aria-label={`映射规范 ${entry.component_number}`} value={mappingDraft.packageId} onChange={(event) => {
+                  const nextCatalog = catalogs.find((item) => item.package.id === event.target.value);
+                  updateMappingDraft(entry.id, { packageId: event.target.value, bridgeTypeId: nextCatalog?.bridge_types[0]?.id ?? "", categoryId: "" });
+                }}>
+                  {catalogs.map((item) => <option key={item.package.id} value={item.package.id}>{item.package.standard_code}</option>)}
+                </select>
+                <select aria-label={`映射桥型 ${entry.component_number}`} value={mappingDraft.bridgeTypeId} onChange={(event) => updateMappingDraft(entry.id, { bridgeTypeId: event.target.value, categoryId: "" })}>
+                  {mappingCatalog?.bridge_types.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <select aria-label={`映射类别 ${entry.component_number}`} value={mappingDraft.categoryId} onChange={(event) => updateMappingDraft(entry.id, { categoryId: event.target.value })}>
+                  <option value="">请选择类别</option>
+                  {mappingCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <button type="button" disabled={busy || !mappingDraft.categoryId} onClick={() => void saveMapping(entry.id)}>保存映射</button>
+              </div>
+            ) : null}
+            {!activeMapping && !mappingDraft ? (
+              <button type="button" disabled={busy || catalogs.length === 0} onClick={() => beginMapping(entry.id)}>设置规范映射</button>
+            ) : null}
             {entry.is_active && !entry.is_referenced ? (
               <button type="button" className="danger-button" disabled={busy} onClick={() => void mutate(() => deleteComponentInventoryEntry(backendBaseUrl, revision.id, entry.id))}>删除</button>
             ) : null}
@@ -591,7 +587,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
           </p>
           <div className="inventory-table-scroll">
             <table className="data-table component-inventory-table">
-              <thead><tr><th>构件编号</th><th>构件类别</th><th>所属跨或位置</th><th>规范映射</th><th>操作</th></tr></thead>
+              <thead><tr><th>构件编号</th><th>构件类别</th><th>所属跨或位置</th><th>操作</th></tr></thead>
               <tbody>{searchMatches.slice(0, kMaxSearchResults).map((entry) => renderEntryRow(entry))}</tbody>
             </table>
           </div>
@@ -611,11 +607,15 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
               <h2 id="inventory-group-dialog-title">
                 {expandedGroup} 构件（共 {expandedGroupEntries.length} 个）
               </h2>
+              {/* 整组共用同一个规范映射，在标题处说明一次，不再逐行重复。 */}
+              {expandedGroupMapping ? (
+                <p className="inventory-group-dialog-mapping">规范映射：{expandedGroupMapping}</p>
+              ) : null}
               {error ? <p className="error-text" role="alert">{error}</p> : null}
             </div>
             <div className="inventory-table-scroll inventory-group-dialog-body">
               <table className="data-table component-inventory-table">
-                <thead><tr><th>构件编号</th><th>构件类别</th><th>所属跨或位置</th><th>规范映射</th><th>操作</th></tr></thead>
+                <thead><tr><th>构件编号</th><th>构件类别</th><th>所属跨或位置</th><th>操作</th></tr></thead>
                 <tbody>{pageEntries.map((entry) => renderEntryRow(entry))}</tbody>
               </table>
             </div>
