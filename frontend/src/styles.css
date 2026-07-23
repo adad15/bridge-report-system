@@ -2656,14 +2656,16 @@ body {
   gap: 0.5rem;
 }
 
-/* 台账页的按钮此前没有任何样式，呈现为浏览器默认外观，与页面其余部分不一致。
-   统一为页面既有规范：次要按钮白底描边，主操作蓝底，危险操作红字。 */
+/* 台账页与桥梁列表页的按钮此前都没有样式，呈现为浏览器默认外观，与页面其余部分
+   不一致。这里统一：次要按钮白底描边，主操作 .is-primary-action 蓝底，
+   危险操作 .danger-button 红字。新增按钮区把选择器加进下面三组即可。 */
 .inventory-group-summary button,
 .inventory-row-actions button,
 .inventory-panel-actions button,
 .inventory-pagination button,
 .inventory-add-form button,
-.inventory-blockers button {
+.inventory-blockers button,
+.bridge-admin-actions button {
   font: inherit;
   padding: 0.4rem 0.8rem;
   border: 1px solid #d9e0e8;
@@ -2679,7 +2681,8 @@ body {
 .inventory-panel-actions button:not(:disabled):hover,
 .inventory-pagination button:not(:disabled):hover,
 .inventory-add-form button:not(:disabled):hover,
-.inventory-blockers button:not(:disabled):hover {
+.inventory-blockers button:not(:disabled):hover,
+.bridge-admin-actions button:not(:disabled):hover {
   background: #f3f5f8;
 }
 
@@ -2687,29 +2690,33 @@ body {
 .inventory-row-actions button:disabled,
 .inventory-panel-actions button:disabled,
 .inventory-pagination button:disabled,
-.inventory-add-form button:disabled {
+.inventory-add-form button:disabled,
+.bridge-admin-actions button:disabled {
   color: #97a2ae;
   background: #f7f9fb;
   cursor: not-allowed;
 }
 
-/* 确认本版台账是该页的主操作。 */
-.inventory-panel-actions button:last-child:not(:disabled) {
+.inventory-panel-actions .is-primary-action:not(:disabled),
+.bridge-admin-actions .is-primary-action:not(:disabled) {
   border-color: #2456c9;
   background: #2456c9;
   color: #fff;
 }
 
-.inventory-panel-actions button:last-child:not(:disabled):hover {
+.inventory-panel-actions .is-primary-action:not(:disabled):hover,
+.bridge-admin-actions .is-primary-action:not(:disabled):hover {
   background: #1d47a8;
 }
 
-.inventory-row-actions .danger-button:not(:disabled) {
+.inventory-row-actions .danger-button:not(:disabled),
+.bridge-admin-actions .danger-button:not(:disabled) {
   border-color: #f0c4bf;
   color: #b42318;
 }
 
-.inventory-row-actions .danger-button:not(:disabled):hover {
+.inventory-row-actions .danger-button:not(:disabled):hover,
+.bridge-admin-actions .danger-button:not(:disabled):hover {
   background: #fef3f2;
 }
 

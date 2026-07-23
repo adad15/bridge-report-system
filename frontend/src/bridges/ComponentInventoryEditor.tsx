@@ -645,7 +645,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       ) : null}
       <div className="inventory-panel-actions">
         <button type="button" disabled={busy} onClick={() => setAdding(true)}>＋ 手动添加构件</button>
-        <button type="button" disabled={busy || revision.status === "已确认" || blockers.length > 0} onClick={() => void mutate(() => confirmComponentInventory(backendBaseUrl, revision.id))}>
+        <button type="button" className="is-primary-action" disabled={busy || revision.status === "已确认" || blockers.length > 0} onClick={() => void mutate(() => confirmComponentInventory(backendBaseUrl, revision.id))}>
           {busy ? "正在处理…" : "确认本版台账"}
         </button>
       </div>
