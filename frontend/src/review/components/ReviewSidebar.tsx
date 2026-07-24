@@ -1,7 +1,12 @@
 import type { ReviewCounts } from "../grouping";
 
 // "需要处理" 永远排第一位；系统评定展示后端计算结果，不展示 Word 导入评分。
-export type GroupKey = "needs_attention" | "defect_photos" | "ratings" | "raw_json";
+export type GroupKey =
+  | "needs_attention"
+  | "component_binding"
+  | "defect_photos"
+  | "ratings"
+  | "raw_json";
 
 interface GroupDef {
   key: GroupKey;
@@ -11,6 +16,8 @@ interface GroupDef {
 
 const GROUPS: GroupDef[] = [
   { key: "needs_attention", label: "需要处理", count: (counts) => counts.needs_attention_count },
+  // 绑定进度由绑定分区自己拉取，不在 ReviewCounts 里，故与"原始 JSON"一样不显示计数。
+  { key: "component_binding", label: "构件绑定", count: () => null },
   { key: "defect_photos", label: "病害与照片", count: (counts) => counts.defect_count },
   { key: "ratings", label: "系统技术状况评定", count: (counts) => counts.rating_item_count },
   { key: "raw_json", label: "原始 JSON", count: () => null },

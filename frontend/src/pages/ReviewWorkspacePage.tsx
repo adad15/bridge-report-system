@@ -21,6 +21,7 @@ import { useAuth } from "../auth/AuthContext";
 import { backendBaseUrl } from "../config";
 import { canPressConfirm, canRunPreflight, formatConfirmSuccess, parsePreflightDetails, validateRevisionForm } from "../review/confirmFlow";
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
+import { ComponentBindingWorkspace } from "../review/binding/ComponentBindingWorkspace";
 import { DefectsSection } from "../review/components/DefectsSection";
 import type { SelectedCandidate } from "../review/components/EvidencePanel";
 import { EvidencePanel } from "../review/components/EvidencePanel";
@@ -754,6 +755,10 @@ function ReviewWorkspaceLoaded({
           {navigationMessage ? <p className="warning-text review-navigation-message">{navigationMessage}</p> : null}
           {activeGroup === "needs_attention" ? (
             <NeedsAttentionSection items={attentionItems} draft={draft} onSelect={selectCandidate} />
+          ) : null}
+          {/* 不传 onEnterReview：这里已经在校对页内，绑定完直接切到别的分区即可。 */}
+          {activeGroup === "component_binding" ? (
+            <ComponentBindingWorkspace importId={importRecordId} bridgeId={response.bridge.id} />
           ) : null}
           {activeGroup === "defect_photos" ? (
             <DefectsSection

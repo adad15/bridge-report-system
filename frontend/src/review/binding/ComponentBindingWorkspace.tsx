@@ -277,19 +277,23 @@ export function ComponentBindingWorkspace({
           ))}
         </div>
       ))}
-      <div className="binding-footer">
-        <button
-          type="button"
-          className="binding-enter-review"
-          disabled={busy || !allResolved}
-          onClick={() => onEnterReview?.()}
-        >
-          {allResolved ? "全部绑定完成，进入校对" : "仍有未处理构件"}
-        </button>
-        <button type="button" className="binding-later" disabled={busy} onClick={() => onEnterReview?.()}>
-          稍后再绑
-        </button>
-      </div>
+      {/* 这两个按钮都是"离开绑定、去校对"。作为校对页的一个分区嵌入时不传回调，
+          此时不渲染页脚，否则会留下两个点了没反应的死按钮。 */}
+      {onEnterReview ? (
+        <div className="binding-footer">
+          <button
+            type="button"
+            className="binding-enter-review"
+            disabled={busy || !allResolved}
+            onClick={() => onEnterReview()}
+          >
+            {allResolved ? "全部绑定完成，进入校对" : "仍有未处理构件"}
+          </button>
+          <button type="button" className="binding-later" disabled={busy} onClick={() => onEnterReview()}>
+            稍后再绑
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
