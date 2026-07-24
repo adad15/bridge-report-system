@@ -2733,11 +2733,59 @@ body {
    最右，宽屏上中间会空出一大片，行首行尾相距过远难以对应。 */
 .binding-row {
   display: grid;
-  grid-template-columns: minmax(6rem, 9rem) 5.5rem 5.5rem minmax(0, 1fr);
+  grid-template-columns: 1.25rem minmax(6rem, 9rem) 5.5rem 5.5rem minmax(0, 1fr);
   align-items: center;
   gap: 0.75rem;
   padding: 0.35rem 0.9rem;
   border-top: 1px solid #f0f4f8;
+}
+
+.binding-row-split-checkbox {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
+
+.binding-split-selected {
+  border-color: #1d5fd0;
+  color: #174ea6;
+  background: #f4f8ff;
+}
+
+.range-split-dialog {
+  width: min(58rem, calc(100vw - 2rem));
+}
+
+.range-split-table-wrap {
+  max-height: min(48vh, 28rem);
+  overflow: auto;
+  border: 1px solid #dbe3ec;
+  border-radius: 0.45rem;
+}
+
+.range-split-totals {
+  margin: 0.8rem 0 0;
+  font-weight: 600;
+}
+
+.range-split-origin-badge {
+  margin-left: 0.55rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  border: 1px solid #aab8c5;
+}
+
+.range-split-origin-badge.pending {
+  color: #8a4b08;
+  background: #fff6df;
+  border-color: #edc46b;
+}
+
+.range-split-origin-badge.confirmed {
+  color: #187642;
+  background: #eaf8f0;
+  border-color: #83cda5;
 }
 
 .binding-row:first-of-type {

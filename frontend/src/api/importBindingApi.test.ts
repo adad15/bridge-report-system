@@ -5,6 +5,8 @@ import {
   clearComponentBinding,
   fetchComponentBinding,
   markComponentMissing,
+  previewComponentRangeSplit,
+  applyComponentRangeSplit,
 } from "./importBindingApi";
 
 const overview = {
@@ -66,5 +68,36 @@ describe("importBindingApi", () => {
       bridge_component_id: "c1",
     });
     expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("POST");
+  });
+
+  it("previews and applies a range split with the impact token", async () => {
+    const preview = {
+      items: [],
+      totals: {
+        selected_range_count: 1, source_defect_count: 1, result_defect_count: 25,
+        result_photo_count: 25, bound_count: 25, ambiguous_count: 0, unmatched_count: 0,
+      },
+      impact_token: "sha256:preview",
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => preview })
+      .mockResolvedValueOnce({
+        ok: true, status: 200,
+        json: async () => ({ ...preview, operation_id: "op-1", overview }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    const targets = [{ part_name: "上部承重构件", component_number: "1-1#梁~1-25#梁" }];
+
+    await previewComponentRangeSplit("http://backend", "i1", targets);
+    await applyComponentRangeSplit("http://backend", "i1", targets, "sha256:preview");
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "http://backend/api/import-records/i1/component-binding/split-preview",
+      "http://backend/api/import-records/i1/component-binding/split-apply",
+    ]);
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({
+      targets,
+      impact_token: "sha256:preview",
+    });
   });
 });

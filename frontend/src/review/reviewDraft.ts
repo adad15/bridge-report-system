@@ -398,6 +398,9 @@ function reduceReviewDraft(
           ...item,
           group_review_status: "已确认",
           review_status: item.review_status === "待确认" ? "已确认" : item.review_status,
+          warnings: item.warnings.filter(
+            (warning) => warning.code !== "component_range_split_review_required"
+          ),
         })),
       };
     }

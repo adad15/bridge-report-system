@@ -222,6 +222,9 @@ void append_components_and_defects(
 
         const auto& source_ref = defect["source_ref"];
         defect_plan.raw_row_text = optional_string_member(source_ref, "raw_row_text");
+        if (defect["range_split_origin"].isObject()) {
+            defect_plan.range_split_origin = defect["range_split_origin"];
+        }
         defect_plan.source_table_title = optional_string_member(source_ref, "table_title");
         defect_plan.source_table_index = optional_int_member(source_ref, "table_index");
         defect_plan.source_row_number = optional_int_member(source_ref, "row_index");

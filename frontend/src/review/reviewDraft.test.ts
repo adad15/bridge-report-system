@@ -146,6 +146,31 @@ describe("reviewDraftReducer", () => {
     expect(next.defects[0]).toMatchObject({ group_review_status: "已确认", review_status: "已确认" });
   });
 
+  it("clears only the temporary range-split warning when confirming the group", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    state.defects[0].warnings = [
+      { code: "component_range_split_review_required", message: "待核对", severity: "warning", target_candidate_id: "defect_0001" },
+      { code: "another_warning", message: "保留", severity: "warning", target_candidate_id: "defect_0001" },
+    ];
+    state.defects[0].range_split_origin = {
+      operation_id: "op-1",
+      source_candidate_id: "source-1",
+      source_component_number: "1-1#梁~1-3#梁",
+      expanded_component_number: "1-1#梁",
+      split_index: 1,
+      split_count: 3,
+      operated_by_user_id: "user-1",
+      operated_at: "2026-07-24T08:00:00Z",
+    };
+    const next = reducer(state, {
+      type: "confirm_defect_group",
+      defectCandidateId: "defect_0001",
+    });
+    expect(next.defects[0].warnings.map((warning) => warning.code)).toEqual(["another_warning"]);
+    expect(next.defects[0].range_split_origin).toEqual(state.defects[0].range_split_origin);
+  });
+
   it("returns the same state when deleting an unknown defect", () => {
     const reducer = createReviewDraftReducer();
     const state = matchedData();

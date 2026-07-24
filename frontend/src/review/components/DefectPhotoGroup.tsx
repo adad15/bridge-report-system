@@ -76,6 +76,18 @@ export function DefectPhotoGroup({ draft, defect, sequenceNumber = 1, importReco
               标签右对齐同一列、输入框共享左边线，消除汇总行与明细行之间的割裂感。 */}
           <div className="defect-card-heading">
             <div className="defect-sequence-badge">病害 {sequenceNumber}</div>
+            {defect.range_split_origin ? (
+              <span
+                className={`range-split-origin-badge ${
+                  defect.warnings.some((warning) => warning.code === "component_range_split_review_required")
+                    ? "pending" : "confirmed"
+                }`}
+                title={`由 ${defect.range_split_origin.source_component_number} 拆分`}
+              >
+                {defect.warnings.some((warning) => warning.code === "component_range_split_review_required")
+                  ? "范围拆分 · 待核对" : "由范围拆分"}
+              </span>
+            ) : null}
             <button
               type="button"
               className="defect-delete-button"

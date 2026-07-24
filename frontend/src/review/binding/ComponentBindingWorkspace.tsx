@@ -12,10 +12,15 @@ import {
   clearComponentBinding,
   fetchComponentBinding,
   markComponentMissing,
+  previewComponentRangeSplit,
+  applyComponentRangeSplit,
   type BindingRow,
+  type BindingTarget,
+  type ComponentRangeSplitPreview,
   type ComponentBindingOverview,
 } from "../../api/importBindingApi";
 import { BulkReplaceDialog } from "./BulkReplaceDialog";
+import { ComponentRangeSplitDialog } from "./ComponentRangeSplitDialog";
 import { ApiError } from "../../api/apiClient";
 import { backendBaseUrl } from "../../config";
 
@@ -168,6 +173,9 @@ export function ComponentBindingWorkspace({
   const [replaceGroup, setReplaceGroup] = useState<string | null>(null);
   // 批量应用被后端整批拒绝时的提示，显示在对话框内而非页面上——用户正对着预览表。
   const [replaceError, setReplaceError] = useState<string | null>(null);
+  const [splitSelection, setSplitSelection] = useState<Map<string, BindingTarget>>(new Map());
+  const [splitPreview, setSplitPreview] = useState<ComponentRangeSplitPreview | null>(null);
+  const [splitError, setSplitError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,6 +241,19 @@ export function ComponentBindingWorkspace({
       .filter((group) => group.rows.length > 0);
   }, [overview, filter]);
 
+  useEffect(() => {
+    const eligible = new Set<string>();
+    for (const group of overview?.groups ?? []) {
+      for (const row of group.rows) {
+        if (row.split_eligible) eligible.add(`${group.part_name}\n${row.component_number}`);
+      }
+    }
+    setSplitSelection((current) => {
+      const next = new Map([...current].filter(([key]) => eligible.has(key)));
+      return next.size === current.size ? current : next;
+    });
+  }, [overview]);
+
   async function run(action: () => Promise<ComponentBindingOverview>) {
     setBusy(true);
     try {
@@ -265,6 +286,26 @@ export function ComponentBindingWorkspace({
       <div className="binding-heading">
         <h3 id="component-binding-title">构件绑定</h3>
         <div className="binding-heading-tools" role="group" aria-label="按状态筛选">
+          <button
+            type="button"
+            className="binding-split-selected"
+            disabled={busy || splitSelection.size === 0}
+            onClick={async () => {
+              setBusy(true);
+              setSplitError(null);
+              try {
+                setSplitPreview(await previewComponentRangeSplit(
+                  backendBaseUrl, importId, [...splitSelection.values()]
+                ));
+              } catch (caught) {
+                setError(errorMessage(caught));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            拆分构件{splitSelection.size > 0 ? ` (${splitSelection.size})` : ""}
+          </button>
           {([
             ["pending", "待处理", counts.pending],
             ["bound", "已绑定", counts.bound],
@@ -276,7 +317,10 @@ export function ComponentBindingWorkspace({
               type="button"
               className={filter === key ? "binding-filter active" : "binding-filter"}
               aria-pressed={filter === key}
-              onClick={() => setFilter(key)}
+              onClick={() => {
+                setFilter(key);
+                if (key !== "pending" && key !== "all") setSplitSelection(new Map());
+              }}
             >
               {label} {count}
             </button>
@@ -315,6 +359,28 @@ export function ComponentBindingWorkspace({
           </div>
           {group.rows.map((row) => (
             <div className="binding-row" key={row.component_number}>
+              {row.split_eligible ? (
+                <input
+                  type="checkbox"
+                  className="binding-row-split-checkbox"
+                  aria-label={`选择拆分 ${row.component_number}`}
+                  checked={splitSelection.has(`${group.part_name}\n${row.component_number}`)}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const key = `${group.part_name}\n${row.component_number}`;
+                    setSplitSelection((current) => {
+                      const next = new Map(current);
+                      if (event.target.checked) {
+                        next.set(key, {
+                          part_name: group.part_name,
+                          component_number: row.component_number,
+                        });
+                      } else next.delete(key);
+                      return next;
+                    });
+                  }}
+                />
+              ) : <span className="binding-row-split-placeholder" aria-hidden="true" />}
               <span className="binding-row-number">{row.component_number}</span>
               <span className="binding-row-refs">引用 {row.defect_count} 条</span>
               <span className={`binding-status binding-status-${row.status}`}>
@@ -374,6 +440,33 @@ export function ComponentBindingWorkspace({
             } catch (caught) {
               // 整批被拒时留在对话框里显示原因，用户可改模式重来。
               setReplaceError(errorMessage(caught));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      ) : null}
+      {splitPreview ? (
+        <ComponentRangeSplitDialog
+          preview={splitPreview}
+          targets={[...splitSelection.values()]}
+          busy={busy}
+          error={splitError}
+          onClose={() => { setSplitPreview(null); setSplitError(null); }}
+          onApply={async (targets, impactToken) => {
+            setBusy(true);
+            setSplitError(null);
+            try {
+              const applied = await applyComponentRangeSplit(
+                backendBaseUrl, importId, targets, impactToken
+              );
+              setOverview(applied.overview);
+              onOverviewChange?.(applied.overview);
+              setSplitSelection(new Map());
+              setSplitPreview(null);
+              setError(null);
+            } catch (caught) {
+              setSplitError(errorMessage(caught));
             } finally {
               setBusy(false);
             }

@@ -75,6 +75,7 @@ const std::set<std::string>& warning_defect_editable_fields() {
         "bridge_component_id", "standard_component_category_id", "resolved_structure_part",
         "component_inventory_revision_id", "component_match_candidate_ids",
         "component_match_method", "component_match_confirmed_by",
+        "warnings",
     };
     return fields;
 }

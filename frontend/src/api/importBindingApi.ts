@@ -8,6 +8,8 @@ export interface BindingRow {
   status: ComponentBindingStatus;
   bridge_component_id: string | null;
   candidate_component_ids: string[];
+  split_eligible?: boolean;
+  split_expanded_count?: number | null;
 }
 
 export interface BindingGroup {
@@ -28,6 +30,37 @@ export interface ComponentBindingOverview {
 export interface BindingTarget {
   part_name: string;
   component_number: string;
+}
+
+export interface ComponentRangeSplitItem extends BindingTarget {
+  expanded_component_count: number;
+  source_defect_count: number;
+  result_defect_count: number;
+  result_photo_count: number;
+  bound_count: number;
+  ambiguous_count: number;
+  unmatched_count: number;
+}
+
+export interface ComponentRangeSplitTotals {
+  selected_range_count: number;
+  source_defect_count: number;
+  result_defect_count: number;
+  result_photo_count: number;
+  bound_count: number;
+  ambiguous_count: number;
+  unmatched_count: number;
+}
+
+export interface ComponentRangeSplitPreview {
+  items: ComponentRangeSplitItem[];
+  totals: ComponentRangeSplitTotals;
+  impact_token: string;
+}
+
+export interface ComponentRangeSplitApply extends ComponentRangeSplitPreview {
+  operation_id: string;
+  overview: ComponentBindingOverview;
 }
 
 // 已处理 = 已绑定或已标记缺失。绑定分区页头的"已处理 x / 共 y"与校对页侧栏的
@@ -92,4 +125,27 @@ export function markComponentMissing(baseUrl: string, importId: string, input: B
 
 export function clearComponentBinding(baseUrl: string, importId: string, input: BindingTarget) {
   return overviewRequest(bindingUrl(baseUrl, importId, "/clear"), json("POST", input));
+}
+
+export function previewComponentRangeSplit(
+  baseUrl: string,
+  importId: string,
+  targets: BindingTarget[]
+) {
+  return request<ComponentRangeSplitPreview>(
+    bindingUrl(baseUrl, importId, "/split-preview"),
+    json("POST", { targets })
+  );
+}
+
+export function applyComponentRangeSplit(
+  baseUrl: string,
+  importId: string,
+  targets: BindingTarget[],
+  impactToken: string
+) {
+  return request<ComponentRangeSplitApply>(
+    bindingUrl(baseUrl, importId, "/split-apply"),
+    json("POST", { targets, impact_token: impactToken })
+  );
 }

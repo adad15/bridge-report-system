@@ -15,6 +15,8 @@ struct BindingRow {
     std::string status;                               // bound|ambiguous|unmatched|missing
     std::optional<std::string> bridge_component_id;   // 已绑定的实际构件
     std::vector<std::string> candidate_component_ids; // 歧义候选
+    bool split_eligible{false};
+    std::optional<int> split_expanded_count;
 };
 
 // 按报告"部件名称"（规范固定用词）分组。

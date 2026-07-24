@@ -25,6 +25,7 @@ add_library(bridge_report_backend_core
     src/db/BridgeDeletionRepository.cpp
     src/db/ComponentArchiveRepository.cpp
     src/db/ComponentInventoryRepository.cpp
+    src/db/ComponentRangeSplitRepository.cpp
     src/db/DbClientFactory.cpp
     src/db/CommitLatch.cpp
     src/db/DefectThreadRepository.cpp

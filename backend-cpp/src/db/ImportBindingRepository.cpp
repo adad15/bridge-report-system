@@ -12,6 +12,7 @@
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/inventory/ComponentCategoryLexicon.hpp"
 #include "bridge_report/inventory/ComponentMatcher.hpp"
+#include "bridge_report/inventory/ComponentRangeParser.hpp"
 
 namespace bridge_report::db {
 namespace {
@@ -86,6 +87,14 @@ BindingOverview aggregate(const Json::Value& parsed, bool inventory_confirmed) {
                 row.status = "ambiguous";
             } else {
                 row.status = "unmatched";
+            }
+            if (row.status == "unmatched" || row.status == "ambiguous") {
+                const auto range = inventory::parse_component_range(number_raw);
+                row.split_eligible =
+                    range.status == inventory::ComponentRangeParseStatus::Ok;
+                if (row.split_eligible) {
+                    row.split_expanded_count = static_cast<int>(range.numbers.size());
+                }
             }
             rit = rows.emplace(normalized, group.rows.size()).first;
             group.rows.push_back(std::move(row));

@@ -50,6 +50,16 @@ export function ObservationYearRow({ observation, onRebind }: ObservationYearRow
   const measurementSummary = observation.measurements.length > 0
     ? observation.measurements.map((item) => item.raw_text).join("；")
     : "无尺寸记录";
+  const splitOrigin = evidence?.source_raw_cells.range_split_origin;
+  const splitSourceNumber =
+    splitOrigin && typeof splitOrigin === "object"
+      && "source_component_number" in splitOrigin
+      && typeof splitOrigin.source_component_number === "string"
+      ? splitOrigin.source_component_number : null;
+  const splitOperatedAt =
+    splitOrigin && typeof splitOrigin === "object"
+      && "operated_at" in splitOrigin && typeof splitOrigin.operated_at === "string"
+      ? splitOrigin.operated_at : null;
 
   return (
     <div className="archive-observation">
@@ -132,6 +142,15 @@ export function ObservationYearRow({ observation, onRebind }: ObservationYearRow
                   {evidence.source_file_name ? `｜${evidence.source_file_name}` : ""}
                 </dd>
                 {!evidence.original_word_retained ? <><dt>原始 Word</dt><dd>已按临时文件策略清理，当前证据来自解析快照。</dd></> : null}
+                {splitSourceNumber ? (
+                  <>
+                    <dt>拆分来源</dt>
+                    <dd>
+                      由 {splitSourceNumber} 拆分
+                      {splitOperatedAt ? `（${new Date(splitOperatedAt).toLocaleString()}）` : ""}
+                    </dd>
+                  </>
+                ) : null}
                 <dt>原始行</dt>
                 <dd>
                   <code>{JSON.stringify(evidence.source_raw_cells)}</code>

@@ -1,4 +1,5 @@
 #include <optional>
+#include <memory>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -7,6 +8,7 @@
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/db/ImportBindingRepository.hpp"
+#include "bridge_report/db/ComponentRangeSplitRepository.hpp"
 
 namespace {
 
@@ -128,6 +130,55 @@ TEST_F(ImportBindingRepositoryTest, OverviewGroupsByPartNameAndCountsReferences)
     const auto* bearing = find_row(*outcome.overview, "支座", "2-1#支座");
     ASSERT_NE(bearing, nullptr);
     EXPECT_EQ(bearing->defect_count, 1);
+}
+
+TEST_F(ImportBindingRepositoryTest, PreviewAndApplySelectedRangeAtomically) {
+    const auto stored = client_->execSqlSync(
+        "select parsed_result_json::text as parsed from import_records where id=$1::uuid",
+        import_id_);
+    Json::Value parsed;
+    Json::CharReaderBuilder reader_builder;
+    std::string errors;
+    const auto parsed_text = stored[0]["parsed"].as<std::string>();
+    const std::unique_ptr<Json::CharReader> reader(reader_builder.newCharReader());
+    ASSERT_TRUE(reader->parse(
+        parsed_text.data(),
+        parsed_text.data() + parsed_text.size(),
+        &parsed, &errors));
+    for (Json::ArrayIndex i = 0; i < 3; ++i) {
+        parsed["defects"][i]["component_number"] = "1-1#梁~1-25#梁";
+    }
+    Json::StreamWriterBuilder writer;
+    writer["indentation"] = "";
+    client_->execSqlSync(
+        "update import_records set parsed_result_json=$2::jsonb where id=$1::uuid",
+        import_id_, Json::writeString(writer, parsed));
+
+    bridge_report::db::ComponentRangeSplitRepository repository(client_);
+    const std::vector<bridge_report::review::ComponentRangeSplitTarget> targets{
+        {"上部承重构件", "1-1#梁~1-25#梁"}};
+    const auto preview = repository.preview(import_id_, targets);
+    ASSERT_EQ(preview.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
+    ASSERT_TRUE(preview.plan.has_value());
+    EXPECT_EQ(preview.plan->totals.result_defect_count, 75);
+    EXPECT_EQ(preview.plan->totals.bound_count, 3);
+    EXPECT_TRUE(preview.impact_token.starts_with("sha256:"));
+
+    const auto applied =
+        repository.apply(import_id_, targets, preview.impact_token, user_id_);
+    ASSERT_EQ(applied.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
+    ASSERT_TRUE(applied.overview.has_value());
+    EXPECT_FALSE(applied.operation_id.empty());
+    const auto after = client_->execSqlSync(
+        "select jsonb_array_length(parsed_result_json->'defects') as count,"
+        "parsed_result_json#>>'{defects,0,range_split_origin,operated_by_user_id}' as actor "
+        "from import_records where id=$1::uuid", import_id_);
+    EXPECT_EQ(after[0]["count"].as<int>(), 76);
+    EXPECT_EQ(after[0]["actor"].as<std::string>(), user_id_);
+
+    const auto replay =
+        repository.apply(import_id_, targets, preview.impact_token, user_id_);
+    EXPECT_NE(replay.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
 }
 
 TEST_F(ImportBindingRepositoryTest, BindAttachesAllReferencingDefects) {

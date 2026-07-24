@@ -34,10 +34,15 @@ std::string write_compact_json(const Json::Value& value) {
     return Json::writeString(writer_builder, value);
 }
 
-std::string build_raw_cells_json(const std::optional<std::string>& raw_row_text) {
+std::string build_raw_cells_json(
+    const std::optional<std::string>& raw_row_text,
+    const std::optional<Json::Value>& range_split_origin) {
     Json::Value json(Json::objectValue);
     if (raw_row_text.has_value()) {
         json["raw_row_text"] = *raw_row_text;
+    }
+    if (range_split_origin.has_value()) {
+        json["range_split_origin"] = *range_split_origin;
     }
     return write_compact_json(json);
 }
@@ -230,7 +235,7 @@ std::string insert_defect_observation(
         defect.source_table_title,
         defect.source_table_index,
         defect.source_row_number,
-        build_raw_cells_json(defect.raw_row_text),
+        build_raw_cells_json(defect.raw_row_text, defect.range_split_origin),
         defect.structure_part,
         defect.part_name,
         component.component_type,

@@ -57,6 +57,7 @@ struct DefectPlan {
     std::string defect_type;
     std::string defect_description_raw;
     std::optional<std::string> raw_row_text;
+    std::optional<Json::Value> range_split_origin;
     std::optional<std::string> source_table_title;
     std::optional<int> source_table_index;
     std::optional<int> source_row_number;
