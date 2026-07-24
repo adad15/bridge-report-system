@@ -157,6 +157,8 @@ export function ComponentBindingWorkspace({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // 已处理的行占绝大多数（本例 257 中有 211），默认收起，要看时再展开。
+  const [showResolved, setShowResolved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -194,6 +196,18 @@ export function ComponentBindingWorkspace({
     [overview]
   );
 
+  // 只留待处理行时，整组都处理完的分组就不再占位；展开后恢复完整列表。
+  const visibleGroups = useMemo(() => {
+    const groups = overview?.groups ?? [];
+    if (showResolved) return groups;
+    return groups
+      .map((group) => ({
+        ...group,
+        rows: group.rows.filter((row) => row.status !== "bound" && row.status !== "missing"),
+      }))
+      .filter((group) => group.rows.length > 0);
+  }, [overview, showResolved]);
+
   async function run(action: () => Promise<ComponentBindingOverview>) {
     setBusy(true);
     try {
@@ -225,11 +239,28 @@ export function ComponentBindingWorkspace({
     <section className="component-binding-workspace" aria-labelledby="component-binding-title">
       <div className="binding-heading">
         <h3 id="component-binding-title">构件绑定</h3>
-        <span className="binding-progress">已处理 {progress.resolved} / 共 {progress.total}</span>
+        <div className="binding-heading-tools">
+          <span className="binding-progress">
+            待处理 {progress.pending} · 已处理 {progress.resolved} / 共 {progress.total}
+          </span>
+          {progress.resolved > 0 ? (
+            <button
+              type="button"
+              className="binding-toggle-resolved"
+              aria-expanded={showResolved}
+              onClick={() => setShowResolved((current) => !current)}
+            >
+              {showResolved ? "只看待处理" : `显示已处理 ${progress.resolved} 项`}
+            </button>
+          ) : null}
+        </div>
       </div>
       {error ? <p className="error-text" role="alert">{error}</p> : null}
       {overview.groups.length === 0 ? <p>本次导入没有需要绑定的病害。</p> : null}
-      {overview.groups.map((group) => (
+      {overview.groups.length > 0 && visibleGroups.length === 0 ? (
+        <p className="binding-all-done">全部构件已处理完毕。</p>
+      ) : null}
+      {visibleGroups.map((group) => (
         <div className="binding-group" key={group.part_name}>
           <div className="binding-group-heading">
             <strong>{group.part_name}</strong>

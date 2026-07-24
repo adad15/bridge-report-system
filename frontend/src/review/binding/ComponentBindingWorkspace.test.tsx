@@ -99,10 +99,11 @@ describe("ComponentBindingWorkspace", () => {
     render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
     expect(await screen.findByText("上部承重构件")).toBeInTheDocument();
     expect(screen.getByText("引用 3 条")).toBeInTheDocument();
-    expect(screen.getByText("已处理 0 / 共 1")).toBeInTheDocument();
+    expect(screen.getByText("待处理 1 · 已处理 0 / 共 1")).toBeInTheDocument();
   });
 
-  it("binds a row to the selected component and reflects the new status", async () => {
+  // 已处理的行占绝大多数，默认收起才能让待处理的凸显出来；要看时再展开。
+  it("hides a row once it is bound and reveals it on demand", async () => {
     vi.mocked(bindComponent).mockResolvedValue(overview("bound"));
     render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
 
@@ -114,7 +115,14 @@ describe("ComponentBindingWorkspace", () => {
       component_number: "1-1#梁",
       bridge_component_id: "c1",
     }));
-    expect(await screen.findByText("已绑定")).toBeInTheDocument();
+
+    // 绑定后该行从默认视图消失，只剩"全部已处理"提示。
+    expect(await screen.findByText("全部构件已处理完毕。")).toBeInTheDocument();
+    expect(screen.queryByText("已绑定")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "显示已处理 1 项" }));
+    expect(screen.getByText("已绑定")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "只看待处理" })).toBeInTheDocument();
   });
 
   it("marks a row missing and enables entering review when all resolved", async () => {

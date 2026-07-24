@@ -2532,11 +2532,11 @@ body {
 }
 
 /* 构件绑定动辄数百行，排版目标是"能快速扫"：各列固定位置对齐、行紧凑、
-   只有需要处理的行才显眼。宽屏下限制最大宽度，否则一行会被拉到一两千像素。 */
+   只有需要处理的行才显眼。宽度随浏览器伸展——待处理行的搜索框与下拉框会占满
+   剩余空间，而已处理行默认收起，不会留下大片空白。 */
 .component-binding-workspace {
   display: grid;
   gap: 0.9rem;
-  max-width: 68rem;
 }
 
 .binding-heading {
@@ -2544,11 +2544,43 @@ body {
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.binding-heading-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .binding-progress {
   color: #5a6b7b;
   font-size: 0.9rem;
+}
+
+.binding-toggle-resolved {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #18202a;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.binding-toggle-resolved:hover {
+  background: #f3f5f8;
+}
+
+.binding-all-done {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid #cfe6d5;
+  border-radius: 9px;
+  background: #f2fbf4;
+  color: #1f6b34;
 }
 
 .binding-group {
