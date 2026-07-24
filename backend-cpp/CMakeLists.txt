@@ -68,6 +68,7 @@ add_library(bridge_report_backend_core
     src/inventory/NumberingTemplate.cpp
     src/inventory/ComponentPartCatalog.cpp
     src/review/ConfirmPlan.cpp
+    src/review/ComponentRangeSplitPlanner.cpp
     src/review/ContractCompatibility.cpp
     src/review/DraftValidation.cpp
     src/review/PreflightReport.cpp
@@ -137,6 +138,7 @@ add_executable(bridge_report_backend_tests
     tests/test_component_inventory_routes.cpp
     tests/test_import_binding_routes.cpp
     tests/test_component_range_parser.cpp
+    tests/test_component_range_split_planner.cpp
     tests/test_component_matcher.cpp
     tests/test_h21_bridge_evaluation.cpp
     tests/test_h21_component_evaluation.cpp
