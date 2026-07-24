@@ -28,6 +28,8 @@ const STATUS_LABELS: Record<string, string> = {
   missing: "已标记缺失",
 };
 
+type BindingFilter = "pending" | "bound" | "missing" | "all";
+
 function usableEntries(inventory: ComponentInventoryRevision | null): ComponentInventoryEntry[] {
   if (!inventory) return [];
   return inventory.entries.filter(
@@ -159,8 +161,9 @@ export function ComponentBindingWorkspace({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // 已处理的行占绝大多数（本例 257 中有 211），默认收起，要看时再展开。
-  const [showResolved, setShowResolved] = useState(false);
+  // 已处理的行占绝大多数（本例 257 中有 213），默认只看待处理。
+  // 四态互不重叠：把"已绑定"与"已标记缺失"分开，后者常需单独核对是否真的台账没有。
+  const [filter, setFilter] = useState<BindingFilter>("pending");
   // 正在批量替换的分组名；null 表示对话框未打开。
   const [replaceGroup, setReplaceGroup] = useState<string | null>(null);
   // 批量应用被后端整批拒绝时的提示，显示在对话框内而非页面上——用户正对着预览表。
@@ -202,17 +205,33 @@ export function ComponentBindingWorkspace({
     [overview]
   );
 
-  // 只留待处理行时，整组都处理完的分组就不再占位；展开后恢复完整列表。
+  // 各状态计数，供筛选按钮显示。
+  const counts = useMemo(() => {
+    let pending = 0, bound = 0, missing = 0;
+    for (const group of overview?.groups ?? []) {
+      for (const row of group.rows) {
+        if (row.status === "bound") bound += 1;
+        else if (row.status === "missing") missing += 1;
+        else pending += 1;
+      }
+    }
+    return { pending, bound, missing, total: pending + bound + missing };
+  }, [overview]);
+
+  // 筛选后为空的分组不占位——否则整屏都是空标题。
   const visibleGroups = useMemo(() => {
     const groups = overview?.groups ?? [];
-    if (showResolved) return groups;
+    if (filter === "all") return groups;
+    const keep = (row: BindingRow) =>
+      filter === "pending"
+        ? row.status !== "bound" && row.status !== "missing"
+        : filter === "bound"
+          ? row.status === "bound"
+          : row.status === "missing";
     return groups
-      .map((group) => ({
-        ...group,
-        rows: group.rows.filter((row) => row.status !== "bound" && row.status !== "missing"),
-      }))
+      .map((group) => ({ ...group, rows: group.rows.filter(keep) }))
       .filter((group) => group.rows.length > 0);
-  }, [overview, showResolved]);
+  }, [overview, filter]);
 
   async function run(action: () => Promise<ComponentBindingOverview>) {
     setBusy(true);
@@ -245,26 +264,32 @@ export function ComponentBindingWorkspace({
     <section className="component-binding-workspace" aria-labelledby="component-binding-title">
       <div className="binding-heading">
         <h3 id="component-binding-title">构件绑定</h3>
-        <div className="binding-heading-tools">
-          <span className="binding-progress">
-            待处理 {progress.pending} · 已处理 {progress.resolved} / 共 {progress.total}
-          </span>
-          {progress.resolved > 0 ? (
+        <div className="binding-heading-tools" role="group" aria-label="按状态筛选">
+          {([
+            ["pending", "待处理", counts.pending],
+            ["bound", "已绑定", counts.bound],
+            ["missing", "已标记缺失", counts.missing],
+            ["all", "全部", counts.total],
+          ] as const).map(([key, label, count]) => (
             <button
+              key={key}
               type="button"
-              className="binding-toggle-resolved"
-              aria-expanded={showResolved}
-              onClick={() => setShowResolved((current) => !current)}
+              className={filter === key ? "binding-filter active" : "binding-filter"}
+              aria-pressed={filter === key}
+              onClick={() => setFilter(key)}
             >
-              {showResolved ? "只看待处理" : `显示已处理 ${progress.resolved} 项`}
+              {label} {count}
             </button>
-          ) : null}
+          ))}
         </div>
       </div>
       {error ? <p className="error-text" role="alert">{error}</p> : null}
       {overview.groups.length === 0 ? <p>本次导入没有需要绑定的病害。</p> : null}
       {overview.groups.length > 0 && visibleGroups.length === 0 ? (
-        <p className="binding-all-done">全部构件已处理完毕。</p>
+        // "全部处理完毕"只在待处理筛选下成立；其余筛选为空只是该状态没有行。
+        <p className={filter === "pending" ? "binding-all-done" : "empty-hint"}>
+          {filter === "pending" ? "全部构件已处理完毕。" : "该状态下没有构件。"}
+        </p>
       ) : null}
       {visibleGroups.map((group) => (
         <div className="binding-group" key={group.part_name}>

@@ -2539,18 +2539,38 @@ body {
   gap: 0.9rem;
 }
 
+/* 页头吸顶：数百行滚动时筛选按钮始终可用。高度用变量给分组表头做偏移，
+   否则两层 sticky 都停在 top:0，分组表头会盖住页头。 */
+.component-binding-workspace {
+  --binding-heading-height: 3.25rem;
+}
+
 .binding-heading {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
+  min-height: var(--binding-heading-height);
+  box-sizing: border-box;
+  padding: 0.35rem 0;
+  /* 必须不透明，否则滚动时下方行会透上来。 */
+  background: #fff;
+  border-bottom: 1px solid #e5ebf1;
+}
+
+.binding-heading h3 {
+  margin: 0;
 }
 
 .binding-heading-tools {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
 .binding-progress {
@@ -2558,20 +2578,27 @@ body {
   font-size: 0.9rem;
 }
 
-.binding-toggle-resolved {
+.binding-filter {
   font: inherit;
   font-size: 0.85rem;
   padding: 0.3rem 0.7rem;
   border: 1px solid #d9e0e8;
   border-radius: 6px;
   background: #fff;
-  color: #18202a;
+  color: #5a6b7b;
   white-space: nowrap;
   cursor: pointer;
 }
 
-.binding-toggle-resolved:hover {
+.binding-filter:hover {
   background: #f3f5f8;
+}
+
+.binding-filter.active {
+  border-color: #2456c9;
+  background: #eaf0fd;
+  color: #1d47a8;
+  font-weight: 600;
 }
 
 .binding-bulk-replace {
@@ -2665,17 +2692,29 @@ body {
   color: #1f6b34;
 }
 
+/* 不能用 overflow:hidden 裁圆角：它会让内部的 sticky 分组表头失效（祖先一旦
+   overflow 非 visible，sticky 就以该盒为容器，滚动到底即随之滚走）。
+   改用 isolation + 子元素各自圆角。 */
 .binding-group {
   border: 1px solid #dce3ea;
   border-radius: 9px;
   background: #fff;
-  overflow: hidden;
+  isolation: isolate;
 }
 
-/* 分组表头吸顶：数百行滚动时始终知道当前在哪个部件下。 */
+.binding-group > .binding-group-heading {
+  border-radius: 8px 8px 0 0;
+}
+
+.binding-group > .binding-row:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+/* 分组表头吸顶：数百行滚动时始终知道当前在哪个部件下。
+   停在页头下沿而非 top:0，否则会盖住页头的筛选按钮。 */
 .binding-group-heading {
   position: sticky;
-  top: 0;
+  top: var(--binding-heading-height);
   z-index: 1;
   display: flex;
   align-items: baseline;

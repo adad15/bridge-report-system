@@ -99,7 +99,25 @@ describe("ComponentBindingWorkspace", () => {
     render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
     expect(await screen.findByText("上部承重构件")).toBeInTheDocument();
     expect(screen.getByText("引用 3 条")).toBeInTheDocument();
-    expect(screen.getByText("待处理 1 · 已处理 0 / 共 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "待处理 1" })).toBeInTheDocument();
+  });
+
+  // 已标记缺失需能单独查看：核对"台账确实没有"是一次独立的复核动作，
+  // 混在"已处理"里看不见。
+  it("filters missing rows on their own", async () => {
+    vi.mocked(fetchComponentBinding).mockResolvedValue(overview("missing"));
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+
+    // 默认只看待处理，已标记缺失的行不在其中。
+    expect(await screen.findByText("全部构件已处理完毕。")).toBeInTheDocument();
+    expect(screen.queryByText("已标记缺失")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "已标记缺失 1" }));
+    expect(screen.getByText("已标记缺失")).toBeInTheDocument();
+
+    // 切到"已绑定"应为空，且不得再说"全部处理完毕"。
+    await userEvent.click(screen.getByRole("button", { name: "已绑定 0" }));
+    expect(screen.getByText("该状态下没有构件。")).toBeInTheDocument();
   });
 
   // 已处理的行占绝大多数，默认收起才能让待处理的凸显出来；要看时再展开。
@@ -120,9 +138,8 @@ describe("ComponentBindingWorkspace", () => {
     expect(await screen.findByText("全部构件已处理完毕。")).toBeInTheDocument();
     expect(screen.queryByText("已绑定")).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "显示已处理 1 项" }));
+    await userEvent.click(screen.getByRole("button", { name: "已绑定 1" }));
     expect(screen.getByText("已绑定")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "只看待处理" })).toBeInTheDocument();
   });
 
   it("marks a row missing and enables entering review when all resolved", async () => {

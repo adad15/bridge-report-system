@@ -769,9 +769,13 @@ function ReviewWorkspaceLoaded({
           onSelect={setActiveGroup}
         />
         <div className="review-main">
-          <div className="review-main-tools">
-            <button type="button" disabled={!selected} onClick={() => setEvidenceOpen(true)}>查看来源证据</button>
-          </div>
+          {/* 来源证据是针对某条病害/照片的，绑定分区里没有"当前选中候选"这个概念，
+              按钮恒为禁用状态，纯占位。 */}
+          {activeGroup !== "component_binding" ? (
+            <div className="review-main-tools">
+              <button type="button" disabled={!selected} onClick={() => setEvidenceOpen(true)}>查看来源证据</button>
+            </div>
+          ) : null}
           {navigationMessage ? <p className="warning-text review-navigation-message">{navigationMessage}</p> : null}
           {activeGroup === "needs_attention" ? (
             <NeedsAttentionSection items={attentionItems} draft={draft} onSelect={selectCandidate} />
