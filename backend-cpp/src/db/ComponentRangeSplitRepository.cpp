@@ -1,6 +1,8 @@
 #include "bridge_report/db/ComponentRangeSplitRepository.hpp"
 
+#include <algorithm>
 #include <memory>
+#include <tuple>
 #include <utility>
 
 #include "bridge_report/auth/PasswordHash.hpp"
@@ -40,8 +42,13 @@ std::string make_token(
     canonical["import_id"] = import_id;
     canonical["parsed_result"] = parsed;
     canonical["inventory_revision"] = inventory::inventory_revision_json(revision);
+    auto canonical_targets = targets;
+    std::sort(canonical_targets.begin(), canonical_targets.end(), [](const auto& left, const auto& right) {
+        return std::tie(left.part_name, left.component_number)
+            < std::tie(right.part_name, right.component_number);
+    });
     canonical["targets"] = Json::Value(Json::arrayValue);
-    for (const auto& target : targets) {
+    for (const auto& target : canonical_targets) {
         Json::Value item(Json::objectValue);
         item["part_name"] = target.part_name;
         item["component_number"] = target.component_number;
