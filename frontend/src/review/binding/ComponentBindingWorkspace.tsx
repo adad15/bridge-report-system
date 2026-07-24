@@ -58,11 +58,17 @@ function RowAction({ row, entries, byId, busy, onBind, onMarkMissing, onClear }:
 
   if (row.status === "bound") {
     const bound = row.bridge_component_id ? byId.get(row.bridge_component_id) : undefined;
+    // 绝大多数行都是按同名精确匹配绑上的，重复显示一遍同样的编号只是噪声——
+    // "已绑定"徽标已经说明状态。只有绑到了别的编号（人工改绑）才值得标出来。
+    const rebound = bound && bound.component_number !== row.component_number;
     return (
       <div className="binding-row-action">
-        <span className="binding-bound-target">
-          {bound ? `${bound.component_number} / ${bound.site_component_type}` : "已绑定构件"}
-        </span>
+        {rebound ? (
+          <span className="binding-bound-target">
+            → {bound.component_number} / {bound.site_component_type}
+          </span>
+        ) : null}
+        {!bound ? <span className="binding-bound-target">已绑定构件</span> : null}
         <button type="button" disabled={busy} aria-label={`取消绑定 ${row.component_number}`} onClick={onClear}>
           取消绑定
         </button>

@@ -2531,15 +2531,19 @@ body {
   margin: 0;
 }
 
+/* 构件绑定动辄数百行，排版目标是"能快速扫"：各列固定位置对齐、行紧凑、
+   只有需要处理的行才显眼。宽屏下限制最大宽度，否则一行会被拉到一两千像素。 */
 .component-binding-workspace {
   display: grid;
-  gap: 1rem;
+  gap: 0.9rem;
+  max-width: 68rem;
 }
 
 .binding-heading {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .binding-progress {
@@ -2548,18 +2552,23 @@ body {
 }
 
 .binding-group {
-  display: grid;
-  gap: 0.4rem;
-  padding: 0.8rem 0.9rem;
   border: 1px solid #dce3ea;
   border-radius: 9px;
-  background: #fbfcfe;
+  background: #fff;
+  overflow: hidden;
 }
 
+/* 分组表头吸顶：数百行滚动时始终知道当前在哪个部件下。 */
 .binding-group-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: baseline;
   gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid #e5ebf1;
+  background: #f4f7fa;
 }
 
 .binding-group-counts {
@@ -2567,29 +2576,41 @@ body {
   font-size: 0.85rem;
 }
 
+/* 四列定位：编号 | 引用 | 状态 | 操作。原来用 flex + margin-left:auto 把操作顶到
+   最右，宽屏上中间会空出一大片，行首行尾相距过远难以对应。 */
 .binding-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(6rem, 9rem) 5.5rem 5.5rem minmax(0, 1fr);
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.45rem 0;
-  border-top: 1px solid #eef2f6;
+  gap: 0.75rem;
+  padding: 0.35rem 0.9rem;
+  border-top: 1px solid #f0f4f8;
+}
+
+.binding-row:first-of-type {
+  border-top: 0;
+}
+
+.binding-row:hover {
+  background: #f8fafc;
 }
 
 .binding-row-number {
   font-weight: 600;
-  min-width: 6rem;
+  overflow-wrap: anywhere;
 }
 
 .binding-row-refs {
-  color: #5a6b7b;
-  font-size: 0.85rem;
+  color: #8595a5;
+  font-size: 0.8rem;
 }
 
 .binding-status {
+  justify-self: start;
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
   font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .binding-status-bound { background: #e3f4e6; color: #1f6b34; }
@@ -2602,12 +2623,83 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin-left: auto;
+  min-width: 0;
+}
+
+.binding-bound-target,
+.binding-missing-note {
+  color: #5a6b7b;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.binding-row-action input {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.binding-row-action select {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.binding-row-action input,
+.binding-row-action select {
+  box-sizing: border-box;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #c9d2dc;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+/* 这些按钮此前没有任何样式，呈现为浏览器默认外观，与页面其余部分不一致。 */
+.binding-row-action button,
+.binding-footer button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #18202a;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.binding-row-action button:not(:disabled):hover,
+.binding-footer button:not(:disabled):hover {
+  background: #f3f5f8;
+}
+
+.binding-row-action button:disabled,
+.binding-footer button:disabled {
+  color: #97a2ae;
+  background: #f7f9fb;
+  cursor: not-allowed;
 }
 
 .binding-footer {
   display: flex;
   gap: 0.75rem;
+}
+
+.binding-footer .binding-enter-review:not(:disabled) {
+  border-color: #2456c9;
+  background: #2456c9;
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  /* 窄屏放弃列对齐，改为编号一行、操作一行，避免列被挤到不可用。 */
+  .binding-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .binding-row-action {
+    grid-column: 1 / -1;
+  }
 }
 
 .inventory-blockers {
