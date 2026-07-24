@@ -2574,6 +2574,88 @@ body {
   background: #f3f5f8;
 }
 
+.binding-bulk-replace {
+  margin-left: auto;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #18202a;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.binding-bulk-replace:not(:disabled):hover {
+  background: #f3f5f8;
+}
+
+.binding-bulk-replace:disabled {
+  color: #97a2ae;
+  background: #f7f9fb;
+  cursor: not-allowed;
+}
+
+.bulk-replace-dialog {
+  width: min(52rem, calc(100vw - 2rem));
+}
+
+.bulk-replace-hint {
+  margin: 0 0 0.75rem;
+  color: #5a6b7b;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.bulk-replace-hint code {
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: #eef2f7;
+}
+
+.bulk-replace-inputs {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.bulk-replace-inputs input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #c9d2dc;
+  border-radius: 7px;
+  background: #fff;
+  font: inherit;
+}
+
+/* 预览可能有几十行，限高滚动，避免对话框把页面撑穿。 */
+.bulk-replace-preview {
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.bulk-replace-summary {
+  margin: 0.6rem 0 0;
+  font-weight: 600;
+}
+
+.bulk-replace-ok { color: #1f6b34; }
+.bulk-replace-skip { color: #8595a5; }
+
+/* .is-primary-action 的既有规则限定在台账/桥梁列表的按钮区内，对话框不在其列，
+   这里补上，否则"应用"会渲染成白底次要按钮。 */
+.bulk-replace-dialog .dialog-actions .is-primary-action:not(:disabled) {
+  border-color: #2456c9;
+  background: #2456c9;
+  color: #fff;
+}
+
+.bulk-replace-dialog .dialog-actions .is-primary-action:not(:disabled):hover {
+  background: #1d47a8;
+}
+
 .binding-all-done {
   margin: 0;
   padding: 0.9rem 1rem;

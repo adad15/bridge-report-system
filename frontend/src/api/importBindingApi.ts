@@ -74,6 +74,18 @@ export function bindComponent(
   return overviewRequest(bindingUrl(baseUrl, importId, "/bind"), json("POST", input));
 }
 
+/**
+ * 批量绑定（批量替换用）。后端整批原子：任一目标非法则一条都不写，
+ * 并在 details.rejected_component_number 指明是哪一条挡住的。
+ */
+export function bindComponentsBatch(
+  baseUrl: string,
+  importId: string,
+  targets: (BindingTarget & { bridge_component_id: string })[]
+) {
+  return overviewRequest(bindingUrl(baseUrl, importId, "/bind-batch"), json("POST", { targets }));
+}
+
 export function markComponentMissing(baseUrl: string, importId: string, input: BindingTarget) {
   return overviewRequest(bindingUrl(baseUrl, importId, "/mark-missing"), json("POST", input));
 }

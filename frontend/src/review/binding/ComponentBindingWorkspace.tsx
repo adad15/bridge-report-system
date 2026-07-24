@@ -7,6 +7,7 @@ import {
 } from "../../api/componentInventoryApi";
 import {
   bindComponent,
+  bindComponentsBatch,
   bindingProgress,
   clearComponentBinding,
   fetchComponentBinding,
@@ -14,6 +15,7 @@ import {
   type BindingRow,
   type ComponentBindingOverview,
 } from "../../api/importBindingApi";
+import { BulkReplaceDialog } from "./BulkReplaceDialog";
 import { ApiError } from "../../api/apiClient";
 import { backendBaseUrl } from "../../config";
 
@@ -159,6 +161,10 @@ export function ComponentBindingWorkspace({
   const [busy, setBusy] = useState(false);
   // 已处理的行占绝大多数（本例 257 中有 211），默认收起，要看时再展开。
   const [showResolved, setShowResolved] = useState(false);
+  // 正在批量替换的分组名；null 表示对话框未打开。
+  const [replaceGroup, setReplaceGroup] = useState<string | null>(null);
+  // 批量应用被后端整批拒绝时的提示，显示在对话框内而非页面上——用户正对着预览表。
+  const [replaceError, setReplaceError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -270,6 +276,17 @@ export function ComponentBindingWorkspace({
               {group.ambiguous > 0 ? ` · 歧义 ${group.ambiguous}` : ""}
               {group.missing > 0 ? ` · 缺失 ${group.missing}` : ""}
             </span>
+            {/* 写法差异按部件成规律，故批量替换逐组进行；无待处理行时无从替换。 */}
+            {group.unmatched + group.ambiguous > 0 ? (
+              <button
+                type="button"
+                className="binding-bulk-replace"
+                disabled={busy}
+                onClick={() => { setReplaceError(null); setReplaceGroup(group.part_name); }}
+              >
+                批量替换
+              </button>
+            ) : null}
           </div>
           {group.rows.map((row) => (
             <div className="binding-row" key={row.component_number}>
@@ -313,6 +330,31 @@ export function ComponentBindingWorkspace({
           ))}
         </div>
       ))}
+      {replaceGroup !== null ? (
+        <BulkReplaceDialog
+          partName={replaceGroup}
+          rows={overview.groups.find((item) => item.part_name === replaceGroup)?.rows ?? []}
+          entries={entries}
+          busy={busy}
+          error={replaceError}
+          onClose={() => setReplaceGroup(null)}
+          onApply={async (targets) => {
+            setBusy(true);
+            try {
+              const next = await bindComponentsBatch(backendBaseUrl, importId, targets);
+              setOverview(next);
+              setError(null);
+              onOverviewChange?.(next);
+              setReplaceGroup(null);
+            } catch (caught) {
+              // 整批被拒时留在对话框里显示原因，用户可改模式重来。
+              setReplaceError(errorMessage(caught));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      ) : null}
       {/* 这两个按钮都是"离开绑定、去校对"。作为校对页的一个分区嵌入时不传回调，
           此时不渲染页脚，否则会留下两个点了没反应的死按钮。 */}
       {onEnterReview ? (
