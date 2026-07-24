@@ -44,6 +44,14 @@ enum class BindingStatus {
 struct BindingOutcome {
     BindingStatus status{BindingStatus::Ok};
     std::optional<BindingOverview> overview;
+    // 批量绑定被拒时回传出错的那个报告编号：整批不写，用户需知道是哪一条挡住的。
+    std::string rejected_component_number;
+};
+
+struct BindingTarget {
+    std::string part_name;
+    std::string component_number;
+    std::string bridge_component_id;
 };
 
 // 在导入记录"待校对"相内读/改 parsed_result_json.defects[] 的构件绑定。
@@ -56,6 +64,9 @@ public:
     [[nodiscard]] BindingOutcome bind(
         const std::string& import_id, const std::string& part_name,
         const std::string& component_number, const std::string& bridge_component_id);
+    // 批量绑定（供绑定界面的"批量替换"）：单次读改写，任一目标非法则整批不写。
+    [[nodiscard]] BindingOutcome bind_batch(
+        const std::string& import_id, const std::vector<BindingTarget>& targets);
     [[nodiscard]] BindingOutcome mark_missing(
         const std::string& import_id, const std::string& part_name,
         const std::string& component_number);

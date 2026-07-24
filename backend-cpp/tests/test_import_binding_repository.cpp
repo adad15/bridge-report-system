@@ -162,6 +162,48 @@ TEST_F(ImportBindingRepositoryTest, MarkMissingAndClearRoundTrip) {
     EXPECT_EQ(find_row(*cleared.overview, "上部承重构件", "1-1#梁")->status, "unmatched");
 }
 
+TEST_F(ImportBindingRepositoryTest, BindBatchAppliesEveryTarget) {
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.bind_batch(import_id_, {
+        {"上部承重构件", "1-1#梁", component_id_},
+    });
+    ASSERT_EQ(outcome.status, BindingStatus::Ok) << static_cast<int>(outcome.status);
+    ASSERT_TRUE(outcome.overview.has_value());
+    const auto* row = find_row(*outcome.overview, "上部承重构件", "1-1#梁");
+    ASSERT_NE(row, nullptr);
+    EXPECT_EQ(row->status, "bound");
+}
+
+// 整批原子：任一目标非法则一条都不写，否则用户无从判断哪些生效了。
+TEST_F(ImportBindingRepositoryTest, BindBatchWritesNothingWhenAnyTargetIsInvalid) {
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.bind_batch(import_id_, {
+        {"上部承重构件", "1-1#梁", component_id_},   // 合法
+        {"支座", "2-1#支座", component_id_},          // 类别不符
+    });
+    EXPECT_EQ(outcome.status, BindingStatus::Conflict);
+    EXPECT_EQ(outcome.rejected_component_number, "2-1#支座");
+
+    // 合法的那条也不得写入。
+    const auto after = repository.overview(import_id_);
+    ASSERT_EQ(after.status, BindingStatus::Ok);
+    EXPECT_EQ(find_row(*after.overview, "上部承重构件", "1-1#梁")->status, "unmatched");
+}
+
+TEST_F(ImportBindingRepositoryTest, BindBatchRejectsUnknownComponentNumber) {
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.bind_batch(import_id_, {
+        {"上部承重构件", "9-9#不存在", component_id_},
+    });
+    EXPECT_EQ(outcome.status, BindingStatus::Invalid);
+    EXPECT_EQ(outcome.rejected_component_number, "9-9#不存在");
+}
+
+TEST_F(ImportBindingRepositoryTest, BindBatchRejectsEmptyTargets) {
+    ImportBindingRepository repository(client_);
+    EXPECT_EQ(repository.bind_batch(import_id_, {}).status, BindingStatus::Invalid);
+}
+
 TEST_F(ImportBindingRepositoryTest, RejectsWritesOutsidePendingReview) {
     client_->execSqlSync("update import_records set import_status='已确认' where id=$1::uuid", import_id_);
     ImportBindingRepository repository(client_);
@@ -169,6 +211,8 @@ TEST_F(ImportBindingRepositoryTest, RejectsWritesOutsidePendingReview) {
     EXPECT_EQ(repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_).status,
               BindingStatus::Conflict);
     EXPECT_EQ(repository.mark_missing(import_id_, "支座", "2-1#支座").status, BindingStatus::Conflict);
+    EXPECT_EQ(repository.bind_batch(import_id_, {{"上部承重构件", "1-1#梁", component_id_}}).status,
+              BindingStatus::Conflict);
 }
 
 }  // namespace

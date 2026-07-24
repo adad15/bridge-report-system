@@ -150,6 +150,112 @@ BindingOutcome ImportBindingRepository::overview(const std::string& import_id) {
     }
 }
 
+namespace {
+
+// 单条与批量共用的目标校验：所选构件须属于已确认台账，且其活动映射类别与报告
+// 部件名称的对照相符。返回该构件的活动映射，nullptr 表示不合法。
+const inventory::InventoryMapping* validate_target(
+    const inventory::InventoryRevision& revision, const std::string& part_name,
+    const std::string& bridge_component_id) {
+    const inventory::InventoryMapping* mapping = nullptr;
+    for (const auto& entry : revision.entries) {
+        if (!entry.is_active || entry.bridge_component_id != bridge_component_id) continue;
+        for (const auto& candidate : entry.mappings) {
+            if (candidate.is_active) { mapping = &candidate; break; }
+        }
+        break;
+    }
+    if (mapping == nullptr) return nullptr;
+    const auto categories = inventory::resolve_component_categories(part_name);
+    if (!categories.empty()
+        && std::find(categories.begin(), categories.end(),
+                     mapping->standard_component_category_id) == categories.end()) {
+        return nullptr;
+    }
+    return mapping;
+}
+
+void write_binding(
+    Json::Value& defect, const std::string& bridge_component_id,
+    const std::string& category_id, const std::string& structure_part,
+    const std::string& revision_id) {
+    defect["bridge_component_id"] = bridge_component_id;
+    defect["component_match_method"] = "manual";
+    defect["standard_component_category_id"] = category_id;
+    defect["resolved_structure_part"] = structure_part;
+    defect["component_inventory_revision_id"] = revision_id;
+}
+
+}  // namespace
+
+BindingOutcome ImportBindingRepository::bind_batch(
+    const std::string& import_id, const std::vector<BindingTarget>& targets) {
+    if (targets.empty()) return {BindingStatus::Invalid};
+    for (const auto& target : targets) {
+        if (target.part_name.empty() || target.component_number.empty()
+            || target.bridge_component_id.empty()) {
+            return {BindingStatus::Invalid, std::nullopt, target.component_number};
+        }
+    }
+    TransactionPtr tx;
+    const auto latch = std::make_shared<CommitLatch>();
+    const auto rollback = [&]() { if (tx) { try { tx->rollback(); } catch (...) {} } };
+    try {
+        tx = db_client_->newTransaction(latch->callback());
+        const auto rows = tx->execSqlSync(
+            "select bridge_id::text as bridge_id, import_status, "
+            "coalesce(parsed_result_json::text,'{}') as parsed "
+            "from import_records where id=$1::uuid for update",
+            import_id);
+        if (rows.empty()) { rollback(); return {BindingStatus::NotFound}; }
+        if (rows[0]["import_status"].as<std::string>() != "待校对") {
+            rollback(); return {BindingStatus::Conflict};
+        }
+        const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
+        const auto revision = ComponentInventoryRepository(tx).get_latest_revision(bridge_id);
+        if (!revision.has_value()
+            || !(revision->status == "已确认" || revision->status == "confirmed")) {
+            rollback(); return {BindingStatus::Conflict};
+        }
+
+        Json::Value parsed;
+        parse_json(rows[0]["parsed"].as<std::string>(), parsed);
+        // 先全量校验并逐个改写，任一目标不合法即整批回滚——半绑状态会让用户
+        // 无从判断哪些生效了。
+        for (const auto& target : targets) {
+            const auto* mapping =
+                validate_target(*revision, target.part_name, target.bridge_component_id);
+            if (mapping == nullptr) {
+                rollback();
+                return {BindingStatus::Conflict, std::nullopt, target.component_number};
+            }
+            const auto normalized = inventory::normalize_component_number(target.component_number);
+            const auto structure_part = contract_structure_part(mapping->structure_part);
+            const auto category_id = mapping->standard_component_category_id;
+            const auto revision_id = revision->id;
+            const auto component_id = target.bridge_component_id;
+            const int applied = apply_to_group(parsed, target.part_name, normalized,
+                [&](Json::Value& defect) {
+                    write_binding(defect, component_id, category_id, structure_part, revision_id);
+                });
+            if (applied == 0) {
+                rollback();
+                return {BindingStatus::Invalid, std::nullopt, target.component_number};
+            }
+        }
+
+        tx->execSqlSync(
+            "update import_records set parsed_result_json=$2::jsonb where id=$1::uuid",
+            import_id, compact_json(parsed));
+        tx.reset();
+        if (!latch->wait()) return {BindingStatus::Failed};
+        return overview(import_id);
+    } catch (...) {
+        rollback();
+        return {BindingStatus::Failed};
+    }
+}
+
 BindingOutcome ImportBindingRepository::bind(
     const std::string& import_id, const std::string& part_name,
     const std::string& component_number, const std::string& bridge_component_id) {
@@ -177,22 +283,8 @@ BindingOutcome ImportBindingRepository::bind(
             rollback(); return {BindingStatus::Conflict};
         }
         // 校验所选构件属于已确认台账，且其活动映射类别符合报告部件名称对照。
-        const inventory::InventoryEntry* target = nullptr;
-        const inventory::InventoryMapping* mapping = nullptr;
-        for (const auto& entry : revision->entries) {
-            if (!entry.is_active || entry.bridge_component_id != bridge_component_id) continue;
-            for (const auto& candidate : entry.mappings) {
-                if (candidate.is_active) { target = &entry; mapping = &candidate; break; }
-            }
-            break;
-        }
-        if (target == nullptr || mapping == nullptr) { rollback(); return {BindingStatus::Conflict}; }
-        const auto categories = inventory::resolve_component_categories(part_name);
-        if (!categories.empty()
-            && std::find(categories.begin(), categories.end(),
-                         mapping->standard_component_category_id) == categories.end()) {
-            rollback(); return {BindingStatus::Conflict};
-        }
+        const auto* mapping = validate_target(*revision, part_name, bridge_component_id);
+        if (mapping == nullptr) { rollback(); return {BindingStatus::Conflict}; }
 
         Json::Value parsed;
         parse_json(rows[0]["parsed"].as<std::string>(), parsed);
@@ -201,11 +293,7 @@ BindingOutcome ImportBindingRepository::bind(
         const auto revision_id = revision->id;
         const auto category_id = mapping->standard_component_category_id;
         const int applied = apply_to_group(parsed, part_name, normalized, [&](Json::Value& defect) {
-            defect["bridge_component_id"] = bridge_component_id;
-            defect["component_match_method"] = "manual";
-            defect["standard_component_category_id"] = category_id;
-            defect["resolved_structure_part"] = structure_part;
-            defect["component_inventory_revision_id"] = revision_id;
+            write_binding(defect, bridge_component_id, category_id, structure_part, revision_id);
         });
         if (applied == 0) { rollback(); return {BindingStatus::Invalid}; }
         tx->execSqlSync(

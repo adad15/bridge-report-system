@@ -52,17 +52,33 @@ void respond_binding(const HttpCallback& callback, const db::BindingOutcome& out
         case db::BindingStatus::NotFound:
             respond_import_record_not_found(callback);
             return;
-        case db::BindingStatus::Conflict:
-            respond_json(callback, make_error_body(
+        case db::BindingStatus::Conflict: {
+            // 批量绑定整批不写，必须让用户知道是哪一条挡住的。
+            auto body = make_error_body(
                 "component_binding_conflict",
-                "台账未确认、导入不在待校对阶段，或所选构件类别与部件名称不符。"),
-                drogon::k409Conflict);
+                outcome.rejected_component_number.empty()
+                    ? "台账未确认、导入不在待校对阶段，或所选构件类别与部件名称不符。"
+                    : "构件 " + outcome.rejected_component_number
+                        + " 的类别与部件名称不符，整批未应用。");
+            if (!outcome.rejected_component_number.empty()) {
+                body["details"]["rejected_component_number"] = outcome.rejected_component_number;
+            }
+            respond_json(callback, body, drogon::k409Conflict);
             return;
-        case db::BindingStatus::Invalid:
-            respond_json(callback, make_error_body(
-                "invalid_component_binding", "绑定参数无效或未找到该编号。"),
-                drogon::k400BadRequest);
+        }
+        case db::BindingStatus::Invalid: {
+            auto body = make_error_body(
+                "invalid_component_binding",
+                outcome.rejected_component_number.empty()
+                    ? "绑定参数无效或未找到该编号。"
+                    : "构件编号 " + outcome.rejected_component_number
+                        + " 不在本次导入中，整批未应用。");
+            if (!outcome.rejected_component_number.empty()) {
+                body["details"]["rejected_component_number"] = outcome.rejected_component_number;
+            }
+            respond_json(callback, body, drogon::k400BadRequest);
             return;
+        }
         default:
             respond_db_unavailable(callback);
             return;
@@ -93,9 +109,48 @@ bool parse_target(const Json::Value* body, std::string& part_name, std::string& 
 
 void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
     const std::string base = "/api/import-records/{import_id}/component-binding";
-    for (const auto& path : {base, base + "/bind", base + "/mark-missing", base + "/clear"}) {
+    for (const auto& path : {base, base + "/bind", base + "/bind-batch",
+                             base + "/mark-missing", base + "/clear"}) {
         register_options_handler(path);
     }
+
+    // 批量绑定：供绑定界面的"批量替换"。单次读改写，任一目标非法则整批不写。
+    drogon::app().registerHandler(
+        base + "/bind-batch",
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                    const std::string& import_id) {
+            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
+            try {
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback); return;
+                }
+                const auto body = request->getJsonObject();
+                if (body == nullptr || !(*body)["targets"].isArray()
+                    || (*body)["targets"].empty()) {
+                    respond_json(callback, make_error_body(
+                        "invalid_component_binding", "targets 必须是非空数组。"),
+                        drogon::k400BadRequest);
+                    return;
+                }
+                std::vector<db::BindingTarget> targets;
+                for (const auto& item : (*body)["targets"]) {
+                    if (!item.isObject() || !item["part_name"].isString()
+                        || !item["component_number"].isString()
+                        || !item["bridge_component_id"].isString()) {
+                        respond_json(callback, make_error_body(
+                            "invalid_component_binding",
+                            "每个目标都需要 part_name、component_number 与 bridge_component_id。"),
+                            drogon::k400BadRequest);
+                        return;
+                    }
+                    targets.push_back({item["part_name"].asString(),
+                                       item["component_number"].asString(),
+                                       item["bridge_component_id"].asString()});
+                }
+                respond_binding(callback,
+                    db::ImportBindingRepository(db_client).bind_batch(import_id, targets));
+            } catch (...) { respond_db_unavailable(callback); }
+        }, {drogon::Post});
 
     drogon::app().registerHandler(
         base,
