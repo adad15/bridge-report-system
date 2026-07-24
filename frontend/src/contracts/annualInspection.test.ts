@@ -191,6 +191,44 @@ describe("isBridgeAnnualInspectionData 2.0", () => {
     expect(isBridgeAnnualInspectionData(data)).toBe(true);
   });
 
+  it("validates optional range split provenance", () => {
+    const data = cloneValidData();
+    Object.assign(data.defects[0], {
+      range_split_origin: {
+        operation_id: "operation-1",
+        source_candidate_id: "defect_0001",
+        source_component_number: "1-1#板~1-25#板",
+        expanded_component_number: "1-7#板",
+        split_index: 7,
+        split_count: 25,
+        operated_by_user_id: "user-1",
+        operated_at: "2026-07-24T16:00:00+08:00",
+      },
+    });
+    expect(isBridgeAnnualInspectionData(data)).toBe(true);
+
+    data.defects[0].range_split_origin!.split_index = 26;
+    expect(isBridgeAnnualInspectionData(data)).toBe(false);
+  });
+
+  it("rejects unknown range split provenance fields", () => {
+    const data = cloneValidData();
+    Object.assign(data.defects[0], {
+      range_split_origin: {
+        operation_id: "operation-1",
+        source_candidate_id: "defect_0001",
+        source_component_number: "1-1#板~1-25#板",
+        expanded_component_number: "1-7#板",
+        split_index: 7,
+        split_count: 25,
+        operated_by_user_id: "user-1",
+        operated_at: "2026-07-24T16:00:00+08:00",
+        unexpected: true,
+      },
+    });
+    expect(isBridgeAnnualInspectionData(data)).toBe(false);
+  });
+
   it("rejects duplicate candidates and unknown component match methods", () => {
     const duplicate = cloneValidData();
     duplicate.defects[0].component_match_candidate_ids = ["component-1", "component-1"];

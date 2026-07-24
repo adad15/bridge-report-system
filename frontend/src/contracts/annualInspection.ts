@@ -80,6 +80,17 @@ export interface Measurement {
   source_text: string;
 }
 
+export interface RangeSplitOrigin {
+  operation_id: string;
+  source_candidate_id: string;
+  source_component_number: string;
+  expanded_component_number: string;
+  split_index: number;
+  split_count: number;
+  operated_by_user_id: string;
+  operated_at: string;
+}
+
 export interface DefectCandidate {
   candidate_id: string;
   source_structure_part?: StructurePart | null;
@@ -108,6 +119,7 @@ export interface DefectCandidate {
   confidence: number;
   review_status: ReviewStatus;
   review_note?: string | null;
+  range_split_origin?: RangeSplitOrigin | null;
   warnings: WarningItem[];
 }
 
@@ -254,6 +266,32 @@ function isValidMeasurement(value: unknown): value is Measurement {
   return false;
 }
 
+function isValidRangeSplitOrigin(value: unknown): value is RangeSplitOrigin {
+  if (!isRecord(value)) return false;
+  const allowed = new Set([
+    "operation_id",
+    "source_candidate_id",
+    "source_component_number",
+    "expanded_component_number",
+    "split_index",
+    "split_count",
+    "operated_by_user_id",
+    "operated_at",
+  ]);
+  return (
+    Object.keys(value).every((key) => allowed.has(key)) &&
+    typeof value.operation_id === "string" && value.operation_id.length > 0 &&
+    typeof value.source_candidate_id === "string" && value.source_candidate_id.length > 0 &&
+    typeof value.source_component_number === "string" && value.source_component_number.length > 0 &&
+    typeof value.expanded_component_number === "string" && value.expanded_component_number.length > 0 &&
+    Number.isInteger(value.split_index) && (value.split_index as number) >= 1 &&
+    Number.isInteger(value.split_count) && (value.split_count as number) >= 2 &&
+    (value.split_index as number) <= (value.split_count as number) &&
+    typeof value.operated_by_user_id === "string" && value.operated_by_user_id.length > 0 &&
+    typeof value.operated_at === "string" && value.operated_at.length > 0
+  );
+}
+
 function isValidDefectCandidate(value: unknown): boolean {
   if (!isRecord(value) || !hasValidConfidence(value)) {
     return false;
@@ -262,6 +300,7 @@ function isValidDefectCandidate(value: unknown): boolean {
   const measurements = getRequiredArray(value, "measurements");
   const matchCandidateIds = value.component_match_candidate_ids;
   const matchMethod = value.component_match_method;
+  const rangeSplitOrigin = value.range_split_origin;
   return (
     hasRequiredArrayMembers(value, ["measurements", "photo_numbers", "warnings"]) &&
     measurements !== null && measurements.every(isValidMeasurement) &&
@@ -291,6 +330,9 @@ function isValidDefectCandidate(value: unknown): boolean {
       matchMethod === "normalized_candidate" ||
       matchMethod === "manual" ||
       matchMethod === "missing") &&
+    (rangeSplitOrigin === undefined ||
+      rangeSplitOrigin === null ||
+      isValidRangeSplitOrigin(rangeSplitOrigin)) &&
     (value.component_inventory_revision_id === undefined ||
       value.component_inventory_revision_id === null ||
       typeof value.component_inventory_revision_id === "string") &&

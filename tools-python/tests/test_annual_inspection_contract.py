@@ -46,6 +46,75 @@ def test_valid_version_two_fixture_is_accepted() -> None:
     assert not hasattr(model.defects[0], "defect_deduction")
 
 
+def test_range_split_origin_is_optional_and_validated() -> None:
+    data = valid_payload()
+    data["defects"][0]["range_split_origin"] = {
+        "operation_id": "operation-1",
+        "source_candidate_id": "defect_0001",
+        "source_component_number": "1-1#板~1-25#板",
+        "expanded_component_number": "1-7#板",
+        "split_index": 7,
+        "split_count": 25,
+        "operated_by_user_id": "user-1",
+        "operated_at": "2026-07-24T16:00:00+08:00",
+    }
+
+    model = BridgeAnnualInspectionData.model_validate(data)
+    assert model.defects[0].range_split_origin is not None
+    assert model.defects[0].range_split_origin.split_index == 7
+
+    data = valid_payload()
+    assert BridgeAnnualInspectionData.model_validate(data).defects[0].range_split_origin is None
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("operation_id", ""),
+        ("source_component_number", ""),
+        ("split_index", 0),
+        ("split_count", 1),
+        ("split_index", 26),
+    ],
+)
+def test_range_split_origin_rejects_invalid_values(field: str, value: object) -> None:
+    data = valid_payload()
+    origin = {
+        "operation_id": "operation-1",
+        "source_candidate_id": "defect_0001",
+        "source_component_number": "1-1#板~1-25#板",
+        "expanded_component_number": "1-7#板",
+        "split_index": 7,
+        "split_count": 25,
+        "operated_by_user_id": "user-1",
+        "operated_at": "2026-07-24T16:00:00+08:00",
+    }
+    origin[field] = value
+    data["defects"][0]["range_split_origin"] = origin
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "range_split_origin" in str(exc_info.value)
+
+
+def test_range_split_origin_rejects_extra_fields() -> None:
+    data = valid_payload()
+    data["defects"][0]["range_split_origin"] = {
+        "operation_id": "operation-1",
+        "source_candidate_id": "defect_0001",
+        "source_component_number": "1-1#板~1-25#板",
+        "expanded_component_number": "1-7#板",
+        "split_index": 7,
+        "split_count": 25,
+        "operated_by_user_id": "user-1",
+        "operated_at": "2026-07-24T16:00:00+08:00",
+        "unexpected": True,
+    }
+    with pytest.raises(ValidationError):
+        BridgeAnnualInspectionData.model_validate(data)
+
+
 def test_with_comparison_fixture_is_accepted() -> None:
     model = BridgeAnnualInspectionData.model_validate(
         load_fixture("bridge_annual_inspection_data.v2.with-comparison.json")

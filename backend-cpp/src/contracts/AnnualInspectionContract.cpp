@@ -257,6 +257,42 @@ void validate_measurement(
     }
 }
 
+void validate_range_split_origin(
+    const Json::Value& origin,
+    const std::string& path,
+    ContractValidationResult& result) {
+    if (!origin.isObject()) {
+        result.add_issue(path, "must be an object");
+        return;
+    }
+    const std::unordered_set<std::string> allowed{
+        "operation_id", "source_candidate_id", "source_component_number",
+        "expanded_component_number", "split_index", "split_count",
+        "operated_by_user_id", "operated_at"};
+    for (const auto& member : origin.getMemberNames()) {
+        if (!allowed.contains(member)) {
+            result.add_issue(member_path(path, member), "is not allowed");
+        }
+    }
+    for (const auto* member : {
+             "operation_id", "source_candidate_id", "source_component_number",
+             "expanded_component_number", "operated_by_user_id", "operated_at"}) {
+        require_non_empty_string(origin, path, member, result);
+    }
+    if (!origin.isMember("split_index") || !origin["split_index"].isInt()
+        || origin["split_index"].asInt() < 1) {
+        result.add_issue(member_path(path, "split_index"), "must be a positive integer");
+    }
+    if (!origin.isMember("split_count") || !origin["split_count"].isInt()
+        || origin["split_count"].asInt() < 2) {
+        result.add_issue(member_path(path, "split_count"), "must be an integer greater than one");
+    }
+    if (origin["split_index"].isInt() && origin["split_count"].isInt()
+        && origin["split_index"].asInt() > origin["split_count"].asInt()) {
+        result.add_issue(path, "split_index must not exceed split_count");
+    }
+}
+
 void validate_defect(
     const Json::Value& defect,
     const std::string& path,
@@ -302,6 +338,13 @@ void validate_defect(
         !defect["resolved_structure_part"].isNull()) {
         require_enum(
             defect, path, "resolved_structure_part", structure_parts(), result);
+    }
+    if (defect.isMember("range_split_origin")
+        && !defect["range_split_origin"].isNull()) {
+        validate_range_split_origin(
+            defect["range_split_origin"],
+            member_path(path, "range_split_origin"),
+            result);
     }
 
     reject_member(defect, path, "structure_part", result);

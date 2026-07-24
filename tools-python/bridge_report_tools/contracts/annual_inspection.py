@@ -119,6 +119,25 @@ class Measurement(ContractModel):
         return self
 
 
+class RangeSplitOrigin(ContractModel):
+    """用户在构件绑定界面把范围病害拆成单构件病害时的永久来源。"""
+
+    operation_id: str = Field(min_length=1)
+    source_candidate_id: str = Field(min_length=1)
+    source_component_number: str = Field(min_length=1)
+    expanded_component_number: str = Field(min_length=1)
+    split_index: int = Field(ge=1, strict=True)
+    split_count: int = Field(ge=2, strict=True)
+    operated_by_user_id: str = Field(min_length=1)
+    operated_at: datetime
+
+    @model_validator(mode="after")
+    def validate_split_position(self) -> RangeSplitOrigin:
+        if self.split_index > self.split_count:
+            raise ValueError("split_index must not exceed split_count")
+        return self
+
+
 class DefectCandidate(ContractModel):
     """第二章结构病害检查表中的一条病害候选记录。"""
 
@@ -155,6 +174,7 @@ class DefectCandidate(ContractModel):
     confidence: float = Field(ge=0, le=1)
     review_status: ReviewStatus
     review_note: str | None = None
+    range_split_origin: RangeSplitOrigin | None = None
     warnings: list[WarningItem]
 
     @field_validator("confirmed_missing_photo_numbers")

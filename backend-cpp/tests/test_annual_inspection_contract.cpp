@@ -154,6 +154,49 @@ TEST(AnnualInspectionContractTest, ValidatesComponentMatchAuditFields) {
     expect_summary_contains(invalid, "defects[0].component_match_method");
 }
 
+TEST(AnnualInspectionContractTest, ValidatesOptionalRangeSplitOrigin) {
+    auto root =
+        read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    auto& origin = root["defects"][0]["range_split_origin"];
+    origin["operation_id"] = "operation-1";
+    origin["source_candidate_id"] = "defect_0001";
+    origin["source_component_number"] = "1-1#板~1-25#板";
+    origin["expanded_component_number"] = "1-7#板";
+    origin["split_index"] = 7;
+    origin["split_count"] = 25;
+    origin["operated_by_user_id"] = "user-1";
+    origin["operated_at"] = "2026-07-24T16:00:00+08:00";
+
+    EXPECT_TRUE(bridge_report::contracts::validate_bridge_annual_inspection_data(root).ok());
+
+    origin["split_index"] = 26;
+    const auto invalid =
+        bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+    EXPECT_FALSE(invalid.ok());
+    expect_summary_contains(invalid, "defects[0].range_split_origin");
+}
+
+TEST(AnnualInspectionContractTest, RejectsUnknownRangeSplitOriginMember) {
+    auto root =
+        read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    auto& origin = root["defects"][0]["range_split_origin"];
+    origin["operation_id"] = "operation-1";
+    origin["source_candidate_id"] = "defect_0001";
+    origin["source_component_number"] = "1-1#板~1-25#板";
+    origin["expanded_component_number"] = "1-7#板";
+    origin["split_index"] = 7;
+    origin["split_count"] = 25;
+    origin["operated_by_user_id"] = "user-1";
+    origin["operated_at"] = "2026-07-24T16:00:00+08:00";
+    origin["unexpected"] = true;
+
+    const auto invalid =
+        bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+    EXPECT_FALSE(invalid.ok());
+    expect_summary_contains(
+        invalid, "defects[0].range_split_origin.unexpected");
+}
+
 TEST(AnnualInspectionContractTest, AcceptsManualSourceWithoutWordCoordinates) {
     auto root =
         read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
