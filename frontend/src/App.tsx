@@ -4,7 +4,6 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { BridgeOverviewPage } from "./pages/BridgeOverviewPage";
 import { BridgesPage } from "./pages/BridgesPage";
 import { ComponentArchivePage } from "./pages/ComponentArchivePage";
-import { ComponentBindingPage } from "./pages/ComponentBindingPage";
 import { ComponentInventoryPage } from "./pages/ComponentInventoryPage";
 import { DefectThreadReviewPage } from "./pages/DefectThreadReviewPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -98,10 +97,6 @@ function AppShell() {
           <Route
             path="/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review"
             element={<ReviewWorkspacePage />}
-          />
-          <Route
-            path="/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/binding"
-            element={<ComponentBindingPage />}
           />
         </Routes>
       </div>

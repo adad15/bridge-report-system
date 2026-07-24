@@ -30,6 +30,24 @@ export interface BindingTarget {
   component_number: string;
 }
 
+// 已处理 = 已绑定或已标记缺失。绑定分区页头的"已处理 x / 共 y"与校对页侧栏的
+// 待处理计数共用这一口径，避免两处各算各的。
+export function bindingProgress(overview: ComponentBindingOverview): {
+  total: number;
+  resolved: number;
+  pending: number;
+} {
+  let total = 0;
+  let resolved = 0;
+  for (const group of overview.groups) {
+    for (const row of group.rows) {
+      total += 1;
+      if (row.status === "bound" || row.status === "missing") resolved += 1;
+    }
+  }
+  return { total, resolved, pending: total - resolved };
+}
+
 const json = (method: string, body: unknown): RequestInit => ({
   method,
   headers: { "Content-Type": "application/json" },

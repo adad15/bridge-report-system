@@ -7,6 +7,7 @@ import {
 } from "../../api/componentInventoryApi";
 import {
   bindComponent,
+  bindingProgress,
   clearComponentBinding,
   fetchComponentBinding,
   markComponentMissing,
@@ -137,10 +138,13 @@ export function ComponentBindingWorkspace({
   importId,
   bridgeId,
   onEnterReview,
+  onOverviewChange,
 }: {
   importId: string;
   bridgeId: string;
   onEnterReview?: () => void;
+  // 每次拿到新的概览（首次加载与每次绑定操作后）都上报，供校对页侧栏同步待处理计数。
+  onOverviewChange?: (overview: ComponentBindingOverview) => void;
 }) {
   const [overview, setOverview] = useState<ComponentBindingOverview | null>(null);
   const [inventory, setInventory] = useState<ComponentInventoryRevision | null>(null);
@@ -160,6 +164,7 @@ export function ComponentBindingWorkspace({
         setOverview(boundOverview);
         setInventory(revision);
         setError(null);
+        onOverviewChange?.(boundOverview);
       })
       .catch((caught) => {
         if (!cancelled) setError(errorMessage(caught));
@@ -178,17 +183,10 @@ export function ComponentBindingWorkspace({
     [entries]
   );
 
-  const progress = useMemo(() => {
-    let total = 0;
-    let resolved = 0;
-    for (const group of overview?.groups ?? []) {
-      for (const row of group.rows) {
-        total += 1;
-        if (row.status === "bound" || row.status === "missing") resolved += 1;
-      }
-    }
-    return { total, resolved };
-  }, [overview]);
+  const progress = useMemo(
+    () => (overview ? bindingProgress(overview) : { total: 0, resolved: 0, pending: 0 }),
+    [overview]
+  );
 
   async function run(action: () => Promise<ComponentBindingOverview>) {
     setBusy(true);
@@ -196,6 +194,7 @@ export function ComponentBindingWorkspace({
       const next = await action();
       setOverview(next);
       setError(null);
+      onOverviewChange?.(next);
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {

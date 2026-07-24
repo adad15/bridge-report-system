@@ -41,5 +41,3 @@ export const componentInventoryPath = (bridgeId: string) =>
   `${bridgeOverviewPath(bridgeId)}/inventory`;
 export const reviewPath = (bridgeId: string, inspectionYearId: string, importRecordId: string) =>
   `${inspectionWorkspacePath(bridgeId, inspectionYearId)}/imports/${segment(importRecordId)}/review`;
-export const componentBindingPath = (bridgeId: string, inspectionYearId: string, importRecordId: string) =>
-  `${inspectionWorkspacePath(bridgeId, inspectionYearId)}/imports/${segment(importRecordId)}/binding`;

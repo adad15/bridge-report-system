@@ -21,6 +21,7 @@ import { useAuth } from "../auth/AuthContext";
 import { backendBaseUrl } from "../config";
 import { canPressConfirm, canRunPreflight, formatConfirmSuccess, parsePreflightDetails, validateRevisionForm } from "../review/confirmFlow";
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
+import { bindingProgress, fetchComponentBinding } from "../api/importBindingApi";
 import { ComponentBindingWorkspace } from "../review/binding/ComponentBindingWorkspace";
 import { DefectsSection } from "../review/components/DefectsSection";
 import type { SelectedCandidate } from "../review/components/EvidencePanel";
@@ -170,7 +171,25 @@ function ReviewWorkspaceLoaded({
   const [expandedDefectId, setExpandedDefectId] = useState<string | null>(null);
   const [activePhotoCandidateId, setActivePhotoCandidateId] = useState<string | null>(null);
   const [activeGroup, setActiveGroup] = useState<GroupKey>("needs_attention");
+  // 侧栏要在用户点进绑定分区之前就显示待处理数，故这里先取一次概览；
+  // 之后由绑定分区通过 onOverviewChange 上报，保证绑定操作后计数同步。
+  const [bindingPending, setBindingPending] = useState<number | null>(null);
   const [pendingNavigation, setPendingNavigation] = useState<AttentionItem | null>(null);
+
+  useEffect(() => {
+    if (!importRecordId) return;
+    let cancelled = false;
+    fetchComponentBinding(backendBaseUrl, importRecordId)
+      .then((overview) => {
+        if (cancelled) return;
+        // 台账未确认时绑定不可用，保持 null 让侧栏显示 "-"。
+        setBindingPending(
+          overview.inventory_confirmed ? bindingProgress(overview).pending : null
+        );
+      })
+      .catch(() => { /* 绑定计数取不到不影响校对，侧栏显示 "-" 即可。 */ });
+    return () => { cancelled = true; };
+  }, [importRecordId]);
   const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
   const navigationHighlightTimer = useRef<number | null>(null);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
@@ -745,6 +764,7 @@ function ReviewWorkspaceLoaded({
       <div className="review-body">
         <ReviewSidebar
           counts={displayedCounts}
+          bindingPendingCount={bindingPending}
           active={activeGroup}
           onSelect={setActiveGroup}
         />
@@ -758,7 +778,15 @@ function ReviewWorkspaceLoaded({
           ) : null}
           {/* 不传 onEnterReview：这里已经在校对页内，绑定完直接切到别的分区即可。 */}
           {activeGroup === "component_binding" ? (
-            <ComponentBindingWorkspace importId={importRecordId} bridgeId={response.bridge.id} />
+            <ComponentBindingWorkspace
+              importId={importRecordId}
+              bridgeId={response.bridge.id}
+              onOverviewChange={(overview) =>
+                setBindingPending(
+                  overview.inventory_confirmed ? bindingProgress(overview).pending : null
+                )
+              }
+            />
           ) : null}
           {activeGroup === "defect_photos" ? (
             <DefectsSection

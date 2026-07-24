@@ -8,16 +8,21 @@ export type GroupKey =
   | "ratings"
   | "raw_json";
 
+// 绑定待处理数不在后端的 ReviewStatistics 里（它来自导入绑定概览），故单列一项；
+// 台账未确认时无法绑定，此时为 null，显示 "-" 而不是 0——0 会被读成"都处理完了"。
+interface SidebarCounts extends ReviewCounts {
+  binding_pending_count: number | null;
+}
+
 interface GroupDef {
   key: GroupKey;
   label: string;
-  count: (counts: ReviewCounts) => number | null;
+  count: (counts: SidebarCounts) => number | null;
 }
 
 const GROUPS: GroupDef[] = [
   { key: "needs_attention", label: "需要处理", count: (counts) => counts.needs_attention_count },
-  // 绑定进度由绑定分区自己拉取，不在 ReviewCounts 里，故与"原始 JSON"一样不显示计数。
-  { key: "component_binding", label: "构件绑定", count: () => null },
+  { key: "component_binding", label: "构件绑定", count: (counts) => counts.binding_pending_count },
   { key: "defect_photos", label: "病害与照片", count: (counts) => counts.defect_count },
   { key: "ratings", label: "系统技术状况评定", count: (counts) => counts.rating_item_count },
   { key: "raw_json", label: "原始 JSON", count: () => null },
@@ -25,19 +30,22 @@ const GROUPS: GroupDef[] = [
 
 interface ReviewSidebarProps {
   counts: ReviewCounts;
+  bindingPendingCount: number | null;
   active: GroupKey;
   onSelect: (key: GroupKey) => void;
 }
 
 export function ReviewSidebar({
   counts,
+  bindingPendingCount,
   active,
   onSelect,
 }: ReviewSidebarProps) {
+  const sidebarCounts: SidebarCounts = { ...counts, binding_pending_count: bindingPendingCount };
   return (
     <nav className="review-sidebar">
       {GROUPS.map((group) => {
-        const count = group.count(counts);
+        const count = group.count(sidebarCounts);
         return (
           <button
             key={group.key}
