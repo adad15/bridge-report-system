@@ -58,7 +58,7 @@ protected:
             "values($1::uuid,'上部结构','空心板','1-1#梁','bind-key-1','已确认','人工录入') returning id::text",
             bridge_id_)[0]["id"].as<std::string>();
         // 先建草稿版本 + 条目 + 映射，再确认（已确认版本的条目不可变）。
-        const auto revision_id = client_->execSqlSync(
+        revision_id_ = client_->execSqlSync(
             "insert into bridge_component_inventory_revisions(bridge_id,revision_number,created_by_user_id) "
             "values($1::uuid,1,$2::uuid) returning id::text",
             bridge_id_, user_id_)[0]["id"].as<std::string>();
@@ -66,7 +66,7 @@ protected:
             "insert into bridge_component_inventory_entries(inventory_revision_id,bridge_component_id,"
             "component_number,site_name,site_component_type,sort_order) "
             "values($1::uuid,$2::uuid,'1-1#梁','空心板','空心板',1) returning id::text",
-            revision_id, component_id_)[0]["id"].as<std::string>();
+            revision_id_, component_id_)[0]["id"].as<std::string>();
         client_->execSqlSync(
             "insert into bridge_component_standard_mappings(inventory_entry_id,standard_package_id,"
             "standard_bridge_type_id,standard_component_category_id,structure_part,mapping_source,"
@@ -77,7 +77,7 @@ protected:
         client_->execSqlSync(
             "update bridge_component_inventory_revisions set status='已确认',"
             "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
-            revision_id, user_id_);
+            revision_id_, user_id_);
 
         // 待校对导入记录：3 条病害引用 1-1#梁（未匹配）+ 1 条支座。
         Json::Value parsed;
@@ -132,7 +132,7 @@ protected:
     }
 
     drogon::orm::DbClientPtr client_;
-    std::string user_id_, bridge_id_, year_id_, package_id_, component_id_, import_id_;
+    std::string user_id_, bridge_id_, year_id_, package_id_, component_id_, revision_id_, import_id_;
 };
 
 TEST_F(ImportBindingRepositoryTest, OverviewGroupsByPartNameAndCountsReferences) {
@@ -211,8 +211,13 @@ TEST_F(ImportBindingRepositoryTest, BindAttachesAllReferencingDefects) {
     EXPECT_EQ(*row->bridge_component_id, component_id_);
     EXPECT_EQ(row->defect_count, 3);
     const auto stored = client_->execSqlSync(
-        "select parsed_result_json::text as parsed from import_records where id=$1::uuid",
+        "select ir.parsed_result_json::text as parsed,"
+        "iy.component_inventory_revision_id::text as year_revision_id "
+        "from import_records ir "
+        "join inspection_years iy on iy.id=ir.inspection_year_id "
+        "where ir.id=$1::uuid",
         import_id_);
+    EXPECT_EQ(stored[0]["year_revision_id"].as<std::string>(), revision_id_);
     Json::Value parsed;
     Json::CharReaderBuilder reader_builder;
     std::string errors;
@@ -239,9 +244,13 @@ TEST_F(ImportBindingRepositoryTest, MarkMissingAndClearRoundTrip) {
     ASSERT_EQ(missing.status, BindingStatus::Ok);
     EXPECT_EQ(find_row(*missing.overview, "支座", "2-1#支座")->status, "missing");
     const auto after_missing = client_->execSqlSync(
-        "select jsonb_array_length(parsed_result_json#>'{defects,3,warnings}') as count "
-        "from import_records where id=$1::uuid", import_id_);
+        "select jsonb_array_length(ir.parsed_result_json#>'{defects,3,warnings}') as count,"
+        "iy.component_inventory_revision_id::text as year_revision_id "
+        "from import_records ir "
+        "join inspection_years iy on iy.id=ir.inspection_year_id "
+        "where ir.id=$1::uuid", import_id_);
     EXPECT_EQ(after_missing[0]["count"].as<int>(), 0);
+    EXPECT_EQ(after_missing[0]["year_revision_id"].as<std::string>(), revision_id_);
 
     const auto bound = repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_);
     ASSERT_EQ(bound.status, BindingStatus::Ok);

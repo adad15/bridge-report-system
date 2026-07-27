@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <utility>
 
@@ -132,6 +133,50 @@ int apply_to_group(Json::Value& parsed, const std::string& part_name,
     return applied;
 }
 
+std::optional<std::string> optional_row_text(
+    const drogon::orm::Row& row, const std::string& column) {
+    return row[column].isNull()
+        ? std::nullopt
+        : std::optional<std::string>(row[column].as<std::string>());
+}
+
+std::optional<inventory::InventoryRevision> resolve_confirmed_revision(
+    const drogon::orm::DbClientPtr& client,
+    const std::string& bridge_id,
+    const std::optional<std::string>& locked_revision_id) {
+    const auto revision = locked_revision_id.has_value()
+        ? ComponentInventoryRepository(client).get_revision(*locked_revision_id)
+        : ComponentInventoryRepository(client).get_latest_revision(bridge_id);
+    if (!revision.has_value() || revision->bridge_id != bridge_id
+        || !(revision->status == "已确认" || revision->status == "confirmed")) {
+        return std::nullopt;
+    }
+    return revision;
+}
+
+bool attach_revision_to_pending_year(
+    const drogon::orm::DbClientPtr& client,
+    const std::optional<std::string>& year_id,
+    const std::string& bridge_id,
+    const std::optional<std::string>& locked_revision_id,
+    const std::string& revision_id) {
+    if (locked_revision_id.has_value()) return *locked_revision_id == revision_id;
+    if (!year_id.has_value()) return true;
+    const auto updated = client->execSqlSync(
+        "update inspection_years "
+        "set component_inventory_revision_id=$2::uuid,updated_at=now() "
+        "where id=$1::uuid and bridge_id=$3::uuid and status='待校对' "
+        "and component_inventory_revision_id is null returning id",
+        *year_id, revision_id, bridge_id);
+    if (!updated.empty()) return true;
+    const auto current = client->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id "
+        "from inspection_years where id=$1::uuid and bridge_id=$2::uuid",
+        *year_id, bridge_id);
+    return !current.empty() && !current[0]["revision_id"].isNull()
+        && current[0]["revision_id"].as<std::string>() == revision_id;
+}
+
 }  // namespace
 
 ImportBindingRepository::ImportBindingRepository(drogon::orm::DbClientPtr db_client)
@@ -140,18 +185,21 @@ ImportBindingRepository::ImportBindingRepository(drogon::orm::DbClientPtr db_cli
 BindingOutcome ImportBindingRepository::overview(const std::string& import_id) {
     try {
         const auto rows = db_client_->execSqlSync(
-            "select bridge_id::text as bridge_id, import_status, "
-            "coalesce(parsed_result_json::text,'{}') as parsed "
-            "from import_records where id=$1::uuid",
+            "select ir.bridge_id::text as bridge_id,ir.import_status,"
+            "iy.component_inventory_revision_id::text as inventory_revision_id,"
+            "coalesce(ir.parsed_result_json::text,'{}') as parsed "
+            "from import_records ir "
+            "left join inspection_years iy on iy.id=ir.inspection_year_id "
+            "where ir.id=$1::uuid",
             import_id);
         if (rows.empty()) return {BindingStatus::NotFound};
         if (rows[0]["import_status"].as<std::string>() != "待校对") return {BindingStatus::Conflict};
         Json::Value parsed;
         parse_json(rows[0]["parsed"].as<std::string>(), parsed);
-        const auto revision =
-            ComponentInventoryRepository(db_client_).get_latest_revision(rows[0]["bridge_id"].as<std::string>());
-        const bool confirmed = revision.has_value()
-            && (revision->status == "已确认" || revision->status == "confirmed");
+        const auto revision = resolve_confirmed_revision(
+            db_client_, rows[0]["bridge_id"].as<std::string>(),
+            optional_row_text(rows[0], "inventory_revision_id"));
+        const bool confirmed = revision.has_value();
         BindingOutcome outcome;
         outcome.overview = aggregate(parsed, confirmed);
         return outcome;
@@ -214,18 +262,25 @@ BindingOutcome ImportBindingRepository::bind_batch(
     try {
         tx = db_client_->newTransaction(latch->callback());
         const auto rows = tx->execSqlSync(
-            "select bridge_id::text as bridge_id, import_status, "
-            "coalesce(parsed_result_json::text,'{}') as parsed "
-            "from import_records where id=$1::uuid for update",
+            "select ir.bridge_id::text as bridge_id,ir.inspection_year_id::text as inspection_year_id,"
+            "ir.import_status,iy.component_inventory_revision_id::text as inventory_revision_id,"
+            "coalesce(ir.parsed_result_json::text,'{}') as parsed "
+            "from import_records ir "
+            "left join inspection_years iy on iy.id=ir.inspection_year_id "
+            "where ir.id=$1::uuid for update of ir",
             import_id);
         if (rows.empty()) { rollback(); return {BindingStatus::NotFound}; }
         if (rows[0]["import_status"].as<std::string>() != "待校对") {
             rollback(); return {BindingStatus::Conflict};
         }
         const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
-        const auto revision = ComponentInventoryRepository(tx).get_latest_revision(bridge_id);
-        if (!revision.has_value()
-            || !(revision->status == "已确认" || revision->status == "confirmed")) {
+        const auto year_id = optional_row_text(rows[0], "inspection_year_id");
+        const auto locked_revision_id =
+            optional_row_text(rows[0], "inventory_revision_id");
+        const auto revision =
+            resolve_confirmed_revision(tx, bridge_id, locked_revision_id);
+        if (!revision.has_value() || !attach_revision_to_pending_year(
+            tx, year_id, bridge_id, locked_revision_id, revision->id)) {
             rollback(); return {BindingStatus::Conflict};
         }
 
@@ -279,18 +334,25 @@ BindingOutcome ImportBindingRepository::bind(
     try {
         tx = db_client_->newTransaction(latch->callback());
         const auto rows = tx->execSqlSync(
-            "select bridge_id::text as bridge_id, import_status, "
-            "coalesce(parsed_result_json::text,'{}') as parsed "
-            "from import_records where id=$1::uuid for update",
+            "select ir.bridge_id::text as bridge_id,ir.inspection_year_id::text as inspection_year_id,"
+            "ir.import_status,iy.component_inventory_revision_id::text as inventory_revision_id,"
+            "coalesce(ir.parsed_result_json::text,'{}') as parsed "
+            "from import_records ir "
+            "left join inspection_years iy on iy.id=ir.inspection_year_id "
+            "where ir.id=$1::uuid for update of ir",
             import_id);
         if (rows.empty()) { rollback(); return {BindingStatus::NotFound}; }
         if (rows[0]["import_status"].as<std::string>() != "待校对") {
             rollback(); return {BindingStatus::Conflict};
         }
         const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
-        const auto revision = ComponentInventoryRepository(tx).get_latest_revision(bridge_id);
-        if (!revision.has_value()
-            || !(revision->status == "已确认" || revision->status == "confirmed")) {
+        const auto year_id = optional_row_text(rows[0], "inspection_year_id");
+        const auto locked_revision_id =
+            optional_row_text(rows[0], "inventory_revision_id");
+        const auto revision =
+            resolve_confirmed_revision(tx, bridge_id, locked_revision_id);
+        if (!revision.has_value() || !attach_revision_to_pending_year(
+            tx, year_id, bridge_id, locked_revision_id, revision->id)) {
             rollback(); return {BindingStatus::Conflict};
         }
         // 校验所选构件属于已确认台账，且其活动映射类别符合报告部件名称对照。
@@ -334,11 +396,25 @@ BindingOutcome mutate_group(
     try {
         tx = client->newTransaction(latch->callback());
         const auto rows = tx->execSqlSync(
-            "select import_status,coalesce(parsed_result_json::text,'{}') as parsed "
-            "from import_records where id=$1::uuid for update",
+            "select ir.bridge_id::text as bridge_id,ir.inspection_year_id::text as inspection_year_id,"
+            "ir.import_status,iy.component_inventory_revision_id::text as inventory_revision_id,"
+            "coalesce(ir.parsed_result_json::text,'{}') as parsed "
+            "from import_records ir "
+            "left join inspection_years iy on iy.id=ir.inspection_year_id "
+            "where ir.id=$1::uuid for update of ir",
             import_id);
         if (rows.empty()) { rollback(); return {BindingStatus::NotFound}; }
         if (rows[0]["import_status"].as<std::string>() != "待校对") {
+            rollback(); return {BindingStatus::Conflict};
+        }
+        const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
+        const auto year_id = optional_row_text(rows[0], "inspection_year_id");
+        const auto locked_revision_id =
+            optional_row_text(rows[0], "inventory_revision_id");
+        const auto revision =
+            resolve_confirmed_revision(tx, bridge_id, locked_revision_id);
+        if (revision.has_value() && !attach_revision_to_pending_year(
+            tx, year_id, bridge_id, locked_revision_id, revision->id)) {
             rollback(); return {BindingStatus::Conflict};
         }
         Json::Value parsed;

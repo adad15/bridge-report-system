@@ -157,8 +157,11 @@ TEST_F(WordImportRepositoryTest, PersistsExactDefectMatchAgainstConfirmedInvento
         "parsed_result_json#>>'{defects,0,component_match_method}' as match_method,"
         "parsed_result_json#>>'{defects,0,component_inventory_revision_id}' as revision_id,"
         "parsed_result_json#>>'{defects,0,component_number}' as component_number,"
-        "parsed_result_json#>>'{defects,0,component_name}' as component_name "
-        "from import_records where id=$1::uuid",
+        "parsed_result_json#>>'{defects,0,component_name}' as component_name,"
+        "iy.component_inventory_revision_id::text as year_revision_id "
+        "from import_records ir "
+        "join inspection_years iy on iy.id=ir.inspection_year_id "
+        "where ir.id=$1::uuid",
         import_id_);
     ASSERT_EQ(stored.size(), 1u);
     EXPECT_EQ(stored[0]["component_id"].as<std::string>(), component_id);
@@ -166,6 +169,7 @@ TEST_F(WordImportRepositoryTest, PersistsExactDefectMatchAgainstConfirmedInvento
     EXPECT_EQ(stored[0]["structure_part"].as<std::string>(), "上部结构");
     EXPECT_EQ(stored[0]["match_method"].as<std::string>(), "exact");
     EXPECT_EQ(stored[0]["revision_id"].as<std::string>(), revision_id);
+    EXPECT_EQ(stored[0]["year_revision_id"].as<std::string>(), revision_id);
     // 导入保真：构件编号/部件名称按报告原文存储，不裁剪类型词、不归一化。
     EXPECT_EQ(stored[0]["component_number"].as<std::string>(), "1-1#梁");
     EXPECT_EQ(stored[0]["component_name"].as<std::string>(), "上部承重构件");

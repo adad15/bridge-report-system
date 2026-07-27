@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include <drogon/orm/Exception.h>
@@ -51,13 +52,16 @@ void append_match_warning(
 Json::Value match_imported_defects(
     const std::shared_ptr<drogon::orm::Transaction>& tx,
     const std::string& bridge_id,
-    const Json::Value& source) {
+    const std::optional<std::string>& locked_revision_id,
+    const Json::Value& source,
+    std::optional<std::string>& confirmed_revision_id) {
     Json::Value matched = source;
-    if (!matched["defects"].isArray()) return matched;
 
     ComponentInventoryRepository inventories(tx);
-    const auto revision = inventories.get_latest_revision(bridge_id);
-    if (!revision.has_value()) {
+    const auto revision = locked_revision_id.has_value()
+        ? inventories.get_revision(*locked_revision_id)
+        : inventories.get_latest_revision(bridge_id);
+    if (!revision.has_value() || revision->bridge_id != bridge_id) {
         for (auto& defect : matched["defects"]) {
             defect["component_match_candidate_ids"] = Json::Value(Json::arrayValue);
             defect["component_match_method"] = Json::Value(Json::nullValue);
@@ -69,6 +73,9 @@ Json::Value match_imported_defects(
                 "尚未建立构件台账，请选择实际构件后再正式确认。");
         }
         return matched;
+    }
+    if (revision->status == "已确认" || revision->status == "confirmed") {
+        confirmed_revision_id = revision->id;
     }
 
     std::vector<inventory::ConfirmedComponentAlias> aliases;
@@ -213,8 +220,12 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
     try {
         tx = db_client_->newTransaction(latch->callback());
         const auto locked = tx->execSqlSync(
-            "select bridge_id::text as bridge_id, inspection_year_id::text as inspection_year_id, import_status "
-            "from import_records where id = $1::uuid for update", import_record_id);
+            "select ir.bridge_id::text as bridge_id, "
+            "ir.inspection_year_id::text as inspection_year_id,ir.import_status,"
+            "iy.component_inventory_revision_id::text as inventory_revision_id "
+            "from import_records ir "
+            "left join inspection_years iy on iy.id=ir.inspection_year_id "
+            "where ir.id = $1::uuid for update of ir", import_record_id);
         if (locked.empty()) {
             tx->rollback();
             outcome.error_code = "import_record_deleted";
@@ -249,9 +260,26 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
         }
 
         const auto bridge_id = locked[0]["bridge_id"].as<std::string>();
-        const auto matched_data = match_imported_defects(tx, bridge_id, batch.data);
         const bool has_year = !locked[0]["inspection_year_id"].isNull();
         const auto year_id = has_year ? locked[0]["inspection_year_id"].as<std::string>() : std::string();
+        const auto locked_revision_id = locked[0]["inventory_revision_id"].isNull()
+            ? std::optional<std::string>()
+            : std::optional<std::string>(
+                locked[0]["inventory_revision_id"].as<std::string>());
+        std::optional<std::string> confirmed_revision_id;
+        const auto matched_data = match_imported_defects(
+            tx, bridge_id, locked_revision_id, batch.data, confirmed_revision_id);
+        // 解析匹配和年度评定必须锁定同一台账版本。仅补齐待校对年度的空关联，
+        // 已经锁定的历史版本绝不被“最新版本”覆盖。
+        if (has_year && !locked_revision_id.has_value()
+            && confirmed_revision_id.has_value()) {
+            tx->execSqlSync(
+                "update inspection_years "
+                "set component_inventory_revision_id=$2::uuid,updated_at=now() "
+                "where id=$1::uuid and bridge_id=$3::uuid and status='待校对' "
+                "and component_inventory_revision_id is null",
+                year_id, *confirmed_revision_id, bridge_id);
+        }
         for (const auto& file : batch.files) {
             const auto inserted = tx->execSqlSync(
                 "insert into archived_files (bridge_id, inspection_year_id, original_file_name, current_file_name, "
