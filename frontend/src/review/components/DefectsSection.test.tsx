@@ -118,7 +118,8 @@ describe("DefectsSection", () => {
     expect(screen.getByRole("textbox", { name: "位置" })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "规范病害" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "关联到病害" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "确认并查看下一条" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "确认本组" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "确认并查看下一条" })).not.toBeInTheDocument();
 
     // 快速列表与缩略图查看不禁用：只读态仍能检查导入结果。
     expect(screen.getByRole("button", { name: /2-1#梁/ })).toBeEnabled();
@@ -188,5 +189,94 @@ describe("DefectsSection", () => {
     rerender(<DefectsSection draft={draft} selectedCandidateId="defect_0055" {...props} />);
     expect(screen.getAllByText("55#梁").length).toBeGreaterThan(0);
     expect(screen.queryByText("1#梁")).not.toBeInTheDocument();
+  });
+
+  it("opens a resizable split detail pane and closes it explicitly", () => {
+    window.localStorage.removeItem("bridge-report:defect-detail-width-percent");
+    const onCloseDetail = vi.fn();
+    render(
+      <DefectsSection
+        draft={data()}
+        importRecordId="record-1"
+        baseUrl="http://backend"
+        bridgeId="bridge-1"
+        selectedCandidateId="defect_0001"
+        onSelect={vi.fn()}
+        onCloseDetail={onCloseDetail}
+        dispatch={vi.fn()}
+      />
+    );
+
+    const separator = screen.getByRole("separator", { name: "调整精细维护区域宽度" });
+    expect(separator).toHaveAttribute("aria-valuenow", "67");
+    fireEvent.keyDown(separator, { key: "ArrowLeft" });
+    expect(separator).toHaveAttribute("aria-valuenow", "69");
+    expect(Number(window.localStorage.getItem("bridge-report:defect-detail-width-percent"))).toBeCloseTo(68.67);
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭精细维护" }));
+    expect(onCloseDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the just-confirmed row pinned until the filter changes", async () => {
+    mockedFetchStandardCatalog.mockResolvedValue({
+      package: {} as never,
+      bridge_types: [],
+      component_categories: [],
+      inventory_templates: [],
+      defect_catalogs: [{
+        id: "catalog-safe",
+        applicable_component_ids: ["h21.component.beam"],
+        source_clause: "5.3.1",
+        indicators: [{
+          id: "h21.defect.crack",
+          name: "裂缝",
+          allowed_scales: [2],
+          deduction_rule_id: "rule-1",
+          source_table: "表5.3.1",
+        }],
+      }],
+      maintenance_levels: [],
+      inspection_types: [],
+      periodic_inspection_requirements: [],
+    });
+    const draft = data();
+    draft.defects[0] = {
+      ...draft.defects[0],
+      bridge_component_id: "component-1",
+      standard_component_category_id: "h21.component.beam",
+      standard_defect_indicator_id: "h21.defect.crack",
+      photo_references: [{
+        photo_number: "2.1-1",
+        resolution: "matched",
+        photo_candidate_id: "photo_0001",
+        resolved_defect_candidate_id: "defect_0001",
+        review_note: null,
+      }],
+    };
+    const dispatch = vi.fn();
+    const props = {
+      importRecordId: "record-1",
+      baseUrl: "http://backend",
+      bridgeId: "bridge-1",
+      selectedCandidateId: "defect_0001",
+      onSelect: vi.fn(),
+      dispatch,
+      technicalStandardPackageId: "package-safe",
+    };
+    const { rerender } = render(<DefectsSection draft={draft} {...props} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "可批量确认 1" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "可批量确认 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认本组" }));
+    expect(dispatch).toHaveBeenCalledWith({ type: "confirm_defect_groups", candidateIds: ["defect_0001"] });
+
+    const confirmedDraft = {
+      ...draft,
+      defects: [{ ...draft.defects[0], group_review_status: "已确认" as const }],
+    };
+    rerender(<DefectsSection draft={confirmedDraft} {...props} />);
+    expect(screen.getByRole("button", { name: /^2-1#梁/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "需处理 0" }));
+    expect(screen.queryByRole("button", { name: /^2-1#梁/ })).not.toBeInTheDocument();
   });
 });

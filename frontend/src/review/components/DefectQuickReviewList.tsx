@@ -14,6 +14,8 @@ interface DefectQuickReviewListProps {
   activeCandidateId: string | null;
   onToggleSelection: (candidateId: string) => void;
   onOpen: (candidateId: string, photoCandidateId?: string) => void;
+  onPageChange?: () => void;
+  compact?: boolean;
 }
 
 const STATUS_LABELS: Record<DefectReviewRow["status"], string> = {
@@ -31,6 +33,8 @@ export function DefectQuickReviewList({
   activeCandidateId,
   onToggleSelection,
   onOpen,
+  onPageChange,
+  compact = false,
 }: DefectQuickReviewListProps) {
   const [page, setPage] = useState(0);
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -48,7 +52,7 @@ export function DefectQuickReviewList({
   );
 
   return (
-    <div className="defect-quick-review">
+    <div className={`defect-quick-review ${compact ? "compact" : ""}`}>
       {rows.length === 0 ? <p className="empty-review-result">当前筛选下没有病害。</p> : null}
       {pageRows.map((row) => (
         <div
@@ -103,9 +107,9 @@ export function DefectQuickReviewList({
       ))}
       {pageCount > 1 ? (
         <div className="defect-pagination">
-          <button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button>
+          <button type="button" disabled={currentPage === 0} onClick={() => { onPageChange?.(); setPage(currentPage - 1); }}>上一页</button>
           <span>第 {currentPage + 1} / {pageCount} 页（共 {rows.length} 条）</span>
-          <button type="button" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</button>
+          <button type="button" disabled={currentPage + 1 >= pageCount} onClick={() => { onPageChange?.(); setPage(currentPage + 1); }}>下一页</button>
         </div>
       ) : null}
     </div>

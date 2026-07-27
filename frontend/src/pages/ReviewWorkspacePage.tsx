@@ -860,6 +860,11 @@ function ReviewWorkspaceLoaded({
                 setSelected({ kind: "defect", candidateId });
                 setActivePhotoCandidateId(photoCandidateId ?? null);
               }}
+              onCloseDetail={() => {
+                setExpandedDefectId(null);
+                setSelected(null);
+                setActivePhotoCandidateId(null);
+              }}
               dispatch={sectionDispatch}
               disabled={actionsDisabled}
               allowStructureChanges={canModifyDefectStructure(actionsDisabled, reopenState?.scope, isAdmin)}

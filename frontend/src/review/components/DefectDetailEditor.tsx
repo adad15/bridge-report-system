@@ -19,7 +19,8 @@ interface DefectDetailEditorProps {
   dispatch: Dispatch<ReviewDraftAction>;
   disabled?: boolean;
   allowDelete?: boolean;
-  onConfirmAndNext: () => void;
+  onConfirm: () => void;
+  onClose: () => void;
 }
 
 function applicableIndicators(
@@ -43,7 +44,8 @@ export function DefectDetailEditor({
   dispatch,
   disabled = false,
   allowDelete = false,
-  onConfirmAndNext,
+  onConfirm,
+  onClose,
 }: DefectDetailEditorProps) {
   const defect = row.defect;
   const indicators = applicableIndicators(catalogs, defect.standard_component_category_id);
@@ -56,9 +58,12 @@ export function DefectDetailEditor({
           <h3>精细维护病害档案</h3>
           <p>{defect.component_number ?? defect.component_name} · {defect.defect_location}</p>
         </div>
-        <span className={`defect-quick-status ${row.status}`}>
-          {defect.review_status}{defect.group_review_status === "已确认" ? " · 本组已确认" : ""}
-        </span>
+        <div className="defect-detail-heading-actions">
+          <span className={`defect-quick-status ${row.status}`}>
+            {defect.review_status}{defect.group_review_status === "已确认" ? " · 本组已确认" : ""}
+          </span>
+          <button type="button" className="defect-detail-close" aria-label="关闭精细维护" onClick={onClose}>×</button>
+        </div>
       </div>
       {row.problems.length > 0 ? (
         <div className="defect-detail-problems">
@@ -141,7 +146,7 @@ export function DefectDetailEditor({
             dispatch({ type: "delete_defect", candidateId: defect.candidate_id });
           }
         }}>删除病害</button> : null}
-        <button type="button" className="review-action-primary" disabled={disabled || !row.batchEligible} onClick={onConfirmAndNext}>确认并查看下一条</button>
+        <button type="button" className="review-action-primary" disabled={disabled || !row.batchEligible} onClick={onConfirm}>确认本组</button>
       </div>
     </section>
   );
