@@ -213,6 +213,8 @@ void append_components_and_defects(
         defect_plan.part_name = component_number;
         defect_plan.defect_location = string_member_or_empty(defect, "defect_location");
         defect_plan.defect_type = string_member_or_empty(defect, "defect_type");
+        defect_plan.standard_defect_indicator_id =
+            string_member_or_empty(defect, "standard_defect_indicator_id");
         defect_plan.defect_description_raw = string_member_or_empty(defect, "defect_description");
         // 规范标度只来自 defect_scale；severity 是校对提示级别，永不写入 scale。
         if (defect.isMember("defect_scale") && defect["defect_scale"].isIntegral()
@@ -224,6 +226,9 @@ void append_components_and_defects(
         defect_plan.raw_row_text = optional_string_member(source_ref, "raw_row_text");
         if (defect["range_split_origin"].isObject()) {
             defect_plan.range_split_origin = defect["range_split_origin"];
+        }
+        if (defect["photo_references"].isArray()) {
+            defect_plan.photo_references = defect["photo_references"];
         }
         defect_plan.source_table_title = optional_string_member(source_ref, "table_title");
         defect_plan.source_table_index = optional_int_member(source_ref, "table_index");

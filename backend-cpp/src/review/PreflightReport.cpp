@@ -222,18 +222,6 @@ void check_photo_link_unresolved(const Json::Value& data, std::vector<PreflightI
     }
 }
 
-bool string_array_contains(const Json::Value& values, const std::string& expected) {
-    if (!values.isArray()) {
-        return false;
-    }
-    for (const auto& value : values) {
-        if (value.isString() && value.asString() == expected) {
-            return true;
-        }
-    }
-    return false;
-}
-
 void check_defect_photo_groups(const Json::Value& data, std::vector<PreflightIssue>& blocking) {
     if (!data["defects"].isArray()) {
         return;
@@ -249,18 +237,22 @@ void check_defect_photo_groups(const Json::Value& data, std::vector<PreflightIss
                       "病害候选 " + defect_id + " 尚未完成病害与照片联合确认。", defect_id);
         }
 
-        if (!defect["photo_numbers"].isArray()) {
+        if (!defect["photo_references"].isArray()) {
             continue;
         }
-        for (const auto& number_value : defect["photo_numbers"]) {
-            if (!number_value.isString()) {
+        for (const auto& reference : defect["photo_references"]) {
+            if (!reference.isObject() || !reference["photo_number"].isString()) {
                 continue;
             }
-            const auto number = number_value.asString();
-            if (!photo_number_has_confirmed_link(data, defect_id, number)
-                && !string_array_contains(defect["confirmed_missing_photo_numbers"], number)) {
+            const auto number = reference["photo_number"].asString();
+            const auto resolution = string_member_or_empty(reference, "resolution");
+            if (resolution == "pending") {
                 add_issue(blocking, "missing_photo_confirmation_required",
-                          "病害候选 " + defect_id + " 引用的照片 " + number + " 缺失，尚未人工确认。", defect_id);
+                          "病害候选 " + defect_id + " 引用的照片 " + number + " 尚未处理。", defect_id);
+            } else if (resolution == "matched"
+                       && !photo_number_has_confirmed_link(data, defect_id, number)) {
+                add_issue(blocking, "photo_link_unresolved",
+                          "病害候选 " + defect_id + " 引用的照片 " + number + " 与实际关联不一致。", defect_id);
             }
         }
     }
@@ -314,22 +306,24 @@ void check_defect_without_photo(const Json::Value& data, std::vector<PreflightIs
             continue;
         }
 
-        const bool has_photo_numbers = defect.isObject() && defect.isMember("photo_numbers")
-            && defect["photo_numbers"].isArray() && !defect["photo_numbers"].empty();
+        const bool has_photo_references =
+            defect.isObject() && defect["photo_references"].isArray()
+            && !defect["photo_references"].empty();
 
         // 没有引用任何照片编号表示报告没有为该病害声明照片，不应制造缺图警告；
         // 只有明确引用了照片编号但找不到已确认关联时才需要提醒。
-        if (!has_photo_numbers) {
+        if (!has_photo_references) {
             continue;
         }
 
         bool missing = false;
         const auto defect_id = candidate_id_of(defect);
-        for (const auto& photo_number_value : defect["photo_numbers"]) {
-            if (!photo_number_value.isString()) {
+        for (const auto& reference : defect["photo_references"]) {
+            if (!reference.isObject() || !reference["photo_number"].isString()) {
                 continue;
             }
-            if (!photo_number_has_confirmed_link(data, defect_id, photo_number_value.asString())) {
+            if (!photo_number_has_confirmed_link(
+                    data, defect_id, reference["photo_number"].asString())) {
                 missing = true;
                 break;
             }

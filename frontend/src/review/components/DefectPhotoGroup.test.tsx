@@ -8,9 +8,12 @@ function defect(): DefectCandidate {
   return {
     candidate_id: "defect_0001", source_structure_part: "上部结构", component_name: "主梁", component_number: "2-1#梁",
     bridge_component_id: "component-1", standard_component_category_id: "category-1", resolved_structure_part: "上部结构",
-    defect_type: "裂缝", defect_location: "第二跨", defect_description: "梁底裂缝", quantity_text: "1处",
-    measurement_text: "L=0.8m", measurements: [], photo_numbers: ["2.1-1", "2.1-2"],
-    group_review_status: "待确认", confirmed_missing_photo_numbers: [], severity: null, remark: null,
+    standard_defect_indicator_id: "h21.defect.crack", defect_type: "裂缝", defect_location: "第二跨", defect_description: "梁底裂缝", quantity_text: "1处",
+    measurement_text: "L=0.8m", measurements: [], photo_references: [
+      { photo_number: "2.1-1", resolution: "matched", photo_candidate_id: "photo_0001", resolved_defect_candidate_id: "defect_0001", review_note: null },
+      { photo_number: "2.1-2", resolution: "matched", photo_candidate_id: "photo_0002", resolved_defect_candidate_id: "defect_0001", review_note: null },
+    ],
+    group_review_status: "待确认", severity: null, remark: null,
     source_ref: {}, confidence: 0.9, review_status: "已确认", review_note: "现场复核", warnings: [],
   };
 }
@@ -25,7 +28,7 @@ function photo(id: string, number: string): PhotoCandidate {
 
 function data(): BridgeAnnualInspectionData {
   return {
-    contract: { name: "BridgeAnnualInspectionData", version: "2.0", generated_at: "2026-07-12", producer: "test", parser_name: "test", parser_version: "2" },
+    contract: { name: "BridgeAnnualInspectionData", version: "3.0", generated_at: "2026-07-12", producer: "test", parser_name: "test", parser_version: "3" },
     import_context: { source_type: "软件导出Word", file_role: "当前年度检测资料", archived_file_system_number: "GDWJ-1", import_record_system_number: "DRJL-1" },
     bridge_check: { selected_bridge_system_number: "QL-1", match_status: "匹配", warnings: [] },
     inspection: { inspection_year: 2026, inspection_date: "2026-07-12", report_number: "R-1", project_name: "测试", data_role: "当前年度" },

@@ -165,9 +165,9 @@ def extract_media(docx_path: Path, output_dir: Path) -> list[str]:
 def defect_by_photo_number(defects: list[DefectCandidate]) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for defect in defects:
-        for photo_number in defect.photo_numbers:
-            if photo_number not in mapping:
-                mapping[photo_number] = defect.candidate_id
+        for reference in defect.photo_references:
+            if reference.photo_number not in mapping:
+                mapping[reference.photo_number] = defect.candidate_id
     return mapping
 
 
@@ -228,7 +228,8 @@ def extract_and_match_photos(
 
     matched_numbers = {photo.photo_number for photo in photos}
     for defect in defects:
-        for photo_number in defect.photo_numbers:
+        for reference in defect.photo_references:
+            photo_number = reference.photo_number
             if photo_number not in matched_numbers:
                 has_existing_warning = any(
                     warning.code == "photo_number_unmatched"

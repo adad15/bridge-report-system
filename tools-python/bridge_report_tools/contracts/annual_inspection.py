@@ -62,7 +62,7 @@ class SourceRef(ContractModel):
 
 class ContractInfo(ContractModel):
     name: Literal["BridgeAnnualInspectionData"]
-    version: Literal["2.0"]
+    version: Literal["3.0"]
     generated_at: datetime
     producer: str
     parser_name: str
@@ -138,6 +138,33 @@ class RangeSplitOrigin(ContractModel):
         return self
 
 
+class PhotoReference(ContractModel):
+    """Word 照片编号及其人工核对结论。"""
+
+    photo_number: str = Field(min_length=1)
+    resolution: Literal["pending", "matched", "relinked", "missing", "unrelated"]
+    photo_candidate_id: str | None = None
+    resolved_defect_candidate_id: str | None = None
+    review_note: str | None = None
+
+    @model_validator(mode="after")
+    def validate_resolution_targets(self) -> PhotoReference:
+        has_photo = self.photo_candidate_id is not None
+        has_defect = self.resolved_defect_candidate_id is not None
+        valid_targets = {
+            "pending": not has_photo and not has_defect,
+            "matched": has_photo and has_defect,
+            "relinked": has_photo and has_defect,
+            "missing": not has_photo and not has_defect,
+            "unrelated": has_photo and not has_defect,
+        }
+        if not valid_targets[self.resolution]:
+            raise ValueError(
+                f"photo reference targets are invalid for resolution {self.resolution}"
+            )
+        return self
+
+
 class DefectCandidate(ContractModel):
     """第二章结构病害检查表中的一条病害候选记录。"""
 
@@ -163,11 +190,9 @@ class DefectCandidate(ContractModel):
     quantity_text: str | None = None
     measurement_text: str | None = None
     measurements: list[Measurement]
-    photo_numbers: list[str]
+    standard_defect_indicator_id: str | None = None
+    photo_references: list[PhotoReference]
     group_review_status: DefectGroupReviewStatus
-    confirmed_missing_photo_numbers: list[str] = Field(
-        json_schema_extra={"uniqueItems": True}
-    )
     severity: Severity | None = None
     remark: str | None = None
     source_ref: SourceRef
@@ -177,11 +202,21 @@ class DefectCandidate(ContractModel):
     range_split_origin: RangeSplitOrigin | None = None
     warnings: list[WarningItem]
 
-    @field_validator("confirmed_missing_photo_numbers")
+    @field_validator("photo_references")
     @classmethod
-    def require_unique_missing_numbers(cls, value: list[str]) -> list[str]:
-        if len(value) != len(set(value)):
-            raise ValueError("confirmed_missing_photo_numbers must be unique")
+    def require_unique_photo_references(
+        cls, value: list[PhotoReference]
+    ) -> list[PhotoReference]:
+        photo_numbers = [reference.photo_number for reference in value]
+        if len(photo_numbers) != len(set(photo_numbers)):
+            raise ValueError("photo_references.photo_number must be unique")
+        return value
+
+    @field_validator("standard_defect_indicator_id")
+    @classmethod
+    def require_non_empty_indicator_id(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("standard_defect_indicator_id must not be blank")
         return value
 
     @field_validator("component_match_candidate_ids")

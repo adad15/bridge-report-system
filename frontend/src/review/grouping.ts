@@ -24,7 +24,7 @@ export interface AttentionItem {
 const ASSESSMENT_DEFECT_FIELDS = new Set<DefectTargetField>([
   "component_match", "component_name", "component_number",
   "defect_location", "defect_type", "defect_scale",
-  "quantity_text", "photo_numbers", "measurement_text",
+  "quantity_text", "photo_references", "measurement_text",
 ]);
 
 export function assessmentIssueToAttention(issue: AssessmentIssue): AttentionItem {
@@ -215,8 +215,9 @@ export function needsAttention(
   }
 
   for (const defect of data.defects) {
-    for (const photoNumber of defect.photo_numbers) {
-      const missingAcknowledged = defect.confirmed_missing_photo_numbers.includes(photoNumber);
+    for (const reference of defect.photo_references) {
+      const photoNumber = reference.photo_number;
+      const missingAcknowledged = reference.resolution === "missing";
       if (!missingAcknowledged && !defectPhotoNumberIsLinked(data, defect.candidate_id, photoNumber)) {
         items.push({
           kind: "defect",
@@ -224,7 +225,7 @@ export function needsAttention(
           message: `照片编号 ${photoNumber} 未匹配到关联图片。`,
           severity: "warning",
           warningCode: "photo_number_unmatched",
-          targetField: "photo_numbers",
+          targetField: "photo_references",
         });
       }
     }
@@ -279,7 +280,7 @@ export function needsAttention(
 
 /**
  * §9.2 普通病害：待确认 + 无对象级 warning + 没有导入级 error 指向它 + 核心字段完整 +
- * 每个引用的照片编号都有照片候选关联回它（photo_numbers 为空则视为满足）。
+ * 每个引用的照片编号都有照片候选关联回它（photo_references 为空则视为满足）。
  */
 export function isNormalDefect(defect: DefectCandidate, data: BridgeAnnualInspectionData): boolean {
   if (defect.review_status !== "待确认") {
@@ -303,7 +304,9 @@ export function isNormalDefect(defect: DefectCandidate, data: BridgeAnnualInspec
   ) {
     return false;
   }
-  return defect.photo_numbers.every((photoNumber) => defectPhotoNumberIsLinked(data, defect.candidate_id, photoNumber));
+  return defect.photo_references.every((reference) =>
+    defectPhotoNumberIsLinked(data, defect.candidate_id, reference.photo_number)
+  );
 }
 
 /**

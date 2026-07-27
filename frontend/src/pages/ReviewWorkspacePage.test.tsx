@@ -151,7 +151,7 @@ function reviewResponse(): ReviewResponse {
       object_warning_count: 0,
     },
     has_current_annual_facts: false,
-    contract_compatibility: "native_2_0",
+    contract_compatibility: "native_3_0",
     reopen: null,
     edit_lock: null,
   };

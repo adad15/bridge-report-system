@@ -65,7 +65,13 @@ describe("grouping", () => {
   it("does not warn when a referenced missing photo was explicitly acknowledged", () => {
     const state = completeData();
     state.photos = [];
-    state.defects[0].confirmed_missing_photo_numbers = ["2.1-1"];
+    state.defects[0].photo_references = [{
+      photo_number: "2.1-1",
+      resolution: "missing",
+      photo_candidate_id: null,
+      resolved_defect_candidate_id: null,
+      review_note: null,
+    }];
     expect(needsAttention(state).some((item) => item.warningCode === "photo_number_unmatched")).toBe(false);
   });
 

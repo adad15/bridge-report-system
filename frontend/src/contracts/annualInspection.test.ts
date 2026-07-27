@@ -6,7 +6,7 @@ import { isBridgeAnnualInspectionData } from "./annualInspection";
 const validData: BridgeAnnualInspectionData = {
   contract: {
     name: "BridgeAnnualInspectionData",
-    version: "2.0",
+    version: "3.0",
     generated_at: "2026-07-03T00:00:00+08:00",
     producer: "bridge-report-system",
     parser_name: "annual_inspection_contract_parser",
@@ -62,9 +62,17 @@ const validData: BridgeAnnualInspectionData = {
           source_text: "L=0.8m",
         },
       ],
-      photo_numbers: ["2.1-1"],
+      standard_defect_indicator_id: null,
+      photo_references: [
+        {
+          photo_number: "2.1-1",
+          resolution: "pending",
+          photo_candidate_id: null,
+          resolved_defect_candidate_id: null,
+          review_note: null,
+        },
+      ],
       group_review_status: "待确认",
-      confirmed_missing_photo_numbers: [],
       severity: "warning",
       remark: null,
       source_ref: {
@@ -106,14 +114,14 @@ function cloneValidData(): BridgeAnnualInspectionData {
   return JSON.parse(JSON.stringify(validData)) as BridgeAnnualInspectionData;
 }
 
-describe("isBridgeAnnualInspectionData 2.0", () => {
-  it("accepts valid version two data without imported ratings", () => {
+describe("isBridgeAnnualInspectionData 3.0", () => {
+  it("accepts valid version three data without imported ratings", () => {
     expect(isBridgeAnnualInspectionData(validData)).toBe(true);
     expect("ratings" in validData).toBe(false);
     expect("defect_deduction" in validData.defects[0]).toBe(false);
   });
 
-  it.each(["1.0", "1.1", "1.2", "2", "2.1"])(
+  it.each(["1.0", "1.1", "1.2", "2", "2.0", "2.1", "3"])(
     "rejects contract version %s",
     (version) => {
       expect(
@@ -267,9 +275,9 @@ describe("isBridgeAnnualInspectionData 2.0", () => {
     ).toBe(false);
   });
 
-  it("rejects duplicate confirmed missing photo numbers", () => {
+  it("rejects duplicate photo reference numbers", () => {
     const invalid = cloneValidData();
-    invalid.defects[0].confirmed_missing_photo_numbers = ["2.1-1", "2.1-1"];
+    invalid.defects[0].photo_references.push({ ...invalid.defects[0].photo_references[0] });
 
     expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
   });

@@ -11,6 +11,14 @@ function matchedData() {
     standard_component_category_id: "category-1",
     resolved_structure_part: "上部结构",
     component_inventory_revision_id: "revision-1",
+    standard_defect_indicator_id: "h21.defect.crack",
+    photo_references: [{
+      photo_number: "2.1-1",
+      resolution: "matched",
+      photo_candidate_id: "photo_0001",
+      resolved_defect_candidate_id: "defect_0001",
+      review_note: null,
+    }],
   };
   return state;
 }
@@ -128,14 +136,20 @@ describe("reviewDraftReducer", () => {
   it("records an explicit missing-photo acknowledgement", () => {
     const reducer = createReviewDraftReducer();
     const state = matchedData();
-    state.defects[0].photo_numbers = ["missing-1"];
+    state.defects[0].photo_references = [{
+      photo_number: "missing-1",
+      resolution: "pending",
+      photo_candidate_id: null,
+      resolved_defect_candidate_id: null,
+      review_note: null,
+    }];
     state.photos = [];
     const next = reducer(state, {
       type: "confirm_missing_photo",
       defectCandidateId: "defect_0001",
       photoNumber: "missing-1",
     });
-    expect(next.defects[0].confirmed_missing_photo_numbers).toEqual(["missing-1"]);
+    expect(next.defects[0].photo_references[0].resolution).toBe("missing");
   });
 
   it("confirms a complete defect-photo group", () => {

@@ -244,18 +244,28 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                     return;
                 }
 
-                // 存量草稿仍是旧版合同时拒绝保存：旧草稿必须重新解析为 2.0，
-                // 不能靠客户端提交一份"看起来像 2.0"的请求体绕过重解析（变更提案 001 §7）。
-                if (review::stored_contract_requires_reparse(
-                        parse_parsed_result_json(detail->parsed_result_json))) {
+                const auto stored_draft =
+                    parse_parsed_result_json(detail->parsed_result_json);
+                // 存量草稿仍是旧版合同时拒绝保存，不能靠客户端伪造 3.0 请求绕过重新解析。
+                if (review::stored_contract_requires_reparse(stored_draft)) {
                     respond_json(
                         callback,
                         make_error_body(
                             "contract_version_outdated",
-                            "该导入记录的候选数据仍是旧版合同，请先重新解析为 2.0 再校对。"
+                            "该导入记录的候选数据仍是旧版合同，请删除测试导入并重新解析为 3.0。"
                         ),
                         drogon::k409Conflict
                     );
+                    return;
+                }
+                const auto evidence_validation =
+                    review::validate_imported_defect_evidence(
+                        stored_draft, *body_json);
+                if (!evidence_validation.ok) {
+                    respond_json(
+                        callback,
+                        make_draft_validation_error_body(evidence_validation),
+                        drogon::k400BadRequest);
                     return;
                 }
 
@@ -293,7 +303,7 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                     }
                     if (detail->reopen_scope.value_or("") == "warnings_only") {
                         const auto scope_validation = review::validate_warnings_only_scope(
-                            parse_parsed_result_json(detail->parsed_result_json), *body_json, &draft_to_save);
+                            stored_draft, *body_json, &draft_to_save);
                         if (!scope_validation.ok) {
                             respond_json(
                                 callback,
@@ -308,7 +318,6 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                 // jsonb 列不保留输入格式，紧凑序列化即可，避免 toStyledString 的缩进开销。
                 Json::StreamWriterBuilder writer_builder;
                 writer_builder["indentation"] = "";
-                const auto stored_draft = parse_parsed_result_json(detail->parsed_result_json);
                 const auto audit_event = review::build_defect_change_audit_event(
                     stored_draft, draft_to_save, user->username);
                 const auto audit_json = audit_event.isNull()

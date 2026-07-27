@@ -45,9 +45,9 @@ def test_liaoning_real_word_regression(tmp_path: Path) -> None:
     assert 10 == sum(1 for defect in response.data.defects if defect.quantity_text)
     assert any(defect.component_number == "2-1#板" for defect in response.data.defects)
 
-    # 合同 2.0：Word 只提供病害事实证据，不再接收报告中的扣分和评分。
+    # 合同 3.0：Word 只提供病害事实证据，不再接收报告中的扣分和评分。
     wire_data = response.data.model_dump(mode="json")
-    assert wire_data["contract"]["version"] == "2.0"
+    assert wire_data["contract"]["version"] == "3.0"
     assert "ratings" not in wire_data
     assert all("defect_deduction" not in defect for defect in wire_data["defects"])
     assert all("component_alias" not in defect for defect in wire_data["defects"])

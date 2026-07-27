@@ -9,7 +9,7 @@ export type DefectTargetField =
   | "defect_type"
   | "defect_scale"
   | "quantity_text"
-  | "photo_numbers"
+  | "photo_references"
   | "measurement_text";
 
 const WARNING_FIELD_MAP: Record<string, DefectTargetField> = {
@@ -18,7 +18,7 @@ const WARNING_FIELD_MAP: Record<string, DefectTargetField> = {
   defect_component_assignment_invalid: "component_match",
   defect_scale_invalid: "defect_scale",
   measurement_parse_low_confidence: "measurement_text",
-  photo_number_unmatched: "photo_numbers",
+  photo_number_unmatched: "photo_references",
   defect_component_missing: "component_name",
   component_alias_missing: "component_number",
   defect_location_missing: "defect_location",

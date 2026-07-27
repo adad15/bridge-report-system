@@ -12,7 +12,7 @@ namespace {
 
 Json::Value fixture() {
     const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-        "samples/contracts/bridge_annual_inspection_data.v2.valid.json";
+        "samples/contracts/bridge_annual_inspection_data.v3.valid.json";
     std::ifstream input(path, std::ios::binary);
     Json::CharReaderBuilder builder;
     Json::Value root;

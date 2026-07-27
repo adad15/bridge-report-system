@@ -51,13 +51,15 @@ struct DefectPlan {
     std::string structure_part;
     std::optional<std::string> part_name;
     std::string defect_location;
-    // 规范病害标度：只来自合同 2.0 的 defect_scale（整数转十进制字符串），
+    // 规范病害标度：只来自合同 3.0 的 defect_scale（整数转十进制字符串），
     // 严禁取 severity——severity 只是 info/warning/error 校对提示级别。
     std::optional<std::string> scale;
+    std::string standard_defect_indicator_id;
     std::string defect_type;
     std::string defect_description_raw;
     std::optional<std::string> raw_row_text;
     std::optional<Json::Value> range_split_origin;
+    Json::Value photo_references{Json::arrayValue};
     std::optional<std::string> source_table_title;
     std::optional<int> source_table_index;
     std::optional<int> source_row_number;

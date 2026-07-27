@@ -203,7 +203,7 @@
           "type": "string"
         },
         "version": {
-          "const": "2.0",
+          "const": "3.0",
           "title": "Version",
           "type": "string"
         },
@@ -428,11 +428,23 @@
           "title": "Measurements",
           "type": "array"
         },
-        "photo_numbers": {
+        "standard_defect_indicator_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Standard Defect Indicator Id"
+        },
+        "photo_references": {
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/PhotoReference"
           },
-          "title": "Photo Numbers",
+          "title": "Photo References",
           "type": "array"
         },
         "group_review_status": {
@@ -442,14 +454,6 @@
           ],
           "title": "Group Review Status",
           "type": "string"
-        },
-        "confirmed_missing_photo_numbers": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Confirmed Missing Photo Numbers",
-          "type": "array",
-          "uniqueItems": true
         },
         "severity": {
           "anyOf": [
@@ -537,9 +541,8 @@
         "defect_location",
         "defect_description",
         "measurements",
-        "photo_numbers",
+        "photo_references",
         "group_review_status",
-        "confirmed_missing_photo_numbers",
         "source_ref",
         "confidence",
         "review_status",
@@ -820,6 +823,70 @@
         "warnings"
       ],
       "title": "PhotoCandidate",
+      "type": "object"
+    },
+    "PhotoReference": {
+      "additionalProperties": false,
+      "description": "Word 照片编号及其人工核对结论。",
+      "properties": {
+        "photo_number": {
+          "minLength": 1,
+          "title": "Photo Number",
+          "type": "string"
+        },
+        "resolution": {
+          "enum": [
+            "pending",
+            "matched",
+            "relinked",
+            "missing",
+            "unrelated"
+          ],
+          "title": "Resolution",
+          "type": "string"
+        },
+        "photo_candidate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Candidate Id"
+        },
+        "resolved_defect_candidate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved Defect Candidate Id"
+        },
+        "review_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review Note"
+        }
+      },
+      "required": [
+        "photo_number",
+        "resolution"
+      ],
+      "title": "PhotoReference",
       "type": "object"
     },
     "RangeSplitOrigin": {

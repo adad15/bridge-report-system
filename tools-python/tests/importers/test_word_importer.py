@@ -190,7 +190,8 @@ def test_parse_defect_tables_extracts_defect_candidate(tmp_path: Path) -> None:
     assert defect.quantity_text == "1处"
     assert defect.measurement_text == "L=0.8m，W=0.12mm"
     assert [item.dimension_type for item in defect.measurements] == ["长度", "宽度"]
-    assert defect.photo_numbers == ["2.1-1"]
+    assert [item.photo_number for item in defect.photo_references] == ["2.1-1"]
+    assert all(item.resolution == "pending" for item in defect.photo_references)
     assert defect.source_ref.table_title == "表2.1-1 上部结构病害检查表"
 
 
@@ -233,7 +234,7 @@ def test_parse_defect_tables_uses_liaoning_table_numbers() -> None:
     assert errors == []
     assert len(defects) == 1
     assert defects[0].source_structure_part == "下部结构"
-    assert defects[0].photo_numbers == ["2.2-1"]
+    assert [item.photo_number for item in defects[0].photo_references] == ["2.2-1"]
 
 
 def test_parse_defect_tables_maps_real_liaoning_header_aliases() -> None:
@@ -282,7 +283,7 @@ def test_parse_defect_tables_maps_real_liaoning_header_aliases() -> None:
     assert defect.defect_type == "横向裂缝"
     assert defect.measurement_text == "L=6m，W=0.2mm"
     assert [item.dimension_type for item in defect.measurements] == ["长度", "宽度"]
-    assert defect.photo_numbers == ["2.1-1"]
+    assert [item.photo_number for item in defect.photo_references] == ["2.1-1"]
     assert defect.severity is None
 
 
@@ -320,7 +321,7 @@ def test_parse_word_import_outputs_contract_data_and_photo_files(tmp_path: Path)
     assert response.temporary_photo_files == ["photo_0001.png"]
     data = response.data
     assert data.contract.name == "BridgeAnnualInspectionData"
-    assert data.contract.version == "2.0"
+    assert data.contract.version == "3.0"
     assert data.contract.parser_name == "word_importer"
     assert data.import_context.source_type == "软件导出Word"
     assert data.import_context.file_role == "当前年度检测资料"
@@ -332,10 +333,13 @@ def test_parse_word_import_outputs_contract_data_and_photo_files(tmp_path: Path)
     assert len(data.defects) == 1
     assert data.defects[0].candidate_id == "defect_0001"
     assert all(item.group_review_status == "待确认" for item in data.defects)
-    assert all(item.confirmed_missing_photo_numbers == [] for item in data.defects)
+    assert all(
+        all(reference.resolution == "pending" for reference in item.photo_references)
+        for item in data.defects
+    )
     assert len(data.photos) == 1
     assert data.photos[0].linked_defect_candidate_id == "defect_0001"
-    assert data.contract.version == "2.0"
+    assert data.contract.version == "3.0"
     assert not hasattr(data, "ratings")
     assert data.comparison_candidates == []
     assert data.report_text_candidates == []
@@ -361,7 +365,7 @@ def test_parse_word_import_keeps_defect_table_missing_as_contract_error(tmp_path
     assert response.data.defects == []
     assert response.data.photos == []
     assert response.data.errors[0].code == "defect_tables_not_found"
-    assert response.data.contract.version == "2.0"
+    assert response.data.contract.version == "3.0"
     assert not hasattr(response.data, "ratings")
 
 
@@ -379,7 +383,7 @@ def test_parse_word_import_succeeds_when_rating_table_missing(tmp_path: Path) ->
 
     response = parse_word_import(request)
 
-    assert response.data.contract.version == "2.0"
+    assert response.data.contract.version == "3.0"
     assert len(response.data.defects) == 1
     assert not hasattr(response.data, "ratings")
     assert "rating_table_not_found" not in {
@@ -441,7 +445,7 @@ def test_parse_word_endpoint_accepts_document_without_rating_table(tmp_path: Pat
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["data"]["contract"]["version"] == "2.0"
+    assert payload["data"]["contract"]["version"] == "3.0"
     assert "ratings" not in payload["data"]
 
 

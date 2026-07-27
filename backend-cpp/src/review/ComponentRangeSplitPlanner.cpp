@@ -235,8 +235,8 @@ ComponentRangeSplitPlan plan_component_range_splits(
                 }
                 append_split_warning(split["warnings"], new_id);
                 apply_match(split, revision, item);
-                output_defects.append(split);
 
+                std::unordered_map<std::string, std::string> split_photo_ids;
                 if (current["photos"].isArray()) {
                     for (const auto& source_photo : current["photos"]) {
                         if (string_member(source_photo, "linked_defect_candidate_id") != source_id)
@@ -248,6 +248,8 @@ ComponentRangeSplitPlan plan_component_range_splits(
                             occupied_ids);
                         photo["candidate_id"] = photo_id;
                         photo["linked_defect_candidate_id"] = new_id;
+                        split_photo_ids.emplace(
+                            string_member(source_photo, "candidate_id"), photo_id);
                         if (photo["warnings"].isArray()) {
                             for (auto& warning : photo["warnings"]) {
                                 if (string_member(warning, "target_candidate_id")
@@ -263,6 +265,23 @@ ComponentRangeSplitPlan plan_component_range_splits(
                         ++item.result_photo_count;
                     }
                 }
+                if (split["photo_references"].isArray()) {
+                    for (auto& reference : split["photo_references"]) {
+                        const auto source_photo_id =
+                            string_member(reference, "photo_candidate_id");
+                        if (const auto photo_it =
+                                split_photo_ids.find(source_photo_id);
+                            photo_it != split_photo_ids.end()) {
+                            reference["photo_candidate_id"] = photo_it->second;
+                        }
+                        if (string_member(
+                                reference,
+                                "resolved_defect_candidate_id") == source_id) {
+                            reference["resolved_defect_candidate_id"] = new_id;
+                        }
+                    }
+                }
+                output_defects.append(std::move(split));
                 if (current["warnings"].isArray()) {
                     for (const auto& warning : current["warnings"]) {
                         rewrite_targeted_warning(warning, source_id, new_id, output_warnings);

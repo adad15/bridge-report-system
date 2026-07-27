@@ -20,7 +20,7 @@ def load_fixture(name: str) -> dict:
 
 
 def valid_payload() -> dict:
-    return copy.deepcopy(load_fixture("bridge_annual_inspection_data.v2.valid.json"))
+    return copy.deepcopy(load_fixture("bridge_annual_inspection_data.v3.valid.json"))
 
 
 def delete_path(data: dict, path: tuple[str | int, ...]) -> None:
@@ -30,11 +30,11 @@ def delete_path(data: dict, path: tuple[str | int, ...]) -> None:
     del current[path[-1]]  # type: ignore[index]
 
 
-def test_valid_version_two_fixture_is_accepted() -> None:
+def test_valid_version_three_fixture_is_accepted() -> None:
     model = BridgeAnnualInspectionData.model_validate(valid_payload())
 
     assert model.contract.name == "BridgeAnnualInspectionData"
-    assert model.contract.version == "2.0"
+    assert model.contract.version == "3.0"
     assert model.defects[0].source_structure_part == "上部结构"
     assert model.defects[0].component_number == "2-1#梁"
     assert model.defects[0].bridge_component_id is None
@@ -117,7 +117,7 @@ def test_range_split_origin_rejects_extra_fields() -> None:
 
 def test_with_comparison_fixture_is_accepted() -> None:
     model = BridgeAnnualInspectionData.model_validate(
-        load_fixture("bridge_annual_inspection_data.v2.with-comparison.json")
+        load_fixture("bridge_annual_inspection_data.v3.with-comparison.json")
     )
 
     assert len(model.comparison_candidates) == 1
@@ -125,8 +125,8 @@ def test_with_comparison_fixture_is_accepted() -> None:
     assert model.comparison_candidates[0].match_basis is not None
 
 
-@pytest.mark.parametrize("version", ["1.0", "1.1", "1.2", "2", "2.1"])
-def test_only_contract_version_two_is_accepted(version: str) -> None:
+@pytest.mark.parametrize("version", ["1.0", "1.1", "1.2", "2.0", "2.1", "3"])
+def test_only_contract_version_three_is_accepted(version: str) -> None:
     data = valid_payload()
     data["contract"]["version"] = version
 
@@ -136,7 +136,7 @@ def test_only_contract_version_two_is_accepted(version: str) -> None:
     assert "contract.version" in str(exc_info.value)
 
 
-def test_ratings_are_rejected_in_version_two() -> None:
+def test_ratings_are_rejected_in_version_three() -> None:
     data = valid_payload()
     data["ratings"] = {"overall": {"total_score": 85.61}}
 
@@ -248,7 +248,7 @@ def test_historical_official_report_file_role_is_allowed() -> None:
     assert model.import_context.file_role == "历史正式报告"
 
 
-@pytest.mark.parametrize("field_name", ["group_review_status", "confirmed_missing_photo_numbers"])
+@pytest.mark.parametrize("field_name", ["group_review_status", "photo_references"])
 def test_defect_group_review_fields_are_required(field_name: str) -> None:
     data = valid_payload()
     del data["defects"][0][field_name]
@@ -259,15 +259,54 @@ def test_defect_group_review_fields_are_required(field_name: str) -> None:
     assert f"defects.0.{field_name}" in str(exc_info.value)
 
 
-@pytest.mark.parametrize("value", [["2.1-1", "2.1-1"], [1], [None]])
-def test_confirmed_missing_photo_numbers_reject_invalid_values(value: list[object]) -> None:
+def test_duplicate_photo_reference_numbers_are_rejected() -> None:
     data = valid_payload()
-    data["defects"][0]["confirmed_missing_photo_numbers"] = value
+    data["defects"][0]["photo_references"].append(
+        copy.deepcopy(data["defects"][0]["photo_references"][0])
+    )
 
     with pytest.raises(ValidationError) as exc_info:
         BridgeAnnualInspectionData.model_validate(data)
 
-    assert "defects.0.confirmed_missing_photo_numbers" in str(exc_info.value)
+    assert "defects.0.photo_references" in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    ("resolution", "photo_candidate_id", "resolved_defect_candidate_id"),
+    [
+        ("pending", "photo_0001", None),
+        ("matched", None, "defect_0001"),
+        ("relinked", "photo_0001", None),
+        ("missing", "photo_0001", None),
+        ("unrelated", None, None),
+    ],
+)
+def test_photo_reference_rejects_invalid_target_combinations(
+    resolution: str,
+    photo_candidate_id: str | None,
+    resolved_defect_candidate_id: str | None,
+) -> None:
+    data = valid_payload()
+    reference = data["defects"][0]["photo_references"][0]
+    reference["resolution"] = resolution
+    reference["photo_candidate_id"] = photo_candidate_id
+    reference["resolved_defect_candidate_id"] = resolved_defect_candidate_id
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "defects.0.photo_references.0" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("field_name", ["photo_numbers", "confirmed_missing_photo_numbers"])
+def test_removed_photo_fields_are_rejected(field_name: str) -> None:
+    data = valid_payload()
+    data["defects"][0][field_name] = []
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert f"defects.0.{field_name}" in str(exc_info.value)
 
 
 @pytest.mark.parametrize(
@@ -294,17 +333,17 @@ def test_top_level_candidate_and_issue_lists_are_required(field_name: str) -> No
 @pytest.mark.parametrize(
     ("fixture_name", "path", "error_path"),
     [
-        ("bridge_annual_inspection_data.v2.valid.json", ("bridge_check", "warnings"), "bridge_check.warnings"),
-        ("bridge_annual_inspection_data.v2.valid.json", ("defects", 0, "measurements"), "defects.0.measurements"),
-        ("bridge_annual_inspection_data.v2.valid.json", ("defects", 0, "photo_numbers"), "defects.0.photo_numbers"),
-        ("bridge_annual_inspection_data.v2.valid.json", ("defects", 0, "warnings"), "defects.0.warnings"),
-        ("bridge_annual_inspection_data.v2.valid.json", ("photos", 0, "warnings"), "photos.0.warnings"),
+        ("bridge_annual_inspection_data.v3.valid.json", ("bridge_check", "warnings"), "bridge_check.warnings"),
+        ("bridge_annual_inspection_data.v3.valid.json", ("defects", 0, "measurements"), "defects.0.measurements"),
+        ("bridge_annual_inspection_data.v3.valid.json", ("defects", 0, "photo_references"), "defects.0.photo_references"),
+        ("bridge_annual_inspection_data.v3.valid.json", ("defects", 0, "warnings"), "defects.0.warnings"),
+        ("bridge_annual_inspection_data.v3.valid.json", ("photos", 0, "warnings"), "photos.0.warnings"),
         (
-            "bridge_annual_inspection_data.v2.with-comparison.json",
+            "bridge_annual_inspection_data.v3.with-comparison.json",
             ("comparison_candidates", 0, "warnings"),
             "comparison_candidates.0.warnings",
         ),
-        ("bridge_annual_inspection_data.v2.valid.json", ("defects", 0, "source_ref"), "defects.0.source_ref"),
+        ("bridge_annual_inspection_data.v3.valid.json", ("defects", 0, "source_ref"), "defects.0.source_ref"),
     ],
 )
 def test_nested_arrays_and_source_refs_are_required(

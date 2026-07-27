@@ -53,6 +53,12 @@ struct DraftValidationResult {
     const std::optional<inventory::InventoryRevision>& latest_revision
 );
 
+/** 已存在病害的 Word 来源和范围拆分来源由服务端锁定，任何重开范围都不得改写。 */
+[[nodiscard]] DraftValidationResult validate_imported_defect_evidence(
+    const Json::Value& stored_draft,
+    const Json::Value& new_draft
+);
+
 /**
  * @brief 纯函数：草稿中是否存在带警告的病害候选（defects[i].warnings 为非空数组）。
  *

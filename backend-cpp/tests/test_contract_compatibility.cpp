@@ -22,32 +22,33 @@ Json::Value make_contract(const std::string& version) {
 
 }  // namespace
 
-TEST(ContractCompatibilityTest, LeavesNative20DataUnchanged) {
-    const auto data = make_contract("2.0");
+TEST(ContractCompatibilityTest, LeavesNative30DataUnchanged) {
+    const auto data = make_contract("3.0");
     const auto result = normalize_review_contract(data, "待校对");
-    EXPECT_EQ(result.compatibility, ContractCompatibility::Native20);
+    EXPECT_EQ(result.compatibility, ContractCompatibility::Native30);
     EXPECT_EQ(result.data, data);
     EXPECT_EQ(
         bridge_report::review::contract_compatibility_name(result.compatibility),
-        "native_2_0");
+        "native_3_0");
 }
 
 TEST(ContractCompatibilityTest, DoesNotNormalizeLegacyContracts) {
     const auto legacy = make_contract("1.2");
     const auto result = normalize_review_contract(legacy, "已确认");
-    EXPECT_EQ(result.compatibility, ContractCompatibility::Native20);
+    EXPECT_EQ(result.compatibility, ContractCompatibility::Native30);
     EXPECT_EQ(result.data, legacy);
     EXPECT_EQ(result.data["contract"]["version"].asString(), "1.2");
 }
 
-TEST(ContractCompatibilityTest, StoredContractRequiresReparseUnlessNative20) {
+TEST(ContractCompatibilityTest, StoredContractRequiresReparseUnlessNative30) {
     EXPECT_TRUE(stored_contract_requires_reparse(make_contract("1.2")));
+    EXPECT_TRUE(stored_contract_requires_reparse(make_contract("2.0")));
     EXPECT_TRUE(stored_contract_requires_reparse(Json::Value(Json::objectValue)));
-    EXPECT_FALSE(stored_contract_requires_reparse(make_contract("2.0")));
+    EXPECT_FALSE(stored_contract_requires_reparse(make_contract("3.0")));
 }
 
 TEST(ContractCompatibilityTest, RemovesOnlyStaleMatchWarningsFromResolvedDefect) {
-    auto data = make_contract("2.0");
+    auto data = make_contract("3.0");
     Json::Value defect(Json::objectValue);
     defect["candidate_id"] = "d1";
     defect["bridge_component_id"] = "component-1";
@@ -69,7 +70,7 @@ TEST(ContractCompatibilityTest, RemovesOnlyStaleMatchWarningsFromResolvedDefect)
 }
 
 TEST(ContractCompatibilityTest, RestoresOneAppropriateWarningForUnresolvedDefect) {
-    auto data = make_contract("2.0");
+    auto data = make_contract("3.0");
     Json::Value defect(Json::objectValue);
     defect["candidate_id"] = "d1";
     defect["bridge_component_id"] = Json::Value();

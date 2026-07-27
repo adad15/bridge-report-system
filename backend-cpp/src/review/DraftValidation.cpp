@@ -225,6 +225,39 @@ DraftValidationResult validate_defect_component_associations(
     return result;
 }
 
+DraftValidationResult validate_imported_defect_evidence(
+    const Json::Value& stored_draft,
+    const Json::Value& new_draft) {
+    DraftValidationResult result;
+    const auto stored = index_defects_by_candidate_id(stored_draft);
+    const auto current = index_defects_by_candidate_id(new_draft);
+    for (const auto& [candidate_id, stored_defect] : stored) {
+        const auto current_it = current.find(candidate_id);
+        if (current_it == current.end()) {
+            continue;
+        }
+        const auto* current_defect = current_it->second;
+        if (!json_semantically_equal(
+                (*stored_defect)["source_ref"],
+                (*current_defect)["source_ref"]) ||
+            !json_semantically_equal(
+                (*stored_defect)["range_split_origin"],
+                (*current_defect)["range_split_origin"])) {
+            result.ok = false;
+            result.code = "imported_evidence_modified";
+            result.message = "Word 来源证据和范围拆分来源不可修改。";
+            result.issues.push_back({
+                "defects." + candidate_id + ".source_ref",
+                "source_ref 或 range_split_origin 与服务端保存的来源不一致。"});
+        }
+    }
+    if (result.ok) {
+        result.code.clear();
+        result.message.clear();
+    }
+    return result;
+}
+
 bool draft_has_warning_defects(const Json::Value& data) {
     if (!data["defects"].isArray()) {
         return false;

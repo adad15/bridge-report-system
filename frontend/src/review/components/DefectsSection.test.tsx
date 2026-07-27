@@ -133,7 +133,7 @@ describe("DefectsSection", () => {
     draft.defects = Array.from({ length: 60 }, (_, index) => ({
       ...template,
       candidate_id: `defect_${String(index + 1).padStart(4, "0")}`,
-      photo_numbers: [],
+      photo_references: [],
     }));
     const props = {
       importRecordId: "record-1",

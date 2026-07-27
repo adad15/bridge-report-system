@@ -40,7 +40,7 @@ export interface SourceRef {
 
 export interface ContractInfo {
   name: "BridgeAnnualInspectionData";
-  version: "2.0";
+  version: "3.0";
   generated_at: string;
   producer: string;
   parser_name: string;
@@ -91,6 +91,16 @@ export interface RangeSplitOrigin {
   operated_at: string;
 }
 
+export type PhotoReferenceResolution = "pending" | "matched" | "relinked" | "missing" | "unrelated";
+
+export interface PhotoReference {
+  photo_number: string;
+  resolution: PhotoReferenceResolution;
+  photo_candidate_id: string | null;
+  resolved_defect_candidate_id: string | null;
+  review_note: string | null;
+}
+
 export interface DefectCandidate {
   candidate_id: string;
   source_structure_part?: StructurePart | null;
@@ -110,9 +120,9 @@ export interface DefectCandidate {
   quantity_text?: string | null;
   measurement_text?: string | null;
   measurements: Measurement[];
-  photo_numbers: string[];
+  standard_defect_indicator_id?: string | null;
+  photo_references: PhotoReference[];
   group_review_status: DefectGroupReviewStatus;
-  confirmed_missing_photo_numbers: string[];
   severity?: Severity | null;
   remark?: string | null;
   source_ref: SourceRef;
@@ -292,17 +302,43 @@ function isValidRangeSplitOrigin(value: unknown): value is RangeSplitOrigin {
   );
 }
 
+function isValidPhotoReference(value: unknown): value is PhotoReference {
+  if (
+    !isRecord(value) ||
+    typeof value.photo_number !== "string" ||
+    value.photo_number.length === 0 ||
+    !["pending", "matched", "relinked", "missing", "unrelated"].includes(String(value.resolution))
+  ) {
+    return false;
+  }
+  const hasPhoto = typeof value.photo_candidate_id === "string";
+  const hasDefect = typeof value.resolved_defect_candidate_id === "string";
+  const nullableIdsAreValid =
+    (value.photo_candidate_id === null || hasPhoto) &&
+    (value.resolved_defect_candidate_id === null || hasDefect);
+  if (!nullableIdsAreValid) {
+    return false;
+  }
+  if (value.resolution === "pending" || value.resolution === "missing") {
+    return !hasPhoto && !hasDefect;
+  }
+  if (value.resolution === "matched" || value.resolution === "relinked") {
+    return hasPhoto && hasDefect;
+  }
+  return hasPhoto && !hasDefect;
+}
+
 function isValidDefectCandidate(value: unknown): boolean {
   if (!isRecord(value) || !hasValidConfidence(value)) {
     return false;
   }
-  const missingPhotoNumbers = getRequiredArray(value, "confirmed_missing_photo_numbers");
+  const photoReferences = getRequiredArray(value, "photo_references");
   const measurements = getRequiredArray(value, "measurements");
   const matchCandidateIds = value.component_match_candidate_ids;
   const matchMethod = value.component_match_method;
   const rangeSplitOrigin = value.range_split_origin;
   return (
-    hasRequiredArrayMembers(value, ["measurements", "photo_numbers", "warnings"]) &&
+    hasRequiredArrayMembers(value, ["measurements", "photo_references", "warnings"]) &&
     measurements !== null && measurements.every(isValidMeasurement) &&
     hasRequiredObjectMembers(value, ["source_ref"]) &&
     isValidSourceRef(value.source_ref) &&
@@ -317,6 +353,8 @@ function isValidDefectCandidate(value: unknown): boolean {
     !hasOwn(value, "structure_part") &&
     !hasOwn(value, "component_alias") &&
     !hasOwn(value, "defect_deduction") &&
+    !hasOwn(value, "photo_numbers") &&
+    !hasOwn(value, "confirmed_missing_photo_numbers") &&
     (value.group_review_status === "待确认" || value.group_review_status === "已确认") &&
     isNullablePositiveInteger(value.defect_scale) &&
     (matchCandidateIds === undefined ||
@@ -339,9 +377,14 @@ function isValidDefectCandidate(value: unknown): boolean {
     (value.component_match_confirmed_by === undefined ||
       value.component_match_confirmed_by === null ||
       typeof value.component_match_confirmed_by === "string") &&
-    missingPhotoNumbers !== null &&
-    missingPhotoNumbers.every((item) => typeof item === "string") &&
-    new Set(missingPhotoNumbers).size === missingPhotoNumbers.length
+    (value.standard_defect_indicator_id === undefined ||
+      value.standard_defect_indicator_id === null ||
+      (typeof value.standard_defect_indicator_id === "string" &&
+        value.standard_defect_indicator_id.trim().length > 0)) &&
+    photoReferences !== null &&
+    photoReferences.every(isValidPhotoReference) &&
+    new Set(photoReferences.map((item) => (item as PhotoReference).photo_number)).size ===
+      photoReferences.length
   );
 }
 
@@ -375,7 +418,7 @@ export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnn
   if (contract === null) {
     return false;
   }
-  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "2.0") {
+  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "3.0") {
     return false;
   }
 

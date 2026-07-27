@@ -26,7 +26,12 @@ namespace {
 using bridge_report::test_support::confirm_all_candidates;
 
 std::string read_fixture_text(const std::string& file_name) {
-    const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) / "samples" / "contracts" / file_name;
+    auto current_file_name = file_name;
+    const auto version_marker = current_file_name.find(".v2.");
+    if (version_marker != std::string::npos) {
+        current_file_name.replace(version_marker, 4, ".v3.");
+    }
+    const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) / "samples" / "contracts" / current_file_name;
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         throw std::runtime_error("Unable to open fixture: " + path.string());

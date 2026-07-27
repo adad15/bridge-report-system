@@ -1,7 +1,7 @@
 {
   "contract": {
     "name": "BridgeAnnualInspectionData",
-    "version": "2.0",
+    "version": "3.0",
     "generated_at": "2026-07-03T00:00:00+08:00",
     "producer": "bridge-report-system",
     "parser_name": "annual_inspection_contract_parser",
@@ -63,9 +63,17 @@
           "source_text": "W=0.12mm"
         }
       ],
-      "photo_numbers": ["2.1-1"],
+      "standard_defect_indicator_id": null,
+      "photo_references": [
+        {
+          "photo_number": "2.1-1",
+          "resolution": "pending",
+          "photo_candidate_id": null,
+          "resolved_defect_candidate_id": null,
+          "review_note": null
+        }
+      ],
       "group_review_status": "待确认",
-      "confirmed_missing_photo_numbers": [],
       "severity": "warning",
       "remark": null,
       "source_ref": {
@@ -114,26 +122,7 @@
       "warnings": []
     }
   ],
-  "comparison_candidates": [
-    {
-      "candidate_id": "comparison_0001",
-      "previous_defect_observation_system_number": "BHGC-000123",
-      "current_defect_observation_system_number": "BHGC-000456",
-      "comparison_type": "原病害发展",
-      "change_summary": "主梁梁底裂缝宽度由 0.10mm 发展至 0.12mm。",
-      "match_basis": {
-        "same_component": true,
-        "same_defect_type": true,
-        "location_similarity": 0.82,
-        "measurement_change_detected": true,
-        "photo_number_related": false
-      },
-      "confidence": 0.86,
-      "confirmation_status": "待确认",
-      "review_note": null,
-      "warnings": []
-    }
-  ],
+  "comparison_candidates": [],
   "report_text_candidates": [],
   "warnings": [],
   "errors": []

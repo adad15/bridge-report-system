@@ -87,11 +87,11 @@ def test_blank_photo_number_is_a_normal_defect_without_warning() -> None:
     assert errors == []
     assert "photo_number_missing" not in {warning.code for warning in warnings}
     assert len(defects) == 1
-    assert defects[0].photo_numbers == []
+    assert defects[0].photo_references == []
     assert "photo_number_missing" not in {warning.code for warning in defects[0].warnings}
 
 
-def test_table_without_score_columns_still_produces_version_two_defect() -> None:
+def test_table_without_score_columns_still_produces_version_three_defect() -> None:
     table = DocxTable(
         index=0,
         title="表2.1-1 上部结构病害检查表",

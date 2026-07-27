@@ -49,7 +49,9 @@ export function buildDefectPhotoGroup(
 
   const photos = data.photos.filter((item) => item.linked_defect_candidate_id === candidateId);
   const candidateNumbers = new Set(data.photos.map((item) => item.photo_number));
-  const missingPhotoNumbers = defect.photo_numbers.filter((number) => !candidateNumbers.has(number));
+  const missingPhotoNumbers = defect.photo_references
+    .map((reference) => reference.photo_number)
+    .filter((number) => !candidateNumbers.has(number));
 
   return { defect, photos, missingPhotoNumbers };
 }
@@ -65,6 +67,9 @@ export function canConfirmDefectPhotoGroup(
   if (REQUIRED_DEFECT_FIELDS.some((field) => !isNonEmptyString(group.defect[field]))) {
     addReason(reasons, "defect_required_field_missing");
   }
+  if (!isNonEmptyString(group.defect.standard_defect_indicator_id)) {
+    addReason(reasons, "defect_indicator_required");
+  }
 
   const hasBlockingError = group.defect.warnings.some((item) => item.severity === "error") ||
     data.errors.some((item) => item.target_candidate_id === candidateId);
@@ -75,7 +80,9 @@ export function canConfirmDefectPhotoGroup(
     if (!photo.extracted_file.archive_relative_path?.trim()) addReason(reasons, "photo_archive_missing");
   }
 
-  const referencedNumbers = new Set(group.defect.photo_numbers);
+  const referencedNumbers = new Set(
+    group.defect.photo_references.map((reference) => reference.photo_number),
+  );
   const unresolvedReferencedCandidate = data.photos.some(
     (item) =>
       referencedNumbers.has(item.photo_number) &&
@@ -84,9 +91,16 @@ export function canConfirmDefectPhotoGroup(
   );
   if (unresolvedReferencedCandidate) addReason(reasons, "photo_link_unresolved");
 
-  const acknowledged = new Set(group.defect.confirmed_missing_photo_numbers);
+  const acknowledged = new Set(
+    group.defect.photo_references
+      .filter((reference) => reference.resolution === "missing")
+      .map((reference) => reference.photo_number),
+  );
   if (group.missingPhotoNumbers.some((number) => !acknowledged.has(number))) {
     addReason(reasons, "missing_photo_confirmation_required");
+  }
+  if (group.defect.photo_references.some((reference) => reference.resolution === "pending")) {
+    addReason(reasons, "photo_reference_review_required");
   }
 
   return { ok: reasons.length === 0, reasons };

@@ -185,8 +185,8 @@ void validate_contract_info(
     const auto version = contract["version"].isString()
                              ? contract["version"].asString()
                              : std::string{};
-    if (version != "2.0") {
-        result.add_issue("contract.version", "must be 2.0");
+    if (version != "3.0") {
+        result.add_issue("contract.version", "must be 3.0");
     }
 }
 
@@ -214,7 +214,7 @@ void reject_member(
     const std::string& member,
     ContractValidationResult& result) {
     if (object.isObject() && object.isMember(member)) {
-        result.add_issue(member_path(path, member), "is not allowed in contract 2.0");
+        result.add_issue(member_path(path, member), "is not allowed in contract 3.0");
     }
 }
 
@@ -293,6 +293,47 @@ void validate_range_split_origin(
     }
 }
 
+void validate_photo_reference(
+    const Json::Value& reference,
+    const std::string& path,
+    ContractValidationResult& result) {
+    if (!reference.isObject()) {
+        result.add_issue(path, "must be an object");
+        return;
+    }
+    require_non_empty_string(reference, path, "photo_number", result);
+    require_enum(
+        reference,
+        path,
+        "resolution",
+        {"pending", "matched", "relinked", "missing", "unrelated"},
+        result);
+    require_optional_nullable_string(
+        reference, path, "photo_candidate_id", result);
+    require_optional_nullable_string(
+        reference, path, "resolved_defect_candidate_id", result);
+    require_optional_nullable_string(reference, path, "review_note", result);
+
+    const auto resolution = reference["resolution"].isString()
+        ? reference["resolution"].asString()
+        : std::string{};
+    const bool has_photo =
+        reference["photo_candidate_id"].isString() &&
+        !reference["photo_candidate_id"].asString().empty();
+    const bool has_defect =
+        reference["resolved_defect_candidate_id"].isString() &&
+        !reference["resolved_defect_candidate_id"].asString().empty();
+    const bool valid_targets =
+        ((resolution == "pending" || resolution == "missing") &&
+         !has_photo && !has_defect) ||
+        ((resolution == "matched" || resolution == "relinked") &&
+         has_photo && has_defect) ||
+        (resolution == "unrelated" && has_photo && !has_defect);
+    if (!resolution.empty() && !valid_targets) {
+        result.add_issue(path, "has invalid targets for its resolution");
+    }
+}
+
 void validate_defect(
     const Json::Value& defect,
     const std::string& path,
@@ -318,6 +359,8 @@ void validate_defect(
         defect, path, "component_inventory_revision_id", result);
     require_optional_nullable_string(
         defect, path, "component_match_confirmed_by", result);
+    require_optional_nullable_string(
+        defect, path, "standard_defect_indicator_id", result);
     validate_optional_string_array(
         defect, path, "component_match_candidate_ids", result);
     if (defect.isMember("component_match_method") &&
@@ -350,6 +393,8 @@ void validate_defect(
     reject_member(defect, path, "structure_part", result);
     reject_member(defect, path, "component_alias", result);
     reject_member(defect, path, "defect_deduction", result);
+    reject_member(defect, path, "photo_numbers", result);
+    reject_member(defect, path, "confirmed_missing_photo_numbers", result);
 
     if (require_array_member(defect, path, "measurements", result)) {
         for (Json::ArrayIndex index = 0; index < defect["measurements"].size(); ++index) {
@@ -359,8 +404,23 @@ void validate_defect(
                 result);
         }
     }
-    require_array_member(defect, path, "photo_numbers", result);
-    require_array_member(defect, path, "confirmed_missing_photo_numbers", result);
+    if (require_array_member(defect, path, "photo_references", result)) {
+        std::unordered_set<std::string> photo_numbers;
+        for (Json::ArrayIndex index = 0;
+             index < defect["photo_references"].size();
+             ++index) {
+            const auto reference_path =
+                indexed_path(member_path(path, "photo_references"), index);
+            const auto& reference = defect["photo_references"][index];
+            validate_photo_reference(reference, reference_path, result);
+            if (reference["photo_number"].isString() &&
+                !photo_numbers.insert(reference["photo_number"].asString()).second) {
+                result.add_issue(
+                    member_path(reference_path, "photo_number"),
+                    "must be unique within the defect");
+            }
+        }
+    }
     validate_source_ref(defect, path, result);
     require_array_member(defect, path, "warnings", result);
     require_confidence(defect, path, result);
@@ -435,20 +495,6 @@ void validate_unique_candidate_ids(
     }
 }
 
-bool array_contains_string(
-    const Json::Value& values,
-    const std::string& expected) {
-    if (!values.isArray()) {
-        return false;
-    }
-    for (const auto& value : values) {
-        if (value.isString() && value.asString() == expected) {
-            return true;
-        }
-    }
-    return false;
-}
-
 void validate_photo_relations(
     const Json::Value& root,
     ContractValidationResult& result) {
@@ -477,47 +523,6 @@ void validate_photo_relations(
         }
     }
 
-    if (!root["defects"].isArray()) {
-        return;
-    }
-    for (Json::ArrayIndex defect_index = 0;
-         defect_index < root["defects"].size();
-         ++defect_index) {
-        const auto& defect = root["defects"][defect_index];
-        if (!defect["confirmed_missing_photo_numbers"].isArray()) {
-            continue;
-        }
-        for (Json::ArrayIndex number_index = 0;
-             number_index < defect["confirmed_missing_photo_numbers"].size();
-             ++number_index) {
-            const auto& number_value =
-                defect["confirmed_missing_photo_numbers"][number_index];
-            const auto number_path = indexed_path(
-                member_path(
-                    indexed_path("defects", defect_index),
-                    "confirmed_missing_photo_numbers"),
-                number_index);
-            if (!number_value.isString() ||
-                !array_contains_string(
-                    defect["photo_numbers"], number_value.asString())) {
-                result.add_issue(
-                    number_path, "must also appear in photo_numbers");
-                continue;
-            }
-            for (const auto& photo : root["photos"]) {
-                if (photo["photo_number"].isString() &&
-                    photo["photo_number"].asString() == number_value.asString() &&
-                    photo["linked_defect_candidate_id"].isString() &&
-                    photo["linked_defect_candidate_id"].asString() ==
-                        defect["candidate_id"].asString()) {
-                    result.add_issue(
-                        number_path,
-                        "cannot be confirmed missing while a linked photo candidate exists");
-                    break;
-                }
-            }
-        }
-    }
 }
 
 }  // namespace

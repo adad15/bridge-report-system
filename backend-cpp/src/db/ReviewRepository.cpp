@@ -36,7 +36,8 @@ std::string write_compact_json(const Json::Value& value) {
 
 std::string build_raw_cells_json(
     const std::optional<std::string>& raw_row_text,
-    const std::optional<Json::Value>& range_split_origin) {
+    const std::optional<Json::Value>& range_split_origin,
+    const Json::Value& photo_references) {
     Json::Value json(Json::objectValue);
     if (raw_row_text.has_value()) {
         json["raw_row_text"] = *raw_row_text;
@@ -44,6 +45,7 @@ std::string build_raw_cells_json(
     if (range_split_origin.has_value()) {
         json["range_split_origin"] = *range_split_origin;
     }
+    json["photo_references"] = photo_references;
     return write_compact_json(json);
 }
 
@@ -220,13 +222,13 @@ std::string insert_defect_observation(
         "(inspection_year_id, bridge_id, bridge_component_id, source_import_record_id, "
         " source_table_title, source_table_index, source_row_number, source_raw_cells_json, "
         " structure_part, part_name, component_type, business_component_code, "
-        " defect_location, defect_type, defect_description_raw, scale, "
+        " defect_location, standard_defect_indicator_id, defect_type, defect_description_raw, scale, "
         " extraction_confidence, review_status, review_note) "
         "values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, "
         "        $5, $6, $7, $8::jsonb, "
         "        $9, $10, $11, $12, "
-        "        $13, $14, $15, $16, "
-        "        $17, $18, $19) "
+        "        $13, $14, $15, $16, $17, "
+        "        $18, $19, $20) "
         "returning id",
         inspection_year_id,
         bridge_id,
@@ -235,12 +237,16 @@ std::string insert_defect_observation(
         defect.source_table_title,
         defect.source_table_index,
         defect.source_row_number,
-        build_raw_cells_json(defect.raw_row_text, defect.range_split_origin),
+        build_raw_cells_json(
+            defect.raw_row_text,
+            defect.range_split_origin,
+            defect.photo_references),
         defect.structure_part,
         defect.part_name,
         component.component_type,
         component.business_component_code,
         defect.defect_location,
+        defect.standard_defect_indicator_id,
         defect.defect_type,
         defect.defect_description_raw,
         defect.scale,

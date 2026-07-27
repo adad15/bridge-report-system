@@ -44,7 +44,7 @@ export interface ReviewStatistics {
   object_warning_count: number;
 }
 
-export type ContractCompatibility = "native_2_0";
+export type ContractCompatibility = "native_3_0";
 
 // 重开校对范围：warnings_only=仅带警告的病害可改（任何登录用户）；
 // full=全部可改（仅管理员可发起）。

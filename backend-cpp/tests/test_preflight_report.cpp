@@ -14,7 +14,7 @@ constexpr const char* kRevision = "00000000-0000-0000-0000-000000000201";
 
 Json::Value fixture() {
     const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-        "samples/contracts/bridge_annual_inspection_data.v2.valid.json";
+        "samples/contracts/bridge_annual_inspection_data.v3.valid.json";
     std::ifstream input(path, std::ios::binary);
     Json::CharReaderBuilder builder;
     Json::Value root;
@@ -35,6 +35,10 @@ void settle(Json::Value& data) {
     defect["group_review_status"] = "已确认";
     data["photos"][0]["match_status"] = "已确认";
     data["photos"][0]["review_status"] = "已确认";
+    auto& reference = defect["photo_references"][0];
+    reference["resolution"] = "matched";
+    reference["photo_candidate_id"] = data["photos"][0]["candidate_id"];
+    reference["resolved_defect_candidate_id"] = defect["candidate_id"];
 }
 
 bridge_report::review::PreflightContext context() {
@@ -131,6 +135,10 @@ TEST(PreflightReportTest, MissingPhotoRequiresAcknowledgement) {
     auto data = fixture();
     settle(data);
     data["photos"] = Json::Value(Json::arrayValue);
+    auto& reference = data["defects"][0]["photo_references"][0];
+    reference["resolution"] = "pending";
+    reference["photo_candidate_id"] = Json::Value();
+    reference["resolved_defect_candidate_id"] = Json::Value();
     const auto report = bridge_report::review::build_preflight_report(data, context());
     EXPECT_TRUE(has_code(report.blocking_errors, "missing_photo_confirmation_required"));
 }
@@ -139,7 +147,10 @@ TEST(PreflightReportTest, AcknowledgedMissingPhotoDoesNotBlock) {
     auto data = fixture();
     settle(data);
     data["photos"] = Json::Value(Json::arrayValue);
-    data["defects"][0]["confirmed_missing_photo_numbers"].append("2.1-1");
+    auto& reference = data["defects"][0]["photo_references"][0];
+    reference["resolution"] = "missing";
+    reference["photo_candidate_id"] = Json::Value();
+    reference["resolved_defect_candidate_id"] = Json::Value();
     const auto report = bridge_report::review::build_preflight_report(data, context());
     EXPECT_TRUE(report.can_confirm);
     EXPECT_TRUE(has_code(report.warnings, "defect_without_photo"));
@@ -238,7 +249,7 @@ TEST(PreflightReportTest, ConfirmedPhotoMustResolveToASettledDefect) {
 TEST(PreflightReportTest, DefectWithoutPhotoNumberDoesNotWarn) {
     auto data = fixture();
     settle(data);
-    data["defects"][0]["photo_numbers"] = Json::Value(Json::arrayValue);
+    data["defects"][0]["photo_references"] = Json::Value(Json::arrayValue);
     data["photos"] = Json::Value(Json::arrayValue);
     const auto report = bridge_report::review::build_preflight_report(data, context());
     EXPECT_TRUE(report.can_confirm);
@@ -248,7 +259,7 @@ TEST(PreflightReportTest, DefectWithoutPhotoNumberDoesNotWarn) {
 TEST(PreflightReportTest, IgnoredUnreferencedPhotoProducesAWarning) {
     auto data = fixture();
     settle(data);
-    data["defects"][0]["photo_numbers"] = Json::Value(Json::arrayValue);
+    data["defects"][0]["photo_references"] = Json::Value(Json::arrayValue);
     data["photos"][0]["linked_defect_candidate_id"] = Json::Value(Json::nullValue);
     data["photos"][0]["match_status"] = "已忽略";
     data["photos"][0]["review_status"] = "已忽略";

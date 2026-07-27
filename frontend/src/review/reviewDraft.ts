@@ -119,8 +119,18 @@ function applyDefectContentEdit(defect: DefectCandidate, action: EditDefectConte
     case "photo_numbers":
       return {
         ...defect,
-        photo_numbers: action.value,
-        confirmed_missing_photo_numbers: defect.confirmed_missing_photo_numbers.filter((number) => action.value.includes(number)),
+        photo_references: action.value.map((photoNumber) => {
+          const existing = defect.photo_references.find(
+            (reference) => reference.photo_number === photoNumber,
+          );
+          return existing ?? {
+            photo_number: photoNumber,
+            resolution: "pending",
+            photo_candidate_id: null,
+            resolved_defect_candidate_id: null,
+            review_note: null,
+          };
+        }),
         review_status,
         group_review_status: "待确认",
       };
@@ -177,9 +187,9 @@ function reduceReviewDraft(
         quantity_text: null,
         measurement_text: null,
         measurements: [],
-        photo_numbers: [],
+        standard_defect_indicator_id: null,
+        photo_references: [],
         group_review_status: "待确认",
-        confirmed_missing_photo_numbers: [],
         severity: null,
         remark: null,
         source_ref: { source_type: "manual" },
@@ -362,7 +372,10 @@ function reduceReviewDraft(
 
     case "confirm_missing_photo": {
       const defect = state.defects.find((item) => item.candidate_id === action.defectCandidateId);
-      const isReferenced = defect?.photo_numbers.includes(action.photoNumber) ?? false;
+      const isReferenced =
+        defect?.photo_references.some(
+          (reference) => reference.photo_number === action.photoNumber,
+        ) ?? false;
       const hasCandidate = state.photos.some((item) => item.photo_number === action.photoNumber);
       if (!defect || !isReferenced || hasCandidate) return state;
       return {
@@ -370,9 +383,16 @@ function reduceReviewDraft(
         defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
           ...item,
           group_review_status: "待确认",
-          confirmed_missing_photo_numbers: item.confirmed_missing_photo_numbers.includes(action.photoNumber)
-            ? item.confirmed_missing_photo_numbers
-            : [...item.confirmed_missing_photo_numbers, action.photoNumber],
+          photo_references: item.photo_references.map((reference) =>
+            reference.photo_number === action.photoNumber
+              ? {
+                  ...reference,
+                  resolution: "missing",
+                  photo_candidate_id: null,
+                  resolved_defect_candidate_id: null,
+                }
+              : reference,
+          ),
         })),
       };
     }
@@ -383,8 +403,16 @@ function reduceReviewDraft(
         defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
           ...item,
           group_review_status: "待确认",
-          confirmed_missing_photo_numbers: item.confirmed_missing_photo_numbers.filter(
-            (number) => number !== action.photoNumber
+          photo_references: item.photo_references.map(
+            (reference) =>
+              reference.photo_number === action.photoNumber
+                ? {
+                    ...reference,
+                    resolution: "pending",
+                    photo_candidate_id: null,
+                    resolved_defect_candidate_id: null,
+                  }
+                : reference,
           ),
         })),
       };

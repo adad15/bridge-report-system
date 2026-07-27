@@ -12,8 +12,13 @@
 namespace {
 
 Json::Value read_contract_fixture(const std::string& file_name) {
+    auto current_file_name = file_name;
+    const auto version_marker = current_file_name.find(".v2.");
+    if (version_marker != std::string::npos) {
+        current_file_name.replace(version_marker, 4, ".v3.");
+    }
     const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-                      "samples" / "contracts" / file_name;
+                      "samples" / "contracts" / current_file_name;
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         throw std::runtime_error("Unable to open fixture: " + path.string());
@@ -37,7 +42,7 @@ void expect_summary_contains(
 
 }  // namespace
 
-TEST(AnnualInspectionContractTest, AcceptsValidVersionTwoContractFixture) {
+TEST(AnnualInspectionContractTest, AcceptsValidVersionThreeContractFixture) {
     const auto root =
         read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
 
@@ -55,7 +60,7 @@ TEST(AnnualInspectionContractTest, RejectsVersionOneTwoWithoutTransitionMode) {
     const auto final_result =
         bridge_report::contracts::validate_bridge_annual_inspection_data(root);
     EXPECT_FALSE(final_result.ok());
-    expect_summary_contains(final_result, "contract.version: must be 2.0");
+    expect_summary_contains(final_result, "contract.version: must be 3.0");
 }
 
 TEST(AnnualInspectionContractTest, AcceptsComparisonCandidateFixture) {
@@ -68,8 +73,8 @@ TEST(AnnualInspectionContractTest, AcceptsComparisonCandidateFixture) {
     EXPECT_TRUE(result.ok()) << result.summary();
 }
 
-TEST(AnnualInspectionContractTest, RejectsEveryNonTwoContractVersion) {
-    for (const auto* version : {"1.0", "1.1", "1.2", "2", "2.1"}) {
+TEST(AnnualInspectionContractTest, RejectsEveryNonThreeContractVersion) {
+    for (const auto* version : {"1.0", "1.1", "1.2", "2", "2.0", "2.1", "3"}) {
         auto root =
             read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
         root["contract"]["version"] = version;
@@ -78,7 +83,7 @@ TEST(AnnualInspectionContractTest, RejectsEveryNonTwoContractVersion) {
             bridge_report::contracts::validate_bridge_annual_inspection_data(root);
 
         EXPECT_FALSE(result.ok());
-        expect_summary_contains(result, "contract.version: must be 2.0");
+        expect_summary_contains(result, "contract.version: must be 3.0");
     }
 }
 
@@ -92,7 +97,7 @@ TEST(AnnualInspectionContractTest, RejectsImportedRatingsWithExactPath) {
 
     EXPECT_FALSE(result.ok());
     expect_summary_contains(
-        result, "ratings: is not allowed in contract 2.0");
+        result, "ratings: is not allowed in contract 3.0");
 }
 
 TEST(AnnualInspectionContractTest, RejectsWordDeductionWithExactPath) {
@@ -106,7 +111,7 @@ TEST(AnnualInspectionContractTest, RejectsWordDeductionWithExactPath) {
     EXPECT_FALSE(result.ok());
     expect_summary_contains(
         result,
-        "defects[0].defect_deduction: is not allowed in contract 2.0");
+        "defects[0].defect_deduction: is not allowed in contract 3.0");
 }
 
 TEST(AnnualInspectionContractTest, RejectsLegacyDefectNames) {
@@ -284,7 +289,7 @@ TEST(AnnualInspectionContractTest, RejectsDuplicateCandidateIds) {
     expect_summary_contains(result, "defects[1].candidate_id");
 }
 
-TEST(AnnualInspectionContractTest, RejectsConfirmedMissingNumberNotReferenced) {
+TEST(AnnualInspectionContractTest, RejectsRemovedConfirmedMissingPhotoNumbers) {
     auto root =
         read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
     root["defects"][0]["confirmed_missing_photo_numbers"].append("9.9-9");
@@ -294,7 +299,7 @@ TEST(AnnualInspectionContractTest, RejectsConfirmedMissingNumberNotReferenced) {
 
     EXPECT_FALSE(result.ok());
     expect_summary_contains(
-        result, "defects[0].confirmed_missing_photo_numbers[0]");
+        result, "defects[0].confirmed_missing_photo_numbers");
 }
 
 TEST(AnnualInspectionContractTest, RejectsUnsafeArchivedPhotoPath) {

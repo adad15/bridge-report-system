@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import re
 
-from bridge_report_tools.contracts.annual_inspection import DefectCandidate, SourceRef, WarningItem
+from bridge_report_tools.contracts.annual_inspection import (
+    DefectCandidate,
+    PhotoReference,
+    SourceRef,
+    WarningItem,
+)
 from bridge_report_tools.importers.docx_reader import DocxTable
 from bridge_report_tools.importers.measurements import parse_measurements
 from bridge_report_tools.importers.word_rules import DefectTableRule, WordRuleSet
@@ -148,9 +153,18 @@ def parse_defect_tables(
                     quantity_text=get_cell(row, quantity_index) or derive_quantity_text(measurement_text),
                     measurement_text=measurement_text,
                     measurements=measurements,
-                    photo_numbers=photo_numbers,
+                    standard_defect_indicator_id=None,
+                    photo_references=[
+                        PhotoReference(
+                            photo_number=photo_number,
+                            resolution="pending",
+                            photo_candidate_id=None,
+                            resolved_defect_candidate_id=None,
+                            review_note=None,
+                        )
+                        for photo_number in photo_numbers
+                    ],
                     group_review_status="待确认",
-                    confirmed_missing_photo_numbers=[],
                     severity=None,
                     remark=None,
                     source_ref=SourceRef(
