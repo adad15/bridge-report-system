@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/apiClient";
@@ -51,6 +51,25 @@ export function canModifyDefectStructure(
 ): boolean {
   if (actionsDisabled || reopenScope === "warnings_only") return false;
   return reopenScope !== "full" || isAdmin;
+}
+
+function ReviewWorkspacePanel({
+  group,
+  activeGroup,
+  visitedGroups,
+  children,
+}: {
+  group: GroupKey;
+  activeGroup: GroupKey;
+  visitedGroups: ReadonlySet<GroupKey>;
+  children: ReactNode;
+}) {
+  if (!visitedGroups.has(group)) return null;
+  return (
+    <div data-review-group={group} hidden={activeGroup !== group}>
+      {children}
+    </div>
+  );
 }
 
 export function ReviewWorkspacePage() {
@@ -171,6 +190,18 @@ function ReviewWorkspaceLoaded({
   const [expandedDefectId, setExpandedDefectId] = useState<string | null>(null);
   const [activePhotoCandidateId, setActivePhotoCandidateId] = useState<string | null>(null);
   const [activeGroup, setActiveGroup] = useState<GroupKey>("needs_attention");
+  const [visitedGroups, setVisitedGroups] = useState<ReadonlySet<GroupKey>>(
+    () => new Set<GroupKey>(["needs_attention"])
+  );
+  const activateGroup = useCallback((group: GroupKey) => {
+    setVisitedGroups((current) => {
+      if (current.has(group)) return current;
+      const next = new Set(current);
+      next.add(group);
+      return next;
+    });
+    setActiveGroup(group);
+  }, []);
   // 侧栏要在用户点进绑定分区之前就显示待处理数，故这里先取一次概览；
   // 之后由绑定分区通过 onOverviewChange 上报，保证绑定操作后计数同步。
   const [bindingPending, setBindingPending] = useState<number | null>(null);
@@ -411,14 +442,14 @@ function ReviewWorkspaceLoaded({
     if (item.kind === "defect") {
       setExpandedDefectId(item.candidateId);
       setActivePhotoCandidateId(null);
-      setActiveGroup("defect_photos");
+      activateGroup("defect_photos");
     } else if (item.kind === "photo") {
       setActivePhotoCandidateId(item.candidateId);
       const linkedDefectId = draft.photos.find((photo) => photo.candidate_id === item.candidateId)?.linked_defect_candidate_id;
       if (linkedDefectId) setExpandedDefectId(linkedDefectId);
-      setActiveGroup("defect_photos");
+      activateGroup("defect_photos");
     } else if (item.kind === "rating") {
-      setActiveGroup("ratings");
+      activateGroup("ratings");
     }
   }
 
@@ -715,7 +746,7 @@ function ReviewWorkspaceLoaded({
   function selectAssessmentIssue(issue: AssessmentIssue): void {
     const item = assessmentIssueToAttention(issue);
     if (item.kind === "import") {
-      setActiveGroup("needs_attention");
+      activateGroup("needs_attention");
       setNavigationMessage(item.message);
       return;
     }
@@ -771,7 +802,7 @@ function ReviewWorkspaceLoaded({
           counts={displayedCounts}
           bindingPendingCount={bindingPending}
           active={activeGroup}
-          onSelect={setActiveGroup}
+          onSelect={activateGroup}
         />
         <div className="review-main">
           {/* 来源证据是针对某条病害/照片的，绑定分区里没有"当前选中候选"这个概念，
@@ -782,11 +813,19 @@ function ReviewWorkspaceLoaded({
             </div>
           ) : null}
           {navigationMessage ? <p className="warning-text review-navigation-message">{navigationMessage}</p> : null}
-          {activeGroup === "needs_attention" ? (
+          <ReviewWorkspacePanel
+            group="needs_attention"
+            activeGroup={activeGroup}
+            visitedGroups={visitedGroups}
+          >
             <NeedsAttentionSection items={attentionItems} draft={draft} onSelect={selectCandidate} />
-          ) : null}
+          </ReviewWorkspacePanel>
           {/* 不传 onEnterReview：这里已经在校对页内，绑定完直接切到别的分区即可。 */}
-          {activeGroup === "component_binding" ? (
+          <ReviewWorkspacePanel
+            group="component_binding"
+            activeGroup={activeGroup}
+            visitedGroups={visitedGroups}
+          >
             <ComponentBindingWorkspace
               importId={importRecordId}
               bridgeId={response.bridge.id}
@@ -797,8 +836,12 @@ function ReviewWorkspaceLoaded({
                 );
               }}
             />
-          ) : null}
-          {activeGroup === "defect_photos" ? (
+          </ReviewWorkspacePanel>
+          <ReviewWorkspacePanel
+            group="defect_photos"
+            activeGroup={activeGroup}
+            visitedGroups={visitedGroups}
+          >
             <DefectsSection
               draft={draft}
               importRecordId={importRecordId}
@@ -817,8 +860,12 @@ function ReviewWorkspaceLoaded({
               allowStructureChanges={canModifyDefectStructure(actionsDisabled, reopenState?.scope, isAdmin)}
               isDefectEditable={isDefectEditable}
             />
-          ) : null}
-          {activeGroup === "ratings" ? (
+          </ReviewWorkspacePanel>
+          <ReviewWorkspacePanel
+            group="ratings"
+            activeGroup={activeGroup}
+            visitedGroups={visitedGroups}
+          >
             <AssessmentSection
               phase={assessmentState.phase}
               response={assessmentState.response}
@@ -826,8 +873,14 @@ function ReviewWorkspaceLoaded({
               onRetry={runAssessment}
               onSelectIssue={selectAssessmentIssue}
             />
-          ) : null}
-          {activeGroup === "raw_json" ? <RawJsonSection draft={draft} /> : null}
+          </ReviewWorkspacePanel>
+          <ReviewWorkspacePanel
+            group="raw_json"
+            activeGroup={activeGroup}
+            visitedGroups={visitedGroups}
+          >
+            <RawJsonSection draft={draft} />
+          </ReviewWorkspacePanel>
         </div>
       </div>
       <div className="review-footer">

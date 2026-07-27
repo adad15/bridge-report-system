@@ -12,6 +12,11 @@ import {
 } from "../api/reviewApi";
 import { previewAssessment, type AssessmentPreviewResponse } from "../api/assessmentApi";
 import { ApiError } from "../api/apiClient";
+import {
+  fetchLatestComponentInventory,
+  type ComponentInventoryRevision,
+} from "../api/componentInventoryApi";
+import { fetchComponentBinding, type ComponentBindingOverview } from "../api/importBindingApi";
 import { data } from "../review/testFixtures";
 import { canModifyDefectStructure, ReviewWorkspacePage } from "./ReviewWorkspacePage";
 
@@ -48,6 +53,16 @@ vi.mock("../api/reviewApi", async (importOriginal) => {
 vi.mock("../api/assessmentApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../api/assessmentApi")>();
   return { ...original, previewAssessment: vi.fn() };
+});
+
+vi.mock("../api/importBindingApi", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../api/importBindingApi")>();
+  return { ...original, fetchComponentBinding: vi.fn() };
+});
+
+vi.mock("../api/componentInventoryApi", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../api/componentInventoryApi")>();
+  return { ...original, fetchLatestComponentInventory: vi.fn() };
 });
 
 vi.mock("../auth/AuthContext", () => ({
@@ -154,6 +169,37 @@ function assessmentResponse(revision: number): AssessmentPreviewResponse {
   };
 }
 
+function missingBindingOverview(): ComponentBindingOverview {
+  return {
+    inventory_confirmed: true,
+    groups: [{
+      part_name: "上部承重构件",
+      total: 1,
+      bound: 0,
+      unmatched: 0,
+      ambiguous: 0,
+      missing: 1,
+      rows: [{
+        component_number: "1-1#梁",
+        defect_count: 1,
+        status: "missing",
+        bridge_component_id: null,
+        candidate_component_ids: [],
+      }],
+    }],
+  };
+}
+
+const bindingInventory: ComponentInventoryRevision = {
+  id: "inventory-1",
+  bridge_id: "bridge-1",
+  revision_number: 1,
+  status: "已确认",
+  baseline_revision_id: null,
+  confirmed_at: "2026-07-17T08:00:00+08:00",
+  entries: [],
+};
+
 async function renderEditableReview(): Promise<HTMLInputElement> {
   render(
     <MemoryRouter initialEntries={["/imports/import-1/review"]}>
@@ -194,11 +240,43 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     });
     vi.mocked(releaseEditLock).mockResolvedValue({ released: true });
     vi.mocked(previewAssessment).mockImplementation(async (_baseUrl, _recordId, _draft, revision) => assessmentResponse(revision));
+    vi.mocked(fetchComponentBinding).mockResolvedValue(missingBindingOverview());
+    vi.mocked(fetchLatestComponentInventory).mockResolvedValue(bindingInventory);
   });
 
   afterEach(() => {
     vi.clearAllTimers();
     vi.useRealTimers();
+  });
+
+  it("lazy mounts review groups and keeps mounted state when switching back", async () => {
+    const defectInput = await renderEditableReview();
+    const bindingRequestsBeforeVisit = vi.mocked(fetchComponentBinding).mock.calls.length;
+    expect(fetchLatestComponentInventory).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /构件绑定/ }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const missingFilter = screen.getByRole("button", { name: "已标记缺失 1" });
+    expect(fetchComponentBinding).toHaveBeenCalledTimes(bindingRequestsBeforeVisit + 1);
+    expect(fetchLatestComponentInventory).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(missingFilter);
+    expect(missingFilter).toHaveAttribute("aria-pressed", "true");
+    const bindingPanel = missingFilter.closest("[data-review-group='component_binding']");
+    expect(bindingPanel).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /病害与照片/ }));
+    expect(bindingPanel).toHaveAttribute("hidden");
+    expect(screen.getByRole("textbox", { name: "测试病害位置" })).toBe(defectInput);
+
+    fireEvent.click(screen.getByRole("button", { name: /构件绑定/ }));
+    expect(screen.getByRole("button", { name: "已标记缺失 1" })).toBe(missingFilter);
+    expect(missingFilter).toHaveAttribute("aria-pressed", "true");
+    expect(fetchComponentBinding).toHaveBeenCalledTimes(bindingRequestsBeforeVisit + 1);
+    expect(fetchLatestComponentInventory).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the focused defect field editable while a normal heartbeat is pending", async () => {
