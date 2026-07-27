@@ -701,7 +701,7 @@ protected:
         client_->closeAll();
     }
 
-    // 组装与本 fixture 标识对齐、且病害和照片候选全部“已确认”的 2.0 样例数据。
+    // 组装与本 fixture 标识对齐、且病害和照片候选全部“已确认”的 3.0 样例数据。
     Json::Value build_confirmed_data() const {
         auto data = parse_json_text(read_fixture_text("bridge_annual_inspection_data.v2.valid.json"));
         data["import_context"]["import_record_system_number"] = import_record_system_number_;
@@ -720,6 +720,8 @@ protected:
         data["defects"][0]["component_name"] = "支座";
         data["defects"][0]["component_number"] = "TEST-BEARING";
         data["defects"][0]["defect_type"] = "板式支座老化变质、开裂";
+        data["defects"][0]["standard_defect_indicator_id"] =
+            "h21.defect.5_3_1_1";
         data["defects"][0]["defect_scale"] = 2;
         return data;
     }
@@ -913,7 +915,8 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
 
     const auto observation_result = client_->execSqlSync(
         "select id, scale, defect_description_raw, part_name, component_type, "
-        "business_component_code, review_status, bridge_component_id "
+        "business_component_code, review_status, bridge_component_id, "
+        "standard_defect_indicator_id "
         "from defect_observations where source_import_record_id = $1::uuid",
         import_record_id_
     );
@@ -926,6 +929,9 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     EXPECT_EQ(observation_result[0]["component_type"].as<std::string>(), "h21.component.bearing");
     EXPECT_FALSE(observation_result[0]["business_component_code"].as<std::string>().empty());
     EXPECT_EQ(observation_result[0]["review_status"].as<std::string>(), "已确认");
+    EXPECT_EQ(
+        observation_result[0]["standard_defect_indicator_id"].as<std::string>(),
+        "h21.defect.5_3_1_1");
 
     const auto measurement_result = client_->execSqlSync(
         "select measurement_type from defect_measurements where defect_observation_id = $1::uuid", observation_id
