@@ -87,12 +87,31 @@ protected:
             defect["candidate_id"] = "d" + std::to_string(i);
             defect["component_name"] = "上部承重构件";
             defect["component_number"] = "1-1#梁";
+            defect["warnings"] = Json::Value(Json::arrayValue);
+            Json::Value match_warning(Json::objectValue);
+            match_warning["code"] = "defect_component_match_required";
+            match_warning["message"] = "未匹配";
+            match_warning["severity"] = "warning";
+            defect["warnings"].append(match_warning);
+            if (i == 0) {
+                Json::Value scale_warning(Json::objectValue);
+                scale_warning["code"] = "defect_scale_invalid";
+                scale_warning["message"] = "标度异常";
+                scale_warning["severity"] = "warning";
+                defect["warnings"].append(scale_warning);
+            }
             parsed["defects"].append(defect);
         }
         Json::Value bearing;
         bearing["candidate_id"] = "d3";
         bearing["component_name"] = "支座";
         bearing["component_number"] = "2-1#支座";
+        bearing["warnings"] = Json::Value(Json::arrayValue);
+        Json::Value bearing_warning(Json::objectValue);
+        bearing_warning["code"] = "defect_component_match_required";
+        bearing_warning["message"] = "未匹配";
+        bearing_warning["severity"] = "warning";
+        bearing["warnings"].append(bearing_warning);
         parsed["defects"].append(bearing);
         Json::StreamWriterBuilder builder;
         builder["indentation"] = "";
@@ -191,6 +210,20 @@ TEST_F(ImportBindingRepositoryTest, BindAttachesAllReferencingDefects) {
     ASSERT_TRUE(row->bridge_component_id.has_value());
     EXPECT_EQ(*row->bridge_component_id, component_id_);
     EXPECT_EQ(row->defect_count, 3);
+    const auto stored = client_->execSqlSync(
+        "select parsed_result_json::text as parsed from import_records where id=$1::uuid",
+        import_id_);
+    Json::Value parsed;
+    Json::CharReaderBuilder reader_builder;
+    std::string errors;
+    const auto text = stored[0]["parsed"].as<std::string>();
+    const std::unique_ptr<Json::CharReader> reader(reader_builder.newCharReader());
+    ASSERT_TRUE(reader->parse(text.data(), text.data() + text.size(), &parsed, &errors));
+    ASSERT_EQ(parsed["defects"][0]["warnings"].size(), 1u);
+    EXPECT_EQ(
+        parsed["defects"][0]["warnings"][0]["code"].asString(),
+        "defect_scale_invalid");
+    EXPECT_TRUE(parsed["defects"][1]["warnings"].empty());
 }
 
 TEST_F(ImportBindingRepositoryTest, BindRejectsCategoryMismatch) {
@@ -205,12 +238,22 @@ TEST_F(ImportBindingRepositoryTest, MarkMissingAndClearRoundTrip) {
     const auto missing = repository.mark_missing(import_id_, "支座", "2-1#支座");
     ASSERT_EQ(missing.status, BindingStatus::Ok);
     EXPECT_EQ(find_row(*missing.overview, "支座", "2-1#支座")->status, "missing");
+    const auto after_missing = client_->execSqlSync(
+        "select jsonb_array_length(parsed_result_json#>'{defects,3,warnings}') as count "
+        "from import_records where id=$1::uuid", import_id_);
+    EXPECT_EQ(after_missing[0]["count"].as<int>(), 0);
 
     const auto bound = repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_);
     ASSERT_EQ(bound.status, BindingStatus::Ok);
     const auto cleared = repository.clear(import_id_, "上部承重构件", "1-1#梁");
     ASSERT_EQ(cleared.status, BindingStatus::Ok);
     EXPECT_EQ(find_row(*cleared.overview, "上部承重构件", "1-1#梁")->status, "unmatched");
+    const auto stored = client_->execSqlSync(
+        "select parsed_result_json#>>'{defects,0,warnings,1,code}' as warning_code "
+        "from import_records where id=$1::uuid", import_id_);
+    EXPECT_EQ(
+        stored[0]["warning_code"].as<std::string>(),
+        "defect_component_match_required");
 }
 
 TEST_F(ImportBindingRepositoryTest, BindBatchAppliesEveryTarget) {

@@ -13,6 +13,7 @@
 #include "bridge_report/inventory/ComponentCategoryLexicon.hpp"
 #include "bridge_report/inventory/ComponentMatcher.hpp"
 #include "bridge_report/inventory/ComponentRangeParser.hpp"
+#include "bridge_report/review/ContractCompatibility.hpp"
 
 namespace bridge_report::db {
 namespace {
@@ -193,6 +194,7 @@ void write_binding(
     defect["standard_component_category_id"] = category_id;
     defect["resolved_structure_part"] = structure_part;
     defect["component_inventory_revision_id"] = revision_id;
+    review::reconcile_defect_component_match_warning(defect);
 }
 
 }  // namespace
@@ -367,6 +369,7 @@ BindingOutcome ImportBindingRepository::mark_missing(
             defect["bridge_component_id"] = Json::Value(Json::nullValue);
             defect["standard_component_category_id"] = Json::Value(Json::nullValue);
             defect["resolved_structure_part"] = Json::Value(Json::nullValue);
+            review::reconcile_defect_component_match_warning(defect);
         },
         [this](const std::string& id) { return overview(id); });
 }
@@ -380,6 +383,7 @@ BindingOutcome ImportBindingRepository::clear(
             defect["bridge_component_id"] = Json::Value(Json::nullValue);
             defect["standard_component_category_id"] = Json::Value(Json::nullValue);
             defect["resolved_structure_part"] = Json::Value(Json::nullValue);
+            review::reconcile_defect_component_match_warning(defect);
         },
         [this](const std::string& id) { return overview(id); });
 }

@@ -45,3 +45,41 @@ TEST(ContractCompatibilityTest, StoredContractRequiresReparseUnlessNative20) {
     EXPECT_TRUE(stored_contract_requires_reparse(Json::Value(Json::objectValue)));
     EXPECT_FALSE(stored_contract_requires_reparse(make_contract("2.0")));
 }
+
+TEST(ContractCompatibilityTest, RemovesOnlyStaleMatchWarningsFromResolvedDefect) {
+    auto data = make_contract("2.0");
+    Json::Value defect(Json::objectValue);
+    defect["candidate_id"] = "d1";
+    defect["bridge_component_id"] = "component-1";
+    defect["warnings"] = Json::Value(Json::arrayValue);
+    for (const auto& code : {"defect_component_match_required", "defect_scale_invalid"}) {
+        Json::Value warning(Json::objectValue);
+        warning["code"] = code;
+        warning["message"] = code;
+        warning["severity"] = "warning";
+        defect["warnings"].append(std::move(warning));
+    }
+    data["defects"].append(defect);
+
+    const auto result = normalize_review_contract(data, "待校对");
+    ASSERT_EQ(result.data["defects"][0]["warnings"].size(), 1u);
+    EXPECT_EQ(
+        result.data["defects"][0]["warnings"][0]["code"].asString(),
+        "defect_scale_invalid");
+}
+
+TEST(ContractCompatibilityTest, RestoresOneAppropriateWarningForUnresolvedDefect) {
+    auto data = make_contract("2.0");
+    Json::Value defect(Json::objectValue);
+    defect["candidate_id"] = "d1";
+    defect["bridge_component_id"] = Json::Value();
+    defect["component_match_candidate_ids"].append("component-1");
+    defect["warnings"] = Json::Value(Json::arrayValue);
+    data["defects"].append(defect);
+
+    const auto result = normalize_review_contract(data, "待校对");
+    ASSERT_EQ(result.data["defects"][0]["warnings"].size(), 1u);
+    EXPECT_EQ(
+        result.data["defects"][0]["warnings"][0]["code"].asString(),
+        "defect_component_match_ambiguous");
+}

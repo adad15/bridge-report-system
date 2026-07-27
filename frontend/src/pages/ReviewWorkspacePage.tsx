@@ -21,7 +21,7 @@ import { useAuth } from "../auth/AuthContext";
 import { backendBaseUrl } from "../config";
 import { canPressConfirm, canRunPreflight, formatConfirmSuccess, parsePreflightDetails, validateRevisionForm } from "../review/confirmFlow";
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
-import { bindingProgress, fetchComponentBinding } from "../api/importBindingApi";
+import { bindingProgress, fetchComponentBinding, type ComponentBindingOverview } from "../api/importBindingApi";
 import { ComponentBindingWorkspace } from "../review/binding/ComponentBindingWorkspace";
 import { DefectsSection } from "../review/components/DefectsSection";
 import type { SelectedCandidate } from "../review/components/EvidencePanel";
@@ -174,6 +174,7 @@ function ReviewWorkspaceLoaded({
   // 侧栏要在用户点进绑定分区之前就显示待处理数，故这里先取一次概览；
   // 之后由绑定分区通过 onOverviewChange 上报，保证绑定操作后计数同步。
   const [bindingPending, setBindingPending] = useState<number | null>(null);
+  const [bindingOverview, setBindingOverview] = useState<ComponentBindingOverview | null>(null);
   const [pendingNavigation, setPendingNavigation] = useState<AttentionItem | null>(null);
 
   useEffect(() => {
@@ -182,6 +183,7 @@ function ReviewWorkspaceLoaded({
     fetchComponentBinding(backendBaseUrl, importRecordId)
       .then((overview) => {
         if (cancelled) return;
+        setBindingOverview(overview);
         // 台账未确认时绑定不可用，保持 null 让侧栏显示 "-"。
         setBindingPending(
           overview.inventory_confirmed ? bindingProgress(overview).pending : null
@@ -224,7 +226,10 @@ function ReviewWorkspaceLoaded({
 
   // needsAttention 对上千条病害是 O(n) 级扫描；这里算一次，counts 与 attentionItems 复用同一份，
   // 避免每次 draft 变动重复计算（buildStatistics 收到长度后就不再自己算一遍）。
-  const draftAttention = useMemo(() => needsAttention(draft), [draft]);
+  const draftAttention = useMemo(
+    () => needsAttention(draft, bindingOverview),
+    [draft, bindingOverview],
+  );
   const counts = useMemo(
     () => buildStatistics(draft, false, draftAttention.length),
     [draft, draftAttention],
@@ -785,11 +790,12 @@ function ReviewWorkspaceLoaded({
             <ComponentBindingWorkspace
               importId={importRecordId}
               bridgeId={response.bridge.id}
-              onOverviewChange={(overview) =>
+              onOverviewChange={(overview) => {
+                setBindingOverview(overview);
                 setBindingPending(
                   overview.inventory_confirmed ? bindingProgress(overview).pending : null
-                )
-              }
+                );
+              }}
             />
           ) : null}
           {activeGroup === "defect_photos" ? (

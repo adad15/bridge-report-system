@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { ComponentBindingOverview } from "../api/importBindingApi";
 import { assessmentIssueToAttention, buildStatistics, isNormalDefect, isNormalPhoto, needsAttention } from "./grouping";
 import { data } from "./testFixtures";
 
@@ -57,6 +58,47 @@ describe("grouping", () => {
     state.photos = [];
     state.defects[0].confirmed_missing_photo_numbers = ["2.1-1"];
     expect(needsAttention(state).some((item) => item.warningCode === "photo_number_unmatched")).toBe(false);
+  });
+
+  it("uses the binding overview to hide stale match warnings and restores them after clearing", () => {
+    const state = completeData();
+    state.defects[0].bridge_component_id = null;
+    state.defects[0].warnings = [{
+      code: "defect_component_match_required",
+      message: "未找到可唯一关联的实际构件，请人工选择。",
+      severity: "warning",
+      target_candidate_id: state.defects[0].candidate_id,
+    }];
+    const overview: ComponentBindingOverview = {
+      inventory_confirmed: true,
+      groups: [{
+        part_name: state.defects[0].component_name,
+        total: 1,
+        bound: 1,
+        unmatched: 0,
+        ambiguous: 0,
+        missing: 0,
+        rows: [{
+          component_number: state.defects[0].component_number ?? "",
+          defect_count: 1,
+          status: "bound",
+          bridge_component_id: "component-1",
+          candidate_component_ids: [],
+        }],
+      }],
+    };
+
+    expect(needsAttention(state, overview).some(
+      (item) => item.warningCode === "defect_component_match_required"
+    )).toBe(false);
+
+    overview.groups[0].rows[0].status = "unmatched";
+    overview.groups[0].rows[0].bridge_component_id = null;
+    overview.groups[0].bound = 0;
+    overview.groups[0].unmatched = 1;
+    expect(needsAttention(state, overview).some(
+      (item) => item.warningCode === "defect_component_match_required"
+    )).toBe(true);
   });
 
   it("counts only review candidates and never counts imported rating rows", () => {

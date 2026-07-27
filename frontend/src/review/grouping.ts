@@ -5,6 +5,8 @@ import type {
   Severity,
 } from "../contracts/annualInspection";
 import type { AssessmentIssue } from "../api/assessmentApi";
+import type { ComponentBindingOverview } from "../api/importBindingApi";
+import { normalizeComponentNumber } from "./binding/normalizeComponentNumber";
 import { defectFieldForWarning, type DefectTargetField } from "./reviewNavigation";
 
 // 只读分类 / 统计逻辑，镜像模块 05 规格 §9.1（需要处理）与 §9.2（普通候选）。
@@ -90,16 +92,47 @@ function defectPhotoNumberIsLinked(data: BridgeAnnualInspectionData, defectId: s
  *   4. 病害引用的照片编号，没有任何照片候选关联回它。
  *   5. 照片 match_status=未关联，或者未关联病害且未被忽略。
  */
-export function needsAttention(data: BridgeAnnualInspectionData): AttentionItem[] {
+function componentBindingResolved(
+  defect: DefectCandidate,
+  overview?: ComponentBindingOverview | null,
+): boolean {
+  if (
+    defect.review_status === "已忽略" ||
+    (typeof defect.bridge_component_id === "string" && defect.bridge_component_id.trim() !== "") ||
+    defect.component_match_method === "missing"
+  ) {
+    return true;
+  }
+  if (!overview || !defect.component_number) return false;
+  const group = overview.groups.find((item) => item.part_name === defect.component_name);
+  const normalized = normalizeComponentNumber(defect.component_number);
+  const row = group?.rows.find(
+    (item) => normalizeComponentNumber(item.component_number) === normalized
+  );
+  return row?.status === "bound" || row?.status === "missing";
+}
+
+export function needsAttention(
+  data: BridgeAnnualInspectionData,
+  bindingOverview?: ComponentBindingOverview | null,
+): AttentionItem[] {
   const items: AttentionItem[] = [];
 
   for (const defect of data.defects) {
+    const bindingResolved = componentBindingResolved(defect, bindingOverview);
     for (const warning of defect.warnings) {
+      if (
+        bindingResolved &&
+        (warning.code === "defect_component_match_required" ||
+          warning.code === "defect_component_match_ambiguous")
+      ) {
+        continue;
+      }
       items.push({ kind: "defect", candidateId: defect.candidate_id, message: warning.message, severity: warning.severity, warningCode: warning.code, targetField: defectFieldForWarning(warning.code) });
     }
     if (
       defect.review_status !== "已忽略" &&
-      !isNonEmptyString(defect.bridge_component_id) &&
+      !bindingResolved &&
       !defect.warnings.some((warning) =>
         warning.code === "defect_component_match_required" ||
         warning.code === "defect_component_match_ambiguous")

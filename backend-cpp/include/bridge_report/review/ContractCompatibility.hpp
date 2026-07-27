@@ -15,6 +15,11 @@ struct ContractCompatibilityResult {
     ContractCompatibility compatibility{ContractCompatibility::Native20};
 };
 
+// 让构件匹配警告与当前绑定状态保持一致：已绑定/已标记缺失时清除，
+// 未处理时按有无候选恢复一条 required/ambiguous 警告；其他警告不变。
+void reconcile_defect_component_match_warning(Json::Value& defect);
+void reconcile_component_match_warnings(Json::Value& data);
+
 // 运行时只接受原生 2.0；本函数不再补造或展示旧合同结构。
 ContractCompatibilityResult normalize_review_contract(
     Json::Value data,
