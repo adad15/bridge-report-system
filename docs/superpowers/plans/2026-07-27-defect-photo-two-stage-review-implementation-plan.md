@@ -4,7 +4,7 @@
 
 **Goal:** 实现 [2026-07-27-defect-photo-two-stage-review-design.md](../specs/2026-07-27-defect-photo-two-stage-review-design.md)：把“病害与照片”改造成“快速校对视觉列表 + 详情维护”的两阶段工作区，安全项可自动预选并批量确认，异常项进入规范病害、正式字段和照片关系的精细维护。
 
-**Architecture:** 候选 JSON 继续作为待校对真值，但增加不可编辑的 Word 来源快照、稳定规范病害指标 ID 和逐条照片引用处理结果。后端锁定的技术评定规范包与 C++ 指标解析器是规范适用性和标度校验的权威；前端只使用后端返回的规范上下文和目录做交互预判。前端以纯派生模型统一计算问题分类、批量资格和确认原因，reducer 只执行明确业务动作，不再接受任意状态赋值。正式入库把规范指标 ID写入病害观测列，并把来源快照与照片引用处理结果写入来源证据。
+**Architecture:** 候选JSON继续作为待校对真值；现有`source_ref.raw_row_text`保存唯一Word内容证据，正式字段只保存当前校对结果。合同3.0增加稳定规范病害指标ID，并用单一`photo_references`取代旧照片编号和缺图字段。后端锁定的技术评定规范包与C++指标解析器是规范适用性和标度校验的权威；前端只使用后端返回的规范上下文和目录做交互预判。前端以纯派生模型统一计算问题分类、批量资格和确认原因，reducer只执行明确业务动作，不再接受任意状态赋值。正式入库把规范指标ID写入病害观测列，并把原始行与照片引用处理结果写入来源证据。
 
 **Tech Stack:** Python 3 / Pydantic / pytest；JSON Schema；C++20 / Drogon / JsonCpp / GoogleTest / PostgreSQL；React 18 / TypeScript / Vitest。
 
@@ -13,8 +13,8 @@
 - 页面和状态语义：设计规格 §5–§9；
 - 规范病害适用性、允许标度：检测年度锁定的技术评定规范包；
 - 正式照片归属：`photos[].linked_defect_candidate_id`；
-- Word 照片引用：`defects[].source_snapshot.photo_numbers`；
-- 引用处理结论：`defects[].photo_reference_reviews`；
+- Word 原始证据：`defects[].source_ref.raw_row_text`及来源表/行定位；
+- Word 照片引用及处理结论：`defects[].photo_references`；
 - 正式系统评分：C++ `AssessmentService`。
 
 ## 实施前工作区约束
@@ -33,49 +33,44 @@
 
 其中 `ReviewWorkspacePage.tsx`、对应测试和 `styles.css` 与本功能存在必要重叠。实施每个相关任务前后必须记录局部 diff，做最小合并；禁止整文件覆盖，禁止 `git reset --hard`、`git checkout --` 或清理用户文件。
 
-## 合同新增字段
+## 干净的新合同
 
-`DefectCandidate` 增加下列可选字段，保持合同版本 `2.0`，避免把已解析的 2.0 草稿整体强制重解析：
+合同升级为不兼容的`3.0`。当前导入记录均为可删除测试数据，因此不保留2.0照片字段、不做旧草稿推导，删除测试导入后重新解析。
 
 ```json
 {
-  "source_snapshot": {
-    "snapshot_origin": "word_import",
-    "structure_part": "superstructure",
-    "component_name": "上部承重构件",
-    "component_number": "1-1#板",
-    "defect_type": "/",
-    "defect_location": "板底",
-    "defect_description": "板底/",
-    "defect_scale": 2,
-    "quantity_text": null,
-    "measurement_text": "存在条形裂缝",
-    "photo_numbers": ["2.1-1"]
-  },
   "standard_defect_indicator_id": "h21.defect.5_1_1_11",
-  "photo_reference_reviews": [
+  "photo_references": [
     {
       "photo_number": "2.1-1",
-      "resolution": "matched",
-      "photo_candidate_id": "photo_0012",
-      "resolved_defect_candidate_id": "defect_0001",
+      "resolution": "pending",
+      "photo_candidate_id": null,
+      "resolved_defect_candidate_id": null,
       "review_note": null
     }
-  ]
+  ],
+  "source_ref": {
+    "source_type": "word",
+    "table_title": "表2.1-1",
+    "table_index": 5,
+    "row_index": 12,
+    "raw_row_text": "上部承重构件 | 1-1#板 | 板底 | / | 2 | 2.1-1"
+  }
 }
 ```
 
 约束：
 
-1. `source_snapshot` 对 Word 导入病害存在，对人工新增病害为 `null`；`snapshot_origin` 为
-   `word_import` 或 `compatibility_snapshot`；保存草稿时后端禁止客户端修改；
-2. `standard_defect_indicator_id` 可为 `null`，但非忽略病害确认前必须存在且适用于实际构件类别；
-3. `photo_reference_reviews` 只处理 `source_snapshot.photo_numbers` 中的编号，同一编号只能有一个结论；
-4. `matched` 必须指向当前病害且实际照片关系一致；
-5. `relinked` 必须指向其他未忽略病害且实际照片关系一致；
-6. `missing` 不得带照片候选；
-7. `unrelated` 必须指向已确认未关联/已忽略的照片候选；
-8. 现有 `photo_numbers`、`confirmed_missing_photo_numbers` 在 2.0 兼容期保留为只读镜像，界面不再编辑，后端保存前从新字段同步，防止双真值。
+1. 不增加`source_snapshot`；Word内容证据只保留现有`source_ref.raw_row_text`和来源定位，保存草稿时后端禁止客户端修改；
+2. `standard_defect_indicator_id`可为`null`，但非忽略病害确认前必须存在且适用于实际构件类别；
+3. `photo_references`直接取代`photo_numbers`、`confirmed_missing_photo_numbers`和原计划中的`photo_reference_reviews`；
+4. `resolution`为`pending | matched | relinked | missing | unrelated`；
+5. 同一病害内`photo_number`唯一；
+6. `matched`必须指向当前病害且实际照片关系一致；
+7. `relinked`必须指向其他未忽略病害且实际照片关系一致；
+8. `missing`不得带照片候选；
+9. `unrelated`必须指向已确认未关联/已忽略的照片候选；
+10. 人工新增且没有Word照片引用的病害使用空数组。
 
 ## 文件结构
 
@@ -98,6 +93,13 @@
 - `backend-cpp/tests/test_defect_indicator_resolver.cpp`
 - `database/migrations/017_defect_standard_indicator.sql`
 - `database/tests/017_defect_standard_indicator_smoke.sql`
+- `samples/contracts/bridge_annual_inspection_data.v3.valid.json`
+- `samples/contracts/bridge_annual_inspection_data.v3.with-comparison.json`
+
+### 删除
+
+- `samples/contracts/bridge_annual_inspection_data.v2.valid.json`
+- `samples/contracts/bridge_annual_inspection_data.v2.with-comparison.json`
 
 ### 修改
 
@@ -107,7 +109,6 @@
 - `tools-python/tests/importers/test_defect_tables.py`
 - `tools-python/tests/importers/test_real_word_regression.py`
 - `contracts/bridge_annual_inspection_data.schema.json`
-- `samples/contracts/bridge_annual_inspection_data.v2.valid.json`
 - `backend-cpp/src/contracts/AnnualInspectionContract.cpp`
 - `backend-cpp/tests/test_annual_inspection_contract.cpp`
 - `backend-cpp/src/review/ContractCompatibility.cpp`
@@ -161,14 +162,14 @@
 
 1. Word 解析表格规则、病害数量和照片提取规则不变。
 2. Word 来源字段只读；正式字段可编辑。
-3. 规范病害使用稳定指标 ID，名称只作显示与兼容匹配。
+3. 规范病害使用稳定指标ID，名称只作显示和前端唯一匹配建议。
 4. 前端不得自行复制 C++ 评分算法。
 5. 手工“校对状态”下拉框和可编辑“照片编号”输入框删除。
 6. 编辑、确认、忽略动作自动产生状态。
 7. 批量确认只处理当前明确选择且重新校验后仍安全的病害。
 8. `warning`、`error`、构件未绑定、规范指标未确定、标度越界、照片引用未解决的病害不能进入批量确认。
 9. 正式照片关系只认 `linked_defect_candidate_id`；来源编号不决定归属。
-10. 旧草稿无法唯一推导的字段保持待处理，不自动确认。
+10. 旧合同不做推导或静默转换，直接要求删除测试导入后重新解析。
 11. 已修改病害确认后仍保留 `review_status="已修改"`，只把组状态改为已确认。
 12. 页面分区切换继续保持已挂载状态；筛选、选择、当前病害、分页和折叠状态不得丢失。
 
@@ -188,88 +189,77 @@
 - [ ] 记录既有失败，不能通过修改无关期望掩盖。
 - [ ] 本任务不改代码、不提交。
 
-## Task 1：四端合同加入来源快照和照片引用结论
+## Task 1：四端合同升级为3.0并统一照片引用
 
 ### Python 与 JSON Schema
 
 - [ ] 先写失败测试：
-  - Word 来源快照完整对象可解析；
-  - 人工病害 `source_snapshot=null` 可解析；
-  - 规范指标 ID 可空或非空字符串；
-  - 四种照片引用结论合法；
+  - `contract.version="3.0"`可解析，`2.0`被拒绝；
+  - 导入候选的规范指标 ID 可空或为非空字符串；无法识别时保留空值进入人工核对；
+  - `pending/matched/relinked/missing/unrelated`五种照片引用状态合法；
   - 重复 `photo_number` 拒绝；
-  - 结论引用不在来源编号中的照片拒绝；
   - `matched/relinked/missing/unrelated` 的关联字段组合不合法时拒绝；
+  - 缺少`photo_references`被拒绝；
+  - `photo_numbers`和`confirmed_missing_photo_numbers`作为额外字段被拒绝；
   - 额外字段继续拒绝。
-- [ ] 新增严格模型 `DefectSourceSnapshot`、`PhotoReferenceReview`。
-- [ ] `DefectSourceSnapshot.snapshot_origin` 为必填枚举
-  `word_import | compatibility_snapshot`。
+- [ ] 新增严格模型`PhotoReference`。
 - [ ] `DefectCandidate` 增加：
-  - `source_snapshot: DefectSourceSnapshot | None = None`
   - `standard_defect_indicator_id: str | None = None`
-  - `photo_reference_reviews: list[PhotoReferenceReview] = []`
-- [ ] 保留 `photo_numbers` 和 `confirmed_missing_photo_numbers`，标注兼容镜像语义。
+  - `photo_references: list[PhotoReference]`
+- [ ] 从`DefectCandidate`删除`photo_numbers`和`confirmed_missing_photo_numbers`。
 - [ ] 从 Pydantic 导出器重新生成 JSON Schema；生成前保存 schema 当前 diff，生成后人工核对，不能覆盖用户修改。
 
 ### TypeScript 与 C++
 
 - [ ] TypeScript 增加等价接口和运行时守卫。
 - [ ] C++ 合同校验增加对象成员白名单、枚举、唯一性和字段组合校验。
-- [ ] 现有 2.0 fixture 补充一个 Word 病害和一个人工病害样例。
+- [ ] 新增3.0 fixture，删除测试对2.0 fixture的业务依赖。
 - [ ] 四端字段名、可空性、默认值和枚举逐项对照。
 - [ ] Python、TypeScript、C++ 合同测试通过。
-- [ ] 提交：`feat(contract): describe defect source and photo references`
+- [ ] 提交：`feat(contract): unify defect photo references in v3`
 
-## Task 2：解析器生成不可变 Word 来源快照
+## Task 2：解析器直接生成3.0照片引用
 
-- [ ] `test_defect_tables.py` 先写失败测试，断言 `source_snapshot` 精确保留：
-  - 结构分部；
-  - 构件类别与编号；
-  - 原始病害类型、位置、描述和标度；
-  - 数量、尺寸原文；
-  - Word 照片编号顺序。
-- [ ] 修改 `defect_tables.py`：创建病害时只生成来源快照，不改变现有正式字段、病害数、警告和照片匹配。
-- [ ] 新解析快照写 `snapshot_origin="word_import"`。
-- [ ] 初始 `standard_defect_indicator_id=null`，初始 `photo_reference_reviews=[]`，不得在 Python 端猜规范指标。
-- [ ] 真实 Word 回归断言原有病害/照片数量不变，并抽样核对来源快照。
-- [ ] 提交：`feat(import): preserve defect source snapshot`
+- [ ] `test_defect_tables.py`先写失败测试：
+  - 每个Word照片编号按原顺序生成一个`photo_references`元素；
+  - 初始`resolution="pending"`；
+  - 候选和目标ID初始为空；
+  - 无照片编号生成空数组；
+  - `source_ref.raw_row_text`及表/行定位保持现有值；
+  - 不再输出已删除的两个旧照片字段。
+- [ ] 修改`defect_tables.py`：初始`standard_defect_indicator_id=null`，不得在Python端猜规范指标。
+- [ ] 照片提取器继续根据引用编号生成高置信候选和初始实际关系，但不得把引用直接标成已人工确认。
+- [ ] 真实Word回归断言原有病害/照片数量不变，并抽样核对原始行和`pending`引用。
+- [ ] 提交：`feat(import): emit unified photo references`
 
-## Task 3：2.0 旧草稿兼容归一化与来源防篡改
+## Task 3：拒绝旧合同、保护来源并适配范围拆分
 
-### 兼容归一化
+### 合同边界
 
 - [ ] `test_contract_compatibility.cpp` 先写失败测试：
-  - 缺 `source_snapshot` 时从当前 2.0 字段生成一次兼容快照，并写
-    `snapshot_origin="compatibility_snapshot"`；
-  - 缺新数组时补空数组；
-  - 已有来源快照不覆盖；
-  - 已确认照片且唯一关联当前病害时可推导 `matched`；
-  - 已人工确认缺图时可推导 `missing`；
-  - 高置信但尚未确认、重复编号、跨病害冲突不推导人工结论；
-  - 归一化不改变 `contract.version=2.0`。
-- [ ] 扩展 `normalize_review_contract`，只做可证明的兼容补全。
-- [ ] `photo_numbers`、`confirmed_missing_photo_numbers` 从新结构同步为兼容镜像；旧数据首次仍允许作为推导输入。
+  - 3.0原样进入校对；
+  - 1.x和2.0均标记为需要重新解析；
+  - 不生成`source_snapshot`或任何照片兼容镜像；
+  - 不从旧照片字段推导人工处理结论。
+- [ ] Review API遇到旧合同返回稳定的`contract_version_outdated`和“删除测试导入后重新解析”提示，不向前端返回伪3.0草稿。
+- [ ] 将后端和前端兼容身份从`native_2_0`改为`native_3_0`，删除`Native20`命名。
 
-### 服务端不可变证据
+### 服务端不可变来源
 
 - [ ] `test_draft_validation.cpp` 先写失败测试：
-  - 客户端修改 `source_snapshot` 被拒绝；
   - 客户端修改 `source_ref` 被拒绝；
   - 客户端修改 `range_split_origin` 被拒绝；
-  - 人工病害保持无来源快照；
   - 规范指标和照片引用结论允许按业务规则修改；
   - `warnings_only` 重开仍不能伪造来源证据。
 - [ ] 新增候选 ID 对齐的来源证据校验函数；保存草稿时比较数据库内原草稿与待保存草稿。
-- [ ] 保存前先归一化数据库内旧草稿，再做来源比较、重开范围校验和审计；不能把
-  GET 响应自动补出的来源快照误判为客户端篡改。
 - [ ] 对新字段执行跨对象一致性校验：候选 ID 存在、来源编号存在、实际照片关系一致。
 - [ ] 范围拆分规划器回归：
-  - 每条拆分病害保留同一来源快照与规范指标 ID；
+  - 每条拆分病害保留原`source_ref`和规范指标 ID；
   - 克隆照片后重写 `photo_candidate_id`；
   - 重写 `resolved_defect_candidate_id` 到对应拆分病害；
   - 任何旧候选 ID 都不能残留为悬空引用。
 - [ ] 保持现有编辑锁和服务端 `component_match_confirmed_by` 所有权。
-- [ ] 提交：`fix(review): protect imported defect evidence`
+- [ ] 提交：`feat(review): enforce v3 review draft boundaries`
 
 ## Task 4：把锁定规范包上下文暴露给校对页
 
@@ -301,8 +291,7 @@
   - 指标 ID 不存在；
   - 指标 ID 存在但不适用；
   - 标度不在 `allowed_scales`；
-  - 缺 ID 的兼容病害按“适用类别 + 名称完全一致”唯一匹配；
-  - 同名多个指标保持歧义；
+  - 缺ID直接返回必填问题；
   - `defect_type` 与指标当前名称不一致时以 ID 为真值，并在输入摘要使用目录名称。
 - [ ] `calculate_assessment_preview` 优先读取 `standard_defect_indicator_id`，不再对新数据只靠名称匹配。
 - [ ] `AssessmentService` 与后续草稿保存校验必须复用该解析器，不得各写一套适用性/标度判断。
@@ -311,7 +300,7 @@
   - `assessment_defect_indicator_unknown`
   - `assessment_defect_indicator_not_applicable`
   - `assessment_defect_scale_not_allowed`
-- [ ] 缺 ID 的兼容唯一匹配只用于打开旧草稿和提示；正式确认前由归一化结果写回 ID。
+- [ ] C++不根据自由文本替客户端选择指标；唯一名称匹配仅由前端产生待确认建议，草稿必须明确写入ID后才能完成评定。
 - [ ] 保持同一实际构件、同一指标取最高标度的现有聚合规则。
 - [ ] 提交：`feat(assessment): score defects by standard indicator id`
 
@@ -365,7 +354,7 @@
   - `confirm_unrelated_photo_reference`
   - `reset_photo_reference_review`
   - `confirm_defect_groups`
-- [ ] 规范指标选择同时更新 ID、显示名称和组待确认状态；不得修改 `source_snapshot.defect_type`。
+- [ ] 规范指标选择同时更新 ID、显示名称和组待确认状态；不得修改`source_ref`。
 - [ ] 自动唯一匹配只填补当前为 `null`、类别适用且名称完全一致的指标 ID，不把病害标记为人工修改，也不确认该组。
 - [ ] 照片动作原子更新实际照片关系与对应引用结论，不能出现一半成功的草稿状态。
 - [ ] `confirm_defect_groups`：
@@ -383,7 +372,7 @@
   - 无关照片处理完成后只移除该照片的未引用警告；
   - 不删除其他字段、其他候选或拆分核对警告。
 - [ ] 忽略使用独立动作，二次确认留在 UI；恢复后回到待确认。
-- [ ] 兼容镜像字段由 reducer helper 同步，不允许 UI 任意写。
+- [ ] 照片动作直接更新唯一`photo_references`数组，不生成任何旧字段或兼容镜像。
 - [ ] 提交：`refactor(review): derive statuses from defect actions`
 
 ## Task 8：详情确认规则改用规范指标和引用结论
@@ -446,9 +435,9 @@
   - 规范病害按当前实际构件类别过滤；
   - 标度选项来自指标 `allowed_scales`；
   - 更换实际构件后旧指标不适用则清空并提示；
-  - 修改字段显示“已修改”和原值；
+  - 修改字段显示“已修改”，不展示逐字段原值；
   - “检测量与补充信息”默认折叠；
-  - “导入原文”默认折叠、只读；
+  - “Word原始记录”默认折叠，只读显示来源表、行号和`raw_row_text`；
   - 人工病害显示“人工新增，无 Word 来源”；
   - 无法确认时按钮禁用并显示具体原因；
   - “确认并查看下一条”确认后选中下一条需处理；
@@ -458,7 +447,7 @@
 - [ ] 实际构件继续复用 `ComponentMatchField` 和已加载台账，不新增第二套构件选择逻辑。
 - [ ] 新增病害表单也改用规范病害选择器；禁止自由文本直接成为正式规范类型。
 - [ ] 删除详情中的校对状态下拉框和照片编号输入框。
-- [ ] 旧 `DefectPhotoGroup.tsx` 缩减为兼容包装或删除其表单职责；迁移完成后不能存在两套可编辑卡片。
+- [ ] 旧`DefectPhotoGroup.tsx`缩减为过渡包装或删除其表单职责；迁移完成后不能存在两套可编辑卡片。
 - [ ] 提交：`feat(review): maintain formal defect details`
 
 ## Task 11：照片关系与原文引用精细维护
@@ -508,7 +497,7 @@
   - `missing` 仍指向照片；
   - `unrelated` 照片仍绑定病害；
   - 同一来源编号重复结论；
-  - 兼容镜像与新结构不一致时由服务端规范化而不是相信客户端；
+  - 请求中出现已删除旧照片字段时合同校验拒绝；
   - 已确认组仍有未解决引用时拒绝保存。
 - [ ] 保存路由取得当前锁定技术评定规范包和最新确认台账，服务端校验：
   - 指标存在；
@@ -528,35 +517,35 @@
 - [ ] 新增幂等迁移 `017_defect_standard_indicator.sql`：
   - `defect_observations.standard_defect_indicator_id text null`
   - 新索引 `(inspection_year_id, bridge_component_id, standard_defect_indicator_id)`
-- [ ] 不回填历史行；旧档案 `null` 表示历史数据没有稳定指标 ID。
+- [ ] 数据库列保持可空仅用于迁移安全，不代表正式业务数据允许缺少指标 ID。
+- [ ] 不回填历史行；本功能验收前清空可删除测试事实并用3.0候选重新入库。
 - [ ] 冒烟脚本验证列、索引、重复执行和事务回滚。
 
 ### ConfirmPlan 与写入
 
 - [ ] `test_confirm_plan.cpp` 先覆盖：
   - 规范指标 ID 映射；
-  - 来源快照映射；
+  - `raw_row_text`和来源定位映射；
   - 照片引用结论映射；
-  - 人工病害无来源快照；
+  - 人工病害无Word原始行时正常入库；
   - 忽略病害不进入计划；
   - 临时拆分警告未解决仍阻断。
-- [ ] `DefectPlan` 增加指标 ID、来源快照和照片引用结论。
+- [ ] `DefectPlan`增加指标ID和照片引用结论，继续使用现有`raw_row_text`。
 - [ ] `build_raw_cells_json` 合并：
   - `raw_row_text`
-  - `source_snapshot`
-  - `photo_reference_reviews`
+  - `photo_references`
   - `range_split_origin`
 - [ ] `insert_defect_observation` 写入规范指标列。
-- [ ] `defect_photos` 仍只从已确认实际照片关系生成，不读取 `source_snapshot.photo_numbers`。
+- [ ] `defect_photos`仍只从已确认实际照片关系生成，不把`photo_references`当作正式归属。
 - [ ] 提交：`feat(archive): persist standard defect identity`
 
 ## Task 15：病害档案显示规范身份和来源处理记录
 
 - [ ] `ComponentArchiveRepository` 查询和响应增加 `standard_defect_indicator_id`。
-- [ ] 历史空值正常返回 `null`，不得按文本猜回填。
+- [ ] 迁移遗留空值只读显示“未记录”，不得按文本猜回填；测试事实清理并按3.0重新入库后，新正式观测必须返回非空指标 ID。
 - [ ] 来源证据面板结构化展示：
-  - Word 原始病害类型；
-  - Word 原始照片编号；
+  - 来源表和行号；
+  - Word原始整行；
   - 照片引用处理结果；
   - 既有范围拆分来源。
 - [ ] 仍保留原始 JSON 展开能力。
@@ -601,7 +590,7 @@
   - 缺图、重复编号、跨病害冲突不自动确认；
   - 批量确认后已修改病害仍显示已修改；
   - 详情修改指标或标度后系统评定立即更新；
-  - 正式入库后档案包含指标 ID、来源快照和照片处理记录。
+  - 正式入库后档案包含指标ID、Word原始整行和照片处理记录。
 - [ ] 对真实业务记录执行批量确认或入库前，必须再次取得用户对该具体记录的授权；无授权时只用复制夹具验收。
 
 ### 文档收口
@@ -632,10 +621,10 @@
 
 ## 主要风险与防护
 
-1. **合同双真值：** 2.0 兼容期保留旧照片字段。服务端统一从 `source_snapshot + photo_reference_reviews` 生成兼容镜像，界面不提供旧字段写入口。
+1. **合同升级：** 3.0直接删除旧照片字段；旧合同拒绝打开和保存，测试数据通过删除并重新解析重建，不存在双真值。
 2. **错误批量确认：** 自动预选要求当前 assessment revision、唯一照片引用、归档存在、无任何 warning/error；确认对话框再次计算，后端保存和 preflight 再兜底。
 3. **规范名称漂移：** 正式评分和档案保存指标 ID；名称仅作显示。规则包升级不改写历史指标 ID。
-4. **旧草稿无法恢复原值：** 缺来源快照的 2.0 草稿只能把首次兼容时的当前字段固化为来源，不能伪造已丢失的 Word 原值；界面标注“兼容快照”。
+4. **无逐字段原值：** 正式字段编辑后只保留当前值和“已修改”状态；追溯依赖只读`raw_row_text`。未来若需要字段级历史，另建审计事件，不回加字段副本。
 5. **照片编号重复：** Python 现有匹配取首项，快速资格层必须检测跨病害重复引用并禁止自动确认；人工详情明确选择照片和目标病害。
 6. **重开范围：** `warnings_only` 当前不允许修改顶层照片数组。本功能保持该安全边界；若未来要在已确认记录中单独维护照片，需要另立变更，不在本次扩权。
 7. **性能回退：** 保留每页 50 条、缩略图懒加载、详情大图按需加载；不得把所有详情卡片同时挂载。
@@ -651,11 +640,11 @@
 4. 筛选、选择、当前详情和展开状态在工作区切换后保留。
 5. 手工校对状态和照片编号输入框已移除。
 6. 正式病害类型由稳定规范指标 ID 表达，标度按指标允许集合校验。
-7. Word 来源快照只读且后端防篡改。
+7. Word原始整行和来源定位只读且后端防篡改。
 8. 每个 Word 照片引用都有可追溯处理结论，正式照片关系只有一个真值。
 9. 修改、确认、忽略由明确动作自动产生状态。
 10. 已修改病害确认后仍保留人工修改痕迹。
-11. 正式入库和档案保留规范指标、来源快照、照片引用处理结果及范围拆分来源。
+11. 正式入库和档案保留规范指标、Word原始整行、照片引用处理结果及范围拆分来源。
 12. 361 条病害规模下页面保持可用，未一次加载全部大图。
 13. Python、前端、C++、数据库全量测试和生产构建通过。
 14. 用户原有未提交修改完整保留。
@@ -665,10 +654,10 @@
 - [x] 设计规格的快速判断与精细维护两个阶段均映射到独立任务。
 - [x] 自动预选、批量影响汇总、二次资格校验和后端兜底均有明确归属。
 - [x] 规范指标 ID 从目录、草稿、评定到正式档案全链路闭合。
-- [x] Word 来源证据有结构化快照且后端防篡改。
+- [x] Word来源证据只保存一份原始整行及定位，后端防篡改。
 - [x] 照片来源引用与正式照片关系分离，并有一致性校验。
 - [x] 手工状态下拉和照片编号输入删除，替换为明确动作。
-- [x] 旧 2.0 草稿兼容策略不伪造人工结论。
+- [x] 旧合同明确拒绝，不包含静默推导或兼容镜像。
 - [x] 每项包含文件、失败测试、实现和提交边界。
 - [x] 数据库迁移为新增列且不回填历史事实。
 - [x] 性能、工作区缓存、真实 Word 和脏工作区均有验收。
