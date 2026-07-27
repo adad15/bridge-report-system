@@ -1,5 +1,6 @@
 #include "bridge_report/assessment/AssessmentService.hpp"
 
+#include "bridge_report/standards/DefectIndicatorResolver.hpp"
 #include <algorithm>
 #include <map>
 #include <set>
@@ -116,35 +117,6 @@ Json::Value result_json_impl(const standards::BridgeAssessmentResult& result) {
         json["trace"].append(trace_json);
     }
     return json;
-}
-
-std::vector<std::string> matching_indicator_ids(
-    const standards::StandardPackage& package,
-    const std::string& component_type_id,
-    const std::string& defect_name) {
-    std::vector<std::string> matches;
-    for (const auto& [_, definition] : package.definitions) {
-        const auto& payload = definition.payload;
-        if (!payload["indicators"].isArray() || !payload["applicable_component_ids"].isArray()) {
-            continue;
-        }
-        bool applicable = false;
-        for (const auto& component_id : payload["applicable_component_ids"]) {
-            if (component_id.isString() && component_id.asString() == component_type_id) {
-                applicable = true;
-                break;
-            }
-        }
-        if (!applicable) continue;
-        for (const auto& indicator : payload["indicators"]) {
-            if (string_member(indicator, "name") == defect_name && indicator["id"].isString()) {
-                matches.push_back(indicator["id"].asString());
-            }
-        }
-    }
-    std::sort(matches.begin(), matches.end());
-    matches.erase(std::unique(matches.begin(), matches.end()), matches.end());
-    return matches;
 }
 
 AssessmentPreviewIssue issue(
@@ -264,7 +236,8 @@ AssessmentPreview calculate_assessment_preview(
             const auto candidate_id = string_member(defect, "candidate_id");
             const auto component_id = string_member(defect, "bridge_component_id");
             const auto client_category = string_member(defect, "standard_component_category_id");
-            const auto defect_name = string_member(defect, "defect_type");
+            const auto indicator_id =
+                string_member(defect, "standard_defect_indicator_id");
             const auto component = component_types.find(component_id);
             if (component == component_types.end() ||
                 (!client_category.empty() && client_category != component->second)) {
@@ -279,27 +252,51 @@ AssessmentPreview calculate_assessment_preview(
                     "defect", candidate_id, "defect_scale"));
                 continue;
             }
-            const auto indicator_ids = matching_indicator_ids(package, component->second, defect_name);
-            if (indicator_ids.empty()) {
-                preview.issues.push_back(issue(
-                    "assessment_defect_type_unmapped", "病害类型无法映射到当前规范的病害指标。",
-                    "defect", candidate_id, "defect_type"));
-                continue;
-            }
-            if (indicator_ids.size() > 1) {
-                preview.issues.push_back(issue(
-                    "assessment_defect_type_ambiguous", "病害类型对应多个规范指标，请进一步明确。",
-                    "defect", candidate_id, "defect_type"));
-                continue;
-            }
             const auto scale = defect["defect_scale"].asInt();
-            auto& aggregated = aggregated_scales[{component_id, indicator_ids.front()}];
+            const auto resolution = standards::resolve_defect_indicator(
+                package, indicator_id, component->second, scale);
+            if (!resolution.ok()) {
+                switch (resolution.status) {
+                    case standards::DefectIndicatorResolutionStatus::indicator_required:
+                        preview.issues.push_back(issue(
+                            "assessment_defect_indicator_required",
+                            "病害尚未选择当前规范中的病害指标。",
+                            "defect", candidate_id,
+                            "standard_defect_indicator_id"));
+                        break;
+                    case standards::DefectIndicatorResolutionStatus::indicator_unknown:
+                        preview.issues.push_back(issue(
+                            "assessment_defect_indicator_unknown",
+                            "病害指标不属于当前锁定的规范包。",
+                            "defect", candidate_id,
+                            "standard_defect_indicator_id"));
+                        break;
+                    case standards::DefectIndicatorResolutionStatus::indicator_not_applicable:
+                        preview.issues.push_back(issue(
+                            "assessment_defect_indicator_not_applicable",
+                            "病害指标不适用于当前实际构件类别。",
+                            "defect", candidate_id,
+                            "standard_defect_indicator_id"));
+                        break;
+                    case standards::DefectIndicatorResolutionStatus::scale_not_allowed:
+                        preview.issues.push_back(issue(
+                            "assessment_defect_scale_not_allowed",
+                            "病害标度不在该规范指标允许范围内。",
+                            "defect", candidate_id, "defect_scale"));
+                        break;
+                    case standards::DefectIndicatorResolutionStatus::resolved:
+                        break;
+                }
+                continue;
+            }
+            auto& aggregated = aggregated_scales[{component_id, indicator_id}];
             aggregated = (std::max)(aggregated, scale);
             Json::Value defect_json;
             defect_json["candidate_id"] = candidate_id;
             defect_json["component_instance_id"] = component_id;
             defect_json["component_type_id"] = component->second;
-            defect_json["defect_indicator_id"] = indicator_ids.front();
+            defect_json["defect_indicator_id"] = indicator_id;
+            defect_json["defect_indicator_name"] = resolution.indicator_name;
             defect_json["scale"] = scale;
             summary["defects"].append(defect_json);
         }

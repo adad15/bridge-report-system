@@ -80,6 +80,7 @@ add_library(bridge_report_backend_core
     src/runtime/RuntimePaths.cpp
     src/standards/StandardModels.cpp
     src/standards/AssessmentModels.cpp
+    src/standards/DefectIndicatorResolver.cpp
     src/standards/H21Evaluator.cpp
     src/standards/Jtg5120MaintenanceStandard.cpp
     src/standards/StandardCatalogModels.cpp
@@ -148,6 +149,7 @@ add_executable(bridge_report_backend_tests
     tests/test_confirm_plan.cpp
     tests/test_commit_latch.cpp
     tests/test_defect_thread_repository.cpp
+    tests/test_defect_indicator_resolver.cpp
     tests/test_defect_thread_routes.cpp
     tests/test_contract_compatibility.cpp
     tests/test_db_client_factory.cpp

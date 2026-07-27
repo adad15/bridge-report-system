@@ -40,6 +40,7 @@ Json::Value draft_with_bearing_defect(
     defect["bridge_component_id"] = bearing->component_instance_id;
     defect["standard_component_category_id"] = bearing->component_type_id;
     defect["defect_type"] = "板式支座老化变质、开裂";
+    defect["standard_defect_indicator_id"] = "h21.defect.5_3_1_1";
     defect["defect_scale"] = 2;
     defect["review_status"] = "已修改";
     draft["defects"].append(defect);
@@ -100,7 +101,7 @@ TEST(AssessmentServiceTest, MissingScaleAndUnconfirmedInventoryAreStructuredBloc
     EXPECT_EQ(preview.issues.front().code, "assessment_inventory_not_confirmed");
 }
 
-TEST(AssessmentServiceTest, UnknownDefectTypeDoesNotFallBackToAnotherRule) {
+TEST(AssessmentServiceTest, StableIndicatorIdRemainsTruthWhenDisplayNameChanges) {
     const auto package = bridge_report::tests::h21::load_package();
     const standards::H21Evaluator evaluator(package);
     const auto context = complete_context(package);
@@ -108,7 +109,23 @@ TEST(AssessmentServiceTest, UnknownDefectTypeDoesNotFallBackToAnotherRule) {
     draft["defects"][0]["defect_type"] = "不存在的病害类型";
 
     const auto preview = assessment::calculate_assessment_preview(evaluator, package, context, draft, 3);
+    EXPECT_TRUE(preview.issues.empty());
+    EXPECT_TRUE(preview.result.has_value());
+    EXPECT_EQ(
+        preview.input_summary["defects"][0]["defect_indicator_name"].asString(),
+        "板式支座老化变质、开裂");
+}
+
+TEST(AssessmentServiceTest, UnknownIndicatorIsStructuredBlocker) {
+    const auto package = bridge_report::tests::h21::load_package();
+    const standards::H21Evaluator evaluator(package);
+    const auto context = complete_context(package);
+    auto draft = draft_with_bearing_defect(context);
+    draft["defects"][0]["standard_defect_indicator_id"] = "missing";
+
+    const auto preview = assessment::calculate_assessment_preview(
+        evaluator, package, context, draft, 4);
     ASSERT_FALSE(preview.issues.empty());
-    EXPECT_EQ(preview.issues.front().code, "assessment_defect_type_unmapped");
+    EXPECT_EQ(preview.issues.front().code, "assessment_defect_indicator_unknown");
     EXPECT_FALSE(preview.result.has_value());
 }

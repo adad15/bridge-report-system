@@ -42,6 +42,7 @@ Json::Value draft_with_forged_word_rating(
     defect["bridge_component_id"] = bearing->component_instance_id;
     defect["standard_component_category_id"] = bearing->component_type_id;
     defect["defect_type"] = "板式支座老化变质、开裂";
+    defect["standard_defect_indicator_id"] = "h21.defect.5_3_1_1";
     defect["defect_scale"] = 2;
     defect["review_status"] = "已确认";
     draft["defects"].append(defect);
