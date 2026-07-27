@@ -24,6 +24,7 @@ export interface DefectComponentSelection {
 export interface ManualDefectInput extends DefectComponentSelection {
   defectLocation: string;
   defectType: string;
+  standardDefectIndicatorId: string;
   defectDescription: string;
   defectScale?: number | null;
 }
@@ -224,7 +225,7 @@ function reduceReviewDraft(
         quantity_text: null,
         measurement_text: null,
         measurements: [],
-        standard_defect_indicator_id: null,
+        standard_defect_indicator_id: input.standardDefectIndicatorId,
         photo_references: [],
         group_review_status: "待确认",
         severity: null,

@@ -38,6 +38,7 @@ describe("reviewDraftReducer", () => {
         inventoryRevisionId: "revision-1",
         defectLocation: "第二跨梁底",
         defectType: "裂缝",
+        standardDefectIndicatorId: "h21.defect.crack",
         defectDescription: "纵向裂缝",
         defectScale: 2,
       },
@@ -50,6 +51,7 @@ describe("reviewDraftReducer", () => {
       component_number: "2-2#梁",
       source_structure_part: null,
       source_ref: { source_type: "manual" },
+      standard_defect_indicator_id: "h21.defect.crack",
       review_status: "已修改",
     });
     expect(next).not.toHaveProperty("ratings");

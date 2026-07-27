@@ -47,7 +47,7 @@ const STRUCTURE_PART_LABELS: Record<InventoryStructurePart, "全桥" | "上部�
 interface ManualDefectFormState {
   componentEntryId: string;
   defectLocation: string;
-  defectType: string;
+  standardDefectIndicatorId: string;
   defectDescription: string;
   defectScale: string;
 }
@@ -55,7 +55,7 @@ interface ManualDefectFormState {
 const EMPTY_MANUAL_DEFECT: ManualDefectFormState = {
   componentEntryId: "",
   defectLocation: "",
-  defectType: "",
+  standardDefectIndicatorId: "",
   defectDescription: "",
   defectScale: "",
 };
@@ -153,6 +153,13 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const selectedPhotoCount = draft.photos.filter(
     (photo) => photo.linked_defect_candidate_id && currentlySafeSelection.includes(photo.linked_defect_candidate_id),
   ).length;
+  const selectedEntry = inventoryEntries.find((entry) => entry.id === form.componentEntryId);
+  const selectedMapping = selectedEntry?.mappings.find((item) => item.is_active);
+  const manualDefectIndicators = selectedMapping
+    ? catalogs
+        .filter((catalog) => catalog.applicable_component_ids.includes(selectedMapping.standard_component_category_id))
+        .flatMap((catalog) => catalog.indicators)
+    : [];
 
   const openAddForm = async () => {
     setShowAddForm(true);
@@ -186,11 +193,11 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     const entry = inventoryEntries.find((item) => item.id === form.componentEntryId);
     const inventory = loadedInventory ?? componentInventory;
     const mapping = entry?.mappings.find((item) => item.is_active);
+    const indicator = manualDefectIndicators.find((item) => item.id === form.standardDefectIndicatorId);
     const location = form.defectLocation.trim();
-    const type = form.defectType.trim();
     const description = form.defectDescription.trim();
     const scale = form.defectScale === "" ? null : Number(form.defectScale);
-    if (!inventory || !entry || !mapping || !location || !type || !description) {
+    if (!inventory || !entry || !mapping || !indicator || !location || !description) {
       setFormError("请填写构件类别、构件编号、病害位置、病害类型和病害描述。");
       return;
     }
@@ -208,7 +215,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         resolvedStructurePart: STRUCTURE_PART_LABELS[mapping.structure_part],
         inventoryRevisionId: inventory.id,
         defectLocation: location,
-        defectType: type,
+        defectType: indicator.name,
+        standardDefectIndicatorId: indicator.id,
         defectDescription: description,
         defectScale: scale,
       },
@@ -226,11 +234,11 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
       </div>
       {showAddForm ? (
         <form className="manual-defect-form" onSubmit={submitManualDefect}>
-          <label>实际构件<select aria-label="实际构件" disabled={loadingInventory} required value={form.componentEntryId} onChange={(event) => setForm({ ...form, componentEntryId: event.target.value })}><option value="">请选择构件</option>{inventoryEntries.map((entry) => <option key={entry.id} value={entry.id}>{entry.component_number} / {entry.site_component_type}</option>)}</select></label>
+          <label>实际构件<select aria-label="实际构件" disabled={loadingInventory} required value={form.componentEntryId} onChange={(event) => setForm({ ...form, componentEntryId: event.target.value, standardDefectIndicatorId: "" })}><option value="">请选择构件</option>{inventoryEntries.map((entry) => <option key={entry.id} value={entry.id}>{entry.component_number} / {entry.site_component_type}</option>)}</select></label>
           <label>构件类别<input aria-label="新增病害构件类别" readOnly value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.site_component_type ?? ""} /></label>
           <label>构件编号<input aria-label="新增病害构件编号" readOnly value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.component_number ?? ""} /></label>
           <label>病害位置<input aria-label="新增病害位置" required value={form.defectLocation} onChange={(event) => setForm({ ...form, defectLocation: event.target.value })} /></label>
-          <label>病害类型<input aria-label="新增病害类型" required value={form.defectType} onChange={(event) => setForm({ ...form, defectType: event.target.value })} /></label>
+          <label>病害类型<select aria-label="新增病害类型" required value={form.standardDefectIndicatorId} onChange={(event) => setForm({ ...form, standardDefectIndicatorId: event.target.value })}><option value="">请选择规范病害</option>{manualDefectIndicators.map((indicator) => <option key={indicator.id} value={indicator.id}>{indicator.name}</option>)}</select></label>
           <label className="manual-defect-form-wide">病害描述<input aria-label="新增病害描述" required value={form.defectDescription} onChange={(event) => setForm({ ...form, defectDescription: event.target.value })} /></label>
           <label>病害标度（可稍后填写）<input aria-label="新增病害标度" type="number" min={1} step={1} value={form.defectScale} onChange={(event) => setForm({ ...form, defectScale: event.target.value })} /></label>
           {formError ? <p className="form-error" role="alert">{formError}</p> : null}

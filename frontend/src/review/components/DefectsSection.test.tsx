@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchLatestComponentInventory } from "../../api/componentInventoryApi";
+import { fetchStandardCatalog } from "../../api/standardsApi";
 import { data } from "../testFixtures";
 import { DefectsSection } from "./DefectsSection";
 
@@ -9,12 +10,18 @@ vi.mock("../../api/componentInventoryApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/componentInventoryApi")>();
   return { ...actual, fetchLatestComponentInventory: vi.fn() };
 });
+vi.mock("../../api/standardsApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api/standardsApi")>();
+  return { ...actual, fetchStandardCatalog: vi.fn() };
+});
 
 const mockedFetchInventory = vi.mocked(fetchLatestComponentInventory);
+const mockedFetchStandardCatalog = vi.mocked(fetchStandardCatalog);
 
 describe("DefectsSection", () => {
   beforeEach(() => {
     mockedFetchInventory.mockReset();
+    mockedFetchStandardCatalog.mockReset();
   });
 
   it("adds a manual defect from an actual mapped component and allows an empty scale", async () => {
@@ -50,15 +57,37 @@ describe("DefectsSection", () => {
         }],
       }],
     });
+    mockedFetchStandardCatalog.mockResolvedValue({
+      package: {} as never,
+      bridge_types: [],
+      component_categories: [],
+      inventory_templates: [],
+      defect_catalogs: [{
+        id: "catalog-1",
+        applicable_component_ids: ["h21.component.beam"],
+        source_clause: "5.3.1",
+        indicators: [{
+          id: "h21.defect.crack",
+          name: "裂缝",
+          allowed_scales: [1, 2, 3, 4, 5],
+          deduction_rule_id: "rule-1",
+          source_table: "表5.3.1",
+        }],
+      }],
+      maintenance_levels: [],
+      inspection_types: [],
+      periodic_inspection_requirements: [],
+    });
     const dispatch = vi.fn();
     const draft = data();
     draft.defects = [];
 
-    render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={dispatch} allowStructureChanges />);
+    render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={dispatch} technicalStandardPackageId="package-1" allowStructureChanges />);
     fireEvent.click(screen.getByRole("button", { name: "新增病害" }));
     await waitFor(() => expect(screen.getByLabelText("实际构件")).toHaveValue("entry-1"));
     fireEvent.change(screen.getByLabelText("新增病害位置"), { target: { value: "第1跨梁底" } });
-    fireEvent.change(screen.getByLabelText("新增病害类型"), { target: { value: "裂缝" } });
+    await waitFor(() => expect(screen.getByLabelText("新增病害类型")).toHaveValue(""));
+    fireEvent.change(screen.getByLabelText("新增病害类型"), { target: { value: "h21.defect.crack" } });
     fireEvent.change(screen.getByLabelText("新增病害描述"), { target: { value: "梁底纵向裂缝" } });
     fireEvent.click(screen.getByRole("button", { name: "添加病害" }));
 
@@ -73,6 +102,7 @@ describe("DefectsSection", () => {
         inventoryRevisionId: "revision-1",
         defectLocation: "第1跨梁底",
         defectType: "裂缝",
+        standardDefectIndicatorId: "h21.defect.crack",
         defectDescription: "梁底纵向裂缝",
         defectScale: null,
       },
