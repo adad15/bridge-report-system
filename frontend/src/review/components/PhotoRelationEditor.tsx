@@ -83,19 +83,50 @@ export function PhotoRelationEditor({
                 {reference.resolution === "pending" ? (
                   <div className="photo-reference-actions">
                     {candidates.map((photo) => (
-                      <button
-                        key={photo.candidate_id}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => dispatch({
-                          type: "confirm_photo_reference_match",
-                          defectCandidateId: defect.candidate_id,
-                          photoNumber: reference.photo_number,
-                          photoCandidateId: photo.candidate_id,
-                        })}
-                      >
-                        照片正确{candidates.length > 1 ? `（${photo.candidate_id}）` : ""}
-                      </button>
+                      <span key={photo.candidate_id} className="photo-reference-candidate-actions">
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => dispatch({
+                            type: "confirm_photo_reference_match",
+                            defectCandidateId: defect.candidate_id,
+                            photoNumber: reference.photo_number,
+                            photoCandidateId: photo.candidate_id,
+                          })}
+                        >
+                          照片正确{candidates.length > 1 ? `（${photo.candidate_id}）` : ""}
+                        </button>
+                        {photo.linked_defect_candidate_id &&
+                        photo.linked_defect_candidate_id !== defect.candidate_id ? (
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => dispatch({
+                              type: "relink_photo_reference",
+                              defectCandidateId: defect.candidate_id,
+                              photoNumber: reference.photo_number,
+                              photoCandidateId: photo.candidate_id,
+                              targetDefectCandidateId: photo.linked_defect_candidate_id!,
+                            })}
+                          >
+                            原文引用到其他病害
+                          </button>
+                        ) : null}
+                        {!photo.linked_defect_candidate_id ? (
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => dispatch({
+                              type: "confirm_unrelated_photo_reference",
+                              defectCandidateId: defect.candidate_id,
+                              photoNumber: reference.photo_number,
+                              photoCandidateId: photo.candidate_id,
+                            })}
+                          >
+                            确认无关
+                          </button>
+                        ) : null}
+                      </span>
                     ))}
                     {candidates.length === 0 ? (
                       <button

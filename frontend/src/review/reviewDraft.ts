@@ -74,6 +74,19 @@ export type ReviewDraftAction =
       defectCandidateId: string;
       photoNumber: string;
     }
+  | {
+      type: "relink_photo_reference";
+      defectCandidateId: string;
+      photoNumber: string;
+      photoCandidateId: string;
+      targetDefectCandidateId: string;
+    }
+  | {
+      type: "confirm_unrelated_photo_reference";
+      defectCandidateId: string;
+      photoNumber: string;
+      photoCandidateId: string;
+    }
   | { type: "confirm_defect_groups"; candidateIds: string[] }
   | { type: "set_defect_status"; candidateId: string; status: ReviewStatus }
   | { type: "photo_confirm_match"; candidateId: string }
@@ -421,6 +434,86 @@ function reduceReviewDraft(
               review_status: "待确认",
             }))
           : state.photos,
+      };
+    }
+
+    case "relink_photo_reference": {
+      const photo = state.photos.find(
+        (item) =>
+          item.candidate_id === action.photoCandidateId &&
+          item.photo_number === action.photoNumber,
+      );
+      const sourceDefect = state.defects.find(
+        (item) => item.candidate_id === action.defectCandidateId,
+      );
+      const targetDefect = state.defects.find(
+        (item) =>
+          item.candidate_id === action.targetDefectCandidateId &&
+          item.review_status !== "已忽略",
+      );
+      if (!photo || !sourceDefect || !targetDefect ||
+          sourceDefect.candidate_id === targetDefect.candidate_id) {
+        return state;
+      }
+      return {
+        ...state,
+        defects: invalidateDefectGroups(
+          updateDefect(state.defects, sourceDefect.candidate_id, (item) => ({
+            ...item,
+            photo_references: item.photo_references.map((reference) =>
+              reference.photo_number === action.photoNumber
+                ? {
+                    ...reference,
+                    resolution: "relinked",
+                    photo_candidate_id: photo.candidate_id,
+                    resolved_defect_candidate_id: targetDefect.candidate_id,
+                  }
+                : reference,
+            ),
+          })),
+          [sourceDefect.candidate_id, targetDefect.candidate_id],
+        ),
+        photos: updatePhoto(state.photos, photo.candidate_id, (item) => ({
+          ...item,
+          linked_defect_candidate_id: targetDefect.candidate_id,
+          match_status: "已确认",
+          review_status: "已修改",
+        })),
+      };
+    }
+
+    case "confirm_unrelated_photo_reference": {
+      const photo = state.photos.find(
+        (item) =>
+          item.candidate_id === action.photoCandidateId &&
+          item.photo_number === action.photoNumber,
+      );
+      const defect = state.defects.find(
+        (item) => item.candidate_id === action.defectCandidateId,
+      );
+      if (!photo || !defect) return state;
+      return {
+        ...state,
+        defects: updateDefect(state.defects, defect.candidate_id, (item) => ({
+          ...item,
+          group_review_status: "待确认",
+          photo_references: item.photo_references.map((reference) =>
+            reference.photo_number === action.photoNumber
+              ? {
+                  ...reference,
+                  resolution: "unrelated",
+                  photo_candidate_id: photo.candidate_id,
+                  resolved_defect_candidate_id: null,
+                }
+              : reference,
+          ),
+        })),
+        photos: updatePhoto(state.photos, photo.candidate_id, (item) => ({
+          ...item,
+          linked_defect_candidate_id: null,
+          match_status: "未关联",
+          review_status: "已确认",
+        })),
       };
     }
 

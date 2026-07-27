@@ -161,6 +161,36 @@ function analyzeDefect(
         addProblem(problems, "photo_match_invalid", "photo", `照片编号 ${reference.photo_number} 的实际关联未确认。`);
       }
     }
+    if (reference.resolution === "relinked") {
+      const target = draft.defects.find(
+        (item) =>
+          item.candidate_id === reference.resolved_defect_candidate_id &&
+          item.candidate_id !== defect.candidate_id &&
+          item.review_status !== "已忽略",
+      );
+      const photo = draft.photos.find(
+        (item) => item.candidate_id === reference.photo_candidate_id,
+      );
+      if (!target || !photo ||
+          photo.linked_defect_candidate_id !== target.candidate_id ||
+          photo.match_status !== "已确认" ||
+          !photo.extracted_file.archive_relative_path) {
+        addProblem(problems, "photo_relink_invalid", "photo", `照片编号 ${reference.photo_number} 的改绑关系无效。`);
+      }
+    }
+    if (reference.resolution === "missing" &&
+        (reference.photo_candidate_id || reference.resolved_defect_candidate_id)) {
+      addProblem(problems, "photo_missing_invalid", "photo", `照片编号 ${reference.photo_number} 的缺图结论无效。`);
+    }
+    if (reference.resolution === "unrelated") {
+      const photo = draft.photos.find(
+        (item) => item.candidate_id === reference.photo_candidate_id,
+      );
+      if (!photo || photo.linked_defect_candidate_id ||
+          photo.review_status !== "已确认") {
+        addProblem(problems, "photo_unrelated_invalid", "photo", `照片编号 ${reference.photo_number} 的无关结论无效。`);
+      }
+    }
   }
 
   for (const warning of defect.warnings) {

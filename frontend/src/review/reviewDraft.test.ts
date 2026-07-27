@@ -265,4 +265,39 @@ describe("reviewDraftReducer", () => {
     expect(ignored.defects[0]).toMatchObject({ review_status: "已忽略", group_review_status: "待确认" });
     expect(restored.defects[0]).toMatchObject({ review_status: "待确认", group_review_status: "待确认" });
   });
+
+  it("records that a Word photo reference actually belongs to another defect", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    state.defects[0].photo_references[0] = {
+      photo_number: "2.1-1",
+      resolution: "pending",
+      photo_candidate_id: null,
+      resolved_defect_candidate_id: null,
+      review_note: null,
+    };
+    state.defects.push({
+      ...state.defects[0],
+      candidate_id: "defect_0002",
+      photo_references: [],
+    });
+
+    const next = reducer(state, {
+      type: "relink_photo_reference",
+      defectCandidateId: "defect_0001",
+      photoNumber: "2.1-1",
+      photoCandidateId: "photo_0001",
+      targetDefectCandidateId: "defect_0002",
+    });
+
+    expect(next.defects[0].photo_references[0]).toMatchObject({
+      resolution: "relinked",
+      photo_candidate_id: "photo_0001",
+      resolved_defect_candidate_id: "defect_0002",
+    });
+    expect(next.photos[0]).toMatchObject({
+      linked_defect_candidate_id: "defect_0002",
+      match_status: "已确认",
+    });
+  });
 });

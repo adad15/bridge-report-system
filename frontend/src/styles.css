@@ -3409,6 +3409,12 @@ body {
   gap: 6px;
 }
 
+.photo-reference-candidate-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .defect-detail-actions {
   justify-content: flex-end;
   margin-top: 14px;
