@@ -430,10 +430,17 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
         "b.system_number as bridge_system_number, b.bridge_name as bridge_name, b.route_name as bridge_route_name, "
         "iy.system_number as inspection_year_system_number, iy.inspection_year as inspection_year, "
         "iy.status as inspection_year_status, iy.version_number as inspection_year_version_number, "
-        "iy.is_current as inspection_year_is_current "
+        "iy.is_current as inspection_year_is_current, "
+        "tsp.id::text as technical_standard_package_id, "
+        "tsp.standard_code as technical_standard_code, "
+        "tsp.standard_name as technical_standard_name, "
+        "tsp.official_edition as technical_standard_official_edition, "
+        "tsp.package_version as technical_standard_package_version "
         "from import_records ir "
         "join bridges b on b.id = ir.bridge_id "
         "left join inspection_years iy on iy.id = ir.inspection_year_id "
+        "left join project_standard_profiles psp on psp.id = iy.standard_profile_id "
+        "left join standard_packages tsp on tsp.id = psp.technical_condition_package_id "
         "where ir.id = $1::uuid",
         import_record_id
     );
@@ -478,6 +485,16 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
     detail.inspection_year_is_current = is_current_field.isNull()
         ? std::nullopt
         : std::make_optional(is_current_field.as<bool>());
+    detail.technical_standard_package_id =
+        optional_text(row, "technical_standard_package_id");
+    detail.technical_standard_code =
+        optional_text(row, "technical_standard_code");
+    detail.technical_standard_name =
+        optional_text(row, "technical_standard_name");
+    detail.technical_standard_official_edition =
+        optional_text(row, "technical_standard_official_edition");
+    detail.technical_standard_package_version =
+        optional_text(row, "technical_standard_package_version");
 
     return detail;
 }

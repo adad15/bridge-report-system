@@ -44,12 +44,27 @@ export interface StandardInventoryTemplate {
   numbering_is_user_editable: boolean;
 }
 
+export interface StandardDefectIndicator {
+  id: string;
+  name: string;
+  allowed_scales: number[];
+  deduction_rule_id: string;
+  source_table: string;
+}
+
+export interface StandardDefectCatalog {
+  id: string;
+  applicable_component_ids: string[];
+  source_clause: string;
+  indicators: StandardDefectIndicator[];
+}
+
 export interface StandardCatalog {
   package: StandardPackageSummary;
   bridge_types: StandardBridgeType[];
   component_categories: StandardComponentCategory[];
   inventory_templates: StandardInventoryTemplate[];
-  defect_catalogs: unknown[];
+  defect_catalogs: StandardDefectCatalog[];
   maintenance_levels: unknown[];
   inspection_types: unknown[];
   periodic_inspection_requirements: unknown[];

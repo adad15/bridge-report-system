@@ -201,7 +201,12 @@ ImportRecordDetail make_detail_without_year() {
 }  // namespace
 
 TEST(BuildReviewResponseTest, PopulatesInspectionYearObjectWhenPresent) {
-    const auto detail = make_detail_with_year();
+    auto detail = make_detail_with_year();
+    detail.technical_standard_package_id = "p1111111-1111-1111-1111-111111111111";
+    detail.technical_standard_code = "JTG/T H21";
+    detail.technical_standard_name = "公路桥梁技术状况评定标准";
+    detail.technical_standard_official_edition = "2011";
+    detail.technical_standard_package_version = "1.0.0";
     Json::Value parsed_result(Json::objectValue);
     ReviewStatistics statistics{};
 
@@ -228,6 +233,18 @@ TEST(BuildReviewResponseTest, PopulatesInspectionYearObjectWhenPresent) {
     EXPECT_EQ(body["import_record"]["importer_version"].asString(), "1.0.0");
     EXPECT_EQ(body["bridge"]["id"].asString(), "b1111111-1111-1111-1111-111111111111");
     EXPECT_EQ(body["bridge"]["route_name"].asString(), "G1线");
+    ASSERT_TRUE(body["technical_condition_standard"].isObject());
+    EXPECT_EQ(
+        body["technical_condition_standard"]["package_id"].asString(),
+        "p1111111-1111-1111-1111-111111111111"
+    );
+    EXPECT_EQ(body["technical_condition_standard"]["standard_code"].asString(), "JTG/T H21");
+    EXPECT_EQ(
+        body["technical_condition_standard"]["standard_name"].asString(),
+        "公路桥梁技术状况评定标准"
+    );
+    EXPECT_EQ(body["technical_condition_standard"]["official_edition"].asString(), "2011");
+    EXPECT_EQ(body["technical_condition_standard"]["package_version"].asString(), "1.0.0");
 }
 
 TEST(BuildReviewResponseTest, OutputsNullInspectionYearWhenAbsent) {
@@ -248,6 +265,7 @@ TEST(BuildReviewResponseTest, OutputsNullInspectionYearWhenAbsent) {
     EXPECT_TRUE(body["import_record"]["importer_name"].isNull());
     EXPECT_TRUE(body["import_record"]["importer_version"].isNull());
     EXPECT_TRUE(body["bridge"]["route_name"].isNull());
+    EXPECT_TRUE(body["technical_condition_standard"].isNull());
 }
 
 TEST(BuildReviewResponseTest, IncludesParsedResultAndStatisticsVerbatim) {

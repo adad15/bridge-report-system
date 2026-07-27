@@ -120,6 +120,21 @@ Json::Value build_review_response(
     body["statistics"] = statistics.to_json();
     body["has_current_annual_facts"] = has_current_annual_facts;
     body["contract_compatibility"] = std::string(contract_compatibility);
+    if (detail.technical_standard_package_id.has_value()) {
+        Json::Value standard(Json::objectValue);
+        standard["package_id"] = *detail.technical_standard_package_id;
+        standard["standard_code"] =
+            detail.technical_standard_code.value_or("");
+        standard["standard_name"] =
+            detail.technical_standard_name.value_or("");
+        standard["official_edition"] =
+            detail.technical_standard_official_edition.value_or("");
+        standard["package_version"] =
+            detail.technical_standard_package_version.value_or("");
+        body["technical_condition_standard"] = std::move(standard);
+    } else {
+        body["technical_condition_standard"] = Json::Value();
+    }
     body["reopen"] = reopen;
     return body;
 }

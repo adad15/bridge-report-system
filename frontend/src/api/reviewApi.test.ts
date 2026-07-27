@@ -87,6 +87,7 @@ function reviewResponseBody(overrides: Partial<Record<string, unknown>> = {}) {
     },
     has_current_annual_facts: false,
     contract_compatibility: "native_3_0",
+    technical_condition_standard: null,
     ...overrides,
   };
 }

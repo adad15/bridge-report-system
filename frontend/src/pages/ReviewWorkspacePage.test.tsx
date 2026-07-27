@@ -152,6 +152,7 @@ function reviewResponse(): ReviewResponse {
     },
     has_current_annual_facts: false,
     contract_compatibility: "native_3_0",
+    technical_condition_standard: null,
     reopen: null,
     edit_lock: null,
   };

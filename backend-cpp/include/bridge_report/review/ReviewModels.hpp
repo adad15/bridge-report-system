@@ -94,6 +94,11 @@ struct ImportRecordDetail {
     std::optional<std::string> inspection_year_status;
     std::optional<int> inspection_year_version_number;
     std::optional<bool> inspection_year_is_current;
+    std::optional<std::string> technical_standard_package_id;
+    std::optional<std::string> technical_standard_code;
+    std::optional<std::string> technical_standard_name;
+    std::optional<std::string> technical_standard_official_edition;
+    std::optional<std::string> technical_standard_package_version;
 
     // 重开校对审计（迁移 004）：reopened_at 非空即处于重开态；
     // scope 为 'warnings_only'（仅警告病害可改）或 'full'（管理员全改）。

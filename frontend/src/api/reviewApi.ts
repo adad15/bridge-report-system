@@ -46,6 +46,14 @@ export interface ReviewStatistics {
 
 export type ContractCompatibility = "native_3_0";
 
+export interface ReviewTechnicalConditionStandard {
+  package_id: string;
+  standard_code: string;
+  standard_name: string;
+  official_edition: string;
+  package_version: string;
+}
+
 // 重开校对范围：warnings_only=仅带警告的病害可改（任何登录用户）；
 // full=全部可改（仅管理员可发起）。
 export type ReopenScope = "warnings_only" | "full";
@@ -80,6 +88,7 @@ export interface ReviewResponse {
   statistics: ReviewStatistics;
   has_current_annual_facts: boolean;
   contract_compatibility: ContractCompatibility;
+  technical_condition_standard: ReviewTechnicalConditionStandard | null;
   reopen: ReviewReopenState | null;
   edit_lock: EditLockSummary | null;
   component_inventory?: ComponentInventoryRevision | null;
