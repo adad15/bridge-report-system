@@ -36,7 +36,7 @@ import { ReviewMessageDock } from "../review/components/ReviewMessageDock";
 import type { GroupKey } from "../review/components/ReviewSidebar";
 import { ReviewSidebar } from "../review/components/ReviewSidebar";
 import type { AttentionItem } from "../review/grouping";
-import { assessmentIssueToAttention, buildStatistics, needsAttention } from "../review/grouping";
+import { assessmentIssueToAttention, buildStatistics, mergeAttentionItems, needsAttention } from "../review/grouping";
 import { assessmentReducer, initialAssessmentState } from "../review/assessmentState";
 import type { ReviewDraftAction } from "../review/reviewDraft";
 import { reviewDraftReducer } from "../review/reviewDraft";
@@ -265,10 +265,13 @@ function ReviewWorkspaceLoaded({
     () => buildStatistics(draft, false, draftAttention.length),
     [draft, draftAttention],
   );
-  const attentionItems = useMemo(() => [
-    ...draftAttention.filter((item) => item.kind !== "rating"),
-    ...(assessmentState.response?.issues ?? []).map(assessmentIssueToAttention),
-  ], [draftAttention, assessmentState.response]);
+  const attentionItems = useMemo(
+    () => mergeAttentionItems(
+      draftAttention.filter((item) => item.kind !== "rating"),
+      assessmentState.response?.issues ?? [],
+    ),
+    [draftAttention, assessmentState.response],
+  );
   const displayedCounts = useMemo(() => ({
     ...counts,
     rating_item_count: assessmentState.response?.result

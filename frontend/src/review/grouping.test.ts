@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 
+import type { AssessmentIssue } from "../api/assessmentApi";
 import type { ComponentBindingOverview } from "../api/importBindingApi";
-import { assessmentIssueToAttention, buildStatistics, isNormalDefect, isNormalPhoto, needsAttention } from "./grouping";
+import {
+  assessmentIssueToAttention,
+  buildStatistics,
+  isNormalDefect,
+  isNormalPhoto,
+  mergeAttentionItems,
+  needsAttention,
+  type AttentionItem,
+} from "./grouping";
 import { data } from "./testFixtures";
 
 function completeData() {
@@ -98,6 +107,73 @@ describe("grouping", () => {
     overview.groups[0].unmatched = 1;
     expect(needsAttention(state, overview).some(
       (item) => item.warningCode === "defect_component_match_required"
+    )).toBe(true);
+  });
+
+  it("suppresses only the parser scale warning matched by an assessment scale error", () => {
+    const parserWarnings: AttentionItem[] = [
+      {
+        kind: "defect",
+        candidateId: "defect-1",
+        message: "标度不是正整数",
+        severity: "warning",
+        warningCode: "defect_scale_invalid",
+        targetField: "defect_scale",
+      },
+      {
+        kind: "defect",
+        candidateId: "defect-2",
+        message: "标度不是正整数",
+        severity: "warning",
+        warningCode: "defect_scale_invalid",
+        targetField: "defect_scale",
+      },
+      {
+        kind: "defect",
+        candidateId: "defect-1",
+        message: "同一字段上的其他独立提示",
+        severity: "warning",
+        warningCode: "another_scale_warning",
+        targetField: "defect_scale",
+      },
+    ];
+    const assessmentIssues: AssessmentIssue[] = [{
+      code: "assessment_defect_scale_required",
+      message: "病害缺少有效的规范标度。",
+      entity_type: "defect",
+      entity_id: "defect-1",
+      field_path: "defect_scale",
+      rule_id: "",
+    }];
+
+    expect(mergeAttentionItems(parserWarnings, assessmentIssues).map(
+      (item) => [item.candidateId, item.warningCode, item.severity]
+    )).toEqual([
+      ["defect-2", "defect_scale_invalid", "warning"],
+      ["defect-1", "another_scale_warning", "warning"],
+      ["defect-1", "assessment_defect_scale_required", "error"],
+    ]);
+    expect(mergeAttentionItems([parserWarnings[0]], [])).toEqual([parserWarnings[0]]);
+  });
+
+  it("uses the split-review warning instead of the generic pending-group warning", () => {
+    const state = completeData();
+    state.defects[0].warnings = [{
+      code: "component_range_split_review_required",
+      message: "该病害由构件范围拆分，请人工核对构件、病害和照片关联。",
+      severity: "warning",
+      target_candidate_id: state.defects[0].candidate_id,
+    }];
+
+    const splitItems = needsAttention(state);
+    expect(splitItems.some(
+      (item) => item.warningCode === "component_range_split_review_required"
+    )).toBe(true);
+    expect(splitItems.some((item) => item.warningCode === "defect_group_pending")).toBe(false);
+
+    state.defects[0].warnings = [];
+    expect(needsAttention(state).some(
+      (item) => item.warningCode === "defect_group_pending"
     )).toBe(true);
   });
 

@@ -42,6 +42,32 @@ export function assessmentIssueToAttention(issue: AssessmentIssue): AttentionIte
   };
 }
 
+export function mergeAttentionItems(
+  draftItems: AttentionItem[],
+  assessmentIssues: AssessmentIssue[],
+): AttentionItem[] {
+  const assessmentItems = assessmentIssues.map(assessmentIssueToAttention);
+  const defectsWithScaleErrors = new Set(
+    assessmentItems
+      .filter(
+        (item) =>
+          item.kind === "defect" &&
+          item.warningCode === "assessment_defect_scale_required"
+      )
+      .map((item) => item.candidateId)
+  );
+  const visibleDraftItems = draftItems.filter(
+    (item) =>
+      !(
+        item.kind === "defect" &&
+        item.severity === "warning" &&
+        item.warningCode === "defect_scale_invalid" &&
+        defectsWithScaleErrors.has(item.candidateId)
+      )
+  );
+  return [...visibleDraftItems, ...assessmentItems];
+}
+
 // 字段刻意用 snake_case：与后端 ReviewStatistics 的 JSON 线格式（wire shape）逐字段对应，
 // 便于和 GET /review 返回的 statistics 直接比对；AttentionItem 是前端专属视图，用 camelCase。
 export interface ReviewCounts {
@@ -234,7 +260,10 @@ export function needsAttention(
   }
 
   for (const defect of data.defects) {
-    if (defect.group_review_status === "待确认") {
+    const hasSplitReviewWarning = defect.warnings.some(
+      (warning) => warning.code === "component_range_split_review_required"
+    );
+    if (defect.group_review_status === "待确认" && !hasSplitReviewWarning) {
       items.push({
         kind: "defect",
         candidateId: defect.candidate_id,
