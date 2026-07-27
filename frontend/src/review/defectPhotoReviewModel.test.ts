@@ -55,6 +55,28 @@ describe("buildDefectPhotoReviewModel", () => {
     expect(model.safeCandidateIds.has("defect_0001")).toBe(true);
   });
 
+  it("treats one archived high-confidence photo as an atomic batch-confirm candidate", () => {
+    const draft = safeDraft();
+    draft.defects[0].photo_references[0] = {
+      photo_number: "2.1-1",
+      resolution: "pending",
+      photo_candidate_id: null,
+      resolved_defect_candidate_id: null,
+      review_note: null,
+    };
+    draft.photos[0].match_status = "高置信候选";
+    draft.photos[0].review_status = "待确认";
+
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      defectCatalogs: catalogs,
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems).toEqual([]);
+    expect(row.batchEligible).toBe(true);
+  });
+
   it("suggests one exact applicable indicator without confirming it", () => {
     const draft = safeDraft();
     draft.defects[0].standard_defect_indicator_id = null;

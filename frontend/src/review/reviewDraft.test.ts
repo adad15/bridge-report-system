@@ -190,4 +190,79 @@ describe("reviewDraftReducer", () => {
     const state = matchedData();
     expect(reducer(state, { type: "delete_defect", candidateId: "missing" })).toBe(state);
   });
+
+  it("selects a standard indicator and derives the modified state", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    state.defects[0].review_status = "已确认";
+    const sourceRef = state.defects[0].source_ref;
+
+    const next = reducer(state, {
+      type: "select_standard_defect_indicator",
+      candidateId: "defect_0001",
+      indicatorId: "h21.defect.spalling",
+      indicatorName: "混凝土剥落",
+    });
+
+    expect(next.defects[0]).toMatchObject({
+      standard_defect_indicator_id: "h21.defect.spalling",
+      defect_type: "混凝土剥落",
+      review_status: "已修改",
+      group_review_status: "待确认",
+    });
+    expect(next.defects[0].source_ref).toBe(sourceRef);
+  });
+
+  it("batch confirms only the requested groups and atomically accepts unique photo matches", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    state.defects[0].review_status = "已修改";
+    state.defects[0].photo_references[0] = {
+      photo_number: "2.1-1",
+      resolution: "pending",
+      photo_candidate_id: null,
+      resolved_defect_candidate_id: null,
+      review_note: null,
+    };
+    state.photos[0] = {
+      ...state.photos[0],
+      photo_number: "2.1-1",
+      linked_defect_candidate_id: "defect_0001",
+      match_status: "高置信候选",
+      review_status: "待确认",
+      extracted_file: {
+        ...state.photos[0].extracted_file,
+        archive_relative_path: "photos/2.1-1.jpg",
+      },
+    };
+
+    const next = reducer(state, {
+      type: "confirm_defect_groups",
+      candidateIds: ["defect_0001"],
+    });
+
+    expect(next.defects[0]).toMatchObject({
+      group_review_status: "已确认",
+      review_status: "已修改",
+    });
+    expect(next.defects[0].photo_references[0]).toMatchObject({
+      resolution: "matched",
+      photo_candidate_id: "photo_0001",
+      resolved_defect_candidate_id: "defect_0001",
+    });
+    expect(next.photos[0]).toMatchObject({
+      match_status: "已确认",
+      review_status: "已确认",
+    });
+  });
+
+  it("ignores and restores a defect through explicit actions", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    const ignored = reducer(state, { type: "ignore_defect", candidateId: "defect_0001" });
+    const restored = reducer(ignored, { type: "restore_ignored_defect", candidateId: "defect_0001" });
+
+    expect(ignored.defects[0]).toMatchObject({ review_status: "已忽略", group_review_status: "待确认" });
+    expect(restored.defects[0]).toMatchObject({ review_status: "待确认", group_review_status: "待确认" });
+  });
 });

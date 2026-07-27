@@ -83,18 +83,16 @@ describe("DefectsSection", () => {
     draft.photos[0] = { ...draft.photos[0], linked_defect_candidate_id: null };
     render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId="defect_0001" selectedPhotoCandidateId="photo_0001" onSelect={vi.fn()} dispatch={vi.fn()} disabled />);
 
-    // 编辑类控件（字段输入、下拉、照片操作按钮）全部禁用。
-    const editableControls = [...screen.getAllByRole("textbox"), ...screen.getAllByRole("combobox")];
-    expect(editableControls.length).toBeGreaterThan(0);
-    editableControls.forEach((control) => expect(control).toBeDisabled());
+    // 筛选仍可使用，详情内正式字段和业务动作被锁定。
+    expect(screen.getByRole("textbox", { name: "搜索病害" })).toBeEnabled();
+    expect(screen.getByRole("textbox", { name: "位置" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "规范病害" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "关联到病害" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "确认本组" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "确认并查看下一条" })).toBeDisabled();
 
-    // 查看类控件不禁用：查看是只读动作，已确认后仍要能看照片。
-    expect(screen.getByRole("button", { name: /收起照片|查看照片/ })).toBeEnabled();
-    screen.getAllByRole("button", { name: /^查看(待处理)?照片 / }).forEach((thumbnail) => {
-      expect(thumbnail).toBeEnabled();
-    });
+    // 快速列表与缩略图查看不禁用：只读态仍能检查导入结果。
+    expect(screen.getByRole("button", { name: /2-1#梁/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "查看待处理照片 2.1-1" })).toBeEnabled();
   });
 
   it("locks defects outside the reopen scope while keeping warning defects editable", () => {
@@ -106,25 +104,25 @@ describe("DefectsSection", () => {
       { ...first, candidate_id: "defect_0002", warnings: [] },
     ];
 
-    render(
+    const commonProps = {
+      draft,
+      importRecordId: "record-1",
+      baseUrl: "http://backend",
+      bridgeId: "bridge-1",
+      onSelect: vi.fn(),
+      dispatch: vi.fn(),
+      isDefectEditable: (defect: (typeof draft.defects)[number]) => defect.warnings.length > 0,
+    };
+    const { rerender } = render(
       <DefectsSection
-        draft={draft}
-        importRecordId="record-1"
-        baseUrl="http://backend"
-        bridgeId="bridge-1"
-        selectedCandidateId={null}
-        onSelect={vi.fn()}
-        dispatch={vi.fn()}
-        isDefectEditable={(defect) => defect.warnings.length > 0}
+        selectedCandidateId="defect_0001"
+        {...commonProps}
       />
     );
 
-    const locationInputs = screen.getAllByRole("textbox", { name: "位置" });
-    expect(locationInputs).toHaveLength(2);
-    expect(locationInputs[0]).toBeEnabled();
-    expect(locationInputs[1]).toBeDisabled();
-    expect(screen.getByText("病害 1")).toBeInTheDocument();
-    expect(screen.getByText("病害 2")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "位置" })).toBeEnabled();
+    rerender(<DefectsSection selectedCandidateId="defect_0002" {...commonProps} />);
+    expect(screen.getByRole("textbox", { name: "位置" })).toBeDisabled();
   });
 
   it("paginates defect cards and jumps to the selected defect's page", () => {
@@ -133,6 +131,7 @@ describe("DefectsSection", () => {
     draft.defects = Array.from({ length: 60 }, (_, index) => ({
       ...template,
       candidate_id: `defect_${String(index + 1).padStart(4, "0")}`,
+      component_number: `${index + 1}#梁`,
       photo_references: [],
     }));
     const props = {
@@ -146,18 +145,18 @@ describe("DefectsSection", () => {
     const { rerender } = render(
       <DefectsSection draft={draft} selectedCandidateId={null} {...props} />
     );
-    expect(screen.getByText("病害 1")).toBeInTheDocument();
-    expect(screen.queryByText("病害 51")).not.toBeInTheDocument();
-    expect(screen.getByText(/第 1 \/ 2 页（共 60 条病害）/)).toBeInTheDocument();
+    expect(screen.getByText("1#梁")).toBeInTheDocument();
+    expect(screen.queryByText("51#梁")).not.toBeInTheDocument();
+    expect(screen.getByText(/第 1 \/ 2 页（共 60 条）/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "下一页" }));
-    expect(screen.getByText("病害 51")).toBeInTheDocument();
-    expect(screen.queryByText("病害 1")).not.toBeInTheDocument();
+    expect(screen.getByText("51#梁")).toBeInTheDocument();
+    expect(screen.queryByText("1#梁")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "上一页" }));
 
     // 待处理跳转选中第 55 条 -> 自动翻到它所在的第 2 页。
     rerender(<DefectsSection draft={draft} selectedCandidateId="defect_0055" {...props} />);
-    expect(screen.getByText("病害 55")).toBeInTheDocument();
-    expect(screen.queryByText("病害 1")).not.toBeInTheDocument();
+    expect(screen.getAllByText("55#梁").length).toBeGreaterThan(0);
+    expect(screen.queryByText("1#梁")).not.toBeInTheDocument();
   });
 });

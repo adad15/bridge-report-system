@@ -853,10 +853,12 @@ function ReviewWorkspaceLoaded({
               componentInventory={response.component_inventory}
               selectedCandidateId={expandedDefectId}
               selectedPhotoCandidateId={activePhotoCandidateId}
-              onSelect={(candidateId) => {
-                setExpandedDefectId((current) => current === candidateId ? null : candidateId);
+              technicalStandardPackageId={response.technical_condition_standard?.package_id}
+              assessmentIssues={assessmentState.response?.issues ?? []}
+              onSelect={(candidateId, photoCandidateId) => {
+                setExpandedDefectId(candidateId);
                 setSelected({ kind: "defect", candidateId });
-                setActivePhotoCandidateId(null);
+                setActivePhotoCandidateId(photoCandidateId ?? null);
               }}
               dispatch={sectionDispatch}
               disabled={actionsDisabled}

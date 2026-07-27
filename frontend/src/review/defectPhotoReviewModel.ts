@@ -135,7 +135,17 @@ function analyzeDefect(
       addProblem(problems, "photo_number_conflict", "photo", `照片编号 ${reference.photo_number} 被多条病害引用。`);
     }
     if (reference.resolution === "pending") {
-      addProblem(problems, "photo_reference_pending", "photo", `照片编号 ${reference.photo_number} 尚未核对。`);
+      const candidates = draft.photos.filter(
+        (photo) =>
+          photo.photo_number === reference.photo_number &&
+          photo.linked_defect_candidate_id === defect.candidate_id &&
+          photo.match_status === "高置信候选" &&
+          photo.review_status !== "已忽略" &&
+          Boolean(photo.extracted_file.archive_relative_path),
+      );
+      if (candidates.length !== 1) {
+        addProblem(problems, "photo_reference_pending", "photo", `照片编号 ${reference.photo_number} 尚未核对。`);
+      }
       continue;
     }
     if (reference.resolution === "matched") {

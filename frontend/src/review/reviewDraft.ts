@@ -51,6 +51,30 @@ export type ReviewDraftAction =
   | { type: "edit_defect_field"; candidateId: string; field: "review_status"; value: ReviewStatus }
   | { type: "edit_defect_field"; candidateId: string; field: "review_note"; value: string | null }
   | { type: "edit_measurement_text"; candidateId: string; text: string | null }
+  | {
+      type: "select_standard_defect_indicator";
+      candidateId: string;
+      indicatorId: string;
+      indicatorName: string;
+    }
+  | {
+      type: "apply_unique_standard_indicator_matches";
+      matches: Array<{ candidateId: string; indicatorId: string; indicatorName: string }>;
+    }
+  | { type: "ignore_defect"; candidateId: string }
+  | { type: "restore_ignored_defect"; candidateId: string }
+  | {
+      type: "confirm_photo_reference_match";
+      defectCandidateId: string;
+      photoNumber: string;
+      photoCandidateId: string;
+    }
+  | {
+      type: "reset_photo_reference_review";
+      defectCandidateId: string;
+      photoNumber: string;
+    }
+  | { type: "confirm_defect_groups"; candidateIds: string[] }
   | { type: "set_defect_status"; candidateId: string; status: ReviewStatus }
   | { type: "photo_confirm_match"; candidateId: string }
   | { type: "photo_relink"; candidateId: string; defectCandidateId: string }
@@ -272,6 +296,180 @@ function reduceReviewDraft(
           review_status: nextStatusAfterContentEdit(defect.review_status),
           group_review_status: "待确认",
         })),
+      };
+    }
+
+    case "select_standard_defect_indicator": {
+      return {
+        ...state,
+        defects: updateDefect(state.defects, action.candidateId, (defect) => ({
+          ...defect,
+          standard_defect_indicator_id: action.indicatorId,
+          defect_type: action.indicatorName,
+          review_status: nextStatusAfterContentEdit(defect.review_status),
+          group_review_status: "待确认",
+        })),
+      };
+    }
+
+    case "apply_unique_standard_indicator_matches": {
+      const matches = new Map(
+        action.matches.map((match) => [match.candidateId, match] as const),
+      );
+      return {
+        ...state,
+        defects: state.defects.map((defect) => {
+          const match = matches.get(defect.candidate_id);
+          if (!match || defect.standard_defect_indicator_id) return defect;
+          return {
+            ...defect,
+            standard_defect_indicator_id: match.indicatorId,
+            defect_type: match.indicatorName,
+            group_review_status: "待确认",
+          };
+        }),
+      };
+    }
+
+    case "ignore_defect": {
+      return {
+        ...state,
+        defects: updateDefect(state.defects, action.candidateId, (defect) => ({
+          ...defect,
+          review_status: "已忽略",
+          group_review_status: "待确认",
+        })),
+      };
+    }
+
+    case "restore_ignored_defect": {
+      return {
+        ...state,
+        defects: updateDefect(state.defects, action.candidateId, (defect) => ({
+          ...defect,
+          review_status: defect.review_status === "已忽略" ? "待确认" : defect.review_status,
+          group_review_status: "待确认",
+        })),
+      };
+    }
+
+    case "confirm_photo_reference_match": {
+      const photo = state.photos.find(
+        (item) =>
+          item.candidate_id === action.photoCandidateId &&
+          item.photo_number === action.photoNumber,
+      );
+      const defect = state.defects.find(
+        (item) => item.candidate_id === action.defectCandidateId,
+      );
+      if (!photo || !defect?.photo_references.some((reference) => reference.photo_number === action.photoNumber)) {
+        return state;
+      }
+      return {
+        ...state,
+        defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
+          ...item,
+          group_review_status: "待确认",
+          photo_references: item.photo_references.map((reference) =>
+            reference.photo_number === action.photoNumber
+              ? {
+                  ...reference,
+                  resolution: "matched",
+                  photo_candidate_id: photo.candidate_id,
+                  resolved_defect_candidate_id: item.candidate_id,
+                }
+              : reference,
+          ),
+        })),
+        photos: updatePhoto(state.photos, photo.candidate_id, (item) => ({
+          ...item,
+          linked_defect_candidate_id: action.defectCandidateId,
+          match_status: "已确认",
+          review_status: "已确认",
+        })),
+      };
+    }
+
+    case "reset_photo_reference_review": {
+      const defect = state.defects.find(
+        (item) => item.candidate_id === action.defectCandidateId,
+      );
+      const reference = defect?.photo_references.find(
+        (item) => item.photo_number === action.photoNumber,
+      );
+      if (!defect || !reference) return state;
+      return {
+        ...state,
+        defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
+          ...item,
+          group_review_status: "待确认",
+          photo_references: item.photo_references.map((itemReference) =>
+            itemReference.photo_number === action.photoNumber
+              ? {
+                  ...itemReference,
+                  resolution: "pending",
+                  photo_candidate_id: null,
+                  resolved_defect_candidate_id: null,
+                }
+              : itemReference,
+          ),
+        })),
+        photos: reference.photo_candidate_id
+          ? updatePhoto(state.photos, reference.photo_candidate_id, (photo) => ({
+              ...photo,
+              match_status: "高置信候选",
+              review_status: "待确认",
+            }))
+          : state.photos,
+      };
+    }
+
+    case "confirm_defect_groups": {
+      const selectedIds = new Set(action.candidateIds);
+      const confirmedPhotoIds = new Set<string>();
+      const defects = state.defects.map((defect) => {
+        if (!selectedIds.has(defect.candidate_id) || defect.review_status === "已忽略") {
+          return defect;
+        }
+        const photoReferences = defect.photo_references.map((reference) => {
+          if (reference.resolution !== "pending") return reference;
+          const candidates = state.photos.filter(
+            (photo) =>
+              photo.photo_number === reference.photo_number &&
+              photo.linked_defect_candidate_id === defect.candidate_id &&
+              photo.review_status !== "已忽略" &&
+              Boolean(photo.extracted_file.archive_relative_path),
+          );
+          if (candidates.length !== 1) return reference;
+          const photo = candidates[0];
+          confirmedPhotoIds.add(photo.candidate_id);
+          return {
+            ...reference,
+            resolution: "matched" as const,
+            photo_candidate_id: photo.candidate_id,
+            resolved_defect_candidate_id: defect.candidate_id,
+          };
+        });
+        return {
+          ...defect,
+          photo_references: photoReferences,
+          group_review_status: "已确认" as const,
+          review_status: defect.review_status === "待确认"
+            ? "已确认" as const
+            : defect.review_status,
+          warnings: defect.warnings.filter(
+            (warning) => warning.code !== "component_range_split_review_required",
+          ),
+        };
+      });
+      return {
+        ...state,
+        defects,
+        photos: state.photos.map((photo) =>
+          confirmedPhotoIds.has(photo.candidate_id)
+            ? { ...photo, match_status: "已确认", review_status: "已确认" }
+            : photo,
+        ),
       };
     }
 

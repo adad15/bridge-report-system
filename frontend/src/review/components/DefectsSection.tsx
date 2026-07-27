@@ -1,9 +1,15 @@
-import { useRef, useState, type Dispatch, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent } from "react";
 
+import type { AssessmentIssue } from "../../api/assessmentApi";
 import { componentInventoryErrorMessage, fetchLatestComponentInventory, type ComponentInventoryEntry, type ComponentInventoryRevision, type StructurePart as InventoryStructurePart } from "../../api/componentInventoryApi";
+import { fetchStandardCatalog, standardsErrorMessage, type StandardDefectCatalog } from "../../api/standardsApi";
 import type { BridgeAnnualInspectionData, DefectCandidate } from "../../contracts/annualInspection";
+import { buildDefectPhotoReviewModel, type DefectReviewFilter, type DefectReviewProblemCategory } from "../defectPhotoReviewModel";
 import type { ReviewDraftAction } from "../reviewDraft";
-import { DefectPhotoGroup } from "./DefectPhotoGroup";
+import { DefectBatchConfirmDialog } from "./DefectBatchConfirmDialog";
+import { DefectDetailEditor } from "./DefectDetailEditor";
+import { DefectQuickReviewList } from "./DefectQuickReviewList";
+import { DefectReviewToolbar } from "./DefectReviewToolbar";
 import { UnlinkedPhotosPanel } from "./UnlinkedPhotosPanel";
 
 interface DefectsSectionProps {
@@ -12,8 +18,10 @@ interface DefectsSectionProps {
   baseUrl: string;
   bridgeId: string;
   selectedCandidateId: string | null;
-  onSelect: (candidateId: string) => void;
+  onSelect: (candidateId: string, photoCandidateId?: string) => void;
   dispatch: Dispatch<ReviewDraftAction>;
+  technicalStandardPackageId?: string | null;
+  assessmentIssues?: AssessmentIssue[];
   selectedPhotoCandidateId?: string | null;
   disabled?: boolean;
   allowStructureChanges?: boolean;
@@ -24,6 +32,9 @@ interface DefectsSectionProps {
    */
   isDefectEditable?: (defect: DefectCandidate) => boolean;
 }
+
+const standardCatalogCache = new Map<string, StandardDefectCatalog[]>();
+const EMPTY_ASSESSMENT_ISSUES: AssessmentIssue[] = [];
 
 const STRUCTURE_PART_LABELS: Record<InventoryStructurePart, "全桥" | "上部结构" | "下部结构" | "桥面系" | "其他"> = {
   overall: "全桥",
@@ -49,38 +60,99 @@ const EMPTY_MANUAL_DEFECT: ManualDefectFormState = {
   defectScale: "",
 };
 
-// 数百条病害一次性全渲染会拖垮页面（每卡十余个输入框），分页渲染并在
-// 待处理跳转选中某条病害时自动翻到它所在页。
-const DEFECT_PAGE_SIZE = 50;
-
 // 禁用策略改为逐控件（DefectPhotoGroup / UnlinkedPhotosPanel 内部处理），
 // 不再用 fieldset disabled 一揽子禁用——那样会连"查看照片"等只读动作一起杀掉。
-export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, dispatch, disabled = false, allowStructureChanges = false, componentInventory = null, isDefectEditable }: DefectsSectionProps) {
+export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, dispatch, technicalStandardPackageId = null, assessmentIssues = EMPTY_ASSESSMENT_ISSUES, disabled = false, allowStructureChanges = false, componentInventory = null, isDefectEditable }: DefectsSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [inventoryEntries, setInventoryEntries] = useState<ComponentInventoryEntry[]>([]);
   const [loadedInventory, setLoadedInventory] = useState<ComponentInventoryRevision | null>(null);
   const [loadingInventory, setLoadingInventory] = useState(false);
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState<ManualDefectFormState>(EMPTY_MANUAL_DEFECT);
-  const [page, setPage] = useState(0);
-  const lastSelectedRef = useRef<string | null>(null);
-
-  const pageCount = Math.max(1, Math.ceil(draft.defects.length / DEFECT_PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount - 1);
-  // 选中病害变化时（待处理跳转/展开）同步翻到它所在页；渲染期 setState 让同一次提交
-  // 就渲染出目标页，父层的滚动定位随后就能找到对应 DOM 锚点。
-  if (selectedCandidateId && selectedCandidateId !== lastSelectedRef.current) {
-    lastSelectedRef.current = selectedCandidateId;
-    const index = draft.defects.findIndex((defect) => defect.candidate_id === selectedCandidateId);
-    if (index >= 0) {
-      const targetPage = Math.floor(index / DEFECT_PAGE_SIZE);
-      if (targetPage !== currentPage) setPage(targetPage);
-    }
-  }
-  const pageDefects = draft.defects.slice(
-    currentPage * DEFECT_PAGE_SIZE,
-    (currentPage + 1) * DEFECT_PAGE_SIZE
+  const [catalogs, setCatalogs] = useState<StandardDefectCatalog[]>(
+    technicalStandardPackageId ? standardCatalogCache.get(technicalStandardPackageId) ?? [] : [],
   );
+  const [catalogError, setCatalogError] = useState("");
+  const [filter, setFilter] = useState<DefectReviewFilter>("needs_attention");
+  const [problemCategory, setProblemCategory] = useState<DefectReviewProblemCategory | null>(null);
+  const [search, setSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const seenSafeIds = useRef(new Set<string>());
+  const appliedSuggestionIds = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!technicalStandardPackageId) {
+      setCatalogs([]);
+      return;
+    }
+    const cached = standardCatalogCache.get(technicalStandardPackageId);
+    if (cached) {
+      setCatalogs(cached);
+      return;
+    }
+    let cancelled = false;
+    setCatalogError("");
+    fetchStandardCatalog(baseUrl, technicalStandardPackageId)
+      .then((catalog) => {
+        if (cancelled) return;
+        standardCatalogCache.set(technicalStandardPackageId, catalog.defect_catalogs);
+        setCatalogs(catalog.defect_catalogs);
+      })
+      .catch((error) => {
+        if (!cancelled) setCatalogError(standardsErrorMessage(error));
+      });
+    return () => { cancelled = true; };
+  }, [baseUrl, technicalStandardPackageId]);
+
+  const allModel = useMemo(() => buildDefectPhotoReviewModel({
+    draft,
+    defectCatalogs: catalogs,
+    assessmentIssues,
+  }), [assessmentIssues, catalogs, draft]);
+  const visibleModel = useMemo(() => buildDefectPhotoReviewModel({
+    draft,
+    defectCatalogs: catalogs,
+    assessmentIssues,
+    filter,
+    problemCategory,
+    search,
+  }), [assessmentIssues, catalogs, draft, filter, problemCategory, search]);
+
+  useEffect(() => {
+    if (catalogs.length === 0) return;
+    const matches = allModel.rows
+      .filter((row) => row.suggestedIndicator && !appliedSuggestionIds.current.has(row.candidateId))
+      .map((row) => {
+        appliedSuggestionIds.current.add(row.candidateId);
+        return {
+          candidateId: row.candidateId,
+          indicatorId: row.suggestedIndicator!.id,
+          indicatorName: row.suggestedIndicator!.name,
+        };
+      });
+    if (matches.length > 0) dispatch({ type: "apply_unique_standard_indicator_matches", matches });
+  }, [allModel.rows, catalogs.length, dispatch]);
+
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => allModel.safeCandidateIds.has(id)));
+      for (const id of allModel.safeCandidateIds) {
+        if (!seenSafeIds.current.has(id)) next.add(id);
+        seenSafeIds.current.add(id);
+      }
+      if (next.size === current.size && [...next].every((id) => current.has(id))) return current;
+      return next;
+    });
+  }, [allModel.safeCandidateIds]);
+
+  const currentRow = selectedCandidateId
+    ? allModel.rows.find((row) => row.candidateId === selectedCandidateId) ?? null
+    : null;
+  const currentlySafeSelection = [...selectedIds].filter((id) => allModel.safeCandidateIds.has(id));
+  const selectedPhotoCount = draft.photos.filter(
+    (photo) => photo.linked_defect_candidate_id && currentlySafeSelection.includes(photo.linked_defect_candidate_id),
+  ).length;
 
   const openAddForm = async () => {
     setShowAddForm(true);
@@ -167,37 +239,69 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
       ) : null}
       <fieldset className="review-disabled-fieldset">
         {draft.defects.length === 0 ? <p>暂无病害候选，可使用“新增病害”手动添加。</p> : null}
-        <div className="table-scroll">
-          {/* 每条病害是一张自带标签的表单卡片（DefectPhotoGroup），不再需要共享表头。 */}
-          <table className="data-table defect-photo-table">
-          {pageDefects.map((defect, index) => (
-              <DefectPhotoGroup
-                key={defect.candidate_id}
-                draft={draft}
-                defect={defect}
-                sequenceNumber={currentPage * DEFECT_PAGE_SIZE + index + 1}
-                importRecordId={importRecordId}
-                baseUrl={baseUrl}
-                expanded={selectedCandidateId === defect.candidate_id}
-                initialPhotoCandidateId={selectedPhotoCandidateId}
-                onToggle={() => onSelect(defect.candidate_id)}
-                dispatch={dispatch}
-                disabled={disabled || (isDefectEditable !== undefined && !isDefectEditable(defect))}
-                allowDelete={allowStructureChanges}
-                componentInventory={componentInventory ?? loadedInventory}
-              />
-            ))}
-          </table>
-        </div>
-        {pageCount > 1 ? (
-          <div className="defect-pagination">
-            <button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button>
-            <span>第 {currentPage + 1} / {pageCount} 页（共 {draft.defects.length} 条病害）</span>
-            <button type="button" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</button>
-          </div>
-        ) : null}
+        {catalogError ? <p className="form-error" role="alert">{catalogError}</p> : null}
+        {!technicalStandardPackageId ? <p className="warning-text">当前检测年度未配置技术评定规范，无法确定规范病害。</p> : null}
+        <DefectReviewToolbar
+          summary={allModel.summary}
+          filter={filter}
+          problemCategory={problemCategory}
+          search={search}
+          selectedCount={currentlySafeSelection.length}
+          disabled={disabled}
+          onFilterChange={setFilter}
+          onProblemCategoryChange={setProblemCategory}
+          onSearchChange={setSearch}
+          onBatchConfirm={() => setBatchDialogOpen(true)}
+        />
+        <DefectQuickReviewList
+          rows={visibleModel.rows}
+          importRecordId={importRecordId}
+          baseUrl={baseUrl}
+          selectedCandidateIds={selectedIds}
+          activeCandidateId={selectedCandidateId}
+          onToggleSelection={(candidateId) => setSelectedIds((current) => {
+            const next = new Set(current);
+            if (next.has(candidateId)) next.delete(candidateId);
+            else if (allModel.safeCandidateIds.has(candidateId)) next.add(candidateId);
+            return next;
+          })}
+          onOpen={onSelect}
+        />
+        {currentRow ? (
+          <DefectDetailEditor
+            draft={draft}
+            row={currentRow}
+            catalogs={catalogs}
+            componentInventory={componentInventory ?? loadedInventory}
+            importRecordId={importRecordId}
+            baseUrl={baseUrl}
+            initialPhotoCandidateId={selectedPhotoCandidateId}
+            dispatch={dispatch}
+            disabled={disabled || (isDefectEditable !== undefined && !isDefectEditable(currentRow.defect))}
+            allowDelete={allowStructureChanges}
+            onConfirmAndNext={() => {
+              dispatch({ type: "confirm_defect_groups", candidateIds: [currentRow.candidateId] });
+              const next = allModel.rows.find(
+                (row) => row.candidateId !== currentRow.candidateId && row.status === "needs_attention",
+              );
+              if (next) onSelect(next.candidateId);
+            }}
+          />
+        ) : <p className="defect-detail-placeholder">选择一条病害后可精细维护档案和照片关系。</p>}
         <UnlinkedPhotosPanel draft={draft} importRecordId={importRecordId} baseUrl={baseUrl} selectedPhotoCandidateId={selectedPhotoCandidateId} dispatch={dispatch} disabled={disabled} />
       </fieldset>
+      <DefectBatchConfirmDialog
+        open={batchDialogOpen}
+        defectCount={currentlySafeSelection.length}
+        photoCount={selectedPhotoCount}
+        removedCount={selectedIds.size - currentlySafeSelection.length}
+        onCancel={() => setBatchDialogOpen(false)}
+        onConfirm={() => {
+          const validIds = [...selectedIds].filter((id) => allModel.safeCandidateIds.has(id));
+          if (validIds.length > 0) dispatch({ type: "confirm_defect_groups", candidateIds: validIds });
+          setBatchDialogOpen(false);
+        }}
+      />
     </section>
   );
 }
