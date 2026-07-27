@@ -17,7 +17,7 @@ describe("review navigation helpers", () => {
 
   it("maps known warning codes to editable fields", () => {
     expect(defectFieldForWarning("defect_scale_invalid")).toBe("defect_scale");
-    expect(defectFieldForWarning("photo_number_unmatched")).toBe("photo_numbers");
+    expect(defectFieldForWarning("photo_number_unmatched")).toBe("photo_references");
     expect(defectFieldForWarning("unknown")).toBeUndefined();
   });
 

@@ -60,8 +60,8 @@ const EMPTY_MANUAL_DEFECT: ManualDefectFormState = {
   defectScale: "",
 };
 
-// 禁用策略改为逐控件（DefectPhotoGroup / UnlinkedPhotosPanel 内部处理），
-// 不再用 fieldset disabled 一揽子禁用——那样会连"查看照片"等只读动作一起杀掉。
+// 禁用策略按详情控件处理，不用 fieldset disabled 一揽子禁用；
+// 筛选、翻页、缩略图等只读动作在已确认记录中仍可使用。
 export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, dispatch, technicalStandardPackageId = null, assessmentIssues = EMPTY_ASSESSMENT_ISSUES, disabled = false, allowStructureChanges = false, componentInventory = null, isDefectEditable }: DefectsSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [inventoryEntries, setInventoryEntries] = useState<ComponentInventoryEntry[]>([]);
