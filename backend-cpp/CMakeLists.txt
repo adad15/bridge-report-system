@@ -57,6 +57,7 @@ add_library(bridge_report_backend_core
     src/http/ImportConfirmRoutes.cpp
     src/http/ImportRecordDeletionRoutes.cpp
     src/http/InspectionYearDeletionRoutes.cpp
+    src/http/RatingTreeRoutes.cpp
     src/http/ReviewRoutes.cpp
     src/http/StandardRoutes.cpp
     src/http/WordImportRoutes.cpp
@@ -183,6 +184,7 @@ add_executable(bridge_report_backend_tests
     tests/test_rating_tree_package_loader.cpp
     tests/test_rating_tree_repository.cpp
     tests/test_rating_tree_resolver.cpp
+    tests/test_rating_tree_routes.cpp
     tests/test_system_number.cpp
     tests/test_standard_package_loader.cpp
     tests/test_standard_repository.cpp

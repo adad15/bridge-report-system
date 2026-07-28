@@ -27,6 +27,7 @@
 #include "bridge_report/http/ImportConfirmRoutes.hpp"
 #include "bridge_report/http/ImportRecordDeletionRoutes.hpp"
 #include "bridge_report/http/InspectionYearDeletionRoutes.hpp"
+#include "bridge_report/http/RatingTreeRoutes.hpp"
 #include "bridge_report/http/ReviewRoutes.hpp"
 #include "bridge_report/http/StandardRoutes.hpp"
 #include "bridge_report/http/WordImportRoutes.hpp"
@@ -465,6 +466,7 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_component_inventory_routes(db_client, standards.registry);
     bridge_report::http::register_defect_thread_routes(db_client);
     bridge_report::http::register_inspection_year_deletion_routes(db_client, cleanup_coordinator);
+    bridge_report::http::register_rating_tree_routes(db_client);
 
     std::cout << "Bridge Report C++ backend listening on "
               << config.host << ":" << config.port << "\n";
