@@ -11,6 +11,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/ReviewRepository.hpp"
+#include "bridge_report/db/RatingTreeRepository.hpp"
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/EditLockRepository.hpp"
 #include "bridge_report/archive/ArchivePaths.hpp"
@@ -279,6 +280,45 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                     respond_json(
                         callback,
                         make_draft_validation_error_body(association_validation),
+                        drogon::k400BadRequest);
+                    return;
+                }
+
+                if (!detail->rating_tree_version_id.has_value() ||
+                    !detail->technical_standard_package_id.has_value()) {
+                    respond_json(
+                        callback,
+                        make_error_body(
+                            "rating_tree_required",
+                            "本年度尚未锁定评定树，不能保存病害校对结果。"),
+                        drogon::k409Conflict);
+                    return;
+                }
+                db::RatingTreeRepository rating_tree_repository(db_client);
+                const auto rating_tree = rating_tree_repository.load_published_tree(
+                    *detail->rating_tree_version_id);
+                if (!rating_tree.has_value()) {
+                    respond_json(
+                        callback,
+                        make_error_body(
+                            "rating_tree_unavailable",
+                            "本年度锁定的评定树不可用。"),
+                        drogon::k409Conflict);
+                    return;
+                }
+                const auto rating_tree_validation =
+                    review::normalize_defect_rating_tree_associations(
+                        draft_to_save,
+                        stored_draft,
+                        *detail->rating_tree_version_id,
+                        *detail->technical_standard_package_id,
+                        *rating_tree,
+                        latest_inventory);
+                if (!rating_tree_validation.ok) {
+                    respond_json(
+                        callback,
+                        make_draft_validation_error_body(
+                            rating_tree_validation),
                         drogon::k400BadRequest);
                     return;
                 }

@@ -352,6 +352,117 @@ RatingTreeRepository::list_published_versions() const {
     return versions;
 }
 
+std::optional<rating_tree::EffectiveRatingTree>
+RatingTreeRepository::load_published_tree(const std::string& version_id) const {
+    const auto versions = db_client_->execSqlSync(
+        "select tree_code,tree_name,package_version,"
+        "technical_condition_standard_id,technical_condition_package_version,"
+        "technical_condition_content_checksum,maintenance_standard_id,"
+        "maintenance_package_version,maintenance_content_checksum,"
+        "organization_content_checksum,tree_content_checksum "
+        "from rating_tree_versions where id=$1::uuid and status='published'",
+        version_id);
+    if (versions.empty()) return std::nullopt;
+
+    rating_tree::EffectiveRatingTree tree;
+    const auto& version = versions[0];
+    tree.version.tree_code = version["tree_code"].as<std::string>();
+    tree.version.tree_name = version["tree_name"].as<std::string>();
+    tree.version.package_version = version["package_version"].as<std::string>();
+    tree.version.h21_standard_id =
+        version["technical_condition_standard_id"].as<std::string>();
+    tree.version.h21_package_version =
+        version["technical_condition_package_version"].as<std::string>();
+    tree.version.h21_content_checksum =
+        version["technical_condition_content_checksum"].as<std::string>();
+    if (!version["maintenance_standard_id"].isNull()) {
+        tree.version.maintenance_standard_id =
+            version["maintenance_standard_id"].as<std::string>();
+        tree.version.maintenance_package_version =
+            version["maintenance_package_version"].as<std::string>();
+        tree.version.maintenance_content_checksum =
+            version["maintenance_content_checksum"].as<std::string>();
+    }
+    tree.version.organization_content_checksum =
+        version["organization_content_checksum"].as<std::string>();
+    tree.version.tree_content_checksum =
+        version["tree_content_checksum"].as<std::string>();
+
+    const auto nodes = db_client_->execSqlSync(
+        "select id::text as id,parent_node_id::text as parent_node_id,display_name,"
+        "node_type,sort_order,array_to_json(bridge_type_ids)::text as bridge_type_ids,"
+        "array_to_json(component_category_ids)::text as component_category_ids,"
+        "scoring_mode,h21_indicator_id,is_selectable,is_scoring,organization_note,"
+        "array_to_json(allowed_scales)::text as allowed_scales,detail_json::text as detail_json "
+        "from rating_tree_nodes where rating_tree_version_id=$1::uuid",
+        version_id);
+    Json::CharReaderBuilder reader;
+    for (const auto& row : nodes) {
+        rating_tree::EffectiveRatingTreeNode node;
+        node.id = row["id"].as<std::string>();
+        if (!row["parent_node_id"].isNull()) {
+            node.parent_id = row["parent_node_id"].as<std::string>();
+        }
+        node.display_name = row["display_name"].as<std::string>();
+        node.node_type = rating_tree::parse_rating_tree_node_type(
+            row["node_type"].as<std::string>()).value();
+        node.sort_order = row["sort_order"].as<int>();
+        node.scoring_mode = rating_tree::parse_rating_tree_scoring_mode(
+            row["scoring_mode"].as<std::string>()).value();
+        if (!row["h21_indicator_id"].isNull()) {
+            node.h21_indicator_id = row["h21_indicator_id"].as<std::string>();
+        }
+        node.is_selectable = row["is_selectable"].as<bool>();
+        node.is_scoring = row["is_scoring"].as<bool>();
+        node.organization_note = row["organization_note"].as<std::string>();
+
+        auto parse_string_array = [&reader](const std::string& text) {
+            Json::Value value;
+            std::string errors;
+            std::istringstream stream(text);
+            Json::parseFromStream(reader, stream, &value, &errors);
+            std::vector<std::string> result;
+            for (const auto& item : value) result.push_back(item.asString());
+            return result;
+        };
+        node.bridge_type_ids =
+            parse_string_array(row["bridge_type_ids"].as<std::string>());
+        node.component_category_ids =
+            parse_string_array(row["component_category_ids"].as<std::string>());
+        {
+            Json::Value value;
+            std::string errors;
+            std::istringstream stream(row["allowed_scales"].as<std::string>());
+            Json::parseFromStream(reader, stream, &value, &errors);
+            for (const auto& item : value) node.allowed_scales.push_back(item.asInt());
+        }
+        {
+            Json::Value detail;
+            std::string errors;
+            std::istringstream stream(row["detail_json"].as<std::string>());
+            Json::parseFromStream(reader, stream, &detail, &errors);
+            node.h21_indicator_name = detail["h21_indicator_name"].asString();
+            node.h21_source_table = detail["h21_source_table"].asString();
+        }
+        tree.nodes.emplace(node.id, std::move(node));
+    }
+
+    const auto aliases = db_client_->execSqlSync(
+        "select alias_text,target_node_id::text as target_node_id,"
+        "bridge_type_id,component_category_id from rating_tree_aliases "
+        "where rating_tree_version_id=$1::uuid",
+        version_id);
+    for (const auto& row : aliases) {
+        tree.aliases.push_back({
+            row["alias_text"].as<std::string>(),
+            row["target_node_id"].as<std::string>(),
+            row["bridge_type_id"].as<std::string>(),
+            row["component_category_id"].as<std::string>(),
+        });
+    }
+    return tree;
+}
+
 RatingTreeProfileBackfillOutcome
 RatingTreeRepository::backfill_unique_profile_versions() {
     RatingTreeProfileBackfillOutcome outcome;

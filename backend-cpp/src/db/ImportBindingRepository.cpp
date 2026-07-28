@@ -1,5 +1,7 @@
 #include "bridge_report/db/ImportBindingRepository.hpp"
 
+#include "bridge_report/db/RatingTreeRepository.hpp"
+#include "bridge_report/review/DraftValidation.hpp"
 #include <algorithm>
 #include <functional>
 #include <memory>
@@ -242,6 +244,10 @@ void write_binding(
     defect["standard_component_category_id"] = category_id;
     defect["resolved_structure_part"] = structure_part;
     defect["component_inventory_revision_id"] = revision_id;
+    defect["rating_tree_node_id"] = Json::Value(Json::nullValue);
+    defect["standard_defect_indicator_id"] = Json::Value(Json::nullValue);
+    defect["rating_tree_match_method"] = Json::Value(Json::nullValue);
+    defect["rating_tree_match_evidence"] = Json::Value(Json::nullValue);
     review::reconcile_defect_component_match_warning(defect);
 }
 
@@ -264,9 +270,12 @@ BindingOutcome ImportBindingRepository::bind_batch(
         const auto rows = tx->execSqlSync(
             "select ir.bridge_id::text as bridge_id,ir.inspection_year_id::text as inspection_year_id,"
             "ir.import_status,iy.component_inventory_revision_id::text as inventory_revision_id,"
+            "psp.rating_tree_version_id::text as rating_tree_version_id,"
+            "psp.technical_condition_package_id::text as technical_package_id,"
             "coalesce(ir.parsed_result_json::text,'{}') as parsed "
             "from import_records ir "
             "left join inspection_years iy on iy.id=ir.inspection_year_id "
+            "left join project_standard_profiles psp on psp.id=iy.standard_profile_id "
             "where ir.id=$1::uuid for update of ir",
             import_id);
         if (rows.empty()) { rollback(); return {BindingStatus::NotFound}; }
@@ -286,6 +295,7 @@ BindingOutcome ImportBindingRepository::bind_batch(
 
         Json::Value parsed;
         parse_json(rows[0]["parsed"].as<std::string>(), parsed);
+        const Json::Value stored = parsed;
         // 先全量校验并逐个改写，任一目标不合法即整批回滚——半绑状态会让用户
         // 无从判断哪些生效了。
         for (const auto& target : targets) {
@@ -307,6 +317,28 @@ BindingOutcome ImportBindingRepository::bind_batch(
             if (applied == 0) {
                 rollback();
                 return {BindingStatus::Invalid, std::nullopt, target.component_number};
+            }
+        }
+
+        const auto tree_version_id =
+            optional_row_text(rows[0], "rating_tree_version_id");
+        const auto technical_package_id =
+            optional_row_text(rows[0], "technical_package_id");
+        if (tree_version_id.has_value() &&
+            technical_package_id.has_value()) {
+            RatingTreeRepository tree_repository(tx);
+            const auto tree =
+                tree_repository.load_published_tree(*tree_version_id);
+            if (!tree.has_value() ||
+                !review::normalize_defect_rating_tree_associations(
+                     parsed,
+                     stored,
+                     *tree_version_id,
+                     *technical_package_id,
+                     *tree,
+                     revision).ok) {
+                rollback();
+                return {BindingStatus::Conflict};
             }
         }
 
@@ -336,9 +368,12 @@ BindingOutcome ImportBindingRepository::bind(
         const auto rows = tx->execSqlSync(
             "select ir.bridge_id::text as bridge_id,ir.inspection_year_id::text as inspection_year_id,"
             "ir.import_status,iy.component_inventory_revision_id::text as inventory_revision_id,"
+            "psp.rating_tree_version_id::text as rating_tree_version_id,"
+            "psp.technical_condition_package_id::text as technical_package_id,"
             "coalesce(ir.parsed_result_json::text,'{}') as parsed "
             "from import_records ir "
             "left join inspection_years iy on iy.id=ir.inspection_year_id "
+            "left join project_standard_profiles psp on psp.id=iy.standard_profile_id "
             "where ir.id=$1::uuid for update of ir",
             import_id);
         if (rows.empty()) { rollback(); return {BindingStatus::NotFound}; }
@@ -361,6 +396,7 @@ BindingOutcome ImportBindingRepository::bind(
 
         Json::Value parsed;
         parse_json(rows[0]["parsed"].as<std::string>(), parsed);
+        const Json::Value stored = parsed;
         const auto normalized = inventory::normalize_component_number(component_number);
         const auto structure_part = contract_structure_part(mapping->structure_part);
         const auto revision_id = revision->id;
@@ -369,6 +405,27 @@ BindingOutcome ImportBindingRepository::bind(
             write_binding(defect, bridge_component_id, category_id, structure_part, revision_id);
         });
         if (applied == 0) { rollback(); return {BindingStatus::Invalid}; }
+        const auto tree_version_id =
+            optional_row_text(rows[0], "rating_tree_version_id");
+        const auto technical_package_id =
+            optional_row_text(rows[0], "technical_package_id");
+        if (tree_version_id.has_value() &&
+            technical_package_id.has_value()) {
+            RatingTreeRepository tree_repository(tx);
+            const auto tree =
+                tree_repository.load_published_tree(*tree_version_id);
+            if (!tree.has_value() ||
+                !review::normalize_defect_rating_tree_associations(
+                     parsed,
+                     stored,
+                     *tree_version_id,
+                     *technical_package_id,
+                     *tree,
+                     revision).ok) {
+                rollback();
+                return {BindingStatus::Conflict};
+            }
+        }
         tx->execSqlSync(
             "update import_records set parsed_result_json=$2::jsonb where id=$1::uuid",
             import_id, compact_json(parsed));
@@ -445,6 +502,13 @@ BindingOutcome ImportBindingRepository::mark_missing(
             defect["bridge_component_id"] = Json::Value(Json::nullValue);
             defect["standard_component_category_id"] = Json::Value(Json::nullValue);
             defect["resolved_structure_part"] = Json::Value(Json::nullValue);
+            defect["rating_tree_node_id"] = Json::Value(Json::nullValue);
+            defect["standard_defect_indicator_id"] =
+                Json::Value(Json::nullValue);
+            defect["rating_tree_match_method"] =
+                Json::Value(Json::nullValue);
+            defect["rating_tree_match_evidence"] =
+                Json::Value(Json::nullValue);
             review::reconcile_defect_component_match_warning(defect);
         },
         [this](const std::string& id) { return overview(id); });
@@ -459,6 +523,13 @@ BindingOutcome ImportBindingRepository::clear(
             defect["bridge_component_id"] = Json::Value(Json::nullValue);
             defect["standard_component_category_id"] = Json::Value(Json::nullValue);
             defect["resolved_structure_part"] = Json::Value(Json::nullValue);
+            defect["rating_tree_node_id"] = Json::Value(Json::nullValue);
+            defect["standard_defect_indicator_id"] =
+                Json::Value(Json::nullValue);
+            defect["rating_tree_match_method"] =
+                Json::Value(Json::nullValue);
+            defect["rating_tree_match_evidence"] =
+                Json::Value(Json::nullValue);
             review::reconcile_defect_component_match_warning(defect);
         },
         [this](const std::string& id) { return overview(id); });

@@ -23,6 +23,54 @@ Json::Value fixture() {
     return root;
 }
 
+bridge_report::rating_tree::EffectiveRatingTree rating_tree_fixture() {
+    using namespace bridge_report::rating_tree;
+    EffectiveRatingTree tree;
+    EffectiveRatingTreeNode crack;
+    crack.id = "11111111-1111-4111-8111-111111111111";
+    crack.display_name = "裂缝";
+    crack.node_type = RatingTreeNodeType::defect;
+    crack.bridge_type_ids = {"beam"};
+    crack.component_category_ids = {"main_girder"};
+    crack.scoring_mode = RatingTreeScoringMode::inherit_h21;
+    crack.h21_indicator_id = "h21.crack";
+    crack.is_selectable = true;
+    crack.is_scoring = true;
+    crack.allowed_scales = {1, 2, 3, 4, 5};
+    tree.nodes.emplace(crack.id, crack);
+
+    EffectiveRatingTreeNode water;
+    water.id = "22222222-2222-4222-8222-222222222222";
+    water.display_name = "水损";
+    water.node_type = RatingTreeNodeType::defect;
+    water.bridge_type_ids = {"beam"};
+    water.component_category_ids = {"main_girder"};
+    water.scoring_mode = RatingTreeScoringMode::non_scoring;
+    water.is_selectable = true;
+    water.is_scoring = false;
+    tree.nodes.emplace(water.id, water);
+    return tree;
+}
+
+bridge_report::inventory::InventoryRevision inventory_fixture(
+    std::string category = "main_girder") {
+    bridge_report::inventory::InventoryRevision revision;
+    revision.id = "revision-1";
+    revision.status = "已确认";
+    bridge_report::inventory::InventoryEntry entry;
+    entry.bridge_component_id = "component-1";
+    entry.is_active = true;
+    bridge_report::inventory::InventoryMapping mapping;
+    mapping.standard_package_id = "h21-package";
+    mapping.standard_bridge_type_id = "beam";
+    mapping.standard_component_category_id = std::move(category);
+    mapping.confirmation_status = "已确认";
+    mapping.is_active = true;
+    entry.mappings.push_back(std::move(mapping));
+    revision.entries.push_back(std::move(entry));
+    return revision;
+}
+
 }  // namespace
 
 TEST(DraftValidationTest, AcceptsValidVersionTwoDraftWhenPendingReview) {
@@ -174,4 +222,84 @@ TEST(DraftValidationTest, AuditIsNullWhenDefectSetIsUnchanged) {
     const auto data = fixture();
     EXPECT_TRUE(
         bridge_report::review::build_defect_change_audit_event(data, data, "editor").isNull());
+}
+
+TEST(DraftValidationTest, RatingTreeNormalizationDerivesH21AndIgnoresForgery) {
+    auto stored = fixture();
+    auto draft = stored;
+    auto& defect = draft["defects"][0];
+    defect["bridge_component_id"] = "component-1";
+    defect["standard_defect_indicator_id"] = "forged";
+
+    const auto result =
+        bridge_report::review::normalize_defect_rating_tree_associations(
+            draft,
+            stored,
+            "tree-version-1",
+            "h21-package",
+            rating_tree_fixture(),
+            inventory_fixture());
+
+    ASSERT_TRUE(result.ok) << result.message;
+    EXPECT_EQ(
+        defect["rating_tree_node_id"].asString(),
+        "11111111-1111-4111-8111-111111111111");
+    EXPECT_EQ(defect["standard_defect_indicator_id"].asString(), "h21.crack");
+    EXPECT_EQ(defect["rating_tree_match_method"].asString(), "exact");
+}
+
+TEST(DraftValidationTest, RatingTreeNormalizationRejectsInapplicableManualNode) {
+    auto stored = fixture();
+    stored["defects"][0]["bridge_component_id"] = "component-1";
+    auto draft = stored;
+    draft["defects"][0]["rating_tree_node_id"] =
+        "11111111-1111-4111-8111-111111111111";
+
+    const auto result =
+        bridge_report::review::normalize_defect_rating_tree_associations(
+            draft,
+            stored,
+            "tree-version-1",
+            "h21-package",
+            rating_tree_fixture(),
+            inventory_fixture("deck"));
+
+    EXPECT_FALSE(result.ok);
+    EXPECT_TRUE(draft["defects"][0]["rating_tree_node_id"].isNull());
+    EXPECT_TRUE(draft["defects"][0]["standard_defect_indicator_id"].isNull());
+}
+
+TEST(DraftValidationTest, RatingTreeConfirmationValidatesScaleAndAllowsNonScoring) {
+    auto data = fixture();
+    auto& defect = data["defects"][0];
+    defect["bridge_component_id"] = "component-1";
+    defect["review_status"] = "已确认";
+    defect["group_review_status"] = "已确认";
+    defect["rating_tree_version_id"] = "tree-version-1";
+    defect["rating_tree_node_id"] =
+        "11111111-1111-4111-8111-111111111111";
+    defect["standard_defect_indicator_id"] = "h21.crack";
+    defect["defect_scale"] = 9;
+
+    auto result =
+        bridge_report::review::validate_defect_rating_tree_for_confirmation(
+            data,
+            "tree-version-1",
+            "h21-package",
+            rating_tree_fixture(),
+            inventory_fixture());
+    EXPECT_FALSE(result.ok);
+
+    defect["rating_tree_node_id"] =
+        "22222222-2222-4222-8222-222222222222";
+    defect["standard_defect_indicator_id"] = Json::Value();
+    defect["defect_scale"] = Json::Value();
+    result =
+        bridge_report::review::validate_defect_rating_tree_for_confirmation(
+            data,
+            "tree-version-1",
+            "h21-package",
+            rating_tree_fixture(),
+            inventory_fixture());
+    EXPECT_TRUE(result.ok) << result.message;
 }

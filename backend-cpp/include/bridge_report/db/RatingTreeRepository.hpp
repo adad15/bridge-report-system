@@ -54,6 +54,8 @@ public:
         const std::string& tree_code,
         const std::string& package_version) const;
     std::vector<RatingTreeVersionRecord> list_published_versions() const;
+    std::optional<rating_tree::EffectiveRatingTree> load_published_tree(
+        const std::string& version_id) const;
 
     RatingTreeProfileBackfillOutcome backfill_unique_profile_versions();
 

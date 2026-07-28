@@ -81,6 +81,12 @@ TEST_F(RatingTreeRepositoryTest, SyncsPublishedTreeIdempotentlyAndRejectsConflic
     ASSERT_TRUE(stored.has_value());
     EXPECT_EQ(stored->status, "published");
     EXPECT_EQ(stored->tree_content_checksum, tree.version.tree_content_checksum);
+    const auto loaded =
+        repository_->load_published_tree(*first.rating_tree_version_id);
+    ASSERT_TRUE(loaded.has_value());
+    EXPECT_EQ(loaded->version.tree_content_checksum, tree.version.tree_content_checksum);
+    EXPECT_EQ(loaded->nodes.size(), tree.nodes.size());
+    EXPECT_EQ(loaded->aliases.size(), tree.aliases.size());
 
     tree.version.tree_content_checksum =
         "sha256:" + std::string(64, 'f');

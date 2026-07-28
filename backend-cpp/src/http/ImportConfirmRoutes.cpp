@@ -8,6 +8,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/ReviewRepository.hpp"
+#include "bridge_report/db/RatingTreeRepository.hpp"
 #include "bridge_report/assessment/AssessmentConfirmationService.hpp"
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/EditLockRepository.hpp"
@@ -15,6 +16,7 @@
 #include "bridge_report/http/EditLockRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
 #include "bridge_report/review/ConfirmPlan.hpp"
+#include "bridge_report/review/DraftValidation.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
 
@@ -77,6 +79,45 @@ void register_preflight_confirm_route(
                         ? std::optional<bool>(inventory->status == "已确认")
                         : std::optional<bool>(false));
                 auto report = review::build_preflight_report(parsed_result, context);
+                if (report.can_confirm) {
+                    if (!detail->rating_tree_version_id.has_value() ||
+                        !detail->technical_standard_package_id.has_value()) {
+                        report.blocking_errors.push_back({
+                            "rating_tree_required",
+                            "本年度尚未锁定评定树。",
+                            detail->id});
+                        report.can_confirm = false;
+                    } else {
+                        db::RatingTreeRepository tree_repository(db_client);
+                        const auto tree = tree_repository.load_published_tree(
+                            *detail->rating_tree_version_id);
+                        if (!tree.has_value()) {
+                            report.blocking_errors.push_back({
+                                "rating_tree_unavailable",
+                                "本年度锁定的评定树不可用。",
+                                *detail->rating_tree_version_id});
+                            report.can_confirm = false;
+                        } else {
+                            const auto tree_validation =
+                                review::validate_defect_rating_tree_for_confirmation(
+                                    parsed_result,
+                                    *detail->rating_tree_version_id,
+                                    *detail->technical_standard_package_id,
+                                    *tree,
+                                    inventory);
+                            if (!tree_validation.ok) {
+                                for (const auto& issue :
+                                     tree_validation.issues) {
+                                    report.blocking_errors.push_back({
+                                        tree_validation.code,
+                                        issue.message,
+                                        issue.path});
+                                }
+                                report.can_confirm = false;
+                            }
+                        }
+                    }
+                }
                 if (report.can_confirm && detail->inspection_year_id.has_value()) {
                     assessment::AssessmentConfirmationService assessment_service(
                         db_client, registry);
@@ -226,6 +267,15 @@ void register_confirm_route(
                 const auto detail = repository.get_import_record_detail(import_record_id);
                 if (!detail.has_value()) {
                     respond_import_record_not_found(callback);
+                    return;
+                }
+                if (!detail->rating_tree_version_id.has_value()) {
+                    respond_json(
+                        callback,
+                        make_error_body(
+                            "rating_tree_required",
+                            "本年度尚未锁定评定树，不能正式入库。"),
+                        drogon::k409Conflict);
                     return;
                 }
 

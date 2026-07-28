@@ -135,6 +135,18 @@ Json::Value build_review_response(
     } else {
         body["technical_condition_standard"] = Json::Value();
     }
+    if (detail.rating_tree_version_id.has_value()) {
+        Json::Value tree(Json::objectValue);
+        tree["version_id"] = *detail.rating_tree_version_id;
+        tree["tree_name"] = detail.rating_tree_name.value_or("");
+        tree["package_version"] =
+            detail.rating_tree_package_version.value_or("");
+        tree["content_checksum"] =
+            detail.rating_tree_content_checksum.value_or("");
+        body["rating_tree"] = std::move(tree);
+    } else {
+        body["rating_tree"] = Json::Value();
+    }
     body["reopen"] = reopen;
     return body;
 }

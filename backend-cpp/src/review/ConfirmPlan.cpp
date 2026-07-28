@@ -213,6 +213,8 @@ void append_components_and_defects(
         defect_plan.part_name = component_number;
         defect_plan.defect_location = string_member_or_empty(defect, "defect_location");
         defect_plan.defect_type = string_member_or_empty(defect, "defect_type");
+        defect_plan.rating_tree_node_id =
+            string_member_or_empty(defect, "rating_tree_node_id");
         defect_plan.standard_defect_indicator_id =
             string_member_or_empty(defect, "standard_defect_indicator_id");
         defect_plan.defect_description_raw = string_member_or_empty(defect, "defect_description");

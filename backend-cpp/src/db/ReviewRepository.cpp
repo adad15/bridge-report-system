@@ -2,7 +2,10 @@
 #include "bridge_report/contracts/AnnualInspectionContract.hpp"
 #include "bridge_report/auth/PasswordHash.hpp"
 #include "bridge_report/assessment/AssessmentConfirmationService.hpp"
+#include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/CommitLatch.hpp"
+#include "bridge_report/db/RatingTreeRepository.hpp"
+#include "bridge_report/review/DraftValidation.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
 
 #include <optional>
@@ -222,13 +225,14 @@ std::string insert_defect_observation(
         "(inspection_year_id, bridge_id, bridge_component_id, source_import_record_id, "
         " source_table_title, source_table_index, source_row_number, source_raw_cells_json, "
         " structure_part, part_name, component_type, business_component_code, "
-        " defect_location, standard_defect_indicator_id, defect_type, defect_description_raw, scale, "
+        " defect_location, rating_tree_node_id, standard_defect_indicator_id, "
+        " defect_type, defect_description_raw, scale, "
         " extraction_confidence, review_status, review_note) "
         "values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, "
         "        $5, $6, $7, $8::jsonb, "
         "        $9, $10, $11, $12, "
-        "        $13, $14, $15, $16, $17, "
-        "        $18, $19, $20) "
+        "        $13, nullif($14,'')::uuid, nullif($15,''), $16, $17, $18, "
+        "        $19, $20, $21) "
         "returning id",
         inspection_year_id,
         bridge_id,
@@ -246,6 +250,7 @@ std::string insert_defect_observation(
         component.component_type,
         component.business_component_code,
         defect.defect_location,
+        defect.rating_tree_node_id,
         defect.standard_defect_indicator_id,
         defect.defect_type,
         defect.defect_description_raw,
@@ -435,12 +440,16 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
         "tsp.standard_code as technical_standard_code, "
         "tsp.standard_name as technical_standard_name, "
         "tsp.official_edition as technical_standard_official_edition, "
-        "tsp.package_version as technical_standard_package_version "
+        "tsp.package_version as technical_standard_package_version, "
+        "rtv.id::text as rating_tree_version_id,rtv.tree_name as rating_tree_name,"
+        "rtv.package_version as rating_tree_package_version,"
+        "rtv.tree_content_checksum as rating_tree_content_checksum "
         "from import_records ir "
         "join bridges b on b.id = ir.bridge_id "
         "left join inspection_years iy on iy.id = ir.inspection_year_id "
         "left join project_standard_profiles psp on psp.id = iy.standard_profile_id "
         "left join standard_packages tsp on tsp.id = psp.technical_condition_package_id "
+        "left join rating_tree_versions rtv on rtv.id = psp.rating_tree_version_id "
         "where ir.id = $1::uuid",
         import_record_id
     );
@@ -495,6 +504,13 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
         optional_text(row, "technical_standard_official_edition");
     detail.technical_standard_package_version =
         optional_text(row, "technical_standard_package_version");
+    detail.rating_tree_version_id =
+        optional_text(row, "rating_tree_version_id");
+    detail.rating_tree_name = optional_text(row, "rating_tree_name");
+    detail.rating_tree_package_version =
+        optional_text(row, "rating_tree_package_version");
+    detail.rating_tree_content_checksum =
+        optional_text(row, "rating_tree_content_checksum");
 
     return detail;
 }
@@ -702,9 +718,12 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             "ir.system_number as import_number, b.system_number as bridge_number, iy.inspection_year, "
             "iy.bridge_id::text as inspection_year_bridge_id,"
             "iy.standard_profile_id::text as standard_profile_id,"
+            "psp.rating_tree_version_id::text as rating_tree_version_id,"
+            "psp.technical_condition_package_id::text as technical_package_id,"
             "iy.component_inventory_revision_id::text as inventory_revision_id "
             "from import_records ir join bridges b on b.id = ir.bridge_id "
             "left join inspection_years iy on iy.id = ir.inspection_year_id "
+            "left join project_standard_profiles psp on psp.id=iy.standard_profile_id "
             "where ir.id = $1::uuid for update of ir",
             import_record_id
         );
@@ -803,6 +822,52 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         }
         if (preflight.requires_revision_confirmation && !confirm_revision) {
             return fail("revision_confirmation_required", "同桥同年已有当前有效事实，需显式确认修订版。");
+        }
+
+        const auto rating_tree_version_id =
+            optional_text(record_row, "rating_tree_version_id");
+        const auto technical_package_id =
+            optional_text(record_row, "technical_package_id");
+        if (rating_tree_version_id.has_value() &&
+            technical_package_id.has_value()) {
+            RatingTreeRepository tree_repository(tx);
+            const auto tree =
+                tree_repository.load_published_tree(*rating_tree_version_id);
+            ComponentInventoryRepository inventory_repository(tx);
+            const auto latest_inventory =
+                inventory_repository.get_latest_revision(bridge_id);
+            if (!tree.has_value()) {
+                review::PreflightReport report = preflight;
+                report.blocking_errors.push_back({
+                    "rating_tree_unavailable",
+                    "检测年度锁定的评定树不可用。",
+                    *rating_tree_version_id});
+                report.can_confirm = false;
+                auto failed = fail(
+                    "preflight_failed", "检测年度锁定的评定树不可用。");
+                failed.preflight_details = report.to_json();
+                return failed;
+            }
+            const auto tree_validation =
+                review::validate_defect_rating_tree_for_confirmation(
+                    data,
+                    *rating_tree_version_id,
+                    *technical_package_id,
+                    *tree,
+                    latest_inventory);
+            if (!tree_validation.ok) {
+                review::PreflightReport report = preflight;
+                for (const auto& issue : tree_validation.issues) {
+                    report.blocking_errors.push_back({
+                        tree_validation.code, issue.message, issue.path});
+                }
+                report.can_confirm = false;
+                auto failed = fail(
+                    "preflight_failed",
+                    "病害评定树关联未通过正式入库校验。");
+                failed.preflight_details = report.to_json();
+                return failed;
+            }
         }
 
         const auto standard_profile_id = optional_text(record_row, "standard_profile_id");

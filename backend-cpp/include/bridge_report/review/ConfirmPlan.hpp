@@ -54,6 +54,7 @@ struct DefectPlan {
     // 规范病害标度：只来自合同 3.0 的 defect_scale（整数转十进制字符串），
     // 严禁取 severity——severity 只是 info/warning/error 校对提示级别。
     std::optional<std::string> scale;
+    std::string rating_tree_node_id;
     std::string standard_defect_indicator_id;
     std::string defect_type;
     std::string defect_description_raw;

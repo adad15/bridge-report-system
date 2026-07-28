@@ -207,6 +207,10 @@ TEST(BuildReviewResponseTest, PopulatesInspectionYearObjectWhenPresent) {
     detail.technical_standard_name = "公路桥梁技术状况评定标准";
     detail.technical_standard_official_edition = "2011";
     detail.technical_standard_package_version = "1.0.0";
+    detail.rating_tree_version_id = "tree-version-1";
+    detail.rating_tree_name = "单位桥梁评定树";
+    detail.rating_tree_package_version = "2026.1";
+    detail.rating_tree_content_checksum = "sha256:tree";
     Json::Value parsed_result(Json::objectValue);
     ReviewStatistics statistics{};
 
@@ -245,6 +249,11 @@ TEST(BuildReviewResponseTest, PopulatesInspectionYearObjectWhenPresent) {
     );
     EXPECT_EQ(body["technical_condition_standard"]["official_edition"].asString(), "2011");
     EXPECT_EQ(body["technical_condition_standard"]["package_version"].asString(), "1.0.0");
+    ASSERT_TRUE(body["rating_tree"].isObject());
+    EXPECT_EQ(body["rating_tree"]["version_id"].asString(), "tree-version-1");
+    EXPECT_EQ(body["rating_tree"]["tree_name"].asString(), "单位桥梁评定树");
+    EXPECT_EQ(body["rating_tree"]["package_version"].asString(), "2026.1");
+    EXPECT_EQ(body["rating_tree"]["content_checksum"].asString(), "sha256:tree");
 }
 
 TEST(BuildReviewResponseTest, OutputsNullInspectionYearWhenAbsent) {
@@ -266,6 +275,7 @@ TEST(BuildReviewResponseTest, OutputsNullInspectionYearWhenAbsent) {
     EXPECT_TRUE(body["import_record"]["importer_version"].isNull());
     EXPECT_TRUE(body["bridge"]["route_name"].isNull());
     EXPECT_TRUE(body["technical_condition_standard"].isNull());
+    EXPECT_TRUE(body["rating_tree"].isNull());
 }
 
 TEST(BuildReviewResponseTest, IncludesParsedResultAndStatisticsVerbatim) {

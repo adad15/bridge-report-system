@@ -29,6 +29,8 @@ void settle(Json::Value& data) {
     defect["standard_component_category_id"] = "category-main-girder";
     defect["resolved_structure_part"] = "上部结构";
     defect["component_inventory_revision_id"] = "00000000-0000-0000-0000-000000000201";
+    defect["rating_tree_node_id"] = "00000000-0000-0000-0000-000000000301";
+    defect["standard_defect_indicator_id"] = "h21.defect.test";
     defect["review_status"] = "已确认";
     defect["group_review_status"] = "已确认";
     data["photos"][0]["match_status"] = "已确认";
@@ -58,6 +60,12 @@ TEST(ConfirmPlanTest, MapsSettledVersionTwoFactsWithoutImportedRatings) {
     ASSERT_EQ(plan.defects.size(), 1u);
     EXPECT_EQ(plan.defects[0].candidate_id, "defect_0001");
     EXPECT_EQ(plan.defects[0].defect_location, "第二跨左幅梁底");
+    EXPECT_EQ(
+        plan.defects[0].rating_tree_node_id,
+        "00000000-0000-0000-0000-000000000301");
+    EXPECT_EQ(
+        plan.defects[0].standard_defect_indicator_id,
+        "h21.defect.test");
     EXPECT_EQ(plan.defects[0].scale, "2");
     EXPECT_EQ(plan.defects[0].measurements.size(), 3u);
 
