@@ -11,7 +11,7 @@ namespace {
 
 std::filesystem::path organization_package_root() {
     return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-        "standards/rating-tree/organization-bridge/1.0.0";
+        "standards/rating-tree/organization-bridge/1.0.1";
 }
 
 void write_json(const std::filesystem::path& path, const Json::Value& value) {

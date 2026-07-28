@@ -4,11 +4,11 @@
   "standard_code": "JTG/T H21—2011",
   "standard_name": "公路桥梁技术状况评定标准",
   "official_edition": "2011",
-  "package_version": "1.0.1",
+  "package_version": "1.0.2",
   "contract_version": 1,
   "algorithm_id": "jtg-h21-2011",
   "effective_date": "2011-09-01",
-  "content_checksum": "sha256:0602d4b4084ba35251876c414fd736eb08bf8e3f47fb729e89e72247cc837ba8",
+  "content_checksum": "sha256:1c6eb62df114fca06bb9bf15f50b137ea6659e04f1dc732940243cb59b198e7f",
   "status": "active",
   "entry_files": [
     "bridge-types.json",

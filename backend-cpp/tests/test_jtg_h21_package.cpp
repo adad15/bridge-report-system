@@ -23,7 +23,7 @@ std::filesystem::path h21_package_root() {
 
 std::filesystem::path h21_package_root_v101() {
     return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-           "standards/technical-condition/jtg-t-h21-2011/1.0.1";
+           "standards/technical-condition/jtg-t-h21-2011/1.0.2";
 }
 
 const Json::Value& document(const StandardPackage& package, const std::string& name) {
@@ -105,17 +105,17 @@ TEST(JtgH21PackageTest, ChecksumCanBeCalculated) {
         "sha256:842f4e5a702d0ae6533be2aa9bea61e7d823c31d866b64a34dbc9a9347fdd898");
 }
 
-TEST(JtgH21PackageTest, Version101AddsOfficialMajorComponentClassification) {
+TEST(JtgH21PackageTest, Version102AddsOfficialMajorComponentClassification) {
     StandardPackageLoader loader;
     const auto checksum = loader.calculate_checksum(h21_package_root_v101());
     ASSERT_TRUE(checksum.ok());
     EXPECT_EQ(
         *checksum.checksum,
-        "sha256:0602d4b4084ba35251876c414fd736eb08bf8e3f47fb729e89e72247cc837ba8");
+        "sha256:1c6eb62df114fca06bb9bf15f50b137ea6659e04f1dc732940243cb59b198e7f");
 
     const auto loaded = loader.load(h21_package_root_v101());
     ASSERT_TRUE(loaded.ok());
-    EXPECT_EQ(loaded.package->manifest.package_version, "1.0.1");
+    EXPECT_EQ(loaded.package->manifest.package_version, "1.0.2");
     std::size_t bridge_type_count = 0;
     for (const auto& [id, definition] : loaded.package->definitions) {
         if (!id.starts_with("h21.bridge_type.")) {
@@ -249,7 +249,7 @@ TEST(JtgH21PackageTest, EveryDefectHasStableScaleDeductionAndSource) {
     EXPECT_EQ(indicator_count, 234u);
 }
 
-TEST(JtgH21PackageTest, Version101EveryDefectScaleHasOfficialDescription) {
+TEST(JtgH21PackageTest, Version102EveryDefectScaleHasOfficialDescription) {
     StandardPackageLoader loader;
     const auto result = loader.load(h21_package_root_v101());
     ASSERT_TRUE(result.ok());
@@ -275,7 +275,7 @@ TEST(JtgH21PackageTest, Version101EveryDefectScaleHasOfficialDescription) {
     EXPECT_EQ(indicator_count, 234u);
 }
 
-TEST(JtgH21PackageTest, Version101RejectsIncompleteOrExtraScaleDescriptions) {
+TEST(JtgH21PackageTest, Version102RejectsIncompleteOrExtraScaleDescriptions) {
     const std::vector<std::pair<std::string, Json::Value>> mutations = {
         {"missing", Json::Value()},
         {"empty", Json::Value("")},
@@ -303,7 +303,7 @@ TEST(JtgH21PackageTest, Version101RejectsIncompleteOrExtraScaleDescriptions) {
     }
 }
 
-TEST(JtgH21PackageTest, Version101UsesTheOfficialThreeScaleDamperTable) {
+TEST(JtgH21PackageTest, Version102UsesTheOfficialThreeScaleDamperTable) {
     StandardPackageLoader loader;
     const auto result = loader.load(h21_package_root_v101());
     ASSERT_TRUE(result.ok());

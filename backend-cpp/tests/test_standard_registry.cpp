@@ -123,7 +123,7 @@ TEST(StandardRegistryTest, RegistersAndCreatesNonH21AlgorithmAdapter) {
 TEST(StandardRegistryTest, CreatesBuiltInH21TechnicalConditionEvaluator) {
     bridge_report::standards::StandardPackageLoader loader;
     const auto root = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-        "standards/technical-condition/jtg-t-h21-2011/1.0.1";
+        "standards/technical-condition/jtg-t-h21-2011/1.0.2";
     auto loaded = loader.load(root);
     ASSERT_TRUE(loaded.ok());
     const auto key = loaded.package->key();

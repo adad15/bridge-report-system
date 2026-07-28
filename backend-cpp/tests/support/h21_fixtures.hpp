@@ -14,7 +14,7 @@ namespace bridge_report::tests::h21 {
 
 inline std::filesystem::path package_root() {
     return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-           "standards/technical-condition/jtg-t-h21-2011/1.0.1";
+           "standards/technical-condition/jtg-t-h21-2011/1.0.2";
 }
 
 inline standards::StandardPackage load_package() {

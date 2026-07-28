@@ -479,7 +479,7 @@ RatingTreeRepository::backfill_unique_profile_versions() {
 
     const auto updated = db_client_->execSqlSync(
         "with unique_tree as ("
-        "select p.id as profile_id, min(v.id) as tree_id "
+        "select p.id as profile_id, min(v.id::text)::uuid as tree_id "
         "from project_standard_profiles p "
         "join rating_tree_versions v "
         "on v.technical_condition_package_id=p.technical_condition_package_id "

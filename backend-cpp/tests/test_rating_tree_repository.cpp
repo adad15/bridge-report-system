@@ -35,12 +35,12 @@ protected:
         const auto root = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT);
         bridge_report::standards::StandardPackageLoader standard_loader;
         auto h21 = standard_loader.load(
-            root / "standards/technical-condition/jtg-t-h21-2011/1.0.1");
+            root / "standards/technical-condition/jtg-t-h21-2011/1.0.2");
         auto maintenance = standard_loader.load(
             root / "standards/maintenance/jtg-5120-2021/1.0.0");
         bridge_report::rating_tree::RatingTreePackageLoader extension_loader;
         auto extension = extension_loader.load(
-            root / "standards/rating-tree/organization-bridge/1.0.0");
+            root / "standards/rating-tree/organization-bridge/1.0.1");
         EXPECT_TRUE(h21.ok());
         EXPECT_TRUE(maintenance.ok());
         EXPECT_TRUE(extension.ok());
@@ -115,6 +115,60 @@ TEST_F(RatingTreeRepositoryTest, MissingSourcePackageDoesNotPublish) {
         outcome.status,
         bridge_report::db::RatingTreeSyncStatus::SourcePackageNotFound);
     EXPECT_FALSE(outcome.rating_tree_version_id.has_value());
+}
+
+TEST_F(RatingTreeRepositoryTest, BackfillsTheOnlyPublishedTreeForAnUnboundProfile) {
+    auto tree = compile_tree();
+    const auto tree_sync = repository_->sync_published_tree(tree);
+    ASSERT_TRUE(tree_sync.rating_tree_version_id.has_value());
+
+    const auto package_ids = client_->execSqlSync(
+        "select technical_condition_package_id::text as technical_id,"
+        "maintenance_package_id::text as maintenance_id "
+        "from rating_tree_versions where id=$1::uuid",
+        *tree_sync.rating_tree_version_id);
+    ASSERT_EQ(package_ids.size(), 1u);
+
+    const auto users = client_->execSqlSync(
+        "insert into users(username,display_name,password_hash,role) "
+        "values('rating-tree-backfill-' || gen_random_uuid()::text,"
+        "'评定树回填测试','test','admin') returning id::text as id");
+    ASSERT_EQ(users.size(), 1u);
+    const auto user_id = users[0]["id"].as<std::string>();
+
+    client_->execSqlSync(
+        "select set_config("
+        "'bridge_report.allow_unbound_rating_tree_profile','on',false)");
+    const auto profiles = client_->execSqlSync(
+        "insert into project_standard_profiles("
+        "technical_condition_package_id,maintenance_package_id,"
+        "created_by_user_id,change_reason) "
+        "values($1::uuid,$2::uuid,$3::uuid,'唯一评定树回填测试') "
+        "returning id::text as id",
+        package_ids[0]["technical_id"].as<std::string>(),
+        package_ids[0]["maintenance_id"].as<std::string>(),
+        user_id);
+    client_->execSqlSync(
+        "select set_config("
+        "'bridge_report.allow_unbound_rating_tree_profile','off',false)");
+    ASSERT_EQ(profiles.size(), 1u);
+    const auto profile_id = profiles[0]["id"].as<std::string>();
+
+    const auto backfill = repository_->backfill_unique_profile_versions();
+    EXPECT_GE(backfill.updated_count, 1u);
+    const auto bound = client_->execSqlSync(
+        "select rating_tree_version_id::text as tree_id "
+        "from project_standard_profiles where id=$1::uuid",
+        profile_id);
+    ASSERT_EQ(bound.size(), 1u);
+    EXPECT_EQ(
+        bound[0]["tree_id"].as<std::string>(),
+        *tree_sync.rating_tree_version_id);
+
+    client_->execSqlSync(
+        "delete from project_standard_profiles where id=$1::uuid",
+        profile_id);
+    client_->execSqlSync("delete from users where id=$1::uuid", user_id);
 }
 
 }  // namespace

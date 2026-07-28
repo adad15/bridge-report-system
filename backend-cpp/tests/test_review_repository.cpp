@@ -534,12 +534,12 @@ protected:
         const auto repository_root = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT);
         bridge_report::standards::StandardPackageLoader standard_loader;
         const auto h21_source = standard_loader.load(
-            repository_root / "standards/technical-condition/jtg-t-h21-2011/1.0.1");
+            repository_root / "standards/technical-condition/jtg-t-h21-2011/1.0.2");
         const auto maintenance_source = standard_loader.load(
             repository_root / "standards/maintenance/jtg-5120-2021/1.0.0");
         bridge_report::rating_tree::RatingTreePackageLoader tree_loader;
         const auto tree_extension = tree_loader.load(
-            repository_root / "standards/rating-tree/organization-bridge/1.0.0");
+            repository_root / "standards/rating-tree/organization-bridge/1.0.1");
         ASSERT_TRUE(h21_source.ok());
         ASSERT_TRUE(maintenance_source.ok());
         ASSERT_TRUE(tree_extension.ok());
