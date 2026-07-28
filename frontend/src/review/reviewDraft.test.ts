@@ -38,9 +38,11 @@ describe("reviewDraftReducer", () => {
         inventoryRevisionId: "revision-1",
         defectLocation: "第二跨梁底",
         defectType: "裂缝",
-        standardDefectIndicatorId: "h21.defect.crack",
+        ratingTreeVersionId: "tree-version-1",
+        ratingTreeNodeId: "tree-node-crack",
         defectDescription: "纵向裂缝",
         defectScale: 2,
+        isScoring: true,
       },
     });
 
@@ -51,7 +53,10 @@ describe("reviewDraftReducer", () => {
       component_number: "2-2#梁",
       source_structure_part: null,
       source_ref: { source_type: "manual" },
-      standard_defect_indicator_id: "h21.defect.crack",
+      rating_tree_version_id: "tree-version-1",
+      rating_tree_node_id: "tree-node-crack",
+      rating_tree_match_method: "manual",
+      standard_defect_indicator_id: null,
       review_status: "已修改",
     });
     expect(next).not.toHaveProperty("ratings");
@@ -255,6 +260,53 @@ describe("reviewDraftReducer", () => {
     expect(next.photos[0]).toMatchObject({
       match_status: "已确认",
       review_status: "已确认",
+    });
+  });
+
+  it("clears a stale tree node after component rebinding and accepts a manual tree selection", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    Object.assign(state.defects[0], {
+      rating_tree_version_id: "tree-version-1",
+      rating_tree_node_id: "old-node",
+      rating_tree_match_method: "exact",
+      standard_defect_indicator_id: "old-h21",
+    });
+    const rebound = reducer(state, {
+      type: "link_defect_component",
+      candidateId: "defect_0001",
+      component: {
+        componentName: "主梁",
+        componentNumber: "2-1#梁",
+        bridgeComponentId: "component-2",
+        standardComponentCategoryId: "category-1",
+        resolvedStructurePart: "上部结构",
+        inventoryRevisionId: "revision-1",
+      },
+    });
+    expect(rebound.defects[0]).toMatchObject({
+      rating_tree_version_id: null,
+      rating_tree_node_id: null,
+      rating_tree_match_method: null,
+      standard_defect_indicator_id: null,
+    });
+
+    const selected = reducer(rebound, {
+      type: "select_rating_tree_node",
+      candidateId: "defect_0001",
+      versionId: "tree-version-1",
+      nodeId: "tree-node-crack",
+      nodeName: "裂缝",
+      isScoring: true,
+      matchEvidence: "人工选择",
+    });
+    expect(selected.defects[0]).toMatchObject({
+      rating_tree_version_id: "tree-version-1",
+      rating_tree_node_id: "tree-node-crack",
+      rating_tree_match_method: "manual",
+      rating_tree_match_evidence: "人工选择",
+      defect_type: "裂缝",
+      standard_defect_indicator_id: null,
     });
   });
 

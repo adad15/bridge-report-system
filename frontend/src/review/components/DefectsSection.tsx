@@ -1,8 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import type { AssessmentIssue } from "../../api/assessmentApi";
 import { componentInventoryErrorMessage, fetchLatestComponentInventory, type ComponentInventoryEntry, type ComponentInventoryRevision, type StructurePart as InventoryStructurePart } from "../../api/componentInventoryApi";
-import { fetchStandardCatalog, standardsErrorMessage, type StandardDefectCatalog } from "../../api/standardsApi";
+import {
+  fetchApplicableRatingTreeDefects,
+  fetchRatingTreeNode,
+  ratingTreeErrorMessage,
+  type RatingTreeNode,
+  type RatingTreeNodeSummary,
+} from "../../api/ratingTreeApi";
+import type { ReviewRatingTree } from "../../api/reviewApi";
 import type { BridgeAnnualInspectionData, DefectCandidate } from "../../contracts/annualInspection";
 import { buildDefectPhotoReviewModel, type DefectReviewFilter, type DefectReviewProblemCategory } from "../defectPhotoReviewModel";
 import type { ReviewDraftAction } from "../reviewDraft";
@@ -13,6 +20,11 @@ import { DefectReviewToolbar } from "./DefectReviewToolbar";
 import { UnlinkedPhotosPanel } from "./UnlinkedPhotosPanel";
 
 interface DefectsSectionProps {
+  /**
+   * 由页面注入的分区级动作（当前是"查看来源证据"）。放进分区标题行与"新增病害"
+   * 同排，省掉页面上方那条只装一个按钮的独立工具行。
+   */
+  headerActions?: ReactNode;
   draft: BridgeAnnualInspectionData;
   importRecordId: string;
   baseUrl: string;
@@ -21,7 +33,7 @@ interface DefectsSectionProps {
   onSelect: (candidateId: string, photoCandidateId?: string) => void;
   onCloseDetail?: () => void;
   dispatch: Dispatch<ReviewDraftAction>;
-  technicalStandardPackageId?: string | null;
+  ratingTree?: ReviewRatingTree | null;
   assessmentIssues?: AssessmentIssue[];
   selectedPhotoCandidateId?: string | null;
   disabled?: boolean;
@@ -34,7 +46,6 @@ interface DefectsSectionProps {
   isDefectEditable?: (defect: DefectCandidate) => boolean;
 }
 
-const standardCatalogCache = new Map<string, StandardDefectCatalog[]>();
 const EMPTY_ASSESSMENT_ISSUES: AssessmentIssue[] = [];
 const DETAIL_WIDTH_STORAGE_KEY = "bridge-report:defect-detail-width-percent";
 const DEFAULT_DETAIL_WIDTH = 66.67;
@@ -62,7 +73,7 @@ const STRUCTURE_PART_LABELS: Record<InventoryStructurePart, "全桥" | "上部�
 interface ManualDefectFormState {
   componentEntryId: string;
   defectLocation: string;
-  standardDefectIndicatorId: string;
+  ratingTreeNodeId: string;
   defectDescription: string;
   defectScale: string;
 }
@@ -70,24 +81,26 @@ interface ManualDefectFormState {
 const EMPTY_MANUAL_DEFECT: ManualDefectFormState = {
   componentEntryId: "",
   defectLocation: "",
-  standardDefectIndicatorId: "",
+  ratingTreeNodeId: "",
   defectDescription: "",
   defectScale: "",
 };
 
 // 禁用策略按详情控件处理，不用 fieldset disabled 一揽子禁用；
 // 筛选、翻页、缩略图等只读动作在已确认记录中仍可使用。
-export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, onCloseDetail, dispatch, technicalStandardPackageId = null, assessmentIssues = EMPTY_ASSESSMENT_ISSUES, disabled = false, allowStructureChanges = false, componentInventory = null, isDefectEditable }: DefectsSectionProps) {
+export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, onCloseDetail, dispatch, ratingTree = null, assessmentIssues = EMPTY_ASSESSMENT_ISSUES, disabled = false, allowStructureChanges = false, componentInventory = null, isDefectEditable, headerActions }: DefectsSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [inventoryEntries, setInventoryEntries] = useState<ComponentInventoryEntry[]>([]);
   const [loadedInventory, setLoadedInventory] = useState<ComponentInventoryRevision | null>(null);
   const [loadingInventory, setLoadingInventory] = useState(false);
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState<ManualDefectFormState>(EMPTY_MANUAL_DEFECT);
-  const [catalogs, setCatalogs] = useState<StandardDefectCatalog[]>(
-    technicalStandardPackageId ? standardCatalogCache.get(technicalStandardPackageId) ?? [] : [],
-  );
-  const [catalogError, setCatalogError] = useState("");
+  const [treeNodesByComponent, setTreeNodesByComponent] =
+    useState<Map<string, RatingTreeNodeSummary[]>>(new Map());
+  const [treeNodeDetails, setTreeNodeDetails] = useState<RatingTreeNode[]>([]);
+  const [manualTreeNode, setManualTreeNode] = useState<RatingTreeNode | null>(null);
+  const [treeRulesReady, setTreeRulesReady] = useState(false);
+  const [treeError, setTreeError] = useState("");
   const [filter, setFilter] = useState<DefectReviewFilter>("needs_attention");
   const [problemCategory, setProblemCategory] = useState<DefectReviewProblemCategory | null>(null);
   const [search, setSearch] = useState("");
@@ -96,61 +109,123 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const [detailWidth, setDetailWidth] = useState(readStoredDetailWidth);
   const [pinnedConfirmedId, setPinnedConfirmedId] = useState<string | null>(null);
   const seenSafeIds = useRef(new Set<string>());
-  const appliedSuggestionIds = useRef(new Set<string>());
   const splitWorkspaceRef = useRef<HTMLDivElement>(null);
+  const selectedTreeNodeIds = useMemo(
+    () => [...new Set(
+      draft.defects
+        .map((defect) => defect.rating_tree_node_id)
+        .filter((id): id is string => Boolean(id)),
+    )].sort(),
+    [draft.defects],
+  );
+  const selectedTreeNodeIdsKey = selectedTreeNodeIds.join("\u0000");
 
   useEffect(() => {
-    if (!technicalStandardPackageId) {
-      setCatalogs([]);
-      return;
-    }
-    const cached = standardCatalogCache.get(technicalStandardPackageId);
-    if (cached) {
-      setCatalogs(cached);
+    if (!ratingTree || !form.ratingTreeNodeId) {
+      setManualTreeNode(null);
       return;
     }
     let cancelled = false;
-    setCatalogError("");
-    fetchStandardCatalog(baseUrl, technicalStandardPackageId)
-      .then((catalog) => {
-        if (cancelled) return;
-        standardCatalogCache.set(technicalStandardPackageId, catalog.defect_catalogs);
-        setCatalogs(catalog.defect_catalogs);
+    void fetchRatingTreeNode(baseUrl, ratingTree.version_id, form.ratingTreeNodeId)
+      .then((node) => {
+        if (!cancelled) setManualTreeNode(node);
       })
       .catch((error) => {
-        if (!cancelled) setCatalogError(standardsErrorMessage(error));
+        if (!cancelled) setFormError(ratingTreeErrorMessage(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [baseUrl, form.ratingTreeNodeId, ratingTree]);
+
+  useEffect(() => {
+    const inventory = componentInventory ?? loadedInventory;
+    if (!ratingTree || !inventory) {
+      setTreeNodesByComponent(new Map());
+      setTreeNodeDetails([]);
+      setTreeRulesReady(Boolean(!ratingTree));
+      return;
+    }
+    let cancelled = false;
+    setTreeRulesReady(false);
+    setTreeError("");
+    const activeEntries = inventory.entries.filter((entry) => entry.is_active);
+    const scopes = new Map<string, { bridgeTypeId: string; componentCategoryId: string }>();
+    for (const entry of activeEntries) {
+      const mapping = entry.mappings.find((item) => item.is_active);
+      if (!mapping) continue;
+      scopes.set(`${mapping.standard_bridge_type_id}\u0000${mapping.standard_component_category_id}`, {
+        bridgeTypeId: mapping.standard_bridge_type_id,
+        componentCategoryId: mapping.standard_component_category_id,
+      });
+    }
+    void Promise.all([
+      Promise.all([...scopes.entries()].map(async ([key, scope]) => [
+        key,
+        await fetchApplicableRatingTreeDefects(
+          baseUrl,
+          ratingTree.version_id,
+          scope.bridgeTypeId,
+          scope.componentCategoryId,
+        ),
+      ] as const)),
+      Promise.all(selectedTreeNodeIds.map((nodeId) =>
+        fetchRatingTreeNode(baseUrl, ratingTree.version_id, nodeId))),
+    ])
+      .then(([scopeResults, details]) => {
+        if (cancelled) return;
+        const byScope = new Map(scopeResults);
+        const byComponent = new Map<string, RatingTreeNodeSummary[]>();
+        for (const entry of activeEntries) {
+          const mapping = entry.mappings.find((item) => item.is_active);
+          if (!mapping) continue;
+          const key = `${mapping.standard_bridge_type_id}\u0000${mapping.standard_component_category_id}`;
+          byComponent.set(entry.bridge_component_id, byScope.get(key) ?? []);
+        }
+        setTreeNodesByComponent(byComponent);
+        setTreeNodeDetails(details);
+        setTreeRulesReady(true);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setTreeError(ratingTreeErrorMessage(error));
+          setTreeRulesReady(false);
+        }
       });
     return () => { cancelled = true; };
-  }, [baseUrl, technicalStandardPackageId]);
+  }, [baseUrl, componentInventory, loadedInventory, ratingTree, selectedTreeNodeIdsKey]);
+
+  const applicableTreeNodeIdsByComponent = useMemo(
+    () => new Map(
+      [...treeNodesByComponent.entries()].map(([componentId, nodes]) => [
+        componentId,
+        new Set(nodes.map((node) => node.id)),
+      ]),
+    ),
+    [treeNodesByComponent],
+  );
 
   const allModel = useMemo(() => buildDefectPhotoReviewModel({
     draft,
-    defectCatalogs: catalogs,
+    defectCatalogs: [],
+    ratingTreeVersionId: ratingTree?.version_id ?? null,
+    ratingTreeNodes: treeNodeDetails,
+    applicableTreeNodeIdsByComponent,
+    treeRulesReady,
     assessmentIssues,
-  }), [assessmentIssues, catalogs, draft]);
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, ratingTree?.version_id, treeNodeDetails, treeRulesReady]);
   const visibleModel = useMemo(() => buildDefectPhotoReviewModel({
     draft,
-    defectCatalogs: catalogs,
+    defectCatalogs: [],
+    ratingTreeVersionId: ratingTree?.version_id ?? null,
+    ratingTreeNodes: treeNodeDetails,
+    applicableTreeNodeIdsByComponent,
+    treeRulesReady,
     assessmentIssues,
     filter,
     problemCategory,
     search,
-  }), [assessmentIssues, catalogs, draft, filter, problemCategory, search]);
-
-  useEffect(() => {
-    if (catalogs.length === 0) return;
-    const matches = allModel.rows
-      .filter((row) => row.suggestedIndicator && !appliedSuggestionIds.current.has(row.candidateId))
-      .map((row) => {
-        appliedSuggestionIds.current.add(row.candidateId);
-        return {
-          candidateId: row.candidateId,
-          indicatorId: row.suggestedIndicator!.id,
-          indicatorName: row.suggestedIndicator!.name,
-        };
-      });
-    if (matches.length > 0) dispatch({ type: "apply_unique_standard_indicator_matches", matches });
-  }, [allModel.rows, catalogs.length, dispatch]);
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, problemCategory, ratingTree?.version_id, search, treeNodeDetails, treeRulesReady]);
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -185,10 +260,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   ).length;
   const selectedEntry = inventoryEntries.find((entry) => entry.id === form.componentEntryId);
   const selectedMapping = selectedEntry?.mappings.find((item) => item.is_active);
-  const manualDefectIndicators = selectedMapping
-    ? catalogs
-        .filter((catalog) => catalog.applicable_component_ids.includes(selectedMapping.standard_component_category_id))
-        .flatMap((catalog) => catalog.indicators)
+  const manualDefectNodes = selectedEntry
+    ? treeNodesByComponent.get(selectedEntry.bridge_component_id) ?? []
     : [];
 
   const closeDetail = () => {
@@ -276,16 +349,20 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     const entry = inventoryEntries.find((item) => item.id === form.componentEntryId);
     const inventory = loadedInventory ?? componentInventory;
     const mapping = entry?.mappings.find((item) => item.is_active);
-    const indicator = manualDefectIndicators.find((item) => item.id === form.standardDefectIndicatorId);
+    const treeNode = manualDefectNodes.find((item) => item.id === form.ratingTreeNodeId);
     const location = form.defectLocation.trim();
     const description = form.defectDescription.trim();
     const scale = form.defectScale === "" ? null : Number(form.defectScale);
-    if (!inventory || !entry || !mapping || !indicator || !location || !description) {
+    if (!inventory || !entry || !mapping || !treeNode || !ratingTree || !location || !description) {
       setFormError("请填写构件类别、构件编号、病害位置、病害类型和病害描述。");
       return;
     }
     if (scale !== null && (!Number.isInteger(scale) || scale <= 0)) {
       setFormError("病害标度必须是正整数，也可以暂时留空。");
+      return;
+    }
+    if (scale !== null && manualTreeNode?.is_scoring && !manualTreeNode.allowed_scales.includes(scale)) {
+      setFormError("病害标度不在该评定树节点允许范围内。");
       return;
     }
     dispatch({
@@ -298,10 +375,12 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         resolvedStructurePart: STRUCTURE_PART_LABELS[mapping.structure_part],
         inventoryRevisionId: inventory.id,
         defectLocation: location,
-        defectType: indicator.name,
-        standardDefectIndicatorId: indicator.id,
+        defectType: treeNode.display_name,
+        ratingTreeVersionId: ratingTree.version_id,
+        ratingTreeNodeId: treeNode.id,
         defectDescription: description,
         defectScale: scale,
+        isScoring: treeNode.is_scoring,
       },
     });
     setForm(EMPTY_MANUAL_DEFECT);
@@ -313,25 +392,28 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     <section className="status-panel defect-photo-section">
       <div className="defect-section-heading">
         <h2>病害与照片</h2>
-        <button type="button" disabled={!allowStructureChanges || loadingInventory} onClick={openAddForm}>新增病害</button>
+        <div className="defect-section-heading-actions">
+          {headerActions}
+          <button type="button" disabled={!allowStructureChanges || loadingInventory} onClick={openAddForm}>新增病害</button>
+        </div>
       </div>
       {showAddForm ? (
         <form className="manual-defect-form" onSubmit={submitManualDefect}>
-          <label>实际构件<select aria-label="实际构件" disabled={loadingInventory} required value={form.componentEntryId} onChange={(event) => setForm({ ...form, componentEntryId: event.target.value, standardDefectIndicatorId: "" })}><option value="">请选择构件</option>{inventoryEntries.map((entry) => <option key={entry.id} value={entry.id}>{entry.component_number} / {entry.site_component_type}</option>)}</select></label>
+          <label>实际构件<select aria-label="实际构件" disabled={loadingInventory} required value={form.componentEntryId} onChange={(event) => setForm({ ...form, componentEntryId: event.target.value, ratingTreeNodeId: "" })}><option value="">请选择构件</option>{inventoryEntries.map((entry) => <option key={entry.id} value={entry.id}>{entry.component_number} / {entry.site_component_type}</option>)}</select></label>
           <label>构件类别<input aria-label="新增病害构件类别" readOnly value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.site_component_type ?? ""} /></label>
           <label>构件编号<input aria-label="新增病害构件编号" readOnly value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.component_number ?? ""} /></label>
           <label>病害位置<input aria-label="新增病害位置" required value={form.defectLocation} onChange={(event) => setForm({ ...form, defectLocation: event.target.value })} /></label>
-          <label>病害类型<select aria-label="新增病害类型" required value={form.standardDefectIndicatorId} onChange={(event) => setForm({ ...form, standardDefectIndicatorId: event.target.value })}><option value="">请选择规范病害</option>{manualDefectIndicators.map((indicator) => <option key={indicator.id} value={indicator.id}>{indicator.name}</option>)}</select></label>
+          <label>病害类型<select aria-label="新增病害类型" required value={form.ratingTreeNodeId} onChange={(event) => setForm({ ...form, ratingTreeNodeId: event.target.value, defectScale: "" })}><option value="">请选择评定树病害</option>{manualDefectNodes.map((node) => <option key={node.id} value={node.id}>{node.display_name}{node.is_scoring ? "" : "（暂不计分）"}</option>)}</select></label>
           <label className="manual-defect-form-wide">病害描述<input aria-label="新增病害描述" required value={form.defectDescription} onChange={(event) => setForm({ ...form, defectDescription: event.target.value })} /></label>
-          <label>病害标度（可稍后填写）<input aria-label="新增病害标度" type="number" min={1} step={1} value={form.defectScale} onChange={(event) => setForm({ ...form, defectScale: event.target.value })} /></label>
+          <label>病害标度（可稍后填写）<select aria-label="新增病害标度" disabled={!manualTreeNode?.is_scoring} value={form.defectScale} onChange={(event) => setForm({ ...form, defectScale: event.target.value })}><option value="">{manualTreeNode?.is_scoring ? "请选择标度" : "该节点暂不计分"}</option>{manualTreeNode?.allowed_scales.map((scale) => <option key={scale} value={scale}>{scale} · {manualTreeNode.scale_descriptions[String(scale)]}</option>)}</select></label>
           {formError ? <p className="form-error" role="alert">{formError}</p> : null}
           <div className="manual-defect-form-actions"><button type="button" onClick={() => { setShowAddForm(false); setFormError(""); }}>取消</button><button type="submit" disabled={loadingInventory || inventoryEntries.length === 0}>添加病害</button></div>
         </form>
       ) : null}
       <fieldset className="review-disabled-fieldset">
         {draft.defects.length === 0 ? <p>暂无病害候选，可使用“新增病害”手动添加。</p> : null}
-        {catalogError ? <p className="form-error" role="alert">{catalogError}</p> : null}
-        {!technicalStandardPackageId ? <p className="warning-text">当前检测年度未配置技术评定规范，无法确定规范病害。</p> : null}
+        {treeError ? <p className="form-error" role="alert">{treeError}</p> : null}
+        {!ratingTree ? <p className="warning-text">当前检测年度未锁定评定树，无法确定病害评分节点。</p> : null}
         <DefectReviewToolbar
           summary={allModel.summary}
           filter={filter}
@@ -388,7 +470,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
                 <DefectDetailEditor
                   draft={draft}
                   row={currentRow}
-                  catalogs={catalogs}
+                  ratingTreeVersionId={ratingTree?.version_id ?? null}
+                  applicableNodes={treeNodesByComponent.get(currentRow.defect.bridge_component_id ?? "") ?? []}
                   componentInventory={componentInventory ?? loadedInventory}
                   importRecordId={importRecordId}
                   baseUrl={baseUrl}

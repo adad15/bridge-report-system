@@ -1,4 +1,5 @@
 import type { AssessmentIssue } from "../api/assessmentApi";
+import type { RatingTreeNode } from "../api/ratingTreeApi";
 import type { StandardDefectCatalog, StandardDefectIndicator } from "../api/standardsApi";
 import type {
   BridgeAnnualInspectionData,
@@ -24,6 +25,7 @@ export interface DefectReviewRow {
   status: "batchable" | "needs_attention" | "confirmed" | "ignored";
   indicator: StandardDefectIndicator | null;
   suggestedIndicator: StandardDefectIndicator | null;
+  ratingTreeNode: RatingTreeNode | null;
 }
 
 export interface DefectPhotoReviewSummary {
@@ -42,6 +44,10 @@ export interface DefectPhotoReviewModel {
 export interface DefectPhotoReviewModelInput {
   draft: BridgeAnnualInspectionData;
   defectCatalogs: StandardDefectCatalog[];
+  ratingTreeVersionId?: string | null;
+  ratingTreeNodes?: RatingTreeNode[];
+  applicableTreeNodeIdsByComponent?: ReadonlyMap<string, ReadonlySet<string>>;
+  treeRulesReady?: boolean;
   assessmentIssues: AssessmentIssue[];
   filter?: DefectReviewFilter;
   problemCategory?: DefectReviewProblemCategory | null;
@@ -101,33 +107,74 @@ function analyzeDefect(
   entries: CatalogEntry[],
   assessmentIssues: AssessmentIssue[],
   repeatedPhotoNumbers: Set<string>,
+  ratingTreeVersionId: string | null | undefined,
+  ratingTreeNodes: ReadonlyMap<string, RatingTreeNode>,
+  applicableTreeNodeIdsByComponent: ReadonlyMap<string, ReadonlySet<string>>,
+  treeRulesReady: boolean,
 ): DefectReviewRow {
   const problems: DefectReviewProblem[] = [];
   const photos = photosForDefect(draft, defect.candidate_id);
   const indicatorEntry = entries.find(
     ({ indicator }) => indicator.id === defect.standard_defect_indicator_id,
   );
+  const treeMode = ratingTreeVersionId !== undefined;
+  const ratingTreeNode = defect.rating_tree_node_id
+    ? ratingTreeNodes.get(defect.rating_tree_node_id) ?? null
+    : null;
 
   if (!defect.bridge_component_id || !defect.standard_component_category_id) {
     addProblem(problems, "component_required", "component", "尚未选择实际构件。");
   }
-  if (!defect.standard_defect_indicator_id) {
-    addProblem(problems, "indicator_required", "defect_type", "尚未选择规范病害。");
-  } else if (!indicatorEntry) {
-    addProblem(problems, "indicator_unknown", "defect_type", "规范病害已不存在。");
-  } else if (
-    !defect.standard_component_category_id ||
-    !indicatorEntry.applicableComponentIds.has(defect.standard_component_category_id)
-  ) {
-    addProblem(problems, "indicator_not_applicable", "defect_type", "规范病害不适用于当前构件。");
-  }
-  if (
-    indicatorEntry &&
-    (defect.defect_scale === null ||
-      defect.defect_scale === undefined ||
-      !indicatorEntry.indicator.allowed_scales.includes(defect.defect_scale))
-  ) {
-    addProblem(problems, "scale_not_allowed", "scale", "病害标度不在规范允许范围内。");
+  if (treeMode) {
+    if (!ratingTreeVersionId) {
+      addProblem(problems, "rating_tree_required", "defect_type", "当前年度尚未锁定评定树。");
+    } else if (!defect.rating_tree_node_id) {
+      addProblem(problems, "rating_tree_node_required", "defect_type", "尚未选择评定树病害。");
+    } else {
+      if (defect.rating_tree_version_id !== ratingTreeVersionId) {
+        addProblem(problems, "rating_tree_version_mismatch", "defect_type", "病害关联的评定树版本与当前年度不一致。");
+      }
+      if (!treeRulesReady) {
+        addProblem(problems, "rating_tree_loading", "other", "正在加载评定树规则。");
+      } else if (!ratingTreeNode) {
+        addProblem(problems, "rating_tree_node_unknown", "defect_type", "评定树病害节点已不存在。");
+      } else if (
+        !defect.bridge_component_id ||
+        !applicableTreeNodeIdsByComponent.get(defect.bridge_component_id)?.has(ratingTreeNode.id)
+      ) {
+        addProblem(problems, "rating_tree_node_not_applicable", "defect_type", "评定树病害不适用于当前实际构件。");
+      }
+    }
+    if (defect.rating_tree_match_method === "fuzzy_candidate") {
+      addProblem(problems, "rating_tree_fuzzy_review_required", "defect_type", "模糊匹配建议需要人工确认。");
+    }
+    if (
+      ratingTreeNode?.is_scoring &&
+      (defect.defect_scale === null ||
+        defect.defect_scale === undefined ||
+        !ratingTreeNode.allowed_scales.includes(defect.defect_scale))
+    ) {
+      addProblem(problems, "scale_not_allowed", "scale", "病害标度不在评定树允许范围内。");
+    }
+  } else {
+    if (!defect.standard_defect_indicator_id) {
+      addProblem(problems, "indicator_required", "defect_type", "尚未选择规范病害。");
+    } else if (!indicatorEntry) {
+      addProblem(problems, "indicator_unknown", "defect_type", "规范病害已不存在。");
+    } else if (
+      !defect.standard_component_category_id ||
+      !indicatorEntry.applicableComponentIds.has(defect.standard_component_category_id)
+    ) {
+      addProblem(problems, "indicator_not_applicable", "defect_type", "规范病害不适用于当前构件。");
+    }
+    if (
+      indicatorEntry &&
+      (defect.defect_scale === null ||
+        defect.defect_scale === undefined ||
+        !indicatorEntry.indicator.allowed_scales.includes(defect.defect_scale))
+    ) {
+      addProblem(problems, "scale_not_allowed", "scale", "病害标度不在规范允许范围内。");
+    }
   }
 
   for (const reference of defect.photo_references) {
@@ -236,6 +283,7 @@ function analyzeDefect(
     suggestedIndicator: defect.standard_defect_indicator_id
       ? null
       : exactIndicatorSuggestion(defect, entries),
+    ratingTreeNode,
   };
 }
 
@@ -243,6 +291,9 @@ export function buildDefectPhotoReviewModel(
   input: DefectPhotoReviewModelInput,
 ): DefectPhotoReviewModel {
   const entries = catalogEntries(input.defectCatalogs);
+  const ratingTreeNodes = new Map(
+    (input.ratingTreeNodes ?? []).map((node) => [node.id, node] as const),
+  );
   const photoNumberCounts = new Map<string, number>();
   for (const defect of input.draft.defects) {
     for (const reference of defect.photo_references) {
@@ -264,6 +315,10 @@ export function buildDefectPhotoReviewModel(
       entries,
       input.assessmentIssues,
       repeatedPhotoNumbers,
+      input.ratingTreeVersionId,
+      ratingTreeNodes,
+      input.applicableTreeNodeIdsByComponent ?? new Map(),
+      input.treeRulesReady ?? false,
     ),
   );
   const summary = {

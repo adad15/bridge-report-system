@@ -54,6 +54,13 @@ export interface ReviewTechnicalConditionStandard {
   package_version: string;
 }
 
+export interface ReviewRatingTree {
+  version_id: string;
+  tree_name: string;
+  package_version: string;
+  content_checksum: string;
+}
+
 // 重开校对范围：warnings_only=仅带警告的病害可改（任何登录用户）；
 // full=全部可改（仅管理员可发起）。
 export type ReopenScope = "warnings_only" | "full";
@@ -89,6 +96,7 @@ export interface ReviewResponse {
   has_current_annual_facts: boolean;
   contract_compatibility: ContractCompatibility;
   technical_condition_standard: ReviewTechnicalConditionStandard | null;
+  rating_tree?: ReviewRatingTree | null;
   reopen: ReviewReopenState | null;
   edit_lock: EditLockSummary | null;
   component_inventory?: ComponentInventoryRevision | null;

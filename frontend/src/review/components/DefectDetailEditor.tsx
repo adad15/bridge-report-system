@@ -1,7 +1,12 @@
-import type { Dispatch } from "react";
+import { useEffect, useState, type Dispatch } from "react";
 
-import type { StandardDefectCatalog, StandardDefectIndicator } from "../../api/standardsApi";
 import type { ComponentInventoryRevision } from "../../api/componentInventoryApi";
+import {
+  fetchRatingTreeNode,
+  ratingTreeErrorMessage,
+  type RatingTreeNode,
+  type RatingTreeNodeSummary,
+} from "../../api/ratingTreeApi";
 import type { BridgeAnnualInspectionData } from "../../contracts/annualInspection";
 import type { DefectReviewRow } from "../defectPhotoReviewModel";
 import type { ReviewDraftAction } from "../reviewDraft";
@@ -11,7 +16,8 @@ import { PhotoRelationEditor } from "./PhotoRelationEditor";
 interface DefectDetailEditorProps {
   draft: BridgeAnnualInspectionData;
   row: DefectReviewRow;
-  catalogs: StandardDefectCatalog[];
+  ratingTreeVersionId: string | null;
+  applicableNodes: RatingTreeNodeSummary[];
   componentInventory?: ComponentInventoryRevision | null;
   importRecordId: string;
   baseUrl: string;
@@ -23,20 +29,11 @@ interface DefectDetailEditorProps {
   onClose: () => void;
 }
 
-function applicableIndicators(
-  catalogs: StandardDefectCatalog[],
-  categoryId: string | null | undefined,
-): StandardDefectIndicator[] {
-  if (!categoryId) return [];
-  return catalogs
-    .filter((catalog) => catalog.applicable_component_ids.includes(categoryId))
-    .flatMap((catalog) => catalog.indicators);
-}
-
 export function DefectDetailEditor({
   draft,
   row,
-  catalogs,
+  ratingTreeVersionId,
+  applicableNodes,
   componentInventory,
   importRecordId,
   baseUrl,
@@ -48,8 +45,31 @@ export function DefectDetailEditor({
   onClose,
 }: DefectDetailEditorProps) {
   const defect = row.defect;
-  const indicators = applicableIndicators(catalogs, defect.standard_component_category_id);
-  const indicator = indicators.find((item) => item.id === defect.standard_defect_indicator_id) ?? null;
+  const [treeNode, setTreeNode] = useState<RatingTreeNode | null>(row.ratingTreeNode);
+  const [treeNodeError, setTreeNodeError] = useState("");
+
+  useEffect(() => {
+    if (!ratingTreeVersionId || !defect.rating_tree_node_id) {
+      setTreeNode(null);
+      return;
+    }
+    if (row.ratingTreeNode?.id === defect.rating_tree_node_id) {
+      setTreeNode(row.ratingTreeNode);
+      return;
+    }
+    let active = true;
+    setTreeNodeError("");
+    void fetchRatingTreeNode(baseUrl, ratingTreeVersionId, defect.rating_tree_node_id)
+      .then((node) => {
+        if (active) setTreeNode(node);
+      })
+      .catch((error) => {
+        if (active) setTreeNodeError(ratingTreeErrorMessage(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [baseUrl, defect.rating_tree_node_id, ratingTreeVersionId, row.ratingTreeNode]);
 
   return (
     <section className="defect-detail-editor" aria-label="病害详情维护">
@@ -73,38 +93,73 @@ export function DefectDetailEditor({
       <div className="defect-detail-fields">
         <label>实际构件<ComponentMatchField defect={defect} inventory={componentInventory ?? null} /></label>
         <label>
-          规范病害
+          评定树病害
           <select
-            disabled={disabled}
-            value={defect.standard_defect_indicator_id ?? ""}
+            disabled={disabled || !ratingTreeVersionId}
+            value={defect.rating_tree_node_id ?? ""}
             onChange={(event) => {
-              const selected = indicators.find((item) => item.id === event.target.value);
+              const selected = applicableNodes.find((item) => item.id === event.target.value);
               if (selected) dispatch({
-                type: "select_standard_defect_indicator",
+                type: "select_rating_tree_node",
                 candidateId: defect.candidate_id,
-                indicatorId: selected.id,
-                indicatorName: selected.name,
+                versionId: ratingTreeVersionId!,
+                nodeId: selected.id,
+                nodeName: selected.display_name,
+                isScoring: selected.is_scoring,
+                matchEvidence: "用户在精细维护中从当前构件适用节点选择",
               });
             }}
           >
-            <option value="">请选择规范病害</option>
-            {indicators.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            <option value="">请选择评定树病害</option>
+            {applicableNodes.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.display_name}{item.is_scoring ? "" : "（暂不计分）"}
+              </option>
+            ))}
           </select>
         </label>
         <label>位置<input disabled={disabled} value={defect.defect_location} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} /></label>
         <label>
           标度
           <select
-            disabled={disabled || !indicator}
+            disabled={disabled || !treeNode?.is_scoring}
             value={defect.defect_scale ?? ""}
             onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_scale", value: event.target.value === "" ? null : Number(event.target.value) })}
           >
             <option value="">请选择标度</option>
-            {indicator?.allowed_scales.map((scale) => <option key={scale} value={scale}>{scale}</option>)}
+            {treeNode?.allowed_scales.map((scale) => (
+              <option key={scale} value={scale}>
+                {scale} · {treeNode.scale_descriptions[String(scale)] ?? ""}
+              </option>
+            ))}
           </select>
         </label>
         <label className="defect-detail-wide">病害描述<input disabled={disabled} value={defect.defect_description} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_description", value: event.target.value })} /></label>
       </div>
+      {treeNodeError ? <p className="form-error" role="alert">{treeNodeError}</p> : null}
+      {treeNode ? (
+        <div className="defect-rating-tree-context">
+          <div>
+            <span>评定树路径</span>
+            <strong>{treeNode.path.map((item) => item.display_name).join(" / ")}</strong>
+          </div>
+          <div>
+            <span>匹配方式</span>
+            <strong>{defect.rating_tree_match_method === "controlled_alias" ? "受控别名" : defect.rating_tree_match_method === "exact" ? "精确匹配" : defect.rating_tree_match_method === "fuzzy_candidate" ? "模糊建议（待确认）" : "人工选择"}</strong>
+          </div>
+          <div>
+            <span>评分规则</span>
+            <strong>{treeNode.is_scoring ? `继承 H21 · ${treeNode.h21_indicator_name ?? treeNode.h21_indicator_id}` : "暂不计分"}</strong>
+          </div>
+          <a
+            href={`/rating-trees/${encodeURIComponent(ratingTreeVersionId!)}?node=${encodeURIComponent(treeNode.id)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            在评定树中查看
+          </a>
+        </div>
+      ) : null}
       <details>
         <summary>检测量与补充信息</summary>
         <div className="defect-detail-fields">

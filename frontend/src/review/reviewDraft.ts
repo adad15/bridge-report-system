@@ -24,9 +24,11 @@ export interface DefectComponentSelection {
 export interface ManualDefectInput extends DefectComponentSelection {
   defectLocation: string;
   defectType: string;
-  standardDefectIndicatorId: string;
+  ratingTreeVersionId: string;
+  ratingTreeNodeId: string;
   defectDescription: string;
   defectScale?: number | null;
+  isScoring: boolean;
 }
 
 export type CandidateIdFactory = () => string;
@@ -52,6 +54,15 @@ export type ReviewDraftAction =
   | { type: "edit_defect_field"; candidateId: string; field: "review_status"; value: ReviewStatus }
   | { type: "edit_defect_field"; candidateId: string; field: "review_note"; value: string | null }
   | { type: "edit_measurement_text"; candidateId: string; text: string | null }
+  | {
+      type: "select_rating_tree_node";
+      candidateId: string;
+      versionId: string;
+      nodeId: string;
+      nodeName: string;
+      isScoring: boolean;
+      matchEvidence: string;
+    }
   | {
       type: "select_standard_defect_indicator";
       candidateId: string;
@@ -221,11 +232,15 @@ function reduceReviewDraft(
         defect_location: input.defectLocation,
         defect_type: input.defectType,
         defect_description: input.defectDescription,
-        defect_scale: input.defectScale ?? null,
+        defect_scale: input.isScoring ? input.defectScale ?? null : null,
         quantity_text: null,
         measurement_text: null,
         measurements: [],
-        standard_defect_indicator_id: input.standardDefectIndicatorId,
+        rating_tree_version_id: input.ratingTreeVersionId,
+        rating_tree_node_id: input.ratingTreeNodeId,
+        rating_tree_match_method: "manual",
+        rating_tree_match_evidence: "人工新增病害时从当前年度评定树选择",
+        standard_defect_indicator_id: null,
         photo_references: [],
         group_review_status: "待确认",
         severity: null,
@@ -270,6 +285,11 @@ function reduceReviewDraft(
           component_match_candidate_ids: [component.bridgeComponentId],
           component_match_method: "manual",
           component_match_confirmed_by: null,
+          rating_tree_version_id: null,
+          rating_tree_node_id: null,
+          rating_tree_match_method: null,
+          rating_tree_match_evidence: null,
+          standard_defect_indicator_id: null,
           warnings: defect.warnings.filter((warning) =>
             warning.code !== "defect_component_match_required" &&
             warning.code !== "defect_component_match_ambiguous"),
@@ -320,6 +340,24 @@ function reduceReviewDraft(
           ...defect,
           standard_defect_indicator_id: action.indicatorId,
           defect_type: action.indicatorName,
+          review_status: nextStatusAfterContentEdit(defect.review_status),
+          group_review_status: "待确认",
+        })),
+      };
+    }
+
+    case "select_rating_tree_node": {
+      return {
+        ...state,
+        defects: updateDefect(state.defects, action.candidateId, (defect) => ({
+          ...defect,
+          rating_tree_version_id: action.versionId,
+          rating_tree_node_id: action.nodeId,
+          rating_tree_match_method: "manual",
+          rating_tree_match_evidence: action.matchEvidence,
+          standard_defect_indicator_id: null,
+          defect_type: action.nodeName,
+          defect_scale: action.isScoring ? defect.defect_scale : null,
           review_status: nextStatusAfterContentEdit(defect.review_status),
           group_review_status: "待确认",
         })),

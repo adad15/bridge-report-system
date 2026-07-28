@@ -68,6 +68,7 @@ export interface RatingTreeNode extends RatingTreeNodeSummary {
 const versionCache = new Map<string, Promise<RatingTreeVersion>>();
 const nodeListCache = new Map<string, Promise<RatingTreeNodeSummary[]>>();
 const nodeDetailCache = new Map<string, Promise<RatingTreeNode>>();
+const applicableNodeCache = new Map<string, Promise<RatingTreeNodeSummary[]>>();
 
 function cached<T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>): Promise<T> {
   const existing = cache.get(key);
@@ -137,21 +138,24 @@ export async function searchRatingTree(
   return body.nodes;
 }
 
-export async function fetchApplicableRatingTreeDefects(
+export function fetchApplicableRatingTreeDefects(
   baseUrl: string,
   versionId: string,
   bridgeTypeId: string,
   componentCategoryId: string,
 ): Promise<RatingTreeNodeSummary[]> {
-  const params = new URLSearchParams({
-    bridge_type_id: bridgeTypeId,
-    component_category_id: componentCategoryId,
-    limit: "200",
+  const key = `${baseUrl}:${versionId}:${bridgeTypeId}:${componentCategoryId}`;
+  return cached(applicableNodeCache, key, async () => {
+    const params = new URLSearchParams({
+      bridge_type_id: bridgeTypeId,
+      component_category_id: componentCategoryId,
+      limit: "200",
+    });
+    const body = await request<{ nodes: RatingTreeNodeSummary[] }>(
+      `${baseUrl}/api/rating-trees/${encodeURIComponent(versionId)}/applicable-defects?${params}`,
+    );
+    return body.nodes;
   });
-  const body = await request<{ nodes: RatingTreeNodeSummary[] }>(
-    `${baseUrl}/api/rating-trees/${encodeURIComponent(versionId)}/applicable-defects?${params}`,
-  );
-  return body.nodes;
 }
 
 export function ratingTreeErrorMessage(error: unknown): string {
@@ -168,4 +172,5 @@ export function clearRatingTreeApiCacheForTests(): void {
   versionCache.clear();
   nodeListCache.clear();
   nodeDetailCache.clear();
+  applicableNodeCache.clear();
 }

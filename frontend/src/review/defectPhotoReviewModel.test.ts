@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { StandardDefectCatalog } from "../api/standardsApi";
+import type { RatingTreeNode } from "../api/ratingTreeApi";
 import { data as completeData } from "./testFixtures";
 import { buildDefectPhotoReviewModel } from "./defectPhotoReviewModel";
 
@@ -16,6 +17,29 @@ const catalogs: StandardDefectCatalog[] = [{
     source_table: "5.1.1-1",
   }],
 }];
+
+const treeNode: RatingTreeNode = {
+  id: "tree-node-crack",
+  node_key: "org.bridge.defect.crack",
+  parent_node_id: "tree-group",
+  display_name: "裂缝",
+  node_type: "defect",
+  sort_order: 1,
+  bridge_type_ids: ["bridge-type-1"],
+  component_category_ids: ["category-1"],
+  scoring_mode: "inherit_h21",
+  h21_indicator_id: "indicator-crack",
+  is_selectable: true,
+  is_scoring: true,
+  organization_note: "",
+  allowed_scales: [1, 2, 3],
+  h21_indicator_name: "裂缝",
+  h21_source_table: "5.1.1-1",
+  scale_descriptions: { "1": "完好", "2": "轻微", "3": "明显" },
+  deduction_points: { "1": 0, "2": 15, "3": 30 },
+  path: [],
+  sources: [],
+};
 
 function safeDraft() {
   const draft = completeData();
@@ -39,6 +63,56 @@ function safeDraft() {
 }
 
 describe("buildDefectPhotoReviewModel", () => {
+  it("allows exact and controlled-alias tree matches but blocks fuzzy suggestions", () => {
+    const draft = safeDraft();
+    Object.assign(draft.defects[0], {
+      rating_tree_version_id: "tree-version-1",
+      rating_tree_node_id: treeNode.id,
+      rating_tree_match_method: "exact",
+    });
+    const input = {
+      draft,
+      defectCatalogs: [],
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodes: [treeNode],
+      applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
+      treeRulesReady: true,
+      assessmentIssues: [],
+    };
+
+    expect(buildDefectPhotoReviewModel(input).rows[0].batchEligible).toBe(true);
+    draft.defects[0].rating_tree_match_method = "controlled_alias";
+    expect(buildDefectPhotoReviewModel(input).rows[0].batchEligible).toBe(true);
+    draft.defects[0].rating_tree_match_method = "fuzzy_candidate";
+    expect(buildDefectPhotoReviewModel(input).rows[0].problems.map((problem) => problem.code))
+      .toContain("rating_tree_fuzzy_review_required");
+  });
+
+  it("validates tree version, component scope and allowed scales independently", () => {
+    const draft = safeDraft();
+    Object.assign(draft.defects[0], {
+      rating_tree_version_id: "old-version",
+      rating_tree_node_id: treeNode.id,
+      rating_tree_match_method: "manual",
+      defect_scale: 5,
+    });
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      defectCatalogs: [],
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodes: [treeNode],
+      applicableTreeNodeIdsByComponent: new Map([["component-1", new Set<string>()]]),
+      treeRulesReady: true,
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code)).toEqual(expect.arrayContaining([
+      "rating_tree_version_mismatch",
+      "rating_tree_node_not_applicable",
+      "scale_not_allowed",
+    ]));
+  });
+
   it("marks a complete group as safe for batch confirmation", () => {
     const model = buildDefectPhotoReviewModel({
       draft: safeDraft(),

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import {
   fetchRatingTreeChildren,
@@ -22,6 +22,8 @@ import {
 
 export function RatingTreePage() {
   const { versionId } = useParams<{ versionId: string }>();
+  const [searchParams] = useSearchParams();
+  const linkedNodeId = searchParams.get("node");
   const navigate = useNavigate();
   const initialState = useMemo(
     () => (versionId ? readRatingTreeViewState(versionId) : null),
@@ -83,7 +85,7 @@ export function RatingTreePage() {
     setRoots([]);
     setChildrenByParent(new Map());
     setExpandedNodeIds(restoredExpanded);
-    setSelectedNodeId(restored.selectedNodeId);
+    setSelectedNodeId(linkedNodeId || restored.selectedNodeId);
     setSelectedNode(null);
     setSearchTerm(restored.searchTerm);
     setSearchResults(restored.searchTerm ? [] : null);
@@ -125,7 +127,7 @@ export function RatingTreePage() {
     return () => {
       active = false;
     };
-  }, [versionId]);
+  }, [linkedNodeId, versionId]);
 
   useEffect(() => {
     if (!versionId) return;

@@ -853,7 +853,7 @@ function ReviewWorkspaceLoaded({
               componentInventory={response.component_inventory}
               selectedCandidateId={expandedDefectId}
               selectedPhotoCandidateId={activePhotoCandidateId}
-              technicalStandardPackageId={response.technical_condition_standard?.package_id}
+              ratingTree={response.rating_tree ?? null}
               assessmentIssues={assessmentState.response?.issues ?? []}
               onSelect={(candidateId, photoCandidateId) => {
                 setExpandedDefectId(candidateId);

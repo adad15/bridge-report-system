@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchLatestComponentInventory } from "../../api/componentInventoryApi";
-import { fetchStandardCatalog } from "../../api/standardsApi";
+import { fetchApplicableRatingTreeDefects, fetchRatingTreeNode } from "../../api/ratingTreeApi";
 import { data } from "../testFixtures";
 import { DefectsSection } from "./DefectsSection";
 
@@ -10,18 +10,25 @@ vi.mock("../../api/componentInventoryApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/componentInventoryApi")>();
   return { ...actual, fetchLatestComponentInventory: vi.fn() };
 });
-vi.mock("../../api/standardsApi", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../api/standardsApi")>();
-  return { ...actual, fetchStandardCatalog: vi.fn() };
+vi.mock("../../api/ratingTreeApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api/ratingTreeApi")>();
+  return {
+    ...actual,
+    fetchApplicableRatingTreeDefects: vi.fn(),
+    fetchRatingTreeNode: vi.fn(),
+  };
 });
 
 const mockedFetchInventory = vi.mocked(fetchLatestComponentInventory);
-const mockedFetchStandardCatalog = vi.mocked(fetchStandardCatalog);
+const mockedFetchApplicableNodes = vi.mocked(fetchApplicableRatingTreeDefects);
+const mockedFetchTreeNode = vi.mocked(fetchRatingTreeNode);
 
 describe("DefectsSection", () => {
   beforeEach(() => {
     mockedFetchInventory.mockReset();
-    mockedFetchStandardCatalog.mockReset();
+    mockedFetchApplicableNodes.mockReset();
+    mockedFetchApplicableNodes.mockResolvedValue([]);
+    mockedFetchTreeNode.mockReset();
   });
 
   it("adds a manual defect from an actual mapped component and allows an empty scale", async () => {
@@ -57,37 +64,52 @@ describe("DefectsSection", () => {
         }],
       }],
     });
-    mockedFetchStandardCatalog.mockResolvedValue({
-      package: {} as never,
-      bridge_types: [],
-      component_categories: [],
-      inventory_templates: [],
-      defect_catalogs: [{
-        id: "catalog-1",
-        applicable_component_ids: ["h21.component.beam"],
-        source_clause: "5.3.1",
-        indicators: [{
-          id: "h21.defect.crack",
-          name: "裂缝",
-          allowed_scales: [1, 2, 3, 4, 5],
-          deduction_rule_id: "rule-1",
-          source_table: "表5.3.1",
-        }],
-      }],
-      maintenance_levels: [],
-      inspection_types: [],
-      periodic_inspection_requirements: [],
+    mockedFetchApplicableNodes.mockResolvedValue([{
+      id: "tree-node-crack",
+      node_key: "org.bridge.defect.crack",
+      parent_node_id: "tree-group",
+      display_name: "裂缝",
+      node_type: "defect",
+      sort_order: 1,
+      bridge_type_ids: ["bridge-type-1"],
+      component_category_ids: ["h21.component.beam"],
+      scoring_mode: "inherit_h21",
+      h21_indicator_id: "h21.defect.crack",
+      is_selectable: true,
+      is_scoring: true,
+    }]);
+    mockedFetchTreeNode.mockResolvedValue({
+      id: "tree-node-crack",
+      node_key: "org.bridge.defect.crack",
+      parent_node_id: "tree-group",
+      display_name: "裂缝",
+      node_type: "defect",
+      sort_order: 1,
+      bridge_type_ids: ["bridge-type-1"],
+      component_category_ids: ["h21.component.beam"],
+      scoring_mode: "inherit_h21",
+      h21_indicator_id: "h21.defect.crack",
+      is_selectable: true,
+      is_scoring: true,
+      organization_note: "",
+      allowed_scales: [1, 2, 3, 4, 5],
+      h21_indicator_name: "裂缝",
+      h21_source_table: "表5.3.1",
+      scale_descriptions: { "1": "完好", "2": "轻微" },
+      deduction_points: { "1": 0, "2": 15 },
+      path: [],
+      sources: [],
     });
     const dispatch = vi.fn();
     const draft = data();
     draft.defects = [];
 
-    render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={dispatch} technicalStandardPackageId="package-1" allowStructureChanges />);
+    render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={dispatch} ratingTree={{ version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" }} allowStructureChanges />);
     fireEvent.click(screen.getByRole("button", { name: "新增病害" }));
     await waitFor(() => expect(screen.getByLabelText("实际构件")).toHaveValue("entry-1"));
     fireEvent.change(screen.getByLabelText("新增病害位置"), { target: { value: "第1跨梁底" } });
     await waitFor(() => expect(screen.getByLabelText("新增病害类型")).toHaveValue(""));
-    fireEvent.change(screen.getByLabelText("新增病害类型"), { target: { value: "h21.defect.crack" } });
+    fireEvent.change(screen.getByLabelText("新增病害类型"), { target: { value: "tree-node-crack" } });
     fireEvent.change(screen.getByLabelText("新增病害描述"), { target: { value: "梁底纵向裂缝" } });
     fireEvent.click(screen.getByRole("button", { name: "添加病害" }));
 
@@ -102,9 +124,11 @@ describe("DefectsSection", () => {
         inventoryRevisionId: "revision-1",
         defectLocation: "第1跨梁底",
         defectType: "裂缝",
-        standardDefectIndicatorId: "h21.defect.crack",
+        ratingTreeVersionId: "tree-version-1",
+        ratingTreeNodeId: "tree-node-crack",
         defectDescription: "梁底纵向裂缝",
         defectScale: null,
+        isScoring: true,
       },
     });
   });
@@ -116,7 +140,7 @@ describe("DefectsSection", () => {
     // 筛选仍可使用，详情内正式字段和业务动作被锁定。
     expect(screen.getByRole("textbox", { name: "搜索病害" })).toBeEnabled();
     expect(screen.getByRole("textbox", { name: "位置" })).toBeDisabled();
-    expect(screen.getByRole("combobox", { name: "规范病害" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "评定树病害" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "关联到病害" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "确认本组" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "确认并查看下一条" })).not.toBeInTheDocument();
@@ -218,32 +242,38 @@ describe("DefectsSection", () => {
   });
 
   it("keeps the just-confirmed row pinned until the filter changes", async () => {
-    mockedFetchStandardCatalog.mockResolvedValue({
-      package: {} as never,
-      bridge_types: [],
-      component_categories: [],
-      inventory_templates: [],
-      defect_catalogs: [{
-        id: "catalog-safe",
-        applicable_component_ids: ["h21.component.beam"],
-        source_clause: "5.3.1",
-        indicators: [{
-          id: "h21.defect.crack",
-          name: "裂缝",
-          allowed_scales: [2],
-          deduction_rule_id: "rule-1",
-          source_table: "表5.3.1",
-        }],
-      }],
-      maintenance_levels: [],
-      inspection_types: [],
-      periodic_inspection_requirements: [],
-    });
+    const treeNode = {
+      id: "tree-node-crack",
+      node_key: "org.bridge.defect.crack",
+      parent_node_id: "tree-group",
+      display_name: "裂缝",
+      node_type: "defect",
+      sort_order: 1,
+      bridge_type_ids: ["bridge-type-1"],
+      component_category_ids: ["h21.component.beam"],
+      scoring_mode: "inherit_h21" as const,
+      h21_indicator_id: "h21.defect.crack",
+      is_selectable: true,
+      is_scoring: true,
+      organization_note: "",
+      allowed_scales: [2],
+      h21_indicator_name: "裂缝",
+      h21_source_table: "表5.3.1",
+      scale_descriptions: { "2": "轻微裂缝" },
+      deduction_points: { "2": 15 },
+      path: [],
+      sources: [],
+    };
+    mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+    mockedFetchTreeNode.mockResolvedValue(treeNode);
     const draft = data();
     draft.defects[0] = {
       ...draft.defects[0],
       bridge_component_id: "component-1",
       standard_component_category_id: "h21.component.beam",
+      rating_tree_version_id: "tree-version-1",
+      rating_tree_node_id: treeNode.id,
+      rating_tree_match_method: "exact",
       standard_defect_indicator_id: "h21.defect.crack",
       photo_references: [{
         photo_number: "2.1-1",
@@ -261,7 +291,39 @@ describe("DefectsSection", () => {
       selectedCandidateId: "defect_0001",
       onSelect: vi.fn(),
       dispatch,
-      technicalStandardPackageId: "package-safe",
+      ratingTree: { version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" },
+      componentInventory: {
+        id: "revision-1",
+        bridge_id: "bridge-1",
+        revision_number: 1,
+        status: "confirmed",
+        baseline_revision_id: null,
+        confirmed_at: null,
+        entries: [{
+          id: "entry-1",
+          bridge_component_id: "component-1",
+          component_number: "2-1#梁",
+          site_name: "主梁",
+          site_component_type: "主梁",
+          span_or_location: null,
+          is_active: true,
+          deactivated_at: null,
+          deactivation_reason: null,
+          sort_order: 1,
+          remarks: null,
+          is_referenced: true,
+          mappings: [{
+            id: "mapping-1",
+            standard_package_id: "package-1",
+            standard_bridge_type_id: "bridge-type-1",
+            standard_component_category_id: "h21.component.beam",
+            structure_part: "superstructure" as const,
+            mapping_source: "template",
+            confirmation_status: "confirmed",
+            is_active: true,
+          }],
+        }],
+      },
     };
     const { rerender } = render(<DefectsSection draft={draft} {...props} />);
     await waitFor(() => expect(screen.getByRole("button", { name: "可批量确认 1" })).toBeInTheDocument());
