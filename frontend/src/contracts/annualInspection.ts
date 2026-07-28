@@ -120,6 +120,10 @@ export interface DefectCandidate {
   quantity_text?: string | null;
   measurement_text?: string | null;
   measurements: Measurement[];
+  rating_tree_version_id?: string | null;
+  rating_tree_node_id?: string | null;
+  rating_tree_match_method?: "exact" | "controlled_alias" | "fuzzy_candidate" | "manual" | null;
+  rating_tree_match_evidence?: string | null;
   standard_defect_indicator_id?: string | null;
   photo_references: PhotoReference[];
   group_review_status: DefectGroupReviewStatus;
@@ -377,6 +381,23 @@ function isValidDefectCandidate(value: unknown): boolean {
     (value.component_match_confirmed_by === undefined ||
       value.component_match_confirmed_by === null ||
       typeof value.component_match_confirmed_by === "string") &&
+    (value.rating_tree_version_id === undefined ||
+      value.rating_tree_version_id === null ||
+      (typeof value.rating_tree_version_id === "string" &&
+        value.rating_tree_version_id.trim().length > 0)) &&
+    (value.rating_tree_node_id === undefined ||
+      value.rating_tree_node_id === null ||
+      (typeof value.rating_tree_node_id === "string" &&
+        value.rating_tree_node_id.trim().length > 0)) &&
+    (value.rating_tree_match_method === undefined ||
+      value.rating_tree_match_method === null ||
+      ["exact", "controlled_alias", "fuzzy_candidate", "manual"].includes(
+        value.rating_tree_match_method as string
+      )) &&
+    (value.rating_tree_match_evidence === undefined ||
+      value.rating_tree_match_evidence === null ||
+      (typeof value.rating_tree_match_evidence === "string" &&
+        value.rating_tree_match_evidence.trim().length > 0)) &&
     (value.standard_defect_indicator_id === undefined ||
       value.standard_defect_indicator_id === null ||
       (typeof value.standard_defect_indicator_id === "string" &&

@@ -428,6 +428,60 @@
           "title": "Measurements",
           "type": "array"
         },
+        "rating_tree_version_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rating Tree Version Id"
+        },
+        "rating_tree_node_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rating Tree Node Id"
+        },
+        "rating_tree_match_method": {
+          "anyOf": [
+            {
+              "enum": [
+                "exact",
+                "controlled_alias",
+                "fuzzy_candidate",
+                "manual"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rating Tree Match Method"
+        },
+        "rating_tree_match_evidence": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rating Tree Match Evidence"
+        },
         "standard_defect_indicator_id": {
           "anyOf": [
             {

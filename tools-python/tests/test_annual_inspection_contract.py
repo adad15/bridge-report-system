@@ -208,6 +208,42 @@ def test_component_match_audit_fields_are_validated() -> None:
     assert "component_match_candidate_ids" in str(exc_info.value)
 
 
+def test_rating_tree_association_fields_are_optional_and_validated() -> None:
+    data = valid_payload()
+    defect = data["defects"][0]
+    defect.update(
+        rating_tree_version_id="tree-version-1",
+        rating_tree_node_id="tree-node-1",
+        rating_tree_match_method="controlled_alias",
+        rating_tree_match_evidence="裂缝 -> 裂缝（受力裂缝）",
+        standard_defect_indicator_id="indicator-1",
+    )
+
+    model = BridgeAnnualInspectionData.model_validate(data)
+    assert model.defects[0].rating_tree_version_id == "tree-version-1"
+    assert model.defects[0].rating_tree_node_id == "tree-node-1"
+    assert model.defects[0].rating_tree_match_method == "controlled_alias"
+    assert model.defects[0].standard_defect_indicator_id == "indicator-1"
+
+    for field_name in (
+        "rating_tree_version_id",
+        "rating_tree_node_id",
+        "rating_tree_match_evidence",
+        "standard_defect_indicator_id",
+    ):
+        invalid = valid_payload()
+        invalid["defects"][0][field_name] = "   "
+        with pytest.raises(ValidationError) as exc_info:
+            BridgeAnnualInspectionData.model_validate(invalid)
+        assert f"defects.0.{field_name}" in str(exc_info.value)
+
+    invalid = valid_payload()
+    invalid["defects"][0]["rating_tree_match_method"] = "guessed"
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(invalid)
+    assert "defects.0.rating_tree_match_method" in str(exc_info.value)
+
+
 def test_unknown_source_reference_type_is_rejected() -> None:
     data = valid_payload()
     data["defects"][0]["source_ref"] = {"source_type": "spreadsheet"}
@@ -424,6 +460,13 @@ def test_export_bridge_annual_inspection_schema(tmp_path: Path) -> None:
     assert defect_properties["bridge_component_id"]["default"] is None
     assert defect_properties["standard_component_category_id"]["default"] is None
     assert defect_properties["resolved_structure_part"]["default"] is None
+    assert defect_properties["rating_tree_version_id"]["default"] is None
+    assert defect_properties["rating_tree_node_id"]["default"] is None
+    assert defect_properties["rating_tree_match_evidence"]["default"] is None
+    assert defect_properties["standard_defect_indicator_id"]["default"] is None
+    assert set(
+        defect_properties["rating_tree_match_method"]["anyOf"][0]["enum"]
+    ) == {"exact", "controlled_alias", "fuzzy_candidate", "manual"}
     assert set(source_properties["source_type"]["enum"]) == {"word", "manual"}
     assert set(measurement_properties["value_type"]["enum"]) == {"single", "range"}
     assert measurement_properties["minimum_value"]["default"] is None

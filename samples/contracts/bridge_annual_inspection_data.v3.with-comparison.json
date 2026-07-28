@@ -63,6 +63,10 @@
           "source_text": "W=0.12mm"
         }
       ],
+      "rating_tree_version_id": null,
+      "rating_tree_node_id": null,
+      "rating_tree_match_method": null,
+      "rating_tree_match_evidence": null,
       "standard_defect_indicator_id": null,
       "photo_references": [
         {

@@ -93,6 +93,24 @@ void require_optional_nullable_string(
     }
 }
 
+void require_optional_nullable_non_blank_string(
+    const Json::Value& object,
+    const std::string& path,
+    const std::string& member,
+    ContractValidationResult& result) {
+    if (!object.isObject() || !object.isMember(member) || object[member].isNull()) {
+        return;
+    }
+    const auto full_path = member_path(path, member);
+    if (!object[member].isString()) {
+        result.add_issue(full_path, "must be a string or null");
+        return;
+    }
+    if (object[member].asString().find_first_not_of(" \t\r\n") == std::string::npos) {
+        result.add_issue(full_path, "must not be blank");
+    }
+}
+
 void validate_optional_string_array(
     const Json::Value& object,
     const std::string& path,
@@ -359,7 +377,22 @@ void validate_defect(
         defect, path, "component_inventory_revision_id", result);
     require_optional_nullable_string(
         defect, path, "component_match_confirmed_by", result);
-    require_optional_nullable_string(
+    require_optional_nullable_non_blank_string(
+        defect, path, "rating_tree_version_id", result);
+    require_optional_nullable_non_blank_string(
+        defect, path, "rating_tree_node_id", result);
+    require_optional_nullable_non_blank_string(
+        defect, path, "rating_tree_match_evidence", result);
+    if (defect.isMember("rating_tree_match_method") &&
+        !defect["rating_tree_match_method"].isNull()) {
+        require_enum(
+            defect,
+            path,
+            "rating_tree_match_method",
+            {"exact", "controlled_alias", "fuzzy_candidate", "manual"},
+            result);
+    }
+    require_optional_nullable_non_blank_string(
         defect, path, "standard_defect_indicator_id", result);
     validate_optional_string_array(
         defect, path, "component_match_candidate_ids", result);

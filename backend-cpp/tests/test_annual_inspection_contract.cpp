@@ -159,6 +159,42 @@ TEST(AnnualInspectionContractTest, ValidatesComponentMatchAuditFields) {
     expect_summary_contains(invalid, "defects[0].component_match_method");
 }
 
+TEST(AnnualInspectionContractTest, ValidatesRatingTreeAssociationFields) {
+    auto root =
+        read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+    auto& defect = root["defects"][0];
+    defect["rating_tree_version_id"] = "tree-version-1";
+    defect["rating_tree_node_id"] = "tree-node-1";
+    defect["rating_tree_match_method"] = "controlled_alias";
+    defect["rating_tree_match_evidence"] = "controlled alias";
+    defect["standard_defect_indicator_id"] = "indicator-1";
+
+    EXPECT_TRUE(bridge_report::contracts::validate_bridge_annual_inspection_data(root).ok());
+
+    for (const auto* field : {
+             "rating_tree_version_id",
+             "rating_tree_node_id",
+             "rating_tree_match_evidence",
+             "standard_defect_indicator_id",
+         }) {
+        auto invalid_root =
+            read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+        invalid_root["defects"][0][field] = "   ";
+        const auto invalid =
+            bridge_report::contracts::validate_bridge_annual_inspection_data(
+                invalid_root);
+        EXPECT_FALSE(invalid.ok()) << field;
+        expect_summary_contains(invalid, "defects[0]." + std::string(field));
+    }
+
+    defect["rating_tree_match_method"] = "guessed";
+    const auto invalid_method =
+        bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+    EXPECT_FALSE(invalid_method.ok());
+    expect_summary_contains(
+        invalid_method, "defects[0].rating_tree_match_method");
+}
+
 TEST(AnnualInspectionContractTest, ValidatesOptionalRangeSplitOrigin) {
     auto root =
         read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");

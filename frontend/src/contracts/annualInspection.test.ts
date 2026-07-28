@@ -62,6 +62,10 @@ const validData: BridgeAnnualInspectionData = {
           source_text: "L=0.8m",
         },
       ],
+      rating_tree_version_id: null,
+      rating_tree_node_id: null,
+      rating_tree_match_method: null,
+      rating_tree_match_evidence: null,
       standard_defect_indicator_id: null,
       photo_references: [
         {
@@ -197,6 +201,33 @@ describe("isBridgeAnnualInspectionData 3.0", () => {
       component_match_confirmed_by: "editor",
     });
     expect(isBridgeAnnualInspectionData(data)).toBe(true);
+  });
+
+  it("validates optional rating-tree association fields", () => {
+    const data = cloneValidData();
+    Object.assign(data.defects[0], {
+      rating_tree_version_id: "tree-version-1",
+      rating_tree_node_id: "tree-node-1",
+      rating_tree_match_method: "controlled_alias",
+      rating_tree_match_evidence: "裂缝 -> 裂缝（受力裂缝）",
+      standard_defect_indicator_id: "indicator-1",
+    });
+    expect(isBridgeAnnualInspectionData(data)).toBe(true);
+
+    for (const fieldName of [
+      "rating_tree_version_id",
+      "rating_tree_node_id",
+      "rating_tree_match_evidence",
+      "standard_defect_indicator_id",
+    ]) {
+      const invalid = cloneValidData();
+      Object.assign(invalid.defects[0], { [fieldName]: "   " });
+      expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
+    }
+
+    const invalidMethod = cloneValidData();
+    Object.assign(invalidMethod.defects[0], { rating_tree_match_method: "guessed" });
+    expect(isBridgeAnnualInspectionData(invalidMethod)).toBe(false);
   });
 
   it("validates optional range split provenance", () => {

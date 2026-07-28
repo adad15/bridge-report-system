@@ -190,6 +190,12 @@ class DefectCandidate(ContractModel):
     quantity_text: str | None = None
     measurement_text: str | None = None
     measurements: list[Measurement]
+    rating_tree_version_id: str | None = None
+    rating_tree_node_id: str | None = None
+    rating_tree_match_method: Literal[
+        "exact", "controlled_alias", "fuzzy_candidate", "manual"
+    ] | None = None
+    rating_tree_match_evidence: str | None = None
     standard_defect_indicator_id: str | None = None
     photo_references: list[PhotoReference]
     group_review_status: DefectGroupReviewStatus
@@ -212,11 +218,16 @@ class DefectCandidate(ContractModel):
             raise ValueError("photo_references.photo_number must be unique")
         return value
 
-    @field_validator("standard_defect_indicator_id")
+    @field_validator(
+        "rating_tree_version_id",
+        "rating_tree_node_id",
+        "rating_tree_match_evidence",
+        "standard_defect_indicator_id",
+    )
     @classmethod
-    def require_non_empty_indicator_id(cls, value: str | None) -> str | None:
+    def require_non_empty_server_reference(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
-            raise ValueError("standard_defect_indicator_id must not be blank")
+            raise ValueError("server-derived rating tree references must not be blank")
         return value
 
     @field_validator("component_match_candidate_ids")
