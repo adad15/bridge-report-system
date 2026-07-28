@@ -10,6 +10,7 @@
 #include "bridge_report/auth/PasswordHash.hpp"
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/EditLockRepository.hpp"
+#include "bridge_report/db/RatingTreeRepository.hpp"
 #include "bridge_report/db/StandardRepository.hpp"
 #include "bridge_report/standards/TechnicalConditionStandard.hpp"
 
@@ -153,6 +154,23 @@ std::string lock_issue_code(db::EditLockCheckStatus status) {
     return {};
 }
 
+bool contains_text(
+    const std::vector<std::string>& values,
+    const std::string& value) {
+    return std::find(values.begin(), values.end(), value) != values.end();
+}
+
+bool rating_tree_node_applies(
+    const rating_tree::EffectiveRatingTreeNode& node,
+    const std::string& bridge_type_id,
+    const std::string& component_category_id) {
+    return node.node_type == rating_tree::RatingTreeNodeType::defect &&
+        node.is_selectable &&
+        contains_text(node.bridge_type_ids, bridge_type_id) &&
+        contains_text(
+            node.component_category_ids, component_category_id);
+}
+
 }  // namespace
 
 Json::Value AssessmentPreviewIssue::to_json() const {
@@ -195,18 +213,47 @@ AssessmentPreview calculate_assessment_preview(
     AssessmentPreview preview;
     preview.client_revision = client_revision;
     preview.standard_identity = standard_identity_json(package.manifest);
+    if (context.rating_tree.has_value()) {
+        Json::Value tree_identity;
+        tree_identity["version_id"] = context.rating_tree_version_id;
+        tree_identity["tree_code"] =
+            context.rating_tree->version.tree_code;
+        tree_identity["tree_name"] =
+            context.rating_tree->version.tree_name;
+        tree_identity["package_version"] =
+            context.rating_tree->version.package_version;
+        tree_identity["content_checksum"] =
+            context.rating_tree_content_checksum;
+        preview.standard_identity["rating_tree"] =
+            std::move(tree_identity);
+    }
     preview.issues = context.issues;
 
     Json::Value summary;
     summary["bridge_type_id"] = context.bridge_type_id;
     summary["inventory_revision_id"] = context.inventory_revision_id;
+    summary["rating_tree_version_id"] =
+        context.rating_tree_version_id;
+    summary["rating_tree_content_checksum"] =
+        context.rating_tree_content_checksum;
     summary["components"] = Json::Value(Json::arrayValue);
     summary["defects"] = Json::Value(Json::arrayValue);
+    summary["rating_tree_skips"] = Json::Value(Json::arrayValue);
 
     if (!context.inventory_confirmed) {
         preview.issues.push_back(issue(
             "assessment_inventory_not_confirmed", "构件台账尚未确认，不能进行系统评定。",
             "component_inventory", context.inventory_revision_id, "status"));
+    }
+    if (!context.rating_tree.has_value() ||
+        context.rating_tree_version_id.empty() ||
+        context.rating_tree_content_checksum.empty()) {
+        preview.issues.push_back(issue(
+            "assessment_rating_tree_required",
+            "检测年度尚未锁定可用的评定树，不能进行系统评定。",
+            "inspection_year",
+            context.inspection_year_id,
+            "rating_tree_version_id"));
     }
 
     std::map<std::string, std::string> component_types;
@@ -236,14 +283,80 @@ AssessmentPreview calculate_assessment_preview(
             const auto candidate_id = string_member(defect, "candidate_id");
             const auto component_id = string_member(defect, "bridge_component_id");
             const auto client_category = string_member(defect, "standard_component_category_id");
-            const auto indicator_id =
-                string_member(defect, "standard_defect_indicator_id");
             const auto component = component_types.find(component_id);
             if (component == component_types.end() ||
                 (!client_category.empty() && client_category != component->second)) {
                 preview.issues.push_back(issue(
                     "assessment_defect_component_unmatched", "病害未关联到当前已确认台账中的规范构件。",
                     "defect", candidate_id, "bridge_component_id"));
+                continue;
+            }
+            const auto defect_tree_version =
+                string_member(defect, "rating_tree_version_id");
+            const auto node_id =
+                string_member(defect, "rating_tree_node_id");
+            const rating_tree::EffectiveRatingTreeNode* node = nullptr;
+            if (context.rating_tree.has_value()) {
+                const auto found =
+                    context.rating_tree->nodes.find(node_id);
+                if (found != context.rating_tree->nodes.end()) {
+                    node = &found->second;
+                }
+            }
+            if (defect_tree_version != context.rating_tree_version_id ||
+                node == nullptr) {
+                preview.issues.push_back(issue(
+                    "assessment_rating_tree_node_required",
+                    "病害尚未选择当前年度评定树中的有效节点。",
+                    "defect",
+                    candidate_id,
+                    "rating_tree_node_id"));
+                continue;
+            }
+            if (!rating_tree_node_applies(
+                    *node,
+                    context.bridge_type_id,
+                    component->second)) {
+                preview.issues.push_back(issue(
+                    "assessment_rating_tree_node_not_applicable",
+                    "评定树节点不适用于当前实际构件。",
+                    "defect",
+                    candidate_id,
+                    "rating_tree_node_id"));
+                continue;
+            }
+            Json::Value defect_json;
+            defect_json["candidate_id"] = candidate_id;
+            defect_json["component_instance_id"] = component_id;
+            defect_json["component_type_id"] = component->second;
+            defect_json["rating_tree_node_id"] = node_id;
+            defect_json["rating_tree_scoring_mode"] =
+                rating_tree::to_string(node->scoring_mode);
+            if (node->scoring_mode ==
+                rating_tree::RatingTreeScoringMode::non_scoring) {
+                defect_json["skipped"] = true;
+                defect_json["skip_reason"] =
+                    "rating_tree_non_scoring";
+                summary["defects"].append(defect_json);
+                Json::Value skip;
+                skip["candidate_id"] = candidate_id;
+                skip["rating_tree_node_id"] = node_id;
+                skip["reason"] = "rating_tree_non_scoring";
+                summary["rating_tree_skips"].append(std::move(skip));
+                continue;
+            }
+            const auto indicator_id =
+                node->h21_indicator_id.value_or("");
+            if (indicator_id.empty() ||
+                string_member(
+                    defect,
+                    "standard_defect_indicator_id") != indicator_id) {
+                preview.issues.push_back(issue(
+                    "assessment_rating_tree_indicator_mismatch",
+                    "病害的 H21 评分来源与评定树节点解析结果不一致。",
+                    "defect",
+                    candidate_id,
+                    "standard_defect_indicator_id"));
                 continue;
             }
             if (!defect["defect_scale"].isInt() || defect["defect_scale"].asInt() <= 0) {
@@ -253,6 +366,18 @@ AssessmentPreview calculate_assessment_preview(
                 continue;
             }
             const auto scale = defect["defect_scale"].asInt();
+            if (std::find(
+                    node->allowed_scales.begin(),
+                    node->allowed_scales.end(),
+                    scale) == node->allowed_scales.end()) {
+                preview.issues.push_back(issue(
+                    "assessment_rating_tree_scale_not_allowed",
+                    "病害标度不在评定树节点允许范围内。",
+                    "defect",
+                    candidate_id,
+                    "defect_scale"));
+                continue;
+            }
             const auto resolution = standards::resolve_defect_indicator(
                 package, indicator_id, component->second, scale);
             if (!resolution.ok()) {
@@ -291,10 +416,6 @@ AssessmentPreview calculate_assessment_preview(
             }
             auto& aggregated = aggregated_scales[{component_id, indicator_id}];
             aggregated = (std::max)(aggregated, scale);
-            Json::Value defect_json;
-            defect_json["candidate_id"] = candidate_id;
-            defect_json["component_instance_id"] = component_id;
-            defect_json["component_type_id"] = component->second;
             defect_json["defect_indicator_id"] = indicator_id;
             defect_json["defect_indicator_name"] = resolution.indicator_name;
             defect_json["scale"] = scale;
@@ -351,10 +472,13 @@ AssessmentServiceOutcome AssessmentService::preview(
         "select ir.inspection_year_id::text as inspection_year_id,"
         "iy.standard_profile_id::text as standard_profile_id,"
         "iy.component_inventory_revision_id::text as inventory_revision_id,"
-        "p.technical_condition_package_id::text as package_id "
+        "p.technical_condition_package_id::text as package_id,"
+        "p.rating_tree_version_id::text as rating_tree_version_id,"
+        "rtv.tree_content_checksum as rating_tree_content_checksum "
         "from import_records ir "
         "left join inspection_years iy on iy.id=ir.inspection_year_id "
         "left join project_standard_profiles p on p.id=iy.standard_profile_id "
+        "left join rating_tree_versions rtv on rtv.id=p.rating_tree_version_id "
         "where ir.id=$1::uuid",
         import_record_id);
     if (rows.empty()) {
@@ -363,7 +487,9 @@ AssessmentServiceOutcome AssessmentService::preview(
     }
     const auto& row = rows[0];
     if (row["inspection_year_id"].isNull() || row["standard_profile_id"].isNull() ||
-        row["inventory_revision_id"].isNull() || row["package_id"].isNull()) {
+        row["inventory_revision_id"].isNull() || row["package_id"].isNull() ||
+        row["rating_tree_version_id"].isNull() ||
+        row["rating_tree_content_checksum"].isNull()) {
         outcome.status = AssessmentServiceStatus::Blocked;
         outcome.preview.issues.push_back(issue(
             "assessment_context_incomplete", "检测年度尚未配置规范组合和构件台账。",
@@ -376,6 +502,24 @@ AssessmentServiceOutcome AssessmentService::preview(
     context.standard_profile_id = row["standard_profile_id"].as<std::string>();
     context.inventory_revision_id = row["inventory_revision_id"].as<std::string>();
     context.standard_package_id = row["package_id"].as<std::string>();
+    context.rating_tree_version_id =
+        row["rating_tree_version_id"].as<std::string>();
+    context.rating_tree_content_checksum =
+        row["rating_tree_content_checksum"].as<std::string>();
+    context.rating_tree =
+        db::RatingTreeRepository(db_client_).load_published_tree(
+            context.rating_tree_version_id);
+    if (!context.rating_tree.has_value() ||
+        context.rating_tree->version.tree_content_checksum !=
+            context.rating_tree_content_checksum) {
+        outcome.status = AssessmentServiceStatus::Blocked;
+        outcome.preview.issues.push_back(issue(
+            "assessment_rating_tree_unavailable",
+            "项目锁定的评定树未发布或内容校验失败。",
+            "rating_tree",
+            context.rating_tree_version_id));
+        return outcome;
+    }
 
     db::StandardRepository standard_repository(db_client_);
     const auto package_record = standard_repository.find_package_by_id(context.standard_package_id);

@@ -14,10 +14,15 @@
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/db/EditLockRepository.hpp"
+#include "bridge_report/db/RatingTreeRepository.hpp"
 #include "bridge_report/db/ReviewRepository.hpp"
+#include "bridge_report/db/StandardRepository.hpp"
+#include "bridge_report/rating_tree/RatingTreeCompiler.hpp"
+#include "bridge_report/rating_tree/RatingTreePackageLoader.hpp"
 #include "bridge_report/review/ConfirmPlan.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
+#include "bridge_report/standards/StandardPackageLoader.hpp"
 #include "support/h21_fixtures.hpp"
 #include "support/review_fixtures.hpp"
 
@@ -523,35 +528,60 @@ protected:
         tracked_user_ids_.push_back(confirmed_by_user_id_);
 
         registry_ = std::make_shared<bridge_report::standards::StandardRegistry>();
-        auto package = bridge_report::tests::h21::load_package();
-        const auto manifest = package.manifest;
-        ASSERT_TRUE(registry_->register_package(std::move(package)).accepted);
-        const auto technical = client_->execSqlSync(
-            "insert into standard_packages(standard_family,standard_id,standard_code,standard_name,"
-            "official_edition,package_version,contract_version,algorithm_id,effective_date,"
-            "content_checksum,is_enabled,sync_status) values('technical_condition',$1,$2,$3,$4,"
-            "$5,$6,$7,$8::date,$9,true,'正常') on conflict(standard_family,standard_id,package_version) "
-            "do update set is_enabled=true,sync_status='正常',sync_error_code=null,sync_error_message=null "
-            "returning id::text as id",
-            manifest.standard_id, manifest.standard_code, manifest.standard_name,
-            manifest.official_edition, manifest.package_version, manifest.contract_version,
-            manifest.algorithm_id, manifest.effective_date, manifest.content_checksum);
-        technical_package_id_ = technical[0]["id"].as<std::string>();
-        const auto maintenance = client_->execSqlSync(
-            "insert into standard_packages(standard_family,standard_id,standard_code,standard_name,"
-            "official_edition,package_version,contract_version,algorithm_id,effective_date,"
-            "content_checksum,is_enabled,sync_status) values('maintenance',$1,'TEST-M','测试养护规范',"
-            "'test','1.0.0',1,'test-maintenance','2021-01-01',"
-            "'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',true,'正常') "
-            "returning id::text as id",
-            "test-maintenance-" + bridge_id_);
-        maintenance_package_id_ = maintenance[0]["id"].as<std::string>();
+        auto registry_package = bridge_report::tests::h21::load_package();
+        ASSERT_TRUE(registry_->register_package(std::move(registry_package)).accepted);
+
+        const auto repository_root = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT);
+        bridge_report::standards::StandardPackageLoader standard_loader;
+        const auto h21_source = standard_loader.load(
+            repository_root / "standards/technical-condition/jtg-t-h21-2011/1.0.1");
+        const auto maintenance_source = standard_loader.load(
+            repository_root / "standards/maintenance/jtg-5120-2021/1.0.0");
+        bridge_report::rating_tree::RatingTreePackageLoader tree_loader;
+        const auto tree_extension = tree_loader.load(
+            repository_root / "standards/rating-tree/organization-bridge/1.0.0");
+        ASSERT_TRUE(h21_source.ok());
+        ASSERT_TRUE(maintenance_source.ok());
+        ASSERT_TRUE(tree_extension.ok());
+
+        bridge_report::db::StandardRepository standard_repository(client_);
+        const auto technical =
+            standard_repository.sync_package(h21_source.package->manifest);
+        const auto maintenance =
+            standard_repository.sync_package(maintenance_source.package->manifest);
+        ASSERT_TRUE(technical.package_id.has_value());
+        ASSERT_TRUE(maintenance.package_id.has_value());
+        technical_package_id_ = *technical.package_id;
+        maintenance_package_id_ = *maintenance.package_id;
+
+        bridge_report::rating_tree::RatingTreeCompiler tree_compiler;
+        const auto compiled_tree = tree_compiler.compile(
+            *h21_source.package, &*maintenance_source.package, *tree_extension.package);
+        ASSERT_TRUE(compiled_tree.ok());
+        bridge_report::db::RatingTreeRepository tree_repository(client_);
+        const auto tree_sync = tree_repository.sync_published_tree(*compiled_tree.tree);
+        ASSERT_TRUE(tree_sync.rating_tree_version_id.has_value());
+        rating_tree_version_id_ = *tree_sync.rating_tree_version_id;
+
         const auto profile = client_->execSqlSync(
             "insert into project_standard_profiles(technical_condition_package_id,maintenance_package_id,"
-            "created_by_user_id,change_reason) values($1::uuid,$2::uuid,$3::uuid,'正式评定测试') "
+            "rating_tree_version_id,created_by_user_id,change_reason) "
+            "values($1::uuid,$2::uuid,$3::uuid,$4::uuid,'正式评定测试') "
             "returning id::text as id",
-            technical_package_id_, maintenance_package_id_, confirmed_by_user_id_);
+            technical_package_id_, maintenance_package_id_, rating_tree_version_id_,
+            confirmed_by_user_id_);
         standard_profile_id_ = profile[0]["id"].as<std::string>();
+
+        const auto tree_node = client_->execSqlSync(
+            "select id::text as id from rating_tree_nodes "
+            "where rating_tree_version_id=$1::uuid "
+            "and h21_indicator_id='h21.defect.5_3_1_1' "
+            "and 'h21.bridge_type.beam'=any(bridge_type_ids) "
+            "and 'h21.component.bearing'=any(component_category_ids) "
+            "and is_selectable",
+            rating_tree_version_id_);
+        ASSERT_EQ(tree_node.size(), 1u);
+        rating_tree_node_id_ = tree_node[0]["id"].as<std::string>();
 
         // 占位年度行：待校对 + is_current=false，与规格步骤 2 的初始状态一致；
         // is_current 必须显式置为 false（而非依赖列默认值 true），否则修订测试另外插入的
@@ -687,10 +717,6 @@ protected:
             client_->execSqlSync(
                 "delete from project_standard_profiles where id=$1::uuid", standard_profile_id_);
         }
-        if (!maintenance_package_id_.empty()) {
-            client_->execSqlSync(
-                "delete from standard_packages where id=$1::uuid", maintenance_package_id_);
-        }
         for (const auto& user_id : tracked_user_ids_) {
             client_->execSqlSync("delete from users where id = $1::uuid", user_id);
         }
@@ -722,6 +748,11 @@ protected:
         data["defects"][0]["defect_type"] = "板式支座老化变质、开裂";
         data["defects"][0]["standard_defect_indicator_id"] =
             "h21.defect.5_3_1_1";
+        data["defects"][0]["rating_tree_version_id"] = rating_tree_version_id_;
+        data["defects"][0]["rating_tree_node_id"] = rating_tree_node_id_;
+        data["defects"][0]["rating_tree_match_method"] = "exact";
+        data["defects"][0]["rating_tree_match_evidence"] =
+            "正式评定集成测试使用已发布评定树节点";
         data["defects"][0]["defect_scale"] = 2;
         return data;
     }
@@ -736,6 +767,8 @@ protected:
     std::string confirmed_by_user_id_;
     std::string technical_package_id_;
     std::string maintenance_package_id_;
+    std::string rating_tree_version_id_;
+    std::string rating_tree_node_id_;
     std::string standard_profile_id_;
     std::string inventory_revision_id_;
     std::shared_ptr<bridge_report::standards::StandardRegistry> registry_;

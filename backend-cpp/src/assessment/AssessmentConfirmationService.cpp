@@ -6,6 +6,8 @@
 #include <tuple>
 #include <utility>
 
+#include "bridge_report/db/RatingTreeRepository.hpp"
+
 namespace bridge_report::assessment {
 namespace {
 
@@ -120,11 +122,15 @@ AssessmentConfirmationOutcome AssessmentConfirmationService::calculate(
         "select iy.id::text as inspection_year_id,iy.standard_profile_id::text as profile_id,"
         "iy.component_inventory_revision_id::text as inventory_revision_id,"
         "p.technical_condition_package_id::text as package_id,"
+        "p.rating_tree_version_id::text as rating_tree_version_id,"
+        "rtv.tree_content_checksum as rating_tree_content_checksum,"
         "sp.standard_family,sp.standard_id,sp.package_version,sp.content_checksum,"
         "sp.is_enabled,sp.sync_status,ir.bridge_id::text as bridge_id "
         "from inspection_years iy "
         "join import_records ir on ir.inspection_year_id=iy.id "
         "join project_standard_profiles p on p.id=iy.standard_profile_id "
+        "join rating_tree_versions rtv on rtv.id=p.rating_tree_version_id "
+        "and rtv.status='published' "
         "join standard_packages sp on sp.id=p.technical_condition_package_id "
         "join bridge_component_inventory_revisions r "
         "on r.id=iy.component_inventory_revision_id and r.bridge_id=iy.bridge_id "
@@ -177,6 +183,23 @@ AssessmentConfirmationOutcome AssessmentConfirmationService::calculate(
     context.standard_profile_id = row["profile_id"].as<std::string>();
     context.inventory_revision_id = row["inventory_revision_id"].as<std::string>();
     context.standard_package_id = row["package_id"].as<std::string>();
+    context.rating_tree_version_id =
+        row["rating_tree_version_id"].as<std::string>();
+    context.rating_tree_content_checksum =
+        row["rating_tree_content_checksum"].as<std::string>();
+    context.rating_tree =
+        db::RatingTreeRepository(transaction_).load_published_tree(
+            context.rating_tree_version_id);
+    if (!context.rating_tree.has_value() ||
+        context.rating_tree->version.tree_content_checksum !=
+            context.rating_tree_content_checksum) {
+        outcome.preview.issues.push_back(issue(
+            "assessment_rating_tree_unavailable",
+            "项目锁定的评定树未发布或内容校验失败。",
+            "rating_tree",
+            context.rating_tree_version_id));
+        return outcome;
+    }
 
     const auto inventory_rows = transaction_->execSqlSync(
         "select r.status,e.bridge_component_id::text as component_id,"
@@ -393,6 +416,24 @@ AssessmentConfirmationWritten AssessmentConfirmationService::persist(
             compact_json(trace.inputs),
             compact_json(trace.output));
         ++written.rule_traces;
+    }
+    if (preview.input_summary["rating_tree_skips"].isArray()) {
+        for (const auto& skip :
+             preview.input_summary["rating_tree_skips"]) {
+            ++sequence;
+            transaction_->execSqlSync(
+                "insert into assessment_rule_traces(assessment_run_id,"
+                "sequence_number,rule_id,trace_stage,target_type,target_key,"
+                "input_json,output_json) "
+                "values($1::uuid,$2,'rating_tree_non_scoring',"
+                "'rating_tree_filter','defect',$3,$4::jsonb,$5::jsonb)",
+                written.assessment_run_id,
+                sequence,
+                skip["candidate_id"].asString(),
+                compact_json(skip),
+                compact_json(skip));
+            ++written.rule_traces;
+        }
     }
 
     transaction_->execSqlSync(

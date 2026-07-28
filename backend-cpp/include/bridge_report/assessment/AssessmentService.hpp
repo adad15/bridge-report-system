@@ -9,6 +9,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/AuthRepository.hpp"
+#include "bridge_report/rating_tree/RatingTreeModels.hpp"
 #include "bridge_report/standards/AssessmentModels.hpp"
 #include "bridge_report/standards/StandardModels.hpp"
 #include "bridge_report/standards/StandardRegistry.hpp"
@@ -42,6 +43,9 @@ struct AssessmentContextSnapshot {
     std::string standard_package_id;
     std::string standard_profile_id;
     std::string inventory_revision_id;
+    std::string rating_tree_version_id;
+    std::string rating_tree_content_checksum;
+    std::optional<rating_tree::EffectiveRatingTree> rating_tree;
     bool inventory_confirmed{false};
     std::string bridge_type_id;
     std::vector<AssessmentComponentSnapshot> components;
