@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bridge-report.local/schemas/rating-tree-extension-package.schema.json",
+  "title": "Read-only organization rating tree extension package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "package_type",
+    "tree_code",
+    "tree_name",
+    "package_version",
+    "contract_version",
+    "status",
+    "content_checksum",
+    "entry_files"
+  ],
+  "properties": {
+    "package_type": {"const": "rating_tree_extension"},
+    "tree_code": {"type": "string", "minLength": 1},
+    "tree_name": {"type": "string", "minLength": 1},
+    "package_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "contract_version": {"const": 1},
+    "status": {"const": "active"},
+    "content_checksum": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "entry_files": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(?![/\\\\])(?!.*(?:^|[/\\\\])\\.\\.(?:[/\\\\]|$)).+\\.json$"
+      }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "parent_id",
+        "display_name",
+        "node_type",
+        "sort_order",
+        "bridge_type_ids",
+        "component_category_ids",
+        "scoring_mode",
+        "is_selectable",
+        "source_ids"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "parent_id": {"type": ["string", "null"]},
+        "display_name": {"type": "string", "minLength": 1},
+        "node_type": {
+          "enum": [
+            "root",
+            "bridge_type_group",
+            "structure_group",
+            "component_group",
+            "defect",
+            "placeholder"
+          ]
+        },
+        "sort_order": {"type": "integer"},
+        "bridge_type_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "component_category_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "scoring_mode": {
+          "enum": ["inherit_h21", "reference_h21", "non_scoring"]
+        },
+        "h21_indicator_id": {"type": "string", "minLength": 1},
+        "is_selectable": {"type": "boolean"},
+        "organization_note": {"type": "string"},
+        "source_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

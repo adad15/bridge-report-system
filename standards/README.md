@@ -8,6 +8,7 @@
 standards/
   technical-condition/<standard-id>/<package-version>/
   maintenance/<standard-id>/<package-version>/
+  rating-tree/<tree-code>/<package-version>/
 ```
 
 每个包必须有 `manifest.json`，并通过 `entry_files` 显式列出参与摘要和加载的 JSON 文件。入口文件只能使用包内相对路径，不能引用其他规则包。
@@ -53,3 +54,11 @@ standards/
 同一包内所有 `definitions[].id` 必须唯一，`references` 必须指向同包定义。`OTHER-PACKAGE::rule.id`、`package://...` 和 `standard://...` 形式的跨包引用会被拒绝。
 
 清单结构分别见 `schemas/technical-condition-package.schema.json` 和 `schemas/maintenance-package.schema.json`。
+
+## 有效评定树扩展包
+
+`rating-tree` 包只描述单位业务层级、显示名称、适用桥型与构件、受控别名和来源关系，不保存另一套扣分值、权重、公式或等级边界。参与评分的叶节点必须以 `inherit_h21` 或 `reference_h21` 明确引用 H21 稳定指标；运行时编译器从锁定的 H21 包取得标度文字与扣分表，并将 JTG 5120 检查养护来源合并为可追踪信息。
+
+当前 `organization-bridge/1.0.0` 只包含桥梁分支。涵洞、隧道和涵洞 JTG 5120 分支未进入该版本；每个构件分支末尾的“其他病害（暂不计分）”是不可选择的 `placeholder`，不会参与评分。规则包和编译后的已发布树均只读，管理员也没有在线编辑接口。
+
+清单与节点字段见 `schemas/rating-tree-extension-package.schema.json`。其 `content_checksum` 与规范包使用完全相同的稳定 JSON 摘要约定。

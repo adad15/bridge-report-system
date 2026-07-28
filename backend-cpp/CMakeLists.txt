@@ -68,6 +68,10 @@ add_library(bridge_report_backend_core
     src/inventory/ComponentCategoryLexicon.cpp
     src/inventory/NumberingTemplate.cpp
     src/inventory/ComponentPartCatalog.cpp
+    src/rating_tree/RatingTreeCompiler.cpp
+    src/rating_tree/RatingTreeModels.cpp
+    src/rating_tree/RatingTreePackageLoader.cpp
+    src/rating_tree/RatingTreeResolver.cpp
     src/review/ConfirmPlan.cpp
     src/review/ComponentRangeSplitPlanner.cpp
     src/review/ContractCompatibility.cpp
@@ -174,6 +178,9 @@ add_executable(bridge_report_backend_tests
     tests/test_review_models.cpp
     tests/test_review_repository.cpp
     tests/test_review_statistics.cpp
+    tests/test_rating_tree_compiler.cpp
+    tests/test_rating_tree_package_loader.cpp
+    tests/test_rating_tree_resolver.cpp
     tests/test_system_number.cpp
     tests/test_standard_package_loader.cpp
     tests/test_standard_repository.cpp
