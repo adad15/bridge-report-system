@@ -106,6 +106,10 @@ Json::Value WorkspaceStandardProfile::to_json() const {
     json["status"] = status;
     json["technical_condition"] = technical_condition.to_json();
     json["maintenance"] = maintenance.to_json();
+    json["rating_tree_version_id"] = rating_tree_version_id;
+    json["rating_tree_name"] = rating_tree_name;
+    json["rating_tree_package_version"] = rating_tree_package_version;
+    json["rating_tree_content_checksum"] = rating_tree_content_checksum;
     return json;
 }
 

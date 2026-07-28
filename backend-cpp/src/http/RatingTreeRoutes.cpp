@@ -226,13 +226,20 @@ void register_rating_tree_routes(const drogon::orm::DbClientPtr& db_client) {
                 if (!require_user(db_client, request, callback).has_value()) return;
                 const auto rows = db_client->execSqlSync(
                     "select id::text as id,tree_code,tree_name,package_version,"
-                    "tree_content_checksum,status,published_at::text as published_at "
+                    "tree_content_checksum,status,published_at::text as published_at,"
+                    "technical_condition_package_version,"
+                    "maintenance_package_version "
                     "from rating_tree_versions where status='published' "
                     "order by published_at desc,tree_code,package_version");
                 Json::Value body;
                 body["versions"] = Json::Value(Json::arrayValue);
                 for (const auto& row : rows) {
-                    body["versions"].append(version_summary(row));
+                    auto version = version_summary(row);
+                    version["h21_package_version"] =
+                        row["technical_condition_package_version"].as<std::string>();
+                    version["maintenance_package_version"] =
+                        row["maintenance_package_version"].as<std::string>();
+                    body["versions"].append(std::move(version));
                 }
                 respond_json(callback, body);
             } catch (...) {

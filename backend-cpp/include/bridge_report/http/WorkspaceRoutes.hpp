@@ -24,8 +24,7 @@ bool is_supported_word_source_type(const std::string& source_type);
 
 struct CreateInspectionRequest {
     int inspection_year{0};
-    std::string technical_condition_package_id;
-    std::string maintenance_package_id;
+    std::string rating_tree_version_id;
 };
 
 std::optional<std::string> parse_create_inspection_request(

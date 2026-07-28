@@ -91,9 +91,25 @@ export interface InspectionWorkspace {
     status: string;
     technical_condition: WorkspaceStandardPackage;
     maintenance: WorkspaceStandardPackage;
+    rating_tree_version_id: string;
+    rating_tree_name: string;
+    rating_tree_package_version: string;
+    rating_tree_content_checksum: string;
   } | null;
   imports: WorkspaceImport[];
   pending: WorkspacePendingSummary;
+}
+
+export interface RatingTreeVersionSummary {
+  id: string;
+  tree_code: string;
+  tree_name: string;
+  package_version: string;
+  tree_content_checksum: string;
+  status: "published";
+  published_at: string;
+  h21_package_version: string;
+  maintenance_package_version: string;
 }
 
 export interface WorkspaceStandardPackage {
@@ -236,8 +252,7 @@ export async function createInspectionYear(
   bridgeId: string,
   input: {
     inspection_year: number;
-    technical_condition_package_id: string;
-    maintenance_package_id: string;
+    rating_tree_version_id: string;
   }
 ): Promise<WorkspaceInspection> {
   const body = await request<{ inspection_year: WorkspaceInspection }>(
@@ -245,6 +260,15 @@ export async function createInspectionYear(
     { method: "POST", headers: JSON_HEADERS, body: JSON.stringify(input) }
   );
   return body.inspection_year;
+}
+
+export async function fetchRatingTreeVersions(
+  baseUrl: string
+): Promise<RatingTreeVersionSummary[]> {
+  const body = await request<{ versions: RatingTreeVersionSummary[] }>(
+    `${baseUrl}/api/rating-trees`
+  );
+  return body.versions;
 }
 
 export async function uploadWordImport(
@@ -270,10 +294,9 @@ export function workspaceErrorMessage(error: unknown): string {
     inspection_year_not_found: "年度检测不存在或已被删除。",
     inspection_year_not_current: "该年度已不是当前版本，不能继续导入资料。",
     inspection_year_already_exists: "该年度已经存在，将进入已有年度。",
-    standard_packages_required: "请选择技术状况评定标准和桥涵养护规范。",
-    standard_package_not_found: "所选规范包不存在，请刷新后重新选择。",
-    standard_package_family_mismatch: "所选规范类别不匹配，请刷新后重新选择。",
-    standard_package_unavailable: "所选规范已停用或处于故障状态，请重新选择。",
+    rating_tree_required: "请选择本年度使用的评定树。",
+    rating_tree_not_found: "所选评定树不存在，请刷新后重新选择。",
+    rating_tree_unavailable: "所选评定树或其底层规范当前不可用，请重新选择。",
     invalid_word_file: "请选择一个非空的 .docx 文件。",
     word_file_too_large: "Word 文件超过允许的上传大小。",
     word_archive_failed: "Word 文件归档失败，请重试。",

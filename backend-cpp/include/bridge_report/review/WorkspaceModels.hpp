@@ -69,6 +69,10 @@ struct WorkspaceStandardProfile {
     std::string status;
     WorkspaceStandardPackage technical_condition;
     WorkspaceStandardPackage maintenance;
+    std::string rating_tree_version_id;
+    std::string rating_tree_name;
+    std::string rating_tree_package_version;
+    std::string rating_tree_content_checksum;
 
     Json::Value to_json() const;
 };

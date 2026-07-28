@@ -8,6 +8,7 @@ import {
   fetchImportRecordDeletionImpact,
   fetchInspectionYearDeletionImpact,
   fetchBridgeOverview,
+  fetchRatingTreeVersions,
   uploadWordImport,
   workspaceErrorMessage,
 } from "./workspaceApi";
@@ -32,8 +33,7 @@ describe("workspaceApi", () => {
     vi.stubGlobal("fetch", fetchMock);
     const input = {
       inspection_year: 2027,
-      technical_condition_package_id: "technical-1",
-      maintenance_package_id: "maintenance-1",
+      rating_tree_version_id: "rating-tree-1",
     };
     await expect(createInspectionYear("http://backend", "bridge-1", input)).resolves.toEqual(inspection);
     expect(fetchMock).toHaveBeenCalledWith("http://backend/api/bridges/bridge-1/inspection-years", {
@@ -41,6 +41,18 @@ describe("workspaceApi", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     });
+  });
+
+  it("loads published rating tree versions for annual creation", async () => {
+    const versions = [{ id: "tree-1", tree_name: "单位桥梁有效评定树" }];
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ versions }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchRatingTreeVersions("http://backend")).resolves.toEqual(versions);
+    expect(fetchMock).toHaveBeenCalledWith("http://backend/api/rating-trees");
   });
 
   it("uploads a FormData body without manually setting multipart Content-Type", async () => {
@@ -106,6 +118,9 @@ describe("workspaceApi", () => {
   });
 
   it("maps stable errors and preserves unknown backend messages", () => {
+    expect(workspaceErrorMessage(new ApiError("rating_tree_required", "raw"))).toContain("评定树");
+    expect(workspaceErrorMessage(new ApiError("rating_tree_not_found", "raw"))).toContain("不存在");
+    expect(workspaceErrorMessage(new ApiError("rating_tree_unavailable", "raw"))).toContain("不可用");
     expect(workspaceErrorMessage(new ApiError("invalid_word_file", "raw"))).toContain(".docx");
     expect(workspaceErrorMessage(new ApiError("word_upload_failed", "raw"))).toContain("Word 上传处理失败");
     expect(workspaceErrorMessage(new ApiError("import_record_edit_locked", "raw"))).toContain("其他人编辑");

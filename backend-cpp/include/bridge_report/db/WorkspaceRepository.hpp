@@ -16,9 +16,8 @@ enum class CreateInspectionYearStatus {
     Created,
     AlreadyExists,
     BridgeNotFound,
-    PackageNotFound,
-    PackageUnavailable,
-    FamilyMismatch,
+    RatingTreeNotFound,
+    RatingTreeUnavailable,
     Failed,
 };
 
@@ -49,8 +48,7 @@ public:
     CreateInspectionYearOutcome create_inspection_year(
         const std::string& bridge_id,
         int inspection_year,
-        const std::string& technical_condition_package_id,
-        const std::string& maintenance_package_id,
+        const std::string& rating_tree_version_id,
         const std::string& created_by_user_id);
     UploadWordOutcome upload_word_import(
         const std::string& inspection_year_id,

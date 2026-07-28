@@ -160,11 +160,15 @@ std::optional<review::InspectionWorkspace> WorkspaceRepository::get_inspection_w
         "mp.id::text as maintenance_package_id, mp.standard_code as maintenance_standard_code, "
         "mp.standard_name as maintenance_standard_name, mp.official_edition as maintenance_official_edition, "
         "mp.package_version as maintenance_package_version, mp.is_enabled as maintenance_is_enabled, "
-        "mp.sync_status as maintenance_sync_status "
+        "mp.sync_status as maintenance_sync_status, "
+        "rt.id::text as rating_tree_version_id,rt.tree_name as rating_tree_name,"
+        "rt.package_version as rating_tree_package_version,"
+        "rt.tree_content_checksum as rating_tree_content_checksum "
         "from inspection_years iy join bridges b on b.id = iy.bridge_id "
         "left join project_standard_profiles sp on sp.id=iy.standard_profile_id "
         "left join standard_packages tp on tp.id=sp.technical_condition_package_id "
         "left join standard_packages mp on mp.id=sp.maintenance_package_id "
+        "left join rating_tree_versions rt on rt.id=sp.rating_tree_version_id "
         "where iy.id = $1::uuid",
         inspection_year_id);
     if (context_rows.empty()) return std::nullopt;
@@ -181,6 +185,16 @@ std::optional<review::InspectionWorkspace> WorkspaceRepository::get_inspection_w
             context_rows[0], "technical", "technical_condition");
         profile.maintenance = standard_package_from_row(
             context_rows[0], "maintenance", "maintenance");
+        if (!context_rows[0]["rating_tree_version_id"].isNull()) {
+            profile.rating_tree_version_id =
+                context_rows[0]["rating_tree_version_id"].as<std::string>();
+            profile.rating_tree_name =
+                context_rows[0]["rating_tree_name"].as<std::string>();
+            profile.rating_tree_package_version =
+                context_rows[0]["rating_tree_package_version"].as<std::string>();
+            profile.rating_tree_content_checksum =
+                context_rows[0]["rating_tree_content_checksum"].as<std::string>();
+        }
         workspace.standard_profile = std::move(profile);
     }
 
@@ -237,8 +251,7 @@ std::optional<review::InspectionWorkspace> WorkspaceRepository::get_inspection_w
 CreateInspectionYearOutcome WorkspaceRepository::create_inspection_year(
     const std::string& bridge_id,
     const int inspection_year,
-    const std::string& technical_condition_package_id,
-    const std::string& maintenance_package_id,
+    const std::string& rating_tree_version_id,
     const std::string& created_by_user_id
 ) {
     std::shared_ptr<drogon::orm::Transaction> transaction;
@@ -264,42 +277,47 @@ CreateInspectionYearOutcome WorkspaceRepository::create_inspection_year(
                     existing_rows[0]["id"].as<std::string>()};
         }
 
-        const auto packages = transaction->execSqlSync(
-            "select id::text as id, standard_family, is_enabled, sync_status "
-            "from standard_packages where id in ($1::uuid, $2::uuid)",
-            technical_condition_package_id, maintenance_package_id);
-        if (packages.size() != 2) {
+        const auto tree_rows = transaction->execSqlSync(
+            "select v.technical_condition_package_id::text as technical_id,"
+            "v.maintenance_package_id::text as maintenance_id,v.status,"
+            "t.is_enabled as technical_enabled,t.sync_status as technical_sync_status,"
+            "m.is_enabled as maintenance_enabled,m.sync_status as maintenance_sync_status "
+            "from rating_tree_versions v "
+            "join standard_packages t on t.id=v.technical_condition_package_id "
+            "join standard_packages m on m.id=v.maintenance_package_id "
+            "where v.id=$1::uuid for share of v,t,m",
+            rating_tree_version_id);
+        if (tree_rows.empty()) {
             transaction->rollback();
-            return {CreateInspectionYearStatus::PackageNotFound, std::nullopt, std::nullopt};
+            return {CreateInspectionYearStatus::RatingTreeNotFound, std::nullopt, std::nullopt};
         }
-        bool technical_ok = false;
-        bool maintenance_ok = false;
-        bool available = true;
-        for (const auto& package : packages) {
-            const auto id = package["id"].as<std::string>();
-            const auto family = package["standard_family"].as<std::string>();
-            technical_ok = technical_ok ||
-                (id == technical_condition_package_id && family == "technical_condition");
-            maintenance_ok = maintenance_ok ||
-                (id == maintenance_package_id && family == "maintenance");
-            available = available && package["is_enabled"].as<bool>() &&
-                package["sync_status"].as<std::string>() == "正常";
-        }
-        if (!technical_ok || !maintenance_ok) {
+        const auto& tree = tree_rows[0];
+        if (tree["status"].as<std::string>() != "published" ||
+            !tree["technical_enabled"].as<bool>() ||
+            !tree["maintenance_enabled"].as<bool>() ||
+            tree["technical_sync_status"].as<std::string>() != "正常" ||
+            tree["maintenance_sync_status"].as<std::string>() != "正常") {
             transaction->rollback();
-            return {CreateInspectionYearStatus::FamilyMismatch, std::nullopt, std::nullopt};
-        }
-        if (!available) {
-            transaction->rollback();
-            return {CreateInspectionYearStatus::PackageUnavailable, std::nullopt, std::nullopt};
+            return {CreateInspectionYearStatus::RatingTreeUnavailable, std::nullopt, std::nullopt};
         }
 
         const auto profile_rows = transaction->execSqlSync(
-            "insert into project_standard_profiles "
-            "(technical_condition_package_id, maintenance_package_id, created_by_user_id, change_reason) "
-            "values ($1::uuid, $2::uuid, $3::uuid, '创建年度检测时锁定规范组合') "
-            "returning id::text as id",
-            technical_condition_package_id, maintenance_package_id, created_by_user_id);
+            "with existing as ("
+            "select id from project_standard_profiles "
+            "where rating_tree_version_id=$1::uuid and status='生效' "
+            "order by created_at limit 1"
+            "), inserted as ("
+            "insert into project_standard_profiles ("
+            "technical_condition_package_id,maintenance_package_id,"
+            "rating_tree_version_id,created_by_user_id,change_reason"
+            ") select $2::uuid,$3::uuid,$1::uuid,$4::uuid,'创建年度检测时锁定评定树' "
+            "where not exists(select 1 from existing) returning id"
+            ") select id::text as id from existing "
+            "union all select id::text as id from inserted limit 1",
+            rating_tree_version_id,
+            tree["technical_id"].as<std::string>(),
+            tree["maintenance_id"].as<std::string>(),
+            created_by_user_id);
         const auto inserted_rows = transaction->execSqlSync(
             "insert into inspection_years "
             "(bridge_id, inspection_year, status, version_number, is_current, standard_profile_id) "
