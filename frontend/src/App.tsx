@@ -8,6 +8,7 @@ import { ComponentInventoryPage } from "./pages/ComponentInventoryPage";
 import { DefectThreadReviewPage } from "./pages/DefectThreadReviewPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ReviewWorkspacePage } from "./pages/ReviewWorkspacePage";
+import { RatingTreePage } from "./pages/RatingTreePage";
 import { BridgeWorkspaceShell } from "./workspace/BridgeWorkspaceShell";
 import { InspectionWorkspacePage } from "./pages/InspectionWorkspacePage";
 import "./styles.css";
@@ -80,11 +81,16 @@ function AppShell() {
           <NavLink to="/bridges" className={({ isActive }) => (isActive ? "top-nav-link active" : "top-nav-link")}>
             桥梁档案
           </NavLink>
+          <NavLink to="/rating-trees" className={({ isActive }) => (isActive ? "top-nav-link active" : "top-nav-link")}>
+            评定树
+          </NavLink>
           <CurrentUserBadge />
         </nav>
         <Routes>
           <Route path="/" element={<Navigate replace to="/bridges" />} />
           <Route path="/bridges" element={<BridgesPage />} />
+          <Route path="/rating-trees" element={<RatingTreePage />} />
+          <Route path="/rating-trees/:versionId" element={<RatingTreePage />} />
           <Route path="/bridges/:bridgeId" element={<BridgeWorkspaceShell />}>
             <Route index element={<BridgeOverviewPage />} />
             <Route path="inventory" element={<ComponentInventoryPage />} />
