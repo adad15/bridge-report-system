@@ -4,6 +4,7 @@
 #include <fstream>
 #include <set>
 #include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -55,6 +56,46 @@ private:
     std::filesystem::path path_;
 };
 
+Json::Value read_json(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    Json::CharReaderBuilder builder;
+    Json::Value value;
+    std::string errors;
+    if (!Json::parseFromStream(builder, input, &value, &errors)) {
+        throw std::runtime_error("test package JSON could not be parsed");
+    }
+    return value;
+}
+
+void write_json(const std::filesystem::path& path, const Json::Value& value) {
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "  ";
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    output << Json::writeString(builder, value) << '\n';
+}
+
+void seal_package(const std::filesystem::path& package_path) {
+    StandardPackageLoader loader;
+    const auto checksum = loader.calculate_checksum(package_path);
+    if (!checksum.ok()) {
+        throw std::runtime_error("test package checksum could not be calculated");
+    }
+    auto manifest = read_json(package_path / "manifest.json");
+    manifest["content_checksum"] = *checksum.checksum;
+    write_json(package_path / "manifest.json", manifest);
+}
+
+bool has_issue(
+    const bridge_report::standards::StandardLoadResult& result,
+    const std::string& code) {
+    for (const auto& issue : result.issues) {
+        if (issue.code == code) {
+            return true;
+        }
+    }
+    return false;
+}
+
 TEST(JtgH21PackageTest, ChecksumCanBeCalculated) {
     StandardPackageLoader loader;
     const auto checksum = loader.calculate_checksum(h21_package_root());
@@ -70,7 +111,7 @@ TEST(JtgH21PackageTest, Version101AddsOfficialMajorComponentClassification) {
     ASSERT_TRUE(checksum.ok());
     EXPECT_EQ(
         *checksum.checksum,
-        "sha256:ea5e1377aa19fdfabe8096ef986eb158172e4f6f857b969e73a8bb923f4127be");
+        "sha256:0602d4b4084ba35251876c414fd736eb08bf8e3f47fb729e89e72247cc837ba8");
 
     const auto loaded = loader.load(h21_package_root_v101());
     ASSERT_TRUE(loaded.ok());
@@ -206,6 +247,81 @@ TEST(JtgH21PackageTest, EveryDefectHasStableScaleDeductionAndSource) {
         }
     }
     EXPECT_EQ(indicator_count, 234u);
+}
+
+TEST(JtgH21PackageTest, Version101EveryDefectScaleHasOfficialDescription) {
+    StandardPackageLoader loader;
+    const auto result = loader.load(h21_package_root_v101());
+    ASSERT_TRUE(result.ok());
+
+    const auto& catalogs = document(*result.package, "defect-indicators.json")["definitions"];
+    std::size_t indicator_count = 0;
+    for (const auto& catalog : catalogs) {
+        for (const auto& indicator : catalog["indicators"]) {
+            ++indicator_count;
+            ASSERT_TRUE(indicator["scale_descriptions"].isObject()) << indicator["id"].asString();
+            const auto members = indicator["scale_descriptions"].getMemberNames();
+            ASSERT_EQ(members.size(), indicator["allowed_scales"].size())
+                << indicator["id"].asString();
+            for (const auto& scale : indicator["allowed_scales"]) {
+                const auto key = std::to_string(scale.asInt());
+                ASSERT_TRUE(indicator["scale_descriptions"].isMember(key))
+                    << indicator["id"].asString() << " scale " << key;
+                ASSERT_TRUE(indicator["scale_descriptions"][key].isString());
+                EXPECT_FALSE(indicator["scale_descriptions"][key].asString().empty());
+            }
+        }
+    }
+    EXPECT_EQ(indicator_count, 234u);
+}
+
+TEST(JtgH21PackageTest, Version101RejectsIncompleteOrExtraScaleDescriptions) {
+    const std::vector<std::pair<std::string, Json::Value>> mutations = {
+        {"missing", Json::Value()},
+        {"empty", Json::Value("")},
+        {"extra", Json::Value("不应存在的额外标度")},
+    };
+
+    for (const auto& [kind, value] : mutations) {
+        SCOPED_TRACE(kind);
+        TemporaryPackageCopy package(h21_package_root_v101());
+        auto document = read_json(package.path() / "defect-indicators.json");
+        auto& indicator = document["definitions"][0]["indicators"][0];
+        if (kind == "missing") {
+            indicator["scale_descriptions"].removeMember("1");
+        } else if (kind == "empty") {
+            indicator["scale_descriptions"]["1"] = value;
+        } else {
+            indicator["scale_descriptions"]["4"] = value;
+        }
+        write_json(package.path() / "defect-indicators.json", document);
+        seal_package(package.path());
+
+        const auto result = StandardPackageLoader().load(package.path());
+        EXPECT_FALSE(result.ok());
+        EXPECT_TRUE(has_issue(result, "defect_scale_descriptions_invalid"));
+    }
+}
+
+TEST(JtgH21PackageTest, Version101UsesTheOfficialThreeScaleDamperTable) {
+    StandardPackageLoader loader;
+    const auto result = loader.load(h21_package_root_v101());
+    ASSERT_TRUE(result.ok());
+
+    const auto& catalogs = document(*result.package, "defect-indicators.json")["definitions"];
+    const Json::Value* damper = nullptr;
+    for (const auto& catalog : catalogs) {
+        for (const auto& indicator : catalog["indicators"]) {
+            if (indicator["id"].asString() == "h21.defect.8_6_1_1") {
+                damper = &indicator;
+            }
+        }
+    }
+    ASSERT_NE(damper, nullptr);
+    EXPECT_EQ((*damper)["allowed_scales"].size(), 3u);
+    EXPECT_EQ((*damper)["deduction_rule_id"].asString(), "h21.deduction.scale_table.max_3");
+    EXPECT_EQ((*damper)["scale_descriptions"]["3"].asString(),
+              "减震装置出现较多处损坏，部分功能失效");
 }
 
 TEST(JtgH21PackageTest, AllProfilesReferenceBridgeAndScoringLevels) {

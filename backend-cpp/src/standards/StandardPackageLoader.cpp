@@ -1,6 +1,7 @@
 #include "bridge_report/standards/StandardPackageLoader.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <fstream>
 #include <set>
 #include <string_view>
@@ -179,6 +180,77 @@ bool is_cross_package_reference(const std::string_view reference) {
            reference.starts_with("package://") || reference.starts_with("standard://");
 }
 
+bool validate_scale_descriptions(
+    const Json::Value& document,
+    StandardLoadResult& result) {
+    const auto& definitions = document["definitions"];
+    if (!definitions.isArray()) {
+        return true;
+    }
+
+    bool uses_scale_descriptions = false;
+    for (const auto& definition : definitions) {
+        const auto& indicators = definition["indicators"];
+        if (!indicators.isArray()) {
+            continue;
+        }
+        for (const auto& indicator : indicators) {
+            uses_scale_descriptions =
+                uses_scale_descriptions || indicator.isMember("scale_descriptions");
+        }
+    }
+    if (!uses_scale_descriptions) {
+        return true;
+    }
+
+    bool valid = true;
+    for (const auto& definition : definitions) {
+        const auto& indicators = definition["indicators"];
+        if (!indicators.isArray()) {
+            continue;
+        }
+        for (const auto& indicator : indicators) {
+            const auto& scales = indicator["allowed_scales"];
+            const auto& descriptions = indicator["scale_descriptions"];
+            if (!scales.isArray() || scales.empty() || !descriptions.isObject() ||
+                descriptions.size() != scales.size()) {
+                valid = false;
+                continue;
+            }
+
+            std::set<int> unique_scales;
+            for (const auto& scale : scales) {
+                if (!scale.isInt() || scale.asInt() <= 0 ||
+                    !unique_scales.insert(scale.asInt()).second) {
+                    valid = false;
+                    continue;
+                }
+                const auto key = std::to_string(scale.asInt());
+                if (!descriptions.isMember(key) || !descriptions[key].isString() ||
+                    descriptions[key].asString().empty()) {
+                    valid = false;
+                }
+            }
+            for (const auto& key : descriptions.getMemberNames()) {
+                int parsed = 0;
+                const auto* begin = key.data();
+                const auto* end = begin + key.size();
+                const auto [position, error] = std::from_chars(begin, end, parsed);
+                if (error != std::errc{} || position != end ||
+                    !unique_scales.contains(parsed)) {
+                    valid = false;
+                }
+            }
+        }
+    }
+    if (!valid) {
+        result.issues.push_back(issue(
+            "defect_scale_descriptions_invalid",
+            "病害指标的标度判定文字必须与 allowed_scales 完整且唯一对应。"));
+    }
+    return valid;
+}
+
 }  // namespace
 
 StandardChecksumResult StandardPackageLoader::calculate_checksum(
@@ -279,6 +351,9 @@ StandardLoadResult StandardPackageLoader::load(
         if (!document["definitions"].isArray()) {
             result.issues.push_back(issue(
                 "definitions_invalid", "规则文件的 definitions 必须是数组。"));
+            continue;
+        }
+        if (!validate_scale_descriptions(document, result)) {
             continue;
         }
         for (const auto& definition_document : document["definitions"]) {

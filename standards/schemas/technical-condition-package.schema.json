@@ -2,6 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://bridge-report.local/schemas/technical-condition-package.schema.json",
   "title": "Technical condition standard package manifest",
+  "$defs": {
+    "defectIndicatorScaleDescriptions": {
+      "description": "Stable scale-to-official-assessment-text mapping used by defect indicator entry documents. Keys must exactly match allowed_scales; the package loader enforces that cross-field rule.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"pattern": "^[1-9][0-9]*$"},
+      "additionalProperties": {"type": "string", "minLength": 1}
+    }
+  },
   "type": "object",
   "additionalProperties": false,
   "required": [
