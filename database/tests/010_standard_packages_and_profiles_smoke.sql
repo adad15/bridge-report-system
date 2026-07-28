@@ -1,5 +1,6 @@
 -- 010 冒烟测试：包身份摘要、family、组合不可变、继承与引用保护。
 begin;
+set local bridge_report.allow_unbound_rating_tree_profile = 'on';
 
 do $$
 declare

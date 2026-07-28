@@ -88,6 +88,15 @@ try {
 
   $env:BRIDGE_REPORT_TEST_DATABASE_URL = $databaseUrl
   $env:BRIDGE_REPORT_TEST_SCHEMA = $testSchema
+  # 大量早期仓储夹具刻意只覆盖其目标表，并未构造完整评定树。
+  # 仅测试进程显式放行这些 legacy fixture；迁移 smoke 在默认严格模式下运行，
+  # 019 smoke 会继续验证生产环境无树写入必定失败。
+  $env:PGOPTIONS = (
+    "-c search_path=$testSchema " +
+    "-c bridge_report.allow_unbound_rating_tree_profile=on " +
+    "-c bridge_report.allow_unbound_rating_tree_run=on " +
+    "-c bridge_report.allow_unbound_rating_tree_defect=on"
+  )
   & $testExe --gtest_brief=1
   if ($LASTEXITCODE -ne 0) {
     throw "C++ backend tests failed with exit code $LASTEXITCODE"

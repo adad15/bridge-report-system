@@ -2,6 +2,7 @@
 -- 事务末尾回滚，不留下测试数据。
 
 begin;
+set local bridge_report.allow_unbound_rating_tree_profile = 'on';
 
 do $$
 declare

@@ -292,10 +292,37 @@ void register_health_routes(
 
             try {
                 db_client->execSqlSync("select 1");
+                const auto rating_tree_rows = db_client->execSqlSync(
+                    "select "
+                    "(select count(*) from rating_tree_versions where status='published') "
+                    "as published_count,"
+                    "(select count(*) from rating_tree_versions where status='failed') "
+                    "as failed_count,"
+                    "(select count(*) from rating_tree_binding_diagnostics) "
+                    "as binding_issue_count");
 
                 Json::Value body;
                 body["status"] = "ok";
                 body["database"] = "reachable";
+                if (!rating_tree_rows.empty()) {
+                    const auto published_count =
+                        rating_tree_rows[0]["published_count"].as<std::int64_t>();
+                    const auto failed_count =
+                        rating_tree_rows[0]["failed_count"].as<std::int64_t>();
+                    const auto binding_issue_count =
+                        rating_tree_rows[0]["binding_issue_count"].as<std::int64_t>();
+                    body["rating_tree_status"] =
+                        published_count > 0 && failed_count == 0 &&
+                                binding_issue_count == 0
+                            ? "ok"
+                            : "degraded";
+                    body["rating_tree_published_count"] =
+                        static_cast<Json::Int64>(published_count);
+                    body["rating_tree_failed_count"] =
+                        static_cast<Json::Int64>(failed_count);
+                    body["rating_tree_binding_issue_count"] =
+                        static_cast<Json::Int64>(binding_issue_count);
+                }
                 auto response = drogon::HttpResponse::newHttpJsonResponse(body);
                 bridge_report::http::apply_local_dev_cors_headers(response);
                 callback(response);

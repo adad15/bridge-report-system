@@ -261,9 +261,13 @@ AssessmentConfirmationWritten AssessmentConfirmationService::persist(
     const auto context = transaction_->execSqlSync(
         "select iy.standard_profile_id::text as profile_id,"
         "iy.component_inventory_revision_id::text as inventory_revision_id,"
-        "p.technical_condition_package_id::text as package_id "
+        "p.technical_condition_package_id::text as package_id,"
+        "p.rating_tree_version_id::text as rating_tree_version_id,"
+        "tree.tree_content_checksum as rating_tree_content_checksum "
         "from inspection_years iy join project_standard_profiles p "
-        "on p.id=iy.standard_profile_id where iy.id=$1::uuid for update of iy,p",
+        "on p.id=iy.standard_profile_id "
+        "join rating_tree_versions tree on tree.id=p.rating_tree_version_id "
+        "where iy.id=$1::uuid for update of iy,p",
         target_inspection_year_id);
     if (context.empty()) {
         throw std::runtime_error("formal assessment target context is incomplete");
@@ -296,10 +300,11 @@ AssessmentConfirmationWritten AssessmentConfirmationService::persist(
         "insert into assessment_runs(inspection_year_id,source_import_record_id,run_kind,"
         "formal_revision_number,supersedes_run_id,technical_condition_package_id,"
         "standard_profile_id,component_inventory_revision_id,result_status,is_current,"
+        "rating_tree_version_id,rating_tree_content_checksum,"
         "input_summary_json,input_checksum,rule_package_summary_json,rule_package_checksum,"
         "result_summary_json,created_by_user_id) values($1::uuid,$2::uuid,'正式',$3,"
-        "nullif($4,'')::uuid,$5::uuid,$6::uuid,$7::uuid,'运行中',false,$8::jsonb,$9,"
-        "$10::jsonb,$11,'{}'::jsonb,$12::uuid) returning id::text as id",
+        "nullif($4,'')::uuid,$5::uuid,$6::uuid,$7::uuid,'运行中',false,$8::uuid,$9,"
+        "$10::jsonb,$11,$12::jsonb,$13,'{}'::jsonb,$14::uuid) returning id::text as id",
         target_inspection_year_id,
         source_import_record_id,
         formal_revision,
@@ -307,6 +312,8 @@ AssessmentConfirmationWritten AssessmentConfirmationService::persist(
         context[0]["package_id"].as<std::string>(),
         context[0]["profile_id"].as<std::string>(),
         context[0]["inventory_revision_id"].as<std::string>(),
+        context[0]["rating_tree_version_id"].as<std::string>(),
+        context[0]["rating_tree_content_checksum"].as<std::string>(),
         compact_json(preview.input_summary),
         preview.input_checksum,
         compact_json(preview.standard_identity),

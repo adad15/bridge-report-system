@@ -45,6 +45,16 @@ foreach ($smokeFile in $smokeFiles) {
   Invoke-PsqlFile $smokeFile.FullName
 }
 
+Write-Host "Rating-tree binding diagnostics (rows require manual review; nothing is deleted):"
+& $psqlExe $databaseUrl -v ON_ERROR_STOP=1 -P pager=off -c @"
+select entity_type, entity_id, reason, candidate_count
+from rating_tree_binding_diagnostics
+order by entity_type, reason, entity_id;
+"@
+if ($LASTEXITCODE -ne 0) {
+  throw "psql failed while reading rating-tree binding diagnostics with exit code $LASTEXITCODE"
+}
+
 Write-Host (
   "Full database migration and smoke check passed: {0} migrations applied twice; {1} smoke files passed." -f
     $migrationFiles.Count,

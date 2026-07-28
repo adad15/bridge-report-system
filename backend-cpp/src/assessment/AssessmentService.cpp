@@ -599,12 +599,14 @@ AssessmentServiceOutcome AssessmentService::preview(
     const auto inserted = db_client_->execSqlSync(
         "insert into assessment_runs(inspection_year_id,source_import_record_id,run_kind,"
         "technical_condition_package_id,standard_profile_id,component_inventory_revision_id,"
+        "rating_tree_version_id,rating_tree_content_checksum,"
         "result_status,input_summary_json,input_checksum,rule_package_summary_json,"
         "rule_package_checksum,result_summary_json,created_by_user_id) "
-        "values($1::uuid,$2::uuid,'试算',$3::uuid,$4::uuid,$5::uuid,$6,$7::jsonb,$8,"
-        "$9::jsonb,$10,$11::jsonb,$12::uuid) returning id::text",
+        "values($1::uuid,$2::uuid,'试算',$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7,"
+        "$8,$9::jsonb,$10,$11::jsonb,$12,$13::jsonb,$14::uuid) returning id::text",
         context.inspection_year_id, import_record_id, context.standard_package_id,
         context.standard_profile_id, context.inventory_revision_id,
+        context.rating_tree_version_id, context.rating_tree_content_checksum,
         outcome.preview.result.has_value() ? "成功" : "阻断",
         compact_json(outcome.preview.input_summary), outcome.preview.input_checksum,
         compact_json(outcome.preview.standard_identity), package->manifest.content_checksum,
