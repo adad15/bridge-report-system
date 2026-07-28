@@ -79,7 +79,7 @@ begin
   insert into rating_tree_node_sources (
     rating_tree_node_id, source_key, source_type, title, source_reference
   ) values (
-    v_node_id, 'h21.defect.4_1_1_1', 'h21', 'H21 裂缝', '表 4.1.1-1'
+    v_node_id, 'h21.defect.4_1_1_1', 'technical_condition', 'H21 裂缝', '表 4.1.1-1'
   );
 
   insert into rating_tree_aliases (

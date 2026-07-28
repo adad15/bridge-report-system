@@ -47,8 +47,7 @@ enum class SetStandardPackageEnabledStatus {
 };
 
 struct CreateStandardProfileRequest {
-    std::string technical_condition_package_id;
-    std::string maintenance_package_id;
+    std::string rating_tree_version_id;
     std::string created_by_user_id;
     std::string change_reason;
 };
@@ -59,6 +58,7 @@ struct ProjectStandardProfileRecord {
     int revision_number{0};
     std::string technical_condition_package_id;
     std::string maintenance_package_id;
+    std::string rating_tree_version_id;
     std::optional<std::string> supersedes_profile_id;
     std::string status;
     std::string change_reason;
@@ -70,6 +70,8 @@ enum class CreateStandardProfileStatus {
     PackageNotFound,
     PackageUnavailable,
     FamilyMismatch,
+    RatingTreeNotFound,
+    RatingTreeUnavailable,
 };
 
 struct CreateStandardProfileOutcome {

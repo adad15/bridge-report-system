@@ -33,6 +33,7 @@ add_library(bridge_report_backend_core
     src/db/InspectionYearDeletionRepository.cpp
     src/db/ImportRecordDeletionRepository.cpp
     src/db/ReviewRepository.cpp
+    src/db/RatingTreeRepository.cpp
     src/db/StandardRepository.cpp
     src/db/WorkspaceRepository.cpp
     src/db/WordImportRepository.cpp
@@ -180,6 +181,7 @@ add_executable(bridge_report_backend_tests
     tests/test_review_statistics.cpp
     tests/test_rating_tree_compiler.cpp
     tests/test_rating_tree_package_loader.cpp
+    tests/test_rating_tree_repository.cpp
     tests/test_rating_tree_resolver.cpp
     tests/test_system_number.cpp
     tests/test_standard_package_loader.cpp

@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/auth/PasswordHash.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/db/StandardRepository.hpp"
 
@@ -51,9 +52,6 @@ protected:
             client_->execSqlSync(
                 "delete from project_standard_profiles where created_by_user_id=$1::uuid",
                 user_id_);
-            client_->execSqlSync(
-                "delete from standard_packages where standard_id like $1",
-                "TEST-" + suffix_ + "%");
             client_->execSqlSync("delete from users where id=$1::uuid", user_id_);
         } catch (...) {
         }
@@ -86,11 +84,65 @@ protected:
         return {*technical.package_id, *maintenance.package_id};
     }
 
-    CreateStandardProfileRequest profile_request(
+    std::string published_tree(
         const std::string& technical_id,
         const std::string& maintenance_id,
+        const std::string& name = "DEFAULT") const {
+        const auto source = client_->execSqlSync(
+            "select t.standard_id as technical_standard_id, "
+            "t.package_version as technical_version, "
+            "t.content_checksum as technical_checksum, "
+            "m.standard_id as maintenance_standard_id, "
+            "m.package_version as maintenance_version, "
+            "m.content_checksum as maintenance_checksum "
+            "from standard_packages t cross join standard_packages m "
+            "where t.id=$1::uuid and m.id=$2::uuid",
+            technical_id,
+            maintenance_id);
+        const auto tree = client_->execSqlSync(
+            "insert into rating_tree_versions ("
+            "tree_code,tree_name,package_version,contract_version,"
+            "technical_condition_package_id,technical_condition_standard_id,"
+            "technical_condition_package_version,technical_condition_content_checksum,"
+            "maintenance_package_id,maintenance_standard_id,"
+            "maintenance_package_version,maintenance_content_checksum,"
+            "organization_tree_code,organization_package_version,"
+            "organization_content_checksum,tree_content_checksum,status"
+            ") values ("
+            "$1,$2,'1.0.0',1,$3::uuid,$4,$5,$6,$7::uuid,$8,$9,$10,"
+            "$1,'1.0.0',$11,$12,'draft'"
+            ") returning id::text as id",
+            "TEST-TREE-" + suffix_ + "-" + name,
+            "测试评定树 " + name,
+            technical_id,
+            source[0]["technical_standard_id"].as<std::string>(),
+            source[0]["technical_version"].as<std::string>(),
+            source[0]["technical_checksum"].as<std::string>(),
+            maintenance_id,
+            source[0]["maintenance_standard_id"].as<std::string>(),
+            source[0]["maintenance_version"].as<std::string>(),
+            source[0]["maintenance_checksum"].as<std::string>(),
+            "sha256:" + bridge_report::auth::sha256_hex(
+                "TEST-TREE-" + suffix_ + "-" + name + "-org"),
+            "sha256:" + bridge_report::auth::sha256_hex(
+                "TEST-TREE-" + suffix_ + "-" + name + "-tree"));
+        const auto tree_id = tree[0]["id"].as<std::string>();
+        client_->execSqlSync(
+            "insert into rating_tree_nodes ("
+            "rating_tree_version_id,node_key,display_name,node_type,scoring_mode"
+            ") values ($1::uuid,'root','测试根节点','root','non_scoring')",
+            tree_id);
+        client_->execSqlSync(
+            "update rating_tree_versions set status='published',published_at=now() "
+            "where id=$1::uuid",
+            tree_id);
+        return tree_id;
+    }
+
+    CreateStandardProfileRequest profile_request(
+        const std::string& tree_id,
         const std::string& reason = "仓储测试组合") const {
-        return {technical_id, maintenance_id, user_id_, reason};
+        return {tree_id, user_id_, reason};
     }
 
     drogon::orm::DbClientPtr client_;
@@ -168,26 +220,24 @@ TEST_F(StandardRepositoryTest, DistinguishesEnabledDisabledFaultAndAdminAuthoriz
 
 TEST_F(StandardRepositoryTest, ProfileRequiresCorrectEnabledFamilies) {
     const auto [technical_id, maintenance_id] = sync_pair();
-    const auto other_technical = repository_->sync_package(
-        manifest(StandardFamily::technical_condition, "OTHER", '4'));
-    ASSERT_TRUE(other_technical.package_id.has_value());
+    const auto tree_id = published_tree(technical_id, maintenance_id);
 
     const auto created = repository_->create_profile(
-        profile_request(technical_id, maintenance_id));
+        profile_request(tree_id));
     EXPECT_EQ(created.status, CreateStandardProfileStatus::Created);
     ASSERT_TRUE(created.profile.has_value());
     EXPECT_EQ(created.profile->revision_number, 1);
 
     const auto mismatch = repository_->create_profile(
-        profile_request(technical_id, *other_technical.package_id));
-    EXPECT_EQ(mismatch.status, CreateStandardProfileStatus::FamilyMismatch);
+        profile_request("00000000-0000-0000-0000-000000000000"));
+    EXPECT_EQ(mismatch.status, CreateStandardProfileStatus::RatingTreeNotFound);
 
     ASSERT_EQ(
         repository_->set_package_enabled(maintenance_id, false, "admin"),
         SetStandardPackageEnabledStatus::Updated);
     const auto unavailable = repository_->create_profile(
-        profile_request(technical_id, maintenance_id));
-    EXPECT_EQ(unavailable.status, CreateStandardProfileStatus::PackageUnavailable);
+        profile_request(tree_id));
+    EXPECT_EQ(unavailable.status, CreateStandardProfileStatus::RatingTreeUnavailable);
 }
 
 TEST_F(StandardRepositoryTest, FormalProfileIsImmutableButCanCreateNewRevision) {
@@ -195,8 +245,11 @@ TEST_F(StandardRepositoryTest, FormalProfileIsImmutableButCanCreateNewRevision) 
     const auto replacement = repository_->sync_package(
         manifest(StandardFamily::technical_condition, "REPLACEMENT", '5'));
     ASSERT_TRUE(replacement.package_id.has_value());
+    const auto tree_id = published_tree(technical_id, maintenance_id);
+    const auto replacement_tree_id =
+        published_tree(*replacement.package_id, maintenance_id, "REPLACEMENT");
     const auto created = repository_->create_profile(
-        profile_request(technical_id, maintenance_id));
+        profile_request(tree_id));
     ASSERT_TRUE(created.profile.has_value());
 
     const auto bridge = client_->execSqlSync(
@@ -216,7 +269,7 @@ TEST_F(StandardRepositoryTest, FormalProfileIsImmutableButCanCreateNewRevision) 
 
     const auto revised = repository_->revise_profile(
         created.profile->id,
-        profile_request(*replacement.package_id, maintenance_id, "正式结果后的规范修订"));
+        profile_request(replacement_tree_id, "正式结果后的规范修订"));
     EXPECT_EQ(revised.status, CreateStandardProfileStatus::Created);
     ASSERT_TRUE(revised.profile.has_value());
     EXPECT_EQ(revised.profile->profile_series_id, created.profile->profile_series_id);
@@ -230,8 +283,9 @@ TEST_F(StandardRepositoryTest, FormalProfileIsImmutableButCanCreateNewRevision) 
 
 TEST_F(StandardRepositoryTest, InspectionRevisionCanInheritProfile) {
     const auto [technical_id, maintenance_id] = sync_pair();
+    const auto tree_id = published_tree(technical_id, maintenance_id);
     const auto profile = repository_->create_profile(
-        profile_request(technical_id, maintenance_id));
+        profile_request(tree_id));
     ASSERT_TRUE(profile.profile.has_value());
     const auto bridge = client_->execSqlSync(
         "insert into bridges (bridge_name) values ($1) returning id::text as id",

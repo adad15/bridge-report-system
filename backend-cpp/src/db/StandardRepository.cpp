@@ -42,6 +42,8 @@ ProjectStandardProfileRecord row_to_profile(const drogon::orm::Row& row) {
     profile.technical_condition_package_id =
         row["technical_condition_package_id"].as<std::string>();
     profile.maintenance_package_id = row["maintenance_package_id"].as<std::string>();
+    profile.rating_tree_version_id =
+        row["rating_tree_version_id"].as<std::string>();
     profile.supersedes_profile_id = optional_text(row, "supersedes_profile_id");
     profile.status = row["status"].as<std::string>();
     profile.change_reason = row["change_reason"].as<std::string>();
@@ -59,43 +61,45 @@ const char* profile_returning_columns() {
     return "id::text as id, profile_series_id::text as profile_series_id, revision_number, "
            "technical_condition_package_id::text as technical_condition_package_id, "
            "maintenance_package_id::text as maintenance_package_id, "
+           "rating_tree_version_id::text as rating_tree_version_id, "
            "supersedes_profile_id::text as supersedes_profile_id, status, change_reason";
 }
 
-CreateStandardProfileStatus validate_profile_packages(
+struct ProfileTreeContext {
+    CreateStandardProfileStatus status{CreateStandardProfileStatus::RatingTreeNotFound};
+    std::optional<std::string> technical_condition_package_id;
+    std::optional<std::string> maintenance_package_id;
+};
+
+ProfileTreeContext resolve_profile_tree(
     const drogon::orm::DbClientPtr& db_client,
     const CreateStandardProfileRequest& request) {
-    const auto packages = db_client->execSqlSync(
-        "select id::text as id, standard_family, is_enabled, sync_status "
-        "from standard_packages where id in ($1::uuid, $2::uuid)",
-        request.technical_condition_package_id,
-        request.maintenance_package_id);
-    if (packages.size() != 2) {
-        return CreateStandardProfileStatus::PackageNotFound;
+    const auto rows = db_client->execSqlSync(
+        "select v.technical_condition_package_id::text as technical_id, "
+        "v.maintenance_package_id::text as maintenance_id, v.status, "
+        "t.is_enabled as technical_enabled, t.sync_status as technical_sync_status, "
+        "m.is_enabled as maintenance_enabled, m.sync_status as maintenance_sync_status "
+        "from rating_tree_versions v "
+        "join standard_packages t on t.id=v.technical_condition_package_id "
+        "join standard_packages m on m.id=v.maintenance_package_id "
+        "where v.id=$1::uuid",
+        request.rating_tree_version_id);
+    if (rows.empty()) {
+        return {CreateStandardProfileStatus::RatingTreeNotFound};
     }
-
-    bool found_technical = false;
-    bool found_maintenance = false;
-    bool available = true;
-    for (const auto& package : packages) {
-        const auto id = package["id"].as<std::string>();
-        const auto family = package["standard_family"].as<std::string>();
-        if (id == request.technical_condition_package_id) {
-            found_technical = family == "technical_condition";
-        }
-        if (id == request.maintenance_package_id) {
-            found_maintenance = family == "maintenance";
-        }
-        available = available && package["is_enabled"].as<bool>() &&
-                    package["sync_status"].as<std::string>() == "正常";
+    const auto& row = rows[0];
+    if (row["status"].as<std::string>() != "published" ||
+        !row["technical_enabled"].as<bool>() ||
+        !row["maintenance_enabled"].as<bool>() ||
+        row["technical_sync_status"].as<std::string>() != "正常" ||
+        row["maintenance_sync_status"].as<std::string>() != "正常") {
+        return {CreateStandardProfileStatus::RatingTreeUnavailable};
     }
-    if (!found_technical || !found_maintenance) {
-        return CreateStandardProfileStatus::FamilyMismatch;
-    }
-    if (!available) {
-        return CreateStandardProfileStatus::PackageUnavailable;
-    }
-    return CreateStandardProfileStatus::Created;
+    return {
+        CreateStandardProfileStatus::Created,
+        row["technical_id"].as<std::string>(),
+        row["maintenance_id"].as<std::string>(),
+    };
 }
 
 }  // namespace
@@ -240,17 +244,19 @@ bool StandardRepository::mark_package_fault(
 
 CreateStandardProfileOutcome StandardRepository::create_profile(
     const CreateStandardProfileRequest& request) {
-    const auto validation = validate_profile_packages(db_client_, request);
-    if (validation != CreateStandardProfileStatus::Created) {
-        return {validation, std::nullopt};
+    const auto context = resolve_profile_tree(db_client_, request);
+    if (context.status != CreateStandardProfileStatus::Created) {
+        return {context.status, std::nullopt};
     }
     const auto result = db_client_->execSqlSync(
         std::string("insert into project_standard_profiles (") +
-            "technical_condition_package_id, maintenance_package_id, created_by_user_id, "
-            "change_reason) values ($1::uuid, $2::uuid, $3::uuid, $4) returning " +
+            "technical_condition_package_id, maintenance_package_id, rating_tree_version_id, "
+            "created_by_user_id, change_reason) "
+            "values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5) returning " +
             profile_returning_columns(),
-        request.technical_condition_package_id,
-        request.maintenance_package_id,
+        *context.technical_condition_package_id,
+        *context.maintenance_package_id,
+        request.rating_tree_version_id,
         request.created_by_user_id,
         request.change_reason);
     return {CreateStandardProfileStatus::Created, row_to_profile(result[0])};
@@ -259,9 +265,9 @@ CreateStandardProfileOutcome StandardRepository::create_profile(
 CreateStandardProfileOutcome StandardRepository::revise_profile(
     const std::string& source_profile_id,
     const CreateStandardProfileRequest& request) {
-    const auto validation = validate_profile_packages(db_client_, request);
-    if (validation != CreateStandardProfileStatus::Created) {
-        return {validation, std::nullopt};
+    const auto context = resolve_profile_tree(db_client_, request);
+    if (context.status != CreateStandardProfileStatus::Created) {
+        return {context.status, std::nullopt};
     }
     const auto source = db_client_->execSqlSync(
         "select profile_series_id::text as profile_series_id "
@@ -274,14 +280,16 @@ CreateStandardProfileOutcome StandardRepository::revise_profile(
     const auto result = db_client_->execSqlSync(
         std::string("insert into project_standard_profiles (") +
             "profile_series_id, revision_number, technical_condition_package_id, "
-            "maintenance_package_id, supersedes_profile_id, created_by_user_id, change_reason) "
+            "maintenance_package_id, rating_tree_version_id, supersedes_profile_id, "
+            "created_by_user_id, change_reason) "
             "select $2::uuid, coalesce(max(revision_number), 0) + 1, $3::uuid, $4::uuid, "
-            "$1::uuid, $5::uuid, $6 from project_standard_profiles "
+            "$5::uuid, $1::uuid, $6::uuid, $7 from project_standard_profiles "
             "where profile_series_id=$2::uuid returning " + profile_returning_columns(),
         source_profile_id,
         source[0]["profile_series_id"].as<std::string>(),
-        request.technical_condition_package_id,
-        request.maintenance_package_id,
+        *context.technical_condition_package_id,
+        *context.maintenance_package_id,
+        request.rating_tree_version_id,
         request.created_by_user_id,
         request.change_reason);
     return {CreateStandardProfileStatus::Created, row_to_profile(result[0])};

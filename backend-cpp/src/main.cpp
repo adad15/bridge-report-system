@@ -13,6 +13,7 @@
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/AuthRepository.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
+#include "bridge_report/db/RatingTreeRepository.hpp"
 #include "bridge_report/db/StandardRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/AssessmentRoutes.hpp"
@@ -31,6 +32,8 @@
 #include "bridge_report/http/WordImportRoutes.hpp"
 #include "bridge_report/http/WorkspaceRoutes.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
+#include "bridge_report/rating_tree/RatingTreeCompiler.hpp"
+#include "bridge_report/rating_tree/RatingTreePackageLoader.hpp"
 #include "bridge_report/standards/StandardPackageLoader.hpp"
 #include "bridge_report/standards/StandardRegistry.hpp"
 #include "bridge_report/deletion/ArchiveFileCleanupCoordinator.hpp"
@@ -62,6 +65,10 @@ StandardStartupState load_standard_registry(const std::filesystem::path& standar
     }
 
     for (const auto& package_root : loader.discover(standards_root)) {
+        if (package_root.lexically_normal().generic_string().find(
+                "/rating-tree/") != std::string::npos) {
+            continue;
+        }
         auto load_result = loader.load(package_root);
         if (!load_result.ok()) {
             for (auto& load_issue : load_result.issues) {
@@ -83,6 +90,80 @@ StandardStartupState load_standard_registry(const std::filesystem::path& standar
         }
     }
     return state;
+}
+
+std::vector<bridge_report::rating_tree::EffectiveRatingTree>
+load_effective_rating_trees(
+    const std::filesystem::path& standards_root,
+    std::vector<bridge_report::standards::StandardIssue>& issues) {
+    bridge_report::rating_tree::RatingTreePackageLoader tree_loader;
+    bridge_report::standards::StandardPackageLoader standard_loader;
+    bridge_report::rating_tree::RatingTreeCompiler compiler;
+    std::vector<bridge_report::rating_tree::EffectiveRatingTree> trees;
+
+    for (const auto& package_root : tree_loader.discover(standards_root)) {
+        auto extension = tree_loader.load(package_root);
+        if (!extension.ok()) {
+            for (const auto& tree_issue : extension.issues) {
+                issues.push_back({tree_issue.code, tree_issue.message});
+                std::cerr << "评定树加载失败 [" << tree_issue.code << "]："
+                          << tree_issue.message << "\n";
+            }
+            continue;
+        }
+
+        const auto find_reference = [&](const std::string& source_type)
+            -> std::optional<std::filesystem::path> {
+            for (const auto& [_, source] : extension.package->sources) {
+                if (source.source_type != source_type) continue;
+                auto reference = std::filesystem::path(source.reference);
+                if (!reference.empty() &&
+                    *reference.begin() == std::filesystem::path("standards")) {
+                    return standards_root.parent_path() / reference;
+                }
+                return standards_root / reference;
+            }
+            return std::nullopt;
+        };
+        const auto technical_path = find_reference("technical_condition");
+        const auto maintenance_path = find_reference("maintenance");
+        if (!technical_path.has_value() || !maintenance_path.has_value()) {
+            bridge_report::standards::StandardIssue issue{
+                "rating_tree_source_reference_missing",
+                "评定树必须明确引用 H21 技术评定规范和 JTG 5120 养护规范。",
+            };
+            std::cerr << "评定树编译失败 [" << issue.code << "]："
+                      << issue.message << "\n";
+            issues.push_back(std::move(issue));
+            continue;
+        }
+
+        auto technical = standard_loader.load(*technical_path);
+        auto maintenance = standard_loader.load(*maintenance_path);
+        if (!technical.ok() || !maintenance.ok()) {
+            bridge_report::standards::StandardIssue issue{
+                "rating_tree_source_package_invalid",
+                "评定树引用的规范包缺失或未通过完整性校验。",
+            };
+            std::cerr << "评定树编译失败 [" << issue.code << "]："
+                      << issue.message << "\n";
+            issues.push_back(std::move(issue));
+            continue;
+        }
+
+        auto compiled = compiler.compile(
+            *technical.package, &*maintenance.package, *extension.package);
+        if (!compiled.ok()) {
+            for (const auto& tree_issue : compiled.issues) {
+                issues.push_back({tree_issue.code, tree_issue.message});
+                std::cerr << "评定树编译失败 [" << tree_issue.code << "]："
+                          << tree_issue.message << "\n";
+            }
+            continue;
+        }
+        trees.push_back(std::move(*compiled.tree));
+    }
+    return trees;
 }
 
 Json::Value make_cpp_health_body(
@@ -234,6 +315,8 @@ int main(int argc, char* argv[]) {
     const std::string config_path = argc > 1 ? argv[1] : "config/local.json";
     const auto config = bridge_report::config::load_app_config(config_path);
     auto standards = load_standard_registry(config.standards_root);
+    auto rating_trees =
+        load_effective_rating_trees(config.standards_root, standards.issues);
 
     const auto db_client = bridge_report::db::create_db_client(config.postgres);
 
@@ -256,6 +339,47 @@ int main(int argc, char* argv[]) {
                       << standards.manifests[index].package_version << "；"
                       << conflict.message << "\n";
             standards.issues.push_back(std::move(conflict));
+        }
+
+        bridge_report::db::RatingTreeRepository rating_tree_repository(db_client);
+        for (const auto& tree : rating_trees) {
+            const auto outcome =
+                rating_tree_repository.sync_published_tree(tree);
+            if (outcome.status ==
+                    bridge_report::db::RatingTreeSyncStatus::Inserted ||
+                outcome.status ==
+                    bridge_report::db::RatingTreeSyncStatus::Unchanged) {
+                continue;
+            }
+            const auto code =
+                outcome.status ==
+                        bridge_report::db::RatingTreeSyncStatus::ChecksumConflict
+                ? "rating_tree_database_checksum_conflict"
+                : outcome.status ==
+                        bridge_report::db::RatingTreeSyncStatus::SourcePackageNotFound
+                ? "rating_tree_source_package_not_synchronized"
+                : "rating_tree_database_sync_failed";
+            bridge_report::standards::StandardIssue issue{
+                code,
+                "有效评定树未能同步发布到数据库，既有已发布版本未被覆盖。",
+            };
+            std::cerr << "评定树数据库同步失败 [" << issue.code << "]："
+                      << tree.version.tree_code << " "
+                      << tree.version.package_version << "；"
+                      << issue.message << "\n";
+            standards.issues.push_back(std::move(issue));
+        }
+        const auto backfill =
+            rating_tree_repository.backfill_unique_profile_versions();
+        if (backfill.ambiguous_profile_count != 0) {
+            bridge_report::standards::StandardIssue issue{
+                "rating_tree_profile_backfill_ambiguous",
+                "部分历史规范组合对应多个已发布评定树，未自动回填。",
+            };
+            std::cerr << "历史评定树回填失败 [" << issue.code << "]："
+                      << backfill.ambiguous_profile_count << " 个规范组合；"
+                      << issue.message << "\n";
+            standards.issues.push_back(std::move(issue));
         }
     } catch (const std::exception& error) {
         bridge_report::standards::StandardIssue sync_issue{

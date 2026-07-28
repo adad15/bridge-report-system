@@ -121,7 +121,7 @@ create table if not exists rating_tree_node_sources (
     references rating_tree_nodes(id) on delete cascade,
   source_key text not null check (length(btrim(source_key)) > 0),
   source_type text not null check (
-    source_type in ('h21', 'jtg5120', 'organization')
+    source_type in ('technical_condition', 'maintenance', 'organization')
   ),
   title text not null check (length(btrim(title)) > 0),
   source_reference text not null default '',
