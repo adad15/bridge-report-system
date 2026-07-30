@@ -25,9 +25,9 @@ const root: ratingTreeApi.RatingTreeNodeSummary = {
   id: "root-1",
   node_key: "org.bridge.root",
   parent_node_id: null,
-  display_name: "梁式桥",
-  node_type: "bridge_type",
-  sort_order: 1,
+  display_name: "桥梁有效评定树",
+  node_type: "root",
+  sort_order: 0,
   bridge_type_ids: ["h21.bridge_type.beam"],
   component_category_ids: [],
   scoring_mode: "non_scoring",
@@ -36,17 +36,65 @@ const root: ratingTreeApi.RatingTreeNodeSummary = {
   is_scoring: false,
 };
 
-const detail: ratingTreeApi.RatingTreeNode = {
+const group5: ratingTreeApi.RatingTreeNodeSummary = {
   ...root,
-  organization_note: "单位桥梁评定树入口。",
-  allowed_scales: [],
-  h21_indicator_name: null,
-  h21_source_table: null,
-  scale_descriptions: {},
-  deduction_points: {},
-  path: [{ id: root.id, node_key: root.node_key, display_name: root.display_name, node_type: root.node_type }],
-  sources: [],
+  id: "group-5",
+  node_key: "org.bridge.group.5",
+  parent_node_id: root.id,
+  display_name: "梁式桥上部结构",
+  node_type: "structure_group",
+  sort_order: 50,
 };
+
+const group51: ratingTreeApi.RatingTreeNodeSummary = {
+  ...group5,
+  id: "group-5-1",
+  node_key: "org.bridge.group.5_1",
+  parent_node_id: group5.id,
+  display_name: "混凝土梁式桥",
+  sort_order: 10,
+};
+
+const group511: ratingTreeApi.RatingTreeNodeSummary = {
+  ...group51,
+  id: "group-5-1-1",
+  node_key: "org.bridge.group.5_1_1",
+  parent_node_id: group51.id,
+  display_name: "上部承重构件、上部一般构件",
+  node_type: "component_group",
+};
+
+function detailFor(node: ratingTreeApi.RatingTreeNodeSummary): ratingTreeApi.RatingTreeNode {
+  return {
+    ...node,
+    organization_note: `${node.display_name}说明。`,
+    allowed_scales: [],
+    h21_indicator_name: null,
+    h21_source_table: null,
+    scale_descriptions: {},
+    deduction_points: {},
+    path: [
+      { id: root.id, node_key: root.node_key, display_name: root.display_name, node_type: root.node_type },
+      { id: node.id, node_key: node.node_key, display_name: node.display_name, node_type: node.node_type },
+    ],
+    sources: [],
+  };
+}
+
+const children = new Map<string, ratingTreeApi.RatingTreeNodeSummary[]>([
+  ["root", [root]],
+  [root.id, [group5]],
+  [group5.id, [group51]],
+  [group51.id, [group511]],
+  [group511.id, []],
+]);
+
+const details = new Map<string, ratingTreeApi.RatingTreeNode>([
+  [root.id, detailFor(root)],
+  [group5.id, detailFor(group5)],
+  [group51.id, detailFor(group51)],
+  [group511.id, detailFor(group511)],
+]);
 
 function renderPage() {
   return render(
@@ -64,9 +112,12 @@ describe("RatingTreePage", () => {
     clearRatingTreeViewStateForTests();
     vi.spyOn(ratingTreeApi, "fetchRatingTreeVersion").mockResolvedValue(version);
     vi.spyOn(ratingTreeApi, "fetchRatingTreeChildren").mockImplementation(
-      async (_baseUrl, _versionId, parentId) => parentId === null ? [root] : [],
+      async (_baseUrl, _versionId, parentId) =>
+        children.get(parentId ?? "root") ?? [],
     );
-    vi.spyOn(ratingTreeApi, "fetchRatingTreeNode").mockResolvedValue(detail);
+    vi.spyOn(ratingTreeApi, "fetchRatingTreeNode").mockImplementation(
+      async (_baseUrl, _versionId, nodeId) => details.get(nodeId) ?? detailFor(root),
+    );
     vi.spyOn(ratingTreeApi, "searchRatingTree").mockResolvedValue([]);
     vi.spyOn(standardsApi, "fetchStandardPackages").mockResolvedValue([{
       id: "h21-package",
@@ -85,8 +136,15 @@ describe("RatingTreePage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "单位桥梁评定树" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "梁式桥" }));
-    expect(await screen.findByText("单位桥梁评定树入口。")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "5、梁式桥上部结构" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "桥梁有效评定树" })).not.toBeInTheDocument();
+    expect(await screen.findByText("梁式桥上部结构说明。")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "5.1、混凝土梁式桥" })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("button", { name: "5.1、混凝土梁式桥" })[0]);
+    expect(await screen.findByRole("heading", { name: "5.1、混凝土梁式桥" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", {
+      name: "5.1.1、上部承重构件、上部一般构件",
+    })).toHaveLength(2);
     expect(await screen.findByText("全部桥型（1 类）")).toBeInTheDocument();
     expect(screen.queryByText("h21.bridge_type.beam")).not.toBeInTheDocument();
     expect(screen.queryByText("org.bridge.root")).not.toBeInTheDocument();
@@ -97,8 +155,8 @@ describe("RatingTreePage", () => {
     const first = renderPage();
     await screen.findByRole("heading", { name: "单位桥梁评定树" });
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "裂缝" } });
-    fireEvent.click(screen.getByRole("button", { name: "梁式桥" }));
-    await screen.findByText("单位桥梁评定树入口。");
+    fireEvent.click(screen.getByRole("button", { name: "5、梁式桥上部结构" }));
+    await screen.findByText("梁式桥上部结构说明。");
     first.unmount();
 
     renderPage();
@@ -107,7 +165,7 @@ describe("RatingTreePage", () => {
     await waitFor(() => expect(ratingTreeApi.fetchRatingTreeNode).toHaveBeenCalledWith(
       expect.any(String),
       "version-1",
-      "root-1",
+      "group-5",
     ));
   });
 });

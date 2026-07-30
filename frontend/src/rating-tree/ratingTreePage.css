@@ -1,0 +1,168 @@
+.rating-tree-page {
+  width: min(1680px, calc(100vw - 24px));
+  gap: 8px;
+}
+
+.rating-tree-page .rating-tree-page-header {
+  padding: 12px 18px;
+  border-radius: 8px;
+}
+
+.rating-tree-page .rating-tree-page-header h1 {
+  margin: 1px 0 3px;
+  font-size: 20px;
+}
+
+.rating-tree-page .rating-tree-workspace {
+  grid-template-columns: minmax(420px, 48%) minmax(0, 1fr);
+  border-radius: 8px;
+}
+
+.rating-tree-page .rating-tree-sidebar {
+  background: #fff;
+}
+
+.rating-tree-page .rating-tree-search {
+  gap: 5px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.rating-tree-page .rating-tree-search input {
+  padding: 7px 10px;
+}
+
+.rating-tree-page .rating-tree-row {
+  min-height: 42px;
+  padding-right: 12px;
+  border-bottom-color: #dfe4ea;
+  background: #fff;
+}
+
+.rating-tree-page .rating-tree-row:hover {
+  background: #f3f5f7;
+}
+
+.rating-tree-page .rating-tree-row.selected {
+  background: #dde2e7;
+}
+
+.rating-tree-page .rating-tree-toggle {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #8a98aa;
+  border-radius: 50%;
+  color: #415166;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.rating-tree-page .rating-tree-leaf-marker {
+  width: 18px;
+}
+
+.rating-tree-page .rating-tree-node-button {
+  padding: 10px 0;
+  color: #101828;
+  font-size: 14px;
+}
+
+.rating-tree-page .rating-tree-detail-pane {
+  padding: 0 0 36px;
+  background: #fff;
+}
+
+.rating-tree-page .rating-tree-detail > header {
+  padding: 18px 22px 14px;
+}
+
+.rating-tree-page .rating-tree-detail-title-row h2 {
+  font-size: 21px;
+}
+
+.rating-tree-child-section {
+  border-bottom: 1px solid #dbe4ef;
+}
+
+.rating-tree-child-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #f8fafc;
+}
+
+.rating-tree-child-section-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.rating-tree-child-section-heading span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.rating-tree-child-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rating-tree-child-list li + li {
+  border-top: 1px solid #dfe4ea;
+}
+
+.rating-tree-child-list button {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 18px;
+  border: 0;
+  color: #101828;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rating-tree-child-list button:hover {
+  background: #f3f5f7;
+}
+
+.rating-tree-child-list button span:last-child {
+  color: #94a3b8;
+  font-size: 22px;
+}
+
+.rating-tree-child-empty {
+  margin: 0;
+  padding: 18px;
+  color: #64748b;
+  text-align: center;
+}
+
+.rating-tree-page .rating-tree-detail-grid {
+  margin: 18px 22px;
+}
+
+.rating-tree-page .rating-tree-detail-section,
+.rating-tree-page .rating-tree-non-scoring-note {
+  margin-right: 22px;
+  margin-left: 22px;
+}
+
+@media (max-width: 1000px) {
+  .rating-tree-page .rating-tree-workspace {
+    grid-template-columns: minmax(340px, 43%) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .rating-tree-page .rating-tree-workspace {
+    grid-template-columns: 1fr;
+  }
+}

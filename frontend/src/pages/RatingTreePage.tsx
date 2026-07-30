@@ -24,6 +24,7 @@ import {
   readRatingTreeViewState,
   writeRatingTreeViewState,
 } from "../rating-tree/ratingTreeViewState";
+import "../rating-tree/ratingTreePage.css";
 
 export function RatingTreePage() {
   const { versionId } = useParams<{ versionId: string }>();
@@ -116,11 +117,43 @@ export function RatingTreePage() {
     ])
       .then(async ([loadedVersion, loadedRoots]) => {
         const loadedChildren = new Map<string, RatingTreeNodeSummary[]>();
-        await hydrateExpanded(loadedRoots, loadedChildren);
+        const technicalRoot =
+          loadedRoots.length === 1 && loadedRoots[0].node_type === "root"
+            ? loadedRoots[0]
+            : null;
+        const navigationRoots = technicalRoot === null
+          ? loadedRoots
+          : await fetchRatingTreeChildren(backendBaseUrl, versionId, technicalRoot.id);
+        if (technicalRoot !== null) {
+          loadedChildren.set(technicalRoot.id, navigationRoots);
+        }
+
+        const initialExpanded = new Set(restoredExpanded);
+        let initialSelectedNodeId = linkedNodeId || restored.selectedNodeId;
+        if (initialSelectedNodeId === null && navigationRoots.length > 0) {
+          const firstNode = navigationRoots[0];
+          initialSelectedNodeId = firstNode.id;
+          if (firstNode.node_type !== "defect") {
+            initialExpanded.add(firstNode.id);
+          }
+        }
+        await hydrateExpanded(navigationRoots, loadedChildren);
+        const newlyExpandedParents = navigationRoots.filter(
+          (node) =>
+            initialExpanded.has(node.id) &&
+            node.node_type !== "defect" &&
+            !loadedChildren.has(node.id),
+        );
+        await Promise.all(newlyExpandedParents.map(async (parent) => {
+          const children = await fetchRatingTreeChildren(backendBaseUrl, versionId, parent.id);
+          loadedChildren.set(parent.id, children);
+        }));
         if (!active) return;
         setVersion(loadedVersion);
         setRoots(loadedRoots);
         setChildrenByParent(loadedChildren);
+        setExpandedNodeIds(initialExpanded);
+        setSelectedNodeId(initialSelectedNodeId);
         setLoading(false);
       })
       .catch((caught) => {
@@ -256,6 +289,22 @@ export function RatingTreePage() {
     }
   }, [childrenByParent, expandedNodeIds, versionId]);
 
+  const selectNode = useCallback((node: RatingTreeNodeSummary) => {
+    setSelectedNodeId(node.id);
+    if (node.node_type !== "defect" && !expandedNodeIds.has(node.id)) {
+      void toggleNode(node);
+    }
+  }, [expandedNodeIds, toggleNode]);
+
+  const navigationRoots = useMemo(() => {
+    if (roots.length !== 1 || roots[0].node_type !== "root") return roots;
+    return childrenByParent.get(roots[0].id) ?? [];
+  }, [childrenByParent, roots]);
+
+  const selectedChildren = selectedNode === null
+    ? []
+    : childrenByParent.get(selectedNode.id) ?? [];
+
   if (loading) {
     return <section className="status-panel"><p>首次加载评定树…</p></section>;
   }
@@ -292,14 +341,14 @@ export function RatingTreePage() {
           </label>
           <div className="rating-tree-navigation-scroll">
             <RatingTreeNavigator
-              roots={roots}
+              roots={navigationRoots}
               childrenByParent={childrenByParent}
               expandedNodeIds={expandedNodeIds}
               selectedNodeId={selectedNodeId}
               loadingNodeIds={loadingNodeIds}
               searchResults={searchResults}
               onToggle={(node) => void toggleNode(node)}
-              onSelect={(node) => setSelectedNodeId(node.id)}
+              onSelect={selectNode}
             />
           </div>
         </aside>
@@ -307,8 +356,13 @@ export function RatingTreePage() {
           <RatingTreeNodeDetail
             version={version}
             node={selectedNode}
+            children={selectedChildren}
             catalog={scopeCatalog}
             loading={detailLoading}
+            childrenLoading={
+              selectedNodeId !== null && loadingNodeIds.has(selectedNodeId)
+            }
+            onSelectChild={selectNode}
           />
         </main>
       </div>

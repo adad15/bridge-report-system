@@ -1,4 +1,5 @@
 import type { RatingTreeNodeSummary } from "../api/ratingTreeApi";
+import { ratingTreeDisplayLabel } from "./ratingTreeLabels";
 
 interface RatingTreeNavigatorProps {
   roots: RatingTreeNodeSummary[];
@@ -18,7 +19,7 @@ function isLeaf(node: RatingTreeNodeSummary): boolean {
 function nodeLabel(node: RatingTreeNodeSummary) {
   return (
     <>
-      <span>{node.display_name}</span>
+      <span>{ratingTreeDisplayLabel(node)}</span>
       {node.is_selectable && (
         <span className={node.is_scoring ? "rating-tree-score-badge" : "rating-tree-placeholder-badge"}>
           {node.is_scoring ? "计分" : "暂不计分"}

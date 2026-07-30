@@ -1,11 +1,19 @@
-import type { RatingTreeNode, RatingTreeVersion } from "../api/ratingTreeApi";
+import type {
+  RatingTreeNode,
+  RatingTreeNodeSummary,
+  RatingTreeVersion,
+} from "../api/ratingTreeApi";
 import type { StandardCatalog } from "../api/standardsApi";
+import { ratingTreeDisplayLabel } from "./ratingTreeLabels";
 
 interface RatingTreeNodeDetailProps {
   version: RatingTreeVersion;
   node: RatingTreeNode | null;
+  children: RatingTreeNodeSummary[];
   catalog: StandardCatalog | null;
   loading: boolean;
+  childrenLoading: boolean;
+  onSelectChild: (node: RatingTreeNodeSummary) => void;
 }
 
 const sourceTypeLabel: Record<string, string> = {
@@ -32,7 +40,15 @@ function scopeText(
   return `${resolved.join("、")}${unresolvedCount > 0 ? `等 ${values.length} 类` : ""}`;
 }
 
-export function RatingTreeNodeDetail({ version, node, catalog, loading }: RatingTreeNodeDetailProps) {
+export function RatingTreeNodeDetail({
+  version,
+  node,
+  children,
+  catalog,
+  loading,
+  childrenLoading,
+  onSelectChild,
+}: RatingTreeNodeDetailProps) {
   if (loading) return <div className="rating-tree-detail-state">正在加载节点详情…</div>;
   if (node === null) {
     return (
@@ -57,7 +73,7 @@ export function RatingTreeNodeDetail({ version, node, catalog, loading }: Rating
           {node.path.map((item) => item.display_name).join(" / ")}
         </div>
         <div className="rating-tree-detail-title-row">
-          <h2>{node.display_name}</h2>
+          <h2>{ratingTreeDisplayLabel(node)}</h2>
           {node.is_selectable && (
             <span className={node.is_scoring ? "rating-tree-score-badge" : "rating-tree-placeholder-badge"}>
               {node.is_scoring ? "参与评分" : "暂不计分"}
@@ -65,6 +81,29 @@ export function RatingTreeNodeDetail({ version, node, catalog, loading }: Rating
           )}
         </div>
       </header>
+
+      {node.node_type !== "defect" && (
+        <section className="rating-tree-child-section" aria-label="下级评定项目">
+          <div className="rating-tree-child-section-heading">
+            <h3>下级评定项目</h3>
+            <span>{childrenLoading ? "正在加载…" : `${children.length} 项`}</span>
+          </div>
+          {!childrenLoading && children.length === 0 ? (
+            <p className="rating-tree-child-empty">该节点没有下级项目。</p>
+          ) : (
+            <ul className="rating-tree-child-list">
+              {children.map((child) => (
+                <li key={child.id}>
+                  <button type="button" onClick={() => onSelectChild(child)}>
+                    <span>{ratingTreeDisplayLabel(child)}</span>
+                    <span aria-hidden="true">›</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       <section className="rating-tree-detail-grid">
         <div>
