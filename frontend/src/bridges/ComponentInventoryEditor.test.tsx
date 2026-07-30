@@ -111,6 +111,34 @@ describe("ComponentInventoryEditor", () => {
     expect(withCatalogs[0].mappingLabel).toBe("JTG/T H21—2011 · 上部承重构件");
   });
 
+  it("uses a newer catalog with the same stable category id for a historical mapping", () => {
+    const summaries = inventoryGroupSummaries(revision, [{
+      package: { id: "package-2", standard_code: "JTG/T H21—2011" },
+      component_categories: [{ id: "girder", name: "上部承重构件" }],
+    } as never]);
+
+    expect(summaries[0].mappingLabel).toBe("JTG/T H21—2011 · 上部承重构件");
+  });
+
+  it("keeps the usable catalog when a historical package directory is unavailable", async () => {
+    vi.mocked(fetchStandardPackages).mockResolvedValue([
+      { id: "package-1", family: "technical_condition", is_enabled: true, sync_status: "正常" } as never,
+      { id: "package-2", family: "technical_condition", is_enabled: true, sync_status: "正常" } as never,
+    ]);
+    vi.mocked(fetchStandardCatalog).mockImplementation(async (_baseUrl, packageId) => {
+      if (packageId === "package-1") throw new Error("historical package unavailable");
+      return {
+        package: { id: "package-2", standard_code: "JTG/T H21—2011" },
+        component_categories: [{ id: "girder", name: "上部承重构件" }],
+      } as never;
+    });
+
+    render(<ComponentInventoryEditor bridgeId="bridge-1" />);
+
+    expect(await screen.findByText("JTG/T H21—2011 · 上部承重构件")).toBeInTheDocument();
+    expect(screen.queryByText(/规范映射名称暂时取不到/)).not.toBeInTheDocument();
+  });
+
   it("shows a check instead of restating the count once every mapping is confirmed", () => {
     const base = {
       siteComponentType: "主梁", structurePart: "superstructure", activeCount: 3,

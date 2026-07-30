@@ -350,7 +350,8 @@ void register_rating_tree_routes(const drogon::orm::DbClientPtr& db_client) {
                     "and (($2::boolean and n.parent_node_id is null) "
                     "or (not $2::boolean and "
                     "($3='' or n.parent_node_id=nullif($3,'')::uuid))) "
-                    "order by n.sort_order,n.node_key limit $4 offset $5",
+                    "order by n.sort_order,n.node_key "
+                    "limit $4::integer offset $5::integer",
                     version_id,
                     roots_only,
                     parent_id,
@@ -452,7 +453,8 @@ void register_rating_tree_routes(const drogon::orm::DbClientPtr& db_client) {
                             "and n.node_type='defect' and n.is_selectable "
                             "and n.bridge_type_ids @> array[$2]::text[] "
                             "and n.component_category_ids @> array[$3]::text[] "
-                            "order by n.sort_order,n.display_name limit $4",
+                            "order by n.sort_order,n.display_name "
+                            "limit $4::integer",
                             version_id,
                             bridge_type,
                             component,
@@ -464,7 +466,7 @@ void register_rating_tree_routes(const drogon::orm::DbClientPtr& db_client) {
                             "where n.rating_tree_version_id=$1::uuid "
                             "and n.display_name ilike ('%'||$2||'%') "
                             "order by n.is_selectable desc,n.sort_order,n.display_name "
-                            "limit $3",
+                            "limit $3::integer",
                             version_id,
                             query,
                             limit);

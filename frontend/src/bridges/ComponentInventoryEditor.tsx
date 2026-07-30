@@ -135,7 +135,11 @@ export function inventoryGroupSummaries(
     // 规范目录是另一条请求，未到达前不要回退成 h21.component.* 这类原始 ID——
     // 那对用户是噪声。空标签由渲染层显示为 "—"，目录到达后本 memo 会重算。
     if (!group.mappingLabel && catalogs.length > 0) {
-      const catalog = catalogs.find((item) => item.package.id === mapping.standard_package_id);
+      const catalog =
+        catalogs.find((item) => item.package.id === mapping.standard_package_id) ??
+        catalogs.find((item) => item.component_categories.some(
+          (category) => category.id === mapping.standard_component_category_id
+        ));
       const category = catalog?.component_categories.find(
         (item) => item.id === mapping.standard_component_category_id
       );
@@ -229,11 +233,21 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     const cached = readCached<StandardCatalog[]>(standardCatalogsCacheKey);
     if (cached) setCatalogs(cached);
     fetchStandardPackages(backendBaseUrl)
-      .then((packages) => Promise.all(
-        packages
-          .filter((item) => item.family === "technical_condition" && item.is_enabled && item.sync_status === "正常")
-          .map((item) => fetchStandardCatalog(backendBaseUrl, item.id))
-      ))
+      .then(async (packages) => {
+        const results = await Promise.allSettled(
+          packages
+            .filter((item) => item.family === "technical_condition" && item.is_enabled && item.sync_status === "正常")
+            .map((item) => fetchStandardCatalog(backendBaseUrl, item.id))
+        );
+        const loaded = results.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value] : []
+        );
+        if (loaded.length === 0) {
+          const failed = results.find((result) => result.status === "rejected");
+          if (failed?.status === "rejected") throw failed.reason;
+        }
+        return loaded;
+      })
       .then((loaded) => {
         writeCached(standardCatalogsCacheKey, loaded);
         if (!cancelled) {
