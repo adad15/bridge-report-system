@@ -16,12 +16,6 @@ interface RatingTreeNodeDetailProps {
   onSelectChild: (node: RatingTreeNodeSummary) => void;
 }
 
-const sourceTypeLabel: Record<string, string> = {
-  technical_condition: "H21 评分规范",
-  maintenance: "JTG 5120 检查养护规范",
-  organization: "单位评定规则",
-};
-
 function scopeText(
   values: string[],
   names: Map<string, string>,
@@ -54,7 +48,7 @@ export function RatingTreeNodeDetail({
     return (
       <div className="rating-tree-detail-state">
         <strong>{version.tree_name}</strong>
-        <span>从左侧选择节点，查看适用范围、规范来源和评分规则。</span>
+        <span>从左侧选择节点，查看适用范围和评分规则。</span>
       </div>
     );
   }
@@ -176,18 +170,6 @@ export function RatingTreeNodeDetail({
         </section>
       ) : null}
 
-      <section className="rating-tree-detail-section">
-        <h3>规则来源</h3>
-        <ul className="rating-tree-sources">
-          {node.sources.map((source) => (
-            <li key={`${source.source_type}:${source.source_key ?? source.source_id ?? source.reference}`}>
-              <strong>{sourceTypeLabel[source.source_type] ?? source.source_type}</strong>
-              <span>{source.title ?? source.source_id}</span>
-              {source.reference && <small>{source.reference}</small>}
-            </li>
-          ))}
-        </ul>
-      </section>
     </article>
   );
 }

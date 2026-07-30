@@ -148,6 +148,7 @@ describe("RatingTreePage", () => {
     expect(await screen.findByText("全部桥型（1 类）")).toBeInTheDocument();
     expect(screen.queryByText("h21.bridge_type.beam")).not.toBeInTheDocument();
     expect(screen.queryByText("org.bridge.root")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "规则来源" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /新增|编辑|发布|停用|删除/ })).not.toBeInTheDocument();
   });
 
