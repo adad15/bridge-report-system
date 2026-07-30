@@ -486,14 +486,37 @@ AssessmentServiceOutcome AssessmentService::preview(
         return outcome;
     }
     const auto& row = rows[0];
-    if (row["inspection_year_id"].isNull() || row["standard_profile_id"].isNull() ||
-        row["inventory_revision_id"].isNull() || row["package_id"].isNull() ||
-        row["rating_tree_version_id"].isNull() ||
+    if (row["inspection_year_id"].isNull()) {
+        outcome.status = AssessmentServiceStatus::Blocked;
+        outcome.preview.issues.push_back(issue(
+            "assessment_inspection_year_required", "导入记录尚未关联检测年度。",
+            "import_record", import_record_id, "inspection_year_id"));
+        return outcome;
+    }
+    if (row["standard_profile_id"].isNull() || row["package_id"].isNull()) {
+        outcome.status = AssessmentServiceStatus::Blocked;
+        outcome.preview.issues.push_back(issue(
+            "assessment_standard_profile_required", "检测年度尚未配置规范组合。",
+            "inspection_year", row["inspection_year_id"].as<std::string>(),
+            "standard_profile_id"));
+        return outcome;
+    }
+    if (row["inventory_revision_id"].isNull()) {
+        outcome.status = AssessmentServiceStatus::Blocked;
+        outcome.preview.issues.push_back(issue(
+            "assessment_inventory_required", "检测年度尚未配置已确认构件台账。",
+            "inspection_year", row["inspection_year_id"].as<std::string>(),
+            "component_inventory_revision_id"));
+        return outcome;
+    }
+    if (row["rating_tree_version_id"].isNull() ||
         row["rating_tree_content_checksum"].isNull()) {
         outcome.status = AssessmentServiceStatus::Blocked;
         outcome.preview.issues.push_back(issue(
-            "assessment_context_incomplete", "检测年度尚未配置规范组合和构件台账。",
-            "inspection_year", {}, "standard_profile_id"));
+            "assessment_rating_tree_required",
+            "检测年度的规范组合尚未绑定有效评定树。",
+            "standard_profile", row["standard_profile_id"].as<std::string>(),
+            "rating_tree_version_id"));
         return outcome;
     }
 
