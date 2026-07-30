@@ -12,6 +12,11 @@ import {
   type RatingTreeNodeSummary,
   type RatingTreeVersion,
 } from "../api/ratingTreeApi";
+import {
+  fetchStandardCatalog,
+  fetchStandardPackages,
+  type StandardCatalog,
+} from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
 import { RatingTreeNavigator } from "../rating-tree/RatingTreeNavigator";
 import { RatingTreeNodeDetail } from "../rating-tree/RatingTreeNodeDetail";
@@ -30,6 +35,7 @@ export function RatingTreePage() {
     [versionId],
   );
   const [version, setVersion] = useState<RatingTreeVersion | null>(null);
+  const [scopeCatalog, setScopeCatalog] = useState<StandardCatalog | null>(null);
   const [roots, setRoots] = useState<RatingTreeNodeSummary[]>([]);
   const [childrenByParent, setChildrenByParent] =
     useState<Map<string, RatingTreeNodeSummary[]>>(new Map());
@@ -128,6 +134,37 @@ export function RatingTreePage() {
       active = false;
     };
   }, [linkedNodeId, versionId]);
+
+  useEffect(() => {
+    if (!version?.h21_package_version) {
+      setScopeCatalog(null);
+      return;
+    }
+    let active = true;
+    void fetchStandardPackages(backendBaseUrl)
+      .then((packages) => packages.find(
+        (item) =>
+          item.family === "technical_condition" &&
+          item.algorithm_id === "jtg-h21-2011" &&
+          item.package_version === version.h21_package_version &&
+          item.sync_status === "正常",
+      ))
+      .then((standardPackage) =>
+        standardPackage
+          ? fetchStandardCatalog(backendBaseUrl, standardPackage.id)
+          : null
+      )
+      .then((catalog) => {
+        if (active) setScopeCatalog(catalog);
+      })
+      .catch(() => {
+        // 评定树本身仍可查看；目录暂不可用时显示范围数量，不回退展示内部 ID。
+        if (active) setScopeCatalog(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [version?.h21_package_version]);
 
   useEffect(() => {
     if (!versionId) return;
@@ -270,6 +307,7 @@ export function RatingTreePage() {
           <RatingTreeNodeDetail
             version={version}
             node={selectedNode}
+            catalog={scopeCatalog}
             loading={detailLoading}
           />
         </main>

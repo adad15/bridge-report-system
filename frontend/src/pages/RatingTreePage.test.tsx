@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as ratingTreeApi from "../api/ratingTreeApi";
+import * as standardsApi from "../api/standardsApi";
 import { clearRatingTreeViewStateForTests } from "../rating-tree/ratingTreeViewState";
 import { RatingTreePage } from "./RatingTreePage";
 
@@ -16,6 +17,7 @@ const version: ratingTreeApi.RatingTreeVersion = {
   published_at: "2026-07-28",
   contract_version: 1,
   node_count: 440,
+  h21_package_version: "1.0.2",
   sources: [],
 };
 
@@ -66,6 +68,17 @@ describe("RatingTreePage", () => {
     );
     vi.spyOn(ratingTreeApi, "fetchRatingTreeNode").mockResolvedValue(detail);
     vi.spyOn(ratingTreeApi, "searchRatingTree").mockResolvedValue([]);
+    vi.spyOn(standardsApi, "fetchStandardPackages").mockResolvedValue([{
+      id: "h21-package",
+      family: "technical_condition",
+      algorithm_id: "jtg-h21-2011",
+      package_version: "1.0.2",
+      sync_status: "正常",
+    } as never]);
+    vi.spyOn(standardsApi, "fetchStandardCatalog").mockResolvedValue({
+      bridge_types: [{ id: "h21.bridge_type.beam", name: "梁式桥" }],
+      component_categories: [],
+    } as never);
   });
 
   it("renders a read-only tree and node detail without management actions", async () => {
@@ -74,6 +87,9 @@ describe("RatingTreePage", () => {
     expect(await screen.findByRole("heading", { name: "单位桥梁评定树" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "梁式桥" }));
     expect(await screen.findByText("单位桥梁评定树入口。")).toBeInTheDocument();
+    expect(await screen.findByText("全部桥型（1 类）")).toBeInTheDocument();
+    expect(screen.queryByText("h21.bridge_type.beam")).not.toBeInTheDocument();
+    expect(screen.queryByText("org.bridge.root")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /新增|编辑|发布|停用|删除/ })).not.toBeInTheDocument();
   });
 

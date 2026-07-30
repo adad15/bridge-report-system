@@ -1,8 +1,10 @@
 import type { RatingTreeNode, RatingTreeVersion } from "../api/ratingTreeApi";
+import type { StandardCatalog } from "../api/standardsApi";
 
 interface RatingTreeNodeDetailProps {
   version: RatingTreeVersion;
   node: RatingTreeNode | null;
+  catalog: StandardCatalog | null;
   loading: boolean;
 }
 
@@ -12,11 +14,25 @@ const sourceTypeLabel: Record<string, string> = {
   organization: "单位评定规则",
 };
 
-function scopeText(values: string[]): string {
-  return values.length === 0 ? "不限" : values.join("、");
+function scopeText(
+  values: string[],
+  names: Map<string, string>,
+  allCount: number,
+  allLabel: string,
+): string {
+  if (values.length === 0) return "不限";
+  if (allCount > 0 && values.length === allCount) return `${allLabel}（${allCount} 类）`;
+  const resolved = values.flatMap((value) => {
+    const name = names.get(value);
+    return name ? [name] : [];
+  });
+  if (resolved.length === 0) return `${values.length} 类`;
+  if (resolved.length > 6) return `${resolved.slice(0, 6).join("、")}等 ${resolved.length} 类`;
+  const unresolvedCount = values.length - resolved.length;
+  return `${resolved.join("、")}${unresolvedCount > 0 ? `等 ${values.length} 类` : ""}`;
 }
 
-export function RatingTreeNodeDetail({ version, node, loading }: RatingTreeNodeDetailProps) {
+export function RatingTreeNodeDetail({ version, node, catalog, loading }: RatingTreeNodeDetailProps) {
   if (loading) return <div className="rating-tree-detail-state">正在加载节点详情…</div>;
   if (node === null) {
     return (
@@ -26,6 +42,13 @@ export function RatingTreeNodeDetail({ version, node, loading }: RatingTreeNodeD
       </div>
     );
   }
+
+  const bridgeTypeNames = new Map(
+    (catalog?.bridge_types ?? []).map((item) => [item.id, item.name]),
+  );
+  const componentCategoryNames = new Map(
+    (catalog?.component_categories ?? []).map((item) => [item.id, item.name]),
+  );
 
   return (
     <article className="rating-tree-detail">
@@ -41,17 +64,30 @@ export function RatingTreeNodeDetail({ version, node, loading }: RatingTreeNodeD
             </span>
           )}
         </div>
-        <p className="rating-tree-node-key">{node.node_key}</p>
       </header>
 
       <section className="rating-tree-detail-grid">
         <div>
           <span>适用桥型</span>
-          <strong>{scopeText(node.bridge_type_ids)}</strong>
+          <strong>
+            {scopeText(
+              node.bridge_type_ids,
+              bridgeTypeNames,
+              catalog?.bridge_types.length ?? 0,
+              "全部桥型",
+            )}
+          </strong>
         </div>
         <div>
           <span>适用构件</span>
-          <strong>{scopeText(node.component_category_ids)}</strong>
+          <strong>
+            {scopeText(
+              node.component_category_ids,
+              componentCategoryNames,
+              catalog?.component_categories.length ?? 0,
+              "全部构件",
+            )}
+          </strong>
         </div>
         <div>
           <span>评分模式</span>
