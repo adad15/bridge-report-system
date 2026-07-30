@@ -26,8 +26,7 @@ import {
   writeCached,
 } from "../api/resourceCache";
 import {
-  fetchStandardCatalog,
-  fetchStandardPackages,
+  fetchStandardMappingCatalogs,
   standardsErrorMessage,
   type StandardCatalog,
 } from "../api/standardsApi";
@@ -175,7 +174,12 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   const [drafts, setDrafts] = useState<Record<string, InventoryEntryInput>>({});
   const [deactivationReasons, setDeactivationReasons] = useState<Record<string, string>>({});
   const [mappingDrafts, setMappingDrafts] = useState<Record<string, MappingDraft>>({});
-  const [catalogs, setCatalogs] = useState<StandardCatalog[]>([]);
+  const [catalogs, setCatalogs] = useState<StandardCatalog[]>(
+    () => readCached<StandardCatalog[]>(standardCatalogsCacheKey) ?? []
+  );
+  const [catalogLoading, setCatalogLoading] = useState(
+    () => readCached<StandardCatalog[]>(standardCatalogsCacheKey) === undefined
+  );
   // 规范目录取不到时，规范映射列会全是"—"；单独记错误并提示，避免无从判断。
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -226,28 +230,18 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     setDrafts(Object.fromEntries(revision.entries.map((entry) => [entry.id, entryDraft(entry)])));
   }, [revision]);
 
-  // 规范目录是另一条独立请求，且是全局参考数据（与桥无关），同样缓存：
-  // 台账已能瞬时渲染，目录若还在路上，规范映射列会先显示原始类别 ID。
+  // 映射页只需要规范身份、桥型和构件类别。使用一个轻量聚合接口，避免先取规范包列表，
+  // 再为每个版本下载包含全部病害指标的完整目录。
   useEffect(() => {
     let cancelled = false;
     const cached = readCached<StandardCatalog[]>(standardCatalogsCacheKey);
-    if (cached) setCatalogs(cached);
-    fetchStandardPackages(backendBaseUrl)
-      .then(async (packages) => {
-        const results = await Promise.allSettled(
-          packages
-            .filter((item) => item.family === "technical_condition" && item.is_enabled && item.sync_status === "正常")
-            .map((item) => fetchStandardCatalog(backendBaseUrl, item.id))
-        );
-        const loaded = results.flatMap((result) =>
-          result.status === "fulfilled" ? [result.value] : []
-        );
-        if (loaded.length === 0) {
-          const failed = results.find((result) => result.status === "rejected");
-          if (failed?.status === "rejected") throw failed.reason;
-        }
-        return loaded;
-      })
+    if (cached) {
+      setCatalogs(cached);
+      setCatalogLoading(false);
+    } else {
+      setCatalogLoading(true);
+    }
+    fetchStandardMappingCatalogs(backendBaseUrl)
       .then((loaded) => {
         writeCached(standardCatalogsCacheKey, loaded);
         if (!cancelled) {
@@ -259,6 +253,9 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
         // 台账读取与编辑不因目录展示失败而整体失效，但也不能静默：
         // 之前这里吞掉异常，规范映射列会永久停在"—"，从界面上看不出任何原因。
         if (!cancelled) setCatalogError(standardsErrorMessage(caught));
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
       });
     return () => { cancelled = true; };
   }, []);
@@ -504,7 +501,8 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     );
   }
 
-  if (loading) return <section className="workspace-card"><h1>实际构件台账</h1><p>加载中…</p></section>;
+  if (loading || (revision !== null && catalogLoading))
+    return <section className="workspace-card"><h1>实际构件台账</h1><p>正在加载台账与规范映射…</p></section>;
 
   if (notCreated) {
     return (

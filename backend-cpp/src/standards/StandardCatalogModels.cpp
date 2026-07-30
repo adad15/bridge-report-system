@@ -80,4 +80,20 @@ Json::Value standard_catalog_json(
     return json;
 }
 
+Json::Value standard_mapping_catalog_json(
+    const db::StandardPackageRecord& record,
+    const StandardPackage& package) {
+    Json::Value json;
+    json["package"] = standard_package_summary_json(record);
+    json["bridge_types"] = definitions(package, "bridge-types.json");
+    json["component_categories"] = definitions(package, "component-taxonomy.json");
+    // 保持与 StandardCatalog 前端合同兼容，但不传输映射页面不使用的大型病害目录。
+    json["inventory_templates"] = Json::Value(Json::arrayValue);
+    json["defect_catalogs"] = Json::Value(Json::arrayValue);
+    json["maintenance_levels"] = Json::Value(Json::arrayValue);
+    json["inspection_types"] = Json::Value(Json::arrayValue);
+    json["periodic_inspection_requirements"] = Json::Value(Json::arrayValue);
+    return json;
+}
+
 }  // namespace bridge_report::standards

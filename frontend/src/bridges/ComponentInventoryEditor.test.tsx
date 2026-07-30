@@ -8,7 +8,10 @@ import {
   setComponentInventoryMapping,
   type ComponentInventoryRevision,
 } from "../api/componentInventoryApi";
-import { fetchStandardCatalog, fetchStandardPackages } from "../api/standardsApi";
+import {
+  fetchStandardMappingCatalogs,
+  type StandardCatalog,
+} from "../api/standardsApi";
 import { clearCachedForTests } from "../api/resourceCache";
 import {
   ComponentInventoryEditor,
@@ -29,7 +32,7 @@ vi.mock("../api/componentInventoryApi", async (importOriginal) => {
 
 vi.mock("../api/standardsApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../api/standardsApi")>();
-  return { ...original, fetchStandardPackages: vi.fn(), fetchStandardCatalog: vi.fn() };
+  return { ...original, fetchStandardMappingCatalogs: vi.fn() };
 });
 
 const revision: ComponentInventoryRevision = {
@@ -52,14 +55,11 @@ describe("ComponentInventoryEditor", () => {
     clearCachedForTests();  // 缓存是模块作用域的，不清会让用例顺序影响结果
     vi.resetAllMocks();
     vi.mocked(fetchLatestComponentInventory).mockResolvedValue(revision);
-    // 规范目录决定映射列显示的是友好名称还是原始 ID，必须给出真实形状。
-    vi.mocked(fetchStandardPackages).mockResolvedValue([
-      { id: "package-1", family: "technical_condition", is_enabled: true, sync_status: "正常" } as never,
-    ]);
-    vi.mocked(fetchStandardCatalog).mockResolvedValue({
+    // 轻量目录决定映射列显示的是友好名称还是原始 ID，必须给出真实形状。
+    vi.mocked(fetchStandardMappingCatalogs).mockResolvedValue([{
       package: { id: "package-1", standard_code: "JTG/T H21—2011" },
       component_categories: [{ id: "girder", name: "上部承重构件" }],
-    } as never);
+    } as never]);
     vi.mocked(setComponentInventoryMapping).mockResolvedValue({
       ...revision,
       entries: [{ ...revision.entries[0], mappings: [{ ...revision.entries[0].mappings[0], confirmation_status: "已确认" }] }],
@@ -77,7 +77,7 @@ describe("ComponentInventoryEditor", () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     // 立即可见，无需等待，也不出现加载态。
     expect(screen.getByText("分组核对")).toBeInTheDocument();
-    expect(screen.queryByText("加载中…")).not.toBeInTheDocument();
+    expect(screen.queryByText("正在加载台账与规范映射…")).not.toBeInTheDocument();
     // 但仍然重新拉了一次，避免停留在过期数据上。
     await waitFor(() => expect(fetchLatestComponentInventory).toHaveBeenCalledTimes(2));
   });
@@ -120,23 +120,24 @@ describe("ComponentInventoryEditor", () => {
     expect(summaries[0].mappingLabel).toBe("JTG/T H21—2011 · 上部承重构件");
   });
 
-  it("keeps the usable catalog when a historical package directory is unavailable", async () => {
-    vi.mocked(fetchStandardPackages).mockResolvedValue([
-      { id: "package-1", family: "technical_condition", is_enabled: true, sync_status: "正常" } as never,
-      { id: "package-2", family: "technical_condition", is_enabled: true, sync_status: "正常" } as never,
-    ]);
-    vi.mocked(fetchStandardCatalog).mockImplementation(async (_baseUrl, packageId) => {
-      if (packageId === "package-1") throw new Error("historical package unavailable");
-      return {
-        package: { id: "package-2", standard_code: "JTG/T H21—2011" },
-        component_categories: [{ id: "girder", name: "上部承重构件" }],
-      } as never;
-    });
+  it("shows the inventory and mapping labels together on the first visit", async () => {
+    let resolveCatalogs!: (catalogs: StandardCatalog[]) => void;
+    vi.mocked(fetchStandardMappingCatalogs).mockReturnValue(new Promise((resolve) => {
+      resolveCatalogs = resolve;
+    }));
 
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
 
+    expect(await screen.findByText("正在加载台账与规范映射…")).toBeInTheDocument();
+    expect(screen.queryByText("分组核对")).not.toBeInTheDocument();
+    resolveCatalogs([{
+      package: { id: "package-1", standard_code: "JTG/T H21—2011" },
+      component_categories: [{ id: "girder", name: "上部承重构件" }],
+    } as never]);
+
     expect(await screen.findByText("JTG/T H21—2011 · 上部承重构件")).toBeInTheDocument();
-    expect(screen.queryByText(/规范映射名称暂时取不到/)).not.toBeInTheDocument();
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
+    expect(fetchStandardMappingCatalogs).toHaveBeenCalledTimes(1);
   });
 
   it("shows a check instead of restating the count once every mapping is confirmed", () => {

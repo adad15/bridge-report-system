@@ -11,5 +11,8 @@ Json::Value standard_package_summary_json(const db::StandardPackageRecord& packa
 Json::Value standard_catalog_json(
     const db::StandardPackageRecord& record,
     const StandardPackage& package);
+Json::Value standard_mapping_catalog_json(
+    const db::StandardPackageRecord& record,
+    const StandardPackage& package);
 
 }  // namespace bridge_report::standards

@@ -169,6 +169,7 @@ void register_standard_routes(
     std::shared_ptr<const standards::StandardRegistry> registry) {
     const std::string list_path = "/api/standards";
     const std::string catalog_path = "/api/standards/{package_id}/catalog";
+    const std::string mapping_catalogs_path = "/api/standards/technical-mapping-catalogs";
     const std::string enabled_path = "/api/standards/{package_id}/enabled";
     const std::string periodic_requirements_path =
         "/api/standards/{package_id}/maintenance/periodic-requirements";
@@ -176,6 +177,7 @@ void register_standard_routes(
         "/api/standards/{package_id}/maintenance/validate-project-requirements";
     register_options_handler(list_path);
     register_options_handler(catalog_path);
+    register_options_handler(mapping_catalogs_path);
     register_options_handler(enabled_path);
     register_options_handler(periodic_requirements_path);
     register_options_handler(validate_requirements_path);
@@ -191,6 +193,35 @@ void register_standard_routes(
                 body["packages"] = Json::Value(Json::arrayValue);
                 for (const auto& package : repository.list_packages(!user->is_admin())) {
                     body["packages"].append(standards::standard_package_summary_json(package));
+                }
+                respond_json(callback, body);
+            } catch (...) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Get});
+
+    drogon::app().registerHandler(
+        mapping_catalogs_path,
+        [db_client, registry](const drogon::HttpRequestPtr& request, HttpCallback&& callback) {
+            try {
+                const auto user = require_user(db_client, request, callback);
+                if (!user.has_value()) return;
+                db::StandardRepository repository(db_client);
+                Json::Value body;
+                body["catalogs"] = Json::Value(Json::arrayValue);
+                for (const auto& record : repository.list_packages(!user->is_admin())) {
+                    if (record.family != standards::StandardFamily::technical_condition ||
+                        !record.is_enabled || record.sync_status != "正常")
+                        continue;
+                    const standards::StandardPackageKey key{
+                        record.family, record.standard_id, record.package_version};
+                    const auto* package = registry->find(key);
+                    if (package == nullptr ||
+                        package->manifest.content_checksum != record.content_checksum)
+                        continue;
+                    body["catalogs"].append(
+                        standards::standard_mapping_catalog_json(record, *package));
                 }
                 respond_json(callback, body);
             } catch (...) {

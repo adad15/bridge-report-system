@@ -62,6 +62,38 @@ TEST(StandardRoutesTest, CatalogResponseDoesNotExposePackageFilePaths) {
     EXPECT_EQ(serialized.find("standards/technical-condition"), std::string::npos);
 }
 
+TEST(StandardRoutesTest, MappingCatalogOmitsHeavyUnrelatedDefinitions) {
+    bridge_report::db::StandardPackageRecord record;
+    record.id = "11111111-1111-1111-1111-111111111111";
+    record.family = bridge_report::standards::StandardFamily::technical_condition;
+    record.standard_code = "JTG/T H21—2011";
+
+    bridge_report::standards::StandardPackage package;
+    Json::Value bridge_types;
+    bridge_types["definitions"] = Json::Value(Json::arrayValue);
+    bridge_types["definitions"].append(Json::Value(Json::objectValue));
+    package.documents["bridge-types.json"] = bridge_types;
+    Json::Value categories;
+    categories["definitions"] = Json::Value(Json::arrayValue);
+    Json::Value category;
+    category["id"] = "h21.component.beam.upper.general";
+    category["name"] = "上部一般构件";
+    categories["definitions"].append(category);
+    package.documents["component-taxonomy.json"] = categories;
+    Json::Value defects;
+    defects["definitions"] = Json::Value(Json::arrayValue);
+    defects["definitions"].append(Json::Value(Json::objectValue));
+    package.documents["defect-indicators.json"] = defects;
+
+    const auto response =
+        bridge_report::standards::standard_mapping_catalog_json(record, package);
+    EXPECT_EQ(response["bridge_types"].size(), 1u);
+    ASSERT_EQ(response["component_categories"].size(), 1u);
+    EXPECT_EQ(response["component_categories"][0]["name"].asString(), "上部一般构件");
+    EXPECT_TRUE(response["defect_catalogs"].empty());
+    EXPECT_TRUE(response["inventory_templates"].empty());
+}
+
 TEST(StandardRoutesTest, ParsesMaintenanceQueryContextWithoutCoercion) {
     Json::Value body;
     body["maintenance_level_id"] = "jtg5120.maintenance_level.i";

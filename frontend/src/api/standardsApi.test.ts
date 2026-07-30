@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   fetchStandardCatalog,
+  fetchStandardMappingCatalogs,
   fetchStandardPackages,
   setStandardPackageEnabled,
 } from "./standardsApi";
@@ -17,6 +18,19 @@ describe("standardsApi", () => {
     vi.stubGlobal("fetch", fetchMock);
     await expect(fetchStandardPackages("http://backend")).resolves.toEqual(packages);
     expect(fetchMock).toHaveBeenCalledWith("http://backend/api/standards");
+  });
+
+  it("loads the lightweight technical mapping catalogs in one request", async () => {
+    const catalogs = [{ package: { id: "package-1" }, component_categories: [] }];
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true, status: 200, json: async () => ({ catalogs }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchStandardMappingCatalogs("http://backend")).resolves.toEqual(catalogs);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://backend/api/standards/technical-mapping-catalogs"
+    );
   });
 
   it("encodes catalog ids and changes enabled state with PATCH", async () => {

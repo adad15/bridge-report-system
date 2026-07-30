@@ -82,6 +82,13 @@ export async function fetchStandardCatalog(
   return request(`${baseUrl}/api/standards/${encodeURIComponent(packageId)}/catalog`);
 }
 
+export async function fetchStandardMappingCatalogs(baseUrl: string): Promise<StandardCatalog[]> {
+  const body = await request<{ catalogs: StandardCatalog[] }>(
+    `${baseUrl}/api/standards/technical-mapping-catalogs`
+  );
+  return body.catalogs;
+}
+
 export async function setStandardPackageEnabled(
   baseUrl: string,
   packageId: string,
