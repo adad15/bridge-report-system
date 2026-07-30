@@ -1,0 +1,20 @@
+{
+  "definitions": [
+    {"id":"h21.control.5.roof_or_deck_crack","references":["h21.source.official_pdf"],"source_clause":"4.3.1.1","result_grade":5,"label":"上部结构落梁或梁、板断裂"},
+    {"id":"h21.control.5.beam_control_section_crack","references":["h21.source.official_pdf"],"source_clause":"4.3.1.2","result_grade":5,"label":"梁式桥控制截面开裂或组合截面结合面开裂贯通"},
+    {"id":"h21.control.5.beam_abnormal_displacement","references":["h21.source.official_pdf"],"source_clause":"4.3.1.3","result_grade":5,"label":"梁式桥上部承重构件严重异常位移并有失稳现象"},
+    {"id":"h21.control.5.permanent_deformation","references":["h21.source.official_pdf"],"source_clause":"4.3.1.4","result_grade":5,"label":"结构明显永久变形且超过规范值"},
+    {"id":"h21.control.5.key_concrete_failure","references":["h21.source.official_pdf"],"source_clause":"4.3.1.5","result_grade":5,"label":"关键部位混凝土压碎或构件失稳倾向，或桥面板严重塌陷"},
+    {"id":"h21.control.5.arch_foot_failure","references":["h21.source.official_pdf"],"source_clause":"4.3.1.6","result_grade":5,"label":"拱桥拱脚严重错台位移、拱顶挠度超限或拱圈严重变形"},
+    {"id":"h21.control.5.masonry_arch_failure","references":["h21.source.official_pdf"],"source_clause":"4.3.1.7","result_grade":5,"label":"圬工拱圈大范围砌体断裂脱落"},
+    {"id":"h21.control.5.arch_spandrel_collapse","references":["h21.source.official_pdf"],"source_clause":"4.3.1.8","result_grade":5,"label":"腹拱、侧墙、立墙或立柱破坏并造成桥面板严重塌落"},
+    {"id":"h21.control.5.tie_rod_failure","references":["h21.source.official_pdf"],"source_clause":"4.3.1.9","result_grade":5,"label":"系杆或吊杆严重锈蚀或断裂"},
+    {"id":"h21.control.5.suspension_cable_failure","references":["h21.source.official_pdf"],"source_clause":"4.3.1.10","result_grade":5,"label":"悬索桥主缆或多根吊索严重锈蚀断丝"},
+    {"id":"h21.control.5.cable_stayed_failure","references":["h21.source.official_pdf"],"source_clause":"4.3.1.11","result_grade":5,"label":"斜拉桥拉索严重锈蚀断丝且主梁严重变形"},
+    {"id":"h21.control.5.foundation_scour","references":["h21.source.official_pdf"],"source_clause":"4.3.1.12","result_grade":5,"label":"扩大基础冲刷深度超过设计值或冲空面积达到20%以上"},
+    {"id":"h21.control.5.pier_abutment_instability","references":["h21.source.official_pdf"],"source_clause":"4.3.1.13","result_grade":5,"label":"桥墩台基础不稳定或墩台滑动下沉位移倾斜"},
+    {"id":"h21.control.5.tower_or_anchorage_movement","references":["h21.source.official_pdf"],"source_clause":"4.3.1.14","result_grade":5,"label":"索塔基础严重沉降位移或悬索桥锚碇水平位移沉降"},
+    {"id":"h21.control.overall_grade_3_combination","references":["h21.source.official_pdf"],"source_clause":"4.1.7","result_grade":3,"label":"上下部均为3类、桥面系为4类且总分处于40至60时全桥评为3类"},
+    {"id":"h21.control.worst_major_component","references":["h21.source.official_pdf"],"source_clause":"4.1.8","label":"主要部件达到4类或5类且影响安全时可按最差缺损评定全桥"}
+  ]
+}

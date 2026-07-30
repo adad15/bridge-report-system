@@ -26,6 +26,11 @@ std::filesystem::path h21_package_root_v101() {
            "standards/technical-condition/jtg-t-h21-2011/1.0.2";
 }
 
+std::filesystem::path h21_package_root_v103() {
+    return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
+           "standards/technical-condition/jtg-t-h21-2011/1.0.3";
+}
+
 const Json::Value& document(const StandardPackage& package, const std::string& name) {
     const auto found = package.documents.find(name);
     if (found == package.documents.end()) {
@@ -94,6 +99,20 @@ bool has_issue(
         }
     }
     return false;
+}
+
+const Json::Value* find_indicator(
+    const StandardPackage& package,
+    const std::string& indicator_id) {
+    const auto& catalogs = document(package, "defect-indicators.json")["definitions"];
+    for (const auto& catalog : catalogs) {
+        for (const auto& indicator : catalog["indicators"]) {
+            if (indicator["id"].asString() == indicator_id) {
+                return &indicator;
+            }
+        }
+    }
+    return nullptr;
 }
 
 TEST(JtgH21PackageTest, ChecksumCanBeCalculated) {
@@ -322,6 +341,125 @@ TEST(JtgH21PackageTest, Version102UsesTheOfficialThreeScaleDamperTable) {
     EXPECT_EQ((*damper)["deduction_rule_id"].asString(), "h21.deduction.scale_table.max_3");
     EXPECT_EQ((*damper)["scale_descriptions"]["3"].asString(),
               "减震装置出现较多处损坏，部分功能失效");
+}
+
+TEST(JtgH21PackageTest, Version103HasAValidImmutableChecksum) {
+    StandardPackageLoader loader;
+    const auto checksum = loader.calculate_checksum(h21_package_root_v103());
+    ASSERT_TRUE(checksum.ok());
+    const auto manifest = read_json(h21_package_root_v103() / "manifest.json");
+    EXPECT_EQ(*checksum.checksum, manifest["content_checksum"].asString());
+}
+
+TEST(JtgH21PackageTest, Version103CorrectsAllDescriptionsAndScaleRanges) {
+    StandardPackageLoader loader;
+    const auto result = loader.load(h21_package_root_v103());
+    ASSERT_TRUE(result.ok());
+    EXPECT_EQ(result.package->manifest.package_version, "1.0.3");
+
+    const std::vector<std::string> forbidden_fragments{
+        "wo.U000", "Q·cm", "㎡²", "钢铰线", "祼露", "未完成失效",
+        "面积积", "＞20%%", "破碎版", "失效象", "缓缓慢",
+        "拉索现行", "拉索线性", "助波", "出现有少量", "%²",
+        "＞2.0且≤5.0mm",
+    };
+    const std::set<std::string> invalid_whole_descriptions{"D", "一", "二"};
+    const auto& catalogs = document(*result.package, "defect-indicators.json")["definitions"];
+    std::size_t indicator_count = 0;
+    std::size_t scale_description_count = 0;
+    for (const auto& catalog : catalogs) {
+        for (const auto& indicator : catalog["indicators"]) {
+            ++indicator_count;
+            const auto& scales = indicator["allowed_scales"];
+            const auto& descriptions = indicator["scale_descriptions"];
+            ASSERT_EQ(descriptions.getMemberNames().size(), scales.size())
+                << indicator["id"].asString();
+            for (const auto& scale : scales) {
+                ++scale_description_count;
+                const auto key = std::to_string(scale.asInt());
+                ASSERT_TRUE(descriptions.isMember(key))
+                    << indicator["id"].asString() << " scale " << key;
+                const auto value = descriptions[key].asString();
+                EXPECT_FALSE(value.empty());
+                EXPECT_FALSE(invalid_whole_descriptions.contains(value))
+                    << indicator["id"].asString() << " scale " << key;
+                for (const auto& fragment : forbidden_fragments) {
+                    EXPECT_EQ(value.find(fragment), std::string::npos)
+                        << indicator["id"].asString() << " scale " << key
+                        << " contains " << fragment;
+                }
+            }
+            const auto expected_rule =
+                "h21.deduction.scale_table.max_" +
+                std::to_string(scales[scales.size() - 1].asInt());
+            EXPECT_EQ(indicator["deduction_rule_id"].asString(), expected_rule)
+                << indicator["id"].asString();
+        }
+    }
+    EXPECT_EQ(indicator_count, 234u);
+    EXPECT_EQ(scale_description_count, 1008u);
+
+    const auto* corrosion = find_indicator(*result.package, "h21.defect.5_1_1_5");
+    ASSERT_NE(corrosion, nullptr);
+    EXPECT_NE((*corrosion)["scale_descriptions"]["3"].asString().find("10000～15000Ω·cm"),
+              std::string::npos);
+
+    const auto* deflection = find_indicator(*result.package, "h21.defect.5_1_1_8");
+    ASSERT_NE(deflection, nullptr);
+    EXPECT_EQ((*deflection)["scale_descriptions"]["1"].asString(), "完好");
+
+    const auto* prestress = find_indicator(*result.package, "h21.defect.5_1_1_10");
+    ASSERT_NE(prestress, nullptr);
+    EXPECT_EQ(
+        (*prestress)["scale_descriptions"]["3"].asString(),
+        "钢绞线裸露出现极个别断丝现象，或锚头出现开裂等现象，或齿板位置处出现部分裂缝，裂缝未超限");
+
+    const auto* spandrel_crack =
+        find_indicator(*result.package, "h21.defect.6_1_2_6");
+    ASSERT_NE(spandrel_crack, nullptr);
+    EXPECT_EQ((*spandrel_crack)["allowed_scales"].size(), 4u);
+
+    const auto* drainage = find_indicator(*result.package, "h21.defect.6_1_2_7");
+    ASSERT_NE(drainage, nullptr);
+    EXPECT_EQ((*drainage)["allowed_scales"].size(), 4u);
+
+    const auto* anchorage_displacement =
+        find_indicator(*result.package, "h21.defect.7_7_1_5");
+    ASSERT_NE(anchorage_displacement, nullptr);
+    EXPECT_EQ((*anchorage_displacement)["scale_descriptions"]["4"].asString(), "—");
+    EXPECT_EQ(
+        (*anchorage_displacement)["scale_descriptions"]["5"].asString(),
+        "有水平位移");
+
+    const auto* pier_abrasion =
+        find_indicator(*result.package, "h21.defect.9_1_1_6");
+    ASSERT_NE(pier_abrasion, nullptr);
+    EXPECT_NE(
+        (*pier_abrasion)["scale_descriptions"]["3"].asString().find(
+            "＞构件面积的5%且≤构件面积的20%"),
+        std::string::npos);
+
+    const auto* wing_wall_damage =
+        find_indicator(*result.package, "h21.defect.9_4_1_1");
+    ASSERT_NE(wing_wall_damage, nullptr);
+    EXPECT_NE(
+        (*wing_wall_damage)["scale_descriptions"]["3"].asString().find(
+            "＞构件面积的5%且≤构件面积的20%"),
+        std::string::npos);
+
+    const auto* cable_geometry =
+        find_indicator(*result.package, "h21.defect.8_1_1_6");
+    ASSERT_NE(cable_geometry, nullptr);
+    EXPECT_TRUE((*cable_geometry)["scale_descriptions"]["4"].asString().starts_with(
+        "拉索线形"));
+
+    const auto* expansion_joint_anchorage =
+        find_indicator(*result.package, "h21.defect.10_2_1_2");
+    ASSERT_NE(expansion_joint_anchorage, nullptr);
+    EXPECT_NE(
+        (*expansion_joint_anchorage)["scale_descriptions"]["4"].asString().find(
+            "混凝土大面积破损；面积＞20%"),
+        std::string::npos);
 }
 
 TEST(JtgH21PackageTest, AllProfilesReferenceBridgeAndScoringLevels) {

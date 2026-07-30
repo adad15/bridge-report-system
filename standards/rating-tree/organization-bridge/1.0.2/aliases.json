@@ -1,0 +1,16 @@
+{
+  "aliases": [
+    {
+      "alias": "渗水泛碱",
+      "target_node_id": "org.bridge.defect.5_1_1_water_damage",
+      "bridge_type_id": "h21.bridge_type.beam",
+      "component_category_id": "h21.component.beam.upper_bearing"
+    },
+    {
+      "alias": "渗水泛碱",
+      "target_node_id": "org.bridge.defect.5_1_1_water_damage",
+      "bridge_type_id": "h21.bridge_type.beam",
+      "component_category_id": "h21.component.beam.upper_general"
+    }
+  ]
+}

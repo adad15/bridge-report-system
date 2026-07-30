@@ -14,6 +14,11 @@ std::filesystem::path organization_package_root() {
         "standards/rating-tree/organization-bridge/1.0.1";
 }
 
+std::filesystem::path organization_package_root_v102() {
+    return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
+        "standards/rating-tree/organization-bridge/1.0.2";
+}
+
 void write_json(const std::filesystem::path& path, const Json::Value& value) {
     Json::StreamWriterBuilder builder;
     builder["indentation"] = "  ";
@@ -177,6 +182,31 @@ TEST(RatingTreePackageLoaderIntegrationTest, OrganizationPackageChecksumMatchesM
     std::string errors;
     ASSERT_TRUE(Json::parseFromStream(builder, input, &manifest, &errors));
     EXPECT_EQ(*checksum.checksum, manifest["content_checksum"].asString());
+}
+
+TEST(RatingTreePackageLoaderIntegrationTest, Version102LocksTheCorrectedH21Package) {
+    bridge_report::rating_tree::RatingTreePackageLoader loader;
+    const auto checksum = loader.calculate_checksum(organization_package_root_v102());
+    ASSERT_TRUE(checksum.ok());
+
+    std::ifstream input(organization_package_root_v102() / "manifest.json");
+    Json::Value manifest;
+    Json::CharReaderBuilder builder;
+    std::string errors;
+    ASSERT_TRUE(Json::parseFromStream(builder, input, &manifest, &errors));
+    EXPECT_EQ(*checksum.checksum, manifest["content_checksum"].asString());
+
+    const auto result = loader.load(organization_package_root_v102());
+    ASSERT_TRUE(result.ok());
+    bool references_corrected_h21 = false;
+    for (const auto& [_, source] : result.package->sources) {
+        if (source.source_type == "technical_condition") {
+            references_corrected_h21 =
+                source.reference ==
+                "standards/technical-condition/jtg-t-h21-2011/1.0.3";
+        }
+    }
+    EXPECT_TRUE(references_corrected_h21);
 }
 
 TEST(RatingTreePackageLoaderIntegrationTest, LoadsOnlyTheApprovedBridgeBranches) {
