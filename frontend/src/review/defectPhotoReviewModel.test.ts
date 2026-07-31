@@ -1,22 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import type { StandardDefectCatalog } from "../api/standardsApi";
+import type { DefectMatchCandidate, DefectMatchOutcome, DefectMatchResult } from "../api/defectMatchingApi";
 import type { RatingTreeNode } from "../api/ratingTreeApi";
 import { data as completeData } from "./testFixtures";
 import { buildDefectPhotoReviewModel } from "./defectPhotoReviewModel";
 
-const catalogs: StandardDefectCatalog[] = [{
-  id: "catalog-1",
-  applicable_component_ids: ["category-1"],
-  source_clause: "5.1.1",
-  indicators: [{
-    id: "indicator-crack",
-    name: "裂缝",
-    allowed_scales: [1, 2, 3],
-    deduction_rule_id: "rule-1",
-    source_table: "5.1.1-1",
-  }],
-}];
+function matchResult(
+  outcome: DefectMatchOutcome,
+  candidates: DefectMatchCandidate[],
+): DefectMatchResult {
+  return {
+    candidate_id: "defect_0001",
+    outcome,
+    skipped: false,
+    rating_tree_node_id: null,
+    match_method: null,
+    match_evidence: null,
+    reason_code: null,
+    reason_message: null,
+    candidates,
+  };
+}
 
 const treeNode: RatingTreeNode = {
   id: "tree-node-crack",
@@ -41,12 +45,23 @@ const treeNode: RatingTreeNode = {
   sources: [],
 };
 
+function treeWiring() {
+  return {
+    ratingTreeVersionId: "tree-version-1",
+    ratingTreeNodes: [treeNode],
+    applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
+    treeRulesReady: true,
+  };
+}
+
 function safeDraft() {
   const draft = completeData();
   const defect = draft.defects[0];
   defect.bridge_component_id = "component-1";
   defect.standard_component_category_id = "category-1";
-  defect.standard_defect_indicator_id = "indicator-crack";
+  defect.rating_tree_version_id = "tree-version-1";
+  defect.rating_tree_node_id = treeNode.id;
+  defect.rating_tree_match_method = "exact";
   defect.defect_scale = 2;
   defect.review_status = "待确认";
   defect.group_review_status = "待确认";
@@ -72,7 +87,6 @@ describe("buildDefectPhotoReviewModel", () => {
     });
     const input = {
       draft,
-      defectCatalogs: [],
       ratingTreeVersionId: "tree-version-1",
       ratingTreeNodes: [treeNode],
       applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
@@ -98,7 +112,6 @@ describe("buildDefectPhotoReviewModel", () => {
     });
     const row = buildDefectPhotoReviewModel({
       draft,
-      defectCatalogs: [],
       ratingTreeVersionId: "tree-version-1",
       ratingTreeNodes: [treeNode],
       applicableTreeNodeIdsByComponent: new Map([["component-1", new Set<string>()]]),
@@ -116,15 +129,18 @@ describe("buildDefectPhotoReviewModel", () => {
   it("marks a complete group as safe for batch confirmation", () => {
     const model = buildDefectPhotoReviewModel({
       draft: safeDraft(),
-      defectCatalogs: catalogs,
+      ...treeWiring(),
       assessmentIssues: [],
     });
 
     expect(model.summary).toEqual({
       all: 1,
+      pending: 0,
       batchable: 1,
-      needs_attention: 0,
       confirmed: 0,
+      composite: 0,
+      candidates: 0,
+      unmatched: 0,
     });
     expect(model.safeCandidateIds.has("defect_0001")).toBe(true);
   });
@@ -143,7 +159,7 @@ describe("buildDefectPhotoReviewModel", () => {
 
     const row = buildDefectPhotoReviewModel({
       draft,
-      defectCatalogs: catalogs,
+      ...treeWiring(),
       assessmentIssues: [],
     }).rows[0];
 
@@ -151,18 +167,340 @@ describe("buildDefectPhotoReviewModel", () => {
     expect(row.batchEligible).toBe(true);
   });
 
-  it("suggests one exact applicable indicator without confirming it", () => {
+  it("blocks batch confirmation until a rating tree defect is chosen", () => {
     const draft = safeDraft();
-    draft.defects[0].standard_defect_indicator_id = null;
+    draft.defects[0].rating_tree_node_id = null;
+    draft.defects[0].rating_tree_match_method = null;
     const row = buildDefectPhotoReviewModel({
       draft,
-      defectCatalogs: catalogs,
+      ...treeWiring(),
       assessmentIssues: [],
     }).rows[0];
 
-    expect(row.suggestedIndicator?.id).toBe("indicator-crack");
-    expect(row.problems.map((problem) => problem.code)).toContain("indicator_required");
+    expect(row.problems.map((problem) => problem.code)).toContain("rating_tree_node_required");
     expect(row.batchEligible).toBe(false);
+  });
+
+  it("drops backend issues that restate a problem the frontend already derived", () => {
+    const draft = safeDraft();
+    draft.defects[0].rating_tree_node_id = null;
+    draft.defects[0].rating_tree_match_method = null;
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [{
+        // 码名必须与 AssessmentService.cpp 实际发出的一致，别名表才去得掉重。
+        code: "assessment_rating_tree_node_required",
+        message: "病害尚未选择当前年度评定树中的有效节点。",
+        entity_type: "defect",
+        entity_id: "defect_0001",
+        field_path: "rating_tree_node_id",
+        rule_id: "",
+      }],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code)).toEqual(["rating_tree_node_required"]);
+    expect(row.batchEligible).toBe(false);
+  });
+
+  it("keeps a backend issue that has no frontend equivalent", () => {
+    const row = buildDefectPhotoReviewModel({
+      draft: safeDraft(),
+      ...treeWiring(),
+      assessmentIssues: [{
+        code: "assessment_defect_scale_required",
+        message: "病害缺少有效的规范标度。",
+        entity_type: "defect",
+        entity_id: "defect_0001",
+        field_path: "defect_scale",
+        rule_id: "",
+      }],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code)).toEqual(["assessment_defect_scale_required"]);
+  });
+
+  it("labels controlled matches, candidates and composite defects distinctly", () => {
+    const draft = safeDraft();
+    Object.assign(draft.defects[0], {
+      rating_tree_version_id: "tree-version-1",
+      rating_tree_node_id: treeNode.id,
+      rating_tree_match_method: "controlled_keyword",
+    });
+    const treeInput = {
+      draft,
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodes: [treeNode],
+      applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
+      treeRulesReady: true,
+      assessmentIssues: [],
+    };
+
+    const bound = buildDefectPhotoReviewModel(treeInput).rows[0];
+    expect(bound.matchState).toBe("auto_bound");
+    expect(bound.matchLabel).toBe("自动匹配：裂缝");
+    // 自动绑定不确认：仍然停留在待确认，只是满足条件后可批量确认。
+    expect(bound.defect.group_review_status).toBe("待确认");
+    expect(bound.batchEligible).toBe(true);
+
+    draft.defects[0].rating_tree_node_id = null;
+    draft.defects[0].rating_tree_match_method = null;
+    const composite = buildDefectPhotoReviewModel({
+      ...treeInput,
+      matchResults: new Map([["defect_0001", matchResult("composite", [
+        { rating_tree_node_id: treeNode.id, display_name: "裂缝", match_method: "controlled_alias", evidence: "命中别名" },
+        { rating_tree_node_id: "tree-node-water", display_name: "水损", match_method: "controlled_keyword", evidence: "命中关键词" },
+      ])]]),
+    }).rows[0];
+    expect(composite.matchState).toBe("composite");
+    expect(composite.matchLabel).toBe("疑似组合病害");
+    expect(composite.batchEligible).toBe(false);
+    expect(composite.matchCandidates).toHaveLength(2);
+
+    const candidates = buildDefectPhotoReviewModel({
+      ...treeInput,
+      matchResults: new Map([["defect_0001", matchResult("candidates", [
+        { rating_tree_node_id: treeNode.id, display_name: "裂缝", match_method: "fuzzy_candidate", evidence: "文字相似" },
+      ])]]),
+    }).rows[0];
+    expect(candidates.matchState).toBe("candidates");
+    expect(candidates.matchLabel).toBe("候选 1 项");
+    expect(candidates.batchEligible).toBe(false);
+  });
+
+  it("keeps missing prerequisites and matcher failures out of the plain unmatched bucket", () => {
+    const draft = safeDraft();
+    draft.defects[0].rating_tree_node_id = null;
+    draft.defects[0].rating_tree_match_method = null;
+    const treeInput = {
+      draft,
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodes: [treeNode],
+      applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
+      treeRulesReady: true,
+      assessmentIssues: [],
+    };
+
+    const missing = buildDefectPhotoReviewModel({
+      ...treeInput,
+      matchResults: new Map([["defect_0001", {
+        ...matchResult("prerequisite_missing", []),
+        reason_code: "component_not_bound",
+        reason_message: "该病害尚未绑定实际构件。",
+      }]]),
+    });
+    expect(missing.rows[0].matchState).toBe("prerequisite_missing");
+    expect(missing.summary.unmatched).toBe(0);
+    expect(missing.rows[0].problems.map((problem) => problem.code))
+      .toContain("rating_tree_prerequisite_missing");
+
+    const failed = buildDefectPhotoReviewModel({
+      ...treeInput,
+      matchResults: new Map([["defect_0001", {
+        ...matchResult("service_error", []),
+        reason_code: "matcher_failed",
+        reason_message: "匹配服务执行失败，请稍后重试。",
+      }]]),
+    });
+    expect(failed.rows[0].matchState).toBe("service_error");
+    expect(failed.summary.unmatched).toBe(0);
+    expect(failed.rows[0].problems.map((problem) => problem.code))
+      .toContain("rating_tree_matcher_failed");
+  });
+
+  // 列表每行只剩一个徽标，所以终态必须由它自己说出来，不能靠另一个状态徽标兜底。
+  it("says an ignored defect is ignored on the single row badge", () => {
+    const draft = safeDraft();
+    draft.defects[0].review_status = "已忽略";
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.status).toBe("ignored");
+    expect(row.matchState).toBe("ignored");
+    expect(row.matchLabel).toBe("已忽略");
+  });
+
+  it("keeps confirmed rows readable from the same single badge", () => {
+    const draft = safeDraft();
+    draft.defects[0].group_review_status = "已确认";
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.status).toBe("confirmed");
+    expect(row.matchLabel).toBe("已确认：裂缝");
+  });
+
+  it("never lets an automatic result relabel a manual or confirmed record", () => {
+    const draft = safeDraft();
+    Object.assign(draft.defects[0], {
+      rating_tree_version_id: "tree-version-1",
+      rating_tree_node_id: treeNode.id,
+      rating_tree_match_method: "manual",
+    });
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodes: [treeNode],
+      applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
+      treeRulesReady: true,
+      assessmentIssues: [],
+      matchResults: new Map([["defect_0001", { ...matchResult("auto_bound", []), skipped: true }]]),
+    }).rows[0];
+
+    expect(row.matchState).toBe("manual");
+    expect(row.matchLabel).toBe("人工选择：裂缝");
+  });
+
+  it("puts composite, candidate and unmatched rows ahead of batchable ones", () => {
+    const draft = safeDraft();
+    draft.defects = ["defect_0001", "defect_0002", "defect_0003"].map((candidateId, index) => ({
+      ...draft.defects[0],
+      candidate_id: candidateId,
+      rating_tree_version_id: "tree-version-1",
+      rating_tree_node_id: index === 0 ? treeNode.id : null,
+      rating_tree_match_method: index === 0 ? ("exact" as const) : null,
+      photo_references: [],
+    }));
+    const model = buildDefectPhotoReviewModel({
+      draft,
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodes: [treeNode],
+      applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
+      treeRulesReady: true,
+      assessmentIssues: [],
+      matchResults: new Map([
+        ["defect_0002", matchResult("candidates", [
+          { rating_tree_node_id: treeNode.id, display_name: "裂缝", match_method: "fuzzy_candidate", evidence: "相似" },
+        ])],
+        ["defect_0003", matchResult("composite", [])],
+      ]),
+    });
+
+    expect(model.rows.map((row) => row.candidateId))
+      .toEqual(["defect_0003", "defect_0002", "defect_0001"]);
+  });
+
+  it("filters by composite, candidate and unmatched issue buckets", () => {
+    const draft = safeDraft();
+    draft.defects = ["defect_0001", "defect_0002"].map((candidateId) => ({
+      ...draft.defects[0],
+      candidate_id: candidateId,
+      rating_tree_version_id: "tree-version-1",
+      rating_tree_node_id: null,
+      rating_tree_match_method: null,
+      photo_references: [],
+    }));
+    const base = {
+      draft,
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodes: [treeNode],
+      applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
+      treeRulesReady: true,
+      assessmentIssues: [],
+      matchResults: new Map([
+        ["defect_0001", matchResult("composite", [])],
+        ["defect_0002", matchResult("unmatched", [])],
+      ]),
+    };
+
+    expect(buildDefectPhotoReviewModel({ ...base, issueFilter: "composite" as const })
+      .rows.map((row) => row.candidateId)).toEqual(["defect_0001"]);
+    expect(buildDefectPhotoReviewModel({ ...base, issueFilter: "unmatched" as const })
+      .rows.map((row) => row.candidateId)).toEqual(["defect_0002"]);
+    expect(buildDefectPhotoReviewModel(base).summary.composite).toBe(1);
+    expect(buildDefectPhotoReviewModel(base).summary.unmatched).toBe(1);
+  });
+
+  // 照片问题的唯一来源是卡片：能不能入库由 ConfirmPlan 按"已确认 + 有归档文件"判定，
+  // 派生的问题必须和那套判定对齐。
+  it("blocks batch confirmation while a Word photo number is still unhandled", () => {
+    const draft = safeDraft();
+    draft.defects[0].photo_references.push({
+      photo_number: "2.1-9",
+      resolution: "pending",
+      photo_candidate_id: null,
+      resolved_defect_candidate_id: null,
+      review_note: null,
+    });
+
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code)).toContain("photo_reference_pending");
+    expect(row.batchEligible).toBe(false);
+  });
+
+  it("clears the problem once the missing photo is acknowledged", () => {
+    const draft = safeDraft();
+    draft.defects[0].photo_references.push({
+      photo_number: "2.1-9",
+      resolution: "missing",
+      photo_candidate_id: null,
+      resolved_defect_candidate_id: null,
+      review_note: null,
+    });
+
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems).toEqual([]);
+    expect(row.batchEligible).toBe(true);
+  });
+
+  // 高置信候选会被批量确认自动接受，不算问题；待校对的不会，必须挡住，
+  // 否则它悄悄进不了 defect_photos，用户还以为确认过了。
+  it("flags a linked photo that batch confirmation would not pick up", () => {
+    const draft = safeDraft();
+    draft.photos[0] = { ...draft.photos[0], match_status: "待校对", review_status: "待确认" };
+
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code)).toContain("photo_not_confirmed");
+    expect(row.batchEligible).toBe(false);
+  });
+
+  it("flags a confirmed photo whose archived file is missing", () => {
+    const draft = safeDraft();
+    draft.photos[0] = {
+      ...draft.photos[0],
+      extracted_file: { ...draft.photos[0].extracted_file, archive_relative_path: null },
+    };
+
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code)).toContain("photo_archive_missing");
+    expect(row.batchEligible).toBe(false);
+  });
+
+  it("exposes the same card list the photo panel renders", () => {
+    const row = buildDefectPhotoReviewModel({
+      draft: safeDraft(),
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.photoCards.map((card) => [card.kind, card.photoNumber]))
+      .toEqual([["photo", "2.1-1"]]);
   });
 
   it("blocks repeated photo references and searches by photo number", () => {
@@ -181,10 +519,10 @@ describe("buildDefectPhotoReviewModel", () => {
     });
     const model = buildDefectPhotoReviewModel({
       draft,
-      defectCatalogs: catalogs,
+      ...treeWiring(),
       assessmentIssues: [],
       filter: "needs_attention",
-      problemCategory: "photo",
+      issueFilter: "photo_pending",
       search: "2.1-1",
     });
 
