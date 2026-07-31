@@ -2,10 +2,10 @@ import type {
   BridgeAnnualInspectionData,
   DefectCandidate,
   PhotoCandidate,
+  RatingTreeMatchMethod,
   ReviewStatus,
   StructurePart,
 } from "../contracts/annualInspection";
-import { canConfirmDefectPhotoGroup } from "./defectPhotoGroups";
 import { parseMeasurements } from "./measurementParser";
 
 // useReducer 草稿 reducer：所有分支都必须返回新对象/新数组，绝不原地修改传入的 state
@@ -63,53 +63,40 @@ export type ReviewDraftAction =
       isScoring: boolean;
       matchEvidence: string;
     }
+  // 后端批量匹配返回的唯一自动结果。方式沿用后端给的 exact/controlled_alias/
+  // controlled_keyword，保存时服务端会用同一份规则复核，伪造的自动方式会被降级为人工。
   | {
-      type: "select_standard_defect_indicator";
-      candidateId: string;
-      indicatorId: string;
-      indicatorName: string;
-    }
-  | {
-      type: "apply_unique_standard_indicator_matches";
-      matches: Array<{ candidateId: string; indicatorId: string; indicatorName: string }>;
+      type: "apply_rating_tree_auto_matches";
+      versionId: string;
+      matches: Array<{
+        candidateId: string;
+        nodeId: string;
+        matchMethod: RatingTreeMatchMethod;
+        matchEvidence: string;
+        isScoring: boolean;
+      }>;
     }
   | { type: "ignore_defect"; candidateId: string }
   | { type: "restore_ignored_defect"; candidateId: string }
+  // 照片四原语（见 docs/superpowers/specs/2026-07-31-defect-photo-actions-redesign-design.md）。
+  // 换绑不是原语：先 unlink 再 link 两步完成。
+  | { type: "link_photo_to_defect"; photoCandidateId: string; defectCandidateId: string }
+  | { type: "unlink_photo_from_defect"; photoCandidateId: string }
+  | { type: "confirm_photo"; photoCandidateId: string; confirmed: boolean }
   | {
-      type: "confirm_photo_reference_match";
+      type: "set_photo_reference_missing";
       defectCandidateId: string;
       photoNumber: string;
-      photoCandidateId: string;
+      missing: boolean;
     }
-  | {
-      type: "reset_photo_reference_review";
-      defectCandidateId: string;
-      photoNumber: string;
-    }
-  | {
-      type: "relink_photo_reference";
-      defectCandidateId: string;
-      photoNumber: string;
-      photoCandidateId: string;
-      targetDefectCandidateId: string;
-    }
-  | {
-      type: "confirm_unrelated_photo_reference";
-      defectCandidateId: string;
-      photoNumber: string;
-      photoCandidateId: string;
-    }
+  // 人工上传/删除已经在服务端落库；这两个 action 只是把结果同步进本地草稿。
+  | { type: "add_photo"; photo: PhotoCandidate }
+  | { type: "remove_photo"; photoCandidateId: string }
   | { type: "confirm_defect_groups"; candidateIds: string[] }
   | { type: "set_defect_status"; candidateId: string; status: ReviewStatus }
-  | { type: "photo_confirm_match"; candidateId: string }
-  | { type: "photo_relink"; candidateId: string; defectCandidateId: string }
-  | { type: "photo_mark_unrelated"; candidateId: string; note: string }
-  | { type: "photo_ignore"; candidateId: string }
-  | { type: "photo_reset"; candidateId: string }
-  | { type: "edit_photo_number"; candidateId: string; photoNumber: string }
-  | { type: "confirm_missing_photo"; defectCandidateId: string; photoNumber: string }
-  | { type: "unconfirm_missing_photo"; defectCandidateId: string; photoNumber: string }
-  | { type: "confirm_defect_group"; defectCandidateId: string };
+  // 服务端已经改写过草稿（构件绑定、批量替换、标记缺失、取消绑定、范围拆分）时，
+  // 用重新拉取到的最新草稿整体替换本地状态。服务端在这些操作上是权威方。
+  | { type: "replace_draft"; data: BridgeAnnualInspectionData };
 
 // 从 union 里抽出各分组，供 reducer 内部 helper 使用（Extract/Exclude 保证与上面的 union 单一真源同步）。
 type EditDefectFieldAction = Extract<ReviewDraftAction, { type: "edit_defect_field" }>;
@@ -215,6 +202,10 @@ function reduceReviewDraft(
   issuedCandidateIds: Set<string>,
 ): BridgeAnnualInspectionData {
   switch (action.type) {
+    case "replace_draft": {
+      return action.data;
+    }
+
     case "add_defect": {
       const input = action.input;
       const defect: DefectCandidate = {
@@ -333,19 +324,6 @@ function reduceReviewDraft(
       };
     }
 
-    case "select_standard_defect_indicator": {
-      return {
-        ...state,
-        defects: updateDefect(state.defects, action.candidateId, (defect) => ({
-          ...defect,
-          standard_defect_indicator_id: action.indicatorId,
-          defect_type: action.indicatorName,
-          review_status: nextStatusAfterContentEdit(defect.review_status),
-          group_review_status: "待确认",
-        })),
-      };
-    }
-
     case "select_rating_tree_node": {
       return {
         ...state,
@@ -364,7 +342,7 @@ function reduceReviewDraft(
       };
     }
 
-    case "apply_unique_standard_indicator_matches": {
+    case "apply_rating_tree_auto_matches": {
       const matches = new Map(
         action.matches.map((match) => [match.candidateId, match] as const),
       );
@@ -372,11 +350,30 @@ function reduceReviewDraft(
         ...state,
         defects: state.defects.map((defect) => {
           const match = matches.get(defect.candidate_id);
-          if (!match || defect.standard_defect_indicator_id) return defect;
+          if (!match) return defect;
+          // 自动结果绝不覆盖人工选择、已确认或已忽略的记录，也不改写复核状态：
+          // 自动匹配只是把待确认病害填好，确认仍然由人做。
+          if (
+            defect.review_status === "已忽略" ||
+            defect.group_review_status === "已确认" ||
+            (defect.rating_tree_match_method === "manual" && defect.rating_tree_node_id)
+          ) {
+            return defect;
+          }
+          if (
+            defect.rating_tree_node_id === match.nodeId &&
+            defect.rating_tree_match_method === match.matchMethod
+          ) {
+            return defect;
+          }
           return {
             ...defect,
-            standard_defect_indicator_id: match.indicatorId,
-            defect_type: match.indicatorName,
+            rating_tree_version_id: action.versionId,
+            rating_tree_node_id: match.nodeId,
+            rating_tree_match_method: match.matchMethod,
+            rating_tree_match_evidence: match.matchEvidence,
+            standard_defect_indicator_id: null,
+            defect_scale: match.isScoring ? defect.defect_scale : null,
             group_review_status: "待确认",
           };
         }),
@@ -405,34 +402,34 @@ function reduceReviewDraft(
       };
     }
 
-    case "confirm_photo_reference_match": {
-      const photo = state.photos.find(
-        (item) =>
-          item.candidate_id === action.photoCandidateId &&
-          item.photo_number === action.photoNumber,
-      );
-      const defect = state.defects.find(
-        (item) => item.candidate_id === action.defectCandidateId,
-      );
-      if (!photo || !defect?.photo_references.some((reference) => reference.photo_number === action.photoNumber)) {
-        return state;
-      }
+    // ── 照片四原语 ────────────────────────────────────────────────
+    // 归属（linked_defect_candidate_id）是唯一决定照片能否入库的事实；
+    // photo_references 的 resolution 只是随之维护的 Word 来源证据。
+
+    case "link_photo_to_defect": {
+      const photo = state.photos.find((item) => item.candidate_id === action.photoCandidateId);
+      const defect = state.defects.find((item) => item.candidate_id === action.defectCandidateId);
+      if (!photo || !defect) return state;
+      const previousOwner = photo.linked_defect_candidate_id;
       return {
         ...state,
-        defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
-          ...item,
-          group_review_status: "待确认",
-          photo_references: item.photo_references.map((reference) =>
-            reference.photo_number === action.photoNumber
-              ? {
-                  ...reference,
-                  resolution: "matched",
-                  photo_candidate_id: photo.candidate_id,
-                  resolved_defect_candidate_id: item.candidate_id,
-                }
-              : reference,
-          ),
-        })),
+        defects: invalidateDefectGroups(
+          updateDefect(state.defects, action.defectCandidateId, (item) => ({
+            ...item,
+            photo_references: item.photo_references.map((reference) =>
+              reference.photo_number === photo.photo_number
+                ? {
+                    ...reference,
+                    resolution: "matched" as const,
+                    photo_candidate_id: photo.candidate_id,
+                    resolved_defect_candidate_id: item.candidate_id,
+                  }
+                : reference,
+            ),
+          })),
+          [previousOwner, action.defectCandidateId],
+        ),
+        // 主动挑一张挂上，本身就表达了"这张是对的"，不再要求二次确认。
         photos: updatePhoto(state.photos, photo.candidate_id, (item) => ({
           ...item,
           linked_defect_candidate_id: action.defectCandidateId,
@@ -442,14 +439,89 @@ function reduceReviewDraft(
       };
     }
 
-    case "reset_photo_reference_review": {
-      const defect = state.defects.find(
-        (item) => item.candidate_id === action.defectCandidateId,
-      );
+    case "unlink_photo_from_defect": {
+      const photo = state.photos.find((item) => item.candidate_id === action.photoCandidateId);
+      if (!photo) return state;
+      const owner = photo.linked_defect_candidate_id;
+      return {
+        ...state,
+        defects: invalidateDefectGroups(
+          owner
+            ? updateDefect(state.defects, owner, (item) => ({
+                ...item,
+                photo_references: item.photo_references.map((reference) =>
+                  reference.photo_candidate_id === photo.candidate_id ||
+                  reference.photo_number === photo.photo_number
+                    ? {
+                        ...reference,
+                        resolution: "pending" as const,
+                        photo_candidate_id: null,
+                        resolved_defect_candidate_id: null,
+                      }
+                    : reference,
+                ),
+              }))
+            : state.defects,
+          [owner],
+        ),
+        photos: updatePhoto(state.photos, photo.candidate_id, (item) => ({
+          ...item,
+          linked_defect_candidate_id: null,
+          match_status: "未关联",
+          review_status: "已修改",
+        })),
+      };
+    }
+
+    case "confirm_photo": {
+      const photo = state.photos.find((item) => item.candidate_id === action.photoCandidateId);
+      if (!photo || !photo.linked_defect_candidate_id) return state;
+      const owner = photo.linked_defect_candidate_id;
+      return {
+        ...state,
+        defects: invalidateDefectGroups(
+          updateDefect(state.defects, owner, (item) => ({
+            ...item,
+            photo_references: item.photo_references.map((reference) =>
+              reference.photo_number === photo.photo_number
+                ? action.confirmed
+                  ? {
+                      ...reference,
+                      resolution: "matched" as const,
+                      photo_candidate_id: photo.candidate_id,
+                      resolved_defect_candidate_id: item.candidate_id,
+                    }
+                  : {
+                      ...reference,
+                      resolution: "pending" as const,
+                      photo_candidate_id: null,
+                      resolved_defect_candidate_id: null,
+                    }
+                : reference,
+            ),
+          })),
+          [owner],
+        ),
+        // 撤销确认只撤确认：照片仍挂在本病害上，解除归属是 unlink 的职责。
+        // 退回"待校对"而不是"高置信候选"——人工干预过之后不该再宣称是系统的高置信结论。
+        photos: updatePhoto(state.photos, photo.candidate_id, (item) => ({
+          ...item,
+          match_status: action.confirmed ? "已确认" : "待校对",
+          review_status: action.confirmed ? "已确认" : "已修改",
+        })),
+      };
+    }
+
+    case "set_photo_reference_missing": {
+      const defect = state.defects.find((item) => item.candidate_id === action.defectCandidateId);
       const reference = defect?.photo_references.find(
         (item) => item.photo_number === action.photoNumber,
       );
       if (!defect || !reference) return state;
+      // 这张图明明在本次导入里（只是没挂上）时，"原报告缺图"就是假话。
+      if (action.missing && state.photos.some((item) => item.photo_number === action.photoNumber)) {
+        return state;
+      }
       return {
         ...state,
         defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
@@ -459,100 +531,41 @@ function reduceReviewDraft(
             itemReference.photo_number === action.photoNumber
               ? {
                   ...itemReference,
-                  resolution: "pending",
+                  resolution: action.missing ? ("missing" as const) : ("pending" as const),
                   photo_candidate_id: null,
                   resolved_defect_candidate_id: null,
                 }
               : itemReference,
           ),
         })),
-        photos: reference.photo_candidate_id
-          ? updatePhoto(state.photos, reference.photo_candidate_id, (photo) => ({
-              ...photo,
-              match_status: "高置信候选",
-              review_status: "待确认",
-            }))
-          : state.photos,
       };
     }
 
-    case "relink_photo_reference": {
-      const photo = state.photos.find(
-        (item) =>
-          item.candidate_id === action.photoCandidateId &&
-          item.photo_number === action.photoNumber,
-      );
-      const sourceDefect = state.defects.find(
-        (item) => item.candidate_id === action.defectCandidateId,
-      );
-      const targetDefect = state.defects.find(
-        (item) =>
-          item.candidate_id === action.targetDefectCandidateId &&
-          item.review_status !== "已忽略",
-      );
-      if (!photo || !sourceDefect || !targetDefect ||
-          sourceDefect.candidate_id === targetDefect.candidate_id) {
+    case "add_photo": {
+      const { photo } = action;
+      if (!photo.linked_defect_candidate_id) return state;
+      if (!state.defects.some((item) => item.candidate_id === photo.linked_defect_candidate_id)) {
         return state;
       }
+      // 上传的照片没有对应的 Word 引用条目，因此不碰 photo_references：
+      // Word 没承诺过这张图，它也就不该顶替任何编号。
+      const photos = state.photos.some((item) => item.candidate_id === photo.candidate_id)
+        ? state.photos.map((item) => (item.candidate_id === photo.candidate_id ? photo : item))
+        : [...state.photos, photo];
       return {
         ...state,
-        defects: invalidateDefectGroups(
-          updateDefect(state.defects, sourceDefect.candidate_id, (item) => ({
-            ...item,
-            photo_references: item.photo_references.map((reference) =>
-              reference.photo_number === action.photoNumber
-                ? {
-                    ...reference,
-                    resolution: "relinked",
-                    photo_candidate_id: photo.candidate_id,
-                    resolved_defect_candidate_id: targetDefect.candidate_id,
-                  }
-                : reference,
-            ),
-          })),
-          [sourceDefect.candidate_id, targetDefect.candidate_id],
-        ),
-        photos: updatePhoto(state.photos, photo.candidate_id, (item) => ({
-          ...item,
-          linked_defect_candidate_id: targetDefect.candidate_id,
-          match_status: "已确认",
-          review_status: "已修改",
-        })),
+        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
+        photos,
       };
     }
 
-    case "confirm_unrelated_photo_reference": {
-      const photo = state.photos.find(
-        (item) =>
-          item.candidate_id === action.photoCandidateId &&
-          item.photo_number === action.photoNumber,
-      );
-      const defect = state.defects.find(
-        (item) => item.candidate_id === action.defectCandidateId,
-      );
-      if (!photo || !defect) return state;
+    case "remove_photo": {
+      const photo = state.photos.find((item) => item.candidate_id === action.photoCandidateId);
+      if (!photo) return state;
       return {
         ...state,
-        defects: updateDefect(state.defects, defect.candidate_id, (item) => ({
-          ...item,
-          group_review_status: "待确认",
-          photo_references: item.photo_references.map((reference) =>
-            reference.photo_number === action.photoNumber
-              ? {
-                  ...reference,
-                  resolution: "unrelated",
-                  photo_candidate_id: photo.candidate_id,
-                  resolved_defect_candidate_id: null,
-                }
-              : reference,
-          ),
-        })),
-        photos: updatePhoto(state.photos, photo.candidate_id, (item) => ({
-          ...item,
-          linked_defect_candidate_id: null,
-          match_status: "未关联",
-          review_status: "已确认",
-        })),
+        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
+        photos: state.photos.filter((item) => item.candidate_id !== action.photoCandidateId),
       };
     }
 
@@ -613,152 +626,6 @@ function reduceReviewDraft(
           ...defect,
           review_status: status,
           group_review_status: "待确认",
-        })),
-      };
-    }
-
-    case "photo_confirm_match": {
-      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
-      if (!photo?.linked_defect_candidate_id) return state;
-      return {
-        ...state,
-        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
-        photos: updatePhoto(state.photos, action.candidateId, (item) => ({
-          ...item,
-          match_status: "已确认",
-          review_status: "已确认",
-        })),
-      };
-    }
-
-    case "photo_relink": {
-      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
-      if (!photo || !state.defects.some((item) => item.candidate_id === action.defectCandidateId)) return state;
-      return {
-        ...state,
-        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id, action.defectCandidateId]),
-        photos: updatePhoto(state.photos, action.candidateId, (item) => ({
-          ...item,
-          linked_defect_candidate_id: action.defectCandidateId,
-          match_status: "已确认",
-          review_status: "已修改",
-        })),
-      };
-    }
-
-    case "photo_mark_unrelated": {
-      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
-      if (!photo) return state;
-      void action.note;
-      return {
-        ...state,
-        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
-        photos: updatePhoto(state.photos, action.candidateId, (item) => ({
-          ...item,
-          linked_defect_candidate_id: null,
-          match_status: "未关联",
-          review_status: "已确认",
-        })),
-      };
-    }
-
-    case "photo_ignore": {
-      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
-      if (!photo) return state;
-      return {
-        ...state,
-        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
-        photos: updatePhoto(state.photos, action.candidateId, (item) => ({
-          ...item,
-          linked_defect_candidate_id: null,
-          review_status: "已忽略",
-        })),
-      };
-    }
-
-    case "photo_reset": {
-      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
-      if (!photo) return state;
-      return {
-        ...state,
-        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
-        photos: updatePhoto(state.photos, action.candidateId, (item) => ({
-          ...item,
-          match_status: "待校对",
-          review_status: "待确认",
-        })),
-      };
-    }
-
-    case "edit_photo_number": {
-      const photo = state.photos.find((item) => item.candidate_id === action.candidateId);
-      if (!photo) return state;
-      return {
-        ...state,
-        defects: invalidateDefectGroups(state.defects, [photo.linked_defect_candidate_id]),
-        photos: updatePhoto(state.photos, action.candidateId, (photo) => ({ ...photo, photo_number: action.photoNumber })),
-      };
-    }
-
-    case "confirm_missing_photo": {
-      const defect = state.defects.find((item) => item.candidate_id === action.defectCandidateId);
-      const isReferenced =
-        defect?.photo_references.some(
-          (reference) => reference.photo_number === action.photoNumber,
-        ) ?? false;
-      const hasCandidate = state.photos.some((item) => item.photo_number === action.photoNumber);
-      if (!defect || !isReferenced || hasCandidate) return state;
-      return {
-        ...state,
-        defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
-          ...item,
-          group_review_status: "待确认",
-          photo_references: item.photo_references.map((reference) =>
-            reference.photo_number === action.photoNumber
-              ? {
-                  ...reference,
-                  resolution: "missing",
-                  photo_candidate_id: null,
-                  resolved_defect_candidate_id: null,
-                }
-              : reference,
-          ),
-        })),
-      };
-    }
-
-    case "unconfirm_missing_photo": {
-      return {
-        ...state,
-        defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
-          ...item,
-          group_review_status: "待确认",
-          photo_references: item.photo_references.map(
-            (reference) =>
-              reference.photo_number === action.photoNumber
-                ? {
-                    ...reference,
-                    resolution: "pending",
-                    photo_candidate_id: null,
-                    resolved_defect_candidate_id: null,
-                  }
-                : reference,
-          ),
-        })),
-      };
-    }
-
-    case "confirm_defect_group": {
-      if (!canConfirmDefectPhotoGroup(state, action.defectCandidateId).ok) return state;
-      return {
-        ...state,
-        defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
-          ...item,
-          group_review_status: "已确认",
-          review_status: item.review_status === "待确认" ? "已确认" : item.review_status,
-          warnings: item.warnings.filter(
-            (warning) => warning.code !== "component_range_split_review_required"
-          ),
         })),
       };
     }

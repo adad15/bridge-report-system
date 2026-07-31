@@ -11,6 +11,8 @@ using bridge_report::db::BindingRow;
 TEST(ImportBindingRoutesTest, SerializesOverviewForFrontend) {
     BindingOverview overview;
     overview.inventory_confirmed = true;
+    overview.rating_tree = bridge_report::db::BindingRatingTree{
+        "tree-1", "单位桥梁有效评定树", "1.0.2", "1.0.3", "1.0.0"};
 
     BindingGroup group;
     group.part_name = "上部承重构件";
@@ -36,6 +38,12 @@ TEST(ImportBindingRoutesTest, SerializesOverviewForFrontend) {
 
     const auto json = bridge_report::http::binding_overview_json(overview);
     EXPECT_TRUE(json["inventory_confirmed"].asBool());
+    EXPECT_EQ(
+        json["rating_tree"]["tree_name"].asString(),
+        "单位桥梁有效评定树");
+    EXPECT_EQ(
+        json["rating_tree"]["h21_package_version"].asString(),
+        "1.0.3");
     ASSERT_EQ(json["groups"].size(), 1u);
     const auto& group_json = json["groups"][0];
     EXPECT_EQ(group_json["part_name"].asString(), "上部承重构件");

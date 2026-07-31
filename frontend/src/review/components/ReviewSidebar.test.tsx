@@ -14,17 +14,15 @@ const counts: ReviewCounts = {
   modified_count: 0,
   ignored_count: 0,
   object_warning_count: 0,
-  needs_attention_count: 333,
 };
 
 describe("ReviewSidebar", () => {
-  it("puts 构件绑定 between 需要处理 and 病害与照片", () => {
+  it("puts 构件绑定 first, ahead of 病害与照片", () => {
     render(
-      <ReviewSidebar counts={counts} bindingPendingCount={46} active="needs_attention" onSelect={vi.fn()} />
+      <ReviewSidebar counts={counts} bindingPendingCount={46} active="component_binding" onSelect={vi.fn()} />
     );
     const labels = screen.getAllByRole("button").map((item) => item.textContent);
     expect(labels).toEqual([
-      "需要处理333",
       "构件绑定46",
       "病害与照片279",
       "系统技术状况评定1",
@@ -35,7 +33,7 @@ describe("ReviewSidebar", () => {
   // 台账未确认时无法绑定，计数为 null；此时必须显示 "-"，显示 0 会被读成"都处理完了"。
   it("shows a dash rather than zero when binding is unavailable", () => {
     render(
-      <ReviewSidebar counts={counts} bindingPendingCount={null} active="needs_attention" onSelect={vi.fn()} />
+      <ReviewSidebar counts={counts} bindingPendingCount={null} active="component_binding" onSelect={vi.fn()} />
     );
     expect(screen.getByRole("button", { name: /构件绑定/ })).toHaveTextContent("构件绑定-");
   });
@@ -43,7 +41,7 @@ describe("ReviewSidebar", () => {
   it("reports the selected group", async () => {
     const onSelect = vi.fn();
     render(
-      <ReviewSidebar counts={counts} bindingPendingCount={0} active="needs_attention" onSelect={onSelect} />
+      <ReviewSidebar counts={counts} bindingPendingCount={0} active="component_binding" onSelect={onSelect} />
     );
     await userEvent.click(screen.getByRole("button", { name: /构件绑定/ }));
     expect(onSelect).toHaveBeenCalledWith("component_binding");

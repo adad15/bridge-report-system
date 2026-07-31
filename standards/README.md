@@ -61,4 +61,11 @@ standards/
 
 当前 `organization-bridge/1.0.1` 只包含桥梁分支。涵洞、隧道和涵洞 JTG 5120 分支未进入该版本；每个构件分支末尾的“其他病害（暂不计分）”是不可选择的 `placeholder`，不会参与评分。规则包和编译后的已发布树均只读，管理员也没有在线编辑接口。
 
+`organization-bridge/1.0.3` 在 1.0.2 的树与来源之上新增 `matching-rules.json`，即病害分层确定性匹配的受控规则包：
+
+- `aliases.json` 的受控别名与 `matching-rules.json` 的受控关键词都随版本不可变发布，页面运行时不可编辑；
+- 每条关键词规则声明目标节点、适用桥型与构件、正向关键词、可选排除关键词和是否允许自动绑定（`auto_bind`）；
+- 装载时校验目标节点存在且可选择、规则适用范围不超出目标节点自身范围、正向关键词非空、`rule_id` 唯一、规则不引用其他评定树版本，并拒绝同一适用范围内指向不同节点的冲突自动规则；
+- `auto_bind` 为假的规则只能产生候选，必须由人工确认后才写入病害。
+
 清单与节点字段见 `schemas/rating-tree-extension-package.schema.json`。其 `content_checksum` 与规范包使用完全相同的稳定 JSON 摘要约定。

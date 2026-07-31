@@ -5,9 +5,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchLatestComponentInventory } from "../../api/componentInventoryApi";
 import {
   bindComponent,
+  bindInspectionRatingTree,
   fetchComponentBinding,
   markComponentMissing,
 } from "../../api/importBindingApi";
+import { fetchRatingTreeVersions } from "../../api/ratingTreeApi";
 import { ComponentBindingWorkspace } from "./ComponentBindingWorkspace";
 
 vi.mock("../../api/importBindingApi", async (importOriginal) => {
@@ -16,9 +18,15 @@ vi.mock("../../api/importBindingApi", async (importOriginal) => {
     ...original,
     fetchComponentBinding: vi.fn(),
     bindComponent: vi.fn(),
+    bindInspectionRatingTree: vi.fn(),
     markComponentMissing: vi.fn(),
     clearComponentBinding: vi.fn(),
   };
+});
+
+vi.mock("../../api/ratingTreeApi", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../api/ratingTreeApi")>();
+  return { ...original, fetchRatingTreeVersions: vi.fn() };
 });
 
 vi.mock("../../api/componentInventoryApi", async (importOriginal) => {
@@ -93,6 +101,19 @@ describe("ComponentBindingWorkspace", () => {
     vi.resetAllMocks();
     vi.mocked(fetchLatestComponentInventory).mockResolvedValue(inventory);
     vi.mocked(fetchComponentBinding).mockResolvedValue(overview("unmatched"));
+    vi.mocked(fetchRatingTreeVersions).mockResolvedValue([
+      {
+        id: "tree-1",
+        tree_code: "org.bridge.root",
+        tree_name: "单位桥梁有效评定树",
+        package_version: "1.0.2",
+        tree_content_checksum: "sha256:test",
+        status: "published",
+        published_at: "2026-07-30T00:00:00Z",
+        h21_package_version: "1.0.3",
+        maintenance_package_version: "1.0.0",
+      },
+    ]);
   });
 
   it("renders grouped rows with reference counts", async () => {
@@ -100,6 +121,38 @@ describe("ComponentBindingWorkspace", () => {
     expect(await screen.findByText("上部承重构件")).toBeInTheDocument();
     expect(screen.getByText("引用 3 条")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "待处理 1" })).toBeInTheDocument();
+  });
+
+  it("binds the selected published rating tree for the inspection year", async () => {
+    vi.mocked(bindInspectionRatingTree).mockResolvedValue({
+      ...overview("unmatched"),
+      rating_tree: {
+        version_id: "tree-1",
+        tree_name: "单位桥梁有效评定树",
+        package_version: "1.0.2",
+        h21_package_version: "1.0.3",
+        maintenance_package_version: "1.0.0",
+      },
+    });
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+
+    const button = await screen.findByRole("button", { name: "绑定评定树" });
+    // 评定树版本列表是独立于构件行的另一个请求（故意不阻塞首屏），按钮出现时
+    // 默认选中值可能还没回来，必须等它落定再断言，否则整套并行跑时会偶发失败。
+    await waitFor(() =>
+      expect(screen.getByLabelText("选择年度评定树")).toHaveValue("tree-1")
+    );
+    await userEvent.click(button);
+
+    await waitFor(() =>
+      expect(bindInspectionRatingTree).toHaveBeenCalledWith(
+        "http://127.0.0.1:18080",
+        "i1",
+        "tree-1"
+      )
+    );
+    expect(await screen.findByText("评定树已绑定。")).toBeInTheDocument();
+    expect(screen.getByText("单位桥梁有效评定树 1.0.2")).toBeInTheDocument();
   });
 
   // 已标记缺失需能单独查看：核对"台账确实没有"是一次独立的复核动作，
@@ -154,5 +207,27 @@ describe("ComponentBindingWorkspace", () => {
     expect(enter).toBeEnabled();
     await userEvent.click(enter);
     expect(onEnterReview).toHaveBeenCalled();
+  });
+
+  // 绑定类写操作都改后端草稿；不上报的话校对分区会一直显示改动前的病害，
+  // 保存时还会把旧内容盖回去。
+  it("reports every draft-mutating operation so the review draft can be refreshed", async () => {
+    vi.mocked(markComponentMissing).mockResolvedValue(overview("missing"));
+    const onDraftInvalidated = vi.fn();
+    render(
+      <ComponentBindingWorkspace
+        importId="i1"
+        bridgeId="bridge-1"
+        onDraftInvalidated={onDraftInvalidated}
+      />,
+    );
+
+    // 首屏加载只是读取，不算改写。
+    await screen.findByLabelText("标记缺失 1-1#梁");
+    expect(onDraftInvalidated).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByLabelText("标记缺失 1-1#梁"));
+
+    await waitFor(() => expect(onDraftInvalidated).toHaveBeenCalledTimes(1));
   });
 });

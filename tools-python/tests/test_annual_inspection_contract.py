@@ -466,7 +466,13 @@ def test_export_bridge_annual_inspection_schema(tmp_path: Path) -> None:
     assert defect_properties["standard_defect_indicator_id"]["default"] is None
     assert set(
         defect_properties["rating_tree_match_method"]["anyOf"][0]["enum"]
-    ) == {"exact", "controlled_alias", "fuzzy_candidate", "manual"}
+    ) == {
+        "exact",
+        "controlled_alias",
+        "controlled_keyword",
+        "fuzzy_candidate",
+        "manual",
+    }
     assert set(source_properties["source_type"]["enum"]) == {"word", "manual"}
     assert set(measurement_properties["value_type"]["enum"]) == {"single", "range"}
     assert measurement_properties["minimum_value"]["default"] is None

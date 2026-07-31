@@ -67,6 +67,21 @@ bool require_non_empty_string(
     return true;
 }
 
+// 允许空字符串的必填文本列：字段必须存在且是字符串，但空串是合法的业务空值。
+bool require_string(
+    const Json::Value& object,
+    const std::string& path,
+    const std::string& member,
+    ContractValidationResult& result) {
+    const auto full_path = member_path(path, member);
+    if (!object.isObject() || !object.isMember(member) ||
+        !object[member].isString()) {
+        result.add_issue(full_path, "must be a string");
+        return false;
+    }
+    return true;
+}
+
 void require_enum(
     const Json::Value& object,
     const std::string& path,
@@ -363,8 +378,10 @@ void validate_defect(
 
     require_non_empty_string(defect, path, "candidate_id", result);
     require_non_empty_string(defect, path, "component_name", result);
-    require_non_empty_string(defect, path, "defect_type", result);
-    require_non_empty_string(defect, path, "defect_location", result);
+    // 病害类型与位置在 Word 里常写成 "/"（本列无此项）。导入清洗把这类占位符化为空串，
+    // 受控关键词层再从描述里兜底，所以这两列允许为空字符串；描述仍必须非空。
+    require_string(defect, path, "defect_type", result);
+    require_string(defect, path, "defect_location", result);
     require_non_empty_string(defect, path, "defect_description", result);
     require_enum(defect, path, "review_status", review_statuses(), result);
     require_enum(defect, path, "group_review_status", {"待确认", "已确认"}, result);
@@ -389,7 +406,8 @@ void validate_defect(
             defect,
             path,
             "rating_tree_match_method",
-            {"exact", "controlled_alias", "fuzzy_candidate", "manual"},
+            {"exact", "controlled_alias", "controlled_keyword",
+             "fuzzy_candidate", "manual"},
             result);
     }
     require_optional_nullable_non_blank_string(

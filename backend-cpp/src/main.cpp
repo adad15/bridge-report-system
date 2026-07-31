@@ -23,6 +23,8 @@
 #include "bridge_report/http/Cors.hpp"
 #include "bridge_report/http/DefectThreadRoutes.hpp"
 #include "bridge_report/http/EditLockRoutes.hpp"
+#include "bridge_report/http/DefectMatchingRoutes.hpp"
+#include "bridge_report/http/DefectPhotoRoutes.hpp"
 #include "bridge_report/http/ImportBindingRoutes.hpp"
 #include "bridge_report/http/ImportConfirmRoutes.hpp"
 #include "bridge_report/http/ImportRecordDeletionRoutes.hpp"
@@ -484,6 +486,8 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_bridge_administration_routes(db_client, cleanup_coordinator);
     bridge_report::http::register_import_confirm_routes(db_client, standards.registry);
     bridge_report::http::register_import_binding_routes(db_client);
+    bridge_report::http::register_defect_matching_routes(db_client);
+    bridge_report::http::register_defect_photo_routes(db_client, config);
     bridge_report::http::register_import_record_deletion_routes(db_client, cleanup_coordinator);
     bridge_report::http::register_word_import_routes(db_client, config);
     bridge_report::http::register_standard_routes(db_client, standards.registry);

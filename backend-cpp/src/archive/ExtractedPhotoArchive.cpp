@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <memory>
 #include <sstream>
+#include <string_view>
 
 #include <openssl/evp.h>
 
@@ -22,29 +23,51 @@ std::string lowercase(std::string value) {
     return value;
 }
 
+bool has_jpeg_head(const unsigned char* bytes, std::streamsize count) {
+    return count >= 4 && bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff;
+}
+
+/// 只看文件头，认不出就返回空串；JPEG 还要看结尾，由调用方补上。
+std::string detect_by_head(const unsigned char* bytes, std::streamsize count) {
+    const std::array<unsigned char, 8> png = {0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a};
+    if (count >= 8 && std::equal(png.begin(), png.end(), bytes)) return ".png";
+    if (count >= 6 && ((std::equal(bytes, bytes + 6, reinterpret_cast<const unsigned char*>("GIF87a")))
+        || (std::equal(bytes, bytes + 6, reinterpret_cast<const unsigned char*>("GIF89a"))))) return ".gif";
+    if (count >= 14 && bytes[0] == 'B' && bytes[1] == 'M') return ".bmp";
+    if (count >= 12 && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
+        && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') return ".webp";
+    if (count >= 4 && ((bytes[0] == 'I' && bytes[1] == 'I' && bytes[2] == 42 && bytes[3] == 0)
+        || (bytes[0] == 'M' && bytes[1] == 'M' && bytes[2] == 0 && bytes[3] == 42))) return ".tiff";
+    return {};
+}
+
 std::string detect_image_extension(const std::filesystem::path& path) {
     std::array<unsigned char, 16> bytes{};
     std::ifstream input(path, std::ios::binary);
     input.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     const auto count = input.gcount();
     if (!input.eof() && input.bad()) throw PhotoArchiveError("unable to read temporary photo: " + path.string());
-    if (count >= 4 && bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff) {
+    if (has_jpeg_head(bytes.data(), count)) {
         std::ifstream tail(path, std::ios::binary);
         tail.seekg(-2, std::ios::end);
         unsigned char end[2]{};
         tail.read(reinterpret_cast<char*>(end), 2);
         if (tail && end[0] == 0xff && end[1] == 0xd9) return ".jpg";
     }
-    const std::array<unsigned char, 8> png = {0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a};
-    if (count >= 8 && std::equal(png.begin(), png.end(), bytes.begin())) return ".png";
-    if (count >= 6 && ((std::equal(bytes.begin(), bytes.begin() + 6, reinterpret_cast<const unsigned char*>("GIF87a")))
-        || (std::equal(bytes.begin(), bytes.begin() + 6, reinterpret_cast<const unsigned char*>("GIF89a"))))) return ".gif";
-    if (count >= 14 && bytes[0] == 'B' && bytes[1] == 'M') return ".bmp";
-    if (count >= 12 && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
-        && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') return ".webp";
-    if (count >= 4 && ((bytes[0] == 'I' && bytes[1] == 'I' && bytes[2] == 42 && bytes[3] == 0)
-        || (bytes[0] == 'M' && bytes[1] == 'M' && bytes[2] == 0 && bytes[3] == 42))) return ".tiff";
-    throw PhotoArchiveError("temporary photo is not a supported image: " + path.string());
+    const auto detected = detect_by_head(bytes.data(), count);
+    if (detected.empty()) throw PhotoArchiveError("temporary photo is not a supported image: " + path.string());
+    return detected;
+}
+
+std::string detect_image_extension_from_bytes(std::string_view content) {
+    const auto* bytes = reinterpret_cast<const unsigned char*>(content.data());
+    const auto count = static_cast<std::streamsize>(content.size());
+    if (has_jpeg_head(bytes, count) && count >= 6 && bytes[count - 2] == 0xff && bytes[count - 1] == 0xd9) {
+        return ".jpg";
+    }
+    const auto detected = detect_by_head(bytes, count);
+    if (detected.empty()) throw PhotoArchiveError("uploaded photo is not a supported image");
+    return detected;
 }
 
 bool extension_matches(const std::string& extension, const std::string& detected) {
@@ -53,12 +76,38 @@ bool extension_matches(const std::string& extension, const std::string& detected
     return extension == detected;
 }
 
-std::string sha256_file(const std::filesystem::path& path) {
-    using Context = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
-    Context context(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+using DigestContext = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
+
+DigestContext new_digest_context() {
+    DigestContext context(EVP_MD_CTX_new(), EVP_MD_CTX_free);
     if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1) {
         throw PhotoArchiveError("unable to initialize SHA-256");
     }
+    return context;
+}
+
+std::string finish_digest(EVP_MD_CTX* context) {
+    std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
+    unsigned int length = 0;
+    if (EVP_DigestFinal_ex(context, digest.data(), &length) != 1) {
+        throw PhotoArchiveError("unable to finalize SHA-256");
+    }
+    std::ostringstream output;
+    output << std::hex << std::setfill('0');
+    for (unsigned int index = 0; index < length; ++index) output << std::setw(2) << static_cast<int>(digest[index]);
+    return output.str();
+}
+
+std::string sha256_bytes(std::string_view content) {
+    auto context = new_digest_context();
+    if (!content.empty() && EVP_DigestUpdate(context.get(), content.data(), content.size()) != 1) {
+        throw PhotoArchiveError("unable to hash uploaded photo");
+    }
+    return finish_digest(context.get());
+}
+
+std::string sha256_file(const std::filesystem::path& path) {
+    auto context = new_digest_context();
     std::ifstream input(path, std::ios::binary);
     if (!input) throw PhotoArchiveError("unable to open file for SHA-256: " + path.string());
     std::array<char, 8192> buffer{};
@@ -70,15 +119,7 @@ std::string sha256_file(const std::filesystem::path& path) {
         }
     }
     if (input.bad()) throw PhotoArchiveError("unable to read file for SHA-256: " + path.string());
-    std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
-    unsigned int length = 0;
-    if (EVP_DigestFinal_ex(context.get(), digest.data(), &length) != 1) {
-        throw PhotoArchiveError("unable to finalize SHA-256");
-    }
-    std::ostringstream output;
-    output << std::hex << std::setfill('0');
-    for (unsigned int index = 0; index < length; ++index) output << std::setw(2) << static_cast<int>(digest[index]);
-    return output.str();
+    return finish_digest(context.get());
 }
 
 ArchivedPhotoFile archive_one(const Json::Value& photo, const PhotoArchiveContext& context) {
@@ -151,26 +192,85 @@ ArchivedPhotoBatch archive_extracted_photos(const Json::Value& data, const Photo
     }
 }
 
+ArchivedPhotoFile archive_uploaded_photo(const UploadedPhotoInput& input, const PhotoArchiveContext& context) {
+    if (input.candidate_id.empty()) throw PhotoArchiveError("uploaded photo candidate id is required");
+    if (input.content.empty()) throw PhotoArchiveError("uploaded photo is empty");
+    if (input.max_bytes > 0 && input.content.size() > input.max_bytes) {
+        throw PhotoTooLargeError("uploaded photo exceeds the configured size limit");
+    }
+
+    // 扩展名与内容都要认同一种格式，改后缀的伪图片在写盘之前就被挡住。
+    const auto extension = lowercase(std::filesystem::path(input.original_file_name).extension().string());
+    const auto detected = detect_image_extension_from_bytes(input.content);
+    if (!extension_matches(extension, detected)) throw PhotoArchiveError("photo extension does not match its content");
+
+    const auto hash = sha256_bytes(input.content);
+    const auto current_name = sanitize_path_part(input.candidate_id) + "_" + hash.substr(0, 12) + detected;
+    const auto relative = build_import_photo_relative_path(
+        context.bridge_system_number, context.bridge_name, context.inspection_year,
+        context.import_record_system_number, context.import_name, input.candidate_id, current_name);
+    const auto destination = resolve_path_under_root(context.archive_root, relative);
+    std::filesystem::create_directories(destination.parent_path());
+
+    bool created = false;
+    if (std::filesystem::exists(destination)) {
+        // 同一张图重复上传只会命中同一条路径，内容一致就直接复用。
+        if (!std::filesystem::is_regular_file(destination) || sha256_file(destination) != hash) {
+            throw PhotoArchiveError("existing archived photo does not match expected SHA-256");
+        }
+    } else {
+        const auto temporary_destination = destination.string() + ".tmp";
+        std::error_code cleanup_error;
+        std::filesystem::remove(temporary_destination, cleanup_error);
+        try {
+            {
+                std::ofstream output(temporary_destination, std::ios::binary | std::ios::trunc);
+                if (!output) throw PhotoArchiveError("unable to write uploaded photo");
+                output.write(input.content.data(), static_cast<std::streamsize>(input.content.size()));
+                if (!output) throw PhotoArchiveError("unable to write uploaded photo");
+            }
+            if (sha256_file(temporary_destination) != hash) {
+                throw PhotoArchiveError("archived copy SHA-256 does not match upload");
+            }
+            std::filesystem::rename(temporary_destination, destination);
+            created = true;
+        } catch (...) {
+            std::filesystem::remove(temporary_destination, cleanup_error);
+            throw;
+        }
+    }
+    return ArchivedPhotoFile{input.candidate_id, input.original_file_name, current_name, relative, detected,
+                             std::filesystem::file_size(destination), hash, created};
+}
+
+void remove_archived_photo(
+    const std::filesystem::path& archive_root,
+    const std::filesystem::path& storage_relative_path,
+    const std::string& sha256
+) noexcept {
+    try {
+        const auto path = resolve_path_under_root(archive_root, storage_relative_path);
+        std::error_code error;
+        if (!std::filesystem::is_regular_file(path, error) || error || sha256_file(path) != sha256) {
+            return;
+        }
+        std::filesystem::remove(path, error);
+        auto directory = path.parent_path();
+        const auto normalized_root = std::filesystem::weakly_canonical(archive_root);
+        while (!error && directory != normalized_root && std::filesystem::is_empty(directory, error)) {
+            std::filesystem::remove(directory, error);
+            directory = directory.parent_path();
+        }
+    } catch (...) {
+    }
+}
+
 void cleanup_archived_photo_batch(const std::filesystem::path& archive_root, const ArchivedPhotoBatch& batch) noexcept {
     for (const auto& file : batch.files) {
         if (!file.created_by_batch) {
             continue;
         }
-        try {
-            const auto path = resolve_path_under_root(archive_root, file.storage_relative_path);
-            std::error_code error;
-            if (!std::filesystem::is_regular_file(path, error) || error || sha256_file(path) != file.sha256) {
-                continue;
-            }
-            std::filesystem::remove(path, error);
-            auto directory = path.parent_path();
-            const auto normalized_root = std::filesystem::weakly_canonical(archive_root);
-            while (!error && directory != normalized_root && std::filesystem::is_empty(directory, error)) {
-                std::filesystem::remove(directory, error);
-                directory = directory.parent_path();
-            }
-        } catch (...) {
-        }
+        remove_archived_photo(archive_root, file.storage_relative_path, file.sha256);
     }
 }
 

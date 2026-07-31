@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BridgeAnnualInspectionData } from "./annualInspection";
-import { isBridgeAnnualInspectionData } from "./annualInspection";
+import { isBridgeAnnualInspectionData, RATING_TREE_MATCH_METHODS } from "./annualInspection";
 
 const validData: BridgeAnnualInspectionData = {
   contract: {
@@ -225,9 +225,35 @@ describe("isBridgeAnnualInspectionData 3.0", () => {
       expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
     }
 
+    for (const method of RATING_TREE_MATCH_METHODS) {
+      const valid = cloneValidData();
+      Object.assign(valid.defects[0], { rating_tree_match_method: method });
+      expect(isBridgeAnnualInspectionData(valid)).toBe(true);
+    }
+    expect(RATING_TREE_MATCH_METHODS).toContain("controlled_keyword");
+
     const invalidMethod = cloneValidData();
     Object.assign(invalidMethod.defects[0], { rating_tree_match_method: "guessed" });
     expect(isBridgeAnnualInspectionData(invalidMethod)).toBe(false);
+  });
+
+  it("accepts an empty defect type or location but still requires a description", () => {
+    const cleaned = cloneValidData();
+    // Word 里的 "/" 被导入清洗成空业务值；描述只由仍有语义的字段拼成。
+    Object.assign(cleaned.defects[0], {
+      defect_location: "",
+      defect_type: "渗水泛碱",
+      defect_description: "渗水泛碱",
+    });
+    expect(isBridgeAnnualInspectionData(cleaned)).toBe(true);
+
+    const bothEmpty = cloneValidData();
+    Object.assign(bothEmpty.defects[0], { defect_location: "", defect_type: "" });
+    expect(isBridgeAnnualInspectionData(bothEmpty)).toBe(true);
+
+    const noDescription = cloneValidData();
+    Object.assign(noDescription.defects[0], { defect_description: "" });
+    expect(isBridgeAnnualInspectionData(noDescription)).toBe(false);
   });
 
   it("validates optional range split provenance", () => {

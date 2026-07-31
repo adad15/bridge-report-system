@@ -10,6 +10,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/CommitLatch.hpp"
+#include "bridge_report/rating_tree/RatingTreeMatchText.hpp"
 
 namespace bridge_report::db {
 namespace {
@@ -67,17 +68,10 @@ std::string join_scales(const std::vector<int>& values) {
     return result;
 }
 
+// 别名唯一性键与匹配器共用同一套规范化：删掉文字内部的 `/`、`-` 会让
+// "板底/腹板交界处" 之类的合法写法失去区分度。
 std::string normalize_alias(const std::string& value) {
-    std::string result;
-    result.reserve(value.size());
-    for (const unsigned char ch : value) {
-        if (std::isspace(ch) || ch == ',' || ch == '.' || ch == '-' ||
-            ch == '_' || ch == '/' || ch == '(' || ch == ')') {
-            continue;
-        }
-        result.push_back(static_cast<char>(ch));
-    }
-    return result;
+    return rating_tree::normalize_match_key(value);
 }
 
 std::string node_detail_json(const rating_tree::EffectiveRatingTreeNode& node) {
@@ -280,6 +274,28 @@ RatingTreeSyncOutcome RatingTreeRepository::sync_published_tree(
                 normalize_alias(alias.alias));
         }
 
+        for (const auto& rule : tree.keyword_rules) {
+            transaction->execSqlSync(
+                "insert into rating_tree_keyword_rules ("
+                "rating_tree_version_id, target_node_id, rule_key, bridge_type_id, "
+                "component_category_id, positive_keywords, excluded_keywords, "
+                "auto_bind, sort_order, rule_note"
+                ") values ($1::uuid, $2::uuid, $3, $4, $5, "
+                "string_to_array($6, chr(31)), "
+                "case when $7='' then '{}'::text[] "
+                "else string_to_array($7, chr(31)) end, $8, $9, $10)",
+                version_id,
+                node_ids.at(rule.target_node_id),
+                rule.rule_id,
+                rule.bridge_type_id,
+                rule.component_category_id,
+                join(rule.positive_keywords, '\x1f'),
+                join(rule.excluded_keywords, '\x1f'),
+                rule.auto_bind,
+                rule.sort_order,
+                rule.rule_note);
+        }
+
         transaction->execSqlSync(
             "update rating_tree_versions "
             "set status='published', published_at=now(), updated_at=now() "
@@ -459,6 +475,40 @@ RatingTreeRepository::load_published_tree(const std::string& version_id) const {
             row["bridge_type_id"].as<std::string>(),
             row["component_category_id"].as<std::string>(),
         });
+    }
+
+    // 规则顺序稳定：排序交给 SQL，保证同一版本每次装载的规则序列一致。
+    const auto keyword_rules = db_client_->execSqlSync(
+        "select rule_key,target_node_id::text as target_node_id,bridge_type_id,"
+        "component_category_id,auto_bind,sort_order,rule_note,"
+        "array_to_json(positive_keywords)::text as positive_keywords,"
+        "array_to_json(excluded_keywords)::text as excluded_keywords "
+        "from rating_tree_keyword_rules where rating_tree_version_id=$1::uuid "
+        "order by sort_order,rule_key",
+        version_id);
+    for (const auto& row : keyword_rules) {
+        rating_tree::RatingTreeKeywordRule rule;
+        rule.rule_id = row["rule_key"].as<std::string>();
+        rule.target_node_id = row["target_node_id"].as<std::string>();
+        rule.bridge_type_id = row["bridge_type_id"].as<std::string>();
+        rule.component_category_id = row["component_category_id"].as<std::string>();
+        rule.auto_bind = row["auto_bind"].as<bool>();
+        rule.sort_order = row["sort_order"].as<int>();
+        rule.rule_note = row["rule_note"].as<std::string>();
+        const auto parse_keywords = [&reader](const std::string& text) {
+            Json::Value value;
+            std::string errors;
+            std::istringstream stream(text);
+            Json::parseFromStream(reader, stream, &value, &errors);
+            std::vector<std::string> result;
+            for (const auto& item : value) result.push_back(item.asString());
+            return result;
+        };
+        rule.positive_keywords =
+            parse_keywords(row["positive_keywords"].as<std::string>());
+        rule.excluded_keywords =
+            parse_keywords(row["excluded_keywords"].as<std::string>());
+        tree.keyword_rules.push_back(std::move(rule));
     }
     return tree;
 }

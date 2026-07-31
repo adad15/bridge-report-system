@@ -14,8 +14,12 @@ namespace {
 using bridge_report::archive::ArchivedPhotoBatch;
 using bridge_report::archive::PhotoArchiveContext;
 using bridge_report::archive::PhotoArchiveError;
+using bridge_report::archive::PhotoTooLargeError;
+using bridge_report::archive::UploadedPhotoInput;
 using bridge_report::archive::archive_extracted_photos;
+using bridge_report::archive::archive_uploaded_photo;
 using bridge_report::archive::cleanup_archived_photo_batch;
+using bridge_report::archive::remove_archived_photo;
 
 class TempDirectory {
 public:
@@ -155,6 +159,85 @@ TEST(ExtractedPhotoArchiveTest, RejectsCorruptPreexistingArchiveAtExpectedPath) 
         PhotoArchiveError
     );
     EXPECT_TRUE(std::filesystem::exists(archived_path));
+}
+
+std::string jpeg_bytes() {
+    const auto bytes = jpeg_fixture();
+    return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+}
+
+UploadedPhotoInput upload_input(std::string content, std::string file_name) {
+    return UploadedPhotoInput{std::move(content), std::move(file_name), "manual_photo_0001", 0};
+}
+
+TEST(UploadedPhotoArchiveTest, ArchivesAnUploadedImageUnderTheImportPhotoDirectory) {
+    TempDirectory temp;
+
+    const auto file = archive_uploaded_photo(upload_input(jpeg_bytes(), "IMG_2031.JPG"), make_context(temp));
+
+    const auto path = temp.archive() / file.storage_relative_path;
+    EXPECT_TRUE(std::filesystem::exists(path));
+    EXPECT_EQ(std::filesystem::file_size(path), jpeg_bytes().size());
+    EXPECT_EQ(file.candidate_id, "manual_photo_0001");
+    EXPECT_EQ(file.original_file_name, "IMG_2031.JPG");
+    EXPECT_EQ(file.file_extension, ".jpg");
+    EXPECT_EQ(file.sha256.size(), 64u);
+    EXPECT_TRUE(file.created_by_batch);
+    // 与 Word 抽出的照片同目录，删除导入时一并带走。
+    EXPECT_EQ(file.storage_relative_path.parent_path().filename().string(), "photos");
+}
+
+TEST(UploadedPhotoArchiveTest, RejectsAFakeImageWhoseExtensionLiesAboutItsContent) {
+    TempDirectory temp;
+
+    EXPECT_THROW(archive_uploaded_photo(upload_input("not-an-image", "evil.jpg"), make_context(temp)),
+                 PhotoArchiveError);
+    // 内容是真图但扩展名对不上，同样拒绝。
+    EXPECT_THROW(archive_uploaded_photo(upload_input(jpeg_bytes(), "photo.png"), make_context(temp)),
+                 PhotoArchiveError);
+    EXPECT_TRUE(std::filesystem::is_empty(temp.archive()));
+}
+
+TEST(UploadedPhotoArchiveTest, RejectsContentOverTheConfiguredLimit) {
+    TempDirectory temp;
+    auto input = upload_input(jpeg_bytes(), "photo.jpg");
+    input.max_bytes = jpeg_bytes().size() - 1;
+
+    EXPECT_THROW(archive_uploaded_photo(input, make_context(temp)), PhotoTooLargeError);
+    EXPECT_TRUE(std::filesystem::is_empty(temp.archive()));
+}
+
+TEST(UploadedPhotoArchiveTest, RefusesToLetTheCandidateIdEscapeTheArchiveRoot) {
+    TempDirectory temp;
+    auto input = upload_input(jpeg_bytes(), "photo.jpg");
+    input.candidate_id = "../../escape";
+
+    const auto file = archive_uploaded_photo(input, make_context(temp));
+
+    // 编号被清洗成安全片段，文件仍落在归档根之内。
+    const auto resolved = std::filesystem::weakly_canonical(temp.archive() / file.storage_relative_path);
+    const auto root = std::filesystem::weakly_canonical(temp.archive());
+    EXPECT_EQ(resolved.string().rfind(root.string(), 0), 0u);
+}
+
+TEST(UploadedPhotoArchiveTest, LeavesNoTemporaryFileBehindWhenValidationFails) {
+    TempDirectory temp;
+
+    EXPECT_THROW(archive_uploaded_photo(upload_input("", "photo.jpg"), make_context(temp)), PhotoArchiveError);
+
+    EXPECT_TRUE(std::filesystem::is_empty(temp.archive()));
+}
+
+TEST(UploadedPhotoArchiveTest, RemovesAnArchivedPhotoOnlyWhenTheHashStillMatches) {
+    TempDirectory temp;
+    const auto file = archive_uploaded_photo(upload_input(jpeg_bytes(), "photo.jpg"), make_context(temp));
+    const auto path = temp.archive() / file.storage_relative_path;
+
+    remove_archived_photo(temp.archive(), file.storage_relative_path, "0000");
+    EXPECT_TRUE(std::filesystem::exists(path));
+
+    remove_archived_photo(temp.archive(), file.storage_relative_path, file.sha256);
+    EXPECT_FALSE(std::filesystem::exists(path));
 }
 
 }  // namespace

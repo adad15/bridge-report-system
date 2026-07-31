@@ -125,45 +125,11 @@ describe("reviewDraftReducer", () => {
     expect(next.defects[0].group_review_status).toBe("待确认");
   });
 
-  it("relinks a photo and invalidates both affected groups", () => {
-    const reducer = createReviewDraftReducer();
-    const state = matchedData();
-    state.defects[0].group_review_status = "已确认";
-    state.defects.push({ ...state.defects[0], candidate_id: "defect_0002", group_review_status: "已确认" });
-    const next = reducer(state, {
-      type: "photo_relink",
-      candidateId: "photo_0001",
-      defectCandidateId: "defect_0002",
-    });
-
-    expect(next.photos[0]).toMatchObject({ linked_defect_candidate_id: "defect_0002", review_status: "已修改" });
-    expect(next.defects.map((item) => item.group_review_status)).toEqual(["待确认", "待确认"]);
-  });
-
-  it("records an explicit missing-photo acknowledgement", () => {
-    const reducer = createReviewDraftReducer();
-    const state = matchedData();
-    state.defects[0].photo_references = [{
-      photo_number: "missing-1",
-      resolution: "pending",
-      photo_candidate_id: null,
-      resolved_defect_candidate_id: null,
-      review_note: null,
-    }];
-    state.photos = [];
-    const next = reducer(state, {
-      type: "confirm_missing_photo",
-      defectCandidateId: "defect_0001",
-      photoNumber: "missing-1",
-    });
-    expect(next.defects[0].photo_references[0].resolution).toBe("missing");
-  });
-
   it("confirms a complete defect-photo group", () => {
     const reducer = createReviewDraftReducer();
     const state = matchedData();
     state.defects[0].review_status = "待确认";
-    const next = reducer(state, { type: "confirm_defect_group", defectCandidateId: "defect_0001" });
+    const next = reducer(state, { type: "confirm_defect_groups", candidateIds: ["defect_0001"] });
     expect(next.defects[0]).toMatchObject({ group_review_status: "已确认", review_status: "已确认" });
   });
 
@@ -185,8 +151,8 @@ describe("reviewDraftReducer", () => {
       operated_at: "2026-07-24T08:00:00Z",
     };
     const next = reducer(state, {
-      type: "confirm_defect_group",
-      defectCandidateId: "defect_0001",
+      type: "confirm_defect_groups",
+      candidateIds: ["defect_0001"],
     });
     expect(next.defects[0].warnings.map((warning) => warning.code)).toEqual(["another_warning"]);
     expect(next.defects[0].range_split_origin).toEqual(state.defects[0].range_split_origin);
@@ -196,28 +162,6 @@ describe("reviewDraftReducer", () => {
     const reducer = createReviewDraftReducer();
     const state = matchedData();
     expect(reducer(state, { type: "delete_defect", candidateId: "missing" })).toBe(state);
-  });
-
-  it("selects a standard indicator and derives the modified state", () => {
-    const reducer = createReviewDraftReducer();
-    const state = matchedData();
-    state.defects[0].review_status = "已确认";
-    const sourceRef = state.defects[0].source_ref;
-
-    const next = reducer(state, {
-      type: "select_standard_defect_indicator",
-      candidateId: "defect_0001",
-      indicatorId: "h21.defect.spalling",
-      indicatorName: "混凝土剥落",
-    });
-
-    expect(next.defects[0]).toMatchObject({
-      standard_defect_indicator_id: "h21.defect.spalling",
-      defect_type: "混凝土剥落",
-      review_status: "已修改",
-      group_review_status: "待确认",
-    });
-    expect(next.defects[0].source_ref).toBe(sourceRef);
   });
 
   it("batch confirms only the requested groups and atomically accepts unique photo matches", () => {
@@ -310,6 +254,242 @@ describe("reviewDraftReducer", () => {
     });
   });
 
+  it("applies automatic tree matches without confirming them", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    const applied = reducer(state, {
+      type: "apply_rating_tree_auto_matches",
+      versionId: "tree-version-1",
+      matches: [{
+        candidateId: "defect_0001",
+        nodeId: "tree-node-water",
+        matchMethod: "controlled_keyword",
+        matchEvidence: "命中受控关键词“渗水”。",
+        isScoring: true,
+      }],
+    });
+
+    expect(applied.defects[0]).toMatchObject({
+      rating_tree_version_id: "tree-version-1",
+      rating_tree_node_id: "tree-node-water",
+      rating_tree_match_method: "controlled_keyword",
+      rating_tree_match_evidence: "命中受控关键词“渗水”。",
+      group_review_status: "待确认",
+    });
+    expect(applied.defects[0].review_status).toBe(state.defects[0].review_status);
+  });
+
+  it("never lets an automatic tree match overwrite manual, confirmed or ignored records", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    state.defects = [
+      { ...state.defects[0], candidate_id: "defect_manual", rating_tree_node_id: "picked", rating_tree_match_method: "manual" },
+      { ...state.defects[0], candidate_id: "defect_confirmed", group_review_status: "已确认" },
+      { ...state.defects[0], candidate_id: "defect_ignored", review_status: "已忽略" },
+    ];
+    const matches = state.defects.map((defect) => ({
+      candidateId: defect.candidate_id,
+      nodeId: "tree-node-water",
+      matchMethod: "exact" as const,
+      matchEvidence: "自动匹配",
+      isScoring: true,
+    }));
+
+    const applied = reducer(state, {
+      type: "apply_rating_tree_auto_matches",
+      versionId: "tree-version-1",
+      matches,
+    });
+
+    expect(applied.defects[0].rating_tree_node_id).toBe("picked");
+    expect(applied.defects[0].rating_tree_match_method).toBe("manual");
+    expect(applied.defects[1].group_review_status).toBe("已确认");
+    expect(applied.defects[1].rating_tree_node_id).toBe(state.defects[1].rating_tree_node_id);
+    expect(applied.defects[2].rating_tree_node_id).toBe(state.defects[2].rating_tree_node_id);
+    expect(applied.defects[2].review_status).toBe("已忽略");
+  });
+
+  describe("四个照片原语", () => {
+    function unlinkedPhoto() {
+      const state = matchedData();
+      state.photos[0] = {
+        ...state.photos[0],
+        linked_defect_candidate_id: null,
+        match_status: "未关联",
+        review_status: "待确认",
+      };
+      state.defects[0] = { ...state.defects[0], photo_references: [] };
+      return state;
+    }
+
+    // 主动挑一张挂上，本身就表达了"这张是对的"，不该再要求点一次确认。
+    it("links a photo and treats the deliberate add as a confirmation", () => {
+      const reducer = createReviewDraftReducer();
+      const state = unlinkedPhoto();
+
+      const next = reducer(state, {
+        type: "link_photo_to_defect",
+        photoCandidateId: "photo_0001",
+        defectCandidateId: "defect_0001",
+      });
+
+      expect(next.photos[0]).toMatchObject({
+        linked_defect_candidate_id: "defect_0001",
+        match_status: "已确认",
+      });
+      expect(next.defects[0].group_review_status).toBe("待确认");
+      expect(state.photos[0].linked_defect_candidate_id).toBeNull();
+    });
+
+    it("marks the matching Word reference when the numbers line up", () => {
+      const reducer = createReviewDraftReducer();
+      const state = unlinkedPhoto();
+      state.defects[0] = {
+        ...state.defects[0],
+        photo_references: [{
+          photo_number: "2.1-1",
+          resolution: "pending",
+          photo_candidate_id: null,
+          resolved_defect_candidate_id: null,
+          review_note: null,
+        }],
+      };
+
+      const next = reducer(state, {
+        type: "link_photo_to_defect",
+        photoCandidateId: "photo_0001",
+        defectCandidateId: "defect_0001",
+      });
+
+      expect(next.defects[0].photo_references[0]).toMatchObject({
+        resolution: "matched",
+        photo_candidate_id: "photo_0001",
+        resolved_defect_candidate_id: "defect_0001",
+      });
+    });
+
+    it("returns the same state when the photo or defect is unknown", () => {
+      const reducer = createReviewDraftReducer();
+      const state = unlinkedPhoto();
+
+      expect(reducer(state, {
+        type: "link_photo_to_defect",
+        photoCandidateId: "missing",
+        defectCandidateId: "defect_0001",
+      })).toBe(state);
+      expect(reducer(state, {
+        type: "link_photo_to_defect",
+        photoCandidateId: "photo_0001",
+        defectCandidateId: "missing",
+      })).toBe(state);
+    });
+
+    it("unlinks a Word photo back to the unassigned list and reopens its reference", () => {
+      const reducer = createReviewDraftReducer();
+      const state = matchedData();
+
+      const next = reducer(state, {
+        type: "unlink_photo_from_defect",
+        photoCandidateId: "photo_0001",
+      });
+
+      expect(next.photos[0]).toMatchObject({
+        linked_defect_candidate_id: null,
+        match_status: "未关联",
+        review_status: "已修改",
+      });
+      expect(next.defects[0].photo_references[0]).toMatchObject({
+        resolution: "pending",
+        photo_candidate_id: null,
+        resolved_defect_candidate_id: null,
+      });
+      expect(next.defects[0].group_review_status).toBe("待确认");
+    });
+
+    // 撤销确认只撤确认，照片仍挂在本病害上；解除归属是删除的职责。
+    it("confirms and un-confirms a photo without changing its owner", () => {
+      const reducer = createReviewDraftReducer();
+      const state = matchedData();
+      state.photos[0] = { ...state.photos[0], match_status: "高置信候选", review_status: "待确认" };
+
+      const confirmed = reducer(state, {
+        type: "confirm_photo",
+        photoCandidateId: "photo_0001",
+        confirmed: true,
+      });
+      expect(confirmed.photos[0]).toMatchObject({
+        match_status: "已确认",
+        linked_defect_candidate_id: "defect_0001",
+      });
+      expect(confirmed.defects[0].photo_references[0].resolution).toBe("matched");
+
+      const undone = reducer(confirmed, {
+        type: "confirm_photo",
+        photoCandidateId: "photo_0001",
+        confirmed: false,
+      });
+      expect(undone.photos[0]).toMatchObject({
+        match_status: "待校对",
+        linked_defect_candidate_id: "defect_0001",
+      });
+      expect(undone.defects[0].photo_references[0].resolution).toBe("pending");
+    });
+
+    it("acknowledges a missing photo and takes it back", () => {
+      const reducer = createReviewDraftReducer();
+      const state = matchedData();
+      state.defects[0] = {
+        ...state.defects[0],
+        photo_references: [{
+          photo_number: "2.1-9",
+          resolution: "pending",
+          photo_candidate_id: null,
+          resolved_defect_candidate_id: null,
+          review_note: null,
+        }],
+      };
+
+      const missing = reducer(state, {
+        type: "set_photo_reference_missing",
+        defectCandidateId: "defect_0001",
+        photoNumber: "2.1-9",
+        missing: true,
+      });
+      expect(missing.defects[0].photo_references[0].resolution).toBe("missing");
+
+      const undone = reducer(missing, {
+        type: "set_photo_reference_missing",
+        defectCandidateId: "defect_0001",
+        photoNumber: "2.1-9",
+        missing: false,
+      });
+      expect(undone.defects[0].photo_references[0].resolution).toBe("pending");
+    });
+
+    // 这张图明明在本次导入里，只是没挂上——"原报告缺图"就是假话。
+    it("refuses to call a photo missing when the import actually has that number", () => {
+      const reducer = createReviewDraftReducer();
+      const state = unlinkedPhoto();
+      state.defects[0] = {
+        ...state.defects[0],
+        photo_references: [{
+          photo_number: "2.1-1",
+          resolution: "pending",
+          photo_candidate_id: null,
+          resolved_defect_candidate_id: null,
+          review_note: null,
+        }],
+      };
+
+      expect(reducer(state, {
+        type: "set_photo_reference_missing",
+        defectCandidateId: "defect_0001",
+        photoNumber: "2.1-1",
+        missing: true,
+      })).toBe(state);
+    });
+  });
+
   it("ignores and restores a defect through explicit actions", () => {
     const reducer = createReviewDraftReducer();
     const state = matchedData();
@@ -320,38 +500,87 @@ describe("reviewDraftReducer", () => {
     expect(restored.defects[0]).toMatchObject({ review_status: "待确认", group_review_status: "待确认" });
   });
 
-  it("records that a Word photo reference actually belongs to another defect", () => {
+  // 换绑不再是原语：先从原病害摘掉，再挂到目标病害。两侧的组都要打回待确认。
+  it("relinks a photo across defects in two steps", () => {
     const reducer = createReviewDraftReducer();
     const state = matchedData();
-    state.defects[0].photo_references[0] = {
-      photo_number: "2.1-1",
-      resolution: "pending",
-      photo_candidate_id: null,
-      resolved_defect_candidate_id: null,
-      review_note: null,
-    };
+    state.defects[0].group_review_status = "已确认";
     state.defects.push({
       ...state.defects[0],
       candidate_id: "defect_0002",
+      group_review_status: "已确认",
       photo_references: [],
     });
 
-    const next = reducer(state, {
-      type: "relink_photo_reference",
-      defectCandidateId: "defect_0001",
-      photoNumber: "2.1-1",
+    const unlinked = reducer(state, {
+      type: "unlink_photo_from_defect",
       photoCandidateId: "photo_0001",
-      targetDefectCandidateId: "defect_0002",
+    });
+    expect(unlinked.photos[0].linked_defect_candidate_id).toBeNull();
+    expect(unlinked.defects[0].photo_references[0].resolution).toBe("pending");
+
+    const relinked = reducer(unlinked, {
+      type: "link_photo_to_defect",
+      photoCandidateId: "photo_0001",
+      defectCandidateId: "defect_0002",
     });
 
-    expect(next.defects[0].photo_references[0]).toMatchObject({
-      resolution: "relinked",
-      photo_candidate_id: "photo_0001",
-      resolved_defect_candidate_id: "defect_0002",
-    });
-    expect(next.photos[0]).toMatchObject({
+    expect(relinked.photos[0]).toMatchObject({
       linked_defect_candidate_id: "defect_0002",
       match_status: "已确认",
     });
+    expect(relinked.defects.map((item) => item.group_review_status)).toEqual(["待确认", "待确认"]);
+  });
+
+  it("mirrors an uploaded photo into the draft and reopens its defect group", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    state.defects[0].group_review_status = "已确认";
+    const uploaded = {
+      ...state.photos[0],
+      candidate_id: "manual_photo_0001",
+      photo_number: "补-1",
+      linked_defect_candidate_id: "defect_0001",
+      source_ref: { source_type: "manual" as const },
+    };
+
+    const next = reducer(state, { type: "add_photo", photo: uploaded });
+
+    expect(next.photos).toHaveLength(2);
+    expect(next.photos[1]).toEqual(uploaded);
+    expect(next.defects[0].group_review_status).toBe("待确认");
+    // 上传的照片没有 Word 引用条目，原有引用一个都不动。
+    expect(next.defects[0].photo_references).toEqual(state.defects[0].photo_references);
+  });
+
+  it("refuses an uploaded photo whose defect is not in this import", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    const stray = {
+      ...state.photos[0],
+      candidate_id: "manual_photo_0001",
+      linked_defect_candidate_id: "defect_9999",
+    };
+
+    expect(reducer(state, { type: "add_photo", photo: stray })).toBe(state);
+  });
+
+  it("drops a removed upload without touching the remaining photos", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    state.defects[0].group_review_status = "已确认";
+    const uploaded = {
+      ...state.photos[0],
+      candidate_id: "manual_photo_0001",
+      photo_number: "补-1",
+      linked_defect_candidate_id: "defect_0001",
+      source_ref: { source_type: "manual" as const },
+    };
+    const withUpload = reducer(state, { type: "add_photo", photo: uploaded });
+
+    const next = reducer(withUpload, { type: "remove_photo", photoCandidateId: "manual_photo_0001" });
+
+    expect(next.photos.map((item) => item.candidate_id)).toEqual(["photo_0001"]);
+    expect(next.defects[0].group_review_status).toBe("待确认");
   });
 });

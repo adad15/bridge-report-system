@@ -8,6 +8,7 @@
 
 #include "bridge_report/contracts/AnnualInspectionContract.hpp"
 #include "bridge_report/rating_tree/RatingTreeResolver.hpp"
+#include "bridge_report/review/DefectRatingTreeMatching.hpp"
 #include "bridge_report/review/JsonAccessors.hpp"
 
 namespace bridge_report::review {
@@ -293,6 +294,11 @@ bool same_component(
             string_member_or_empty(new_defect, "bridge_component_id");
 }
 
+bool is_auto_match_method(const std::string& method) {
+    return method == "exact" || method == "controlled_alias" ||
+        method == "controlled_keyword";
+}
+
 }  // namespace
 
 DraftValidationResult normalize_defect_rating_tree_associations(
@@ -312,7 +318,11 @@ DraftValidationResult normalize_defect_rating_tree_associations(
         return result;
     }
     const auto stored = rating_tree_defect_index(stored_draft);
-    rating_tree::RatingTreeResolver resolver;
+    const rating_tree::RatingTreeResolver resolver;
+    // 用户提交了节点的病害在这里就地定稿；其余交给统一的批量匹配服务，
+    // 保证导入、绑定、草稿保存和页面重新匹配跑的是同一份规则。
+    DefectMatchScope auto_scope;
+    auto_scope.has_scope = true;
     for (Json::ArrayIndex index = 0; index < draft["defects"].size(); ++index) {
         auto& defect = draft["defects"][index];
         const auto candidate_id = string_member_or_empty(defect, "candidate_id");
@@ -321,71 +331,80 @@ DraftValidationResult normalize_defect_rating_tree_associations(
             stored_it == stored.end() ? nullptr : stored_it->second;
         const auto submitted_node =
             string_member_or_empty(defect, "rating_tree_node_id");
+        const auto submitted_method =
+            string_member_or_empty(defect, "rating_tree_match_method");
         const bool component_unchanged = same_component(stored_defect, defect);
         const auto scope = rating_tree_scope_for_defect(
             defect, technical_standard_package_id, latest_revision);
 
-        clear_derived_rating_tree_fields(defect, rating_tree_version_id);
-        if (!scope.has_value()) continue;
-
-        if (!submitted_node.empty() && component_unchanged) {
-            const auto node = tree.nodes.find(submitted_node);
-            if (node == tree.nodes.end() ||
-                !tree_node_applies(node->second, *scope)) {
-                result.issues.push_back({
-                    "defects[" + std::to_string(index) + "].rating_tree_node_id",
-                    "所选评定树节点不属于本年度或不适用于当前实际构件。"});
-                continue;
-            }
-            defect["rating_tree_node_id"] = submitted_node;
-            defect["standard_defect_indicator_id"] =
-                node->second.h21_indicator_id.has_value()
-                    ? Json::Value(*node->second.h21_indicator_id)
-                    : Json::Value();
-            const auto stored_node = stored_defect == nullptr
-                ? std::string{}
-                : string_member_or_empty(*stored_defect, "rating_tree_node_id");
-            const auto stored_method = stored_defect == nullptr
-                ? std::string{}
-                : string_member_or_empty(
-                    *stored_defect, "rating_tree_match_method");
-            const bool preserve_auto =
-                stored_node == submitted_node &&
-                (stored_method == "exact" ||
-                 stored_method == "controlled_alias");
-            defect["rating_tree_match_method"] =
-                preserve_auto ? stored_method : "manual";
-            defect["rating_tree_match_evidence"] = preserve_auto
-                ? (*stored_defect)["rating_tree_match_evidence"]
-                : Json::Value("用户在当前实际构件范围内选择了该评定树节点。");
+        if (submitted_node.empty() || !component_unchanged) {
+            clear_derived_rating_tree_fields(defect, rating_tree_version_id);
+            if (scope.has_value()) auto_scope.candidate_ids.insert(candidate_id);
             continue;
         }
 
-        const auto resolution = resolver.resolve(
-            tree,
-            scope->bridge_type_id,
-            scope->component_category_id,
-            string_member_or_empty(defect, "defect_type"));
-        if (resolution.status ==
-                rating_tree::RatingTreeResolutionStatus::resolved &&
-            resolution.node_id.has_value()) {
-            defect["rating_tree_node_id"] = *resolution.node_id;
-            defect["standard_defect_indicator_id"] =
-                resolution.h21_indicator_id.has_value()
-                    ? Json::Value(*resolution.h21_indicator_id)
-                    : Json::Value();
-            defect["rating_tree_match_method"] = resolution.match_method;
-            defect["rating_tree_match_evidence"] =
-                resolution.match_evidence;
-        } else if (
-            resolution.status ==
-                rating_tree::RatingTreeResolutionStatus::candidates ||
-            resolution.status ==
-                rating_tree::RatingTreeResolutionStatus::ambiguous) {
-            defect["rating_tree_match_method"] = resolution.match_method;
-            defect["rating_tree_match_evidence"] =
-                resolution.match_evidence;
+        clear_derived_rating_tree_fields(defect, rating_tree_version_id);
+        if (!scope.has_value()) continue;
+        const auto node = tree.nodes.find(submitted_node);
+        if (node == tree.nodes.end() || !tree_node_applies(node->second, *scope)) {
+            result.issues.push_back({
+                "defects[" + std::to_string(index) + "].rating_tree_node_id",
+                "所选评定树节点不属于本年度或不适用于当前实际构件。"});
+            continue;
         }
+        defect["rating_tree_node_id"] = submitted_node;
+        defect["standard_defect_indicator_id"] =
+            node->second.h21_indicator_id.has_value()
+                ? Json::Value(*node->second.h21_indicator_id)
+                : Json::Value();
+
+        const auto stored_node = stored_defect == nullptr
+            ? std::string{}
+            : string_member_or_empty(*stored_defect, "rating_tree_node_id");
+        const auto stored_method = stored_defect == nullptr
+            ? std::string{}
+            : string_member_or_empty(*stored_defect, "rating_tree_match_method");
+        // 已经在库里的自动结果原样保留。页面把本次批量匹配的自动结果先落进本地
+        // 草稿时库里还没有节点，这时重跑一次匹配器：结论一致才认自动方式，
+        // 否则一律记成人工选择，避免客户端伪造自动匹配证据。
+        if (stored_node == submitted_node && is_auto_match_method(stored_method)) {
+            defect["rating_tree_match_method"] = stored_method;
+            defect["rating_tree_match_evidence"] =
+                (*stored_defect)["rating_tree_match_evidence"];
+            continue;
+        }
+        if (is_auto_match_method(submitted_method)) {
+            rating_tree::RatingTreeMatchInput input;
+            input.bridge_type_id = scope->bridge_type_id;
+            input.component_category_id = scope->component_category_id;
+            input.defect_type = string_member_or_empty(defect, "defect_type");
+            input.defect_description =
+                string_member_or_empty(defect, "defect_description");
+            input.defect_location =
+                string_member_or_empty(defect, "defect_location");
+            const auto verified = resolver.resolve(tree, input);
+            if (verified.outcome ==
+                    rating_tree::RatingTreeMatchOutcome::auto_bound &&
+                verified.node_id.value_or("") == submitted_node) {
+                defect["rating_tree_match_method"] = verified.match_method;
+                defect["rating_tree_match_evidence"] = verified.match_evidence;
+                continue;
+            }
+        }
+        defect["rating_tree_match_method"] = "manual";
+        defect["rating_tree_match_evidence"] =
+            Json::Value("用户在当前实际构件范围内选择了该评定树节点。");
+    }
+
+    if (!auto_scope.candidate_ids.empty()) {
+        (void)match_defect_rating_tree_nodes(
+            draft,
+            rating_tree_version_id,
+            technical_standard_package_id,
+            tree,
+            latest_revision,
+            auto_scope,
+            true);
     }
     result.ok = result.issues.empty();
     if (result.ok) {

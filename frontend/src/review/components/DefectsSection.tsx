@@ -1,7 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import type { AssessmentIssue } from "../../api/assessmentApi";
 import { componentInventoryErrorMessage, fetchLatestComponentInventory, type ComponentInventoryEntry, type ComponentInventoryRevision, type StructurePart as InventoryStructurePart } from "../../api/componentInventoryApi";
+import {
+  defectMatchErrorMessage,
+  matchDefectRatingTreeNodes,
+  type DefectMatchResult,
+  type DefectMatchSummary,
+} from "../../api/defectMatchingApi";
 import {
   fetchApplicableRatingTreeDefects,
   fetchRatingTreeNode,
@@ -11,7 +17,7 @@ import {
 } from "../../api/ratingTreeApi";
 import type { ReviewRatingTree } from "../../api/reviewApi";
 import type { BridgeAnnualInspectionData, DefectCandidate } from "../../contracts/annualInspection";
-import { buildDefectPhotoReviewModel, type DefectReviewFilter, type DefectReviewProblemCategory } from "../defectPhotoReviewModel";
+import { buildDefectPhotoReviewModel, type DefectReviewFilter, type DefectReviewIssueFilter } from "../defectPhotoReviewModel";
 import type { ReviewDraftAction } from "../reviewDraft";
 import { DefectBatchConfirmDialog } from "./DefectBatchConfirmDialog";
 import { DefectDetailEditor } from "./DefectDetailEditor";
@@ -20,11 +26,6 @@ import { DefectReviewToolbar } from "./DefectReviewToolbar";
 import { UnlinkedPhotosPanel } from "./UnlinkedPhotosPanel";
 
 interface DefectsSectionProps {
-  /**
-   * 由页面注入的分区级动作（当前是"查看来源证据"）。放进分区标题行与"新增病害"
-   * 同排，省掉页面上方那条只装一个按钮的独立工具行。
-   */
-  headerActions?: ReactNode;
   draft: BridgeAnnualInspectionData;
   importRecordId: string;
   baseUrl: string;
@@ -38,6 +39,8 @@ interface DefectsSectionProps {
   selectedPhotoCandidateId?: string | null;
   disabled?: boolean;
   allowStructureChanges?: boolean;
+  /** 上传补充照片要带编辑锁令牌；没有令牌时上传入口自动关掉。 */
+  editLockToken?: string | null;
   componentInventory?: ComponentInventoryRevision | null;
   /**
    * 逐病害可编辑判定（重开校对 warnings_only 态下仅带警告的病害可改）。
@@ -88,7 +91,7 @@ const EMPTY_MANUAL_DEFECT: ManualDefectFormState = {
 
 // 禁用策略按详情控件处理，不用 fieldset disabled 一揽子禁用；
 // 筛选、翻页、缩略图等只读动作在已确认记录中仍可使用。
-export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, onCloseDetail, dispatch, ratingTree = null, assessmentIssues = EMPTY_ASSESSMENT_ISSUES, disabled = false, allowStructureChanges = false, componentInventory = null, isDefectEditable, headerActions }: DefectsSectionProps) {
+export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, onCloseDetail, dispatch, ratingTree = null, assessmentIssues = EMPTY_ASSESSMENT_ISSUES, disabled = false, allowStructureChanges = false, editLockToken = null, componentInventory = null, isDefectEditable }: DefectsSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [inventoryEntries, setInventoryEntries] = useState<ComponentInventoryEntry[]>([]);
   const [loadedInventory, setLoadedInventory] = useState<ComponentInventoryRevision | null>(null);
@@ -102,8 +105,12 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const [treeRulesReady, setTreeRulesReady] = useState(false);
   const [treeError, setTreeError] = useState("");
   const [filter, setFilter] = useState<DefectReviewFilter>("needs_attention");
-  const [problemCategory, setProblemCategory] = useState<DefectReviewProblemCategory | null>(null);
+  const [issueFilter, setIssueFilter] = useState<DefectReviewIssueFilter | null>(null);
   const [search, setSearch] = useState("");
+  const [matchResults, setMatchResults] = useState<Map<string, DefectMatchResult>>(new Map());
+  const [matchSummary, setMatchSummary] = useState<DefectMatchSummary | null>(null);
+  const [matchError, setMatchError] = useState<string | null>(null);
+  const [rematching, setRematching] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [detailWidth, setDetailWidth] = useState(readStoredDetailWidth);
@@ -205,27 +212,106 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     [treeNodesByComponent],
   );
 
+  const nodeSummaryById = useMemo(() => {
+    const map = new Map<string, RatingTreeNodeSummary>();
+    for (const nodes of treeNodesByComponent.values()) {
+      for (const node of nodes) map.set(node.id, node);
+    }
+    return map;
+  }, [treeNodesByComponent]);
+
+  // 自动触发的去重签名只看依赖类变化（构件绑定、病害增删、复核状态）。
+  // 病害类型与描述属于输入过程，改它们不在这里发请求，改由字段失焦提交触发，
+  // 避免逐键请求。写回自动结果不会改变签名，
+  // 所以"应用结果 -> 重新触发"不会变成死循环。
+  const matchInputSignature = useMemo(
+    () => draft.defects
+      .map((defect) => [
+        defect.candidate_id,
+        defect.bridge_component_id ?? "",
+        defect.review_status,
+        defect.group_review_status,
+      ].join("|"))
+      .join("~"),
+    [draft.defects],
+  );
+  const lastMatchSignature = useRef<string | null>(null);
+
+  const runMatch = useCallback(async (candidateIds?: string[]) => {
+    if (!ratingTree || draft.defects.length === 0) return;
+    setRematching(true);
+    try {
+      // 几百条病害只发这一个请求；后端只算不写，页面拿到结果后再落进本地草稿。
+      const report = await matchDefectRatingTreeNodes(
+        baseUrl, importRecordId, draft.defects, candidateIds,
+      );
+      setMatchResults((current) => {
+        const next = candidateIds ? new Map(current) : new Map<string, DefectMatchResult>();
+        for (const result of report.results) next.set(result.candidate_id, result);
+        return next;
+      });
+      setMatchSummary(report.summary);
+      setMatchError(null);
+      const autoMatches = report.results
+        .filter((result) => !result.skipped && result.outcome === "auto_bound" && result.rating_tree_node_id)
+        .map((result) => ({
+          candidateId: result.candidate_id,
+          nodeId: result.rating_tree_node_id!,
+          matchMethod: result.match_method ?? "exact",
+          matchEvidence: result.match_evidence ?? "系统自动匹配",
+          isScoring: nodeSummaryById.get(result.rating_tree_node_id!)?.is_scoring ?? true,
+        }));
+      if (autoMatches.length > 0) {
+        dispatch({
+          type: "apply_rating_tree_auto_matches",
+          versionId: report.rating_tree_version_id,
+          matches: autoMatches,
+        });
+      }
+    } catch (error) {
+      // 服务失败不能伪装成"这批病害都没有匹配结果"：清掉上一轮结果并显式报错。
+      setMatchResults(new Map());
+      setMatchSummary(null);
+      setMatchError(defectMatchErrorMessage(error));
+    } finally {
+      setRematching(false);
+    }
+  }, [baseUrl, dispatch, draft.defects, importRecordId, nodeSummaryById, ratingTree]);
+
+  // 自动触发：导入、构件绑定、评定树绑定完成，或未确认病害的构件/类型/描述改动后
+  // 各触发一次。输入过程中不请求，短时间内的重复变化合并成一次。
+  useEffect(() => {
+    if (!ratingTree || draft.defects.length === 0) return;
+    const signature = `${ratingTree.version_id}~${matchInputSignature}`;
+    if (lastMatchSignature.current === signature) return;
+    const timer = window.setTimeout(() => {
+      lastMatchSignature.current = signature;
+      void runMatch();
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [draft.defects.length, matchInputSignature, ratingTree, runMatch]);
+
   const allModel = useMemo(() => buildDefectPhotoReviewModel({
     draft,
-    defectCatalogs: [],
     ratingTreeVersionId: ratingTree?.version_id ?? null,
     ratingTreeNodes: treeNodeDetails,
     applicableTreeNodeIdsByComponent,
     treeRulesReady,
     assessmentIssues,
-  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, ratingTree?.version_id, treeNodeDetails, treeRulesReady]);
+    matchResults,
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, matchResults, ratingTree?.version_id, treeNodeDetails, treeRulesReady]);
   const visibleModel = useMemo(() => buildDefectPhotoReviewModel({
     draft,
-    defectCatalogs: [],
     ratingTreeVersionId: ratingTree?.version_id ?? null,
     ratingTreeNodes: treeNodeDetails,
     applicableTreeNodeIdsByComponent,
     treeRulesReady,
     assessmentIssues,
+    matchResults,
     filter,
-    problemCategory,
+    issueFilter,
     search,
-  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, problemCategory, ratingTree?.version_id, search, treeNodeDetails, treeRulesReady]);
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, issueFilter, matchResults, ratingTree?.version_id, search, treeNodeDetails, treeRulesReady]);
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -254,7 +340,29 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     rows.splice(insertionIndex < 0 ? rows.length : insertionIndex, 0, currentRow);
     return rows;
   }, [allModel.rows, currentRow, pinnedConfirmedId, visibleModel.rows]);
+  // 重新匹配默认作用于当前筛选范围内的未确认记录；人工与已确认结果由后端跳过。
+  const rematchCandidateIds = useMemo(
+    () => visibleModel.rows
+      .filter((row) => row.status !== "confirmed" && row.status !== "ignored")
+      .map((row) => row.candidateId),
+    [visibleModel.rows],
+  );
+  const rematchScopeLabel =
+    filter === "all" && !issueFilter && !search ? "全部" : "当前筛选";
   const currentlySafeSelection = [...selectedIds].filter((id) => allModel.safeCandidateIds.has(id));
+  const batchDistribution = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of allModel.rows) {
+      if (!currentlySafeSelection.includes(row.candidateId)) continue;
+      const name =
+        row.ratingTreeNode?.display_name ?? (row.defect.defect_type || "未确定规范病害");
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
+    // currentlySafeSelection 每次渲染都是新数组，用它的内容做依赖而不是引用。
+  }, [allModel.rows, currentlySafeSelection.join("|")]);
   const selectedPhotoCount = draft.photos.filter(
     (photo) => photo.linked_defect_candidate_id && currentlySafeSelection.includes(photo.linked_defect_candidate_id),
   ).length;
@@ -393,7 +501,6 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
       <div className="defect-section-heading">
         <h2>病害与照片</h2>
         <div className="defect-section-heading-actions">
-          {headerActions}
           <button type="button" disabled={!allowStructureChanges || loadingInventory} onClick={openAddForm}>新增病害</button>
         </div>
       </div>
@@ -417,14 +524,20 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         <DefectReviewToolbar
           summary={allModel.summary}
           filter={filter}
-          problemCategory={problemCategory}
+          issueFilter={issueFilter}
           search={search}
           selectedCount={currentlySafeSelection.length}
           disabled={disabled}
+          rematchScopeLabel={rematchScopeLabel}
+          rematchCount={rematchCandidateIds.length}
+          rematching={rematching}
+          matchError={matchError}
+          lastMatchSummary={matchSummary}
           onFilterChange={(nextFilter) => { clearPinnedResult(); setFilter(nextFilter); }}
-          onProblemCategoryChange={(nextCategory) => { clearPinnedResult(); setProblemCategory(nextCategory); }}
+          onIssueFilterChange={(nextIssueFilter) => { clearPinnedResult(); setIssueFilter(nextIssueFilter); }}
           onSearchChange={(nextSearch) => { clearPinnedResult(); setSearch(nextSearch); }}
           onBatchConfirm={() => setBatchDialogOpen(true)}
+          onRematch={() => { void runMatch(rematchCandidateIds); }}
         />
         <div
           ref={splitWorkspaceRef}
@@ -479,7 +592,9 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
                   dispatch={dispatch}
                   disabled={disabled || (isDefectEditable !== undefined && !isDefectEditable(currentRow.defect))}
                   allowDelete={allowStructureChanges}
+                  editLockToken={editLockToken}
                   onClose={closeDetail}
+                  onDefectTextCommitted={(candidateId) => { void runMatch([candidateId]); }}
                   onConfirm={() => {
                     setPinnedConfirmedId(currentRow.candidateId);
                     dispatch({ type: "confirm_defect_groups", candidateIds: [currentRow.candidateId] });
@@ -489,13 +604,14 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
             </>
           ) : null}
         </div>
-        <UnlinkedPhotosPanel draft={draft} importRecordId={importRecordId} baseUrl={baseUrl} selectedPhotoCandidateId={selectedPhotoCandidateId} dispatch={dispatch} disabled={disabled} />
+        <UnlinkedPhotosPanel draft={draft} importRecordId={importRecordId} baseUrl={baseUrl} selectedPhotoCandidateId={selectedPhotoCandidateId} />
       </fieldset>
       <DefectBatchConfirmDialog
         open={batchDialogOpen}
         defectCount={currentlySafeSelection.length}
         photoCount={selectedPhotoCount}
         removedCount={selectedIds.size - currentlySafeSelection.length}
+        defectNameDistribution={batchDistribution}
         onCancel={() => setBatchDialogOpen(false)}
         onConfirm={() => {
           const validIds = [...selectedIds].filter((id) => allModel.safeCandidateIds.has(id));

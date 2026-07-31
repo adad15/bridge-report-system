@@ -1,8 +1,7 @@
-import { useEffect, useState, type Dispatch } from "react";
+import { useEffect, useState } from "react";
 
 import { photoContentUrl } from "../../api/reviewApi";
 import type { BridgeAnnualInspectionData } from "../../contracts/annualInspection";
-import type { ReviewDraftAction } from "../reviewDraft";
 import { reviewTargetId } from "../reviewNavigation";
 
 interface UnlinkedPhotosPanelProps {
@@ -10,35 +9,67 @@ interface UnlinkedPhotosPanelProps {
   importRecordId: string;
   baseUrl: string;
   selectedPhotoCandidateId?: string | null;
-  dispatch: Dispatch<ReviewDraftAction>;
-  disabled?: boolean;
 }
 
-export function UnlinkedPhotosPanel({ draft, importRecordId, baseUrl, selectedPhotoCandidateId, dispatch, disabled = false }: UnlinkedPhotosPanelProps) {
+/**
+ * 只读清单：告诉用户还有多少张图没有着落，可预览，但不带归属操作。
+ * 把图挂到病害上只有一个入口——病害卡片里的「添加照片」，不再有第二套说法。
+ */
+export function UnlinkedPhotosPanel({
+  draft,
+  importRecordId,
+  baseUrl,
+  selectedPhotoCandidateId,
+}: UnlinkedPhotosPanelProps) {
   const photos = draft.photos.filter((photo) => !photo.linked_defect_candidate_id);
   const [activeId, setActiveId] = useState(selectedPhotoCandidateId ?? photos[0]?.candidate_id ?? null);
   const active = photos.find((photo) => photo.candidate_id === activeId) ?? photos[0] ?? null;
-  const [targetDefectId, setTargetDefectId] = useState(draft.defects[0]?.candidate_id ?? "");
 
   useEffect(() => {
-    if (selectedPhotoCandidateId && photos.some((photo) => photo.candidate_id === selectedPhotoCandidateId)) setActiveId(selectedPhotoCandidateId);
-  }, [photos, selectedPhotoCandidateId]);
-
-  useEffect(() => {
-    if (!draft.defects.some((defect) => defect.candidate_id === targetDefectId)) {
-      setTargetDefectId(draft.defects[0]?.candidate_id ?? "");
+    if (selectedPhotoCandidateId && photos.some((photo) => photo.candidate_id === selectedPhotoCandidateId)) {
+      setActiveId(selectedPhotoCandidateId);
     }
-  }, [draft.defects, targetDefectId]);
+  }, [photos, selectedPhotoCandidateId]);
 
   if (photos.length === 0) return null;
   return (
     <div id={reviewTargetId("unlinked-photos", "panel")} tabIndex={-1} className="unlinked-photos-panel">
-      <h3>待关联及已处理照片</h3>
-      <p>这里保留尚未关联、已确认无关或已忽略的照片，便于重新检查和恢复。</p>
+      <h3>未归属的照片（{photos.length} 张）</h3>
+      <p>这些照片还没有挂到任何病害上。要归属其中一张，请在对应病害里点「添加照片」。</p>
       <div className="defect-photo-review">
-        <div className="defect-photo-stage">{active ? <img className="defect-photo-stage-image active" src={photoContentUrl(baseUrl, importRecordId, active.candidate_id)} alt={`照片 ${active.photo_number}`} /> : null}</div>
-        {active ? <div className="defect-photo-meta"><strong>照片 {active.photo_number}</strong><span>{active.extracted_file.original_caption ?? "无照片说明"}</span><span>匹配：{active.match_status} · 校对：{active.review_status}</span><label>目标病害<select disabled={disabled} aria-label="目标病害" value={targetDefectId} onChange={(event) => setTargetDefectId(event.target.value)}>{draft.defects.map((defect) => <option key={defect.candidate_id} value={defect.candidate_id}>{defect.component_name} / {defect.defect_location} / {defect.defect_type}</option>)}</select></label><div className="review-photo-actions"><button disabled={disabled || !targetDefectId} type="button" onClick={() => dispatch({ type: "photo_relink", candidateId: active.candidate_id, defectCandidateId: targetDefectId })}>关联到病害</button><button disabled={disabled} type="button" onClick={() => dispatch({ type: "photo_reset", candidateId: active.candidate_id })}>重置校对状态</button></div></div> : null}
-        <div className="defect-photo-thumbnails">{photos.map((photo) => <button id={reviewTargetId("unlinked-photo", photo.candidate_id)} key={photo.candidate_id} type="button" className={photo.candidate_id === active?.candidate_id ? "active" : ""} aria-label={`查看待处理照片 ${photo.photo_number}`} onClick={() => setActiveId(photo.candidate_id)}><img src={photoContentUrl(baseUrl, importRecordId, photo.candidate_id)} alt="" /><span>{photo.photo_number}</span></button>)}</div>
+        <div className="defect-photo-stage">
+          {active ? (
+            <img
+              className="defect-photo-stage-image active"
+              src={photoContentUrl(baseUrl, importRecordId, active.candidate_id)}
+              alt={`照片 ${active.photo_number}`}
+            />
+          ) : null}
+        </div>
+        {active ? (
+          <div className="defect-photo-meta">
+            <strong>照片 {active.photo_number}</strong>
+            <span>{active.extracted_file.original_caption ?? "无照片说明"}</span>
+            {/* 不直吐 match_status / review_status 两个字段名：说清哪半句是机器给的、
+                哪半句是人的进度。 */}
+            <span>系统判断：{active.match_status} · 我的处理：{active.review_status}</span>
+          </div>
+        ) : null}
+        <div className="defect-photo-thumbnails">
+          {photos.map((photo) => (
+            <button
+              id={reviewTargetId("unlinked-photo", photo.candidate_id)}
+              key={photo.candidate_id}
+              type="button"
+              className={photo.candidate_id === active?.candidate_id ? "active" : ""}
+              aria-label={`查看未归属照片 ${photo.photo_number}`}
+              onClick={() => setActiveId(photo.candidate_id)}
+            >
+              <img src={photoContentUrl(baseUrl, importRecordId, photo.candidate_id)} alt="" />
+              <span>{photo.photo_number}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

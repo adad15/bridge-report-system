@@ -12,6 +12,17 @@ namespace bridge_report::http {
 Json::Value binding_overview_json(const db::BindingOverview& overview) {
     Json::Value value;
     value["inventory_confirmed"] = overview.inventory_confirmed;
+    value["rating_tree"] = Json::Value(Json::nullValue);
+    if (overview.rating_tree.has_value()) {
+        const auto& tree = *overview.rating_tree;
+        value["rating_tree"]["version_id"] = tree.version_id;
+        value["rating_tree"]["tree_name"] = tree.tree_name;
+        value["rating_tree"]["package_version"] = tree.package_version;
+        value["rating_tree"]["h21_package_version"] =
+            tree.h21_package_version;
+        value["rating_tree"]["maintenance_package_version"] =
+            tree.maintenance_package_version;
+    }
     value["groups"] = Json::Value(Json::arrayValue);
     for (const auto& group : overview.groups) {
         Json::Value group_json;
@@ -176,10 +187,40 @@ void respond_binding(const HttpCallback& callback, const db::BindingOutcome& out
             respond_json(callback, body, drogon::k400BadRequest);
             return;
         }
+        case db::BindingStatus::TreeNotFound:
+            respond_json(callback, make_error_body(
+                "rating_tree_not_found", "评定树版本不存在。"),
+                drogon::k404NotFound);
+            return;
+        case db::BindingStatus::TreeUnavailable:
+            respond_json(callback, make_error_body(
+                "rating_tree_unavailable",
+                "所选评定树尚未发布，或关联规范包当前不可用。"),
+                drogon::k409Conflict);
+            return;
+        case db::BindingStatus::MappingIncompatible:
+            respond_json(callback, make_error_body(
+                "rating_tree_inventory_incompatible",
+                "当前已确认台账无法完整继承到所选评定树，请先检查台账规范映射。"),
+                drogon::k409Conflict);
+            return;
         default:
             respond_db_unavailable(callback);
             return;
     }
+}
+
+void respond_rating_tree_binding(
+    const HttpCallback& callback,
+    const db::BindingOutcome& outcome) {
+    if (outcome.status == db::BindingStatus::Conflict) {
+        respond_json(callback, make_error_body(
+            "rating_tree_binding_conflict",
+            "仅可为待校对、尚无成功正式评定且已确认构件台账的年度绑定评定树。"),
+            drogon::k409Conflict);
+        return;
+    }
+    respond_binding(callback, outcome);
 }
 
 // 取回 part_name + component_number（bind 另需 bridge_component_id）。
@@ -207,10 +248,48 @@ bool parse_target(const Json::Value* body, std::string& part_name, std::string& 
 void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
     const std::string base = "/api/import-records/{import_id}/component-binding";
     for (const auto& path : {base, base + "/bind", base + "/bind-batch",
+                             base + "/rating-tree",
                              base + "/mark-missing", base + "/clear",
                              base + "/split-preview", base + "/split-apply"}) {
         register_options_handler(path);
     }
+
+    drogon::app().registerHandler(
+        base + "/rating-tree",
+        [db_client](const drogon::HttpRequestPtr& request,
+                    HttpCallback&& callback,
+                    const std::string& import_id) {
+            if (!is_valid_uuid(import_id)) {
+                respond_import_record_not_found(callback);
+                return;
+            }
+            try {
+                const auto actor = authenticate_request(db_client, request);
+                if (!actor) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                const auto body = request->getJsonObject();
+                if (body == nullptr ||
+                    !(*body)["rating_tree_version_id"].isString() ||
+                    !is_valid_uuid(
+                        (*body)["rating_tree_version_id"].asString())) {
+                    respond_json(callback, make_error_body(
+                        "invalid_rating_tree_binding",
+                        "必须选择有效的评定树版本。"),
+                        drogon::k400BadRequest);
+                    return;
+                }
+                respond_rating_tree_binding(
+                    callback,
+                    db::ImportBindingRepository(db_client).bind_rating_tree(
+                        import_id,
+                        (*body)["rating_tree_version_id"].asString(),
+                        actor->id));
+            } catch (...) {
+                respond_db_unavailable(callback);
+            }
+        }, {drogon::Post});
 
     drogon::app().registerHandler(
         base + "/split-preview",

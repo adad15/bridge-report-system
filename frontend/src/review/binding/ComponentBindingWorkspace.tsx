@@ -8,6 +8,7 @@ import {
 import {
   bindComponent,
   bindComponentsBatch,
+  bindInspectionRatingTree,
   bindingProgress,
   clearComponentBinding,
   fetchComponentBinding,
@@ -19,10 +20,15 @@ import {
   type ComponentRangeSplitPreview,
   type ComponentBindingOverview,
 } from "../../api/importBindingApi";
+import {
+  fetchRatingTreeVersions,
+  type RatingTreeVersionSummary,
+} from "../../api/ratingTreeApi";
 import { BulkReplaceDialog } from "./BulkReplaceDialog";
 import { ComponentRangeSplitDialog } from "./ComponentRangeSplitDialog";
 import { ApiError } from "../../api/apiClient";
 import { backendBaseUrl } from "../../config";
+import "./ComponentBindingRatingTree.css";
 
 const MAX_SEARCH_RESULTS = 20;
 
@@ -154,12 +160,23 @@ export function ComponentBindingWorkspace({
   bridgeId,
   onEnterReview,
   onOverviewChange,
+  onRatingTreeChange,
+  onDraftInvalidated,
 }: {
   importId: string;
   bridgeId: string;
   onEnterReview?: () => void;
   // 每次拿到新的概览（首次加载与每次绑定操作后）都上报，供校对页侧栏同步待处理计数。
   onOverviewChange?: (overview: ComponentBindingOverview) => void;
+  // 评定树也是病害与评定分区的年度上下文，绑定后让父页面重取完整校对数据。
+  onRatingTreeChange?: () => void;
+  /**
+   * 绑定、批量替换、标记缺失、取消绑定和范围拆分都会由后端改写
+   * parsed_result_json（拆分还会增删病害与照片关系）。父页面的草稿是首屏拉取后
+   * 独立持有的 reducer 状态，不重取就会一直显示拆分前的旧病害，之后保存还会
+   * 把旧内容盖回去。这里在每次成功的写操作后上报一次，让父页面按需重取。
+   */
+  onDraftInvalidated?: () => void;
 }) {
   const [overview, setOverview] = useState<ComponentBindingOverview | null>(null);
   const [inventory, setInventory] = useState<ComponentInventoryRevision | null>(null);
@@ -176,6 +193,10 @@ export function ComponentBindingWorkspace({
   const [splitSelection, setSplitSelection] = useState<Map<string, BindingTarget>>(new Map());
   const [splitPreview, setSplitPreview] = useState<ComponentRangeSplitPreview | null>(null);
   const [splitError, setSplitError] = useState<string | null>(null);
+  const [ratingTrees, setRatingTrees] = useState<RatingTreeVersionSummary[]>([]);
+  const [selectedRatingTreeId, setSelectedRatingTreeId] = useState("");
+  const [ratingTreeMessage, setRatingTreeMessage] = useState<string | null>(null);
+  const [ratingTreeError, setRatingTreeError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,10 +218,29 @@ export function ComponentBindingWorkspace({
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    // 评定树版本列表是本页的辅助选择数据，不能阻塞构件行首屏显示。
+    fetchRatingTreeVersions(backendBaseUrl)
+      .then((versions) => {
+        if (!cancelled) {
+          setRatingTrees(versions);
+          setRatingTreeError(null);
+        }
+      })
+      .catch((caught) => {
+        if (!cancelled) setRatingTreeError(errorMessage(caught));
+      });
     return () => {
       cancelled = true;
     };
   }, [importId, bridgeId]);
+
+  useEffect(() => {
+    if (overview?.rating_tree?.version_id) {
+      setSelectedRatingTreeId(overview.rating_tree.version_id);
+    } else if (ratingTrees.length === 1) {
+      setSelectedRatingTreeId(ratingTrees[0].id);
+    }
+  }, [overview?.rating_tree?.version_id, ratingTrees]);
 
   const entries = useMemo(() => usableEntries(inventory), [inventory]);
   const byId = useMemo(
@@ -225,6 +265,16 @@ export function ComponentBindingWorkspace({
     }
     return { pending, bound, missing, total: pending + bound + missing };
   }, [overview]);
+
+  // 只有未匹配/歧义行才可能可拆分，一条都没有时拆分按钮永远点不动，索性不占位。
+  const splitEligibleCount = useMemo(
+    () =>
+      (overview?.groups ?? []).reduce(
+        (sum, group) => sum + group.rows.filter((row) => row.split_eligible).length,
+        0
+      ),
+    [overview]
+  );
 
   // 筛选后为空的分组不占位——否则整屏都是空标题。
   const visibleGroups = useMemo(() => {
@@ -254,6 +304,7 @@ export function ComponentBindingWorkspace({
     });
   }, [overview]);
 
+  // 单条绑定 / 标记缺失 / 取消绑定共用；三者都会改写后端草稿里的病害构件关联。
   async function run(action: () => Promise<ComponentBindingOverview>) {
     setBusy(true);
     try {
@@ -261,8 +312,49 @@ export function ComponentBindingWorkspace({
       setOverview(next);
       setError(null);
       onOverviewChange?.(next);
+      onDraftInvalidated?.();
     } catch (caught) {
       setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleBindRatingTree() {
+    if (!selectedRatingTreeId ||
+        selectedRatingTreeId === overview?.rating_tree?.version_id) {
+      return;
+    }
+    if (
+      overview?.rating_tree &&
+      !window.confirm(
+        "切换评定树会同步切换年度规范组合，并在需要时派生一版兼容台账；当前草稿中的规范病害将重新匹配。确定继续吗？"
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setRatingTreeError(null);
+    setRatingTreeMessage(null);
+    try {
+      const next = await bindInspectionRatingTree(
+        backendBaseUrl,
+        importId,
+        selectedRatingTreeId
+      );
+      setOverview(next);
+      onOverviewChange?.(next);
+      setInventory(
+        await fetchLatestComponentInventory(backendBaseUrl, bridgeId).catch(
+          () => inventory
+        )
+      );
+      setRatingTreeMessage(
+        overview?.rating_tree ? "评定树已切换。" : "评定树已绑定。"
+      );
+      onRatingTreeChange?.();
+    } catch (caught) {
+      setRatingTreeError(errorMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -271,63 +363,135 @@ export function ComponentBindingWorkspace({
   if (loading) return <p>正在加载构件绑定…</p>;
   if (error && !overview) return <p className="error-text" role="alert">{error}</p>;
   if (!overview) return <p>没有可绑定的病害。</p>;
-  if (!overview.inventory_confirmed) {
-    return (
-      <p className="error-text" role="alert">
-        该桥构件台账尚未确认，请先建立并确认台账后再进行构件绑定。
-      </p>
-    );
-  }
-
   const allResolved = progress.total > 0 && progress.resolved === progress.total;
 
   return (
     <section className="component-binding-workspace" aria-labelledby="component-binding-title">
       <div className="binding-heading">
         <h3 id="component-binding-title">构件绑定</h3>
-        <div className="binding-heading-tools" role="group" aria-label="按状态筛选">
-          <button
-            type="button"
-            className="binding-split-selected"
-            disabled={busy || splitSelection.size === 0}
-            onClick={async () => {
-              setBusy(true);
-              setSplitError(null);
-              try {
-                setSplitPreview(await previewComponentRangeSplit(
-                  backendBaseUrl, importId, [...splitSelection.values()]
-                ));
-              } catch (caught) {
-                setError(errorMessage(caught));
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            拆分构件{splitSelection.size > 0 ? ` (${splitSelection.size})` : ""}
-          </button>
-          {([
-            ["pending", "待处理", counts.pending],
-            ["bound", "已绑定", counts.bound],
-            ["missing", "已标记缺失", counts.missing],
-            ["all", "全部", counts.total],
-          ] as const).map(([key, label, count]) => (
+        <div className="binding-heading-tools">
+          {/* 拆分是动作而非筛选，故留在筛选组外，靠竖线隔开，免得看成第五个页签。 */}
+          {splitEligibleCount > 0 ? (
             <button
-              key={key}
               type="button"
-              className={filter === key ? "binding-filter active" : "binding-filter"}
-              aria-pressed={filter === key}
-              onClick={() => {
-                setFilter(key);
-                if (key !== "pending" && key !== "all") setSplitSelection(new Map());
+              className="binding-split-selected"
+              disabled={busy || splitSelection.size === 0}
+              title={splitSelection.size === 0 ? "先勾选待拆分的构件行" : undefined}
+              onClick={async () => {
+                setBusy(true);
+                setSplitError(null);
+                try {
+                  setSplitPreview(await previewComponentRangeSplit(
+                    backendBaseUrl, importId, [...splitSelection.values()]
+                  ));
+                } catch (caught) {
+                  setError(errorMessage(caught));
+                } finally {
+                  setBusy(false);
+                }
               }}
             >
-              {label} {count}
+              拆分构件
+              {splitSelection.size > 0 ? (
+                <span className="binding-split-count">{splitSelection.size}</span>
+              ) : null}
             </button>
-          ))}
+          ) : null}
+          <div className="binding-filters" role="group" aria-label="按状态筛选">
+            {([
+              ["pending", "待处理", counts.pending],
+              ["bound", "已绑定", counts.bound],
+              ["missing", "已标记缺失", counts.missing],
+              ["all", "全部", counts.total],
+            ] as const).map(([key, label, count]) => (
+              <button
+                key={key}
+                type="button"
+                className={filter === key ? "binding-filter active" : "binding-filter"}
+                aria-pressed={filter === key}
+                onClick={() => {
+                  setFilter(key);
+                  if (key !== "pending" && key !== "all") setSplitSelection(new Map());
+                }}
+              >
+                {label} {count}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+      <div className="binding-rating-tree" aria-label="年度评定树绑定">
+        <div className="binding-rating-tree-current">
+          <span>年度评定树</span>
+          <strong>
+            {overview.rating_tree
+              ? `${overview.rating_tree.tree_name} ${overview.rating_tree.package_version}`
+              : "尚未绑定"}
+          </strong>
+          {overview.rating_tree ? (
+            <small>
+              H21 {overview.rating_tree.h21_package_version}
+              {" · "}
+              JTG 5120 {overview.rating_tree.maintenance_package_version}
+            </small>
+          ) : (
+            <small>绑定后，病害匹配与系统评定将统一使用该版本。</small>
+          )}
+        </div>
+        <label>
+          <span>选择已发布版本</span>
+          <select
+            aria-label="选择年度评定树"
+            value={selectedRatingTreeId}
+            disabled={busy || ratingTrees.length === 0}
+            onChange={(event) => {
+              setSelectedRatingTreeId(event.target.value);
+              setRatingTreeMessage(null);
+              setRatingTreeError(null);
+            }}
+          >
+            <option value="">
+              {ratingTrees.length === 0 ? "暂无可用评定树" : "请选择评定树"}
+            </option>
+            {ratingTrees.map((tree) => (
+              <option key={tree.id} value={tree.id}>
+                {tree.tree_name} {tree.package_version}
+                {tree.h21_package_version
+                  ? ` · H21 ${tree.h21_package_version}`
+                  : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          className="binding-rating-tree-action"
+          disabled={
+            busy ||
+            !selectedRatingTreeId ||
+            selectedRatingTreeId === overview.rating_tree?.version_id
+          }
+          onClick={() => void handleBindRatingTree()}
+        >
+          {overview.rating_tree ? "切换评定树" : "绑定评定树"}
+        </button>
+      </div>
+      {ratingTreeMessage ? (
+        <p className="binding-rating-tree-success" role="status">
+          {ratingTreeMessage}
+        </p>
+      ) : null}
+      {ratingTreeError ? (
+        <p className="error-text" role="alert">{ratingTreeError}</p>
+      ) : null}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
+      {!overview.inventory_confirmed ? (
+        <p className="error-text" role="alert">
+          该桥构件台账尚未确认，请先建立并确认台账后再进行构件绑定。
+        </p>
+      ) : null}
+      {overview.inventory_confirmed ? (
+        <>
       {overview.groups.length === 0 ? <p>本次导入没有需要绑定的病害。</p> : null}
       {overview.groups.length > 0 && visibleGroups.length === 0 ? (
         // "全部处理完毕"只在待处理筛选下成立；其余筛选为空只是该状态没有行。
@@ -436,6 +600,7 @@ export function ComponentBindingWorkspace({
               setOverview(next);
               setError(null);
               onOverviewChange?.(next);
+              onDraftInvalidated?.();
               setReplaceGroup(null);
             } catch (caught) {
               // 整批被拒时留在对话框里显示原因，用户可改模式重来。
@@ -462,6 +627,8 @@ export function ComponentBindingWorkspace({
               );
               setOverview(applied.overview);
               onOverviewChange?.(applied.overview);
+              // 拆分会增删病害并复制照片候选，父页面的草稿必须重取。
+              onDraftInvalidated?.();
               setSplitSelection(new Map());
               setSplitPreview(null);
               setError(null);
@@ -489,6 +656,8 @@ export function ComponentBindingWorkspace({
             稍后再绑
           </button>
         </div>
+      ) : null}
+        </>
       ) : null}
     </section>
   );

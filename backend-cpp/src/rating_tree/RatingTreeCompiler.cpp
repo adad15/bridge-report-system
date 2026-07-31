@@ -142,6 +142,36 @@ std::string canonical_tree(const EffectiveRatingTree& tree) {
         value["component_category_id"] = alias.component_category_id;
         document["aliases"].append(value);
     }
+    // 没有关键词规则时整个键都不写：多一个空数组会改变所有既有评定树的内容摘要，
+    // 而"没有规则"和"规则为空"本来就是同一份内容。
+    auto keyword_rules = tree.keyword_rules;
+    if (!keyword_rules.empty()) document["keyword_rules"] = Json::Value(Json::arrayValue);
+    std::sort(
+        keyword_rules.begin(),
+        keyword_rules.end(),
+        [](const RatingTreeKeywordRule& left, const RatingTreeKeywordRule& right) {
+            return std::tie(left.sort_order, left.rule_id) <
+                std::tie(right.sort_order, right.rule_id);
+        });
+    for (const auto& rule : keyword_rules) {
+        Json::Value value;
+        value["rule_id"] = rule.rule_id;
+        value["target_node_id"] = rule.target_node_id;
+        value["bridge_type_id"] = rule.bridge_type_id;
+        value["component_category_id"] = rule.component_category_id;
+        value["auto_bind"] = rule.auto_bind;
+        value["sort_order"] = rule.sort_order;
+        value["rule_note"] = rule.rule_note;
+        value["positive_keywords"] = Json::Value(Json::arrayValue);
+        for (const auto& keyword : rule.positive_keywords) {
+            value["positive_keywords"].append(keyword);
+        }
+        value["excluded_keywords"] = Json::Value(Json::arrayValue);
+        for (const auto& keyword : rule.excluded_keywords) {
+            value["excluded_keywords"].append(keyword);
+        }
+        document["keyword_rules"].append(value);
+    }
     document["sources"] = Json::Value(Json::arrayValue);
     for (const auto& [_, source] : tree.sources) {
         Json::Value value;
@@ -196,6 +226,7 @@ RatingTreeCompileResult RatingTreeCompiler::compile(
             maintenance_package->manifest.content_checksum;
     }
     tree.aliases = extension.aliases;
+    tree.keyword_rules = extension.keyword_rules;
     tree.sources = extension.sources;
 
     for (const auto& [id, source] : extension.nodes) {
@@ -296,6 +327,16 @@ RatingTreeCompileResult RatingTreeCompiler::compile(
             result.issues.push_back({
                 "rating_tree_alias_target_invalid",
                 "受控别名必须指向可选择的评定树病害节点。"});
+            return result;
+        }
+    }
+
+    for (const auto& rule : tree.keyword_rules) {
+        const auto target = tree.nodes.find(rule.target_node_id);
+        if (target == tree.nodes.end() || !target->second.is_selectable) {
+            result.issues.push_back({
+                "rating_tree_keyword_rule_target_invalid",
+                "受控关键词规则必须指向可选择的评定树病害节点。"});
             return result;
         }
     }

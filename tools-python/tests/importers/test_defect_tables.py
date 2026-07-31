@@ -91,6 +91,74 @@ def test_blank_photo_number_is_a_normal_defect_without_warning() -> None:
     assert "photo_number_missing" not in {warning.code for warning in defects[0].warnings}
 
 
+def test_placeholder_location_cell_becomes_empty_and_drops_out_of_the_description() -> None:
+    table = make_liaoning_table(
+        [["上部承重构件", "1-1#板", "/", "渗水泛碱", "1处", "S=0.3m²", "2", "35", "65", "2.1-1"]]
+    )
+
+    defects, _warnings, errors = parse_single_table(table)
+
+    assert errors == []
+    defect = defects[0]
+    assert defect.defect_location == ""
+    assert defect.defect_type == "渗水泛碱"
+    assert defect.defect_description == "渗水泛碱"
+    # Word 原文仍然完整保留在来源证据里，清洗只影响业务字段。
+    assert "/" in defect.source_ref.raw_row_text
+
+
+def test_every_full_width_and_dash_placeholder_is_treated_as_empty() -> None:
+    for placeholder in ["／", " / ", "—", "–", "-", "  "]:
+        table = make_liaoning_table(
+            [["上部承重构件", "1-1#板", placeholder, "渗水泛碱", "1处", "S=0.3m²", "2", "35", "65", "2.1-1"]]
+        )
+
+        defects, _warnings, errors = parse_single_table(table)
+
+        assert errors == []
+        assert defects[0].defect_location == "", placeholder
+        assert defects[0].defect_description == "渗水泛碱", placeholder
+
+
+def test_placeholder_defect_type_never_produces_a_trailing_slash_description() -> None:
+    table = make_liaoning_table(
+        [["上部承重构件", "1-1#板", "板底", "/", "1处", "S=0.3m²", "2", "35", "65", "2.1-1"]]
+    )
+
+    defects, _warnings, errors = parse_single_table(table)
+
+    assert errors == []
+    defect = defects[0]
+    assert defect.defect_type == ""
+    assert defect.defect_location == "板底"
+    assert defect.defect_description == "板底"
+
+
+def test_two_placeholder_cells_fall_back_to_the_existing_missing_value_hint() -> None:
+    table = make_liaoning_table(
+        [["上部承重构件", "1-1#板", "/", "／", "1处", "S=0.3m²", "2", "35", "65", "2.1-1"]]
+    )
+
+    defects, _warnings, errors = parse_single_table(table)
+
+    assert errors == []
+    assert defects[0].defect_description == "未识别病害描述"
+
+
+def test_meaningful_slashes_and_dashes_inside_a_cell_are_never_stripped() -> None:
+    table = make_liaoning_table(
+        [["上部承重构件", "1-1#板", "板底/腹板交界处", "裂缝", "1处", "L/W=2", "2", "35", "65", "2.1-1"]]
+    )
+
+    defects, _warnings, errors = parse_single_table(table)
+
+    assert errors == []
+    defect = defects[0]
+    assert defect.defect_location == "板底/腹板交界处"
+    assert defect.measurement_text == "L/W=2"
+    assert defect.defect_description == "板底/腹板交界处裂缝"
+
+
 def test_table_without_score_columns_still_produces_version_three_defect() -> None:
     table = DocxTable(
         index=0,

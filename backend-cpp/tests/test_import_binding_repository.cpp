@@ -307,6 +307,43 @@ TEST_F(ImportBindingRepositoryTest, BindBatchRejectsEmptyTargets) {
     EXPECT_EQ(repository.bind_batch(import_id_, {}).status, BindingStatus::Invalid);
 }
 
+TEST_F(ImportBindingRepositoryTest, BindsPublishedRatingTreeAndDerivesCompatibleInventory) {
+    const auto trees = client_->execSqlSync(
+        "select id::text as id from rating_tree_versions "
+        "where status='published' order by published_at desc,id limit 1");
+    if (trees.empty()) {
+        GTEST_SKIP() << "No published rating tree synchronized";
+    }
+    const auto tree_id = trees[0]["id"].as<std::string>();
+
+    ImportBindingRepository repository(client_);
+    const auto outcome =
+        repository.bind_rating_tree(import_id_, tree_id, user_id_);
+    ASSERT_EQ(outcome.status, BindingStatus::Ok)
+        << static_cast<int>(outcome.status);
+    ASSERT_TRUE(outcome.overview.has_value());
+    ASSERT_TRUE(outcome.overview->rating_tree.has_value());
+    EXPECT_EQ(outcome.overview->rating_tree->version_id, tree_id);
+
+    const auto year = client_->execSqlSync(
+        "select profile.rating_tree_version_id::text as tree_id,"
+        "iy.component_inventory_revision_id::text as revision_id,"
+        "revision.status as revision_status,"
+        "revision.baseline_revision_id::text as baseline_id "
+        "from inspection_years iy "
+        "join project_standard_profiles profile "
+        "on profile.id=iy.standard_profile_id "
+        "join bridge_component_inventory_revisions revision "
+        "on revision.id=iy.component_inventory_revision_id "
+        "where iy.id=$1::uuid",
+        year_id_);
+    ASSERT_EQ(year.size(), 1u);
+    EXPECT_EQ(year[0]["tree_id"].as<std::string>(), tree_id);
+    EXPECT_EQ(year[0]["revision_status"].as<std::string>(), "已确认");
+    EXPECT_EQ(year[0]["baseline_id"].as<std::string>(), revision_id_);
+    EXPECT_NE(year[0]["revision_id"].as<std::string>(), revision_id_);
+}
+
 TEST_F(ImportBindingRepositoryTest, RejectsWritesOutsidePendingReview) {
     client_->execSqlSync("update import_records set import_status='已确认' where id=$1::uuid", import_id_);
     ImportBindingRepository repository(client_);
@@ -316,6 +353,11 @@ TEST_F(ImportBindingRepositoryTest, RejectsWritesOutsidePendingReview) {
     EXPECT_EQ(repository.mark_missing(import_id_, "支座", "2-1#支座").status, BindingStatus::Conflict);
     EXPECT_EQ(repository.bind_batch(import_id_, {{"上部承重构件", "1-1#梁", component_id_}}).status,
               BindingStatus::Conflict);
+    EXPECT_EQ(
+        repository.bind_rating_tree(
+            import_id_, "11111111-1111-1111-1111-111111111111",
+            user_id_).status,
+        BindingStatus::Conflict);
 }
 
 }  // namespace

@@ -93,6 +93,20 @@ export interface RangeSplitOrigin {
 
 export type PhotoReferenceResolution = "pending" | "matched" | "relinked" | "missing" | "unrelated";
 
+/**
+ * 评定树病害的匹配方式。前三种是后端分层确定性匹配写入的自动结果，`fuzzy_candidate`
+ * 只是候选提示（永远不落 rating_tree_node_id），`manual` 是人工选择且不被自动结果覆盖。
+ */
+export const RATING_TREE_MATCH_METHODS = [
+  "exact",
+  "controlled_alias",
+  "controlled_keyword",
+  "fuzzy_candidate",
+  "manual",
+] as const;
+
+export type RatingTreeMatchMethod = (typeof RATING_TREE_MATCH_METHODS)[number];
+
 export interface PhotoReference {
   photo_number: string;
   resolution: PhotoReferenceResolution;
@@ -122,7 +136,7 @@ export interface DefectCandidate {
   measurements: Measurement[];
   rating_tree_version_id?: string | null;
   rating_tree_node_id?: string | null;
-  rating_tree_match_method?: "exact" | "controlled_alias" | "fuzzy_candidate" | "manual" | null;
+  rating_tree_match_method?: RatingTreeMatchMethod | null;
   rating_tree_match_evidence?: string | null;
   standard_defect_indicator_id?: string | null;
   photo_references: PhotoReference[];
@@ -348,10 +362,10 @@ function isValidDefectCandidate(value: unknown): boolean {
     isValidSourceRef(value.source_ref) &&
     typeof value.component_name === "string" &&
     value.component_name.length > 0 &&
+    // 病害类型与位置允许为空串：Word 里的 "/"（本列无此项）被导入清洗成空业务值，
+    // 受控关键词层再从描述兜底。描述本身仍然必须有内容。
     typeof value.defect_type === "string" &&
-    value.defect_type.length > 0 &&
     typeof value.defect_location === "string" &&
-    value.defect_location.length > 0 &&
     typeof value.defect_description === "string" &&
     value.defect_description.length > 0 &&
     !hasOwn(value, "structure_part") &&
@@ -391,8 +405,8 @@ function isValidDefectCandidate(value: unknown): boolean {
         value.rating_tree_node_id.trim().length > 0)) &&
     (value.rating_tree_match_method === undefined ||
       value.rating_tree_match_method === null ||
-      ["exact", "controlled_alias", "fuzzy_candidate", "manual"].includes(
-        value.rating_tree_match_method as string
+      RATING_TREE_MATCH_METHODS.includes(
+        value.rating_tree_match_method as RatingTreeMatchMethod
       )) &&
     (value.rating_tree_match_evidence === undefined ||
       value.rating_tree_match_evidence === null ||

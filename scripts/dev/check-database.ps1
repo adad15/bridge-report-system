@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $databaseUrl = $env:BRIDGE_REPORT_DATABASE_URL
 if ([string]::IsNullOrWhiteSpace($databaseUrl)) {

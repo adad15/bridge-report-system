@@ -16,7 +16,11 @@ import {
   fetchLatestComponentInventory,
   type ComponentInventoryRevision,
 } from "../api/componentInventoryApi";
-import { fetchComponentBinding, type ComponentBindingOverview } from "../api/importBindingApi";
+import {
+  clearComponentBinding,
+  fetchComponentBinding,
+  type ComponentBindingOverview,
+} from "../api/importBindingApi";
 import { data } from "../review/testFixtures";
 import { canModifyDefectStructure, ReviewWorkspacePage } from "./ReviewWorkspacePage";
 
@@ -57,7 +61,11 @@ vi.mock("../api/assessmentApi", async (importOriginal) => {
 
 vi.mock("../api/importBindingApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../api/importBindingApi")>();
-  return { ...original, fetchComponentBinding: vi.fn() };
+  return {
+    ...original,
+    fetchComponentBinding: vi.fn(),
+    clearComponentBinding: vi.fn(),
+  };
 });
 
 vi.mock("../api/componentInventoryApi", async (importOriginal) => {
@@ -76,10 +84,6 @@ vi.mock("../review/grouping", async (importOriginal) => {
     buildStatistics: (...args: Parameters<typeof original.buildStatistics>) => {
       renderCounters.statistics += 1;
       return original.buildStatistics(...args);
-    },
-    needsAttention: (...args: Parameters<typeof original.needsAttention>) => {
-      renderCounters.attention += 1;
-      return original.needsAttention(...args);
     },
   };
 });
@@ -250,20 +254,36 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     vi.useRealTimers();
   });
 
-  it("lazy mounts review groups and keeps mounted state when switching back", async () => {
-    const defectInput = await renderEditableReview();
-    const bindingRequestsBeforeVisit = vi.mocked(fetchComponentBinding).mock.calls.length;
-    expect(fetchLatestComponentInventory).not.toHaveBeenCalled();
+  it("keeps the edit-lock notice in its own row above the review body", async () => {
+    await renderEditableReview();
+
+    const notice = screen.getByText("你正在编辑此导入记录。").closest(".review-edit-lock-banner");
+    expect(notice?.parentElement).toHaveClass("review-workspace-notices");
+    expect(notice?.parentElement?.nextElementSibling).toHaveClass("review-body");
+  });
+
+  it("removes the transparent top gap from the component-binding scroll area", async () => {
+    await renderEditableReview();
 
     fireEvent.click(screen.getByRole("button", { name: /构件绑定/ }));
+    expect(document.querySelector(".review-main")).toHaveClass("review-main-component-binding");
+  });
+
+  // 构件绑定现在是落地分区（流程第一步）；没点进去过的分区仍然不挂载，
+  // 点进去过的分区切走再切回来要保住自己的内部状态，且不重复取数。
+  it("lazy mounts unvisited groups and keeps visited ones mounted when switching back", async () => {
+    const defectInput = await renderEditableReview();
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    const missingFilter = screen.getByRole("button", { name: "已标记缺失 1" });
-    expect(fetchComponentBinding).toHaveBeenCalledTimes(bindingRequestsBeforeVisit + 1);
+    const bindingRequests = vi.mocked(fetchComponentBinding).mock.calls.length;
     expect(fetchLatestComponentInventory).toHaveBeenCalledTimes(1);
+    // 从没点开过的分区连 DOM 都不存在。
+    expect(document.querySelector("[data-review-group='ratings']")).toBeNull();
 
+    fireEvent.click(screen.getByRole("button", { name: /构件绑定/ }));
+    const missingFilter = screen.getByRole("button", { name: "已标记缺失 1" });
     fireEvent.click(missingFilter);
     expect(missingFilter).toHaveAttribute("aria-pressed", "true");
     const bindingPanel = missingFilter.closest("[data-review-group='component_binding']");
@@ -276,8 +296,45 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     fireEvent.click(screen.getByRole("button", { name: /构件绑定/ }));
     expect(screen.getByRole("button", { name: "已标记缺失 1" })).toBe(missingFilter);
     expect(missingFilter).toHaveAttribute("aria-pressed", "true");
-    expect(fetchComponentBinding).toHaveBeenCalledTimes(bindingRequestsBeforeVisit + 1);
+    expect(fetchComponentBinding).toHaveBeenCalledTimes(bindingRequests);
     expect(fetchLatestComponentInventory).toHaveBeenCalledTimes(1);
+  });
+
+  // 绑定分区的写操作（绑定 / 批量替换 / 标记缺失 / 取消绑定 / 范围拆分）由后端直接
+  // 改写 parsed_result_json。页面草稿是首屏拉取后独立持有的，不重取就会一直显示
+  // 拆分前的旧病害，保存时还会把旧内容盖回去。
+  it("reloads the review draft after a binding operation rewrites it server-side", async () => {
+    const defectInput = await renderEditableReview();
+    expect(defectInput.value).toBe("第二跨");
+
+    const splitDraft = data();
+    splitDraft.defects[0] = { ...splitDraft.defects[0], defect_location: "拆分后的位置" };
+    vi.mocked(fetchReview).mockResolvedValue({ ...reviewResponse(), parsed_result: splitDraft });
+    vi.mocked(clearComponentBinding).mockResolvedValue(missingBindingOverview());
+
+    fireEvent.click(screen.getByRole("button", { name: /构件绑定/ }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // 缺失行默认收起，先展开这一组才能点到它的动作按钮。
+    fireEvent.click(screen.getByRole("button", { name: "已标记缺失 1" }));
+    fireEvent.click(screen.getByLabelText("取消标记 1-1#梁"));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // 合并短时间内的连续绑定操作，超时后才重取一次最新草稿。
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /病害与照片/ }));
+    expect(
+      (screen.getByRole("textbox", { name: "测试病害位置" }) as HTMLInputElement).value,
+    ).toBe("拆分后的位置");
   });
 
   it("keeps the focused defect field editable while a normal heartbeat is pending", async () => {

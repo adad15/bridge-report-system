@@ -29,6 +29,7 @@ struct AppConfig {
     std::filesystem::path temporary_word_root{"runtime/temp/word-imports"};
     int failed_word_retention_hours{24};
     std::size_t word_upload_max_bytes{256ULL * 1024ULL * 1024ULL};
+    std::size_t photo_upload_max_bytes{20ULL * 1024ULL * 1024ULL};
     int cleanup_interval_seconds{300};
     int cleanup_batch_size{25};
     int cleanup_claim_timeout_seconds{900};

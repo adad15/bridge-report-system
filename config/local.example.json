@@ -23,6 +23,7 @@
   "archive": {
     "root": "archive",
     "word_upload_max_bytes": 268435456,
+    "photo_upload_max_bytes": 20971520,
     "cleanup_interval_seconds": 300,
     "cleanup_batch_size": 25,
     "cleanup_claim_timeout_seconds": 900,

@@ -24,9 +24,6 @@ import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
 import { bindingProgress, fetchComponentBinding, type ComponentBindingOverview } from "../api/importBindingApi";
 import { ComponentBindingWorkspace } from "../review/binding/ComponentBindingWorkspace";
 import { DefectsSection } from "../review/components/DefectsSection";
-import type { SelectedCandidate } from "../review/components/EvidencePanel";
-import { EvidencePanel } from "../review/components/EvidencePanel";
-import { NeedsAttentionSection } from "../review/components/NeedsAttentionSection";
 import { OverviewHeader } from "../review/components/OverviewHeader";
 import { AssessmentSection } from "../review/components/AssessmentSection";
 import { RawJsonSection } from "../review/components/RawJsonSection";
@@ -35,8 +32,7 @@ import type { SaveMessageState } from "../review/components/ReviewMessageDock";
 import { ReviewMessageDock } from "../review/components/ReviewMessageDock";
 import type { GroupKey } from "../review/components/ReviewSidebar";
 import { ReviewSidebar } from "../review/components/ReviewSidebar";
-import type { AttentionItem } from "../review/grouping";
-import { assessmentIssueToAttention, buildStatistics, mergeAttentionItems, needsAttention } from "../review/grouping";
+import { buildStatistics } from "../review/grouping";
 import { assessmentReducer, initialAssessmentState } from "../review/assessmentState";
 import type { ReviewDraftAction } from "../review/reviewDraft";
 import { reviewDraftReducer } from "../review/reviewDraft";
@@ -186,13 +182,16 @@ function ReviewWorkspaceLoaded({
   const navigate = useNavigate();
   const { user } = useAuth();
   const [draft, rawDispatch] = useReducer(reviewDraftReducer, response.parsed_result);
-  const [selected, setSelected] = useState<SelectedCandidate | null>(null);
   const [expandedDefectId, setExpandedDefectId] = useState<string | null>(null);
   const [activePhotoCandidateId, setActivePhotoCandidateId] = useState<string | null>(null);
-  const [activeGroup, setActiveGroup] = useState<GroupKey>("needs_attention");
+  const [activeGroup, setActiveGroup] = useState<GroupKey>("component_binding");
   const [visitedGroups, setVisitedGroups] = useState<ReadonlySet<GroupKey>>(
-    () => new Set<GroupKey>(["needs_attention"])
+    () => new Set<GroupKey>(["component_binding"])
   );
+  // 绑定分区的写操作直接改后端草稿，本地 reducer 草稿并不知情：不重取就会一直
+  // 显示拆分前的旧病害，之后保存还会把旧内容盖回后端、把拆分结果抹掉。
+  // 这里只换草稿、不整页重挂，用户当前停留的分区和选中项都不受影响。
+  const [draftStaleFromBinding, setDraftStaleFromBinding] = useState(false);
   const activateGroup = useCallback((group: GroupKey) => {
     setVisitedGroups((current) => {
       if (current.has(group)) return current;
@@ -206,7 +205,8 @@ function ReviewWorkspaceLoaded({
   // 之后由绑定分区通过 onOverviewChange 上报，保证绑定操作后计数同步。
   const [bindingPending, setBindingPending] = useState<number | null>(null);
   const [bindingOverview, setBindingOverview] = useState<ComponentBindingOverview | null>(null);
-  const [pendingNavigation, setPendingNavigation] = useState<AttentionItem | null>(null);
+  // 系统评定分区点某条问题时，滚动并高亮对应病害。
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
   useEffect(() => {
     if (!importRecordId) return;
@@ -225,7 +225,6 @@ function ReviewWorkspaceLoaded({
   }, [importRecordId]);
   const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
   const navigationHighlightTimer = useRef<number | null>(null);
-  const [evidenceOpen, setEvidenceOpen] = useState(false);
 
   const [saveMessage, setSaveMessage] = useState<SaveMessageState | null>(null);
   const [preflight, setPreflight] = useState<PreflightResponse | null>(null);
@@ -255,30 +254,43 @@ function ReviewWorkspaceLoaded({
   const [assessmentState, assessmentDispatch] = useReducer(assessmentReducer, initialAssessmentState);
   const assessmentAbortRef = useRef<AbortController | null>(null);
 
-  // needsAttention 对上千条病害是 O(n) 级扫描；这里算一次，counts 与 attentionItems 复用同一份，
-  // 避免每次 draft 变动重复计算（buildStatistics 收到长度后就不再自己算一遍）。
-  const draftAttention = useMemo(
-    () => needsAttention(draft, bindingOverview),
-    [draft, bindingOverview],
-  );
-  const counts = useMemo(
-    () => buildStatistics(draft, false, draftAttention.length),
-    [draft, draftAttention],
-  );
-  const attentionItems = useMemo(
-    () => mergeAttentionItems(
-      draftAttention.filter((item) => item.kind !== "rating"),
-      assessmentState.response?.issues ?? [],
-    ),
-    [draftAttention, assessmentState.response],
-  );
+  // 绑定分区改过后端草稿后，把最新草稿换进来。连点多次绑定时合并成一次重取。
+  // 后端在这些操作上是权威方：本页未保存的病害修改会被覆盖，覆盖了就明确告知，
+  // 不做静默丢弃。
+  useEffect(() => {
+    if (!draftStaleFromBinding) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void fetchReview(backendBaseUrl, importRecordId)
+        .then((result) => {
+          if (cancelled) return;
+          const discardedEdits = dirty;
+          rawDispatch({ type: "replace_draft", data: result.parsed_result });
+          draftRevision.current += 1;
+          setPreflight(null);
+          setDirty(false);
+          setDraftStaleFromBinding(false);
+          if (discardedEdits) {
+            setSaveMessage({
+              kind: "error",
+              text: "构件绑定改动了服务端草稿，本页未保存的病害修改已被最新草稿覆盖。",
+            });
+          }
+        })
+        .catch(() => {
+          // 取不到就保持过期标记，下一次绑定操作或刷新页面会再试。
+        });
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [dirty, draftStaleFromBinding, importRecordId]);
+
+  const counts = useMemo(() => buildStatistics(draft), [draft]);
   const displayedCounts = useMemo(() => ({
     ...counts,
     rating_item_count: assessmentState.response?.result
       ? 1 + assessmentState.response.result.structure_parts.length
       : assessmentState.response?.issues.length ?? 0,
-    needs_attention_count: attentionItems.length,
-  }), [counts, assessmentState.response, attentionItems.length]);
+  }), [counts, assessmentState.response]);
   const reviewSession = deriveReviewSession(
     sessionImportStatus,
     response.contract_compatibility,
@@ -438,43 +450,18 @@ function ReviewWorkspaceLoaded({
     return () => window.clearTimeout(timer);
   }, [saveMessage]);
 
-  function selectCandidate(item: AttentionItem) {
-    setSelected({ kind: item.kind, candidateId: item.candidateId });
+  function selectDefect(candidateId: string): void {
     setNavigationMessage(null);
-    setPendingNavigation({ ...item });
-    if (item.kind === "defect") {
-      setExpandedDefectId(item.candidateId);
-      setActivePhotoCandidateId(null);
-      activateGroup("defect_photos");
-    } else if (item.kind === "photo") {
-      setActivePhotoCandidateId(item.candidateId);
-      const linkedDefectId = draft.photos.find((photo) => photo.candidate_id === item.candidateId)?.linked_defect_candidate_id;
-      if (linkedDefectId) setExpandedDefectId(linkedDefectId);
-      activateGroup("defect_photos");
-    } else if (item.kind === "rating") {
-      activateGroup("ratings");
-    }
+    setPendingNavigation(candidateId);
+    setExpandedDefectId(candidateId);
+    setActivePhotoCandidateId(null);
+    activateGroup("defect_photos");
   }
 
   useEffect(() => {
     if (pendingNavigation === null) return;
     const timer = window.setTimeout(() => {
-      let targetId: string;
-      if (pendingNavigation.kind === "defect") {
-        targetId = pendingNavigation.targetField
-          ? reviewTargetId("defect-field", pendingNavigation.candidateId, pendingNavigation.targetField)
-          : reviewTargetId("defect", pendingNavigation.candidateId);
-      } else if (pendingNavigation.kind === "photo") {
-        const photo = draft.photos.find((candidate) => candidate.candidate_id === pendingNavigation.candidateId);
-        targetId = reviewTargetId(photo?.linked_defect_candidate_id ? "photo" : "unlinked-photo", pendingNavigation.candidateId);
-      } else if (pendingNavigation.kind === "rating") {
-        targetId = reviewTargetId("rating", pendingNavigation.candidateId);
-      } else {
-        setPendingNavigation(null);
-        return;
-      }
-
-      const target = document.getElementById(targetId);
+      const target = document.getElementById(reviewTargetId("defect", pendingNavigation));
       if (target === null) {
         setNavigationMessage("目标数据已变化，请刷新待处理列表。");
         setPendingNavigation(null);
@@ -493,7 +480,7 @@ function ReviewWorkspaceLoaded({
       setPendingNavigation(null);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeGroup, draft.photos, expandedDefectId, activePhotoCandidateId, pendingNavigation]);
+  }, [activeGroup, expandedDefectId, pendingNavigation]);
 
   useEffect(() => () => {
     if (navigationHighlightTimer.current !== null) window.clearTimeout(navigationHighlightTimer.current);
@@ -746,14 +733,15 @@ function ReviewWorkspaceLoaded({
 
   useEffect(() => () => assessmentAbortRef.current?.abort(), []);
 
+  // 试算问题挂在某条病害上就跳过去；挂在整个年度上（台账未确认、评定树不可用等）
+  // 没有可跳转的对象，原地把说明显示出来。
   function selectAssessmentIssue(issue: AssessmentIssue): void {
-    const item = assessmentIssueToAttention(issue);
-    if (item.kind === "import") {
-      activateGroup("needs_attention");
-      setNavigationMessage(item.message);
+    const candidateId = issue.entity_id.trim();
+    if (issue.entity_type !== "defect" || candidateId === "") {
+      setNavigationMessage(issue.message);
       return;
     }
-    selectCandidate(item);
+    selectDefect(candidateId);
   }
 
   // 重开 warnings_only 态：仅带警告的病害可编辑；full 态与正常待校对态全部可编辑。
@@ -784,22 +772,24 @@ function ReviewWorkspaceLoaded({
   return (
     <div className="review-workspace">
       <OverviewHeader response={response} draft={draft} counts={counts} />
-      {lockNotice ? (
-        <div className={`review-edit-lock-banner review-edit-lock-${lockPhase}`}>
-          <span>{lockNotice}</span>
-          {lockSummary ? <span className="review-reopen-meta">开始时间：{lockSummary.acquired_at}</span> : null}
-          {isAdmin && lockSummary !== null && lockPhase === "blocked" ? (
-            <button type="button" disabled={busy} onClick={() => void handleForceRelease()}>管理员强制解锁</button>
-          ) : null}
-        </div>
-      ) : null}
-      {/* 重开校对态横幅：可编辑态下 bannerText 非空即重开中，提示范围与后续流程。 */}
-      {!readOnly && reviewSession.bannerText ? (
-        <div className="review-reopen-banner">
-          <span>{reviewSession.bannerText}</span>
-          {reopenState ? <span className="review-reopen-meta">重开人：{reopenState.reopened_by_username}</span> : null}
-        </div>
-      ) : null}
+      <div className="review-workspace-notices">
+        {lockNotice ? (
+          <div className={`review-edit-lock-banner review-edit-lock-${lockPhase}`}>
+            <span>{lockNotice}</span>
+            {lockSummary ? <span className="review-reopen-meta">开始时间：{lockSummary.acquired_at}</span> : null}
+            {isAdmin && lockSummary !== null && lockPhase === "blocked" ? (
+              <button type="button" disabled={busy} onClick={() => void handleForceRelease()}>管理员强制解锁</button>
+            ) : null}
+          </div>
+        ) : null}
+        {/* 重开校对态横幅：可编辑态下 bannerText 非空即重开中，提示范围与后续流程。 */}
+        {!readOnly && reviewSession.bannerText ? (
+          <div className="review-reopen-banner">
+            <span>{reviewSession.bannerText}</span>
+            {reopenState ? <span className="review-reopen-meta">重开人：{reopenState.reopened_by_username}</span> : null}
+          </div>
+        ) : null}
+      </div>
       <div className="review-body">
         <ReviewSidebar
           counts={displayedCounts}
@@ -807,22 +797,8 @@ function ReviewWorkspaceLoaded({
           active={activeGroup}
           onSelect={activateGroup}
         />
-        <div className="review-main">
-          {/* 来源证据是针对某条病害/照片的，绑定分区里没有"当前选中候选"这个概念，
-              按钮恒为禁用状态，纯占位。 */}
-          {activeGroup !== "component_binding" ? (
-            <div className="review-main-tools">
-              <button type="button" disabled={!selected} onClick={() => setEvidenceOpen(true)}>查看来源证据</button>
-            </div>
-          ) : null}
+        <div className={activeGroup === "component_binding" ? "review-main review-main-component-binding" : "review-main"}>
           {navigationMessage ? <p className="warning-text review-navigation-message">{navigationMessage}</p> : null}
-          <ReviewWorkspacePanel
-            group="needs_attention"
-            activeGroup={activeGroup}
-            visitedGroups={visitedGroups}
-          >
-            <NeedsAttentionSection items={attentionItems} draft={draft} onSelect={selectCandidate} />
-          </ReviewWorkspacePanel>
           {/* 不传 onEnterReview：这里已经在校对页内，绑定完直接切到别的分区即可。 */}
           <ReviewWorkspacePanel
             group="component_binding"
@@ -832,6 +808,8 @@ function ReviewWorkspaceLoaded({
             <ComponentBindingWorkspace
               importId={importRecordId}
               bridgeId={response.bridge.id}
+              onRatingTreeChange={onReload}
+              onDraftInvalidated={() => setDraftStaleFromBinding(true)}
               onOverviewChange={(overview) => {
                 setBindingOverview(overview);
                 setBindingPending(
@@ -857,17 +835,16 @@ function ReviewWorkspaceLoaded({
               assessmentIssues={assessmentState.response?.issues ?? []}
               onSelect={(candidateId, photoCandidateId) => {
                 setExpandedDefectId(candidateId);
-                setSelected({ kind: "defect", candidateId });
                 setActivePhotoCandidateId(photoCandidateId ?? null);
               }}
               onCloseDetail={() => {
                 setExpandedDefectId(null);
-                setSelected(null);
                 setActivePhotoCandidateId(null);
               }}
               dispatch={sectionDispatch}
               disabled={actionsDisabled}
               allowStructureChanges={canModifyDefectStructure(actionsDisabled, reopenState?.scope, isAdmin)}
+              editLockToken={lockToken}
               isDefectEditable={isDefectEditable}
             />
           </ReviewWorkspacePanel>
@@ -943,14 +920,6 @@ function ReviewWorkspaceLoaded({
               </button>
             </div>
           </section>
-        </div>
-      ) : null}
-      {evidenceOpen ? (
-        <div className="review-modal-backdrop" role="presentation" onMouseDown={() => setEvidenceOpen(false)}>
-          <div className="review-evidence-dialog" role="dialog" aria-modal="true" aria-label="来源证据" onMouseDown={(event) => event.stopPropagation()}>
-            <button className="review-dialog-close" type="button" aria-label="关闭来源证据" onClick={() => setEvidenceOpen(false)}>×</button>
-            <EvidencePanel selected={selected} draft={draft} />
-          </div>
         </div>
       ) : null}
     </div>

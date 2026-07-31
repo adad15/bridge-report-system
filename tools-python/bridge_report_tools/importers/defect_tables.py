@@ -15,6 +15,9 @@ from bridge_report_tools.importers.word_rules.common import normalize_rule_text
 
 
 PHOTO_NUMBER_PATTERN = re.compile(r"(?:照片)?(?P<number>\d+(?:\.\d+)?-\d+)")
+# Word 病害表用这几个记号表示“本列无此项”。只有整格去掉首尾空白后就等于其中之一时才算空值：
+# 同样的字符出现在 "L/W=2"、"板底/腹板交界处"、"1-1#板" 里是有语义的，绝不能无条件删除。
+EMPTY_CELL_PLACEHOLDERS = frozenset({"/", "／", "—", "–", "-"})
 QUANTITY_PATTERN = re.compile(r"(?:共|约)?(?P<quantity>\d+(?:\.\d+)?\s*(?:处|条|个|块|道|孔|座))")
 FUZZY_QUANTITY_PATTERN = re.compile(r"(?P<quantity>多(?:处|条|个|块|道|孔))")
 
@@ -67,6 +70,17 @@ def get_cell(row: list[str], index: int | None) -> str:
     return row[index].strip()
 
 
+def get_business_cell(row: list[str], index: int | None) -> str:
+    """读取一格的业务值：整格只是空值占位符时返回空串，其余原样保留。"""
+    value = get_cell(row, index)
+    return "" if value in EMPTY_CELL_PLACEHOLDERS else value
+
+
+def compose_defect_description(location: str, defect_type: str) -> str:
+    """病害描述只由清洗后仍有语义的字段拼成，绝不把占位符拼进去（"/渗水泛碱"、"板底/"）。"""
+    return "".join(part for part in (location, defect_type) if part) or "未识别病害描述"
+
+
 def parse_photo_numbers(text: str) -> list[str]:
     return [match.group("number") for match in PHOTO_NUMBER_PATTERN.finditer(text)]
 
@@ -111,7 +125,7 @@ def parse_defect_tables(
             if not any(row):
                 continue
             candidate_id = f"defect_{len(defects) + 1:04d}"
-            measurement_text = get_cell(row, measurement_index) or None
+            measurement_text = get_business_cell(row, measurement_index) or None
             measurements, measurement_warnings = parse_measurements(measurement_text, candidate_id)
             photo_numbers = parse_photo_numbers(get_cell(row, photo_index))
             row_warnings = list(measurement_warnings)
@@ -132,11 +146,11 @@ def parse_defect_tables(
                     )
                 )
 
-            location = get_cell(row, location_index)
-            defect_type = get_cell(row, type_index)
-            defect_description = f"{location}{defect_type}".strip() or "未识别病害描述"
-            component_name = get_cell(row, component_index) or "未识别构件"
-            component_number = get_cell(row, component_alias_index) or None
+            location = get_business_cell(row, location_index)
+            defect_type = get_business_cell(row, type_index)
+            defect_description = compose_defect_description(location, defect_type)
+            component_name = get_business_cell(row, component_index) or "未识别构件"
+            component_number = get_business_cell(row, component_alias_index) or None
             defects.append(
                 DefectCandidate(
                     candidate_id=candidate_id,
@@ -146,11 +160,13 @@ def parse_defect_tables(
                     bridge_component_id=None,
                     standard_component_category_id=None,
                     resolved_structure_part=None,
-                    defect_type=defect_type or "未识别病害",
-                    defect_location=location or "未识别位置",
+                    # 清洗后为空就保持为空：分层匹配的受控关键词层要靠描述兜底，
+                    # 用"未识别病害"这类假值填坑只会让匹配器把提示语当成病害名。
+                    defect_type=defect_type,
+                    defect_location=location,
                     defect_scale=defect_scale,
                     defect_description=defect_description,
-                    quantity_text=get_cell(row, quantity_index) or derive_quantity_text(measurement_text),
+                    quantity_text=get_business_cell(row, quantity_index) or derive_quantity_text(measurement_text),
                     measurement_text=measurement_text,
                     measurements=measurements,
                     standard_defect_indicator_id=None,

@@ -45,7 +45,7 @@ export function OverviewHeader({ response, draft, counts }: OverviewHeaderProps)
         </button>
         <span className="review-header-spacer" />
         <span className="review-chip review-chip-warning">
-          需要处理 <b>{counts.needs_attention_count}</b>
+          待确认 <b>{counts.pending_count}</b>
         </span>
         <span className="review-chip review-chip-success">
           已确认 <b>{counts.confirmed_count}</b>

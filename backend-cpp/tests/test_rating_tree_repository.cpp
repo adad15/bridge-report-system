@@ -60,9 +60,76 @@ protected:
         return std::move(*compiled.tree);
     }
 
+    // 1.0.3 是带受控规则包的版本，锁定的是修正后的 H21 1.0.3。
+    bridge_report::rating_tree::EffectiveRatingTree compile_rule_pack_tree() {
+        const auto root = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT);
+        bridge_report::standards::StandardPackageLoader standard_loader;
+        auto h21 = standard_loader.load(
+            root / "standards/technical-condition/jtg-t-h21-2011/1.0.3");
+        auto maintenance = standard_loader.load(
+            root / "standards/maintenance/jtg-5120-2021/1.0.0");
+        bridge_report::rating_tree::RatingTreePackageLoader extension_loader;
+        auto extension = extension_loader.load(
+            root / "standards/rating-tree/organization-bridge/1.0.3");
+        EXPECT_TRUE(h21.ok());
+        EXPECT_TRUE(maintenance.ok());
+        EXPECT_TRUE(extension.ok());
+
+        bridge_report::db::StandardRepository standards(client_);
+        EXPECT_NE(
+            standards.sync_package(h21.package->manifest).status,
+            bridge_report::db::StandardPackageSyncStatus::ChecksumConflict);
+        EXPECT_NE(
+            standards.sync_package(maintenance.package->manifest).status,
+            bridge_report::db::StandardPackageSyncStatus::ChecksumConflict);
+
+        bridge_report::rating_tree::RatingTreeCompiler compiler;
+        auto compiled = compiler.compile(
+            *h21.package, &*maintenance.package, *extension.package);
+        EXPECT_TRUE(compiled.ok());
+        return std::move(*compiled.tree);
+    }
+
     drogon::orm::DbClientPtr client_;
     std::unique_ptr<bridge_report::db::RatingTreeRepository> repository_;
 };
+
+TEST_F(RatingTreeRepositoryTest, PublishesAndReloadsTheControlledMatchingRulePack) {
+    const auto tree = compile_rule_pack_tree();
+    ASSERT_FALSE(tree.keyword_rules.empty());
+
+    const auto sync = repository_->sync_published_tree(tree);
+    ASSERT_TRUE(
+        sync.status == bridge_report::db::RatingTreeSyncStatus::Inserted ||
+        sync.status == bridge_report::db::RatingTreeSyncStatus::Unchanged);
+    ASSERT_TRUE(sync.rating_tree_version_id.has_value());
+
+    const auto loaded =
+        repository_->load_published_tree(*sync.rating_tree_version_id);
+    ASSERT_TRUE(loaded.has_value());
+    EXPECT_EQ(loaded->keyword_rules.size(), tree.keyword_rules.size());
+    EXPECT_EQ(loaded->aliases.size(), tree.aliases.size());
+    // 规则顺序稳定，且目标节点是本版本内的真实节点。
+    for (std::size_t index = 1; index < loaded->keyword_rules.size(); ++index) {
+        const auto& previous = loaded->keyword_rules[index - 1];
+        const auto& current = loaded->keyword_rules[index];
+        EXPECT_TRUE(
+            previous.sort_order < current.sort_order ||
+            (previous.sort_order == current.sort_order &&
+             previous.rule_id <= current.rule_id));
+    }
+    bool has_auto_water_rule = false;
+    for (const auto& rule : loaded->keyword_rules) {
+        EXPECT_TRUE(loaded->nodes.contains(rule.target_node_id));
+        EXPECT_FALSE(rule.positive_keywords.empty());
+        if (rule.auto_bind && rule.positive_keywords.front() == "渗水") {
+            has_auto_water_rule = true;
+            EXPECT_EQ(loaded->nodes.at(rule.target_node_id).display_name, "水损");
+            EXPECT_FALSE(rule.excluded_keywords.empty());
+        }
+    }
+    EXPECT_TRUE(has_auto_water_rule);
+}
 
 TEST_F(RatingTreeRepositoryTest, SyncsPublishedTreeIdempotentlyAndRejectsConflict) {
     auto tree = compile_tree();

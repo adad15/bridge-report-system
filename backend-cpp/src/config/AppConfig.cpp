@@ -86,6 +86,11 @@ AppConfig load_app_config(const std::filesystem::path& path) {
         "word_upload_max_bytes",
         config.word_upload_max_bytes
     );
+    config.photo_upload_max_bytes = get_size_or_default(
+        archive,
+        "photo_upload_max_bytes",
+        config.photo_upload_max_bytes
+    );
     config.cleanup_interval_seconds = get_positive_int_or_default(
         archive, "cleanup_interval_seconds", config.cleanup_interval_seconds);
     config.cleanup_batch_size = get_positive_int_or_default(

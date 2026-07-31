@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { photoContentUrl } from "../../api/reviewApi";
 import type { DefectReviewRow } from "../defectPhotoReviewModel";
 import { reviewTargetId } from "../reviewNavigation";
+import { displayDefectLocation } from "./displayHelpers";
 
 const PAGE_SIZE = 50;
 
@@ -17,13 +18,6 @@ interface DefectQuickReviewListProps {
   onPageChange?: () => void;
   compact?: boolean;
 }
-
-const STATUS_LABELS: Record<DefectReviewRow["status"], string> = {
-  batchable: "可批量确认",
-  needs_attention: "需处理",
-  confirmed: "已确认",
-  ignored: "已忽略",
-};
 
 export function DefectQuickReviewList({
   rows,
@@ -72,13 +66,18 @@ export function DefectQuickReviewList({
           <button type="button" className="defect-quick-main" onClick={() => onOpen(row.candidateId)}>
             <span className="defect-quick-component">
               <strong>{row.defect.component_number ?? row.defect.component_name}</strong>
-              <small>{row.defect.defect_location}</small>
+              {/* 位置多为 "/"（Word 里的"无"），空着就不占这一行。 */}
+              {displayDefectLocation(row.defect.defect_location) ? (
+                <small>{displayDefectLocation(row.defect.defect_location)}</small>
+              ) : null}
             </span>
             <span className="defect-quick-defect">
-              <strong>{row.indicator?.name ?? (row.defect.defect_type || "未确定规范病害")}</strong>
+              <strong>{row.defect.defect_type || "未确定规范病害"}</strong>
               <small>标度 {row.defect.defect_scale ?? "未填"}</small>
             </span>
-            <span className={`defect-quick-status ${row.status}`}>{STATUS_LABELS[row.status]}</span>
+            {/* 每行只留一个徽标：已忽略/已确认这类终态直接说终态，其余说匹配结论。
+                "可批量确认"由行首那个可勾选的复选框表达，不必再占一个徽标位。 */}
+            <span className={`defect-quick-match ${row.matchState}`}>{row.matchLabel}</span>
             <span className="defect-quick-problems">
               {row.problems.slice(0, 2).map((problem) => (
                 <small key={problem.code}>{problem.message}</small>

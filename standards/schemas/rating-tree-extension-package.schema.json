@@ -39,6 +39,40 @@
     }
   },
   "$defs": {
+    "keyword_rule": {
+      "description": "matching-rules.json 中的受控关键词规则：随不可变评定树版本发布，运行时不可编辑。只有 auto_bind 为真、目标节点在当前适用范围内且结果唯一时才允许自动绑定。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule_id",
+        "target_node_id",
+        "bridge_type_id",
+        "component_category_id",
+        "positive_keywords",
+        "auto_bind",
+        "sort_order"
+      ],
+      "properties": {
+        "rule_id": {"type": "string", "minLength": 1},
+        "target_node_id": {"type": "string", "minLength": 1},
+        "bridge_type_id": {"type": "string", "minLength": 1},
+        "component_category_id": {"type": "string", "minLength": 1},
+        "positive_keywords": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "excluded_keywords": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "auto_bind": {"type": "boolean"},
+        "sort_order": {"type": "integer"},
+        "rule_note": {"type": "string"}
+      }
+    },
     "node": {
       "type": "object",
       "additionalProperties": false,

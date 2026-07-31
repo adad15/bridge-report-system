@@ -193,7 +193,7 @@ class DefectCandidate(ContractModel):
     rating_tree_version_id: str | None = None
     rating_tree_node_id: str | None = None
     rating_tree_match_method: Literal[
-        "exact", "controlled_alias", "fuzzy_candidate", "manual"
+        "exact", "controlled_alias", "controlled_keyword", "fuzzy_candidate", "manual"
     ] | None = None
     rating_tree_match_evidence: str | None = None
     standard_defect_indicator_id: str | None = None

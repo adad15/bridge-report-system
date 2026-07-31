@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import type { AttentionItem } from "../grouping";
-import { formatAttentionItem } from "./displayHelpers";
+import { displayDefectLocation } from "./displayHelpers";
 
-describe("formatAttentionItem", () => {
-  it.each<AttentionItem>([
-    { kind: "defect", candidateId: "defect_0001", message: "构件名称疑似缺失。", severity: "warning" },
-    { kind: "photo", candidateId: "photo_0002", message: "未关联病害。", severity: "error" },
-    { kind: "rating", candidateId: "assessment", message: "系统评定缺少输入。", severity: "warning" },
-    { kind: "import", candidateId: "unknown_9999", message: "无法定位到具体候选。", severity: "info" },
-  ])("formats $kind attention items", (item) => {
-    expect(formatAttentionItem(item)).toBe(`[${item.kind}] ${item.candidateId}: ${item.message}`);
+describe("displayDefectLocation", () => {
+  it("hides the Word placeholders that stand for an empty location", () => {
+    for (const placeholder of ["", "  ", "/", "／", null, undefined]) {
+      expect(displayDefectLocation(placeholder)).toBeNull();
+    }
+  });
+
+  it("keeps a real location and trims it", () => {
+    expect(displayDefectLocation(" 左侧翼缘板及腹板 ")).toBe("左侧翼缘板及腹板");
+    expect(displayDefectLocation("1/4 跨")).toBe("1/4 跨");
   });
 });

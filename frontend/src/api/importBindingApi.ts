@@ -24,6 +24,13 @@ export interface BindingGroup {
 
 export interface ComponentBindingOverview {
   inventory_confirmed: boolean;
+  rating_tree?: {
+    version_id: string;
+    tree_name: string;
+    package_version: string;
+    h21_package_version: string;
+    maintenance_package_version: string;
+  } | null;
   groups: BindingGroup[];
 }
 
@@ -97,6 +104,17 @@ function bindingUrl(baseUrl: string, importId: string, suffix = ""): string {
 
 export function fetchComponentBinding(baseUrl: string, importId: string) {
   return overviewRequest(bindingUrl(baseUrl, importId));
+}
+
+export function bindInspectionRatingTree(
+  baseUrl: string,
+  importId: string,
+  ratingTreeVersionId: string
+) {
+  return overviewRequest(
+    bindingUrl(baseUrl, importId, "/rating-tree"),
+    json("POST", { rating_tree_version_id: ratingTreeVersionId })
+  );
 }
 
 export function bindComponent(

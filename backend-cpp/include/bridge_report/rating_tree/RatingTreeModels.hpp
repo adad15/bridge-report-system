@@ -64,6 +64,21 @@ struct RatingTreeAlias {
     std::string component_category_id;
 };
 
+// 受控关键词规则：与别名一样随不可变评定树版本发布，运行时不可编辑。
+// 只有 auto_bind 为真、目标节点在当前适用范围内且最终结果唯一时才允许自动绑定；
+// 其余情况只能作为候选提示。
+struct RatingTreeKeywordRule {
+    std::string rule_id;
+    std::string target_node_id;
+    std::string bridge_type_id;
+    std::string component_category_id;
+    std::vector<std::string> positive_keywords;
+    std::vector<std::string> excluded_keywords;
+    bool auto_bind{false};
+    int sort_order{0};
+    std::string rule_note;
+};
+
 struct RatingTreeSource {
     std::string id;
     std::string source_type;
@@ -75,6 +90,7 @@ struct RatingTreeExtensionPackage {
     RatingTreeExtensionManifest manifest;
     std::map<std::string, RatingTreeExtensionNode> nodes;
     std::vector<RatingTreeAlias> aliases;
+    std::vector<RatingTreeKeywordRule> keyword_rules;
     std::map<std::string, RatingTreeSource> sources;
     std::map<std::string, Json::Value> documents;
 };
@@ -118,6 +134,7 @@ struct EffectiveRatingTree {
     EffectiveRatingTreeVersion version;
     std::map<std::string, EffectiveRatingTreeNode> nodes;
     std::vector<RatingTreeAlias> aliases;
+    std::vector<RatingTreeKeywordRule> keyword_rules;
     std::map<std::string, RatingTreeSource> sources;
 };
 

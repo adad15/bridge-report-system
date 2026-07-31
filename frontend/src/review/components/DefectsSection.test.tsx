@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchLatestComponentInventory } from "../../api/componentInventoryApi";
+import { ApiError } from "../../api/apiClient";
+import { matchDefectRatingTreeNodes } from "../../api/defectMatchingApi";
 import { fetchApplicableRatingTreeDefects, fetchRatingTreeNode } from "../../api/ratingTreeApi";
 import { data } from "../testFixtures";
 import { DefectsSection } from "./DefectsSection";
@@ -19,6 +21,12 @@ vi.mock("../../api/ratingTreeApi", async (importOriginal) => {
   };
 });
 
+vi.mock("../../api/defectMatchingApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api/defectMatchingApi")>();
+  return { ...actual, matchDefectRatingTreeNodes: vi.fn() };
+});
+
+const mockedMatchDefects = vi.mocked(matchDefectRatingTreeNodes);
 const mockedFetchInventory = vi.mocked(fetchLatestComponentInventory);
 const mockedFetchApplicableNodes = vi.mocked(fetchApplicableRatingTreeDefects);
 const mockedFetchTreeNode = vi.mocked(fetchRatingTreeNode);
@@ -29,6 +37,15 @@ describe("DefectsSection", () => {
     mockedFetchApplicableNodes.mockReset();
     mockedFetchApplicableNodes.mockResolvedValue([]);
     mockedFetchTreeNode.mockReset();
+    mockedMatchDefects.mockReset();
+    mockedMatchDefects.mockResolvedValue({
+      summary: {
+        processed: 0, auto_bound: 0, candidates: 0, composite: 0,
+        unmatched: 0, prerequisite_missing: 0, failed: 0, skipped: 0,
+      },
+      results: [],
+      rating_tree_version_id: "tree-version-1",
+    });
   });
 
   it("adds a manual defect from an actual mapped component and allows an empty scale", async () => {
@@ -141,13 +158,14 @@ describe("DefectsSection", () => {
     expect(screen.getByRole("textbox", { name: "搜索病害" })).toBeEnabled();
     expect(screen.getByRole("textbox", { name: "位置" })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "评定树病害" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "关联到病害" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "添加照片" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "确认缺图" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "确认本组" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "确认并查看下一条" })).not.toBeInTheDocument();
 
     // 快速列表与缩略图查看不禁用：只读态仍能检查导入结果。
     expect(screen.getByRole("button", { name: /2-1#梁/ })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "查看待处理照片 2.1-1" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "查看未归属照片 2.1-1" })).toBeEnabled();
   });
 
   it("locks defects outside the reopen scope while keeping warning defects editable", () => {
@@ -338,7 +356,211 @@ describe("DefectsSection", () => {
     rerender(<DefectsSection draft={confirmedDraft} {...props} />);
     expect(screen.getByRole("button", { name: /^2-1#梁/ })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "需处理 0" }));
+    fireEvent.click(screen.getByRole("button", { name: "待处理 0" }));
     expect(screen.queryByRole("button", { name: /^2-1#梁/ })).not.toBeInTheDocument();
+  });
+
+  describe("批量匹配", () => {
+    const treeNode = {
+      id: "tree-node-water",
+      node_key: "org.bridge.defect.water",
+      parent_node_id: "tree-group",
+      display_name: "水损",
+      node_type: "defect",
+      sort_order: 1,
+      bridge_type_ids: ["bridge-type-1"],
+      component_category_ids: ["h21.component.beam"],
+      scoring_mode: "reference_h21" as const,
+      h21_indicator_id: "h21.defect.5_1_1_6",
+      is_selectable: true,
+      is_scoring: true,
+      organization_note: "",
+      allowed_scales: [1, 2],
+      h21_indicator_name: "混凝土碳化",
+      h21_source_table: "表5.1.1",
+      scale_descriptions: { "1": "轻微", "2": "明显" },
+      deduction_points: { "1": 0, "2": 15 },
+      path: [],
+      sources: [],
+    };
+
+    function matchProps(dispatch = vi.fn()) {
+      return {
+        importRecordId: "record-1",
+        baseUrl: "http://backend",
+        bridgeId: "bridge-1",
+        selectedCandidateId: null,
+        onSelect: vi.fn(),
+        dispatch,
+        ratingTree: {
+          version_id: "tree-version-1",
+          tree_name: "单位桥梁评定树",
+          package_version: "1.0.3",
+          content_checksum: "sha256:test",
+        },
+      };
+    }
+
+    function boundDraft() {
+      const draft = data();
+      draft.defects[0] = {
+        ...draft.defects[0],
+        bridge_component_id: "component-1",
+        standard_component_category_id: "h21.component.beam",
+        rating_tree_node_id: null,
+        rating_tree_match_method: null,
+        photo_references: [],
+      };
+      return draft;
+    }
+
+    it("uses a single batch request and applies unique automatic results without confirming them", async () => {
+      mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+      mockedMatchDefects.mockResolvedValue({
+        summary: {
+          processed: 1, auto_bound: 1, candidates: 0, composite: 0,
+          unmatched: 0, prerequisite_missing: 0, failed: 0, skipped: 0,
+        },
+        results: [{
+          candidate_id: "defect_0001",
+          outcome: "auto_bound",
+          skipped: false,
+          rating_tree_node_id: treeNode.id,
+          match_method: "controlled_keyword",
+          match_evidence: "命中受控关键词“渗水”。",
+          reason_code: null,
+          reason_message: null,
+          candidates: [],
+        }],
+        rating_tree_version_id: "tree-version-1",
+      });
+      const dispatch = vi.fn();
+
+      render(<DefectsSection draft={boundDraft()} {...matchProps(dispatch)} />);
+
+      await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(dispatch).toHaveBeenCalledWith({
+        type: "apply_rating_tree_auto_matches",
+        versionId: "tree-version-1",
+        matches: [{
+          candidateId: "defect_0001",
+          nodeId: treeNode.id,
+          matchMethod: "controlled_keyword",
+          matchEvidence: "命中受控关键词“渗水”。",
+          isScoring: true,
+        }],
+      }));
+      // 自动匹配不确认病害：reducer 之外没有任何确认动作被派发。
+      expect(dispatch).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "confirm_defect_groups" }),
+      );
+      await waitFor(() => expect(
+        screen.getByText(/共处理 1 条：自动匹配 1 条/),
+      ).toBeInTheDocument());
+    });
+
+    it("shows composite and candidate results as their own states instead of plain unmatched", async () => {
+      mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+      mockedMatchDefects.mockResolvedValue({
+        summary: {
+          processed: 1, auto_bound: 0, candidates: 0, composite: 1,
+          unmatched: 0, prerequisite_missing: 0, failed: 0, skipped: 0,
+        },
+        results: [{
+          candidate_id: "defect_0001",
+          outcome: "composite",
+          skipped: false,
+          rating_tree_node_id: null,
+          match_method: "fuzzy_candidate",
+          match_evidence: null,
+          reason_code: "composite_defect",
+          reason_message: "同一条记录明确命中多个规范病害。",
+          candidates: [
+            { rating_tree_node_id: treeNode.id, display_name: "水损", match_method: "controlled_alias", evidence: "命中别名“受渗水侵蚀”。" },
+            { rating_tree_node_id: "tree-node-spalling", display_name: "剥落、掉角", match_method: "controlled_keyword", evidence: "命中关键词“剥蚀”。" },
+          ],
+        }],
+        rating_tree_version_id: "tree-version-1",
+      });
+
+      render(<DefectsSection draft={boundDraft()} {...matchProps()} />);
+
+      // 左侧列表不打开详情就能读出状态，顶部统计把组合病害与无结果分开计数。
+      await waitFor(() => expect(
+        document.querySelector(".defect-quick-match.composite"),
+      ).toHaveTextContent("疑似组合病害"));
+      expect(screen.getByRole("button", { name: "疑似组合病害 1" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "无匹配结果 0" })).toBeInTheDocument();
+    });
+
+    // 三个头条问题只在顶部统计卡上有入口，下拉框不再重复一份；筛选生效时
+    // 下拉框必须如实说明，不能显示成"全部问题"。
+    it("offers each issue filter in exactly one place", async () => {
+      mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+
+      render(<DefectsSection draft={boundDraft()} {...matchProps()} />);
+      await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalled());
+
+      const select = screen.getByLabelText("问题类型") as HTMLSelectElement;
+      const optionLabels = [...select.options].map((option) => option.textContent);
+      expect(optionLabels).toEqual(["全部问题", "构件未绑定", "标度待选择", "照片待处理"]);
+
+      fireEvent.click(screen.getByRole("button", { name: "疑似组合病害 0" }));
+      expect(select.value).toBe("__headline__");
+      expect(screen.getByRole("option", { name: "已按上方统计筛选" })).toBeDisabled();
+    });
+
+    it("reports a matcher failure with a retry entry instead of a silent no-match", async () => {
+      mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+      mockedMatchDefects.mockRejectedValue(new ApiError(
+        "rating_tree_catalog_unavailable", "本年度锁定的评定树当前不可用。",
+      ));
+
+      render(<DefectsSection draft={boundDraft()} {...matchProps()} />);
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent("评定树目录当前不可用");
+      expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "无匹配结果 0" })).toBeInTheDocument();
+    });
+
+    it("waits for the description field to lose focus before rematching that defect", async () => {
+      mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+      const dispatch = vi.fn();
+
+      render(
+        <DefectsSection
+          draft={boundDraft()}
+          {...matchProps(dispatch)}
+          selectedCandidateId="defect_0001"
+        />,
+      );
+      await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(1));
+
+      const description = screen.getByLabelText("病害描述");
+      fireEvent.change(description, { target: { value: "板底存在渗水泛碱" } });
+      // 输入过程中不发请求：只有 dispatch 记录了这次编辑。
+      expect(mockedMatchDefects).toHaveBeenCalledTimes(1);
+      expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+        type: "edit_defect_field",
+        field: "defect_description",
+      }));
+
+      fireEvent.blur(description);
+      await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(2));
+      expect(mockedMatchDefects.mock.calls[1][3]).toEqual(["defect_0001"]);
+    });
+
+    it("rematches the current filter scope through one request", async () => {
+      mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+
+      render(<DefectsSection draft={boundDraft()} {...matchProps()} />);
+      await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByRole("button", { name: /^重新匹配（当前筛选 1）/ }));
+
+      await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(2));
+      expect(mockedMatchDefects.mock.calls[1][3]).toEqual(["defect_0001"]);
+    });
   });
 });

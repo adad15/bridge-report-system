@@ -30,8 +30,17 @@ struct BindingGroup {
     std::vector<BindingRow> rows;
 };
 
+struct BindingRatingTree {
+    std::string version_id;
+    std::string tree_name;
+    std::string package_version;
+    std::string h21_package_version;
+    std::string maintenance_package_version;
+};
+
 struct BindingOverview {
     bool inventory_confirmed{false};
+    std::optional<BindingRatingTree> rating_tree;
     std::vector<BindingGroup> groups;
 };
 
@@ -40,6 +49,9 @@ enum class BindingStatus {
     NotFound,     // 导入记录不存在
     Conflict,     // 非"待校对"相 / 台账未确认 / 所选构件类别与部件名称不符
     Invalid,      // 入参无效
+    TreeNotFound,
+    TreeUnavailable,
+    MappingIncompatible,
     Failed,       // 数据库异常
 };
 
@@ -75,6 +87,12 @@ public:
     [[nodiscard]] BindingOutcome clear(
         const std::string& import_id, const std::string& part_name,
         const std::string& component_number);
+    // 为本次导入所属的待校对年度绑定评定树。目标 H21 包不同时从已确认
+    // 台账派生新修订，旧规范组合和旧台账不原地覆盖。
+    [[nodiscard]] BindingOutcome bind_rating_tree(
+        const std::string& import_id,
+        const std::string& rating_tree_version_id,
+        const std::string& actor_user_id);
 
 private:
     drogon::orm::DbClientPtr db_client_;

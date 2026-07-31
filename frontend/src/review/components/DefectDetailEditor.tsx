@@ -8,10 +8,11 @@ import {
   type RatingTreeNodeSummary,
 } from "../../api/ratingTreeApi";
 import type { BridgeAnnualInspectionData } from "../../contracts/annualInspection";
-import type { DefectReviewRow } from "../defectPhotoReviewModel";
+import { matchMethodLabel, type DefectReviewRow } from "../defectPhotoReviewModel";
 import type { ReviewDraftAction } from "../reviewDraft";
 import { ComponentMatchField } from "./ComponentMatchField";
-import { PhotoRelationEditor } from "./PhotoRelationEditor";
+import { displayDefectLocation } from "./displayHelpers";
+import { DefectPhotoPanel } from "./DefectPhotoPanel";
 
 interface DefectDetailEditorProps {
   draft: BridgeAnnualInspectionData;
@@ -25,8 +26,14 @@ interface DefectDetailEditorProps {
   dispatch: Dispatch<ReviewDraftAction>;
   disabled?: boolean;
   allowDelete?: boolean;
+  editLockToken?: string | null;
   onConfirm: () => void;
   onClose: () => void;
+  /**
+   * 病害类型/描述这类影响匹配的文字提交后触发重新匹配。只在失焦时调用，
+   * 不能每敲一个键就发一次请求。
+   */
+  onDefectTextCommitted?: (candidateId: string) => void;
 }
 
 export function DefectDetailEditor({
@@ -41,12 +48,30 @@ export function DefectDetailEditor({
   dispatch,
   disabled = false,
   allowDelete = false,
+  editLockToken,
   onConfirm,
   onClose,
+  onDefectTextCommitted,
 }: DefectDetailEditorProps) {
   const defect = row.defect;
   const [treeNode, setTreeNode] = useState<RatingTreeNode | null>(row.ratingTreeNode);
   const [treeNodeError, setTreeNodeError] = useState("");
+  // 候选是后端这次算出来的临时结果，不在草稿里；采用候选后按人工选择处理。
+  const evidence =
+    defect.rating_tree_match_evidence ?? row.matchResult?.reason_message ?? "";
+  const selectNode = (nodeId: string) => {
+    const selected = applicableNodes.find((item) => item.id === nodeId);
+    if (!selected || !ratingTreeVersionId) return;
+    dispatch({
+      type: "select_rating_tree_node",
+      candidateId: defect.candidate_id,
+      versionId: ratingTreeVersionId,
+      nodeId: selected.id,
+      nodeName: selected.display_name,
+      isScoring: selected.is_scoring,
+      matchEvidence: "用户在精细维护中从当前构件适用节点选择",
+    });
+  };
 
   useEffect(() => {
     if (!ratingTreeVersionId || !defect.rating_tree_node_id) {
@@ -74,9 +99,16 @@ export function DefectDetailEditor({
   return (
     <section className="defect-detail-editor" aria-label="病害详情维护">
       <div className="defect-detail-heading">
-        <div>
-          <h3>精细维护病害档案</h3>
-          <p>{defect.component_number ?? defect.component_name} · {defect.defect_location}</p>
+        <div className="defect-detail-identity">
+          {/* 面板名是恒定的，每次打开都一样；真正要一眼确认的是"这是哪条病害"。
+              所以标题给病害编号，面板名降成上方的小字说明。 */}
+          <p className="defect-detail-kicker">精细维护病害档案</p>
+          <h3>
+            {defect.component_number ?? defect.component_name}
+            {displayDefectLocation(defect.defect_location) ? (
+              <span className="defect-detail-location">{displayDefectLocation(defect.defect_location)}</span>
+            ) : null}
+          </h3>
         </div>
         <div className="defect-detail-heading-actions">
           <span className={`defect-quick-status ${row.status}`}>
@@ -92,41 +124,67 @@ export function DefectDetailEditor({
       ) : null}
       <div className="defect-detail-fields">
         <label>实际构件<ComponentMatchField defect={defect} inventory={componentInventory ?? null} /></label>
-        <label>
-          评定树病害
-          <select
-            disabled={disabled || !ratingTreeVersionId}
-            value={defect.rating_tree_node_id ?? ""}
-            onChange={(event) => {
-              const selected = applicableNodes.find((item) => item.id === event.target.value);
-              if (selected) dispatch({
-                type: "select_rating_tree_node",
-                candidateId: defect.candidate_id,
-                versionId: ratingTreeVersionId!,
-                nodeId: selected.id,
-                nodeName: selected.display_name,
-                isScoring: selected.is_scoring,
-                matchEvidence: "用户在精细维护中从当前构件适用节点选择",
-              });
-            }}
-          >
-            <option value="">请选择评定树病害</option>
-            {applicableNodes.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.display_name}{item.is_scoring ? "" : "（暂不计分）"}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>位置<input disabled={disabled} value={defect.defect_location} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} /></label>
+        <div className="defect-detail-wide defect-rating-tree-result" aria-label="评定树病害">
+          <div className="defect-rating-tree-result-head">
+            <span>评定树病害</span>
+            <strong>{treeNode?.display_name ?? "尚未确定规范病害"}</strong>
+            <em className={`defect-match-method ${row.matchState}`}>
+              {defect.rating_tree_node_id
+                ? matchMethodLabel(defect.rating_tree_match_method)
+                : row.matchLabel}
+            </em>
+          </div>
+          {/* 匹配依据必须写清命中的原文、别名或关键词，以及构件适用理由：
+              用户要能不打开评定树就判断这条自动结果该不该认。 */}
+          {evidence ? <p className="defect-match-evidence">{evidence}</p> : null}
+          {row.matchState === "composite" ? (
+            <p className="warning-text">
+              这条记录同时命中多个规范病害。请改写描述拆成单一病害，或在下方候选中确认为其中一个。
+            </p>
+          ) : null}
+          {row.matchCandidates.length > 0 ? (
+            <ul className="defect-match-candidates">
+              {row.matchCandidates.map((candidate) => (
+                <li key={candidate.rating_tree_node_id}>
+                  <button
+                    type="button"
+                    disabled={disabled || !ratingTreeVersionId}
+                    onClick={() => selectNode(candidate.rating_tree_node_id)}
+                  >
+                    采用「{candidate.display_name}」
+                  </button>
+                  <small>{matchMethodLabel(candidate.match_method)} · {candidate.evidence}</small>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <details open={!defect.rating_tree_node_id}>
+            <summary>展开完整评定树人工选择</summary>
+            <select
+              aria-label="评定树病害"
+              disabled={disabled || !ratingTreeVersionId}
+              value={defect.rating_tree_node_id ?? ""}
+              onChange={(event) => selectNode(event.target.value)}
+            >
+              <option value="">请选择评定树病害</option>
+              {applicableNodes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.display_name}{item.is_scoring ? "" : "（暂不计分）"}
+                </option>
+              ))}
+            </select>
+          </details>
+        </div>
+        <label>位置<input disabled={disabled} value={defect.defect_location} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} onBlur={() => onDefectTextCommitted?.(defect.candidate_id)} /></label>
         <label>
           标度
+          {/* 标度只列出该节点允许的取值并附完整规范判定文字；不按描述推断标度。 */}
           <select
             disabled={disabled || !treeNode?.is_scoring}
             value={defect.defect_scale ?? ""}
             onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_scale", value: event.target.value === "" ? null : Number(event.target.value) })}
           >
-            <option value="">请选择标度</option>
+            <option value="">{treeNode ? (treeNode.is_scoring ? "请选择标度" : "该节点暂不计分") : "请先确定规范病害"}</option>
             {treeNode?.allowed_scales.map((scale) => (
               <option key={scale} value={scale}>
                 {scale} · {treeNode.scale_descriptions[String(scale)] ?? ""}
@@ -134,7 +192,7 @@ export function DefectDetailEditor({
             ))}
           </select>
         </label>
-        <label className="defect-detail-wide">病害描述<input disabled={disabled} value={defect.defect_description} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_description", value: event.target.value })} /></label>
+        <label className="defect-detail-wide">病害描述<input disabled={disabled} value={defect.defect_description} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_description", value: event.target.value })} onBlur={() => onDefectTextCommitted?.(defect.candidate_id)} /></label>
       </div>
       {treeNodeError ? <p className="form-error" role="alert">{treeNodeError}</p> : null}
       {treeNode ? (
@@ -142,10 +200,6 @@ export function DefectDetailEditor({
           <div>
             <span>评定树路径</span>
             <strong>{treeNode.path.map((item) => item.display_name).join(" / ")}</strong>
-          </div>
-          <div>
-            <span>匹配方式</span>
-            <strong>{defect.rating_tree_match_method === "controlled_alias" ? "受控别名" : defect.rating_tree_match_method === "exact" ? "精确匹配" : defect.rating_tree_match_method === "fuzzy_candidate" ? "模糊建议（待确认）" : "人工选择"}</strong>
           </div>
           <div>
             <span>评分规则</span>
@@ -168,25 +222,17 @@ export function DefectDetailEditor({
           <label className="defect-detail-wide">校对备注<input disabled={disabled} value={defect.review_note ?? ""} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_note", value: event.target.value || null })} /></label>
         </div>
       </details>
-      <details>
-        <summary>Word 原始记录</summary>
-        {defect.source_ref.source_type === "manual" ? (
-          <p>人工新增，无 Word 来源。</p>
-        ) : (
-          <div className="word-source-evidence">
-            <span>{defect.source_ref.table_title ?? "未命名表格"} · 第 {defect.source_ref.row_index ?? "?"} 行</span>
-            <pre>{defect.source_ref.raw_row_text ?? "未保存原始行文本"}</pre>
-          </div>
-        )}
-      </details>
-      <PhotoRelationEditor
+      <DefectPhotoPanel
         draft={draft}
         defect={defect}
+        cards={row.photoCards}
         importRecordId={importRecordId}
         baseUrl={baseUrl}
         initialPhotoCandidateId={initialPhotoCandidateId}
         dispatch={dispatch}
         disabled={disabled}
+        editLockToken={editLockToken}
+        allowUpload={allowDelete}
       />
       <div className="defect-detail-actions">
         {defect.review_status === "已忽略" ? (
@@ -196,7 +242,8 @@ export function DefectDetailEditor({
             if (window.confirm("确定忽略这条病害？")) dispatch({ type: "ignore_defect", candidateId: defect.candidate_id });
           }}>忽略病害</button>
         )}
-        {allowDelete ? <button type="button" disabled={disabled} onClick={() => {
+        {/* 删除不可逆（照片会退回未关联区），与"忽略"用同一副长相太容易点错。 */}
+        {allowDelete ? <button type="button" className="danger-text-button" disabled={disabled} onClick={() => {
           if (window.confirm("确定删除这条病害？已关联照片会回到未关联照片区。")) {
             dispatch({ type: "delete_defect", candidateId: defect.candidate_id });
           }

@@ -3,7 +3,9 @@
 #include "bridge_report/archive/ArchivePaths.hpp"
 #include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
+#include "bridge_report/db/RatingTreeRepository.hpp"
 #include "bridge_report/inventory/ComponentMatcher.hpp"
+#include "bridge_report/review/DefectRatingTreeMatching.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -13,6 +15,7 @@
 
 #include <drogon/orm/Exception.h>
 #include <json/json.h>
+#include <trantor/utils/Logger.h>
 
 namespace bridge_report::db {
 namespace {
@@ -129,6 +132,72 @@ Json::Value match_imported_defects(
                 : "存在构件匹配候选，请人工确认实际构件。");
     }
     return matched;
+}
+
+// 依赖齐备时就地写入自动匹配结果；评定树未绑定或装载失败时安静跳过，
+// 由构件/评定树绑定完成后的触发点或页面"重新匹配"补上，绝不阻断导入落库。
+void match_imported_defect_rating_tree_nodes_unguarded(
+    const std::shared_ptr<drogon::orm::Transaction>& tx,
+    const std::string& inspection_year_id,
+    Json::Value& data) {
+    if (inspection_year_id.empty() || !data["defects"].isArray()) return;
+    const auto profile = tx->execSqlSync(
+        "select psp.rating_tree_version_id::text as rating_tree_version_id,"
+        "psp.technical_condition_package_id::text as technical_package_id,"
+        "iy.bridge_id::text as bridge_id,"
+        "iy.component_inventory_revision_id::text as inventory_revision_id "
+        "from inspection_years iy "
+        "join project_standard_profiles psp on psp.id=iy.standard_profile_id "
+        "where iy.id=$1::uuid",
+        inspection_year_id);
+    if (profile.empty() || profile[0]["rating_tree_version_id"].isNull() ||
+        profile[0]["technical_package_id"].isNull()) {
+        return;
+    }
+    const auto tree_version_id =
+        profile[0]["rating_tree_version_id"].as<std::string>();
+    const auto tree = RatingTreeRepository(tx).load_published_tree(tree_version_id);
+    if (!tree.has_value()) return;
+    ComponentInventoryRepository inventories(tx);
+    const auto revision = profile[0]["inventory_revision_id"].isNull()
+        ? inventories.get_latest_revision(profile[0]["bridge_id"].as<std::string>())
+        : inventories.get_revision(
+              profile[0]["inventory_revision_id"].as<std::string>());
+    (void)review::match_defect_rating_tree_nodes(
+        data,
+        tree_version_id,
+        profile[0]["technical_package_id"].as<std::string>(),
+        *tree,
+        revision,
+        review::DefectMatchScope{},
+        true);
+}
+
+// 评定树匹配只是导入的便利层，绝不能把整批解析结果挡在门外。PostgreSQL 里一条语句
+// 失败会让整个事务进入 aborted 态，光靠 try/catch 救不回来，所以这里先开 SAVEPOINT：
+// 匹配出任何问题就回滚到保存点，病害照常落库，等依赖补齐后由绑定或"重新匹配"补上。
+void match_imported_defect_rating_tree_nodes(
+    const std::shared_ptr<drogon::orm::Transaction>& tx,
+    const std::string& inspection_year_id,
+    Json::Value& data) {
+    const Json::Value unmatched = data;
+    try {
+        tx->execSqlSync("savepoint import_rating_tree_match");
+        match_imported_defect_rating_tree_nodes_unguarded(
+            tx, inspection_year_id, data);
+        tx->execSqlSync("release savepoint import_rating_tree_match");
+    } catch (const std::exception& error) {
+        data = unmatched;
+        try {
+            tx->execSqlSync("rollback to savepoint import_rating_tree_match");
+            tx->execSqlSync("release savepoint import_rating_tree_match");
+        } catch (...) {
+        }
+        LOG_WARN << "import-time rating tree matching skipped year="
+                 << inspection_year_id << " reason="
+                 << bridge_report::rating_tree::kReasonMatcherFailed
+                 << " detail=" << error.what();
+    }
 }
 
 }  // namespace
@@ -267,8 +336,13 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
             : std::optional<std::string>(
                 locked[0]["inventory_revision_id"].as<std::string>());
         std::optional<std::string> confirmed_revision_id;
-        const auto matched_data = match_imported_defects(
+        auto matched_data = match_imported_defects(
             tx, bridge_id, locked_revision_id, batch.data, confirmed_revision_id);
+        // 导入完成即尝试一次评定树匹配：构件已唯一命中的病害立刻拿到自动结果，
+        // 依赖尚未补齐的仍然停在待处理，等构件/评定树绑定完成后再触发。
+        if (has_year) {
+            match_imported_defect_rating_tree_nodes(tx, year_id, matched_data);
+        }
         // 解析匹配和年度评定必须锁定同一台账版本。仅补齐待校对年度的空关联，
         // 已经锁定的历史版本绝不被“最新版本”覆盖。
         if (has_year && !locked_revision_id.has_value()

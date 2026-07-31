@@ -1,6 +1,8 @@
 import { ApiError, request } from "./apiClient";
 
-export type RatingTreeScoringMode = "inherit_h21" | "non_scoring";
+// reference_h21：单位规则新增的病害（如"水损"）参照某条 H21 指标计分，
+// 后端 EffectiveRatingTree 一直有这一档，前端类型此前漏掉了。
+export type RatingTreeScoringMode = "inherit_h21" | "reference_h21" | "non_scoring";
 
 export interface RatingTreeSource {
   source_type: "technical_condition" | "maintenance" | "organization" | string;

@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <fstream>
 #include <set>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 
 #include <json/json.h>
 
 #include "bridge_report/auth/PasswordHash.hpp"
+#include "bridge_report/rating_tree/RatingTreeMatchText.hpp"
 
 namespace bridge_report::rating_tree {
 
@@ -177,6 +179,28 @@ bool parse_node(
         return false;
     }
     return true;
+}
+
+std::string scope_key(
+    const std::string& bridge_type_id,
+    const std::string& component_category_id) {
+    return bridge_type_id + "\n" + component_category_id;
+}
+
+// 自动规则的唯一性证明键：同一适用范围内，规范化后完全相同的正向关键词集合
+// 不能指向两个不同节点，否则同一段文字会同时得到两个自动结论。
+std::string keyword_signature(const RatingTreeKeywordRule& rule) {
+    std::vector<std::string> normalized;
+    normalized.reserve(rule.positive_keywords.size());
+    for (const auto& keyword : rule.positive_keywords) {
+        normalized.push_back(normalize_match_key(keyword));
+    }
+    std::sort(normalized.begin(), normalized.end());
+    std::string signature;
+    for (const auto& keyword : normalized) {
+        signature += std::to_string(keyword.size()) + ":" + keyword;
+    }
+    return signature;
 }
 
 bool has_cycle(const std::map<std::string, RatingTreeExtensionNode>& nodes) {
@@ -350,6 +374,142 @@ RatingTreeLoadResult RatingTreePackageLoader::load(
             }
             package.aliases.push_back(std::move(alias));
         }
+    }
+
+    const auto rules_it = package.documents.find("matching-rules.json");
+    if (rules_it != package.documents.end()) {
+        const auto& document = rules_it->second;
+        // 规则包只能描述自己所属的评定树版本，禁止跨版本引用节点。
+        if (!document["tree_code"].isString() ||
+            document["tree_code"].asString() != package.manifest.tree_code ||
+            !document["package_version"].isString() ||
+            document["package_version"].asString() !=
+                package.manifest.package_version) {
+            result.issues.push_back(issue(
+                "rating_tree_rule_pack_version_mismatch",
+                "匹配规则包必须声明与本评定树版本一致的 tree_code 与 package_version。"));
+            return result;
+        }
+        if (!document["keyword_rules"].isArray()) {
+            result.issues.push_back(issue(
+                "rating_tree_keyword_rules_invalid",
+                "matching-rules.json 必须包含 keyword_rules 数组。"));
+            return result;
+        }
+        std::set<std::string> unique_rule_ids;
+        for (const auto& value : document["keyword_rules"]) {
+            RatingTreeKeywordRule rule;
+            if (!value.isObject() ||
+                !non_empty_string(value, "rule_id", rule.rule_id) ||
+                !non_empty_string(value, "target_node_id", rule.target_node_id) ||
+                !non_empty_string(value, "bridge_type_id", rule.bridge_type_id) ||
+                !non_empty_string(
+                    value, "component_category_id", rule.component_category_id) ||
+                !value["auto_bind"].isBool() || !value["sort_order"].isInt()) {
+                result.issues.push_back(issue(
+                    "rating_tree_keyword_rule_invalid",
+                    "受控关键词规则缺少必填字段或字段类型错误。"));
+                return result;
+            }
+            const auto positives = string_array(value["positive_keywords"]);
+            if (!positives.has_value() || positives->empty()) {
+                result.issues.push_back(issue(
+                    "rating_tree_keyword_rule_invalid",
+                    "受控关键词规则必须声明非空正向关键词。"));
+                return result;
+            }
+            rule.positive_keywords = *positives;
+            if (value.isMember("excluded_keywords")) {
+                const auto excluded = string_array(value["excluded_keywords"]);
+                if (!excluded.has_value()) {
+                    result.issues.push_back(issue(
+                        "rating_tree_keyword_rule_invalid",
+                        "受控关键词规则的排除词必须是字符串数组。"));
+                    return result;
+                }
+                rule.excluded_keywords = *excluded;
+            }
+            for (const auto& keyword : rule.positive_keywords) {
+                if (normalize_match_key(keyword).empty()) {
+                    result.issues.push_back(issue(
+                        "rating_tree_keyword_rule_invalid",
+                        "受控关键词规范化后不能为空。"));
+                    return result;
+                }
+            }
+            rule.auto_bind = value["auto_bind"].asBool();
+            rule.sort_order = value["sort_order"].asInt();
+            if (value["rule_note"].isString()) {
+                rule.rule_note = value["rule_note"].asString();
+            }
+            const auto target = package.nodes.find(rule.target_node_id);
+            if (target == package.nodes.end() || !target->second.is_selectable ||
+                target->second.node_type != RatingTreeNodeType::defect) {
+                result.issues.push_back(issue(
+                    "rating_tree_keyword_rule_target_invalid",
+                    "受控关键词规则必须指向本版本内可选择的病害节点。"));
+                return result;
+            }
+            const auto& scope_bridges = target->second.bridge_type_ids;
+            const auto& scope_components = target->second.component_category_ids;
+            if (std::find(
+                    scope_bridges.begin(), scope_bridges.end(), rule.bridge_type_id) ==
+                    scope_bridges.end() ||
+                std::find(
+                    scope_components.begin(),
+                    scope_components.end(),
+                    rule.component_category_id) == scope_components.end()) {
+                result.issues.push_back(issue(
+                    "rating_tree_keyword_rule_scope_invalid",
+                    "受控关键词规则的适用范围必须落在目标节点自身的桥型与构件范围内。"));
+                return result;
+            }
+            if (!unique_rule_ids.insert(rule.rule_id).second) {
+                result.issues.push_back(issue(
+                    "rating_tree_keyword_rule_duplicate", "受控关键词规则 ID 不能重复。"));
+                return result;
+            }
+            package.keyword_rules.push_back(std::move(rule));
+        }
+
+        std::map<std::string, std::string> auto_signature_targets;
+        for (const auto& rule : package.keyword_rules) {
+            if (!rule.auto_bind) continue;
+            const auto key =
+                scope_key(rule.bridge_type_id, rule.component_category_id) + "\n" +
+                keyword_signature(rule);
+            const auto existing =
+                auto_signature_targets.emplace(key, rule.target_node_id);
+            if (!existing.second && existing.first->second != rule.target_node_id) {
+                result.issues.push_back(issue(
+                    "rating_tree_keyword_rule_conflict",
+                    "同一适用范围内的自动关键词规则不能指向不同的病害节点。"));
+                return result;
+            }
+        }
+        // 自动关键词不能与同范围的受控别名撞车：两者都会给出自动结论。
+        for (const auto& alias : package.aliases) {
+            const auto key =
+                scope_key(alias.bridge_type_id, alias.component_category_id) + "\n" +
+                std::to_string(normalize_match_key(alias.alias).size()) + ":" +
+                normalize_match_key(alias.alias);
+            const auto conflicting = auto_signature_targets.find(key);
+            if (conflicting != auto_signature_targets.end() &&
+                conflicting->second != alias.target_node_id) {
+                result.issues.push_back(issue(
+                    "rating_tree_keyword_rule_conflict",
+                    "自动关键词规则与同范围的受控别名指向了不同的病害节点。"));
+                return result;
+            }
+        }
+        // 规则顺序稳定：先按声明的 sort_order，再按 rule_id 兜底。
+        std::sort(
+            package.keyword_rules.begin(),
+            package.keyword_rules.end(),
+            [](const RatingTreeKeywordRule& left, const RatingTreeKeywordRule& right) {
+                return std::tie(left.sort_order, left.rule_id) <
+                    std::tie(right.sort_order, right.rule_id);
+            });
     }
 
     const auto sources_it = package.documents.find("sources.json");

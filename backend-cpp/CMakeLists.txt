@@ -51,7 +51,9 @@ add_library(bridge_report_backend_core
     src/http/ComponentArchiveRoutes.cpp
     src/http/ComponentInventoryRoutes.cpp
     src/http/Cors.cpp
+    src/http/DefectPhotoRoutes.cpp
     src/http/DefectThreadRoutes.cpp
+    src/http/DefectMatchingRoutes.cpp
     src/http/EditLockRoutes.cpp
     src/http/ImportBindingRoutes.cpp
     src/http/ImportConfirmRoutes.cpp
@@ -71,12 +73,14 @@ add_library(bridge_report_backend_core
     src/inventory/NumberingTemplate.cpp
     src/inventory/ComponentPartCatalog.cpp
     src/rating_tree/RatingTreeCompiler.cpp
+    src/rating_tree/RatingTreeMatchText.cpp
     src/rating_tree/RatingTreeModels.cpp
     src/rating_tree/RatingTreePackageLoader.cpp
     src/rating_tree/RatingTreeResolver.cpp
     src/review/ConfirmPlan.cpp
     src/review/ComponentRangeSplitPlanner.cpp
     src/review/ContractCompatibility.cpp
+    src/review/DefectRatingTreeMatching.cpp
     src/review/DraftValidation.cpp
     src/review/PreflightReport.cpp
     src/review/ReviewModels.cpp
@@ -154,6 +158,9 @@ add_executable(bridge_report_backend_tests
     tests/test_h21_part_evaluation.cpp
     tests/test_confirm_plan.cpp
     tests/test_commit_latch.cpp
+    tests/test_defect_matching_routes.cpp
+    tests/test_defect_photo_routes.cpp
+    tests/test_defect_rating_tree_matching.cpp
     tests/test_defect_thread_repository.cpp
     tests/test_defect_indicator_resolver.cpp
     tests/test_defect_thread_routes.cpp

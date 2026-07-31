@@ -1,8 +1,8 @@
 import type { ReviewCounts } from "../grouping";
 
-// "需要处理" 永远排第一位；系统评定展示后端计算结果，不展示 Word 导入评分。
+// 构件绑定排第一位：构件不绑好，评定树匹配跑不起来，它是流程上的第一步。
+// 系统评定展示后端计算结果，不展示 Word 导入评分。
 export type GroupKey =
-  | "needs_attention"
   | "component_binding"
   | "defect_photos"
   | "ratings"
@@ -21,7 +21,6 @@ interface GroupDef {
 }
 
 const GROUPS: GroupDef[] = [
-  { key: "needs_attention", label: "需要处理", count: (counts) => counts.needs_attention_count },
   { key: "component_binding", label: "构件绑定", count: (counts) => counts.binding_pending_count },
   { key: "defect_photos", label: "病害与照片", count: (counts) => counts.defect_count },
   { key: "ratings", label: "系统技术状况评定", count: (counts) => counts.rating_item_count },

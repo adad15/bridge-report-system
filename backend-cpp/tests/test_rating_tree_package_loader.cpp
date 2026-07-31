@@ -19,6 +19,11 @@ std::filesystem::path organization_package_root_v102() {
         "standards/rating-tree/organization-bridge/1.0.2";
 }
 
+std::filesystem::path organization_package_root_v103() {
+    return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
+        "standards/rating-tree/organization-bridge/1.0.3";
+}
+
 void write_json(const std::filesystem::path& path, const Json::Value& value) {
     Json::StreamWriterBuilder builder;
     builder["indentation"] = "  ";
@@ -85,6 +90,47 @@ protected:
         defect["organization_note"] = "参照混凝土碳化执行";
         tree["nodes"].append(defect);
         return tree;
+    }
+
+    Json::Value keyword_rule(
+        const std::string& rule_id,
+        const std::string& target,
+        const std::string& keyword,
+        const bool auto_bind) const {
+        Json::Value rule;
+        rule["rule_id"] = rule_id;
+        rule["target_node_id"] = target;
+        rule["bridge_type_id"] = "h21.bridge_type.beam";
+        rule["component_category_id"] = "h21.component.beam.upper_general";
+        rule["positive_keywords"] = Json::Value(Json::arrayValue);
+        rule["positive_keywords"].append(keyword);
+        rule["excluded_keywords"] = Json::Value(Json::arrayValue);
+        rule["auto_bind"] = auto_bind;
+        rule["sort_order"] = 10;
+        rule["rule_note"] = "测试规则";
+        return rule;
+    }
+
+    Json::Value matching_rules(const Json::Value& rules) const {
+        Json::Value document;
+        document["tree_code"] = "organization-bridge";
+        document["package_version"] = "1.0.0";
+        document["keyword_rules"] = rules;
+        return document;
+    }
+
+    // 写入带规则包的完整包并回填正确摘要，供各条冲突用例复用。
+    void write_package_with_rules(const Json::Value& rules_document) {
+        write_valid_package();
+        auto manifest = valid_manifest();
+        manifest["entry_files"].append("matching-rules.json");
+        write_json(root_ / "matching-rules.json", rules_document);
+        write_json(root_ / "manifest.json", manifest);
+        bridge_report::rating_tree::RatingTreePackageLoader loader;
+        const auto checksum = loader.calculate_checksum(root_);
+        ASSERT_TRUE(checksum.checksum.has_value());
+        manifest["content_checksum"] = *checksum.checksum;
+        write_json(root_ / "manifest.json", manifest);
     }
 
     void write_valid_package() {
@@ -169,6 +215,138 @@ TEST_F(RatingTreePackageLoaderTest, RejectsCycles) {
     ASSERT_FALSE(result.ok());
     ASSERT_FALSE(result.issues.empty());
     EXPECT_EQ(result.issues.front().code, "rating_tree_cycle");
+}
+
+TEST_F(RatingTreePackageLoaderTest, LoadsControlledKeywordRulesInStableOrder) {
+    Json::Value rules(Json::arrayValue);
+    auto second = keyword_rule(
+        "org.bridge.keyword.b", "org.bridge.water_damage", "泛碱", false);
+    second["sort_order"] = 20;
+    auto first = keyword_rule(
+        "org.bridge.keyword.a", "org.bridge.water_damage", "渗水", true);
+    first["sort_order"] = 10;
+    rules.append(second);
+    rules.append(first);
+    write_package_with_rules(matching_rules(rules));
+
+    const auto result =
+        bridge_report::rating_tree::RatingTreePackageLoader().load(root_);
+
+    ASSERT_TRUE(result.ok());
+    ASSERT_EQ(result.package->keyword_rules.size(), 2U);
+    EXPECT_EQ(result.package->keyword_rules[0].rule_id, "org.bridge.keyword.a");
+    EXPECT_TRUE(result.package->keyword_rules[0].auto_bind);
+    EXPECT_EQ(result.package->keyword_rules[1].rule_id, "org.bridge.keyword.b");
+    EXPECT_FALSE(result.package->keyword_rules[1].auto_bind);
+}
+
+TEST_F(RatingTreePackageLoaderTest, RejectsRulePacksFromAnotherTreeVersion) {
+    Json::Value rules(Json::arrayValue);
+    rules.append(keyword_rule(
+        "org.bridge.keyword.a", "org.bridge.water_damage", "渗水", true));
+    auto document = matching_rules(rules);
+    document["package_version"] = "9.9.9";
+    write_package_with_rules(document);
+
+    const auto result =
+        bridge_report::rating_tree::RatingTreePackageLoader().load(root_);
+
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "rating_tree_rule_pack_version_mismatch");
+}
+
+TEST_F(RatingTreePackageLoaderTest, RejectsRulesTargetingAnUnselectableNode) {
+    Json::Value rules(Json::arrayValue);
+    rules.append(keyword_rule("org.bridge.keyword.a", "org.bridge", "渗水", true));
+    write_package_with_rules(matching_rules(rules));
+
+    const auto result =
+        bridge_report::rating_tree::RatingTreePackageLoader().load(root_);
+
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "rating_tree_keyword_rule_target_invalid");
+}
+
+TEST_F(RatingTreePackageLoaderTest, RejectsRulesReachingOutsideTheirTargetScope) {
+    Json::Value rules(Json::arrayValue);
+    auto rule = keyword_rule(
+        "org.bridge.keyword.a", "org.bridge.water_damage", "渗水", true);
+    rule["component_category_id"] = "h21.component.deck.pavement";
+    rules.append(rule);
+    write_package_with_rules(matching_rules(rules));
+
+    const auto result =
+        bridge_report::rating_tree::RatingTreePackageLoader().load(root_);
+
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "rating_tree_keyword_rule_scope_invalid");
+}
+
+TEST_F(RatingTreePackageLoaderTest, RejectsEmptyPositiveKeywords) {
+    Json::Value rules(Json::arrayValue);
+    auto rule = keyword_rule(
+        "org.bridge.keyword.a", "org.bridge.water_damage", "渗水", true);
+    rule["positive_keywords"] = Json::Value(Json::arrayValue);
+    rules.append(rule);
+    write_package_with_rules(matching_rules(rules));
+
+    const auto result =
+        bridge_report::rating_tree::RatingTreePackageLoader().load(root_);
+
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "rating_tree_keyword_rule_invalid");
+}
+
+TEST_F(RatingTreePackageLoaderTest, RejectsConflictingAutomaticKeywordRules) {
+    Json::Value tree = valid_tree();
+    Json::Value other = tree["nodes"][1];
+    other["id"] = "org.bridge.spalling";
+    other["display_name"] = "剥落、掉角";
+    tree["nodes"].append(other);
+    write_valid_package();
+    write_json(root_ / "tree.json", tree);
+
+    Json::Value rules(Json::arrayValue);
+    rules.append(keyword_rule(
+        "org.bridge.keyword.a", "org.bridge.water_damage", "渗水", true));
+    rules.append(
+        keyword_rule("org.bridge.keyword.b", "org.bridge.spalling", "渗水", true));
+    auto manifest = valid_manifest();
+    manifest["entry_files"].append("matching-rules.json");
+    write_json(root_ / "matching-rules.json", matching_rules(rules));
+    write_json(root_ / "manifest.json", manifest);
+    bridge_report::rating_tree::RatingTreePackageLoader loader;
+    const auto checksum = loader.calculate_checksum(root_);
+    ASSERT_TRUE(checksum.checksum.has_value());
+    manifest["content_checksum"] = *checksum.checksum;
+    write_json(root_ / "manifest.json", manifest);
+
+    const auto result = loader.load(root_);
+
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "rating_tree_keyword_rule_conflict");
+}
+
+TEST(RatingTreePackageLoaderIntegrationTest, Version103ShipsTheControlledRulePack) {
+    bridge_report::rating_tree::RatingTreePackageLoader loader;
+    const auto checksum = loader.calculate_checksum(organization_package_root_v103());
+    ASSERT_TRUE(checksum.ok());
+
+    std::ifstream input(organization_package_root_v103() / "manifest.json");
+    Json::Value manifest;
+    Json::CharReaderBuilder builder;
+    std::string errors;
+    ASSERT_TRUE(Json::parseFromStream(builder, input, &manifest, &errors));
+    EXPECT_EQ(*checksum.checksum, manifest["content_checksum"].asString());
+
+    const auto result = loader.load(organization_package_root_v103());
+    ASSERT_TRUE(result.ok());
+    // 渗水泛碱 / 泛碱 / 受渗水侵蚀 各覆盖两个梁式桥上部构件类别。
+    EXPECT_EQ(result.package->aliases.size(), 6U);
+    EXPECT_EQ(result.package->keyword_rules.size(), 4U);
+    for (const auto& alias : result.package->aliases) {
+        EXPECT_EQ(alias.target_node_id, "org.bridge.defect.5_1_1_water_damage");
+    }
 }
 
 TEST(RatingTreePackageLoaderIntegrationTest, OrganizationPackageChecksumMatchesManifest) {
