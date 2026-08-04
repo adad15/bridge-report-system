@@ -41,15 +41,16 @@ powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1
 - [ ] 先写失败测试：用一个内存 SQLite 造出五张表的最小样本，断言导出结果的三元组
       数量、字段与排序稳定。
 - [ ] 实现 `load_source_triples(db_path)`：只读打开（`file:...?mode=ro`），三表联查
-      去重，返回 `(group_code, group_name, index_code, index_name, template_name)`
-      的有序列表。
-- [ ] 实现 `filter_h21(triples, indicators)`：按 `h21.defect.X_Y_Z` 是否存在于 H21 包
-      的指标集合过滤，返回保留项与排除统计。
+      去重，返回带 `index_id` 的有序列表。**必须按 `judgeIndex.id` 取**——`tableNum`
+      在库里会重复（`5.1.1-13` 是两个不同指标，`1.3.1` 重复 24 次），按编号取会串行。
+- [ ] 实现 `classify(triples, h21_indicators)`：分成三档——a 编号直接对上 H21、
+      b 同章节但超出 H21 编号（单位扩展项）、c 属于别的标准。返回三组与统计。
+      **b 档不得并入 c 档丢弃**，它包含水损这类 H21 没有、评定树自己加的指标。
 - [ ] 输出必须按固定键排序，保证同一份库反复导出字节一致。
 
 完成条件：
 
-- 对真实离线库导出得到 808 条三元组，其中 373 条通过 H21 过滤；
+- 对真实离线库导出得到 808 条三元组，分档为 a 373 / b 11 / c 424；
 - 连续两次导出结果 diff 为空。
 
 提交建议：
@@ -65,10 +66,14 @@ feat(standards): export defect templates from the source offline database
 **新增：**
 
 - `standards/rating-tree/organization-bridge/1.0.4/source-component-map.json`
+- `standards/rating-tree/organization-bridge/1.0.4/source-index-map.json`
 
 步骤：
 
-- [ ] 由 Task 1 输出那 373 条涉及的 46 个源分组清单，生成待填模板（每行含源分组编号、
+- [ ] 先填 6 行的指标对表 `source-index-map.json`：b 档那 6 个单位扩展指标
+      （`5.1.1-13` 水损、`9.1.1-10` / `9.2.1-10` 水损害，以及三个"其它病害"）
+      → 评定树节点 id。填不出的显式留空并注明。
+- [ ] 由 Task 1 输出 a 档涉及的 46 个源分组清单，生成待填模板（每行含源分组编号、
       名称、留空的 H21 构件类别数组）。
 - [ ] 人工填写每个分组对应的 H21 构件类别（可多个）。填不出的留空并注明原因。
 - [ ] 脚本校验：每个填入的构件类别都必须存在于 H21 `component-taxonomy.json`；
@@ -77,7 +82,7 @@ feat(standards): export defect templates from the source offline database
 
 完成条件：
 
-- 46 行全部有明确结论（填写或显式留空 + 原因）；
+- 46 行构件对表与 6 行指标对表全部有明确结论（填写或显式留空 + 原因）；
 - 校验脚本零错误。
 
 提交建议：
@@ -99,7 +104,8 @@ feat(standards): map source component groups to H21 categories
 
 - [ ] 先写失败测试，至少覆盖：唯一映射生成一条别名；同作用域多指向被降级为候选规则
       且不进别名表；源分组未对表时整组跳过；H21 指标在评定树里没有节点时跳过并报告。
-- [ ] 实现生成：对每条三元组，用对表得到构件类别集合，用指标编号反查评定树节点，
+- [ ] 实现生成：对每条三元组，用构件对表得到构件类别集合；a 档用指标编号反查评定树
+      节点，b 档用指标对表直接取节点 id；
       与节点自带的 `bridge_type_ids` × `component_category_ids` 取交集后产出条目。
 - [ ] 按 `(模板, 桥型, 构件类别)` 归并；命中多个节点的一律不写别名，改写候选规则。
 - [ ] 产出三份文件：`aliases.json` 增量、候选规则增量、以及一份人类可读的生成报告
@@ -123,14 +129,14 @@ feat(standards): generate controlled aliases from defect templates
 **新增：**
 
 - `standards/rating-tree/organization-bridge/1.0.4/`（manifest / tree / aliases /
-  matching-rules / sources / source-component-map）
+  matching-rules / sources / source-component-map / source-index-map）
 
 步骤：
 
 - [ ] 从 1.0.3 复制 `tree.json` 与 `sources.json`，节点不变。
 - [ ] 合并 Task 3 的别名增量到 `aliases.json`，合并候选规则增量到 `matching-rules.json`。
 - [ ] `manifest.json` 的 `package_version` 改为 `1.0.4`，`entry_files` 加入
-      `source-component-map.json`。
+      `source-component-map.json` 与 `source-index-map.json`。
 - [ ] 计算 `content_checksum`：清空该字段后按后端同一套规范化 JSON 规则算摘要，
       或先填占位启动后端、从校验失败日志里取实际摘要回填。
 - [ ] 后端启动后确认包同步成功、无 checksum 冲突、`/health/db` 的
@@ -198,7 +204,7 @@ powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1
 ## 最终验收清单
 
 1. 808 条三元组可复跑导出，两次结果一致；
-2. 46 行对表全部有结论，且构件类别都通过 H21 分类校验；
+2. 46 行构件对表与 6 行指标对表全部有结论，且构件类别都通过 H21 分类校验；
 3. 别名表中不存在作用域冲突的条目，冲突全部降级为候选；
 4. 1.0.3 未被改动，1.0.4 装载成功；
 5. 2024 年度草稿离线验证显示自动定节点条数上升，且无一条由已定变未定；
