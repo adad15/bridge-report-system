@@ -54,6 +54,8 @@ SAMPLE = [
     # 同一个 tableNum，不同分组下是完全不同的指标——真实库里就是这样。
     ("6.1.3", "桥面板", "idx-c", "5.1.1-13", "桥面板其它病害", "横向裂缝"),
     ("1.1.1", "桥面铺装", "idx-d", "1.1.1-6", "桥面贯通横缝", "横向裂缝"),
+    # 涵洞分组借用了桥梁栏杆的指标编号：编号是 H21 的，但分组不属于定检。
+    ("12.4-4", "排水沟", "idx-e", "5.1.1-2", "剥落、掉角", "破损"),
 ]
 
 
@@ -67,7 +69,7 @@ def source_db(tmp_path):
 def test_loads_every_group_index_template_triple(source_db) -> None:
     triples = load_source_triples(source_db)
 
-    assert len(triples) == 4
+    assert len(triples) == 5
     assert SourceTriple(
         "5.1.1", "上部承重构件、上部一般构件", "idx-b", "5.1.1-13", "水损（参照混凝土碳化执行）", "渗水泛碱"
     ) in triples
@@ -121,22 +123,24 @@ def test_maps_source_index_code_to_h21_indicator_id() -> None:
     assert h21_indicator_id("10.1.2-7") == "h21.defect.10_1_2_7"
 
 
+KNOWN = {"h21.defect.5_1_1_2", "h21.defect.6_1_3_1"}
+
+
 def test_splits_triples_into_three_buckets(source_db) -> None:
-    known = {"h21.defect.5_1_1_2"}
+    result = classify(load_source_triples(source_db), KNOWN)
 
-    result = classify(load_source_triples(source_db), known)
-
-    # a：编号直接对上 H21
+    # a：编号对上 H21，且分组本身属于定检章节
     assert [t.index_id for t in result.mapped] == ["idx-a"]
     # b：同章节但超出 H21 编号，是评定树自己加的指标——不能当成别的标准丢掉
     assert {t.index_id for t in result.extensions} == {"idx-b", "idx-c"}
     # c：经常检查等别的标准
-    assert [t.index_id for t in result.foreign] == ["idx-d"]
-    assert result.counts == {"mapped": 1, "extensions": 2, "foreign": 1}
+    # c：经常检查，以及借用了 H21 编号但分组属于涵洞的那条
+    assert sorted(t.index_id for t in result.foreign) == ["idx-d", "idx-e"]
+    assert result.counts == {"mapped": 1, "extensions": 2, "foreign": 2}
 
 
 def test_extension_bucket_lists_the_indices_that_need_a_manual_row(source_db) -> None:
-    result = classify(load_source_triples(source_db), {"h21.defect.5_1_1_2"})
+    result = classify(load_source_triples(source_db), KNOWN)
 
     # 对表按指标实例给，不能按编号——两个 5.1.1-13 要分别对。
     assert sorted(result.extension_indices) == [
@@ -152,3 +156,56 @@ def test_reads_indicator_ids_from_the_real_h21_package(h21_package_root) -> None
     # H21 的 5.1.1 只到 -12，没有水损；它是单位评定树加的。
     assert "h21.defect.5_1_1_13" not in ids
     assert len(ids) > 200
+
+
+def test_component_map_template_lists_every_group_once(source_db) -> None:
+    from bridge_report_tools.standards.defect_template_source import build_component_map_template
+
+    triples = load_source_triples(source_db)
+    result = classify(triples, KNOWN)
+
+    rows = build_component_map_template(result.mapped, node_lookup={}, category_names={})
+
+    assert [row["group_code"] for row in rows] == ["5.1.1"]
+    assert rows[0]["group_name"] == "上部承重构件、上部一般构件"
+    assert rows[0]["template_count"] == 1
+    # 待人工填写的字段必须是空的，建议单独放，不能混为一谈。
+    assert rows[0]["component_category_ids"] == []
+    assert "suggested_component_category_ids" in rows[0]
+
+
+def test_component_map_template_suggests_from_the_rating_tree(source_db) -> None:
+    from bridge_report_tools.standards.defect_template_source import build_component_map_template
+
+    result = classify(load_source_triples(source_db), KNOWN)
+    lookup = {
+        "h21.defect.5_1_1_2": [
+            {"id": "org.node.a", "component_category_ids": ["h21.component.beam.upper_bearing"]},
+        ]
+    }
+
+    rows = build_component_map_template(result.mapped, lookup, {"h21.component.beam.upper_bearing": "上部承重构件"})
+
+    assert rows[0]["suggested_component_category_ids"] == ["h21.component.beam.upper_bearing"]
+    assert rows[0]["suggestion_names"] == ["上部承重构件"]
+
+
+def test_index_map_template_lists_each_extension_index(source_db) -> None:
+    from bridge_report_tools.standards.defect_template_source import build_index_map_template
+
+    result = classify(load_source_triples(source_db), KNOWN)
+
+    rows = build_index_map_template(result.extensions)
+
+    assert [row["index_id"] for row in rows] == ["idx-b", "idx-c"]
+    assert rows[0]["index_code"] == "5.1.1-13"
+    assert rows[0]["target_node_id"] == ""
+    assert rows[0]["templates"] == ["渗水泛碱"]
+
+
+def test_a_group_from_another_standard_never_enters_the_mapped_bucket(source_db) -> None:
+    """12.4-4 排水沟属于涵洞，却挂着桥梁栏杆的指标编号；只看编号会把它当成定检。"""
+    result = classify(load_source_triples(source_db), KNOWN)
+
+    assert all(t.group_code != "12.4-4" for t in result.mapped)
+    assert any(t.group_code == "12.4-4" for t in result.foreign)

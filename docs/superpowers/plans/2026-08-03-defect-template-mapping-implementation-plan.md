@@ -43,14 +43,15 @@ powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1
 - [ ] 实现 `load_source_triples(db_path)`：只读打开（`file:...?mode=ro`），三表联查
       去重，返回带 `index_id` 的有序列表。**必须按 `judgeIndex.id` 取**——`tableNum`
       在库里会重复（`5.1.1-13` 是两个不同指标，`1.3.1` 重复 24 次），按编号取会串行。
-- [ ] 实现 `classify(triples, h21_indicators)`：分成三档——a 编号直接对上 H21、
+- [ ] 实现 `classify(triples, h21_indicators)`：分成三档——a 编号对上 H21 且分组
+      属于定检章节、
       b 同章节但超出 H21 编号（单位扩展项）、c 属于别的标准。返回三组与统计。
       **b 档不得并入 c 档丢弃**，它包含水损这类 H21 没有、评定树自己加的指标。
 - [ ] 输出必须按固定键排序，保证同一份库反复导出字节一致。
 
 完成条件：
 
-- 对真实离线库导出得到 808 条三元组，分档为 a 373 / b 12 / c 423；
+- 对真实离线库导出得到 808 条三元组，分档为 a 362 / b 12 / c 434；
 - 连续两次导出结果 diff 为空。
 
 提交建议：
@@ -73,7 +74,7 @@ feat(standards): export defect templates from the source offline database
 - [ ] 先填 7 行的指标对表 `source-index-map.json`：b 档那 7 个单位扩展指标
       （`5.1.1-13` 水损、`9.1.1-10` / `9.2.1-10` 水损害、`8.6.1` 减震装置，
       以及三个"其它病害"）→ 评定树节点 id。填不出的显式留空并注明。
-- [ ] 由 Task 1 输出 a 档涉及的 46 个源分组清单，生成待填模板（每行含源分组编号、
+- [ ] 由 Task 1 输出 a 档涉及的 45 个源分组清单，生成待填模板（每行含源分组编号、
       名称、留空的 H21 构件类别数组）。
 - [ ] 人工填写每个分组对应的 H21 构件类别（可多个）。填不出的留空并注明原因。
 - [ ] 脚本校验：每个填入的构件类别都必须存在于 H21 `component-taxonomy.json`；
@@ -82,7 +83,7 @@ feat(standards): export defect templates from the source offline database
 
 完成条件：
 
-- 46 行构件对表与 7 行指标对表全部有明确结论（填写或显式留空 + 原因）；
+- 45 行构件对表与 7 行指标对表全部有明确结论（填写或显式留空 + 原因）；
 - 校验脚本零错误。
 
 提交建议：
@@ -204,7 +205,7 @@ powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1
 ## 最终验收清单
 
 1. 808 条三元组可复跑导出，两次结果一致；
-2. 46 行构件对表与 7 行指标对表全部有结论，且构件类别都通过 H21 分类校验；
+2. 45 行构件对表与 7 行指标对表全部有结论，且构件类别都通过 H21 分类校验；
 3. 别名表中不存在作用域冲突的条目，冲突全部降级为候选；
 4. 1.0.3 未被改动，1.0.4 装载成功；
 5. 2024 年度草稿离线验证显示自动定节点条数上升，且无一条由已定变未定；
