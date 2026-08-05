@@ -61,7 +61,8 @@ powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1
 
 完成条件：
 
-- 对真实离线库读取百股大桥 2024（`4ec7bd71`）得到 259 个构件、279 条病害、170 张照片；
+- 对快照读取百股大桥 2024（`4ec7bd71`）得到 278 个台账节点（其中具体构件 259 个）、
+  279 条病害、166 张挂在病害上的照片；
 - 连续两次读取结果 diff 为空；
 - 单元测试断言连接使用了 `mode=ro`。
 
