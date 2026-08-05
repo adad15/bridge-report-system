@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from bridge_report_tools.importers.source_db.reader import ComponentNode, SourceDefect
@@ -23,6 +24,18 @@ DIMENSION_TYPES = {
 #: 取 word 表示"来自导入"——写 manual 会让这些病害被当成人工新增的。
 SOURCE_TYPE = "word"
 SOURCE_REMARK = "由来源软件离线库导入"
+
+
+@dataclass(frozen=True)
+class DefectLink:
+    """源病害 id → 契约候选 id 与来源构件节点 id。
+
+    照片是按源病害 id 绑定的，而契约候选另有自己的 id；不显式记下这层对应，
+    照片就永远挂不上去。
+    """
+
+    candidate_id: str
+    tree_id: str
 
 
 def h21_indicator_id(index_code: str) -> str:
@@ -100,9 +113,16 @@ def build_defect_candidates(
     indicator_codes: dict[str, tuple[str, str]],
     h21_indicator_ids: set[str],
     category_names: dict[str, str] | None = None,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, DefectLink]]:
+    """返回 (病害候选, 源病害 id → DefectLink)。
+
+    映射按**源病害 id** 索引，因为照片就是按它绑定的。构件节点 id 一并带上，
+    但两者都不属于契约——契约模型是 extra="forbid"，往候选字典里塞私有键会让整份
+    数据校验失败，所以单独返回。
+    """
     by_level = {node.level_code: node for node in tree if node.level_code}
-    candidates = []
+    candidates: list[dict[str, Any]] = []
+    links: dict[str, DefectLink] = {}
     for position, defect in enumerate(defects, start=1):
         warnings: list[dict[str, str]] = []
         component = resolve_component(tree, defect.tree_id)
@@ -123,8 +143,10 @@ def build_defect_candidates(
         indicator = h21_indicator_id(code) if code else ""
         standard_indicator = indicator if indicator in h21_indicator_ids else None
 
+        candidate_id = f"source_defect_{position:04d}"
+        links[defect.id] = DefectLink(candidate_id, defect.tree_id)
         candidates.append({
-            "candidate_id": f"source_defect_{position:04d}",
+            "candidate_id": candidate_id,
             "component_name": component_name,
             "component_number": component_number,
             "defect_type": defect.name,
@@ -147,4 +169,4 @@ def build_defect_candidates(
             "review_status": "待确认",
             "warnings": warnings,
         })
-    return candidates
+    return candidates, links

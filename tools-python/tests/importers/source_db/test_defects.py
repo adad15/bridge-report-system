@@ -35,7 +35,8 @@ def defect(**overrides) -> SourceDefect:
 
 
 def build(defects, **kwargs):
-    return build_defect_candidates(defects, TREE, CODES, H21_IDS, **kwargs)
+    candidates, _ = build_defect_candidates(defects, TREE, CODES, H21_IDS, **kwargs)
+    return candidates
 
 
 def test_maps_the_source_index_code_to_an_h21_indicator() -> None:
@@ -118,7 +119,7 @@ def test_carries_the_scale_the_inspector_recorded() -> None:
 def test_keeps_the_range_notation_for_the_backend_to_split() -> None:
     """拆分由 C++ 现有的 ComponentRangeParser 做，解析器原样带过去。"""
     ranged = ComponentNode("t-r", "1-1#板~1-25#板", "001001003", 3, None, "空心板")
-    candidates = build_defect_candidates(
+    candidates, _ = build_defect_candidates(
         [defect(tree_id="t-r")], TREE + [ranged], CODES, H21_IDS)
 
     assert candidates[0]["component_number"] == "1-1#板~1-25#板"
@@ -156,3 +157,12 @@ def test_reports_a_defect_whose_component_is_unknown() -> None:
 def test_resolve_component_returns_none_for_an_unknown_tree_id() -> None:
     assert resolve_component(TREE, "nope") is None
     assert resolve_component(TREE, "t-a").name == "25-1#板"
+
+
+def test_returns_a_link_keyed_by_the_source_defect_id() -> None:
+    """照片是按源病害 id 绑定的；映射若按候选 id 索引，照片一张也挂不上。"""
+    _, links = build_defect_candidates([defect(id="src-9")], TREE, CODES, H21_IDS)
+
+    assert "src-9" in links
+    assert links["src-9"].candidate_id == "source_defect_0001"
+    assert links["src-9"].tree_id == "t-a"
