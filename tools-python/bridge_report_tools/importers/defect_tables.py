@@ -192,7 +192,6 @@ def parse_defect_tables(
                     ),
                     confidence=0.92,
                     review_status="待确认",
-                    review_note=None,
                     warnings=row_warnings,
                 )
             )

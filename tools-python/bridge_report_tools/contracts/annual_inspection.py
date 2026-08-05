@@ -204,7 +204,6 @@ class DefectCandidate(ContractModel):
     source_ref: SourceRef
     confidence: float = Field(ge=0, le=1)
     review_status: ReviewStatus
-    review_note: str | None = None
     range_split_origin: RangeSplitOrigin | None = None
     warnings: list[WarningItem]
 
