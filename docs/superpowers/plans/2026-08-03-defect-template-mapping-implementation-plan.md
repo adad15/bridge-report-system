@@ -1,5 +1,23 @@
 # 实施计划：用来源软件的病害描述模板建立受控映射
 
+> **状态：2026-08-05 暂停。**
+>
+> 后续发现来源软件的桌面程序会把**整座桥的检测数据**下载到本机离线库（`tasks` /
+> `taskTrees` / `outerCheckData` / `images`），其中每条病害**自带评定指标
+> （`judgeIndexId`）、标度、已拆分的尺寸、所属台账节点和照片绑定**。实测 2024 年度
+> 那份数据 275 条真实病害，带明确指标的比例是 100%——而本文档要解决的问题，正是
+> 你系统里 361 条中有 176 条定不到指标。
+>
+> 也就是说：**本文档设计的别名映射表，是在猜一个上游已经给出答案的东西。**
+> 直接导入若可行，本方案的主要价值即不复存在。
+>
+> **不作废、不回退**，因为：Task 1 的导出模块（只读打开来源库、H21 指标对照、
+> 评定树节点索引）在新路子上原样复用；那 7 行「单位扩展指标 → 评定树节点」对表
+> （水损、减震装置等 H21 没有的指标）在新路子上同样需要。作废的只是 45 行的
+> 「源构件分组 → H21 构件类别」对表与其后的别名生成、发包步骤。
+>
+> 新方向确认前不要按本文档继续施工。
+
 设计文档：[2026-08-03-defect-template-mapping-design.md](../specs/2026-08-03-defect-template-mapping-design.md)
 日期：2026-08-03
 
@@ -12,7 +30,7 @@
 
 ---
 
-## Task 0：记录基线
+## （已完成）Task 0：记录基线
 
 - [ ] 记录当前可自动定节点的条数（现为 361 条中 185 条），保存查询与结果。
 - [ ] 记录后端测试数、前端测试文件数与用例数，作为回归对照。
@@ -28,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1
 
 ---
 
-## Task 1：导出脚本
+## （已完成，成果复用）Task 1：导出脚本
 
 **新增：**
 
@@ -62,7 +80,7 @@ feat(standards): export defect templates from the source offline database
 
 ---
 
-## Task 2：源构件分组对表（人工）
+## （暂停）Task 2：源构件分组对表（人工）
 
 **新增：**
 
@@ -94,7 +112,7 @@ feat(standards): map source component groups to H21 categories
 
 ---
 
-## Task 3：别名生成器
+## （暂停）Task 3：别名生成器
 
 **新增：**
 
@@ -125,7 +143,7 @@ feat(standards): generate controlled aliases from defect templates
 
 ---
 
-## Task 4：发布 1.0.4 规则包
+## （暂停）Task 4：发布 1.0.4 规则包
 
 **新增：**
 
@@ -156,7 +174,7 @@ feat(standards): publish rating tree package 1.0.4 with template aliases
 
 ---
 
-## Task 5：离线验证收益
+## （暂停）Task 5：离线验证收益
 
 **新增：**
 
@@ -183,7 +201,7 @@ test(standards): verify template alias coverage against the 2024 draft
 
 ---
 
-## Task 6：回归与验收
+## （暂停）Task 6：回归与验收
 
 - [ ] `scripts/dev/check-backend-tests.ps1` 全绿，迁移各跑两遍。
 - [ ] Python 测试全绿。
