@@ -28,6 +28,7 @@ def build_db(path, *, skip_table=None, drop_column=None):
                            ' "宽度" text, "宽度单位" text, "面积一" text, "面积一单位" text, "走向" text'),
         "images": ("id text primary key, taskId text, fileName text, contentType text, w integer, h integer,"
                    " ForeignTable text, ForeignKey text, memberNum text"),
+        "judgeIndex": "id text primary key, tableNum text, name text",
     }
     for table, columns in schema.items():
         if table == skip_table:
@@ -184,3 +185,22 @@ def test_reading_is_stable_across_runs(source_db):
         assert load_defects(db, TASK) == load_defects(db, TASK)
         assert load_component_tree(db, TASK) == load_component_tree(db, TASK)
         assert load_photos(db, TASK) == load_photos(db, TASK)
+
+
+def test_indexes_indicator_codes_by_id(tmp_path):
+    """编号会重复，只有 judgeIndex.id 是唯一键。"""
+    path = tmp_path / "idx.sqlite"
+    build_db(path)
+    db = sqlite3.connect(path)
+    db.execute("insert into judgeIndex values ('i-a','5.1.1-13','水损（参照混凝土碳化执行）')")
+    db.execute("insert into judgeIndex values ('i-b','5.1.1-13','桥面板其它病害')")
+    db.commit()
+    db.close()
+
+    from bridge_report_tools.importers.source_db.reader import load_indicator_codes
+
+    with open_source_db(path) as connection:
+        codes = load_indicator_codes(connection)
+
+    assert codes["i-a"] == ("5.1.1-13", "水损（参照混凝土碳化执行）")
+    assert codes["i-b"] == ("5.1.1-13", "桥面板其它病害")

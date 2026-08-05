@@ -35,6 +35,7 @@ REQUIRED_SCHEMA: dict[str, tuple[str, ...]] = {
         "数量", "数量单位", "长度", "长度单位", "宽度", "宽度单位", "面积一", "面积一单位", "走向",
     ),
     "images": ("id", "taskId", "fileName", "contentType", "w", "h", "ForeignTable", "ForeignKey", "memberNum"),
+    "judgeIndex": ("id", "tableNum", "name"),
 }
 
 #: 尺寸列与其单位列成对出现。
@@ -170,6 +171,17 @@ def load_defects(db: sqlite3.Connection, task_id: str) -> list[SourceDefect]:
             direction=str(row[index["走向"]] or ""),
         ))
     return defects
+
+
+def load_indicator_codes(db: sqlite3.Connection) -> dict[str, tuple[str, str]]:
+    """`judgeIndex.id` → (指标编号, 指标名称)。
+
+    编号会重复（同一个 `5.1.1-13` 在不同分组下是两个不同指标），所以按 id 索引。
+    """
+    return {
+        str(i): (str(num or ""), str(name or ""))
+        for i, num, name in db.execute("select id, tableNum, name from judgeIndex")
+    }
 
 
 def load_photos(db: sqlite3.Connection, task_id: str) -> list[SourcePhoto]:
