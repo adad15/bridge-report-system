@@ -89,8 +89,17 @@ feat(import): read inspection data from the source offline database
 - [ ] 实现构件认领：`treeId` → `taskTrees` → 构件编号与父级类别名。
 - [ ] 实现 `component_name` 回退链：父级名 → `memberTypeName` → 上级部位名；
       全空则该条带警告，**不得让整次导入失败**。
-- [ ] 实现指标映射：复用 `standards/defect_template_source.py` 的三档判定；
-      单位扩展指标走 7 行对表；无法落到评定树节点的按无匹配处理并计入警告。
+- [ ] 实现指标换算：源指标编号 → `h21.defect.*`，填进契约已有的
+      `standard_defect_indicator_id`。**H21 里没有的编号一律留空，不硬凑。**
+
+      不需要对表，也不需要动评定树。实测三年百股 974 条：441 条的指标在梁式桥作用域下
+      唯一可定；514 条是「渗水泛碱」，现有别名表本来就认得（正是当前 184 条能匹配上的
+      原因）；仅 3 条落在「碳化 vs 水损」这个同作用域二选一上，描述里有「渗水」「水蚀」
+      足以区分；其余 16 条走现有人工流程。合计 98% 可自动定好。
+
+      **评定树不能改成"给水损一个自己的 H21 编号"**：编译器强制要求参与评分的节点
+      引用的 H21 指标必须真实存在（`rating_tree_h21_indicator_missing`），而 H21 的
+      5.1.1 只有 12 项；且水损的标度与扣分表正是从碳化那条指标取的，改了就没标度可选。
 - [ ] 实现尺寸组装：数量/长度/宽度/高度/面积一 + 各自单位列 → `measurements`，
       **不得 import `importers/measurements.py`**（设计 §3）。
 - [ ] 位置由 `pos` / `posStake` / `posPart1..5` 组装。
@@ -98,7 +107,8 @@ feat(import): read inspection data from the source offline database
 
 完成条件：
 
-- 2024 那份数据产出 279 条病害候选，指标填充率 ≥ 99%；
+- 2024 那份数据产出 279 条病害候选；
+- `standard_defect_indicator_id` 的填充率与"H21 有该指标"的条数一致，不多不少；
 - 无 `component_name` 为空的候选；
 - 与现有 361 条的对账可解释（设计 §10.2）。
 
@@ -187,6 +197,12 @@ feat(import): add the source database parse endpoint
 步骤：
 
 - [ ] 先写失败测试：来源为源库时调用新端点；为 Word 时行为与现在**完全一致**。
+- [ ] 匹配器增加一条兜底路径：现有文字匹配（精确名/别名/关键词/片段）全部落空时，
+      才用契约里的 `standard_defect_indicator_id` 按"指标 + 桥型 + 构件类别"选节点；
+      该组合在树中不唯一时不自动定，落候选交人工。**文字匹配优先级不变。**
+- [ ] `ImportBindingRepository` 重绑时**不再清空 `standard_defect_indicator_id`**。
+      它来自源软件而不是文字推断，清掉就再也算不回来（离线库在客户端，服务端读不到），
+      那 441 条会在用户动一次构件绑定后集体失去指标。
 - [ ] C++ 侧按导入来源选择端点与请求体，响应处理、照片归档、`parsed_result_json`
       写入路径**不变**。
 - [ ] 前端导入对话框增加来源选项；选择源库时要求填 taskId 或从任务列表中选。
