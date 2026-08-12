@@ -56,10 +56,10 @@ Json::Value binding_overview_json(const db::BindingOverview& overview) {
 
 namespace {
 
-Json::Value split_plan_json(const review::ComponentRangeSplitPlan& plan) {
+Json::Value split_analysis_json(const review::ComponentRangeSplitAnalysis& analysis) {
     Json::Value value(Json::objectValue);
     value["items"] = Json::Value(Json::arrayValue);
-    for (const auto& item : plan.items) {
+    for (const auto& item : analysis.items) {
         Json::Value row(Json::objectValue);
         row["part_name"] = item.target.part_name;
         row["component_number"] = item.target.component_number;
@@ -72,7 +72,7 @@ Json::Value split_plan_json(const review::ComponentRangeSplitPlan& plan) {
         row["unmatched_count"] = item.unmatched_count;
         value["items"].append(std::move(row));
     }
-    const auto& totals = plan.totals;
+    const auto& totals = analysis.totals;
     value["totals"]["selected_range_count"] = totals.selected_range_count;
     value["totals"]["source_defect_count"] = totals.source_defect_count;
     value["totals"]["result_defect_count"] = totals.result_defect_count;
@@ -86,7 +86,7 @@ Json::Value split_plan_json(const review::ComponentRangeSplitPlan& plan) {
 void respond_split(const HttpCallback& callback,
                    const db::ComponentRangeSplitOutcome& outcome) {
     if (outcome.status == db::ComponentRangeSplitStatus::Ok) {
-        Json::Value body = split_plan_json(*outcome.plan);
+        Json::Value body = split_analysis_json(*outcome.analysis);
         body["impact_token"] = outcome.impact_token;
         if (!outcome.operation_id.empty()) body["operation_id"] = outcome.operation_id;
         if (outcome.overview) body["overview"] = binding_overview_json(*outcome.overview);

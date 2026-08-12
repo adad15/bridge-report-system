@@ -178,14 +178,17 @@ TEST_F(ImportBindingRepositoryTest, PreviewAndApplySelectedRangeAtomically) {
         {"上部承重构件", "1-1#梁~1-25#梁"}};
     const auto preview = repository.preview(import_id_, targets);
     ASSERT_EQ(preview.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
-    ASSERT_TRUE(preview.plan.has_value());
-    EXPECT_EQ(preview.plan->totals.result_defect_count, 75);
-    EXPECT_EQ(preview.plan->totals.bound_count, 3);
+    ASSERT_TRUE(preview.analysis.has_value());
+    EXPECT_FALSE(preview.plan.has_value());
+    EXPECT_EQ(preview.analysis->totals.result_defect_count, 75);
+    EXPECT_EQ(preview.analysis->totals.bound_count, 3);
     EXPECT_TRUE(preview.impact_token.starts_with("sha256:"));
 
     const auto applied =
         repository.apply(import_id_, targets, preview.impact_token, user_id_);
     ASSERT_EQ(applied.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
+    ASSERT_TRUE(applied.analysis.has_value());
+    ASSERT_TRUE(applied.plan.has_value());
     ASSERT_TRUE(applied.overview.has_value());
     EXPECT_FALSE(applied.operation_id.empty());
     const auto after = client_->execSqlSync(

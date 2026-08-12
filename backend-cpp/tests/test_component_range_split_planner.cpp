@@ -11,6 +11,7 @@ using bridge_report::inventory::InventoryMapping;
 using bridge_report::inventory::InventoryRevision;
 using bridge_report::review::ComponentRangeSplitPlanStatus;
 using bridge_report::review::ComponentRangeSplitTarget;
+using bridge_report::review::analyze_component_range_splits;
 using bridge_report::review::plan_component_range_splits;
 
 InventoryEntry entry(std::string id, std::string number) {
@@ -107,6 +108,30 @@ TEST(ComponentRangeSplitPlannerTest, ExpandsEveryReferencedDefectAndCopiesPhotos
                   "component_range_split_review_required");
     }
     EXPECT_EQ(ids.size(), 9u);
+}
+
+TEST(ComponentRangeSplitPlannerTest, LightweightAnalysisMatchesMaterializedSummary) {
+    const auto current = document(3);
+    const auto inventory = revision({entry("c1", "1-1#梁"), entry("c2", "1-2#梁"),
+                                     entry("c3", "1-3#梁")});
+    const auto targets = std::vector<ComponentRangeSplitTarget>{
+        {"上部承重构件", "1-1#梁~1-3#梁"}};
+
+    const auto analysis = analyze_component_range_splits(current, inventory, targets);
+    const auto plan = plan_component_range_splits(current, inventory, targets);
+
+    ASSERT_EQ(analysis.status, ComponentRangeSplitPlanStatus::Ok);
+    ASSERT_EQ(analysis.items.size(), 1u);
+    EXPECT_EQ(analysis.items[0].source_defect_count, 3);
+    EXPECT_EQ(analysis.items[0].result_defect_count, 9);
+    EXPECT_EQ(analysis.items[0].result_photo_count, 3);
+    EXPECT_EQ(analysis.items[0].bound_count, 9);
+    EXPECT_EQ(analysis.totals.result_defect_count, plan.totals.result_defect_count);
+    EXPECT_EQ(analysis.totals.result_photo_count, plan.totals.result_photo_count);
+    EXPECT_EQ(analysis.totals.bound_count, plan.totals.bound_count);
+    ASSERT_EQ(analysis.work_items.size(), 1u);
+    EXPECT_EQ(analysis.work_items[0].source_candidate_ids.size(), 3u);
+    EXPECT_EQ(analysis.work_items[0].matches.size(), 3u);
 }
 
 TEST(ComponentRangeSplitPlannerTest, ReportsUniqueAmbiguousAndMissingMatches) {

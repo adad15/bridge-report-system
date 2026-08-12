@@ -33,10 +33,12 @@ describe("ComponentRangeSplitDialog", () => {
     render(
       <ComponentRangeSplitDialog
         preview={preview}
+        loading={false}
         targets={targets}
         busy={false}
         error={null}
         onClose={() => undefined}
+        onRetry={() => undefined}
         onApply={onApply}
       />
     );
@@ -44,5 +46,24 @@ describe("ComponentRangeSplitDialog", () => {
     expect(screen.getByText("3 → 75")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "确认拆分" }));
     expect(onApply).toHaveBeenCalledWith(targets, "sha256:preview");
+  });
+
+  it("shows a cancellable loading state before the preview is ready", () => {
+    render(
+      <ComponentRangeSplitDialog
+        preview={null}
+        loading
+        targets={targets}
+        busy={false}
+        error={null}
+        onClose={() => undefined}
+        onRetry={() => undefined}
+        onApply={() => undefined}
+      />
+    );
+
+    expect(screen.getByText("正在计算拆分影响…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "取消" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "确认拆分" })).toBeDisabled();
   });
 });

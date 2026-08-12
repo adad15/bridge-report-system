@@ -8,6 +8,8 @@ import {
   bindInspectionRatingTree,
   fetchComponentBinding,
   markComponentMissing,
+  previewComponentRangeSplit,
+  type ComponentBindingOverview,
 } from "../../api/importBindingApi";
 import { fetchRatingTreeVersions } from "../../api/ratingTreeApi";
 import { ComponentBindingWorkspace } from "./ComponentBindingWorkspace";
@@ -20,6 +22,7 @@ vi.mock("../../api/importBindingApi", async (importOriginal) => {
     bindComponent: vi.fn(),
     bindInspectionRatingTree: vi.fn(),
     markComponentMissing: vi.fn(),
+    previewComponentRangeSplit: vi.fn(),
     clearComponentBinding: vi.fn(),
   };
 });
@@ -71,7 +74,7 @@ const inventory = {
   ],
 };
 
-function overview(status: "unmatched" | "bound" | "missing") {
+function overview(status: "unmatched" | "bound" | "missing"): ComponentBindingOverview {
   return {
     inventory_confirmed: true,
     groups: [
@@ -89,6 +92,8 @@ function overview(status: "unmatched" | "bound" | "missing") {
             status,
             bridge_component_id: status === "bound" ? "c1" : null,
             candidate_component_ids: status === "unmatched" ? ["c1"] : [],
+            split_eligible: false,
+            split_expanded_count: null,
           },
         ],
       },
@@ -230,5 +235,43 @@ describe("ComponentBindingWorkspace", () => {
     await userEvent.click(screen.getByLabelText("标记缺失 1-1#梁"));
 
     await waitFor(() => expect(onDraftInvalidated).toHaveBeenCalledTimes(1));
+  });
+
+  it("opens the split dialog before the preview request finishes and ignores a late result after close", async () => {
+    const splitOverview = overview("unmatched");
+    splitOverview.groups[0].rows[0].component_number = "1-1#梁~1-25#梁";
+    splitOverview.groups[0].rows[0].split_eligible = true;
+    splitOverview.groups[0].rows[0].split_expanded_count = 25;
+    vi.mocked(fetchComponentBinding).mockResolvedValue(splitOverview);
+
+    let resolvePreview!: (value: Awaited<ReturnType<typeof previewComponentRangeSplit>>) => void;
+    vi.mocked(previewComponentRangeSplit).mockReturnValue(new Promise((resolve) => {
+      resolvePreview = resolve;
+    }));
+
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    await userEvent.click(await screen.findByLabelText("选择拆分 1-1#梁~1-25#梁"));
+    await userEvent.click(screen.getByRole("button", { name: /拆分构件/ }));
+
+    expect(screen.getByRole("dialog", { name: "拆分构件范围" })).toBeInTheDocument();
+    expect(screen.getByText("正在计算拆分影响…")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(screen.queryByRole("dialog", { name: "拆分构件范围" })).not.toBeInTheDocument();
+
+    resolvePreview({
+      items: [],
+      totals: {
+        selected_range_count: 1,
+        source_defect_count: 1,
+        result_defect_count: 25,
+        result_photo_count: 0,
+        bound_count: 25,
+        ambiguous_count: 0,
+        unmatched_count: 0,
+      },
+      impact_token: "sha256:late",
+    });
+    await Promise.resolve();
+    expect(screen.queryByRole("dialog", { name: "拆分构件范围" })).not.toBeInTheDocument();
   });
 });

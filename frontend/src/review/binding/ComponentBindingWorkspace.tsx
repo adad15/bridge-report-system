@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   fetchLatestComponentInventory,
@@ -191,8 +191,11 @@ export function ComponentBindingWorkspace({
   // 批量应用被后端整批拒绝时的提示，显示在对话框内而非页面上——用户正对着预览表。
   const [replaceError, setReplaceError] = useState<string | null>(null);
   const [splitSelection, setSplitSelection] = useState<Map<string, BindingTarget>>(new Map());
+  const [splitDialogTargets, setSplitDialogTargets] = useState<BindingTarget[] | null>(null);
   const [splitPreview, setSplitPreview] = useState<ComponentRangeSplitPreview | null>(null);
+  const [splitPreviewLoading, setSplitPreviewLoading] = useState(false);
   const [splitError, setSplitError] = useState<string | null>(null);
+  const splitPreviewRequest = useRef(0);
   const [ratingTrees, setRatingTrees] = useState<RatingTreeVersionSummary[]>([]);
   const [selectedRatingTreeId, setSelectedRatingTreeId] = useState("");
   const [ratingTreeMessage, setRatingTreeMessage] = useState<string | null>(null);
@@ -265,6 +268,37 @@ export function ComponentBindingWorkspace({
     }
     return { pending, bound, missing, total: pending + bound + missing };
   }, [overview]);
+
+  useEffect(() => {
+    splitPreviewRequest.current += 1;
+    setSplitDialogTargets(null);
+    setSplitPreview(null);
+    setSplitPreviewLoading(false);
+    setSplitError(null);
+  }, [importId]);
+
+  async function loadSplitPreview(targets: BindingTarget[]) {
+    const requestId = ++splitPreviewRequest.current;
+    setSplitPreview(null);
+    setSplitError(null);
+    setSplitPreviewLoading(true);
+    try {
+      const preview = await previewComponentRangeSplit(backendBaseUrl, importId, targets);
+      if (splitPreviewRequest.current === requestId) setSplitPreview(preview);
+    } catch (caught) {
+      if (splitPreviewRequest.current === requestId) setSplitError(errorMessage(caught));
+    } finally {
+      if (splitPreviewRequest.current === requestId) setSplitPreviewLoading(false);
+    }
+  }
+
+  function closeSplitDialog() {
+    splitPreviewRequest.current += 1;
+    setSplitDialogTargets(null);
+    setSplitPreview(null);
+    setSplitPreviewLoading(false);
+    setSplitError(null);
+  }
 
   // 只有未匹配/歧义行才可能可拆分，一条都没有时拆分按钮永远点不动，索性不占位。
   const splitEligibleCount = useMemo(
@@ -377,18 +411,10 @@ export function ComponentBindingWorkspace({
               className="binding-split-selected"
               disabled={busy || splitSelection.size === 0}
               title={splitSelection.size === 0 ? "先勾选待拆分的构件行" : undefined}
-              onClick={async () => {
-                setBusy(true);
-                setSplitError(null);
-                try {
-                  setSplitPreview(await previewComponentRangeSplit(
-                    backendBaseUrl, importId, [...splitSelection.values()]
-                  ));
-                } catch (caught) {
-                  setError(errorMessage(caught));
-                } finally {
-                  setBusy(false);
-                }
+              onClick={() => {
+                const targets = [...splitSelection.values()];
+                setSplitDialogTargets(targets);
+                void loadSplitPreview(targets);
               }}
             >
               拆分构件
@@ -611,13 +637,15 @@ export function ComponentBindingWorkspace({
           }}
         />
       ) : null}
-      {splitPreview ? (
+      {splitDialogTargets ? (
         <ComponentRangeSplitDialog
           preview={splitPreview}
-          targets={[...splitSelection.values()]}
+          loading={splitPreviewLoading}
+          targets={splitDialogTargets}
           busy={busy}
           error={splitError}
-          onClose={() => { setSplitPreview(null); setSplitError(null); }}
+          onClose={closeSplitDialog}
+          onRetry={() => void loadSplitPreview(splitDialogTargets)}
           onApply={async (targets, impactToken) => {
             setBusy(true);
             setSplitError(null);
@@ -630,7 +658,7 @@ export function ComponentBindingWorkspace({
               // 拆分会增删病害并复制照片候选，父页面的草稿必须重取。
               onDraftInvalidated?.();
               setSplitSelection(new Map());
-              setSplitPreview(null);
+              closeSplitDialog();
               setError(null);
             } catch (caught) {
               setSplitError(errorMessage(caught));

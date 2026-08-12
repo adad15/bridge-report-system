@@ -22,6 +22,7 @@ enum class ComponentRangeSplitStatus {
 
 struct ComponentRangeSplitOutcome {
     ComponentRangeSplitStatus status{ComponentRangeSplitStatus::Failed};
+    std::optional<review::ComponentRangeSplitAnalysis> analysis;
     std::optional<review::ComponentRangeSplitPlan> plan;
     std::optional<BindingOverview> overview;
     std::string impact_token;
