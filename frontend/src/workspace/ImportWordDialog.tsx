@@ -21,10 +21,13 @@ interface Props {
   onCompleted: (importRecordId: string) => void;
 }
 
-/** 导入列表里认得出来的名字：桥名 + 检测日期。 */
+/** 导入列表里认得出来的名字：桥名 + 检测日期。
+ *  这个串会作为 import_name 落库，所以只放事实、不放状态词——原先没日期时会拼进
+ *  "未填日期"，存下来之后就永远长在记录名里，列表上读起来像桥名的一部分。缺日期时
+ *  留空即可，页面另有位置提示。 */
 function sourceTaskLabel(task?: SourceTaskRow): string | undefined {
   if (!task) return undefined;
-  return [task.name, task.check_date ?? "未填日期"].filter(Boolean).join(" ");
+  return [task.name, task.check_date].filter(Boolean).join(" ") || undefined;
 }
 
 function formatFileSize(bytes: number): string {

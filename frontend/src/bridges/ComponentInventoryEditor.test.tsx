@@ -15,7 +15,7 @@ import {
 import { clearCachedForTests } from "../api/resourceCache";
 import {
   ComponentInventoryEditor,
-  groupStatusText,
+  groupAnomalyText,
   inventoryConfirmationBlockers,
   inventoryGroupSummaries,
 } from "./ComponentInventoryEditor";
@@ -88,6 +88,8 @@ describe("ComponentInventoryEditor", () => {
     expect(await screen.findByRole("columnheader", { name: "上部结构" })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
+    // 行默认只读，字段要进编辑态才出现。
+    await userEvent.click(await screen.findByRole("button", { name: "编辑" }));
     // 现场名称与构件类别生成时同值，页面只留构件类别。
     expect(await screen.findByLabelText("构件类别 1-1#")).toBeInTheDocument();
     expect(screen.queryByLabelText("现场名称 1-1#")).not.toBeInTheDocument();
@@ -140,34 +142,45 @@ describe("ComponentInventoryEditor", () => {
     expect(fetchStandardMappingCatalogs).toHaveBeenCalledTimes(1);
   });
 
-  it("shows a check instead of restating the count once every mapping is confirmed", () => {
+  it("reports nothing once every mapping is confirmed", () => {
     const base = {
       siteComponentType: "主梁", structurePart: "superstructure", activeCount: 3,
       firstNumber: "1-1#", lastNumber: "1-3#", mappingLabel: "", unmappedCount: 0,
     };
-    // 数量列已经写了同一个数字，全确认时不再重复"已确认 3"。
-    expect(groupStatusText({ ...base, confirmedCount: 3, pendingCount: 0 })).toBe("✓");
-    expect(groupStatusText({ ...base, confirmedCount: 1, pendingCount: 2 })).toBe("待确认 2");
-    expect(groupStatusText({ ...base, confirmedCount: 0, pendingCount: 0, unmappedCount: 3 }))
+    // 全确认时返回 null，表格就不为它渲染任何标记——数量列已经写过同一个数字。
+    expect(groupAnomalyText({ ...base, confirmedCount: 3, pendingCount: 0 })).toBeNull();
+    expect(groupAnomalyText({ ...base, confirmedCount: 1, pendingCount: 2 })).toBe("待确认 2");
+    expect(groupAnomalyText({ ...base, confirmedCount: 0, pendingCount: 0, unmappedCount: 3 }))
       .toBe("无映射 3");
   });
 
   it("keeps internal component ids hidden and referenced entries deactivate-only", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     await userEvent.click(await screen.findByRole("button", { name: "查看构件 主梁" }));
+    await userEvent.click(await screen.findByRole("button", { name: "编辑" }));
     const numberInput = await screen.findByLabelText("构件编号 1-1#");
     const row = numberInput.closest("tr") as HTMLElement;
     expect(screen.queryByText("internal-component-id")).not.toBeInTheDocument();
+
+    // 被引用的构件只能停用、不能删除；停用与删除都收在"更多"里。
+    await userEvent.click(within(row).getByLabelText("更多操作 1-1#"));
     expect(within(row).queryByRole("button", { name: "删除" })).not.toBeInTheDocument();
-    expect(within(row).getByRole("button", { name: "停用" })).toBeDisabled();
+    // 停用原因不再每行常驻，点了"停用"才问。
+    expect(within(row).queryByLabelText("停用原因 1-1#")).not.toBeInTheDocument();
+    await userEvent.click(within(row).getByRole("button", { name: "停用" }));
+
+    expect(within(row).getByRole("button", { name: "确认停用" })).toBeDisabled();
     await userEvent.type(within(row).getByLabelText("停用原因 1-1#"), "构件已拆换");
-    expect(within(row).getByRole("button", { name: "停用" })).toBeEnabled();
+    expect(within(row).getByRole("button", { name: "确认停用" })).toBeEnabled();
   });
 
   it("centralizes unresolved mappings and confirms an existing generated mapping", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     expect(await screen.findByText(/确认前还需处理 1 项/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
+    // 映射相关动作收进了编辑态的"更多"。
+    await userEvent.click(await screen.findByRole("button", { name: "编辑" }));
+    await userEvent.click(await screen.findByLabelText("更多操作 1-1#"));
     await userEvent.click(await screen.findByRole("button", { name: "确认映射" }));
     expect(setComponentInventoryMapping).toHaveBeenCalledWith(expect.any(String), "revision-1", "entry-1", expect.objectContaining({
       standard_component_category_id: "girder",
@@ -206,18 +219,20 @@ describe("ComponentInventoryEditor", () => {
   it("shows entry rows in a dialog for the opened group or via number search", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     await screen.findByText("分组核对");
-    expect(screen.queryByLabelText("构件编号 1-1#")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByText(/在分组核对表中点击/)).toBeInTheDocument();
 
+    // 行现在是只读文本，按编号取单元格而不是输入框。
     await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
-    expect(await screen.findByRole("dialog", { name: /主梁 构件（共 1 个）/ })).toBeInTheDocument();
-    expect(screen.getByLabelText("构件编号 1-1#")).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: /主梁 构件（共 1 个）/ });
+    expect(within(dialog).getByText("1-1#")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "关闭" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("构件编号 1-1#")).not.toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText("按编号搜索构件"), "1-1");
-    expect(await screen.findByLabelText("构件编号 1-1#")).toBeInTheDocument();
+    const results = await screen.findByRole("heading", { name: "搜索结果" });
+    const section = results.closest("div") as HTMLElement;
+    expect(within(section).getByText("1-1#")).toBeInTheDocument();
     expect(screen.getByText(/匹配 1 个构件/)).toBeInTheDocument();
   });
 
@@ -236,12 +251,13 @@ describe("ComponentInventoryEditor", () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     await userEvent.click(await screen.findByRole("button", { name: "查看构件 主梁" }));
 
-    expect(await screen.findByLabelText("构件编号 1#")).toBeInTheDocument();
-    expect(screen.queryByLabelText("构件编号 101#")).not.toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: /主梁 构件/ });
+    expect(within(dialog).getByText("1#")).toBeInTheDocument();
+    expect(within(dialog).queryByText("101#")).not.toBeInTheDocument();
     expect(screen.getByText("第 1 / 2 页")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "下一页" }));
-    expect(await screen.findByLabelText("构件编号 101#")).toBeInTheDocument();
-    expect(screen.queryByLabelText("构件编号 1#")).not.toBeInTheDocument();
+    expect(await within(dialog).findByText("101#")).toBeInTheDocument();
+    expect(within(dialog).queryByText("1#")).not.toBeInTheDocument();
   });
 
   it("summarizes generated groups for checking", () => {

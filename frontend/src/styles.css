@@ -362,6 +362,13 @@ body {
   border-bottom: 1px solid #e7ecf2;
 }
 
+/* 数量列左对齐时 825 / 3300 / 32 的个位对不齐，扫一眼比不出量级。右对齐 + 等宽数字
+   才能按位比较；表头也一起右对齐，不然列标题和数据各站一边。 */
+.data-table .numeric-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .data-table thead th {
   color: #55606c;
   font-weight: 600;
@@ -1720,17 +1727,18 @@ body {
 }
 
 /* 模块 6.5：桥梁档案工作区。校对页仍由 app-shell-workbench 单独控制。 */
+/* 这套小标签原本是照英文 eyebrow（LATEST RESULT）配的：uppercase 拉出形状、宽字距
+   补回可读性。但正文全是中文——uppercase 对汉字完全空转，只剩 0.08em 把「最新正式
+   结论」六个字生生拆散。字距收到 0.02em，字重也从 700 降一档，标签才不抢正题。 */
 .section-kicker {
   margin: 0 0 6px;
   color: #667586;
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .page-title-row,
-.bridge-title-row,
 .card-heading,
 .annual-heading,
 .annual-actions,
@@ -1788,6 +1796,32 @@ body {
   color: #7c5510;
 }
 
+/* 语义色见 workspaceState.statusTone()。徽章带上边框，是为了在渐变卡（结论卡）和
+   纯白卡上都还有轮廓，不至于跟底色化在一起。 */
+.status-badge-ok {
+  border: 1px solid #bcdcce;
+  background: #e4f0e9;
+  color: #0f6e56;
+}
+
+.status-badge-warn {
+  border: 1px solid #ecd3a8;
+  background: #faeeda;
+  color: #854f0b;
+}
+
+.status-badge-danger {
+  border: 1px solid #f0b5b5;
+  background: #fdeced;
+  color: #a32d2d;
+}
+
+.status-badge-neutral {
+  border: 1px solid #dee4eb;
+  background: #eef1f5;
+  color: #52616f;
+}
+
 .bridge-workspace-shell {
   display: grid;
   gap: 20px;
@@ -1811,19 +1845,37 @@ body {
 .bridge-breadcrumb {
   display: flex;
   gap: 8px;
-  padding-top: 16px;
+  padding-top: 12px;
   color: #647286;
   font-size: 13px;
 }
 
+/* 这一行原来是「标题 + 副行」两层，状态徽章再被 space-between 甩到最右——离它修饰
+   的桥名将近 950px，读的时候对不上。改成同一条基线上排开：桥名、状态、分隔、编号与
+   路线。页头从约 165px 收到约 105px，四个页签共用这套外壳，省下的是每一页的首屏。 */
 .bridge-title-row {
-  padding-top: 12px;
-  padding-bottom: 18px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 8px;
+  padding-bottom: 12px;
+}
+
+.bridge-title-row h1 {
+  font-size: 24px;
 }
 
 .bridge-title-row p {
-  margin: 6px 0 0;
+  margin: 0;
   color: #667586;
+  font-size: 13px;
+}
+
+.bridge-title-rule {
+  width: 1px;
+  height: 15px;
+  background: #ccd4de;
 }
 
 .bridge-tabs {
@@ -1833,7 +1885,7 @@ body {
 }
 
 .bridge-tabs a {
-  padding: 13px 2px 11px;
+  padding: 11px 2px 9px;
   border-bottom: 3px solid transparent;
   color: #4d5b6b;
   text-decoration: none;
@@ -1884,6 +1936,12 @@ body {
   cursor: pointer;
 }
 
+/* card-heading 是一条 space-between 的横杠，kicker 当它的直接子元素时那 6px 下边距
+   会把两侧顶得不齐。 */
+.card-heading .section-kicker {
+  margin: 0;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1895,10 +1953,15 @@ body {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.metric-grid-four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .metric-grid > * {
   display: grid;
   gap: 4px;
   padding: 16px;
+  border: 1px solid transparent;
   border-radius: 8px;
   background: #f5f7fa;
   color: inherit;
@@ -1907,6 +1970,51 @@ body {
 
 .metric-grid strong {
   font-size: 26px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 这个网格里可点的是 <a>、不可点的是 <div>，原先两者外观完全一致，鼠标放上去也毫无
+   反应——能点的地方看不出来能点。 */
+.metric-grid a:hover {
+  border-color: #a9bce7;
+  background: #e8effc;
+}
+
+.metric-grid a:focus-visible {
+  outline: 2px solid #2456c9;
+  outline-offset: 2px;
+}
+
+/* 一屏五六个数字全是黑字，扫不出哪里有事要办。0 退成灰，有值的自己跳出来。 */
+.metric-zero strong,
+.metric-zero span {
+  color: #96a1ae;
+}
+
+.metric-live {
+  border-color: #cddcf7;
+  background: #eef3fd;
+}
+
+.metric-live strong,
+.metric-live span {
+  color: #1d49ad;
+}
+
+.metric-live strong::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #2456c9;
+  vertical-align: middle;
+}
+
+.metric-grid a.metric-live:hover {
+  border-color: #a9bce7;
+  background: #e2ecfc;
 }
 
 .metric-grid span,
@@ -2271,8 +2379,9 @@ body {
     padding: 14px;
   }
 
+  /* .bridge-title-row 不在这里了：它现在是桥名/徽章/编号四个同级元素排成一行，
+     竖排 + stretch 会把徽章抻成整行宽。窄屏交给它自己的 flex-wrap 换行。 */
   .page-title-row,
-  .bridge-title-row,
   .overview-hero,
   .annual-heading,
   .import-source-card {
@@ -2308,6 +2417,17 @@ body {
 
   .metric-grid,
   .metric-grid-three {
+    grid-template-columns: 1fr;
+  }
+
+  /* 四格从 4 直接塌到 1 会跳过合理的中间档，平板上白白拉长一屏。先走两列。 */
+  .metric-grid-four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .metric-grid-four {
     grid-template-columns: 1fr;
   }
 }
@@ -2504,6 +2624,64 @@ body {
   color: #294969;
 }
 
+/* 折叠起来的编号/版本规则说明。默认收起，展开状态由浏览器自己记在 details 上。
+   宽度跟着内容走：横贯整卡的话，收起时就是一条一米长的空条，比它收起来省下的还碍眼。
+   展开后再放宽到能正常读一段话的行宽。 */
+.inventory-rules {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid #dde4ee;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.inventory-rules[open] {
+  width: min(62ch, 100%);
+}
+
+.inventory-rules summary {
+  padding: 7px 12px;
+  color: #46566c;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inventory-rules summary:focus-visible {
+  outline: 2px solid #2456c9;
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.inventory-rules div {
+  padding: 0 14px 12px;
+}
+
+.inventory-rules p {
+  margin: 0 0 6px;
+  color: #55616f;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.inventory-rules p:last-child {
+  margin-bottom: 0;
+}
+
+/* 映射异常原本单占一列，正常时是一竖排 ✓。改成挂在映射名后面的小标记，正常就不渲染。 */
+.inventory-mapping-flag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid #ecd3a8;
+  border-radius: 999px;
+  background: #faeeda;
+  color: #854f0b;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .inventory-wizard-grid,
 .inventory-group-fields,
 .inventory-add-form {
@@ -2520,11 +2698,14 @@ body {
   font-size: 0.9rem;
 }
 
+/* 注意 .component-inventory-table 那条限定到了 td 的直接子元素：原先写成后代选择器，
+   把操作列里的"停用原因"也一起撑成 100% 宽——它待在一个 flex-wrap 容器里，独占整行
+   之后就把保存挤到上一行、停用挤到下一行，每行三层、行高 123px。 */
 .inventory-wizard input,
 .inventory-wizard select,
 .inventory-add-form input,
 .inventory-mapping-editor select,
-.component-inventory-table input {
+.component-inventory-table td > input {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -2619,14 +2800,54 @@ body {
   color: #294969;
 }
 
+/* 原先这里只是一个裸的 flex 行：<label> 是行内元素，标签文字和输入框贴在一起没有
+   间距；提示语又是它的兄弟节点，被卡片 1rem 的网格间隙推到老远。合成一条工具栏，
+   标签、输入框、提示语全排在同一条基线上。 */
 .inventory-entry-tools {
   display: flex;
-  align-items: end;
-  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e3e9f1;
+  border-radius: 8px;
+  background: #f8fafc;
 }
 
+/* 标签和输入框同排。当初挤在一起不是因为同排，是因为 <label> 行内排版给不出间距——
+   改成 flex 之后 gap 才管得住。 */
+.inventory-entry-tools label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #18202a;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 32px 是项目里其他控件的基线高度，靠 padding 凑会随字体行高飘，直接定高更准。 */
 .inventory-entry-tools input {
-  max-width: 16rem;
+  width: 14rem;
+  max-width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+}
+
+.inventory-entry-tools input:hover {
+  border-color: #b9c4d0;
+}
+
+.inventory-entry-tools input:focus-visible {
+  outline: none;
+  border-color: #2456c9;
+  box-shadow: 0 0 0 3px rgba(36, 86, 201, 0.14);
 }
 
 .inventory-entry-section {
@@ -2652,8 +2873,14 @@ body {
   gap: 0.75rem;
 }
 
+/* 工具栏右半边。给个下限宽度，窄屏时整段换到输入框下方而不是被挤成一竖条。 */
 .inventory-entry-hint {
+  flex: 1 1 20rem;
+  min-width: 0;
+  margin: 0;
   color: #5b7891;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .inventory-group-dialog {
@@ -3290,8 +3517,129 @@ body {
   overflow-x: auto;
 }
 
+/* 操作列瘦成一个"编辑"按钮之后不再需要 1040px——那个值是当年为了塞下保存/停用原因/
+   停用/删除一整排才撑出来的，在 1100px 的弹窗里必然出横向滚动条。 */
 .component-inventory-table {
-  min-width: 1040px;
+  min-width: 640px;
+}
+
+/* 只读行：数字列和按钮列各自靠边，中间留给位置。 */
+.component-inventory-table td {
+  vertical-align: middle;
+}
+
+.inventory-entry-rowend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+/* 这颗按钮每行一个，一页就是上百个。描边方块排成一列比表格内容本身还抢眼，所以默认
+   不给边框和底色，只在这一行被指到时才浮出来。注意 .inventory-row-actions 那套按钮
+   样式够不到这里——两个类不是一回事，之前它落的是浏览器默认外观。 */
+.inventory-entry-rowend button {
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: #6b7686;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.component-inventory-table tbody tr:hover .inventory-entry-rowend button,
+.inventory-entry-rowend button:hover:not(:disabled),
+.inventory-entry-rowend button:focus-visible {
+  border-color: #c6d3e6;
+  background: #fff;
+  color: #2456c9;
+}
+
+.inventory-entry-rowend button:focus-visible {
+  outline: 2px solid #2456c9;
+  outline-offset: 1px;
+}
+
+.inventory-entry-rowend button:disabled {
+  color: #aab3bf;
+  cursor: not-allowed;
+}
+
+/* 整行给个极淡的高亮，说明这一行是可操作的——不然幽灵按钮浮出来会显得没来由。 */
+.component-inventory-table tbody tr:not(.inventory-entry-editing):hover > td {
+  background: #f8fafd;
+}
+
+/* 编辑行整行让出来给编辑区，所以它不参与列对齐。 */
+.inventory-entry-editing > td {
+  background: #f7faff;
+  box-shadow: inset 3px 0 0 #2456c9;
+}
+
+.inventory-entry-editor {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.75rem;
+}
+
+.inventory-entry-editor > label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  color: #46566c;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inventory-entry-editor > label input {
+  width: 11rem;
+  max-width: 100%;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #c9d2dc;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+}
+
+.inventory-entry-editor > label input:focus-visible {
+  outline: none;
+  border-color: #2456c9;
+  box-shadow: 0 0 0 3px rgba(36, 86, 201, 0.14);
+}
+
+.inventory-entry-editor-actions {
+  margin-left: auto;
+}
+
+.inventory-deactivate-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed #cddcf7;
+}
+
+.inventory-deactivate-row input {
+  width: 18rem;
+  max-width: 100%;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #c9d2dc;
+  border-radius: 6px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
 }
 
 .component-inventory-table tr:focus {

@@ -152,7 +152,9 @@ describe("InspectionWorkspacePage", () => {
       </MemoryRouter>
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: "删除导入记录" }));
+    // 删除收进了"更多"，先展开再点——页面上年度卡也有一个"更多"，靠 aria-label 区分。
+    await userEvent.click(await screen.findByLabelText("更多操作 百股大桥报告.docx"));
+    await userEvent.click(screen.getByRole("button", { name: "删除导入记录" }));
     expect(screen.getByRole("region", { name: "删除导入记录测试弹窗" })).toHaveTextContent("import-1");
   });
 

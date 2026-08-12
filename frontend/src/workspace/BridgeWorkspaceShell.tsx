@@ -9,6 +9,7 @@ import {
   componentArchivePath,
   componentInventoryPath,
   inspectionsPath,
+  statusBadgeClass,
 } from "./workspaceState";
 
 interface BridgeWorkspaceContextValue {
@@ -71,11 +72,10 @@ export function BridgeWorkspaceShell() {
       <header className="bridge-workspace-header">
         <div className="bridge-breadcrumb"><Link to="/bridges">桥梁档案</Link><span>/</span><span>{bridge.bridge_name}</span></div>
         <div className="bridge-title-row">
-          <div>
-            <h1>{bridge.bridge_name}</h1>
-            <p>{bridge.system_number} · {bridge.route_name ?? "路线未填写"}</p>
-          </div>
-          <span className="status-badge">{bridge.status}</span>
+          <h1>{bridge.bridge_name}</h1>
+          <span className={statusBadgeClass(bridge.status)}>{bridge.status}</span>
+          <span className="bridge-title-rule" aria-hidden="true" />
+          <p>{bridge.system_number} · {bridge.route_name ?? "路线未填写"}</p>
         </div>
         <nav className="bridge-tabs" aria-label="桥梁工作区">
           <NavLink end to={bridgeOverviewPath(bridge.id)}>桥梁概览</NavLink>

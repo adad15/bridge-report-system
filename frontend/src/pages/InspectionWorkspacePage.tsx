@@ -18,7 +18,7 @@ import { ImportWordDialog } from "../workspace/ImportWordDialog";
 import { DeleteInspectionYearDialog } from "../workspace/DeleteInspectionYearDialog";
 import { DeleteImportRecordDialog } from "../workspace/DeleteImportRecordDialog";
 import { useBridgeWorkspace } from "../workspace/BridgeWorkspaceShell";
-import { deriveInspectionProgress, inspectionWorkspacePath, reviewPath } from "../workspace/workspaceState";
+import { deriveInspectionProgress, inspectionWorkspacePath, reviewPath, statusBadgeClass } from "../workspace/workspaceState";
 
 const actionLabel = (item: WorkspaceImport) => {
   if (item.available_action === "continue_review") return "继续校对";
@@ -215,10 +215,20 @@ function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry, canDelete, on
             const label = actionLabel(item);
             const lockText = item.edit_lock ? `${item.edit_lock.owner_display_name} 正在编辑` : null;
             return <article className="import-source-card" key={item.id}>
-              <div><div className="import-title-row"><h3>{item.import_name}</h3><span className="status-badge">{item.import_status}</span></div><p>{item.system_number} · {item.source_type}</p><p>病害 {item.statistics.defect_count} · 照片 {item.statistics.photo_count}</p>{item.import_status === "解析失败" && item.error_message ? <p className="error-text">解析失败：{item.error_message}</p> : null}{item.import_status === "解析失败" && item.temporary_source_expires_at ? <p className="muted-text">临时 Word 保留至 {new Date(item.temporary_source_expires_at).toLocaleString()}</p> : null}{item.available_action === "reupload" ? <p className="error-text">原临时 Word 已不可用，请重新上传。</p> : null}{lockText ? <p className="lock-note">{lockText}</p> : null}</div>
+              <div><div className="import-title-row"><h3>{item.import_name}</h3><span className={statusBadgeClass(item.import_status)}>{item.import_status}</span></div><p>{item.system_number} · {item.source_type}</p><p>病害 {item.statistics.defect_count} · 照片 {item.statistics.photo_count}</p>{item.import_status === "解析失败" && item.error_message ? <p className="error-text">解析失败：{item.error_message}</p> : null}{item.import_status === "解析失败" && item.temporary_source_expires_at ? <p className="muted-text">临时 Word 保留至 {new Date(item.temporary_source_expires_at).toLocaleString()}</p> : null}{item.available_action === "reupload" ? <p className="error-text">原临时 Word 已不可用，请重新上传。</p> : null}{lockText ? <p className="lock-note">{lockText}</p> : null}</div>
               <div className="import-card-actions">
                 {label ? item.available_action === "parse" ? <button type="button" onClick={() => onRetry(item)}>{label}</button> : item.available_action === "reupload" ? <button type="button" onClick={onImport}>{label}</button> : <Link to={reviewPath(bridgeId, workspace.inspection_year.id, item.id)}>{label}</Link> : <span className="muted-text">处理中</span>}
-                {canDelete ? <button type="button" className="danger-text-button" onClick={() => onDeleteImport(item)}>删除导入记录</button> : null}
+                {/* 删除原本和"继续校对"并排同权。破坏性操作不该走主流程视觉，收进"更多"，
+                    和上面年度卡删除年度的做法保持一致。一页可能有多张导入卡，summary 要
+                    带上记录名才区分得开。 */}
+                {canDelete ? (
+                  <details className="more-actions">
+                    <summary aria-label={`更多操作 ${item.import_name}`}>更多</summary>
+                    <div>
+                      <button type="button" className="danger-menu-item" onClick={() => onDeleteImport(item)}>删除导入记录</button>
+                    </div>
+                  </details>
+                ) : null}
               </div>
             </article>;
           })}</div>

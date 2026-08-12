@@ -29,6 +29,23 @@ export function deriveInspectionProgress(
   return { stage: "empty", label: "待导入资料" };
 }
 
+// 状态徽章原本全站共用一个灰底，「在用」和「解析失败」长得一模一样，等于没做徽章。
+// 按含义分档：绿=已就位，琥珀=还等人动手，红=出错；已归档、停用这类终态留灰。
+const kOkStatuses = new Set(["在用", "已确认"]);
+const kWarnStatuses = new Set(["待校对", "待确认", "草稿", "已上传", "待解析", "待导入资料", "解析中"]);
+const kDangerStatuses = new Set(["解析失败"]);
+
+export type StatusTone = "ok" | "warn" | "danger" | "neutral";
+
+export function statusTone(status: string): StatusTone {
+  if (kOkStatuses.has(status)) return "ok";
+  if (kWarnStatuses.has(status)) return "warn";
+  if (kDangerStatuses.has(status)) return "danger";
+  return "neutral";
+}
+
+export const statusBadgeClass = (status: string) => `status-badge status-badge-${statusTone(status)}`;
+
 const segment = (value: string) => encodeURIComponent(value);
 
 export const bridgeOverviewPath = (bridgeId: string) => `/bridges/${segment(bridgeId)}`;
