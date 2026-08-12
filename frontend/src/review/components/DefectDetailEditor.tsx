@@ -102,6 +102,7 @@ export function DefectDetailEditor({
       return;
     }
     let active = true;
+    setTreeNode(null);
     setTreeNodeError("");
     void fetchRatingTreeNode(baseUrl, ratingTreeVersionId, defect.rating_tree_node_id)
       .then((node) => {

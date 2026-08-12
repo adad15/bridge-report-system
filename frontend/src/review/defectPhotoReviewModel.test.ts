@@ -144,6 +144,58 @@ describe("buildDefectPhotoReviewModel", () => {
     expect(model.safeCandidateIds.has("defect_0001")).toBe(true);
   });
 
+  it("allows a non-scoring node to be confirmed from its applicable summary before details load", () => {
+    const draft = safeDraft();
+    const nonScoringSummary = {
+      ...treeNode,
+      id: "tree-node-other",
+      display_name: "其它病害",
+      scoring_mode: "non_scoring" as const,
+      h21_indicator_id: null,
+      is_scoring: false,
+    };
+    draft.defects[0] = {
+      ...draft.defects[0],
+      rating_tree_node_id: nonScoringSummary.id,
+      rating_tree_match_method: "manual",
+      defect_type: nonScoringSummary.display_name,
+      defect_scale: null,
+    };
+
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodes: [],
+      ratingTreeNodeSummaries: [nonScoringSummary],
+      applicableTreeNodeIdsByComponent: new Map([
+        ["component-1", new Set([nonScoringSummary.id])],
+      ]),
+      treeRulesReady: true,
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems).toEqual([]);
+    expect(row.confirmEligible).toBe(true);
+    expect(row.batchEligible).toBe(true);
+  });
+
+  it("keeps a scoring node blocked until its scale rules are available", () => {
+    const row = buildDefectPhotoReviewModel({
+      draft: safeDraft(),
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodes: [],
+      ratingTreeNodeSummaries: [treeNode],
+      applicableTreeNodeIdsByComponent: new Map([
+        ["component-1", new Set([treeNode.id])],
+      ]),
+      treeRulesReady: true,
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code)).toContain("rating_tree_node_loading");
+    expect(row.confirmEligible).toBe(false);
+  });
+
   it("allows individual confirmation of a range split without photos but keeps it out of batch confirmation", () => {
     const draft = safeDraft();
     draft.defects[0].photo_references = [];

@@ -110,6 +110,9 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const [treeNodesByComponent, setTreeNodesByComponent] =
     useState<Map<string, RatingTreeNodeSummary[]>>(new Map());
   const [treeNodeDetails, setTreeNodeDetails] = useState<RatingTreeNode[]>([]);
+  const loadedTreeNodeIds = useRef(new Set<string>());
+  const loadingTreeNodeIds = useRef(new Set<string>());
+  const treeNodeDetailsVersion = useRef<string | null>(null);
   const [manualTreeNode, setManualTreeNode] = useState<RatingTreeNode | null>(null);
   const [treeRulesReady, setTreeRulesReady] = useState(false);
   const [treeError, setTreeError] = useState("");
@@ -165,7 +168,6 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     const inventory = componentInventory ?? loadedInventory;
     if (!ratingTree || !inventory) {
       setTreeNodesByComponent(new Map());
-      setTreeNodeDetails([]);
       setTreeRulesReady(Boolean(!ratingTree));
       return;
     }
@@ -182,20 +184,16 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         componentCategoryId: mapping.standard_component_category_id,
       });
     }
-    void Promise.all([
-      Promise.all([...scopes.entries()].map(async ([key, scope]) => [
-        key,
-        await fetchApplicableRatingTreeDefects(
-          baseUrl,
-          ratingTree.version_id,
-          scope.bridgeTypeId,
-          scope.componentCategoryId,
-        ),
-      ] as const)),
-      Promise.all(selectedTreeNodeIds.map((nodeId) =>
-        fetchRatingTreeNode(baseUrl, ratingTree.version_id, nodeId))),
-    ])
-      .then(([scopeResults, details]) => {
+    void Promise.all([...scopes.entries()].map(async ([key, scope]) => [
+      key,
+      await fetchApplicableRatingTreeDefects(
+        baseUrl,
+        ratingTree.version_id,
+        scope.bridgeTypeId,
+        scope.componentCategoryId,
+      ),
+    ] as const))
+      .then((scopeResults) => {
         if (cancelled) return;
         const byScope = new Map(scopeResults);
         const byComponent = new Map<string, RatingTreeNodeSummary[]>();
@@ -206,7 +204,6 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
           byComponent.set(entry.bridge_component_id, byScope.get(key) ?? []);
         }
         setTreeNodesByComponent(byComponent);
-        setTreeNodeDetails(details);
         setTreeRulesReady(true);
       })
       .catch((error) => {
@@ -214,9 +211,50 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
           setTreeError(ratingTreeErrorMessage(error));
           setTreeRulesReady(false);
         }
-      });
+    });
     return () => { cancelled = true; };
-  }, [baseUrl, componentInventory, loadedInventory, ratingTree, selectedTreeNodeIdsKey]);
+  }, [baseUrl, componentInventory, loadedInventory, ratingTree]);
+
+  useEffect(() => {
+    if (!ratingTree) {
+      setTreeNodeDetails([]);
+      loadedTreeNodeIds.current.clear();
+      loadingTreeNodeIds.current.clear();
+      treeNodeDetailsVersion.current = null;
+      return;
+    }
+    if (treeNodeDetailsVersion.current !== ratingTree.version_id) {
+      setTreeNodeDetails([]);
+      loadedTreeNodeIds.current.clear();
+      loadingTreeNodeIds.current.clear();
+      treeNodeDetailsVersion.current = ratingTree.version_id;
+    }
+    const missingIds = selectedTreeNodeIds.filter(
+      (nodeId) => !loadedTreeNodeIds.current.has(nodeId) && !loadingTreeNodeIds.current.has(nodeId),
+    );
+    if (missingIds.length === 0) return;
+    const requestedVersionId = ratingTree.version_id;
+    for (const nodeId of missingIds) loadingTreeNodeIds.current.add(nodeId);
+    void Promise.all(missingIds.map((nodeId) =>
+      fetchRatingTreeNode(baseUrl, requestedVersionId, nodeId)))
+      .then((details) => {
+        if (treeNodeDetailsVersion.current !== requestedVersionId) return;
+        for (const node of details) {
+          loadingTreeNodeIds.current.delete(node.id);
+          loadedTreeNodeIds.current.add(node.id);
+        }
+        setTreeNodeDetails((current) => {
+          const next = new Map(current.map((node) => [node.id, node] as const));
+          for (const node of details) next.set(node.id, node);
+          return [...next.values()];
+        });
+      })
+      .catch((error) => {
+        if (treeNodeDetailsVersion.current !== requestedVersionId) return;
+        for (const nodeId of missingIds) loadingTreeNodeIds.current.delete(nodeId);
+        setTreeError(ratingTreeErrorMessage(error));
+      });
+  }, [baseUrl, ratingTree, selectedTreeNodeIdsKey]);
 
   const applicableTreeNodeIdsByComponent = useMemo(
     () => new Map(
@@ -235,6 +273,10 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     }
     return map;
   }, [treeNodesByComponent]);
+  const ratingTreeNodeSummaries = useMemo(
+    () => [...nodeSummaryById.values()],
+    [nodeSummaryById],
+  );
 
   // 自动触发的去重签名只看依赖类变化（构件绑定、病害增删、复核状态）。
   // 病害类型与描述属于输入过程，改它们不在这里发请求，改由字段失焦提交触发，
@@ -313,15 +355,17 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     draft,
     ratingTreeVersionId: ratingTree?.version_id ?? null,
     ratingTreeNodes: treeNodeDetails,
+    ratingTreeNodeSummaries,
     applicableTreeNodeIdsByComponent,
     treeRulesReady,
     assessmentIssues,
     matchResults,
-  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, matchResults, ratingTree?.version_id, treeNodeDetails, treeRulesReady]);
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, treeNodeDetails, treeRulesReady]);
   const visibleModel = useMemo(() => buildDefectPhotoReviewModel({
     draft,
     ratingTreeVersionId: ratingTree?.version_id ?? null,
     ratingTreeNodes: treeNodeDetails,
+    ratingTreeNodeSummaries,
     applicableTreeNodeIdsByComponent,
     treeRulesReady,
     assessmentIssues,
@@ -329,7 +373,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     filter,
     issueFilter,
     search,
-  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, issueFilter, matchResults, ratingTree?.version_id, search, treeNodeDetails, treeRulesReady]);
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, issueFilter, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, search, treeNodeDetails, treeRulesReady]);
 
   useEffect(() => {
     setSelectedIds((current) => {

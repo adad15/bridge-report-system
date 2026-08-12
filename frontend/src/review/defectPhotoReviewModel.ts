@@ -1,6 +1,6 @@
 import type { AssessmentIssue } from "../api/assessmentApi";
 import type { DefectMatchCandidate, DefectMatchResult } from "../api/defectMatchingApi";
-import type { RatingTreeNode } from "../api/ratingTreeApi";
+import type { RatingTreeNode, RatingTreeNodeSummary } from "../api/ratingTreeApi";
 import { buildDefectPhotoCards, type DefectPhotoCard } from "./defectPhotoCards";
 import type {
   BridgeAnnualInspectionData,
@@ -84,6 +84,8 @@ export interface DefectPhotoReviewModelInput {
   /** null 表示当前年度尚未锁定评定树。 */
   ratingTreeVersionId: string | null;
   ratingTreeNodes?: RatingTreeNode[];
+  /** 适用节点接口已经能证明节点存在、适用范围及是否计分，无需等待详情接口。 */
+  ratingTreeNodeSummaries?: RatingTreeNodeSummary[];
   applicableTreeNodeIdsByComponent?: ReadonlyMap<string, ReadonlySet<string>>;
   treeRulesReady?: boolean;
   assessmentIssues: AssessmentIssue[];
@@ -148,7 +150,7 @@ function addProblem(
 function deriveMatchState(
   defect: DefectCandidate,
   match: DefectMatchResult | null,
-  ratingTreeNode: RatingTreeNode | null,
+  ratingTreeNode: RatingTreeNodeSummary | null,
 ): { state: DefectMatchState; label: string } {
   const nodeName = ratingTreeNode?.display_name ?? defect.defect_type;
   if (defect.group_review_status === "已确认") {
@@ -188,6 +190,7 @@ function analyzeDefect(
   repeatedPhotoNumbers: Set<string>,
   ratingTreeVersionId: string | null,
   ratingTreeNodes: ReadonlyMap<string, RatingTreeNode>,
+  ratingTreeNodeSummaries: ReadonlyMap<string, RatingTreeNodeSummary>,
   applicableTreeNodeIdsByComponent: ReadonlyMap<string, ReadonlySet<string>>,
   treeRulesReady: boolean,
   match: DefectMatchResult | null,
@@ -199,6 +202,9 @@ function analyzeDefect(
     .filter((photo): photo is PhotoCandidate => photo !== null);
   const ratingTreeNode = defect.rating_tree_node_id
     ? ratingTreeNodes.get(defect.rating_tree_node_id) ?? null
+    : null;
+  const ratingTreeNodeSummary = defect.rating_tree_node_id
+    ? ratingTreeNode ?? ratingTreeNodeSummaries.get(defect.rating_tree_node_id) ?? null
     : null;
 
   if (!defect.bridge_component_id || !defect.standard_component_category_id) {
@@ -214,11 +220,11 @@ function analyzeDefect(
     }
     if (!treeRulesReady) {
       addProblem(problems, "rating_tree_loading", "other", "正在加载评定树规则。");
-    } else if (!ratingTreeNode) {
+    } else if (!ratingTreeNodeSummary) {
       addProblem(problems, "rating_tree_node_unknown", "defect_type", "评定树病害节点已不存在。");
     } else if (
       !defect.bridge_component_id ||
-      !applicableTreeNodeIdsByComponent.get(defect.bridge_component_id)?.has(ratingTreeNode.id)
+      !applicableTreeNodeIdsByComponent.get(defect.bridge_component_id)?.has(ratingTreeNodeSummary.id)
     ) {
       addProblem(problems, "rating_tree_node_not_applicable", "defect_type", "评定树病害不适用于当前实际构件。");
     }
@@ -226,13 +232,16 @@ function analyzeDefect(
   if (defect.rating_tree_match_method === "fuzzy_candidate") {
     addProblem(problems, "rating_tree_fuzzy_review_required", "defect_type", "模糊匹配建议需要人工确认。");
   }
-  if (
-    ratingTreeNode?.is_scoring &&
-    (defect.defect_scale === null ||
+  if (ratingTreeNodeSummary?.is_scoring) {
+    if (!ratingTreeNode) {
+      addProblem(problems, "rating_tree_node_loading", "scale", "正在加载病害标度规则。");
+    } else if (
+      defect.defect_scale === null ||
       defect.defect_scale === undefined ||
-      !ratingTreeNode.allowed_scales.includes(defect.defect_scale))
-  ) {
-    addProblem(problems, "scale_not_allowed", "scale", "病害标度不在评定树允许范围内。");
+      !ratingTreeNode.allowed_scales.includes(defect.defect_scale)
+    ) {
+      addProblem(problems, "scale_not_allowed", "scale", "病害标度不在评定树允许范围内。");
+    }
   }
 
   // 匹配服务给出的问题：依赖缺失、服务故障和真的没规则必须能分开看。
@@ -321,7 +330,7 @@ function analyzeDefect(
   const batchEligible = !ignored && !confirmed && problems.length === 0;
   const derived = ignored
     ? { state: "ignored" as const, label: "已忽略" }
-    : deriveMatchState(defect, match, ratingTreeNode);
+    : deriveMatchState(defect, match, ratingTreeNodeSummary);
   return {
     candidateId: defect.candidate_id,
     defect,
@@ -396,6 +405,9 @@ export function buildDefectPhotoReviewModel(
   const ratingTreeNodes = new Map(
     (input.ratingTreeNodes ?? []).map((node) => [node.id, node] as const),
   );
+  const ratingTreeNodeSummaries = new Map(
+    (input.ratingTreeNodeSummaries ?? []).map((node) => [node.id, node] as const),
+  );
   const photoNumberCounts = new Map<string, number>();
   for (const defect of input.draft.defects) {
     for (const reference of defect.photo_references) {
@@ -418,6 +430,7 @@ export function buildDefectPhotoReviewModel(
       repeatedPhotoNumbers,
       input.ratingTreeVersionId,
       ratingTreeNodes,
+      ratingTreeNodeSummaries,
       input.applicableTreeNodeIdsByComponent ?? new Map(),
       input.treeRulesReady ?? false,
       input.matchResults?.get(defect.candidate_id) ?? null,
