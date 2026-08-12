@@ -115,36 +115,201 @@ body {
   border-color: #b9c4d0;
 }
 
-/* 登录页：单卡片居中，表单纵向排布。 */
-.login-panel {
+/* 登录页：单卡片整屏居中，表单纵向排布。
+   app-shell 的 min-height:100vh 量的是内容盒，32px 内边距会额外加上去，不改
+   border-box 的话居中后整页还能再滚 64px——和双栏页那条是同一个坑。 */
+.app-shell:has(> .app-content > .login-panel) {
+  box-sizing: border-box;
+  align-items: center;
+  background: linear-gradient(180deg, #e9eef7 0%, #f3f5f8 340px);
+}
+
+/* padding 和圆角要压 .status-panel 的同名声明，而 .login-panel 写在它前面，
+   同权重时后来者赢——所以这里用两个类把权重提上去。 */
+.status-panel.login-panel {
   max-width: 420px;
-  margin: 64px auto 0;
+  margin: 0 auto;
+  padding: 30px 28px 22px;
+  border-radius: 12px;
+}
+
+.login-brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.login-brand-badge {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #e8effc;
+  color: #1d49ad;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* .status-panel h1 给的 24px / margin-bottom:24px 是给内容页标题定的，套在这里
+   会把品牌行和副标题撑散。 */
+.login-panel h1 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.login-brand-sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: #5b6674;
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  margin-top: 8px;
+  margin-top: 22px;
 }
 
-.login-form label {
+.login-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.login-field label {
   font-weight: 600;
+  font-size: 13px;
   color: #18202a;
 }
 
-.login-form input {
+/* 图标和"显示密码"按钮压在输入框内侧：外框负责边框和焦点环，input 自己去边框，
+   否则焦点态会画出两层框。 */
+.login-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid #d9e0e8;
   border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 14px;
+  background: #ffffff;
+  padding: 0 10px;
 }
 
-.login-form button {
-  margin-top: 6px;
+.login-input-wrap:hover {
+  border-color: #b9c4d0;
+}
+
+.login-input-wrap:focus-within {
+  border-color: #2456c9;
+  box-shadow: 0 0 0 3px rgba(36, 86, 201, 0.14);
+}
+
+.login-field-icon {
+  flex: none;
+  color: #8a97a6;
+}
+
+.login-input-wrap input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  padding: 9px 0;
+  font: inherit;
+  font-size: 14px;
+  color: #18202a;
+}
+
+.login-password-toggle {
+  flex: none;
+  display: flex;
+  align-items: center;
+  border: none;
+  background: none;
+  padding: 2px;
+  color: #8a97a6;
+  cursor: pointer;
+}
+
+.login-password-toggle:hover:not(:disabled) {
+  color: #2456c9;
+}
+
+.login-password-toggle:focus-visible {
+  outline: 2px solid #2456c9;
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+.login-caps-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  margin: 2px 0 0;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #faeeda;
+  color: #854f0b;
+  font-size: 12px;
+}
+
+.login-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #f0b5b5;
+  border-radius: 6px;
+  background: #fdeced;
+  color: #a32d2d;
+  font-size: 13px;
+}
+
+.login-error svg {
+  flex: none;
+}
+
+/* 这颗按钮原先挂的是 .review-action-primary，但那个类的所有蓝色规则都带
+   .review-action-bar 之类的父容器前缀，登录页一条都命中不了，于是永远是浏览器
+   默认灰底——可用态和禁用态长得一模一样。改成登录页自己的类。 */
+.login-submit {
+  margin-top: 4px;
+  border: 1px solid #2456c9;
+  border-radius: 6px;
+  background: #2456c9;
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+
+.login-submit:not(:disabled):hover {
+  background: #1d49ad;
+  border-color: #1d49ad;
+}
+
+.login-submit:disabled {
+  background: #a9bce7;
+  border-color: #a9bce7;
+  cursor: not-allowed;
+}
+
+.login-submit:focus-visible {
+  outline: 2px solid #2456c9;
+  outline-offset: 2px;
+}
+
+.login-foot {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: #8a97a6;
 }
 
 .status-panel {
