@@ -148,6 +148,19 @@ const TERMINAL_EDIT_LOCK_ERROR_CODES = new Set([
   "edit_lock_required",
 ]);
 
+function isPageReload(): boolean {
+  try {
+    const navigation = window.performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    return navigation?.type === "reload";
+  } catch {
+    return false;
+  }
+}
+
+function waitFor(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
 // 心跳正常续租只会改变 expires_at。页面不展示该值，也不应仅因此重渲染数百条病害；
 // 真实归属、持有人或取得时间变化时才需要刷新可见锁摘要。
 function hasSameVisibleLockSummary(left: EditLockSummary | null, right: EditLockSummary): boolean {
@@ -369,7 +382,25 @@ function ReviewWorkspaceLoaded({
     // 延后一拍可避开 React StrictMode 的首次 setup→cleanup 探测，防止开发态重复抢锁。
     const timer = window.setTimeout(() => {
       setLockPhase("acquiring");
-      acquireEditLock(backendBaseUrl, importRecordId)
+      const acquire = async () => {
+        try {
+          return await acquireEditLock(backendBaseUrl, importRecordId);
+        } catch (caught) {
+          // Reload tears down the old page and starts this one almost simultaneously. Give
+          // its keepalive DELETE a brief chance to release the same user's previous lock.
+          if (
+            isPageReload() &&
+            caught instanceof ApiError &&
+            caught.code === "import_record_locked" &&
+            lockSummaryFromError(caught)?.owned_by_current_user
+          ) {
+            await waitFor(250);
+            return acquireEditLock(backendBaseUrl, importRecordId);
+          }
+          throw caught;
+        }
+      };
+      acquire()
         .then((result) => {
           if (cancelled) {
             void releaseEditLock(backendBaseUrl, importRecordId, result.lock_token, true).catch(() => undefined);
@@ -431,6 +462,18 @@ function ReviewWorkspaceLoaded({
       heartbeatInFlightRef.current = false;
       window.clearInterval(timer);
     };
+  }, [importRecordId, lockToken]);
+
+  useEffect(() => {
+    if (lockToken === null) return;
+    const releaseOnPageHide = (event: PageTransitionEvent) => {
+      // A bfcache page may be resumed without remounting; keep its lease in that case.
+      if (event.persisted) return;
+      void releaseEditLock(backendBaseUrl, importRecordId, lockToken, true)
+        .catch(() => undefined);
+    };
+    window.addEventListener("pagehide", releaseOnPageHide);
+    return () => window.removeEventListener("pagehide", releaseOnPageHide);
   }, [importRecordId, lockToken]);
 
   useEffect(() => {

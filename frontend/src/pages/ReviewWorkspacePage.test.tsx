@@ -262,6 +262,78 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     expect(notice?.parentElement?.nextElementSibling).toHaveClass("review-body");
   });
 
+  it("retries once after a reload gives the previous page time to release its lock", async () => {
+    const navigationSpy = vi.spyOn(window.performance, "getEntriesByType").mockReturnValue([
+      { type: "reload" } as PerformanceNavigationTiming,
+    ]);
+    vi.mocked(acquireEditLock)
+      .mockRejectedValueOnce(new ApiError("import_record_locked", "另一个页面正在编辑。", {
+        details: { lock: currentLock() },
+      }))
+      .mockResolvedValueOnce({
+        acquired: true,
+        lock_token: "new-token",
+        heartbeat_interval_seconds: 30,
+        lock: currentLock(),
+      });
+
+    render(
+      <MemoryRouter initialEntries={["/imports/import-1/review"]}>
+        <Routes>
+          <Route path="/imports/:importRecordId/review" element={<ReviewWorkspacePage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(acquireEditLock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(acquireEditLock).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("你正在编辑此导入记录。")).toBeInTheDocument();
+    navigationSpy.mockRestore();
+  });
+
+  it("does not retry when another tab still owns the lock during normal navigation", async () => {
+    const navigationSpy = vi.spyOn(window.performance, "getEntriesByType").mockReturnValue([
+      { type: "navigate" } as PerformanceNavigationTiming,
+    ]);
+    vi.mocked(acquireEditLock).mockRejectedValueOnce(new ApiError("import_record_locked", "另一个页面正在编辑。", {
+      details: { lock: currentLock() },
+    }));
+
+    await renderEditableReview();
+
+    expect(acquireEditLock).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText(/另一个页面正在编辑/)).not.toHaveLength(0);
+    navigationSpy.mockRestore();
+  });
+
+  it("releases the held lock when a reload or close hides the page", async () => {
+    await renderEditableReview();
+    vi.mocked(releaseEditLock).mockClear();
+
+    window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false }));
+
+    expect(releaseEditLock).toHaveBeenCalledWith(
+      "http://127.0.0.1:18080",
+      "import-1",
+      "lock-token",
+      true,
+    );
+  });
+
   it("removes the transparent top gap from the component-binding scroll area", async () => {
     await renderEditableReview();
 
