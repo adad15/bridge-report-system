@@ -33,7 +33,7 @@ import { ReviewMessageDock } from "../review/components/ReviewMessageDock";
 import type { GroupKey } from "../review/components/ReviewSidebar";
 import { ReviewSidebar } from "../review/components/ReviewSidebar";
 import { buildStatistics } from "../review/grouping";
-import { assessmentReducer, initialAssessmentState } from "../review/assessmentState";
+import { assessmentReducer, currentAssessmentIssues, initialAssessmentState } from "../review/assessmentState";
 import type { ReviewDraftAction } from "../review/reviewDraft";
 import { reviewDraftReducer } from "../review/reviewDraft";
 import { deriveReviewSession, shouldClearDirtyAfterSave } from "../review/reviewSession";
@@ -298,6 +298,10 @@ function ReviewWorkspaceLoaded({
   }, [dirty, draftStaleFromBinding, importRecordId]);
 
   const counts = useMemo(() => buildStatistics(draft), [draft]);
+  const assessmentIssuesForCurrentDraft = currentAssessmentIssues(
+    assessmentState,
+    draftRevision.current,
+  );
   const displayedCounts = useMemo(() => ({
     ...counts,
     rating_item_count: assessmentState.response?.result
@@ -875,7 +879,7 @@ function ReviewWorkspaceLoaded({
               selectedCandidateId={expandedDefectId}
               selectedPhotoCandidateId={activePhotoCandidateId}
               ratingTree={response.rating_tree ?? null}
-              assessmentIssues={assessmentState.response?.issues ?? []}
+              assessmentIssues={assessmentIssuesForCurrentDraft}
               onSelect={(candidateId, photoCandidateId) => {
                 setExpandedDefectId(candidateId);
                 setActivePhotoCandidateId(photoCandidateId ?? null);

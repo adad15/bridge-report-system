@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
-import type { RatingTreeNode } from "../../api/ratingTreeApi";
+import type { RatingTreeNode, RatingTreeNodeSummary } from "../../api/ratingTreeApi";
 import { buildDefectPhotoReviewModel } from "../defectPhotoReviewModel";
 import { data } from "../testFixtures";
 import { DefectDetailEditor } from "./DefectDetailEditor";
@@ -77,4 +77,64 @@ it("lets a range-split defect without photos be confirmed individually", () => {
   expect(confirm).toBeEnabled();
   fireEvent.click(confirm);
   expect(onConfirm).toHaveBeenCalledTimes(1);
+});
+
+it("uses summary scale rules before the full node detail has loaded", () => {
+  const node: RatingTreeNodeSummary = {
+    id: "tree-node-drainage",
+    node_key: "org.bridge.defect.drainage",
+    parent_node_id: "tree-group",
+    display_number: "10.5.1-1",
+    display_name: "排水不畅",
+    node_type: "defect",
+    sort_order: 1,
+    bridge_type_ids: ["bridge-type-1"],
+    component_category_ids: ["h21.component.beam"],
+    scoring_mode: "inherit_h21",
+    h21_indicator_id: "h21.defect.drainage",
+    is_selectable: true,
+    is_scoring: true,
+    allowed_scales: [1, 2],
+    scale_descriptions: { "1": "完好", "2": "排水不畅" },
+  };
+  const draft = data();
+  Object.assign(draft.defects[0], {
+    bridge_component_id: "component-1",
+    standard_component_category_id: "h21.component.beam",
+    rating_tree_version_id: "tree-version-1",
+    rating_tree_node_id: node.id,
+    rating_tree_match_method: "manual",
+    defect_scale: 1,
+    warnings: [],
+  });
+  const row = buildDefectPhotoReviewModel({
+    draft,
+    ratingTreeVersionId: "tree-version-1",
+    ratingTreeNodes: [],
+    ratingTreeNodeSummaries: [node],
+    applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([node.id])]]),
+    treeRulesReady: true,
+    assessmentIssues: [],
+  }).rows[0];
+
+  render(
+    <DefectDetailEditor
+      draft={draft}
+      row={row}
+      ratingTreeVersionId="tree-version-1"
+      applicableNodes={[node]}
+      importRecordId="record-1"
+      baseUrl="http://backend"
+      dispatch={vi.fn()}
+      onConfirm={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  );
+
+  const scale = screen.getByRole("combobox", { name: "标度" });
+  expect(scale).toBeEnabled();
+  expect(scale).toHaveValue("1");
+  expect(screen.getByRole("option", { name: "1 · 完好" })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "2 · 排水不畅" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "确认本组" })).toBeEnabled();
 });

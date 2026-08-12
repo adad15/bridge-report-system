@@ -97,6 +97,13 @@ Json::Value node_summary(const drogon::orm::Row& row) {
     return value;
 }
 
+void add_scale_rules(Json::Value& value, const drogon::orm::Row& row) {
+    value["allowed_scales"] =
+        parse_json_array(row["allowed_scales"].as<std::string>());
+    const auto detail = parse_json_object(row["detail_json"].as<std::string>());
+    value["scale_descriptions"] = detail["scale_descriptions"];
+}
+
 const char* node_columns() {
     return "n.id::text as id,n.node_key,n.parent_node_id::text as parent_node_id,"
            "n.display_number,n.display_name,n.node_type,n.sort_order,"
@@ -153,8 +160,7 @@ std::optional<Json::Value> full_node(
     auto value = node_summary(rows[0]);
     value["organization_note"] =
         rows[0]["organization_note"].as<std::string>();
-    value["allowed_scales"] =
-        parse_json_array(rows[0]["allowed_scales"].as<std::string>());
+    add_scale_rules(value, rows[0]);
     const auto detail =
         parse_json_object(rows[0]["detail_json"].as<std::string>());
     value["h21_indicator_name"] = detail["h21_indicator_name"];
@@ -162,7 +168,6 @@ std::optional<Json::Value> full_node(
     value["uses_source_scale_descriptions"] =
         detail["uses_source_scale_descriptions"].asBool();
     value["source_mappings"] = detail["source_mappings"];
-    value["scale_descriptions"] = detail["scale_descriptions"];
     value["deduction_points"] = detail["deduction_points"];
     value["path"] = node_path(db_client, version_id, node_id);
     value["sources"] = Json::Value(Json::arrayValue);
@@ -466,6 +471,8 @@ void register_rating_tree_routes(const drogon::orm::DbClientPtr& db_client) {
                         if (applicable_only) {
                             return db_client->execSqlSync(
                             std::string("select ") + node_columns() +
+                            ",array_to_json(n.allowed_scales)::text as allowed_scales,"
+                            "n.detail_json::text as detail_json "
                             " from rating_tree_nodes n "
                             "where n.rating_tree_version_id=$1::uuid "
                             "and n.node_type='defect' and n.is_selectable "
@@ -493,6 +500,7 @@ void register_rating_tree_routes(const drogon::orm::DbClientPtr& db_client) {
                     body["nodes"] = Json::Value(Json::arrayValue);
                     for (const auto& row : rows) {
                         auto item = node_summary(row);
+                        if (applicable_only) add_scale_rules(item, row);
                         item["path"] = node_path(
                             db_client, version_id, row["id"].as<std::string>());
                         body["nodes"].append(std::move(item));

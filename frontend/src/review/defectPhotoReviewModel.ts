@@ -233,12 +233,13 @@ function analyzeDefect(
     addProblem(problems, "rating_tree_fuzzy_review_required", "defect_type", "模糊匹配建议需要人工确认。");
   }
   if (ratingTreeNodeSummary?.is_scoring) {
-    if (!ratingTreeNode) {
+    const allowedScales = ratingTreeNode?.allowed_scales ?? ratingTreeNodeSummary.allowed_scales;
+    if (!allowedScales) {
       addProblem(problems, "rating_tree_node_loading", "scale", "正在加载病害标度规则。");
     } else if (
       defect.defect_scale === null ||
       defect.defect_scale === undefined ||
-      !ratingTreeNode.allowed_scales.includes(defect.defect_scale)
+      !allowedScales.includes(defect.defect_scale)
     ) {
       addProblem(problems, "scale_not_allowed", "scale", "病害标度不在评定树允许范围内。");
     }

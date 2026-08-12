@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AssessmentPreviewResponse } from "../api/assessmentApi";
-import { assessmentReducer, initialAssessmentState } from "./assessmentState";
+import { assessmentReducer, currentAssessmentIssues, initialAssessmentState } from "./assessmentState";
 
 function response(revision: number): AssessmentPreviewResponse {
   return {
@@ -34,5 +34,26 @@ describe("assessmentState", () => {
     state = assessmentReducer(state, { type: "requested", revision: 2 });
     expect(state.phase).toBe("updating");
     expect(state.response?.client_revision).toBe(1);
+  });
+
+  it("does not let issues from an older draft revision block current editing", () => {
+    const stale = response(1);
+    stale.issues = [{
+      code: "assessment_defect_scale_required",
+      message: "病害缺少有效的规范标度。",
+      entity_type: "defect",
+      entity_id: "defect-1",
+      field_path: "defect_scale",
+      rule_id: "scale-required",
+    }];
+    const state = assessmentReducer(initialAssessmentState, {
+      type: "resolved",
+      response: stale,
+      currentRevision: 1,
+    });
+
+    expect(currentAssessmentIssues(state, 1)).toHaveLength(1);
+    expect(currentAssessmentIssues(state, 2)).toEqual([]);
+    expect(state.response?.issues).toHaveLength(1);
   });
 });

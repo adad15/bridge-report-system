@@ -56,6 +56,9 @@ export interface RatingTreeNodeSummary {
   h21_indicator_id: string | null;
   is_selectable: boolean;
   is_scoring: boolean;
+  /** 适用节点列表直接携带确认所需的标度规则；旧服务响应中可能暂时缺少。 */
+  allowed_scales?: number[];
+  scale_descriptions?: Record<string, string>;
   path?: RatingTreePathItem[];
 }
 

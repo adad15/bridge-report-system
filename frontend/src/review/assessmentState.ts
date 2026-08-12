@@ -43,3 +43,10 @@ export function assessmentReducer(state: AssessmentState, action: AssessmentActi
       return initialAssessmentState;
   }
 }
+
+export function currentAssessmentIssues(
+  state: AssessmentState,
+  currentRevision: number,
+): AssessmentPreviewResponse["issues"] {
+  return state.response?.client_revision === currentRevision ? state.response.issues : [];
+}

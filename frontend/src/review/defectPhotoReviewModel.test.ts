@@ -180,11 +180,16 @@ describe("buildDefectPhotoReviewModel", () => {
   });
 
   it("keeps a scoring node blocked until its scale rules are available", () => {
+    const summaryWithoutScaleRules = {
+      ...treeNode,
+      allowed_scales: undefined,
+      scale_descriptions: undefined,
+    };
     const row = buildDefectPhotoReviewModel({
       draft: safeDraft(),
       ratingTreeVersionId: "tree-version-1",
       ratingTreeNodes: [],
-      ratingTreeNodeSummaries: [treeNode],
+      ratingTreeNodeSummaries: [summaryWithoutScaleRules],
       applicableTreeNodeIdsByComponent: new Map([
         ["component-1", new Set([treeNode.id])],
       ]),

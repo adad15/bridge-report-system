@@ -61,6 +61,13 @@ export function DefectDetailEditor({
     () => sortRatingTreeNodes(applicableNodes),
     [applicableNodes],
   );
+  const selectedNodeSummary = applicableNodes.find(
+    (item) => item.id === defect.rating_tree_node_id,
+  ) ?? null;
+  const activeTreeNode = treeNode?.id === defect.rating_tree_node_id ? treeNode : null;
+  const selectedNodeIsScoring = activeTreeNode?.is_scoring ?? selectedNodeSummary?.is_scoring ?? false;
+  const selectedNodeAllowedScales = activeTreeNode?.allowed_scales ?? selectedNodeSummary?.allowed_scales ?? [];
+  const selectedNodeScaleDescriptions = activeTreeNode?.scale_descriptions ?? selectedNodeSummary?.scale_descriptions ?? {};
   // 候选是后端这次算出来的临时结果，不在草稿里；采用候选后按人工选择处理。
   const evidence = displayMatchEvidence(
     defect.rating_tree_match_evidence ?? row.matchResult?.reason_message,
@@ -211,18 +218,18 @@ export function DefectDetailEditor({
             </select>
             {/* 路径和评分规则说的就是上面这个下拉选中的节点，原先却独占一块带边框的
                 灰条摆在字段区下方；并进这张卡，读的时候不用在两块之间来回对。 */}
-            {treeNode ? (
+            {activeTreeNode ? (
               <div className="defect-rating-tree-context">
                 <div>
                   <span>评定树路径</span>
-                  <strong>{treeNode.path.map((item) => ratingTreeDisplayLabel(item)).join(" / ")}</strong>
+                  <strong>{activeTreeNode.path.map((item) => ratingTreeDisplayLabel(item)).join(" / ")}</strong>
                 </div>
                 <div>
                   <span>评分规则</span>
-                  <strong>{treeNode.is_scoring ? `继承 H21 · ${treeNode.h21_indicator_name ?? treeNode.h21_indicator_id}` : "暂不计分"}</strong>
+                  <strong>{activeTreeNode.is_scoring ? `继承 H21 · ${activeTreeNode.h21_indicator_name ?? activeTreeNode.h21_indicator_id}` : "暂不计分"}</strong>
                 </div>
                 <a
-                  href={`/rating-trees/${encodeURIComponent(ratingTreeVersionId!)}?node=${encodeURIComponent(treeNode.id)}`}
+                  href={`/rating-trees/${encodeURIComponent(ratingTreeVersionId!)}?node=${encodeURIComponent(activeTreeNode.id)}`}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -238,14 +245,14 @@ export function DefectDetailEditor({
               标度
               {/* 标度只列出该节点允许的取值并附完整规范判定文字；不按描述推断标度。 */}
               <select
-                disabled={disabled || !treeNode?.is_scoring}
+                disabled={disabled || !selectedNodeIsScoring}
                 value={defect.defect_scale ?? ""}
                 onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_scale", value: event.target.value === "" ? null : Number(event.target.value) })}
               >
-                <option value="">{treeNode ? (treeNode.is_scoring ? "请选择标度" : "该节点暂不计分") : "请先确定规范病害"}</option>
-                {treeNode?.allowed_scales.map((scale) => (
+                <option value="">{defect.rating_tree_node_id ? (selectedNodeIsScoring ? "请选择标度" : "该节点暂不计分") : "请先确定规范病害"}</option>
+                {selectedNodeAllowedScales.map((scale) => (
                   <option key={scale} value={scale}>
-                    {scale} · {treeNode.scale_descriptions[String(scale)] ?? ""}
+                    {scale} · {selectedNodeScaleDescriptions[String(scale)] ?? ""}
                   </option>
                 ))}
               </select>
