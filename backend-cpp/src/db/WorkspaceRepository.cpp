@@ -384,7 +384,8 @@ UploadWordOutcome WorkspaceRepository::upload_word_import(
             "insert into import_source_files "
             "(id, import_record_id, original_file_name, storage_relative_path, file_extension, "
             " file_size_bytes, file_hash, status) "
-            "select id, $1::uuid, $2, id::text || '.docx', $3, $4, $5, '待解析' from source_id "
+            // 扩展名跟着元数据走：Word 是 .docx，接口同步是指向本机离线库的 .srcref。
+            "select id, $1::uuid, $2, id::text || $3, $3, $4, $5, '待解析' from source_id "
             "returning id::text, system_number, storage_relative_path",
             import_id, metadata.original_file_name, metadata.file_extension,
             static_cast<long long>(metadata.file_size_bytes), metadata.sha256);

@@ -45,6 +45,7 @@ struct RatingTreeExtensionManifest {
 struct RatingTreeExtensionNode {
     std::string id;
     std::optional<std::string> parent_id;
+    std::optional<std::string> display_number;
     std::string display_name;
     RatingTreeNodeType node_type{RatingTreeNodeType::placeholder};
     int sort_order{0};
@@ -52,9 +53,18 @@ struct RatingTreeExtensionNode {
     std::vector<std::string> component_category_ids;
     RatingTreeScoringMode scoring_mode{RatingTreeScoringMode::non_scoring};
     std::optional<std::string> h21_indicator_id;
+    std::map<int, std::string> source_scale_descriptions;
     bool is_selectable{false};
     std::string organization_note;
     std::vector<std::string> source_ids;
+};
+
+struct RatingTreeSourceMapping {
+    std::string source_group_id;
+    std::string source_indicator_id;
+    std::string source_group_number;
+    std::string source_indicator_number;
+    std::string target_node_id;
 };
 
 struct RatingTreeAlias {
@@ -91,6 +101,7 @@ struct RatingTreeExtensionPackage {
     std::map<std::string, RatingTreeExtensionNode> nodes;
     std::vector<RatingTreeAlias> aliases;
     std::vector<RatingTreeKeywordRule> keyword_rules;
+    std::vector<RatingTreeSourceMapping> source_mappings;
     std::map<std::string, RatingTreeSource> sources;
     std::map<std::string, Json::Value> documents;
 };
@@ -112,6 +123,7 @@ struct EffectiveRatingTreeVersion {
 struct EffectiveRatingTreeNode {
     std::string id;
     std::optional<std::string> parent_id;
+    std::optional<std::string> display_number;
     std::string display_name;
     RatingTreeNodeType node_type{RatingTreeNodeType::placeholder};
     int sort_order{0};
@@ -128,6 +140,8 @@ struct EffectiveRatingTreeNode {
     std::map<int, int> deduction_points;
     std::string h21_indicator_name;
     std::string h21_source_table;
+    bool uses_source_scale_descriptions{false};
+    std::vector<RatingTreeSourceMapping> source_mappings;
 };
 
 struct EffectiveRatingTree {

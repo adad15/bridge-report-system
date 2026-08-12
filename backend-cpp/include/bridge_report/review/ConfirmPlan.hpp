@@ -66,7 +66,6 @@ struct DefectPlan {
     std::optional<int> source_row_number;
     double extraction_confidence{0.0};
     std::string review_status;
-    std::optional<std::string> review_note;
     std::vector<MeasurementPlan> measurements;
 };
 

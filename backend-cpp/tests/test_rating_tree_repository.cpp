@@ -90,6 +90,33 @@ protected:
         return std::move(*compiled.tree);
     }
 
+    bridge_report::rating_tree::EffectiveRatingTree compile_current_tree() {
+        const auto root = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT);
+        bridge_report::standards::StandardPackageLoader standard_loader;
+        auto h21 = standard_loader.load(
+            root / "standards/technical-condition/jtg-t-h21-2011/1.0.3");
+        auto maintenance = standard_loader.load(
+            root / "standards/maintenance/jtg-5120-2021/1.0.0");
+        auto extension = bridge_report::rating_tree::RatingTreePackageLoader().load(
+            root / "standards/rating-tree/organization-bridge/2.0.2");
+        EXPECT_TRUE(h21.ok());
+        EXPECT_TRUE(maintenance.ok());
+        EXPECT_TRUE(extension.ok());
+
+        bridge_report::db::StandardRepository standards(client_);
+        EXPECT_NE(
+            standards.sync_package(h21.package->manifest).status,
+            bridge_report::db::StandardPackageSyncStatus::ChecksumConflict);
+        EXPECT_NE(
+            standards.sync_package(maintenance.package->manifest).status,
+            bridge_report::db::StandardPackageSyncStatus::ChecksumConflict);
+
+        auto compiled = bridge_report::rating_tree::RatingTreeCompiler().compile(
+            *h21.package, &*maintenance.package, *extension.package);
+        EXPECT_TRUE(compiled.ok());
+        return std::move(*compiled.tree);
+    }
+
     drogon::orm::DbClientPtr client_;
     std::unique_ptr<bridge_report::db::RatingTreeRepository> repository_;
 };
@@ -129,6 +156,50 @@ TEST_F(RatingTreeRepositoryTest, PublishesAndReloadsTheControlledMatchingRulePac
         }
     }
     EXPECT_TRUE(has_auto_water_rule);
+}
+
+TEST_F(RatingTreeRepositoryTest, PersistsTheCurrentSourceTree) {
+    const auto tree = compile_current_tree();
+
+    const auto sync = repository_->sync_published_tree(tree);
+
+    ASSERT_TRUE(
+        sync.status == bridge_report::db::RatingTreeSyncStatus::Inserted ||
+        sync.status == bridge_report::db::RatingTreeSyncStatus::Unchanged);
+    ASSERT_TRUE(sync.rating_tree_version_id.has_value());
+    const auto loaded =
+        repository_->load_published_tree(*sync.rating_tree_version_id);
+    ASSERT_TRUE(loaded.has_value());
+    const auto found = std::find_if(
+        loaded->nodes.begin(),
+        loaded->nodes.end(),
+        [](const auto& item) {
+            return item.second.display_number ==
+                std::optional<std::string>("9.1.1-10") &&
+                item.second.display_name == "水损害";
+        });
+    ASSERT_NE(found, loaded->nodes.end());
+    const auto& water = found->second;
+    EXPECT_TRUE(water.is_scoring);
+    EXPECT_TRUE(water.uses_source_scale_descriptions);
+    EXPECT_EQ(water.scale_descriptions.at(3), "渗水、水蚀严重；范围＜30%");
+    EXPECT_EQ(water.deduction_points.at(4), 50);
+    EXPECT_EQ(water.sort_order, 100);
+
+    const auto crack = std::find_if(
+        loaded->nodes.begin(),
+        loaded->nodes.end(),
+        [](const auto& item) {
+            return item.second.display_number ==
+                std::optional<std::string>("9.1.2-1") &&
+                item.second.display_name == "裂缝";
+        });
+    ASSERT_NE(crack, loaded->nodes.end());
+    ASSERT_EQ(crack->second.source_mappings.size(), 1u);
+    EXPECT_EQ(crack->second.source_mappings[0].source_group_number, "9.1.2");
+    EXPECT_EQ(
+        crack->second.source_mappings[0].source_indicator_number,
+        "9.1.2-1");
 }
 
 TEST_F(RatingTreeRepositoryTest, SyncsPublishedTreeIdempotentlyAndRejectsConflict) {

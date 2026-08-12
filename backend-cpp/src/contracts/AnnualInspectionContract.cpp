@@ -218,8 +218,8 @@ void validate_contract_info(
     const auto version = contract["version"].isString()
                              ? contract["version"].asString()
                              : std::string{};
-    if (version != "3.0") {
-        result.add_issue("contract.version", "must be 3.0");
+    if (version != "4.0") {
+        result.add_issue("contract.version", "must be 4.0");
     }
 }
 
@@ -247,7 +247,7 @@ void reject_member(
     const std::string& member,
     ContractValidationResult& result) {
     if (object.isObject() && object.isMember(member)) {
-        result.add_issue(member_path(path, member), "is not allowed in contract 3.0");
+        result.add_issue(member_path(path, member), "is not allowed in contract 4.0");
     }
 }
 
@@ -407,11 +407,20 @@ void validate_defect(
             path,
             "rating_tree_match_method",
             {"exact", "controlled_alias", "controlled_keyword",
-             "fuzzy_candidate", "manual"},
+             "fuzzy_candidate", "source_indicator", "manual"},
             result);
     }
     require_optional_nullable_non_blank_string(
         defect, path, "standard_defect_indicator_id", result);
+    // 来源软件原始分组与指标身份：只读输入，与派生 H21 字段分开，重绑时不清空。
+    require_optional_nullable_non_blank_string(
+        defect, path, "source_defect_group_id", result);
+    require_optional_nullable_non_blank_string(
+        defect, path, "source_defect_group_number", result);
+    require_optional_nullable_non_blank_string(
+        defect, path, "source_defect_indicator_id", result);
+    require_optional_nullable_non_blank_string(
+        defect, path, "source_defect_indicator_number", result);
     validate_optional_string_array(
         defect, path, "component_match_candidate_ids", result);
     if (defect.isMember("component_match_method") &&
@@ -487,13 +496,8 @@ void validate_photo(
     }
     require_non_empty_string(photo, path, "candidate_id", result);
     require_non_empty_string(photo, path, "photo_number", result);
-    require_enum(photo, path, "review_status", review_statuses(), result);
-    require_enum(
-        photo,
-        path,
-        "match_status",
-        {"高置信候选", "待校对", "已确认", "未关联", "已忽略"},
-        result);
+    reject_member(photo, path, "match_status", result);
+    reject_member(photo, path, "review_status", result);
     if (require_object_member(photo, path, "extracted_file", result)) {
         const auto& extracted = photo["extracted_file"];
         if (extracted.isMember("archive_relative_path") &&

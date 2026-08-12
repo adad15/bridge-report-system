@@ -46,6 +46,14 @@ describe("ReviewMessageDock", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  it("shows a fallback instead of an empty error dock", () => {
+    render(
+      <ReviewMessageDock saveMessage={{ kind: "error", text: "   " }} preflight={null} onDismissSaveMessage={vi.fn()} />
+    );
+
+    expect(screen.getByText("操作失败，请稍后重试。")).toBeInTheDocument();
+  });
+
   it("summarizes a blocked preflight and expands to the issue list on demand", async () => {
     render(<ReviewMessageDock saveMessage={null} preflight={blockedPreflight()} onDismissSaveMessage={vi.fn()} />);
 

@@ -1,0 +1,51 @@
+{
+  "overrides": [
+    {
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-13",
+      "scoring_mode": "reference_h21",
+      "h21_indicator_id": "h21.defect.5_1_1_6",
+      "reason": "来源指标明确注明参照混凝土碳化执行。"
+    },
+    {
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "9.2.1-10",
+      "scoring_mode": "reference_h21",
+      "h21_indicator_id": "h21.defect.9_1_1_5",
+      "source_scale_descriptions": {
+        "1": "完好",
+        "2": "渗水泛碱",
+        "3": "大面积水蚀",
+        "4": "水蚀露筋且存在异常变化"
+      },
+      "reason": "来源软件为该水损害指标提供完整四级判定，扣分引用 H21 四级标度曲线。"
+    },
+    {
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-10",
+      "scoring_mode": "reference_h21",
+      "h21_indicator_id": "h21.defect.9_1_1_5",
+      "source_scale_descriptions": {
+        "1": "少量；范围＜5%",
+        "2": "局部渗水泛碱；范围＜10%",
+        "3": "渗水、水蚀严重；范围＜30%",
+        "4": "—"
+      },
+      "reason": "来源软件为墩身水损害提供四级判定，扣分引用 H21 四级标度曲线。"
+    },
+    {
+      "source_group_number": "9.1.2",
+      "source_indicator_number": "9.1.2-1",
+      "scoring_mode": "inherit_h21",
+      "h21_indicator_id": "h21.defect.9_1_2",
+      "reason": "来源软件编号为9.1.2-1，对应H21表9.1.2盖梁裂缝。"
+    },
+    {
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-10",
+      "scoring_mode": "reference_h21",
+      "h21_indicator_id": "h21.defect.9_2_1_4",
+      "reason": "来源指标明确注明参照台身混凝土碳化、腐蚀执行。"
+    }
+  ]
+}

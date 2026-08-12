@@ -20,7 +20,7 @@ import {
 const minimalWireResult: BridgeAnnualInspectionData = {
   contract: {
     name: "BridgeAnnualInspectionData",
-    version: "3.0",
+    version: "4.0",
     generated_at: "2026-07-09T00:00:00+08:00",
     producer: "bridge-report-system",
     parser_name: "test-parser",
@@ -86,7 +86,7 @@ function reviewResponseBody(overrides: Partial<Record<string, unknown>> = {}) {
       object_warning_count: 0,
     },
     has_current_annual_facts: false,
-    contract_compatibility: "native_3_0",
+    contract_compatibility: "native_4_0",
     technical_condition_standard: null,
     ...overrides,
   };
@@ -126,7 +126,7 @@ describe("reviewApi", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/review");
     expect(review.parsed_result).toEqual(minimalParsedResult);
     expect(review.statistics.defect_count).toBe(0);
-    expect(review.contract_compatibility).toBe("native_3_0");
+    expect(review.contract_compatibility).toBe("native_4_0");
     expect(review.component_inventory?.id).toBe("revision-1");
   });
 

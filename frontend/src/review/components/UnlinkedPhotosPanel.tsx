@@ -50,9 +50,6 @@ export function UnlinkedPhotosPanel({
           <div className="defect-photo-meta">
             <strong>照片 {active.photo_number}</strong>
             <span>{active.extracted_file.original_caption ?? "无照片说明"}</span>
-            {/* 不直吐 match_status / review_status 两个字段名：说清哪半句是机器给的、
-                哪半句是人的进度。 */}
-            <span>系统判断：{active.match_status} · 我的处理：{active.review_status}</span>
           </div>
         ) : null}
         <div className="defect-photo-thumbnails">

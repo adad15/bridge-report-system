@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <charconv>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <tuple>
 #include <utility>
@@ -77,6 +78,9 @@ Json::Value node_summary(const drogon::orm::Row& row) {
     value["parent_node_id"] = row["parent_node_id"].isNull()
         ? Json::Value()
         : Json::Value(row["parent_node_id"].as<std::string>());
+    value["display_number"] = row["display_number"].isNull()
+        ? Json::Value()
+        : Json::Value(row["display_number"].as<std::string>());
     value["display_name"] = row["display_name"].as<std::string>();
     value["node_type"] = row["node_type"].as<std::string>();
     value["sort_order"] = row["sort_order"].as<int>();
@@ -95,7 +99,7 @@ Json::Value node_summary(const drogon::orm::Row& row) {
 
 const char* node_columns() {
     return "n.id::text as id,n.node_key,n.parent_node_id::text as parent_node_id,"
-           "n.display_name,n.node_type,n.sort_order,"
+           "n.display_number,n.display_name,n.node_type,n.sort_order,"
            "array_to_json(n.bridge_type_ids)::text as bridge_type_ids,"
            "array_to_json(n.component_category_ids)::text as component_category_ids,"
            "n.scoring_mode,n.h21_indicator_id,n.is_selectable,n.is_scoring";
@@ -107,14 +111,14 @@ Json::Value node_path(
     const std::string& node_id) {
     const auto rows = db_client->execSqlSync(
         "with recursive ancestors as ("
-        "select id,parent_node_id,node_key,display_name,node_type,0 as depth "
+        "select id,parent_node_id,node_key,display_number,display_name,node_type,0 as depth "
         "from rating_tree_nodes "
         "where id=$2::uuid and rating_tree_version_id=$1::uuid "
         "union all "
-        "select p.id,p.parent_node_id,p.node_key,p.display_name,p.node_type,a.depth+1 "
+        "select p.id,p.parent_node_id,p.node_key,p.display_number,p.display_name,p.node_type,a.depth+1 "
         "from rating_tree_nodes p join ancestors a on p.id=a.parent_node_id "
         "where p.rating_tree_version_id=$1::uuid"
-        ") select id::text as id,node_key,display_name,node_type "
+        ") select id::text as id,node_key,display_number,display_name,node_type "
         "from ancestors order by depth desc",
         version_id,
         node_id);
@@ -123,6 +127,9 @@ Json::Value node_path(
         Json::Value item;
         item["id"] = row["id"].as<std::string>();
         item["node_key"] = row["node_key"].as<std::string>();
+        item["display_number"] = row["display_number"].isNull()
+            ? Json::Value()
+            : Json::Value(row["display_number"].as<std::string>());
         item["display_name"] = row["display_name"].as<std::string>();
         item["node_type"] = row["node_type"].as<std::string>();
         path.append(std::move(item));
@@ -152,6 +159,9 @@ std::optional<Json::Value> full_node(
         parse_json_object(rows[0]["detail_json"].as<std::string>());
     value["h21_indicator_name"] = detail["h21_indicator_name"];
     value["h21_source_table"] = detail["h21_source_table"];
+    value["uses_source_scale_descriptions"] =
+        detail["uses_source_scale_descriptions"].asBool();
+    value["source_mappings"] = detail["source_mappings"];
     value["scale_descriptions"] = detail["scale_descriptions"];
     value["deduction_points"] = detail["deduction_points"];
     value["path"] = node_path(db_client, version_id, node_id);
@@ -230,11 +240,19 @@ void register_rating_tree_routes(const drogon::orm::DbClientPtr& db_client) {
                     "technical_condition_package_version,"
                     "maintenance_package_version "
                     "from rating_tree_versions where status='published' "
-                    "order by published_at desc,tree_code,package_version");
+                    "order by tree_code,"
+                    "split_part(package_version,'.',1)::integer desc,"
+                    "split_part(package_version,'.',2)::integer desc,"
+                    "split_part(package_version,'.',3)::integer desc,"
+                    "published_at desc");
                 Json::Value body;
                 body["versions"] = Json::Value(Json::arrayValue);
+                std::set<std::string> trees_with_default;
                 for (const auto& row : rows) {
                     auto version = version_summary(row);
+                    const auto tree_code = row["tree_code"].as<std::string>();
+                    version["is_default"] =
+                        trees_with_default.insert(tree_code).second;
                     version["h21_package_version"] =
                         row["technical_condition_package_version"].as<std::string>();
                     version["maintenance_package_version"] =

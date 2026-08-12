@@ -1,0 +1,1093 @@
+{
+  "groups": [
+    {
+      "source_group_number": "5",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general",
+        "h21.component.bearing"
+      ]
+    },
+    {
+      "source_group_number": "5.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.beam"
+      ],
+      "component_category_ids": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ]
+    },
+    {
+      "source_group_number": "5.1.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.beam"
+      ],
+      "component_category_ids": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ]
+    },
+    {
+      "source_group_number": "5.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.beam"
+      ],
+      "component_category_ids": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ]
+    },
+    {
+      "source_group_number": "5.2.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.beam"
+      ],
+      "component_category_ids": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ]
+    },
+    {
+      "source_group_number": "5.3",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.bearing"
+      ]
+    },
+    {
+      "source_group_number": "5.3.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.bearing"
+      ]
+    },
+    {
+      "source_group_number": "5.3.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.bearing"
+      ]
+    },
+    {
+      "source_group_number": "5.3.3",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.bearing"
+      ]
+    },
+    {
+      "source_group_number": "5.3.4",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.bearing"
+      ]
+    },
+    {
+      "source_group_number": "6",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.main_ring",
+        "h21.component.arch.rigid_or_truss_segment",
+        "h21.component.arch.spandrel",
+        "h21.component.arch.transverse_link",
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.column",
+        "h21.component.composite_arch.deck_slab_or_beam",
+        "h21.component.composite_arch.hanger",
+        "h21.component.composite_arch.tie_rod",
+        "h21.component.composite_arch.transverse_link"
+      ]
+    },
+    {
+      "source_group_number": "6.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.main_ring",
+        "h21.component.arch.spandrel"
+      ]
+    },
+    {
+      "source_group_number": "6.1.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.main_ring"
+      ]
+    },
+    {
+      "source_group_number": "6.1.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.spandrel"
+      ]
+    },
+    {
+      "source_group_number": "6.1.3",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.deck_slab"
+      ]
+    },
+    {
+      "source_group_number": "6.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.main_ring",
+        "h21.component.arch.rigid_or_truss_segment",
+        "h21.component.arch.spandrel",
+        "h21.component.arch.transverse_link"
+      ]
+    },
+    {
+      "source_group_number": "6.2.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.main_ring"
+      ]
+    },
+    {
+      "source_group_number": "6.2.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.spandrel"
+      ]
+    },
+    {
+      "source_group_number": "6.2.3",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.main_ring"
+      ]
+    },
+    {
+      "source_group_number": "6.2.5",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ]
+    },
+    {
+      "source_group_number": "6.2.6",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.transverse_link"
+      ]
+    },
+    {
+      "source_group_number": "6.2.7",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ]
+    },
+    {
+      "source_group_number": "6.2.8",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.transverse_link"
+      ]
+    },
+    {
+      "source_group_number": "6.2.9",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "component_category_ids": [
+        "h21.component.arch.deck_slab"
+      ]
+    },
+    {
+      "source_group_number": "6.3",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "component_category_ids": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.column",
+        "h21.component.composite_arch.deck_slab_or_beam",
+        "h21.component.composite_arch.hanger",
+        "h21.component.composite_arch.tie_rod",
+        "h21.component.composite_arch.transverse_link"
+      ]
+    },
+    {
+      "source_group_number": "6.3.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "component_category_ids": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ]
+    },
+    {
+      "source_group_number": "6.3.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "component_category_ids": [
+        "h21.component.composite_arch.column"
+      ]
+    },
+    {
+      "source_group_number": "6.3.3",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "component_category_ids": [
+        "h21.component.composite_arch.hanger"
+      ]
+    },
+    {
+      "source_group_number": "6.3.4",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "component_category_ids": [
+        "h21.component.composite_arch.tie_rod"
+      ]
+    },
+    {
+      "source_group_number": "6.3.5",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "component_category_ids": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ]
+    },
+    {
+      "source_group_number": "6.4",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "component_category_ids": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.deck_slab_or_beam",
+        "h21.component.composite_arch.transverse_link"
+      ]
+    },
+    {
+      "source_group_number": "6.4.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "component_category_ids": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ]
+    },
+    {
+      "source_group_number": "6.4.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "component_category_ids": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ]
+    },
+    {
+      "source_group_number": "7",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.anchorage",
+        "h21.component.suspension.anchorage_rod",
+        "h21.component.suspension.cable_clamp",
+        "h21.component.suspension.hanger",
+        "h21.component.suspension.main_cable",
+        "h21.component.suspension.main_saddle",
+        "h21.component.suspension.splay_saddle",
+        "h21.component.suspension.stiffening_girder",
+        "h21.component.suspension.tower"
+      ]
+    },
+    {
+      "source_group_number": "7.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.main_cable"
+      ]
+    },
+    {
+      "source_group_number": "7.1.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.main_cable"
+      ]
+    },
+    {
+      "source_group_number": "7.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.cable_clamp"
+      ]
+    },
+    {
+      "source_group_number": "7.2.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.cable_clamp"
+      ]
+    },
+    {
+      "source_group_number": "7.3",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.hanger"
+      ]
+    },
+    {
+      "source_group_number": "7.3.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.hanger"
+      ]
+    },
+    {
+      "source_group_number": "7.4",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.stiffening_girder"
+      ]
+    },
+    {
+      "source_group_number": "7.4.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.stiffening_girder"
+      ]
+    },
+    {
+      "source_group_number": "7.4.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.stiffening_girder"
+      ]
+    },
+    {
+      "source_group_number": "7.4.3",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.stiffening_girder"
+      ]
+    },
+    {
+      "source_group_number": "7.5",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.tower"
+      ]
+    },
+    {
+      "source_group_number": "7.5.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.tower"
+      ]
+    },
+    {
+      "source_group_number": "7.6",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.main_saddle",
+        "h21.component.suspension.splay_saddle"
+      ]
+    },
+    {
+      "source_group_number": "7.6.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.main_saddle",
+        "h21.component.suspension.splay_saddle"
+      ]
+    },
+    {
+      "source_group_number": "7.7",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.anchorage"
+      ]
+    },
+    {
+      "source_group_number": "7.7.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.anchorage"
+      ]
+    },
+    {
+      "source_group_number": "7.8",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.anchorage_rod"
+      ]
+    },
+    {
+      "source_group_number": "7.8.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.suspension.anchorage_rod"
+      ]
+    },
+    {
+      "source_group_number": "8",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.cable_system",
+        "h21.component.cable_stayed.tower"
+      ]
+    },
+    {
+      "source_group_number": "8.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.cable_system"
+      ]
+    },
+    {
+      "source_group_number": "8.1.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.cable_system"
+      ]
+    },
+    {
+      "source_group_number": "8.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.cable_system"
+      ]
+    },
+    {
+      "source_group_number": "8.2.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.cable_system"
+      ]
+    },
+    {
+      "source_group_number": "8.4",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.tower"
+      ]
+    },
+    {
+      "source_group_number": "8.4.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.tower"
+      ]
+    },
+    {
+      "source_group_number": "8.5",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.cable_system"
+      ]
+    },
+    {
+      "source_group_number": "8.5.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.cable_system"
+      ]
+    },
+    {
+      "source_group_number": "8.6",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.cable_system"
+      ]
+    },
+    {
+      "source_group_number": "8.6.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.cable_system"
+      ]
+    },
+    {
+      "source_group_number": "8.7",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.cable_system"
+      ]
+    },
+    {
+      "source_group_number": "8.7.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.cable_stayed.cable_system"
+      ]
+    },
+    {
+      "source_group_number": "9",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.abutment",
+        "h21.component.lower.cone_or_protection_slope",
+        "h21.component.lower.foundation",
+        "h21.component.lower.pier",
+        "h21.component.lower.regulation_structure",
+        "h21.component.lower.riverbed",
+        "h21.component.lower.wing_or_ear_wall"
+      ]
+    },
+    {
+      "source_group_number": "9.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.pier"
+      ]
+    },
+    {
+      "source_group_number": "9.1.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.pier"
+      ]
+    },
+    {
+      "source_group_number": "9.1.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.pier"
+      ]
+    },
+    {
+      "source_group_number": "9.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.abutment"
+      ]
+    },
+    {
+      "source_group_number": "9.2.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.abutment"
+      ]
+    },
+    {
+      "source_group_number": "9.2.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.abutment"
+      ]
+    },
+    {
+      "source_group_number": "9.3",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.foundation"
+      ]
+    },
+    {
+      "source_group_number": "9.3.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.foundation"
+      ]
+    },
+    {
+      "source_group_number": "9.4",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.wing_or_ear_wall"
+      ]
+    },
+    {
+      "source_group_number": "9.4.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.wing_or_ear_wall"
+      ]
+    },
+    {
+      "source_group_number": "9.5",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.cone_or_protection_slope"
+      ]
+    },
+    {
+      "source_group_number": "9.5.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.cone_or_protection_slope"
+      ]
+    },
+    {
+      "source_group_number": "9.6",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.regulation_structure",
+        "h21.component.lower.riverbed"
+      ]
+    },
+    {
+      "source_group_number": "9.6.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.riverbed"
+      ]
+    },
+    {
+      "source_group_number": "9.6.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.lower.regulation_structure"
+      ]
+    },
+    {
+      "source_group_number": "10",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.drainage",
+        "h21.component.deck.expansion_joint",
+        "h21.component.deck.lighting_signs",
+        "h21.component.deck.pavement",
+        "h21.component.deck.railing",
+        "h21.component.deck.sidewalk"
+      ]
+    },
+    {
+      "source_group_number": "10.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.pavement"
+      ]
+    },
+    {
+      "source_group_number": "10.1.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.pavement"
+      ]
+    },
+    {
+      "source_group_number": "10.1.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.pavement"
+      ]
+    },
+    {
+      "source_group_number": "10.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.expansion_joint"
+      ]
+    },
+    {
+      "source_group_number": "10.2.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.expansion_joint"
+      ]
+    },
+    {
+      "source_group_number": "10.3",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.sidewalk"
+      ]
+    },
+    {
+      "source_group_number": "10.3.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.sidewalk"
+      ]
+    },
+    {
+      "source_group_number": "10.4",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.railing"
+      ]
+    },
+    {
+      "source_group_number": "10.4.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.railing"
+      ]
+    },
+    {
+      "source_group_number": "10.5",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.drainage"
+      ]
+    },
+    {
+      "source_group_number": "10.5.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.drainage"
+      ]
+    },
+    {
+      "source_group_number": "10.5.2",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.drainage"
+      ]
+    },
+    {
+      "source_group_number": "10.6",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.lighting_signs"
+      ]
+    },
+    {
+      "source_group_number": "10.6.1",
+      "bridge_type_ids": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "component_category_ids": [
+        "h21.component.deck.lighting_signs"
+      ]
+    }
+  ]
+}

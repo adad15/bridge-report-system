@@ -74,7 +74,7 @@ TEST(DefectPhotoNamingTest, ContinuesAfterTheHighestManualNumberInTheImport) {
     EXPECT_FALSE(draft_has_photo_naming(draft_with(photos), naming));
 }
 
-TEST(DefectPhotoCandidateTest, MarksAnUploadedPhotoAsConfirmedOnBothAxes) {
+TEST(DefectPhotoCandidateTest, BuildsAContractFourPhotoWithoutReviewState) {
     const auto candidate = build_uploaded_photo_candidate(
         UploadedPhotoNaming{"manual_photo_0001", "补-1"}, "defect_0042", "IMG_2031.jpg",
         "梁底裂缝补拍", "bridges/QL-1_桥/2026/imports/DRJL-1_导入/photos/x.jpg");
@@ -82,8 +82,8 @@ TEST(DefectPhotoCandidateTest, MarksAnUploadedPhotoAsConfirmedOnBothAxes) {
     EXPECT_EQ(candidate["candidate_id"].asString(), "manual_photo_0001");
     EXPECT_EQ(candidate["photo_number"].asString(), "补-1");
     EXPECT_EQ(candidate["linked_defect_candidate_id"].asString(), "defect_0042");
-    EXPECT_EQ(candidate["match_status"].asString(), "已确认");
-    EXPECT_EQ(candidate["review_status"].asString(), "已确认");
+    EXPECT_FALSE(candidate.isMember("match_status"));
+    EXPECT_FALSE(candidate.isMember("review_status"));
     EXPECT_EQ(candidate["source_ref"]["source_type"].asString(), "manual");
     EXPECT_DOUBLE_EQ(candidate["confidence"].asDouble(), 1.0);
     // 图注即最终报告里的照片题注。
@@ -226,7 +226,8 @@ TEST_F(DefectPhotoWriteTest, AppendsTheCandidateAndRegistersBothFileRows) {
     const auto draft = stored_draft();
     ASSERT_EQ(draft["photos"].size(), 2u);
     EXPECT_EQ(draft["photos"][1]["candidate_id"].asString(), "manual_photo_0001");
-    EXPECT_EQ(draft["photos"][1]["review_status"].asString(), "已确认");
+    EXPECT_FALSE(draft["photos"][1].isMember("match_status"));
+    EXPECT_FALSE(draft["photos"][1].isMember("review_status"));
     // 照片必须同时进两张文件表，否则 /photos/{id}/content 取不到图。
     EXPECT_EQ(client_->execSqlSync(
         "select count(*) as n from import_record_files irf join archived_files af on af.id=irf.archived_file_id "

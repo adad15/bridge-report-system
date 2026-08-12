@@ -33,6 +33,14 @@ struct PersistParseOutcome {
     std::vector<std::filesystem::path> obsolete_storage_paths;
 };
 
+struct DiscardFailedImportOutcome {
+    bool deleted{false};
+    std::string error_message;
+    std::vector<std::filesystem::path> temporary_source_paths;
+    std::vector<std::filesystem::path> archived_file_paths;
+    std::vector<std::filesystem::path> parse_work_paths;
+};
+
 class WordImportRepository {
 public:
     explicit WordImportRepository(drogon::orm::DbClientPtr db_client);
@@ -49,6 +57,7 @@ public:
         const std::filesystem::path& active_parse_work_relative_path = {}
     );
     void clear_active_parse_work_path(const std::string& import_record_id);
+    DiscardFailedImportOutcome discard_failed_import(const std::string& import_record_id);
     void mark_parse_failed(
         const std::string& import_record_id,
         const std::string& message,

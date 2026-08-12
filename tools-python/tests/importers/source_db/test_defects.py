@@ -2,7 +2,6 @@ import pytest
 
 from bridge_report_tools.importers.source_db.defects import (
     build_defect_candidates,
-    h21_indicator_id,
     resolve_component,
 )
 from bridge_report_tools.importers.source_db.reader import ComponentNode, SourceDefect
@@ -19,7 +18,7 @@ CODES = {
     "idx-water": ("5.1.1-13", "水损（参照混凝土碳化执行）"),
     "idx-other": ("11", "其他"),
 }
-H21_IDS = {"h21.defect.5_1_1_2"}
+GROUP_CODES = {"jt-1": ("5.1.1", "板式构件")}
 
 
 def defect(**overrides) -> SourceDefect:
@@ -35,27 +34,27 @@ def defect(**overrides) -> SourceDefect:
 
 
 def build(defects, **kwargs):
-    candidates, _ = build_defect_candidates(defects, TREE, CODES, H21_IDS, **kwargs)
+    candidates, _ = build_defect_candidates(
+        defects, TREE, GROUP_CODES, CODES, **kwargs)
     return candidates
 
 
-def test_maps_the_source_index_code_to_an_h21_indicator() -> None:
-    assert h21_indicator_id("5.1.1-2") == "h21.defect.5_1_1_2"
-    assert h21_indicator_id("10.1.2-7") == "h21.defect.10_1_2_7"
-
-
-def test_carries_the_indicator_when_h21_has_it() -> None:
+def test_carries_the_raw_source_group_and_indicator_identity() -> None:
     candidate = build([defect()])[0]
 
-    assert candidate["standard_defect_indicator_id"] == "h21.defect.5_1_1_2"
+    assert candidate["source_defect_group_id"] == "jt-1"
+    assert candidate["source_defect_group_number"] == "5.1.1"
+    assert candidate["source_defect_indicator_id"] == "idx-spall"
+    assert candidate["source_defect_indicator_number"] == "5.1.1-2"
+    # 派生字段留空：它由后端按选中的节点算，解析器写它就会被当成已解析结果。
+    assert candidate["standard_defect_indicator_id"] is None
 
 
-def test_leaves_the_indicator_blank_when_h21_lacks_it() -> None:
-    """H21 的 5.1.1 只有 12 项，没有水损；硬凑一个不存在的编号只会误导下游。"""
+def test_carries_a_unit_extension_indicator_as_is() -> None:
     candidate = build([defect(judge_index_id="idx-water", name="渗水泛碱")])[0]
 
-    assert candidate["standard_defect_indicator_id"] is None
-    # 文字照常带出去——现有别名表认得「渗水泛碱」，这条走文字匹配。
+    assert candidate["source_defect_indicator_id"] == "idx-water"
+    assert candidate["source_defect_indicator_number"] == "5.1.1-13"
     assert candidate["defect_type"] == "渗水泛碱"
 
 
@@ -120,7 +119,7 @@ def test_keeps_the_range_notation_for_the_backend_to_split() -> None:
     """拆分由 C++ 现有的 ComponentRangeParser 做，解析器原样带过去。"""
     ranged = ComponentNode("t-r", "1-1#板~1-25#板", "001001003", 3, None, "空心板")
     candidates, _ = build_defect_candidates(
-        [defect(tree_id="t-r")], TREE + [ranged], CODES, H21_IDS)
+        [defect(tree_id="t-r")], TREE + [ranged], GROUP_CODES, CODES)
 
     assert candidates[0]["component_number"] == "1-1#板~1-25#板"
 
@@ -161,7 +160,8 @@ def test_resolve_component_returns_none_for_an_unknown_tree_id() -> None:
 
 def test_returns_a_link_keyed_by_the_source_defect_id() -> None:
     """照片是按源病害 id 绑定的；映射若按候选 id 索引，照片一张也挂不上。"""
-    _, links = build_defect_candidates([defect(id="src-9")], TREE, CODES, H21_IDS)
+    _, links = build_defect_candidates(
+        [defect(id="src-9")], TREE, GROUP_CODES, CODES)
 
     assert "src-9" in links
     assert links["src-9"].candidate_id == "source_defect_0001"

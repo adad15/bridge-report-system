@@ -67,7 +67,8 @@ export function RatingTreePage() {
           setLoading(false);
           return;
         }
-        navigate(`/rating-trees/${encodeURIComponent(versions[0].id)}`, { replace: true });
+        const defaultVersion = versions.find((item) => item.is_default) ?? versions[0];
+        navigate(`/rating-trees/${encodeURIComponent(defaultVersion.id)}`, { replace: true });
       })
       .catch((caught) => {
         if (active) {

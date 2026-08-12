@@ -35,6 +35,7 @@ REQUIRED_SCHEMA: dict[str, tuple[str, ...]] = {
         "数量", "数量单位", "长度", "长度单位", "宽度", "宽度单位", "面积一", "面积一单位", "走向",
     ),
     "images": ("id", "taskId", "fileName", "contentType", "w", "h", "ForeignTable", "ForeignKey", "memberNum"),
+    "judgeTree": ("id", "chapterNum", "name"),
     "judgeIndex": ("id", "tableNum", "name"),
 }
 
@@ -184,6 +185,14 @@ def load_indicator_codes(db: sqlite3.Connection) -> dict[str, tuple[str, str]]:
     }
 
 
+def load_group_codes(db: sqlite3.Connection) -> dict[str, tuple[str, str]]:
+    """`judgeTree.id` -> (分组编号, 分组名称)。"""
+    return {
+        str(i): (str(num or ""), str(name or ""))
+        for i, num, name in db.execute("select id, chapterNum, name from judgeTree")
+    }
+
+
 def load_photos(db: sqlite3.Connection, task_id: str) -> list[SourcePhoto]:
     """只取元信息。照片本体是 base64，一座桥约 42 MB，列清单时不读进内存。"""
     rows = db.execute(
@@ -211,3 +220,38 @@ def load_photo_content(db: sqlite3.Connection, photo_id: str) -> tuple[str, byte
         return content_type, base64.b64decode(payload, validate=False)
     except Exception as error:  # noqa: BLE001 - 统一成带码异常交给上层
         raise SourceDatabaseError("source_photo_decode_failed", f"照片 {photo_id} 无法解码。") from error
+
+
+@dataclass(frozen=True)
+class SourceTaskSummary:
+    """任务列表里的一行。
+
+    taskId 是厂商库里的 UUID，用户无从得知，所以列表必须自带够用的信息让人认出来：
+    桥名、检测日期，再加病害与照片条数——同一座桥同一年出现两条时，这两个数是
+    唯一能区分"哪条是真正下载全了的"的依据。
+    """
+
+    id: str
+    name: str
+    check_date: str | None
+    defect_count: int
+    photo_count: int
+
+
+def load_task_summaries(db: sqlite3.Connection) -> list[SourceTaskSummary]:
+    """列出离线库里的全部检测任务，新的在前。
+
+    没有 checkDate 的任务排在最后——来源软件允许任务不填日期，实测确有这种行。
+    """
+    rows = db.execute(
+        "select t.id, t.name, t.checkDate,"
+        " (select count(*) from outerCheckData d where d.taskId = t.id),"
+        " (select count(*) from images i where i.taskId = t.id)"
+        " from tasks t"
+    ).fetchall()
+    summaries = [
+        SourceTaskSummary(row[0], row[1] or "", row[2] or None, row[3], row[4])
+        for row in rows
+    ]
+    return sorted(summaries, key=lambda s: (s.check_date is None, s.check_date or "", s.name),
+                  reverse=False)

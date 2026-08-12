@@ -74,7 +74,7 @@ const std::set<std::string>& warning_defect_editable_fields() {
         "source_structure_part", "component_name", "component_number", "defect_location",
         "defect_scale", "defect_type", "defect_description",
         "quantity_text", "measurement_text", "measurements", "review_status",
-        "group_review_status", "review_note",
+        "group_review_status",
         "bridge_component_id", "standard_component_category_id", "resolved_structure_part",
         "component_inventory_revision_id", "component_match_candidate_ids",
         "component_match_method", "component_match_confirmed_by",
@@ -295,8 +295,7 @@ bool same_component(
 }
 
 bool is_auto_match_method(const std::string& method) {
-    return method == "exact" || method == "controlled_alias" ||
-        method == "controlled_keyword";
+    return method == "source_indicator";
 }
 
 }  // namespace
@@ -382,6 +381,14 @@ DraftValidationResult normalize_defect_rating_tree_associations(
                 string_member_or_empty(defect, "defect_description");
             input.defect_location =
                 string_member_or_empty(defect, "defect_location");
+            input.source_defect_group_id =
+                string_member_or_empty(defect, "source_defect_group_id");
+            input.source_defect_group_number =
+                string_member_or_empty(defect, "source_defect_group_number");
+            input.source_defect_indicator_id =
+                string_member_or_empty(defect, "source_defect_indicator_id");
+            input.source_defect_indicator_number =
+                string_member_or_empty(defect, "source_defect_indicator_number");
             const auto verified = resolver.resolve(tree, input);
             if (verified.outcome ==
                     rating_tree::RatingTreeMatchOutcome::auto_bound &&
@@ -506,6 +513,7 @@ DraftValidationResult validate_imported_defect_evidence(
                 "source_ref 或 range_split_origin 与服务端保存的来源不一致。"});
         }
     }
+    result.ok = result.issues.empty();
     if (result.ok) {
         result.code.clear();
         result.message.clear();

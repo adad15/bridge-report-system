@@ -54,7 +54,8 @@ export async function parseError(response: Response): Promise<ApiError> {
   const body = await readJsonBody(response);
 
   if (isRecord(body) && typeof body.code === "string") {
-    const message = typeof body.message === "string" ? body.message : `请求失败（HTTP ${response.status}）`;
+    const rawMessage = typeof body.message === "string" ? body.message.trim() : "";
+    const message = rawMessage || `请求失败（HTTP ${response.status}，错误码 ${body.code}）`;
     const issues = Array.isArray(body.issues) ? (body.issues as ApiErrorIssue[]) : undefined;
     return new ApiError(body.code, message, { issues, details: body });
   }

@@ -7,12 +7,12 @@
 namespace bridge_report::review {
 
 enum class ContractCompatibility {
-    Native30,
+    Native40,
 };
 
 struct ContractCompatibilityResult {
     Json::Value data;
-    ContractCompatibility compatibility{ContractCompatibility::Native30};
+    ContractCompatibility compatibility{ContractCompatibility::Native40};
 };
 
 // 让构件匹配警告与当前绑定状态保持一致：已绑定/已标记缺失时清除，

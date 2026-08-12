@@ -8,7 +8,7 @@ import { data as fixtureData } from "../testFixtures";
 describe("UnlinkedPhotosPanel", () => {
   it("keeps an unlinked photo visible with its count", () => {
     const draft: BridgeAnnualInspectionData = fixtureData();
-    draft.photos[0] = { ...draft.photos[0], linked_defect_candidate_id: null, review_status: "已忽略" };
+    draft.photos[0] = { ...draft.photos[0], linked_defect_candidate_id: null };
 
     render(<UnlinkedPhotosPanel draft={draft} importRecordId="record-1" baseUrl="http://backend" />);
 
@@ -30,17 +30,17 @@ describe("UnlinkedPhotosPanel", () => {
     expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 
-  it("explains the raw status fields instead of dumping them", () => {
+  it("shows the photo caption without obsolete review state", () => {
     const draft: BridgeAnnualInspectionData = fixtureData();
     draft.photos[0] = {
       ...draft.photos[0],
       linked_defect_candidate_id: null,
-      match_status: "高置信候选",
-      review_status: "待确认",
+      extracted_file: { ...draft.photos[0].extracted_file, original_caption: "梁底裂缝" },
     };
 
     render(<UnlinkedPhotosPanel draft={draft} importRecordId="record-1" baseUrl="http://backend" />);
 
-    expect(screen.getByText("系统判断：高置信候选 · 我的处理：待确认")).toBeInTheDocument();
+    expect(screen.getByText("梁底裂缝")).toBeInTheDocument();
+    expect(screen.queryByText(/系统判断|我的处理/)).not.toBeInTheDocument();
   });
 });

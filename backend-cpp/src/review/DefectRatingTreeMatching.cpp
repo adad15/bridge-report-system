@@ -9,10 +9,9 @@ namespace {
 
 using rating_tree::RatingTreeMatchOutcome;
 
-// 自动匹配写入的三种方式；人工选择与模糊候选都不算自动结果。
+// 自动绑定只来自来源分组+指标的显式对表；文字方式不再参与。
 bool is_auto_match_method(const std::string& method) {
-    return method == "exact" || method == "controlled_alias" ||
-        method == "controlled_keyword";
+    return method == "source_indicator";
 }
 
 void clear_rating_tree_fields(
@@ -33,7 +32,10 @@ void write_auto_binding(
         ? Json::Value(*result.h21_indicator_id)
         : Json::Value();
     defect["rating_tree_match_method"] = result.match_method;
-    defect["rating_tree_match_evidence"] = result.match_evidence;
+    // 依据为空就写 null：契约允许缺省，页面据此隐藏那一行。
+    defect["rating_tree_match_evidence"] = result.match_evidence.empty()
+        ? Json::Value()
+        : Json::Value(result.match_evidence);
 }
 
 void count(DefectMatchStats& stats, const RatingTreeMatchOutcome outcome) {
@@ -92,6 +94,15 @@ std::optional<rating_tree::RatingTreeMatchInput> build_defect_match_input(
                     string_member_or_empty(defect, "defect_description");
                 input.defect_location =
                     string_member_or_empty(defect, "defect_location");
+                input.source_defect_group_id =
+                    string_member_or_empty(defect, "source_defect_group_id");
+                input.source_defect_group_number =
+                    string_member_or_empty(defect, "source_defect_group_number");
+                input.source_defect_indicator_id =
+                    string_member_or_empty(defect, "source_defect_indicator_id");
+                input.source_defect_indicator_number =
+                    string_member_or_empty(
+                        defect, "source_defect_indicator_number");
                 return input;
             }
         }

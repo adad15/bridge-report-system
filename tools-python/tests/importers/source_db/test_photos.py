@@ -120,8 +120,8 @@ def test_binds_the_photo_to_its_defect_on_both_sides(source_db, tmp_path):
 
     assert built[0]["linked_defect_candidate_id"] == "source_defect_1"
     # 归属来自外键而不是编号推断，所以匹配状态直接是已确认。
-    assert built[0]["match_status"] == "已确认"
-    assert built[0]["review_status"] == "待确认"
+    assert "match_status" not in built[0]
+    assert "review_status" not in built[0]
     reference = defects[0]["photo_references"][0]
     assert reference["photo_number"] == built[0]["photo_number"]
     assert reference["resolution"] == "matched"

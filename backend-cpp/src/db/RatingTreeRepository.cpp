@@ -78,11 +78,22 @@ std::string node_detail_json(const rating_tree::EffectiveRatingTreeNode& node) {
     Json::Value detail(Json::objectValue);
     detail["h21_indicator_name"] = node.h21_indicator_name;
     detail["h21_source_table"] = node.h21_source_table;
+    detail["uses_source_scale_descriptions"] =
+        node.uses_source_scale_descriptions;
     detail["scale_descriptions"] = Json::Value(Json::objectValue);
     detail["deduction_points"] = Json::Value(Json::objectValue);
     detail["source_ids"] = Json::Value(Json::arrayValue);
+    detail["source_mappings"] = Json::Value(Json::arrayValue);
     for (const auto& source_id : node.source_ids) {
         detail["source_ids"].append(source_id);
+    }
+    for (const auto& mapping : node.source_mappings) {
+        Json::Value value;
+        value["source_group_id"] = mapping.source_group_id;
+        value["source_indicator_id"] = mapping.source_indicator_id;
+        value["source_group_number"] = mapping.source_group_number;
+        value["source_indicator_number"] = mapping.source_indicator_number;
+        detail["source_mappings"].append(value);
     }
     for (const auto& [scale, description] : node.scale_descriptions) {
         detail["scale_descriptions"][std::to_string(scale)] = description;
@@ -206,19 +217,20 @@ RatingTreeSyncOutcome RatingTreeRepository::sync_published_tree(
         for (const auto& [node_key, node] : tree.nodes) {
             const auto rows = transaction->execSqlSync(
                 "insert into rating_tree_nodes ("
-                "rating_tree_version_id, node_key, display_name, node_type, sort_order, "
+                "rating_tree_version_id, node_key, display_number, display_name, node_type, sort_order, "
                 "bridge_type_ids, component_category_ids, scoring_mode, h21_indicator_id, "
                 "is_selectable, is_scoring, organization_note, allowed_scales, detail_json"
                 ") values ("
-                "$1::uuid, $2, $3, $4, $5, "
-                "case when $6='' then '{}'::text[] else string_to_array($6, chr(31)) end, "
+                "$1::uuid, $2, nullif($3, ''), $4, $5, $6, "
                 "case when $7='' then '{}'::text[] else string_to_array($7, chr(31)) end, "
-                "$8, nullif($9, ''), $10, $11, $12, "
-                "case when $13='' then '{}'::integer[] "
-                "else string_to_array($13, ',')::integer[] end, $14::jsonb"
+                "case when $8='' then '{}'::text[] else string_to_array($8, chr(31)) end, "
+                "$9, nullif($10, ''), $11, $12, $13, "
+                "case when $14='' then '{}'::integer[] "
+                "else string_to_array($14, ',')::integer[] end, $15::jsonb"
                 ") returning id::text as id",
                 version_id,
                 node_key,
+                node.display_number.value_or(""),
                 node.display_name,
                 rating_tree::to_string(node.node_type),
                 node.sort_order,
@@ -405,7 +417,7 @@ RatingTreeRepository::load_published_tree(const std::string& version_id) const {
         version["tree_content_checksum"].as<std::string>();
 
     const auto nodes = db_client_->execSqlSync(
-        "select id::text as id,parent_node_id::text as parent_node_id,display_name,"
+        "select id::text as id,parent_node_id::text as parent_node_id,display_number,display_name,"
         "node_type,sort_order,array_to_json(bridge_type_ids)::text as bridge_type_ids,"
         "array_to_json(component_category_ids)::text as component_category_ids,"
         "scoring_mode,h21_indicator_id,is_selectable,is_scoring,organization_note,"
@@ -418,6 +430,9 @@ RatingTreeRepository::load_published_tree(const std::string& version_id) const {
         node.id = row["id"].as<std::string>();
         if (!row["parent_node_id"].isNull()) {
             node.parent_id = row["parent_node_id"].as<std::string>();
+        }
+        if (!row["display_number"].isNull()) {
+            node.display_number = row["display_number"].as<std::string>();
         }
         node.display_name = row["display_name"].as<std::string>();
         node.node_type = rating_tree::parse_rating_tree_node_type(
@@ -459,6 +474,33 @@ RatingTreeRepository::load_published_tree(const std::string& version_id) const {
             Json::parseFromStream(reader, stream, &detail, &errors);
             node.h21_indicator_name = detail["h21_indicator_name"].asString();
             node.h21_source_table = detail["h21_source_table"].asString();
+            node.uses_source_scale_descriptions =
+                detail["uses_source_scale_descriptions"].asBool();
+            for (const auto& scale :
+                 detail["scale_descriptions"].getMemberNames()) {
+                node.scale_descriptions.emplace(
+                    std::stoi(scale),
+                    detail["scale_descriptions"][scale].asString());
+            }
+            for (const auto& scale : detail["deduction_points"].getMemberNames()) {
+                node.deduction_points.emplace(
+                    std::stoi(scale),
+                    detail["deduction_points"][scale].asInt());
+            }
+            if (detail["source_mappings"].isArray()) {
+                for (const auto& value : detail["source_mappings"]) {
+                    rating_tree::RatingTreeSourceMapping mapping;
+                    mapping.source_group_id = value["source_group_id"].asString();
+                    mapping.source_indicator_id =
+                        value["source_indicator_id"].asString();
+                    mapping.source_group_number =
+                        value["source_group_number"].asString();
+                    mapping.source_indicator_number =
+                        value["source_indicator_number"].asString();
+                    mapping.target_node_id = node.id;
+                    node.source_mappings.push_back(std::move(mapping));
+                }
+            }
         }
         tree.nodes.emplace(node.id, std::move(node));
     }

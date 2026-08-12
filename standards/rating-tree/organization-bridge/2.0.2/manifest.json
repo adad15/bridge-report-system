@@ -1,0 +1,15 @@
+{
+  "package_type": "rating_tree_extension",
+  "tree_code": "organization-bridge",
+  "tree_name": "单位桥梁评定树",
+  "package_version": "2.0.2",
+  "contract_version": 1,
+  "status": "active",
+  "content_checksum": "sha256:79e1fa74c80c58ad41e267efbe6f617bdc14bc0d91a1f29eae9cc5326cf4a063",
+  "entry_files": [
+    "tree.json",
+    "source-index-map.json",
+    "corrections.json",
+    "sources.json"
+  ]
+}

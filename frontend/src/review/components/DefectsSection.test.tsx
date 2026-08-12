@@ -85,6 +85,7 @@ describe("DefectsSection", () => {
       id: "tree-node-crack",
       node_key: "org.bridge.defect.crack",
       parent_node_id: "tree-group",
+      display_number: "5.1.1-1",
       display_name: "裂缝",
       node_type: "defect",
       sort_order: 1,
@@ -99,6 +100,7 @@ describe("DefectsSection", () => {
       id: "tree-node-crack",
       node_key: "org.bridge.defect.crack",
       parent_node_id: "tree-group",
+      display_number: "5.1.1-1",
       display_name: "裂缝",
       node_type: "defect",
       sort_order: 1,
@@ -166,6 +168,76 @@ describe("DefectsSection", () => {
     // 快速列表与缩略图查看不禁用：只读态仍能检查导入结果。
     expect(screen.getByRole("button", { name: /2-1#梁/ })).toBeEnabled();
     expect(screen.getByRole("button", { name: "查看未归属照片 2.1-1" })).toBeEnabled();
+  });
+
+  // 无匹配的病害没有候选按钮可点，这个下拉是唯一能给它定规范病害的入口，必须常驻。
+  it("keeps the rating tree picker in reach whether or not a node is bound", () => {
+    const node = {
+      id: "tree-node-crack",
+      node_key: "org.bridge.defect.crack",
+      parent_node_id: null,
+      display_number: "5.1.1-1",
+      display_name: "裂缝",
+      node_type: "defect" as const,
+      sort_order: 1,
+      bridge_type_ids: ["bridge-type-1"],
+      component_category_ids: ["h21.component.beam"],
+      scoring_mode: "inherit_h21" as const,
+      h21_indicator_id: "h21.defect.crack",
+      is_selectable: true,
+      is_scoring: true,
+    };
+    mockedFetchInventory.mockResolvedValue({
+      id: "revision-1", bridge_id: "bridge-1", revision_number: 1, status: "confirmed",
+      baseline_revision_id: null, confirmed_at: null, entries: [],
+    });
+    mockedFetchApplicableNodes.mockResolvedValue([node]);
+    mockedFetchTreeNode.mockResolvedValue({
+      ...node,
+      organization_note: "",
+      allowed_scales: [1, 2, 3],
+      h21_indicator_name: "裂缝",
+      h21_source_table: "表5.3.1",
+      scale_descriptions: {},
+      deduction_points: {},
+      path: [],
+      sources: [],
+    });
+    const unbound = data();
+    unbound.defects[0] = {
+      ...unbound.defects[0],
+      bridge_component_id: "component-1",
+      standard_component_category_id: "h21.component.beam",
+      rating_tree_node_id: null,
+    };
+    const props = {
+      importRecordId: "record-1",
+      baseUrl: "http://backend",
+      bridgeId: "bridge-1",
+      selectedCandidateId: "defect_0001",
+      onSelect: vi.fn(),
+      dispatch: vi.fn(),
+      ratingTree: {
+        version_id: "tree-version-1",
+        tree_name: "单位桥梁评定树",
+        package_version: "1.0.3",
+        content_checksum: "sha256:test",
+      },
+    };
+
+    const { rerender } = render(<DefectsSection draft={unbound} {...props} />);
+    expect(screen.getByRole("combobox", { name: "评定树病害" })).toBeInTheDocument();
+
+    // 定了之后下拉不消失：它同时是当前值的显示和改选的入口。
+    const bound = data();
+    bound.defects[0] = {
+      ...bound.defects[0],
+      bridge_component_id: "component-1",
+      standard_component_category_id: "h21.component.beam",
+      rating_tree_node_id: "tree-node-crack",
+    };
+    rerender(<DefectsSection draft={bound} {...props} />);
+    expect(screen.getByRole("combobox", { name: "评定树病害" })).toBeInTheDocument();
   });
 
   it("locks defects outside the reopen scope while keeping warning defects editable", () => {
@@ -264,6 +336,7 @@ describe("DefectsSection", () => {
       id: "tree-node-crack",
       node_key: "org.bridge.defect.crack",
       parent_node_id: "tree-group",
+      display_number: "5.1.1-1",
       display_name: "裂缝",
       node_type: "defect",
       sort_order: 1,
@@ -365,6 +438,7 @@ describe("DefectsSection", () => {
       id: "tree-node-water",
       node_key: "org.bridge.defect.water",
       parent_node_id: "tree-group",
+      display_number: "5.1.1-2",
       display_name: "水损",
       node_type: "defect",
       sort_order: 1,
@@ -454,8 +528,9 @@ describe("DefectsSection", () => {
       expect(dispatch).not.toHaveBeenCalledWith(
         expect.objectContaining({ type: "confirm_defect_groups" }),
       );
+      // 多个候选、疑似组合与无匹配的条数由统计筹码负责，汇总只说筹码说不出来的。
       await waitFor(() => expect(
-        screen.getByText(/共处理 1 条：自动匹配 1 条/),
+        screen.getByText(/共 1 条 · 自动匹配 1 条 · 跳过 0 条/),
       ).toBeInTheDocument());
     });
 
@@ -561,6 +636,181 @@ describe("DefectsSection", () => {
 
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(2));
       expect(mockedMatchDefects.mock.calls[1][3]).toEqual(["defect_0001"]);
+    });
+
+    it("groups exact source identities and dispatches one batch rating-tree assignment", async () => {
+      mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+      mockedMatchDefects.mockResolvedValue({
+        summary: {
+          processed: 2, auto_bound: 0, candidates: 0, composite: 0,
+          unmatched: 2, prerequisite_missing: 0, failed: 0, skipped: 0,
+        },
+        results: ["defect_0001", "defect_0002"].map((candidateId) => ({
+          candidate_id: candidateId,
+          outcome: "unmatched" as const,
+          skipped: false,
+          rating_tree_node_id: null,
+          match_method: null,
+          match_evidence: null,
+          reason_code: "no_matching_rule",
+          reason_message: "来源分组与指标没有精确对应关系。",
+          candidates: [],
+        })),
+        rating_tree_version_id: "tree-version-1",
+      });
+      const draft = boundDraft();
+      draft.defects = ["component-1", "component-2"].map((componentId, index) => ({
+        ...draft.defects[0],
+        candidate_id: `defect_000${index + 1}`,
+        component_number: `1-${index + 1}#板`,
+        bridge_component_id: componentId,
+        defect_type: "",
+        defect_description: "存在黑点痕迹",
+        source_defect_group_id: "source-group-a",
+        source_defect_group_number: "5.1.1",
+        source_defect_indicator_id: "source-indicator-a",
+        source_defect_indicator_number: "5.1.1-8",
+      }));
+      const dispatch = vi.fn();
+      const componentInventory = {
+        id: "revision-1",
+        bridge_id: "bridge-1",
+        revision_number: 1,
+        status: "confirmed" as const,
+        baseline_revision_id: null,
+        confirmed_at: null,
+        entries: ["component-1", "component-2"].map((componentId, index) => ({
+          id: `entry-${index + 1}`,
+          bridge_component_id: componentId,
+          component_number: `1-${index + 1}#板`,
+          site_name: "桥面板",
+          site_component_type: "桥面板",
+          span_or_location: null,
+          is_active: true,
+          deactivated_at: null,
+          deactivation_reason: null,
+          sort_order: index + 1,
+          remarks: null,
+          is_referenced: true,
+          mappings: [{
+            id: `mapping-${index + 1}`,
+            standard_package_id: "package-1",
+            standard_bridge_type_id: "bridge-type-1",
+            standard_component_category_id: "h21.component.beam",
+            structure_part: "superstructure" as const,
+            mapping_source: "template",
+            confirmation_status: "confirmed",
+            is_active: true,
+          }],
+        })),
+      };
+
+      render(
+        <DefectsSection
+          draft={draft}
+          {...matchProps(dispatch)}
+          componentInventory={componentInventory}
+        />,
+      );
+      await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole("button", { name: "问题分组（1）" }));
+      const picker = await screen.findByRole("combobox", { name: "为 存在黑点痕迹 选择评定树病害" });
+      fireEvent.change(picker, { target: { value: treeNode.id } });
+      fireEvent.click(screen.getByRole("button", { name: "应用到本组 2 条" }));
+      fireEvent.click(screen.getByRole("button", { name: "应用到本组" }));
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "select_rating_tree_nodes",
+        candidateIds: ["defect_0001", "defect_0002"],
+        versionId: "tree-version-1",
+        nodeId: treeNode.id,
+        nodeName: treeNode.display_name,
+        isScoring: true,
+        matchEvidence: "用户按相同来源身份批量指定评定树病害",
+      });
+    });
+
+    it("confirms all safe range-split defects in an issue group even when they have no photos", async () => {
+      mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+      mockedFetchTreeNode.mockResolvedValue(treeNode);
+      const draft = boundDraft();
+      draft.photos = [];
+      draft.defects[0] = {
+        ...draft.defects[0],
+        rating_tree_version_id: "tree-version-1",
+        rating_tree_node_id: treeNode.id,
+        rating_tree_match_method: "source_indicator",
+        standard_defect_indicator_id: treeNode.h21_indicator_id,
+        defect_type: "渗水泛碱",
+        group_review_status: "待确认",
+        source_defect_group_id: "source-group-water",
+        source_defect_group_number: "5.1.1",
+        source_defect_indicator_id: "source-indicator-water",
+        source_defect_indicator_number: "5.1.1-13",
+        warnings: [{
+          code: "component_range_split_review_required",
+          message: "该病害由构件范围拆分，请人工核对构件、病害和照片关联。",
+          severity: "warning",
+          target_candidate_id: "defect_0001",
+        }],
+        photo_references: [],
+      };
+      const componentInventory = {
+        id: "revision-1",
+        bridge_id: "bridge-1",
+        revision_number: 1,
+        status: "confirmed" as const,
+        baseline_revision_id: null,
+        confirmed_at: null,
+        entries: [{
+          id: "entry-1",
+          bridge_component_id: "component-1",
+          component_number: "2-1#梁",
+          site_name: "主梁",
+          site_component_type: "主梁",
+          span_or_location: null,
+          is_active: true,
+          deactivated_at: null,
+          deactivation_reason: null,
+          sort_order: 1,
+          remarks: null,
+          is_referenced: true,
+          mappings: [{
+            id: "mapping-1",
+            standard_package_id: "package-1",
+            standard_bridge_type_id: "bridge-type-1",
+            standard_component_category_id: "h21.component.beam",
+            structure_part: "superstructure" as const,
+            mapping_source: "template",
+            confirmation_status: "confirmed",
+            is_active: true,
+          }],
+        }],
+      };
+      const dispatch = vi.fn();
+
+      render(
+        <DefectsSection
+          draft={draft}
+          {...matchProps(dispatch)}
+          componentInventory={componentInventory}
+        />,
+      );
+
+      await waitFor(() => expect(mockedFetchTreeNode).toHaveBeenCalledWith(
+        "http://backend",
+        "tree-version-1",
+        treeNode.id,
+      ));
+      fireEvent.click(screen.getByRole("button", { name: "问题分组（1）" }));
+      fireEvent.click(await screen.findByRole("button", { name: "确认本组可确认项（1）" }));
+      expect(screen.getByText("无照片记录也会被确认；现有病害选择和照片关联保持不变。")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "确认 1 条" }));
+
+      expect(dispatch).toHaveBeenCalledWith({
+        type: "confirm_defect_groups",
+        candidateIds: ["defect_0001"],
+      });
     });
   });
 });

@@ -57,7 +57,6 @@ export function buildStatistics(data: BridgeAnnualInspectionData): ReviewCounts 
     }
   }
   for (const photo of data.photos) {
-    tallyReviewStatus(photo.review_status, counts);
     if (photo.warnings.length > 0) {
       counts.object_warning_count += 1;
     }

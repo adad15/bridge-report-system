@@ -37,12 +37,16 @@ EffectiveRatingTree tree_fixture() {
     water.is_scoring = true;
     water.bridge_type_ids = {kBeam};
     water.component_category_ids = {kUpper};
+    water.source_mappings.push_back({
+        "group-water", "index-water", "5.1.1", "5.1.1-13", kWaterNode});
     tree.nodes.emplace(water.id, water);
 
     EffectiveRatingTreeNode spalling = water;
     spalling.id = kSpallingNode;
     spalling.display_name = "剥落、掉角";
     spalling.sort_order = 2;
+    spalling.source_mappings = {{
+        "group-board", "index-spalling", "5.1.1", "5.1.1-2", kSpallingNode}};
     tree.nodes.emplace(spalling.id, spalling);
 
     tree.aliases.push_back(RatingTreeAlias{"受渗水侵蚀", kWaterNode, kBeam, kUpper});
@@ -109,6 +113,19 @@ Json::Value make_draft(const std::vector<Json::Value>& defects) {
     return draft;
 }
 
+Json::Value with_source(
+    Json::Value defect,
+    const std::string& group_id,
+    const std::string& indicator_id,
+    const std::string& group_number,
+    const std::string& indicator_number) {
+    defect["source_defect_group_id"] = group_id;
+    defect["source_defect_indicator_id"] = indicator_id;
+    defect["source_defect_group_number"] = group_number;
+    defect["source_defect_indicator_number"] = indicator_number;
+    return defect;
+}
+
 bridge_report::review::DefectMatchReport run(Json::Value& draft, const bool apply = true) {
     return match_defect_rating_tree_nodes(
         draft, kTreeVersion, kPackage, tree_fixture(), inventory_fixture(),
@@ -118,7 +135,12 @@ bridge_report::review::DefectMatchReport run(Json::Value& draft, const bool appl
 }  // namespace
 
 TEST(DefectRatingTreeMatchingTest, BindsUniqueResultsWithoutConfirmingThem) {
-    auto draft = make_draft({make_defect("d1", "水损")});
+    auto draft = make_draft({with_source(
+        make_defect("d1", "文字与映射无关"),
+        "group-water",
+        "index-water",
+        "5.1.1",
+        "5.1.1-13")});
 
     const auto report = run(draft);
 
@@ -126,37 +148,36 @@ TEST(DefectRatingTreeMatchingTest, BindsUniqueResultsWithoutConfirmingThem) {
     EXPECT_EQ(report.stats.auto_bound, 1);
     const auto& defect = draft["defects"][0];
     EXPECT_EQ(defect["rating_tree_node_id"].asString(), kWaterNode);
-    EXPECT_EQ(defect["rating_tree_match_method"].asString(), "exact");
+    EXPECT_EQ(defect["rating_tree_match_method"].asString(), "source_indicator");
     EXPECT_EQ(defect["standard_defect_indicator_id"].asString(), "h21.defect.5_1_1_6");
     // 自动绑定不等于确认：记录仍然停留在待确认。
     EXPECT_EQ(defect["review_status"].asString(), "待确认");
     EXPECT_EQ(defect["group_review_status"].asString(), "待确认");
 }
 
-TEST(DefectRatingTreeMatchingTest, KeywordFallbackCoversAnEmptyDefectTypeCell) {
+TEST(DefectRatingTreeMatchingTest, TextDoesNotCreateAnAutomaticBinding) {
     auto draft = make_draft({make_defect("d1", "", "板底存在渗水泛碱")});
 
     const auto report = run(draft);
 
-    EXPECT_EQ(report.stats.auto_bound, 1);
-    EXPECT_EQ(
-        draft["defects"][0]["rating_tree_match_method"].asString(),
-        "controlled_keyword");
+    EXPECT_EQ(report.stats.auto_bound, 0);
+    EXPECT_EQ(report.stats.unmatched, 1);
+    EXPECT_TRUE(draft["defects"][0]["rating_tree_node_id"].isNull());
 }
 
-TEST(DefectRatingTreeMatchingTest, CompositeDefectsNeverReceiveANode) {
+TEST(DefectRatingTreeMatchingTest, CompositeTextDoesNotCreateCandidates) {
     auto draft =
         make_draft({make_defect("d1", "受渗水侵蚀，混凝土剥蚀破损")});
 
     const auto report = run(draft);
 
-    EXPECT_EQ(report.stats.composite, 1);
+    EXPECT_EQ(report.stats.unmatched, 1);
     EXPECT_EQ(report.stats.auto_bound, 0);
     EXPECT_TRUE(draft["defects"][0]["rating_tree_node_id"].isNull());
     ASSERT_EQ(report.records.size(), 1U);
-    EXPECT_EQ(report.records[0].outcome, RatingTreeMatchOutcome::composite);
-    EXPECT_EQ(report.records[0].reason_code, "composite_defect");
-    EXPECT_EQ(report.records[0].candidates.size(), 2U);
+    EXPECT_EQ(report.records[0].outcome, RatingTreeMatchOutcome::unmatched);
+    EXPECT_EQ(report.records[0].reason_code, "no_matching_rule");
+    EXPECT_TRUE(report.records[0].candidates.empty());
 }
 
 TEST(DefectRatingTreeMatchingTest, SeparatesMissingPrerequisitesFromRealMisses) {
@@ -206,7 +227,12 @@ TEST(DefectRatingTreeMatchingTest, NeverOverwritesConfirmedOrIgnoredRecords) {
 }
 
 TEST(DefectRatingTreeMatchingTest, PreviewModeLeavesTheDraftUntouched) {
-    auto draft = make_draft({make_defect("d1", "水损")});
+    auto draft = make_draft({with_source(
+        make_defect("d1", "水损"),
+        "group-water",
+        "index-water",
+        "5.1.1",
+        "5.1.1-13")});
     const auto before = draft;
 
     const auto report = run(draft, false);
@@ -237,7 +263,19 @@ TEST(DefectRatingTreeMatchingTest, RepeatedRunsAreIdempotentAndKeepTheDefectCoun
 }
 
 TEST(DefectRatingTreeMatchingTest, ScopeLimitsProcessingToTheSelectedCandidates) {
-    auto draft = make_draft({make_defect("d1", "水损"), make_defect("d2", "水损")});
+    auto first = with_source(
+        make_defect("d1", "水损"),
+        "group-water",
+        "index-water",
+        "5.1.1",
+        "5.1.1-13");
+    auto second = with_source(
+        make_defect("d2", "水损"),
+        "group-water",
+        "index-water",
+        "5.1.1",
+        "5.1.1-13");
+    auto draft = make_draft({first, second});
     DefectMatchScope scope;
     scope.has_scope = true;
     scope.candidate_ids.insert("d2");

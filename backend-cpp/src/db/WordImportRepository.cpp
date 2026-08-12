@@ -1,6 +1,7 @@
 #include "bridge_report/db/WordImportRepository.hpp"
 
 #include "bridge_report/archive/ArchivePaths.hpp"
+#include "bridge_report/archive/SourceDbReference.hpp"
 #include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/RatingTreeRepository.hpp"
@@ -232,7 +233,11 @@ std::optional<WordImportContext> WordImportRepository::load_context(
     std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char value) {
         return static_cast<char>(std::tolower(value));
     });
-    if (extension != ".docx" || !std::filesystem::is_regular_file(word_path)) return std::nullopt;
+    // .srcref 是接口同步导入的来源引用文件（指向本机离线库，不是它的副本）；
+    // 它与 Word 源文件走同一套状态流转与清理，这里一并放行。
+    const bool known_extension = extension == ".docx" ||
+        extension == std::string(archive::kSourceDbReferenceExtension);
+    if (!known_extension || !std::filesystem::is_regular_file(word_path)) return std::nullopt;
 
     WordImportContext context;
     context.import_record_id = row["import_record_id"].as<std::string>();
@@ -392,6 +397,95 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
             }
         }
         outcome.error_code = "db_write_failed";
+        outcome.error_message = error.what();
+        return outcome;
+    }
+}
+
+DiscardFailedImportOutcome WordImportRepository::discard_failed_import(
+    const std::string& import_record_id
+) {
+    DiscardFailedImportOutcome outcome;
+    std::shared_ptr<drogon::orm::Transaction> tx;
+    const auto latch = std::make_shared<CommitLatch>();
+    try {
+        tx = db_client_->newTransaction(latch->callback());
+        const auto locked = tx->execSqlSync(
+            "select import_status from import_records where id=$1::uuid for update",
+            import_record_id);
+        if (locked.empty()) {
+            tx->rollback();
+            outcome.deleted = true;
+            return outcome;
+        }
+        const auto status = locked[0]["import_status"].as<std::string>();
+        if (status != "已上传" && status != "解析中" && status != "解析失败") {
+            tx->rollback();
+            outcome.error_message = "导入记录已进入可校对或正式状态，不能按失败导入自动删除。";
+            return outcome;
+        }
+
+        const auto sources = tx->execSqlSync(
+            "select storage_relative_path,active_parse_work_relative_path "
+            "from import_source_files where import_record_id=$1::uuid for update",
+            import_record_id);
+        for (const auto& source : sources) {
+            outcome.temporary_source_paths.emplace_back(
+                source["storage_relative_path"].as<std::string>());
+            if (!source["active_parse_work_relative_path"].isNull()) {
+                outcome.parse_work_paths.emplace_back(
+                    source["active_parse_work_relative_path"].as<std::string>());
+            }
+        }
+
+        const auto files = tx->execSqlSync(
+            "with candidates as ("
+            " select main_file_id as id from import_records where id=$1::uuid and main_file_id is not null"
+            " union select archived_file_id from import_record_files where import_record_id=$1::uuid"
+            ") select af.id::text as id,af.storage_relative_path,not("
+            " exists(select 1 from import_records x where x.main_file_id=af.id and x.id<>$1::uuid) or"
+            " exists(select 1 from import_record_files x where x.archived_file_id=af.id and x.import_record_id<>$1::uuid) or"
+            " exists(select 1 from bridge_aliases x where x.source_file_id=af.id) or"
+            " exists(select 1 from component_aliases x where x.source_file_id=af.id) or"
+            " exists(select 1 from defect_observations x where x.source_file_id=af.id) or"
+            " exists(select 1 from defect_photos x where x.archived_file_id=af.id or x.source_file_id=af.id) or"
+            " exists(select 1 from condition_ratings x where x.source_file_id=af.id)"
+            ") as deletable from archived_files af join candidates c on c.id=af.id order by af.id",
+            import_record_id);
+        std::vector<std::string> archived_file_ids;
+        for (const auto& file : files) {
+            if (!file["deletable"].as<bool>()) continue;
+            archived_file_ids.push_back(file["id"].as<std::string>());
+            outcome.archived_file_paths.emplace_back(
+                file["storage_relative_path"].as<std::string>());
+        }
+        for (const auto& file_id : archived_file_ids) {
+            tx->execSqlSync("select id from archived_files where id=$1::uuid for update", file_id);
+        }
+
+        tx->execSqlSync(
+            "delete from import_source_files where import_record_id=$1::uuid",
+            import_record_id);
+        tx->execSqlSync(
+            "delete from import_records where id=$1::uuid",
+            import_record_id);
+        for (const auto& file_id : archived_file_ids) {
+            tx->execSqlSync("delete from archived_files where id=$1::uuid", file_id);
+        }
+
+        tx.reset();
+        if (!latch->wait()) {
+            outcome.error_message = "database commit callback reported failure";
+            return outcome;
+        }
+        outcome.deleted = true;
+        return outcome;
+    } catch (const std::exception& error) {
+        if (tx) {
+            try { tx->rollback(); }
+            catch (...) {
+            }
+        }
         outcome.error_message = error.what();
         return outcome;
     }

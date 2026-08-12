@@ -1,0 +1,134 @@
+{
+  "contract": {
+    "name": "BridgeAnnualInspectionData",
+    "version": "4.0",
+    "generated_at": "2026-07-03T00:00:00+08:00",
+    "producer": "bridge-report-system",
+    "parser_name": "annual_inspection_contract_parser",
+    "parser_version": "2.0.0"
+  },
+  "import_context": {
+    "source_type": "软件导出Word",
+    "file_role": "当前年度检测资料",
+    "archived_file_system_number": "ARCH-2026-0001",
+    "import_record_system_number": "DRJL-000001"
+  },
+  "bridge_check": {
+    "selected_bridge_system_number": "QL-000001",
+    "extracted_bridge_name": "绕阳河二号桥",
+    "match_status": "匹配",
+    "warnings": []
+  },
+  "inspection": {
+    "inspection_year": 2026,
+    "inspection_date": "2026-05-18",
+    "report_number": "BG-2026-RYH02-001",
+    "project_name": "绕阳河二号桥2026年度检查",
+    "data_role": "当前年度"
+  },
+  "defects": [
+    {
+      "candidate_id": "defect_0001",
+      "source_structure_part": "上部结构",
+      "component_name": "主梁",
+      "component_number": "2-1#梁",
+      "bridge_component_id": null,
+      "standard_component_category_id": null,
+      "resolved_structure_part": null,
+      "defect_type": "裂缝",
+      "defect_location": "第二跨左幅梁底",
+      "defect_scale": 2,
+      "defect_description": "梁底发现纵向裂缝，需现场复核。",
+      "quantity_text": "1处",
+      "measurement_text": "L=0.8m，W=0.12mm",
+      "measurements": [
+        {
+          "dimension_type": "长度",
+          "value_type": "single",
+          "value": 0.8,
+          "minimum_value": null,
+          "maximum_value": null,
+          "unit": "m",
+          "is_approximate": false,
+          "source_text": "L=0.8m"
+        },
+        {
+          "dimension_type": "宽度",
+          "value_type": "single",
+          "value": 0.12,
+          "minimum_value": null,
+          "maximum_value": null,
+          "unit": "mm",
+          "is_approximate": false,
+          "source_text": "W=0.12mm"
+        }
+      ],
+      "rating_tree_version_id": null,
+      "rating_tree_node_id": null,
+      "rating_tree_match_method": null,
+      "rating_tree_match_evidence": null,
+      "standard_defect_indicator_id": null,
+      "source_defect_group_id": null,
+      "source_defect_group_number": null,
+      "source_defect_indicator_id": null,
+      "source_defect_indicator_number": null,
+      "photo_references": [
+        {
+          "photo_number": "2.1-1",
+          "resolution": "pending",
+          "photo_candidate_id": null,
+          "resolved_defect_candidate_id": null,
+          "review_note": null
+        }
+      ],
+      "group_review_status": "待确认",
+      "severity": "warning",
+      "remark": null,
+      "source_ref": {
+        "source_type": "word",
+        "chapter": "第二章病害",
+        "table_title": "病害记录表",
+        "table_index": 1,
+        "row_index": 1,
+        "column_name": "病害描述",
+        "raw_row_text": "第二跨左幅梁底主梁裂缝，L=0.8m，W=0.12mm。",
+        "photo_area_caption": null,
+        "file_role": "当前年度检测资料",
+        "paragraph_index": null
+      },
+      "confidence": 0.92,
+      "review_status": "待确认",
+      "warnings": []
+    }
+  ],
+  "photos": [
+    {
+      "candidate_id": "photo_0001",
+      "photo_number": "2.1-1",
+      "linked_defect_candidate_id": "defect_0001",
+      "extracted_file": {
+        "temporary_file_name": "photo_0001.jpg",
+        "original_caption": "主梁梁底裂缝",
+        "archive_relative_path": "photos/2.1-1.jpg"
+      },
+      "source_ref": {
+        "source_type": "word",
+        "chapter": "第二章病害",
+        "table_title": "照片记录表",
+        "table_index": 1,
+        "row_index": 1,
+        "column_name": "照片",
+        "raw_row_text": "照片2.1-1 主梁梁底裂缝。",
+        "photo_area_caption": "主梁梁底裂缝",
+        "file_role": "当前年度检测资料",
+        "paragraph_index": null
+      },
+      "confidence": 0.95,
+      "warnings": []
+    }
+  ],
+  "comparison_candidates": [],
+  "report_text_candidates": [],
+  "warnings": [],
+  "errors": []
+}

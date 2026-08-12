@@ -193,7 +193,6 @@ def extract_and_match_photos(
         candidate_id = f"photo_{index:04d}"
         linked_defect_id = defect_mapping.get(caption_number)
         warnings: list[WarningItem] = []
-        match_status = "高置信候选" if linked_defect_id else "未关联"
         confidence = 0.95 if linked_defect_id else 0.6
         if not linked_defect_id:
             warnings.append(
@@ -215,13 +214,11 @@ def extract_and_match_photos(
                     original_caption=caption_text,
                     archive_relative_path=None,
                 ),
-                match_status=match_status,
                 source_ref=SourceRef(
                     chapter="第二章",
                     photo_area_caption=caption_text,
                 ),
                 confidence=confidence,
-                review_status="待确认",
                 warnings=warnings,
             )
         )

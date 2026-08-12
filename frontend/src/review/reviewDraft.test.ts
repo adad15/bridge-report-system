@@ -70,8 +70,6 @@ describe("reviewDraftReducer", () => {
     expect(next.defects).toEqual([]);
     expect(next.photos[0]).toMatchObject({
       linked_defect_candidate_id: null,
-      match_status: "未关联",
-      review_status: "已修改",
     });
     expect(state.defects).toHaveLength(1);
   });
@@ -179,8 +177,6 @@ describe("reviewDraftReducer", () => {
       ...state.photos[0],
       photo_number: "2.1-1",
       linked_defect_candidate_id: "defect_0001",
-      match_status: "高置信候选",
-      review_status: "待确认",
       extracted_file: {
         ...state.photos[0].extracted_file,
         archive_relative_path: "photos/2.1-1.jpg",
@@ -201,10 +197,7 @@ describe("reviewDraftReducer", () => {
       photo_candidate_id: "photo_0001",
       resolved_defect_candidate_id: "defect_0001",
     });
-    expect(next.photos[0]).toMatchObject({
-      match_status: "已确认",
-      review_status: "已确认",
-    });
+    expect(next.photos[0]).toEqual(state.photos[0]);
   });
 
   it("clears a stale tree node after component rebinding and accepts a manual tree selection", () => {
@@ -309,21 +302,18 @@ describe("reviewDraftReducer", () => {
     expect(applied.defects[2].review_status).toBe("已忽略");
   });
 
-  describe("四个照片原语", () => {
+  describe("照片归属与缺图操作", () => {
     function unlinkedPhoto() {
       const state = matchedData();
       state.photos[0] = {
         ...state.photos[0],
         linked_defect_candidate_id: null,
-        match_status: "未关联",
-        review_status: "待确认",
       };
       state.defects[0] = { ...state.defects[0], photo_references: [] };
       return state;
     }
 
-    // 主动挑一张挂上，本身就表达了"这张是对的"，不该再要求点一次确认。
-    it("links a photo and treats the deliberate add as a confirmation", () => {
+    it("links a photo without creating a separate confirmation state", () => {
       const reducer = createReviewDraftReducer();
       const state = unlinkedPhoto();
 
@@ -335,7 +325,6 @@ describe("reviewDraftReducer", () => {
 
       expect(next.photos[0]).toMatchObject({
         linked_defect_candidate_id: "defect_0001",
-        match_status: "已确认",
       });
       expect(next.defects[0].group_review_status).toBe("待确认");
       expect(state.photos[0].linked_defect_candidate_id).toBeNull();
@@ -395,8 +384,6 @@ describe("reviewDraftReducer", () => {
 
       expect(next.photos[0]).toMatchObject({
         linked_defect_candidate_id: null,
-        match_status: "未关联",
-        review_status: "已修改",
       });
       expect(next.defects[0].photo_references[0]).toMatchObject({
         resolution: "pending",
@@ -404,35 +391,6 @@ describe("reviewDraftReducer", () => {
         resolved_defect_candidate_id: null,
       });
       expect(next.defects[0].group_review_status).toBe("待确认");
-    });
-
-    // 撤销确认只撤确认，照片仍挂在本病害上；解除归属是删除的职责。
-    it("confirms and un-confirms a photo without changing its owner", () => {
-      const reducer = createReviewDraftReducer();
-      const state = matchedData();
-      state.photos[0] = { ...state.photos[0], match_status: "高置信候选", review_status: "待确认" };
-
-      const confirmed = reducer(state, {
-        type: "confirm_photo",
-        photoCandidateId: "photo_0001",
-        confirmed: true,
-      });
-      expect(confirmed.photos[0]).toMatchObject({
-        match_status: "已确认",
-        linked_defect_candidate_id: "defect_0001",
-      });
-      expect(confirmed.defects[0].photo_references[0].resolution).toBe("matched");
-
-      const undone = reducer(confirmed, {
-        type: "confirm_photo",
-        photoCandidateId: "photo_0001",
-        confirmed: false,
-      });
-      expect(undone.photos[0]).toMatchObject({
-        match_status: "待校对",
-        linked_defect_candidate_id: "defect_0001",
-      });
-      expect(undone.defects[0].photo_references[0].resolution).toBe("pending");
     });
 
     it("acknowledges a missing photo and takes it back", () => {
@@ -527,7 +485,6 @@ describe("reviewDraftReducer", () => {
 
     expect(relinked.photos[0]).toMatchObject({
       linked_defect_candidate_id: "defect_0002",
-      match_status: "已确认",
     });
     expect(relinked.defects.map((item) => item.group_review_status)).toEqual(["待确认", "待确认"]);
   });
@@ -582,5 +539,64 @@ describe("reviewDraftReducer", () => {
 
     expect(next.photos.map((item) => item.candidate_id)).toEqual(["photo_0001"]);
     expect(next.defects[0].group_review_status).toBe("待确认");
+  });
+
+  it("assigns one rating tree node to a selected source group without touching other records", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    state.defects = [
+      {
+        ...state.defects[0],
+        candidate_id: "defect_0001",
+        rating_tree_node_id: null,
+        rating_tree_match_method: null,
+        source_defect_group_id: "group-a",
+        source_defect_indicator_id: "indicator-a",
+      },
+      {
+        ...state.defects[0],
+        candidate_id: "defect_0002",
+        rating_tree_node_id: null,
+        rating_tree_match_method: null,
+        source_defect_group_id: "group-a",
+        source_defect_indicator_id: "indicator-a",
+      },
+      {
+        ...state.defects[0],
+        candidate_id: "defect_0003",
+        rating_tree_node_id: null,
+        rating_tree_match_method: null,
+        source_defect_group_id: "group-b",
+        source_defect_indicator_id: "indicator-b",
+      },
+    ];
+
+    const next = reducer(state, {
+      type: "select_rating_tree_nodes",
+      candidateIds: ["defect_0001", "defect_0002"],
+      versionId: "tree-version-2",
+      nodeId: "tree-node-other",
+      nodeName: "其他病害",
+      isScoring: false,
+      matchEvidence: "用户按相同来源身份批量指定评定树病害",
+    });
+
+    expect(next.defects.slice(0, 2)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        rating_tree_version_id: "tree-version-2",
+        rating_tree_node_id: "tree-node-other",
+        rating_tree_match_method: "manual",
+        rating_tree_match_evidence: "用户按相同来源身份批量指定评定树病害",
+        defect_type: "其他病害",
+        defect_scale: null,
+        group_review_status: "待确认",
+      }),
+      expect.objectContaining({
+        rating_tree_version_id: "tree-version-2",
+        rating_tree_node_id: "tree-node-other",
+      }),
+    ]));
+    expect(next.defects[0].source_defect_group_id).toBe("group-a");
+    expect(next.defects[2]).toBe(state.defects[2]);
   });
 });

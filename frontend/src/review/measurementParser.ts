@@ -6,8 +6,8 @@ const CHINESE_DIMENSION_LABELS: Record<string, string> = {
   长度: "长度", 宽度: "宽度", 面积: "面积", 总面积: "总面积", 间距: "间距",
 };
 const DIMENSION_PATTERN = /(?<label>[LWSAD])\s*[=:：]\s*(?<approx>约|大约|约为)?\s*(?<value>\d+(?:\.\d+)?)\s*(?<unit>m2|m²|㎡|mm|cm|m)/gi;
-const CHINESE_DIMENSION_PATTERN = /(?<label>总面积|面积|长度|宽度|间距)\s*[=:：]?\s*(?<approx>约|大约|约为)?\s*(?<value>\d+(?:\.\d+)?)\s*(?<unit>m2|m²|㎡|mm|cm|m)/gi;
-const RANGE_PATTERN = /(?:(?<label>总面积|面积|长度|宽度|间距|[LWSAD])\s*[=:：]?\s*)?(?<approx>约|大约|约为)?\s*(?<minimum>\d+(?:\.\d+)?)\s*(?:~|～|至)\s*(?<maximum>\d+(?:\.\d+)?)\s*(?<unit>m2|m²|㎡|mm|cm|m)/gi;
+const CHINESE_DIMENSION_PATTERN = /(?<label>总面积|面积|长度|宽度|间距)(?:范围)?\s*[=:：]?\s*(?<approx>约|大约|约为)?\s*(?<value>\d+(?:\.\d+)?)\s*(?<unit>m2|m²|㎡|mm|cm|m)/gi;
+const RANGE_PATTERN = /(?:(?<label>总面积|面积|长度|宽度|间距|[LWSAD])(?:范围)?\s*[=:：]?\s*)?(?<approx>约|大约|约为)?\s*(?<minimum>\d+(?:\.\d+)?)\s*(?:~|～|至)\s*(?<maximum>\d+(?:\.\d+)?)\s*(?<unit>m2|m²|㎡|mm|cm|m)/gi;
 const APPROXIMATE_SINGLE_PATTERN = /(?<approx>约|大约|约为)\s*(?<value>\d+(?:\.\d+)?)\s*(?<unit>m2|m²|㎡|mm|cm|m)/gi;
 const AREA_PRODUCT_PATTERN = /(?:(?<label>[SA])\s*[=:：]\s*)?(?<first>\d+(?:\.\d+)?)\s*(?<firstUnit>mm|cm|m)?\s*[×xX*]\s*(?<second>\d+(?:\.\d+)?)\s*(?<secondUnit>m2|m²|㎡|mm2|mm²|cm2|cm²|mm|cm|m)/gi;
 const COUNT_PATTERN = /(?<value>\d+(?:\.\d+)?)\s*(?<unit>处|条|个|块)/g;

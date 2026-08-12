@@ -293,6 +293,19 @@ create index if not exists ix_archived_files_bridge_year_type_hash on archived_f
 create index if not exists ix_import_records_bridge_year_status on import_records (bridge_id, inspection_year_id, import_status);
 create index if not exists ix_bridge_components_bridge_part_code on bridge_components (bridge_id, structure_part, business_component_code);
 create index if not exists ix_defect_observations_year_component_type_review on defect_observations (inspection_year_id, bridge_component_id, defect_type, review_status);
-create index if not exists ix_defect_photos_observation_number_status on defect_photos (defect_observation_id, photo_number, match_status);
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = current_schema()
+      and table_name = 'defect_photos'
+      and column_name = 'match_status'
+  ) then
+    create index if not exists ix_defect_photos_observation_number_status
+      on defect_photos (defect_observation_id, photo_number, match_status);
+  end if;
+end
+$$;
 create index if not exists ix_defect_threads_bridge_component_status on defect_threads (bridge_id, bridge_component_id, current_status);
 create index if not exists ix_defect_comparisons_current_compared_status on defect_comparisons (current_inspection_year_id, compared_inspection_year_id, confirmation_status);

@@ -15,6 +15,7 @@ add_library(bridge_report_backend_core
     src/assessment/AssessmentConfirmationService.cpp
     src/archive/ArchivePaths.cpp
     src/archive/ExtractedPhotoArchive.cpp
+    src/archive/SourceDbReference.cpp
     src/archive/TemporaryWordStorage.cpp
     src/archive/WordInputArchive.cpp
     src/auth/PasswordHash.cpp
@@ -169,6 +170,7 @@ add_executable(bridge_report_backend_tests
     tests/test_draft_validation.cpp
     tests/test_edit_lock_repository.cpp
     tests/test_extracted_photo_archive.cpp
+    tests/test_source_db_reference.cpp
     tests/test_inspection_year_deletion_models.cpp
     tests/test_inspection_year_deletion_repository.cpp
     tests/test_inspection_year_deletion_routes.cpp

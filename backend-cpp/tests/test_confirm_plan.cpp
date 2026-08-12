@@ -12,13 +12,13 @@ namespace {
 
 Json::Value fixture() {
     const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-        "samples/contracts/bridge_annual_inspection_data.v3.valid.json";
+        "samples/contracts/bridge_annual_inspection_data.v4.valid.json";
     std::ifstream input(path, std::ios::binary);
     Json::CharReaderBuilder builder;
     Json::Value root;
     std::string errors;
     if (!input || !Json::parseFromStream(builder, input, &root, &errors)) {
-        throw std::runtime_error("unable to load v2 fixture: " + errors);
+        throw std::runtime_error("unable to load v4 fixture: " + errors);
     }
     return root;
 }
@@ -33,8 +33,6 @@ void settle(Json::Value& data) {
     defect["standard_defect_indicator_id"] = "h21.defect.test";
     defect["review_status"] = "已确认";
     defect["group_review_status"] = "已确认";
-    data["photos"][0]["match_status"] = "已确认";
-    data["photos"][0]["review_status"] = "已确认";
 }
 
 }  // namespace
@@ -46,7 +44,7 @@ TEST(ConfirmPlanTest, SkipsPendingCandidates) {
     EXPECT_TRUE(plan.photos.empty());
 }
 
-TEST(ConfirmPlanTest, MapsSettledVersionTwoFactsWithoutImportedRatings) {
+TEST(ConfirmPlanTest, MapsSettledVersionFourFactsWithoutImportedRatings) {
     auto data = fixture();
     settle(data);
     const auto plan = bridge_report::review::build_confirm_plan(data);
@@ -105,16 +103,14 @@ TEST(ConfirmPlanTest, IgnoresUnrelatedPhotos) {
     auto data = fixture();
     settle(data);
     data["photos"][0]["linked_defect_candidate_id"] = Json::Value(Json::nullValue);
-    data["photos"][0]["match_status"] = "未关联";
     const auto plan = bridge_report::review::build_confirm_plan(data);
     EXPECT_TRUE(plan.photos.empty());
 }
 
-TEST(ConfirmPlanTest, ModifiedDefectAndPhotoRemainEligibleFacts) {
+TEST(ConfirmPlanTest, ModifiedDefectAndLinkedPhotoRemainEligibleFacts) {
     auto data = fixture();
     settle(data);
     data["defects"][0]["review_status"] = "已修改";
-    data["photos"][0]["review_status"] = "已修改";
     const auto plan = bridge_report::review::build_confirm_plan(data);
     ASSERT_EQ(plan.defects.size(), 1u);
     ASSERT_EQ(plan.photos.size(), 1u);
@@ -196,12 +192,10 @@ TEST(ConfirmPlanTest, QuantityTextAddsOneQuantityMeasurement) {
     EXPECT_DOUBLE_EQ(*quantity.numeric_value, 3.0);
 }
 
-TEST(ConfirmPlanTest, PendingOrIgnoredPhotosNeverEnterFormalPlan) {
-    for (const auto* status : {"待确认", "已忽略"}) {
-        auto data = fixture();
-        settle(data);
-        data["photos"][0]["review_status"] = status;
-        const auto plan = bridge_report::review::build_confirm_plan(data);
-        EXPECT_TRUE(plan.photos.empty()) << status;
-    }
+TEST(ConfirmPlanTest, PhotoWithoutArchivedFileNeverEntersFormalPlan) {
+    auto data = fixture();
+    settle(data);
+    data["photos"][0]["extracted_file"]["archive_relative_path"] = Json::Value();
+    const auto plan = bridge_report::review::build_confirm_plan(data);
+    EXPECT_TRUE(plan.photos.empty());
 }

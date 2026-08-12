@@ -28,6 +28,7 @@ def build_db(path, *, skip_table=None, drop_column=None):
                            ' "宽度" text, "宽度单位" text, "面积一" text, "面积一单位" text, "走向" text'),
         "images": ("id text primary key, taskId text, fileName text, contentType text, w integer, h integer,"
                    " ForeignTable text, ForeignKey text, memberNum text"),
+        "judgeTree": "id text primary key, chapterNum text, name text",
         "judgeIndex": "id text primary key, tableNum text, name text",
     }
     for table, columns in schema.items():
@@ -64,6 +65,8 @@ def build_db(path, *, skip_table=None, drop_column=None):
         db.execute("insert into images values (?,?,?,?,?,?,?,?,?)", (
             "i-1", TASK, "data:image/jpeg;base64,/9j/4AAQ", "image/jpeg", 1600, 1200,
             "outerCheckData", "d-1", "25-1#板"))
+    if skip_table != "judgeTree":
+        db.execute("insert into judgeTree values ('jt-1','5.1.1','板式构件')")
     db.commit()
     db.close()
     return path
@@ -204,3 +207,12 @@ def test_indexes_indicator_codes_by_id(tmp_path):
 
     assert codes["i-a"] == ("5.1.1-13", "水损（参照混凝土碳化执行）")
     assert codes["i-b"] == ("5.1.1-13", "桥面板其它病害")
+
+
+def test_indexes_group_codes_by_id(source_db):
+    from bridge_report_tools.importers.source_db.reader import load_group_codes
+
+    with open_source_db(source_db) as connection:
+        codes = load_group_codes(connection)
+
+    assert codes["jt-1"] == ("5.1.1", "板式构件")

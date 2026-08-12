@@ -26,13 +26,13 @@ CHINESE_DIMENSION_LABELS = {
     "间距": "间距",
 }
 CHINESE_DIMENSION_PATTERN = re.compile(
-    r"(?P<label>总面积|面积|长度|宽度|间距)\s*[=:：]?\s*"
+    r"(?P<label>总面积|面积|长度|宽度|间距)(?:范围)?\s*[=:：]?\s*"
     r"(?P<approx>约|大约|约为)?\s*"
     r"(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>m2|m²|㎡|mm|cm|m)",
     re.IGNORECASE,
 )
 RANGE_PATTERN = re.compile(
-    r"(?:(?P<label>总面积|面积|长度|宽度|间距|[LWSAD])\s*[=:：]?\s*)?"
+    r"(?:(?P<label>总面积|面积|长度|宽度|间距|[LWSAD])(?:范围)?\s*[=:：]?\s*)?"
     r"(?P<approx>约|大约|约为)?\s*"
     r"(?P<minimum>\d+(?:\.\d+)?)\s*(?:~|～|至)\s*"
     r"(?P<maximum>\d+(?:\.\d+)?)\s*"

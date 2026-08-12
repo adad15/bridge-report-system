@@ -247,13 +247,13 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
 
                 const auto stored_draft =
                     parse_parsed_result_json(detail->parsed_result_json);
-                // 存量草稿仍是旧版合同时拒绝保存，不能靠客户端伪造 3.0 请求绕过重新解析。
+                // 存量草稿仍是旧版合同时拒绝保存，不能靠客户端伪造 4.0 请求绕过重新解析。
                 if (review::stored_contract_requires_reparse(stored_draft)) {
                     respond_json(
                         callback,
                         make_error_body(
                             "contract_version_outdated",
-                            "该导入记录的候选数据仍是旧版合同，请删除测试导入并重新解析为 3.0。"
+                            "该导入记录的候选数据仍是旧版合同，请删除测试导入并重新解析为 4.0。"
                         ),
                         drogon::k409Conflict
                     );

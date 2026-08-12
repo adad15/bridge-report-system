@@ -115,6 +115,26 @@ std::optional<std::vector<std::string>> string_array(const Json::Value& value) {
     return result;
 }
 
+std::optional<std::map<int, std::string>> scale_description_map(
+    const Json::Value& value) {
+    if (!value.isObject()) return std::nullopt;
+    std::map<int, std::string> result;
+    for (const auto& key : value.getMemberNames()) {
+        std::size_t consumed = 0;
+        int scale = 0;
+        try {
+            scale = std::stoi(key, &consumed);
+        } catch (...) {
+            return std::nullopt;
+        }
+        if (consumed != key.size() || scale <= 0 || !value[key].isString() ||
+            value[key].asString().empty() || !result.emplace(scale, value[key].asString()).second) {
+            return std::nullopt;
+        }
+    }
+    return result;
+}
+
 bool parse_node(
     const Json::Value& value,
     RatingTreeExtensionNode& node,
@@ -146,6 +166,15 @@ bool parse_node(
     node.is_selectable = value["is_selectable"].asBool();
     node.bridge_type_ids = *bridges;
     node.component_category_ids = *components;
+    if (value.isMember("display_number") && !value["display_number"].isNull()) {
+        if (!value["display_number"].isString() ||
+            value["display_number"].asString().empty()) {
+            parse_issue = issue(
+                "rating_tree_node_invalid", "显示编号必须为非空字符串。");
+            return false;
+        }
+        node.display_number = value["display_number"].asString();
+    }
     if (value.isMember("parent_id") && !value["parent_id"].isNull()) {
         if (!value["parent_id"].isString() || value["parent_id"].asString().empty()) {
             parse_issue = issue("rating_tree_node_invalid", "父节点 ID 必须为非空字符串。");
@@ -161,6 +190,17 @@ bool parse_node(
             return false;
         }
         node.h21_indicator_id = value["h21_indicator_id"].asString();
+    }
+    if (value.isMember("source_scale_descriptions")) {
+        const auto descriptions =
+            scale_description_map(value["source_scale_descriptions"]);
+        if (!descriptions.has_value() || descriptions->empty()) {
+            parse_issue = issue(
+                "rating_tree_node_invalid",
+                "来源标度说明必须按正整数标度提供非空文字。");
+            return false;
+        }
+        node.source_scale_descriptions = *descriptions;
     }
     if (value["organization_note"].isString()) {
         node.organization_note = value["organization_note"].asString();
@@ -185,6 +225,13 @@ std::string scope_key(
     const std::string& bridge_type_id,
     const std::string& component_category_id) {
     return bridge_type_id + "\n" + component_category_id;
+}
+
+std::string source_mapping_key(
+    const std::string& group,
+    const std::string& indicator) {
+    return std::to_string(group.size()) + ":" + group +
+        std::to_string(indicator.size()) + ":" + indicator;
 }
 
 // 自动规则的唯一性证明键：同一适用范围内，规范化后完全相同的正向关键词集合
@@ -343,6 +390,62 @@ RatingTreeLoadResult RatingTreePackageLoader::load(
     if (has_cycle(package.nodes)) {
         result.issues.push_back(issue("rating_tree_cycle", "评定树父子关系存在循环。"));
         return result;
+    }
+
+    const auto source_mappings_it =
+        package.documents.find("source-index-map.json");
+    if (source_mappings_it != package.documents.end()) {
+        const auto& document = source_mappings_it->second;
+        if (!document["mappings"].isArray()) {
+            result.issues.push_back(issue(
+                "rating_tree_source_mappings_invalid",
+                "source-index-map.json 必须包含 mappings 数组。"));
+            return result;
+        }
+        std::set<std::string> source_id_pairs;
+        std::set<std::string> source_number_pairs;
+        for (const auto& value : document["mappings"]) {
+            RatingTreeSourceMapping mapping;
+            if (!value.isObject() ||
+                !non_empty_string(
+                    value, "source_group_id", mapping.source_group_id) ||
+                !non_empty_string(
+                    value, "source_indicator_id", mapping.source_indicator_id) ||
+                !non_empty_string(
+                    value, "source_group_number", mapping.source_group_number) ||
+                !non_empty_string(
+                    value,
+                    "source_indicator_number",
+                    mapping.source_indicator_number) ||
+                !non_empty_string(
+                    value, "target_node_id", mapping.target_node_id)) {
+                result.issues.push_back(issue(
+                    "rating_tree_source_mapping_invalid",
+                    "来源指标映射缺少必填字段或字段类型错误。"));
+                return result;
+            }
+            const auto target = package.nodes.find(mapping.target_node_id);
+            if (target == package.nodes.end() ||
+                target->second.node_type != RatingTreeNodeType::defect ||
+                !target->second.is_selectable) {
+                result.issues.push_back(issue(
+                    "rating_tree_source_mapping_invalid",
+                    "来源指标映射必须指向可选择的病害节点。"));
+                return result;
+            }
+            if (!source_id_pairs.insert(source_mapping_key(
+                    mapping.source_group_id,
+                    mapping.source_indicator_id)).second ||
+                !source_number_pairs.insert(source_mapping_key(
+                    mapping.source_group_number,
+                    mapping.source_indicator_number)).second) {
+                result.issues.push_back(issue(
+                    "rating_tree_source_mapping_conflict",
+                    "来源分组与指标的组合必须唯一。"));
+                return result;
+            }
+            package.source_mappings.push_back(std::move(mapping));
+        }
     }
 
     const auto aliases_it = package.documents.find("aliases.json");

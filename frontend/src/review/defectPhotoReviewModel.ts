@@ -48,6 +48,9 @@ export interface DefectReviewRow {
   defect: DefectCandidate;
   photos: PhotoCandidate[];
   problems: DefectReviewProblem[];
+  /** 当前详情可人工确认；范围拆分提示需要靠这次确认消除，因此不作为单条确认阻断项。 */
+  confirmEligible: boolean;
+  /** 无任何待核对问题，允许进入工具栏批量确认。 */
   batchEligible: boolean;
   status: "batchable" | "needs_attention" | "confirmed" | "ignored";
   matchState: DefectMatchState;
@@ -113,6 +116,7 @@ const MATCH_METHOD_LABELS: Record<string, string> = {
   controlled_alias: "受控别名",
   controlled_keyword: "受控关键词",
   fuzzy_candidate: "文字相似（仅候选）",
+  source_indicator: "来源软件标注",
   manual: "人工选择",
 };
 
@@ -249,8 +253,7 @@ function analyzeDefect(
     }
   }
 
-  // 照片问题只有卡片一个来源。判定口径对齐 ConfirmPlan：只有"已确认 + 有归档文件"
-  // 的照片才会进 defect_photos，所以派生的问题必须正好挡住进不去的那些。
+  // 照片关系随病害组一起确认；这里只检查引用结论和归档文件是否完整。
   for (const card of photoCards) {
     if (repeatedPhotoNumbers.has(card.photoNumber)) {
       addProblem(problems, "photo_number_conflict", "photo", `照片编号 ${card.photoNumber} 被多条病害引用。`);
@@ -263,13 +266,6 @@ function analyzeDefect(
     }
     const photo = card.photo!;
     const archived = Boolean(photo.extracted_file.archive_relative_path);
-    // 批量确认会自动接受唯一的高置信照片（confirm_defect_groups），那类不算问题；
-    // 其余未确认的照片批量确认捡不起来，必须挡住。
-    const willBeAutoConfirmed =
-      photo.match_status === "高置信候选" && photo.review_status !== "已忽略" && archived;
-    if (!card.confirmed && !willBeAutoConfirmed) {
-      addProblem(problems, "photo_not_confirmed", "photo", `照片 ${card.photoNumber} 尚未确认。`);
-    }
     if (!archived) {
       addProblem(problems, "photo_archive_missing", "photo", `照片 ${card.photoNumber} 的归档文件缺失。`);
     }
@@ -310,6 +306,18 @@ function analyzeDefect(
 
   const ignored = defect.review_status === "已忽略";
   const confirmed = !ignored && defect.group_review_status === "已确认" && problems.length === 0;
+  const hasRangeSplitReviewWarning = defect.warnings.some(
+    (warning) => warning.code === "component_range_split_review_required",
+  );
+  const hasIndividualConfirmationBlocker = problems.some(
+    (problem) =>
+      problem.code !== "component_range_split_review_required" ||
+      !hasRangeSplitReviewWarning,
+  );
+  const confirmEligible =
+    !ignored &&
+    defect.group_review_status !== "已确认" &&
+    !hasIndividualConfirmationBlocker;
   const batchEligible = !ignored && !confirmed && problems.length === 0;
   const derived = ignored
     ? { state: "ignored" as const, label: "已忽略" }
@@ -319,6 +327,7 @@ function analyzeDefect(
     defect,
     photos,
     problems,
+    confirmEligible,
     batchEligible,
     status: ignored
       ? "ignored"

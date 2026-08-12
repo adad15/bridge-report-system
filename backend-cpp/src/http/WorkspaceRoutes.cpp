@@ -5,9 +5,11 @@
 #include <drogon/drogon.h>
 #include <drogon/MultiPart.h>
 
+#include "bridge_report/archive/SourceDbReference.hpp"
 #include "bridge_report/archive/WordInputArchive.hpp"
 #include "bridge_report/db/WorkspaceRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
+#include "bridge_report/http/WordImportRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
 
 namespace bridge_report::http {
@@ -36,6 +38,34 @@ Json::Value inspection_year_already_exists_body(
     );
     body["existing_inspection_year_id"] = existing_inspection_year_id;
     return body;
+}
+
+std::string string_member_or_empty(const Json::Value& body, const char* member) {
+    if (!body.isObject() || !body.isMember(member) || !body[member].isString()) return {};
+    return body[member].asString();
+}
+
+std::string utf8_string(const std::filesystem::path& path) {
+    const auto text = path.u8string();
+    return std::string(text.begin(), text.end());
+}
+
+Json::Value source_db_error_body(const archive::SourceDbValidationError error) {
+    switch (error) {
+        case archive::SourceDbValidationError::TaskIdMissing:
+            return make_error_body(
+                "source_task_id_required",
+                "需要指定要导入的检测任务；请先在桌面程序里打开该桥，再选择对应任务。");
+        case archive::SourceDbValidationError::NotSqlite:
+            return make_error_body(
+                "source_db_not_readable", "选中的文件不是来源软件的离线库。");
+        case archive::SourceDbValidationError::PathMissing:
+        case archive::SourceDbValidationError::None:
+            break;
+    }
+    return make_error_body(
+        "source_db_not_found",
+        "找不到来源软件的离线库文件；请确认路径正确，并已在桌面程序里打开过该桥。");
 }
 
 bool is_supported_word_source_type(const std::string& source_type) {
@@ -69,9 +99,14 @@ void register_workspace_routes(
     const std::string bridge_path = "/api/bridges/{bridge_id}/overview";
     const std::string inspection_path = "/api/inspection-years/{inspection_year_id}/workspace";
     const std::string word_upload_path = "/api/inspection-years/{inspection_year_id}/import-records/word";
+    const std::string source_import_path =
+        "/api/inspection-years/{inspection_year_id}/import-records/source";
+    const std::string source_tasks_path = "/api/source-imports/tasks";
     register_options_handler(bridge_path);
     register_options_handler(inspection_path);
     register_options_handler(word_upload_path);
+    register_options_handler(source_import_path);
+    register_options_handler(source_tasks_path);
 
     drogon::app().registerHandler(
         bridge_path,
@@ -281,6 +316,164 @@ void register_workspace_routes(
                 LOG_ERROR << "Word upload request handling failure: " << error.what();
                 respond_json(callback,
                              make_error_body("word_upload_failed", "Word 上传处理失败，请稍后重试。"),
+                             drogon::k500InternalServerError);
+            }
+        },
+        {drogon::Post}
+    );
+
+    // 接口同步导入：不上传离线库本体，只登记一份指向它的引用。
+    drogon::app().registerHandler(
+        source_import_path,
+        [db_client, config](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                            const std::string& inspection_year_id) {
+            if (!is_valid_uuid(inspection_year_id)) {
+                respond_workspace_not_found(callback, WorkspaceResource::InspectionYear);
+                return;
+            }
+            try {
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                const auto body = request->getJsonObject();
+                if (!body) {
+                    respond_json(callback, make_error_body("invalid_request", "请求体必须是 JSON。"),
+                                 drogon::k400BadRequest);
+                    return;
+                }
+                archive::SourceDbReference reference{
+                    string_member_or_empty(*body, "source_db_path"),
+                    string_member_or_empty(*body, "task_id")};
+                const auto validation = archive::validate_source_db(reference);
+                if (!validation.ok()) {
+                    respond_json(callback, source_db_error_body(validation.error),
+                                 drogon::k400BadRequest);
+                    return;
+                }
+
+                const auto content = archive::encode_source_db_reference(reference);
+                // 离线库文件名就是个 "1"，拿它当导入名字在列表里根本认不出来。
+                // 前端把选中的任务标签（桥名 + 日期 + 条数）一并送来，用它更有用。
+                auto display_name = string_member_or_empty(*body, "import_name");
+                if (display_name.empty()) display_name = validation.original_file_name;
+                const auto metadata = archive::describe_source_db_reference(
+                    content, display_name);
+                db::WorkspaceRepository repository(db_client);
+                const auto outcome = repository.upload_word_import(
+                    inspection_year_id, "接口同步", metadata, content,
+                    std::filesystem::absolute(config.temporary_word_root));
+                if (outcome.status == db::UploadWordStatus::InspectionYearNotFound) {
+                    respond_workspace_not_found(callback, WorkspaceResource::InspectionYear);
+                    return;
+                }
+                if (outcome.status == db::UploadWordStatus::InspectionYearNotCurrent) {
+                    respond_json(callback,
+                                 make_error_body("inspection_year_not_current", "非当前年度版本不能继续导入资料。"),
+                                 drogon::k409Conflict);
+                    return;
+                }
+                if (outcome.status == db::UploadWordStatus::TemporaryStorageFailed) {
+                    respond_json(callback,
+                                 make_error_body("source_reference_storage_failed", "来源引用保存失败。"),
+                                 drogon::k500InternalServerError);
+                    return;
+                }
+
+                Json::Value response;
+                response["import_record"] = outcome.import_record->to_json();
+                respond_json(callback, response, drogon::k201Created);
+            } catch (const drogon::orm::DrogonDbException& error) {
+                LOG_ERROR << "Source import database failure: " << error.base().what();
+                respond_db_unavailable(callback);
+            } catch (const std::exception& error) {
+                LOG_ERROR << "Source import request handling failure: " << error.what();
+                respond_json(callback,
+                             make_error_body("source_import_failed", "来源库导入登记失败，请稍后重试。"),
+                             drogon::k500InternalServerError);
+            }
+        },
+        {drogon::Post}
+    );
+
+    // 列出离线库里有哪些检测任务。taskId 是厂商库里的 UUID，用户不可能手填，
+    // 导入界面得先拿到这张表让人选；路径不填就用来源软件的默认位置。
+    drogon::app().registerHandler(
+        source_tasks_path,
+        [db_client, config](const drogon::HttpRequestPtr& request, HttpCallback&& callback) {
+            try {
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                const auto body = request->getJsonObject();
+                auto requested = body ? string_member_or_empty(*body, "source_db_path")
+                                      : std::string{};
+                std::filesystem::path resolved;
+                if (requested.empty()) {
+                    resolved = archive::default_source_db_path();
+                } else {
+                    resolved = archive::path_from_utf8(requested);
+                }
+                if (resolved.empty()) {
+                    respond_json(callback,
+                                 source_db_error_body(archive::SourceDbValidationError::PathMissing),
+                                 drogon::k400BadRequest);
+                    return;
+                }
+                const auto resolved_utf8 = utf8_string(resolved);
+                // 先本地校验，能立刻说清"文件不在"或"这不是离线库"，不必绕一趟 Python。
+                const auto validation = archive::validate_source_db({resolved_utf8, "probe"});
+                if (!validation.ok()) {
+                    respond_json(callback, source_db_error_body(validation.error),
+                                 drogon::k400BadRequest);
+                    return;
+                }
+
+                Json::Value python_body;
+                python_body["source_db_path"] = resolved_utf8;
+                auto client = drogon::HttpClient::newHttpClient(config.python_tools_base_url);
+                auto python_request = drogon::HttpRequest::newHttpJsonRequest(python_body);
+                python_request->setMethod(drogon::Post);
+                python_request->setPath("/imports/source/tasks");
+                client->sendRequest(
+                    python_request,
+                    [callback, resolved_utf8](drogon::ReqResult result,
+                                              const drogon::HttpResponsePtr& response) mutable {
+                        if (result != drogon::ReqResult::Ok || !response) {
+                            respond_json(callback,
+                                         make_error_body("python_parse_failed", "读取离线库的服务未响应。"),
+                                         drogon::k502BadGateway);
+                            return;
+                        }
+                        const auto payload = response->getJsonObject();
+                        if (response->statusCode() != drogon::k200OK) {
+                            if (payload) {
+                                if (const auto error = extract_python_parse_error(*payload)) {
+                                    respond_json(callback,
+                                                 make_error_body(error->code, error->message),
+                                                 drogon::k400BadRequest);
+                                    return;
+                                }
+                            }
+                            respond_json(callback,
+                                         make_error_body("python_parse_failed", "读取离线库失败。"),
+                                         drogon::k502BadGateway);
+                            return;
+                        }
+                        Json::Value out;
+                        // 把最终用的路径回给前端，界面上就能显示它到底读的是哪份库。
+                        out["source_db_path"] = resolved_utf8;
+                        out["tasks"] = payload && payload->isMember("tasks")
+                            ? (*payload)["tasks"] : Json::Value(Json::arrayValue);
+                        respond_json(callback, out, drogon::k200OK);
+                    });
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception& error) {
+                LOG_ERROR << "Source task listing failure: " << error.what();
+                respond_json(callback,
+                             make_error_body("source_import_failed", "读取离线库任务列表失败。"),
                              drogon::k500InternalServerError);
             }
         },

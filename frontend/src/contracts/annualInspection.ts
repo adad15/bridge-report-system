@@ -7,7 +7,6 @@ export type SourceType = "软件导出Word" | "正式Word" | "Excel病害表" | 
 export type FileRole = "当前年度检测资料" | "历史正式报告" | "历史基线资料" | "修订资料";
 export type DataRole = "当前年度" | "历史基线" | "修订版";
 export type BridgeMatchStatus = "匹配" | "不匹配" | "待人工确认";
-export type PhotoMatchStatus = "高置信候选" | "待校对" | "已确认" | "未关联" | "已忽略";
 export type ComparisonType =
   | "原病害无明显变化"
   | "原病害发展"
@@ -40,7 +39,7 @@ export interface SourceRef {
 
 export interface ContractInfo {
   name: "BridgeAnnualInspectionData";
-  version: "3.0";
+  version: "4.0";
   generated_at: string;
   producer: string;
   parser_name: string;
@@ -102,6 +101,8 @@ export const RATING_TREE_MATCH_METHODS = [
   "controlled_alias",
   "controlled_keyword",
   "fuzzy_candidate",
+  // 来源软件直接标注的评定指标：不是从文字推断的，来源要能区分开
+  "source_indicator",
   "manual",
 ] as const;
 
@@ -139,6 +140,14 @@ export interface DefectCandidate {
   rating_tree_match_method?: RatingTreeMatchMethod | null;
   rating_tree_match_evidence?: string | null;
   standard_defect_indicator_id?: string | null;
+  /** 来源软件原始 judgeTreeId；派生评定树字段重算时不得清空。 */
+  source_defect_group_id?: string | null;
+  /** 来源软件 judgeTree.chapterNum，仅用于结构化编号精确回退。 */
+  source_defect_group_number?: string | null;
+  /** 来源软件原始 judgeIndexId，不是 H21 指标 ID。 */
+  source_defect_indicator_id?: string | null;
+  /** 来源软件 judgeIndex.tableNum，仅用于结构化编号精确回退。 */
+  source_defect_indicator_number?: string | null;
   photo_references: PhotoReference[];
   group_review_status: DefectGroupReviewStatus;
   severity?: Severity | null;
@@ -146,7 +155,6 @@ export interface DefectCandidate {
   source_ref: SourceRef;
   confidence: number;
   review_status: ReviewStatus;
-  review_note?: string | null;
   range_split_origin?: RangeSplitOrigin | null;
   warnings: WarningItem[];
 }
@@ -162,10 +170,8 @@ export interface PhotoCandidate {
   photo_number: string;
   linked_defect_candidate_id?: string | null;
   extracted_file: ExtractedPhotoFile;
-  match_status: PhotoMatchStatus;
   source_ref: SourceRef;
   confidence: number;
-  review_status: ReviewStatus;
   warnings: WarningItem[];
 }
 
@@ -416,6 +422,22 @@ function isValidDefectCandidate(value: unknown): boolean {
       value.standard_defect_indicator_id === null ||
       (typeof value.standard_defect_indicator_id === "string" &&
         value.standard_defect_indicator_id.trim().length > 0)) &&
+    (value.source_defect_group_id === undefined ||
+      value.source_defect_group_id === null ||
+      (typeof value.source_defect_group_id === "string" &&
+        value.source_defect_group_id.trim().length > 0)) &&
+    (value.source_defect_group_number === undefined ||
+      value.source_defect_group_number === null ||
+      (typeof value.source_defect_group_number === "string" &&
+        value.source_defect_group_number.trim().length > 0)) &&
+    (value.source_defect_indicator_id === undefined ||
+      value.source_defect_indicator_id === null ||
+      (typeof value.source_defect_indicator_id === "string" &&
+        value.source_defect_indicator_id.trim().length > 0)) &&
+    (value.source_defect_indicator_number === undefined ||
+      value.source_defect_indicator_number === null ||
+      (typeof value.source_defect_indicator_number === "string" &&
+        value.source_defect_indicator_number.trim().length > 0)) &&
     photoReferences !== null &&
     photoReferences.every(isValidPhotoReference) &&
     new Set(photoReferences.map((item) => (item as PhotoReference).photo_number)).size ===
@@ -426,6 +448,8 @@ function isValidDefectCandidate(value: unknown): boolean {
 function isValidPhotoCandidate(value: unknown): boolean {
   return (
     isRecord(value) &&
+    !hasOwn(value, "match_status") &&
+    !hasOwn(value, "review_status") &&
     hasValidConfidence(value) &&
     hasRequiredArrayMembers(value, ["warnings"]) &&
     hasRequiredObjectMembers(value, ["extracted_file", "source_ref"]) &&
@@ -453,7 +477,7 @@ export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnn
   if (contract === null) {
     return false;
   }
-  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "3.0") {
+  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "4.0") {
     return false;
   }
 

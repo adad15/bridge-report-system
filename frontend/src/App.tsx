@@ -50,6 +50,15 @@ function AppShell() {
   // 只有"导入记录校对工作台"使用全屏工作台壳；模块 06 的 /defect-threads/review
   // 是普通卡片流页面，正则必须锚定 imports 段避免误匹配。
   const isReviewWorkspace = /\/imports\/[^/]+\/review$/.test(location.pathname);
+  // 评定树是"树 + 节点详情"的双栏浏览页，和校对工作台一样吃得下整块屏幕：500 个节点
+  // 的树要显示深层编号，右侧标度表有三列。但它保留普通页眉和卡片外观，所以只放宽
+  // .app-content 的 1180px 上限，不套全屏工作台壳。
+  const isWidePage = location.pathname.startsWith("/rating-trees");
+  const contentClass = isReviewWorkspace
+    ? "app-content app-content-workbench"
+    : isWidePage
+      ? "app-content app-content-wide"
+      : "app-content";
 
   // 启动恢复会话期间不渲染登录页，避免"闪一下登录页再进入系统"。
   if (restoring) {
@@ -76,7 +85,7 @@ function AppShell() {
 
   return (
     <main className={isReviewWorkspace ? "app-shell app-shell-workbench" : "app-shell"}>
-      <div className={isReviewWorkspace ? "app-content app-content-workbench" : "app-content"}>
+      <div className={contentClass}>
         <nav className="top-nav">
           <NavLink to="/bridges" className={({ isActive }) => (isActive ? "top-nav-link active" : "top-nav-link")}>
             桥梁档案

@@ -13,10 +13,6 @@ namespace {
 constexpr const char* kPending = "待确认";
 constexpr const char* kIgnored = "已忽略";
 
-constexpr const char* kMatchHighConfidence = "高置信候选";
-constexpr const char* kMatchConfirmed = "已确认";
-constexpr const char* kMatchUnlinked = "未关联";
-
 bool photo_number_has_confirmed_link(const Json::Value& data, const std::string& defect_id, const std::string& photo_number);
 
 void add_issue(std::vector<PreflightIssue>& target, std::string code, std::string message, std::string candidate_id = std::string()) {
@@ -75,15 +71,6 @@ void check_candidate_pending_review(const Json::Value& data, std::vector<Preflig
             if (review_status_of(defect) == kPending) {
                 add_issue(blocking, "candidate_pending_review",
                           "病害候选 " + candidate_id_of(defect) + " 仍处于待确认状态。", candidate_id_of(defect));
-            }
-        }
-    }
-
-    if (data["photos"].isArray()) {
-        for (const auto& photo : data["photos"]) {
-            if (review_status_of(photo) == kPending) {
-                add_issue(blocking, "candidate_pending_review",
-                          "照片候选 " + candidate_id_of(photo) + " 仍处于待确认状态。", candidate_id_of(photo));
             }
         }
     }
@@ -166,7 +153,7 @@ void check_component_inventory_links(
 }
 
 // -----------------------------------------------------------------------
-// 检查 6：已确认/已修改照片的病害关联是否能解析
+// 检查 6：已关联照片的病害关联是否能解析
 // -----------------------------------------------------------------------
 
 // 契约不保证 candidate_id 唯一性；若存在重复 id，此处按首个匹配处理。
@@ -182,26 +169,15 @@ const Json::Value* find_defect_by_candidate_id(const Json::Value& data, const st
     return nullptr;
 }
 
-bool photo_requires_resolved_link(const Json::Value& photo) {
-    const auto match_status = string_member_or_empty(photo, "match_status");
-    return match_status == kMatchHighConfidence || match_status == kMatchConfirmed;
-}
-
 void check_photo_link_unresolved(const Json::Value& data, std::vector<PreflightIssue>& blocking) {
     if (!data["photos"].isArray()) {
         return;
     }
     for (const auto& photo : data["photos"]) {
-        if (!is_review_settled(review_status_of(photo)) || !photo_requires_resolved_link(photo)) {
-            continue;
-        }
-
         const bool has_link = photo.isObject() && photo.isMember("linked_defect_candidate_id")
             && photo["linked_defect_candidate_id"].isString() && !photo["linked_defect_candidate_id"].asString().empty();
 
         if (!has_link) {
-            add_issue(blocking, "photo_link_unresolved",
-                      "照片候选 " + candidate_id_of(photo) + " 未关联到任何病害。", candidate_id_of(photo));
             continue;
         }
 
@@ -263,9 +239,7 @@ void check_photo_archives(const Json::Value& data, std::vector<PreflightIssue>& 
         return;
     }
     for (const auto& photo : data["photos"]) {
-        if (!is_review_settled(review_status_of(photo))
-            || string_member_or_empty(photo, "match_status") != kMatchConfirmed
-            || string_member_or_empty(photo, "linked_defect_candidate_id").empty()) {
+        if (string_member_or_empty(photo, "linked_defect_candidate_id").empty()) {
             continue;
         }
         if (string_member_or_empty(photo["extracted_file"], "archive_relative_path").empty()) {
@@ -284,9 +258,6 @@ bool photo_number_has_confirmed_link(const Json::Value& data, const std::string&
         return false;
     }
     for (const auto& photo : data["photos"]) {
-        if (!is_review_settled(review_status_of(photo))) {
-            continue;
-        }
         if (string_member_or_empty(photo, "linked_defect_candidate_id") != defect_id) {
             continue;
         }
@@ -337,7 +308,7 @@ void check_defect_without_photo(const Json::Value& data, std::vector<PreflightIs
 }
 
 // -----------------------------------------------------------------------
-// 警告：不会入库的照片候选
+// 警告：未归属、不会入库的照片候选
 // -----------------------------------------------------------------------
 
 void check_unreferenced_photo_ignored(const Json::Value& data, std::vector<PreflightIssue>& warnings) {
@@ -345,14 +316,9 @@ void check_unreferenced_photo_ignored(const Json::Value& data, std::vector<Prefl
         return;
     }
     for (const auto& photo : data["photos"]) {
-        const auto status = review_status_of(photo);
-        const auto match_status = string_member_or_empty(photo, "match_status");
-
-        const bool will_be_dropped = status == kIgnored || (is_review_settled(status) && match_status == kMatchUnlinked);
-
-        if (will_be_dropped) {
+        if (string_member_or_empty(photo, "linked_defect_candidate_id").empty()) {
             add_issue(warnings, "unreferenced_photo_ignored",
-                      "照片候选 " + candidate_id_of(photo) + " 不会入库（" + (status == kIgnored ? "已忽略" : "未关联") + "）。",
+                      "照片候选 " + candidate_id_of(photo) + " 未归属，不会写入正式照片表。",
                       candidate_id_of(photo));
         }
     }

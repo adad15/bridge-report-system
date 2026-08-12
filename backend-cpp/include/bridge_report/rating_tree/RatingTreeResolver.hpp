@@ -8,7 +8,7 @@
 
 namespace bridge_report::rating_tree {
 
-/// 分层确定性匹配的统一结果类型。
+/// 来源身份精确匹配的统一结果类型。
 enum class RatingTreeMatchOutcome {
     auto_bound,            // 唯一且规则允许自动绑定
     candidates,            // 只能给候选，由人工选择
@@ -47,6 +47,11 @@ struct RatingTreeMatchInput {
     std::string defect_type;
     std::string defect_description;
     std::string defect_location;
+    // 来源软件的原始分组与指标身份；不与 H21 指标 ID 混用。
+    std::string source_defect_group_id;
+    std::string source_defect_group_number;
+    std::string source_defect_indicator_id;
+    std::string source_defect_indicator_number;
 };
 
 struct RatingTreeMatchResult {
@@ -63,11 +68,8 @@ struct RatingTreeMatchResult {
 
 std::string to_string(RatingTreeMatchOutcome value);
 
-/// 单条病害的候选池过滤与分层规则解析。
-///
-/// 固定顺序：适用范围过滤 -> 规范名称精确 -> 正式受控别名 -> 受控关键词 ->
-/// 候选推荐。高优先级已经得到唯一合法结果时不再用低优先级规则替换。
-/// 文字包含、编辑距离等普通模糊只能产生候选，永远不能自动绑定。
+/// 单条病害按当前桥型/构件范围过滤后，仅以来源分组+指标精确解析。
+/// 先匹配原始 ID 对，再匹配编号对；病害名称、描述、别名和关键词均不参与。
 class RatingTreeResolver {
 public:
     [[nodiscard]] RatingTreeMatchResult resolve(

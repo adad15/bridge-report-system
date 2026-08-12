@@ -17,10 +17,19 @@ import {
 } from "../../api/ratingTreeApi";
 import type { ReviewRatingTree } from "../../api/reviewApi";
 import type { BridgeAnnualInspectionData, DefectCandidate } from "../../contracts/annualInspection";
+import {
+  ratingTreeDisplayLabel,
+  ratingTreeOptionLabel,
+  sortRatingTreeNodes,
+} from "../../rating-tree/ratingTreeLabels";
 import { buildDefectPhotoReviewModel, type DefectReviewFilter, type DefectReviewIssueFilter } from "../defectPhotoReviewModel";
+import { buildDefectIssueGroups, type DefectIssueGroup } from "../defectIssueGroups";
 import type { ReviewDraftAction } from "../reviewDraft";
+import { DefectBatchAssignDialog } from "./DefectBatchAssignDialog";
 import { DefectBatchConfirmDialog } from "./DefectBatchConfirmDialog";
 import { DefectDetailEditor } from "./DefectDetailEditor";
+import { DefectIssueGroupConfirmDialog } from "./DefectIssueGroupConfirmDialog";
+import { DefectIssueGroupList } from "./DefectIssueGroupList";
 import { DefectQuickReviewList } from "./DefectQuickReviewList";
 import { DefectReviewToolbar } from "./DefectReviewToolbar";
 import { UnlinkedPhotosPanel } from "./UnlinkedPhotosPanel";
@@ -109,10 +118,17 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const [search, setSearch] = useState("");
   const [matchResults, setMatchResults] = useState<Map<string, DefectMatchResult>>(new Map());
   const [matchSummary, setMatchSummary] = useState<DefectMatchSummary | null>(null);
+  const [matchedAt, setMatchedAt] = useState<Date | null>(null);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [rematching, setRematching] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [reviewMode, setReviewMode] = useState<"records" | "groups">("records");
+  const [pendingGroupAssignment, setPendingGroupAssignment] = useState<{
+    group: DefectIssueGroup;
+    node: RatingTreeNodeSummary;
+  } | null>(null);
+  const [pendingGroupConfirmationKey, setPendingGroupConfirmationKey] = useState<string | null>(null);
   const [detailWidth, setDetailWidth] = useState(readStoredDetailWidth);
   const [pinnedConfirmedId, setPinnedConfirmedId] = useState<string | null>(null);
   const seenSafeIds = useRef(new Set<string>());
@@ -251,6 +267,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         return next;
       });
       setMatchSummary(report.summary);
+      setMatchedAt(new Date());
       setMatchError(null);
       const autoMatches = report.results
         .filter((result) => !result.skipped && result.outcome === "auto_bound" && result.rating_tree_node_id)
@@ -272,6 +289,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
       // 服务失败不能伪装成"这批病害都没有匹配结果"：清掉上一轮结果并显式报错。
       setMatchResults(new Map());
       setMatchSummary(null);
+      setMatchedAt(null);
       setMatchError(defectMatchErrorMessage(error));
     } finally {
       setRematching(false);
@@ -350,12 +368,31 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const rematchScopeLabel =
     filter === "all" && !issueFilter && !search ? "全部" : "当前筛选";
   const currentlySafeSelection = [...selectedIds].filter((id) => allModel.safeCandidateIds.has(id));
+  const selectableCandidateIds = useMemo(
+    () => visibleModel.rows
+      .filter((row) => row.batchEligible)
+      .map((row) => row.candidateId),
+    [visibleModel.rows],
+  );
+  const selectedSelectableCount = selectableCandidateIds.filter((id) => selectedIds.has(id)).length;
+  const allSelectableSelected =
+    selectableCandidateIds.length > 0 && selectedSelectableCount === selectableCandidateIds.length;
+  const someSelectableSelected =
+    selectedSelectableCount > 0 && !allSelectableSelected;
+  const issueGroups = useMemo(
+    () => buildDefectIssueGroups(visibleModel.rows),
+    [visibleModel.rows],
+  );
+  const pendingGroupConfirmation = pendingGroupConfirmationKey
+    ? issueGroups.find((group) => group.key === pendingGroupConfirmationKey) ?? null
+    : null;
   const batchDistribution = useMemo(() => {
     const counts = new Map<string, number>();
     for (const row of allModel.rows) {
       if (!currentlySafeSelection.includes(row.candidateId)) continue;
       const name =
-        row.ratingTreeNode?.display_name ?? (row.defect.defect_type || "未确定规范病害");
+        (row.ratingTreeNode ? ratingTreeDisplayLabel(row.ratingTreeNode) : null) ??
+        (row.defect.defect_type || "未确定规范病害");
       counts.set(name, (counts.get(name) ?? 0) + 1);
     }
     return [...counts.entries()]
@@ -368,9 +405,12 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   ).length;
   const selectedEntry = inventoryEntries.find((entry) => entry.id === form.componentEntryId);
   const selectedMapping = selectedEntry?.mappings.find((item) => item.is_active);
-  const manualDefectNodes = selectedEntry
-    ? treeNodesByComponent.get(selectedEntry.bridge_component_id) ?? []
-    : [];
+  const manualDefectNodes = useMemo(
+    () => sortRatingTreeNodes(selectedEntry
+      ? treeNodesByComponent.get(selectedEntry.bridge_component_id) ?? []
+      : []),
+    [selectedEntry, treeNodesByComponent],
+  );
 
   const closeDetail = () => {
     setPinnedConfirmedId(null);
@@ -498,52 +538,86 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
 
   return (
     <section className="status-panel defect-photo-section">
-      <div className="defect-section-heading">
-        <h2>病害与照片</h2>
-        <div className="defect-section-heading-actions">
-          <button type="button" disabled={!allowStructureChanges || loadingInventory} onClick={openAddForm}>新增病害</button>
-        </div>
-      </div>
+      {/* 分区标题现在长在工具条里：两者本来就要一起吸顶，拆成两个 sticky 元素只会
+          在中间留一道能透出滚动内容的缝，还得拿伪元素去补。 */}
+      <DefectReviewToolbar
+        summary={allModel.summary}
+        filter={filter}
+        issueFilter={issueFilter}
+        search={search}
+        selectedCount={currentlySafeSelection.length}
+        selectableCount={selectableCandidateIds.length}
+        allSelectableSelected={allSelectableSelected}
+        someSelectableSelected={someSelectableSelected}
+        viewMode={reviewMode}
+        issueGroupCount={issueGroups.length}
+        disabled={disabled}
+        rematchScopeLabel={rematchScopeLabel}
+        rematchCount={rematchCandidateIds.length}
+        rematching={rematching}
+        matchError={matchError}
+        lastMatchSummary={matchSummary}
+        lastMatchAt={matchedAt}
+        onAddDefect={openAddForm}
+        addDefectDisabled={!allowStructureChanges || loadingInventory}
+        onFilterChange={(nextFilter) => { clearPinnedResult(); setFilter(nextFilter); }}
+        onIssueFilterChange={(nextIssueFilter) => { clearPinnedResult(); setIssueFilter(nextIssueFilter); }}
+        onSearchChange={(nextSearch) => { clearPinnedResult(); setSearch(nextSearch); }}
+        onToggleSelectAll={() => setSelectedIds((current) => {
+          const next = new Set(current);
+          if (allSelectableSelected) {
+            for (const id of selectableCandidateIds) next.delete(id);
+          } else {
+            for (const id of selectableCandidateIds) next.add(id);
+          }
+          return next;
+        })}
+        onViewModeChange={(mode) => {
+          clearPinnedResult();
+          setReviewMode(mode);
+          if (mode === "groups") onCloseDetail?.();
+        }}
+        onBatchConfirm={() => setBatchDialogOpen(true)}
+        onRematch={() => { void runMatch(rematchCandidateIds); }}
+      />
       {showAddForm ? (
         <form className="manual-defect-form" onSubmit={submitManualDefect}>
           <label>实际构件<select aria-label="实际构件" disabled={loadingInventory} required value={form.componentEntryId} onChange={(event) => setForm({ ...form, componentEntryId: event.target.value, ratingTreeNodeId: "" })}><option value="">请选择构件</option>{inventoryEntries.map((entry) => <option key={entry.id} value={entry.id}>{entry.component_number} / {entry.site_component_type}</option>)}</select></label>
           <label>构件类别<input aria-label="新增病害构件类别" readOnly value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.site_component_type ?? ""} /></label>
           <label>构件编号<input aria-label="新增病害构件编号" readOnly value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.component_number ?? ""} /></label>
           <label>病害位置<input aria-label="新增病害位置" required value={form.defectLocation} onChange={(event) => setForm({ ...form, defectLocation: event.target.value })} /></label>
-          <label>病害类型<select aria-label="新增病害类型" required value={form.ratingTreeNodeId} onChange={(event) => setForm({ ...form, ratingTreeNodeId: event.target.value, defectScale: "" })}><option value="">请选择评定树病害</option>{manualDefectNodes.map((node) => <option key={node.id} value={node.id}>{node.display_name}{node.is_scoring ? "" : "（暂不计分）"}</option>)}</select></label>
+          <label>病害类型<select aria-label="新增病害类型" required value={form.ratingTreeNodeId} onChange={(event) => setForm({ ...form, ratingTreeNodeId: event.target.value, defectScale: "" })}><option value="">请选择评定树病害</option>{manualDefectNodes.map((node) => <option key={node.id} value={node.id}>{ratingTreeOptionLabel(node, manualDefectNodes)}{node.is_scoring ? "" : "（暂不计分）"}</option>)}</select></label>
           <label className="manual-defect-form-wide">病害描述<input aria-label="新增病害描述" required value={form.defectDescription} onChange={(event) => setForm({ ...form, defectDescription: event.target.value })} /></label>
           <label>病害标度（可稍后填写）<select aria-label="新增病害标度" disabled={!manualTreeNode?.is_scoring} value={form.defectScale} onChange={(event) => setForm({ ...form, defectScale: event.target.value })}><option value="">{manualTreeNode?.is_scoring ? "请选择标度" : "该节点暂不计分"}</option>{manualTreeNode?.allowed_scales.map((scale) => <option key={scale} value={scale}>{scale} · {manualTreeNode.scale_descriptions[String(scale)]}</option>)}</select></label>
           {formError ? <p className="form-error" role="alert">{formError}</p> : null}
           <div className="manual-defect-form-actions"><button type="button" onClick={() => { setShowAddForm(false); setFormError(""); }}>取消</button><button type="submit" disabled={loadingInventory || inventoryEntries.length === 0}>添加病害</button></div>
         </form>
       ) : null}
-      <fieldset className="review-disabled-fieldset">
+      {/* 原来这里是一个 fieldset：它曾经用 disabled 一揽子关掉整片区域，禁用改成
+          逐控件处理后就只剩一个空壳，还带着 fieldset 自己的 min-width:min-content。 */}
+      <div className="defect-review-body">
         {draft.defects.length === 0 ? <p>暂无病害候选，可使用“新增病害”手动添加。</p> : null}
         {treeError ? <p className="form-error" role="alert">{treeError}</p> : null}
         {!ratingTree ? <p className="warning-text">当前检测年度未锁定评定树，无法确定病害评分节点。</p> : null}
-        <DefectReviewToolbar
-          summary={allModel.summary}
-          filter={filter}
-          issueFilter={issueFilter}
-          search={search}
-          selectedCount={currentlySafeSelection.length}
-          disabled={disabled}
-          rematchScopeLabel={rematchScopeLabel}
-          rematchCount={rematchCandidateIds.length}
-          rematching={rematching}
-          matchError={matchError}
-          lastMatchSummary={matchSummary}
-          onFilterChange={(nextFilter) => { clearPinnedResult(); setFilter(nextFilter); }}
-          onIssueFilterChange={(nextIssueFilter) => { clearPinnedResult(); setIssueFilter(nextIssueFilter); }}
-          onSearchChange={(nextSearch) => { clearPinnedResult(); setSearch(nextSearch); }}
-          onBatchConfirm={() => setBatchDialogOpen(true)}
-          onRematch={() => { void runMatch(rematchCandidateIds); }}
-        />
-        <div
-          ref={splitWorkspaceRef}
-          className={`defect-review-workspace ${currentRow ? "detail-open" : ""}`}
-          style={{ "--defect-detail-width": `${detailWidth}%` } as CSSProperties}
-        >
+        {reviewMode === "groups" ? (
+          <DefectIssueGroupList
+            groups={issueGroups}
+            nodesByComponent={treeNodesByComponent}
+            disabled={disabled || !ratingTree}
+            onApplyNode={(group, node) => setPendingGroupAssignment({ group, node })}
+            onConfirmGroup={(group) => setPendingGroupConfirmationKey(group.key)}
+            onOpenDefect={(candidateId) => {
+              setReviewMode("records");
+              clearPinnedResult();
+              onSelect(candidateId);
+            }}
+          />
+        ) : (
+          <div
+            ref={splitWorkspaceRef}
+            className={`defect-review-workspace ${currentRow ? "detail-open" : ""}`}
+            style={{ "--defect-detail-width": `${detailWidth}%` } as CSSProperties}
+          >
           <div className="defect-review-list-pane">
             <DefectQuickReviewList
               rows={displayedRows}
@@ -585,7 +659,6 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
                   row={currentRow}
                   ratingTreeVersionId={ratingTree?.version_id ?? null}
                   applicableNodes={treeNodesByComponent.get(currentRow.defect.bridge_component_id ?? "") ?? []}
-                  componentInventory={componentInventory ?? loadedInventory}
                   importRecordId={importRecordId}
                   baseUrl={baseUrl}
                   initialPhotoCandidateId={selectedPhotoCandidateId}
@@ -603,9 +676,10 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
               </aside>
             </>
           ) : null}
-        </div>
+          </div>
+        )}
         <UnlinkedPhotosPanel draft={draft} importRecordId={importRecordId} baseUrl={baseUrl} selectedPhotoCandidateId={selectedPhotoCandidateId} />
-      </fieldset>
+      </div>
       <DefectBatchConfirmDialog
         open={batchDialogOpen}
         defectCount={currentlySafeSelection.length}
@@ -620,6 +694,38 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
           }
           if (validIds.length > 0) dispatch({ type: "confirm_defect_groups", candidateIds: validIds });
           setBatchDialogOpen(false);
+        }}
+      />
+      <DefectBatchAssignDialog
+        assignment={pendingGroupAssignment}
+        onCancel={() => setPendingGroupAssignment(null)}
+        onConfirm={() => {
+          if (!pendingGroupAssignment || !ratingTree) return;
+          const { group, node } = pendingGroupAssignment;
+          dispatch({
+            type: "select_rating_tree_nodes",
+            candidateIds: group.rows.map((row) => row.candidateId),
+            versionId: ratingTree.version_id,
+            nodeId: node.id,
+            nodeName: node.display_name,
+            isScoring: node.is_scoring,
+            matchEvidence: "用户按相同来源身份批量指定评定树病害",
+          });
+          setPendingGroupAssignment(null);
+        }}
+      />
+      <DefectIssueGroupConfirmDialog
+        group={pendingGroupConfirmation}
+        onCancel={() => setPendingGroupConfirmationKey(null)}
+        onConfirm={() => {
+          if (!pendingGroupConfirmation) return;
+          const candidateIds = pendingGroupConfirmation.rangeSplitConfirmableRows.map(
+            (row) => row.candidateId,
+          );
+          if (candidateIds.length > 0) {
+            dispatch({ type: "confirm_defect_groups", candidateIds });
+          }
+          setPendingGroupConfirmationKey(null);
         }}
       />
     </section>

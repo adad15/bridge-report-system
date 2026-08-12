@@ -7,7 +7,7 @@
 namespace bridge_report::review {
 
 /**
- * @brief 候选（病害/照片/评分项）review_status 的两个"已定案"取值。
+ * @brief 病害候选 review_status 的两个"已定案"取值。
  *
  * 与数据库 check 约束（defect_observations.review_status / condition_ratings.review_status）
  * 的合法取值子集一致：候选只有落在这两个状态时才会进入 ConfirmPlan / 通过入库前检查。
@@ -32,7 +32,7 @@ inline std::string string_member_or_empty(const Json::Value& object, const char*
     return object[key].asString();
 }
 
-// candidate_id / review_status 是所有候选（病害/照片/评分项）共有的定位与状态字段。
+// candidate_id 是候选定位字段；review_status 只用于仍有人工校对状态的候选。
 inline std::string candidate_id_of(const Json::Value& candidate) {
     return string_member_or_empty(candidate, "candidate_id");
 }

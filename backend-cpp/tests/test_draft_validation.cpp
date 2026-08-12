@@ -12,13 +12,13 @@ namespace {
 
 Json::Value fixture() {
     const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-        "samples/contracts/bridge_annual_inspection_data.v3.valid.json";
+        "samples/contracts/bridge_annual_inspection_data.v4.valid.json";
     std::ifstream input(path, std::ios::binary);
     Json::CharReaderBuilder builder;
     Json::Value root;
     std::string errors;
     if (!input || !Json::parseFromStream(builder, input, &root, &errors)) {
-        throw std::runtime_error("unable to load v2 fixture: " + errors);
+        throw std::runtime_error("unable to load v4 fixture: " + errors);
     }
     return root;
 }
@@ -37,6 +37,12 @@ bridge_report::rating_tree::EffectiveRatingTree rating_tree_fixture() {
     crack.is_selectable = true;
     crack.is_scoring = true;
     crack.allowed_scales = {1, 2, 3, 4, 5};
+    crack.source_mappings.push_back({
+        "source-group-crack",
+        "source-indicator-crack",
+        "5.1.1",
+        "5.1.1-1",
+        crack.id});
     tree.nodes.emplace(crack.id, crack);
 
     EffectiveRatingTreeNode water;
@@ -212,7 +218,7 @@ TEST(WarningsOnlyScopeTest, RejectsChangingPhotosWhileFixingWarningDefect) {
     auto stored = fixture();
     stored["defects"][0]["warnings"].append(Json::Value(Json::objectValue));
     auto next = stored;
-    next["photos"][0]["review_status"] = "已确认";
+    next["photos"][0]["extracted_file"]["original_caption"] = "被修改的图注";
     const auto result = bridge_report::review::validate_warnings_only_scope(stored, next);
     EXPECT_FALSE(result.ok);
     EXPECT_EQ(result.code, "reopen_scope_violation");
@@ -224,12 +230,38 @@ TEST(DraftValidationTest, AuditIsNullWhenDefectSetIsUnchanged) {
         bridge_report::review::build_defect_change_audit_event(data, data, "editor").isNull());
 }
 
-TEST(DraftValidationTest, RatingTreeNormalizationDerivesH21AndIgnoresForgery) {
+TEST(DraftValidationTest, AcceptsUnchangedImportedDefectEvidence) {
+    const auto data = fixture();
+    const auto result =
+        bridge_report::review::validate_imported_defect_evidence(data, data);
+
+    EXPECT_TRUE(result.ok) << result.message;
+    EXPECT_TRUE(result.code.empty());
+}
+
+TEST(DraftValidationTest, RejectsChangedImportedDefectEvidence) {
+    const auto stored = fixture();
+    auto draft = stored;
+    draft["defects"][0]["source_ref"]["raw_row_text"] = "被修改的来源证据";
+
+    const auto result =
+        bridge_report::review::validate_imported_defect_evidence(stored, draft);
+
+    EXPECT_FALSE(result.ok);
+    EXPECT_EQ(result.code, "imported_evidence_modified");
+    ASSERT_EQ(result.issues.size(), 1U);
+}
+
+TEST(DraftValidationTest, SourceMappingDerivesH21AndIgnoresForgery) {
     auto stored = fixture();
     auto draft = stored;
     auto& defect = draft["defects"][0];
     defect["bridge_component_id"] = "component-1";
     defect["standard_defect_indicator_id"] = "forged";
+    defect["source_defect_group_id"] = "source-group-crack";
+    defect["source_defect_indicator_id"] = "source-indicator-crack";
+    defect["source_defect_group_number"] = "5.1.1";
+    defect["source_defect_indicator_number"] = "5.1.1-1";
 
     const auto result =
         bridge_report::review::normalize_defect_rating_tree_associations(
@@ -245,7 +277,7 @@ TEST(DraftValidationTest, RatingTreeNormalizationDerivesH21AndIgnoresForgery) {
         defect["rating_tree_node_id"].asString(),
         "11111111-1111-4111-8111-111111111111");
     EXPECT_EQ(defect["standard_defect_indicator_id"].asString(), "h21.crack");
-    EXPECT_EQ(defect["rating_tree_match_method"].asString(), "exact");
+    EXPECT_EQ(defect["rating_tree_match_method"].asString(), "source_indicator");
 }
 
 TEST(DraftValidationTest, RatingTreeNormalizationRejectsInapplicableManualNode) {

@@ -76,6 +76,11 @@ std::string canonical_tree(const EffectiveRatingTree& tree) {
         value["id"] = node.id;
         value["parent_id"] =
             node.parent_id.has_value() ? Json::Value(*node.parent_id) : Json::Value();
+        // Omit extension-only fields when absent so recompiling an unchanged
+        // 1.x package preserves its existing effective-tree checksum.
+        if (node.display_number.has_value()) {
+            value["display_number"] = *node.display_number;
+        }
         value["display_name"] = node.display_name;
         value["node_type"] = to_string(node.node_type);
         value["sort_order"] = node.sort_order;
@@ -88,6 +93,9 @@ std::string canonical_tree(const EffectiveRatingTree& tree) {
         value["organization_note"] = node.organization_note;
         value["h21_indicator_name"] = node.h21_indicator_name;
         value["h21_source_table"] = node.h21_source_table;
+        if (node.uses_source_scale_descriptions) {
+            value["uses_source_scale_descriptions"] = true;
+        }
         value["bridge_type_ids"] = Json::Value(Json::arrayValue);
         for (const auto& id : node.bridge_type_ids) {
             value["bridge_type_ids"].append(id);
@@ -99,6 +107,35 @@ std::string canonical_tree(const EffectiveRatingTree& tree) {
         value["source_ids"] = Json::Value(Json::arrayValue);
         for (const auto& id : node.source_ids) {
             value["source_ids"].append(id);
+        }
+        auto source_mappings = node.source_mappings;
+        std::sort(
+            source_mappings.begin(),
+            source_mappings.end(),
+            [](const RatingTreeSourceMapping& left,
+               const RatingTreeSourceMapping& right) {
+                return std::tie(
+                           left.source_group_id,
+                           left.source_indicator_id,
+                           left.source_group_number,
+                           left.source_indicator_number) <
+                    std::tie(
+                           right.source_group_id,
+                           right.source_indicator_id,
+                           right.source_group_number,
+                           right.source_indicator_number);
+            });
+        if (!source_mappings.empty()) {
+            value["source_mappings"] = Json::Value(Json::arrayValue);
+            for (const auto& mapping : source_mappings) {
+                Json::Value mapping_value;
+                mapping_value["source_group_id"] = mapping.source_group_id;
+                mapping_value["source_indicator_id"] = mapping.source_indicator_id;
+                mapping_value["source_group_number"] = mapping.source_group_number;
+                mapping_value["source_indicator_number"] =
+                    mapping.source_indicator_number;
+                value["source_mappings"].append(mapping_value);
+            }
         }
         value["allowed_scales"] = Json::Value(Json::arrayValue);
         value["scale_descriptions"] = Json::Value(Json::objectValue);
@@ -233,6 +270,7 @@ RatingTreeCompileResult RatingTreeCompiler::compile(
         EffectiveRatingTreeNode node;
         node.id = source.id;
         node.parent_id = source.parent_id;
+        node.display_number = source.display_number;
         node.display_name = source.display_name;
         node.node_type = source.node_type;
         node.sort_order = source.sort_order;
@@ -240,12 +278,21 @@ RatingTreeCompileResult RatingTreeCompiler::compile(
         node.component_category_ids = source.component_category_ids;
         node.scoring_mode = source.scoring_mode;
         node.h21_indicator_id = source.h21_indicator_id;
+        node.uses_source_scale_descriptions =
+            !source.source_scale_descriptions.empty();
         node.is_selectable = source.is_selectable;
         node.organization_note = source.organization_note;
         node.source_ids = source.source_ids;
         node.is_scoring =
             source.scoring_mode != RatingTreeScoringMode::non_scoring;
 
+        if (source.scoring_mode == RatingTreeScoringMode::non_scoring &&
+            source.h21_indicator_id.has_value()) {
+            result.issues.push_back({
+                "rating_tree_non_scoring_target_invalid",
+                "暂不评分节点不能引用 H21 指标。"});
+            return result;
+        }
         if (node.is_scoring) {
             if (!node.h21_indicator_id.has_value()) {
                 result.issues.push_back({
@@ -261,13 +308,15 @@ RatingTreeCompileResult RatingTreeCompiler::compile(
                     "评定树节点引用的 H21 指标不存在。"});
                 return result;
             }
-            for (const auto& component_id : node.component_category_ids) {
-                if (!contains(*resolved->applicable_components, component_id)) {
-                    result.issues.push_back({
-                        "rating_tree_h21_indicator_not_applicable",
-                        "H21 指标不适用于评定树节点 " + node.id +
-                            " 声明的构件 " + component_id + "。"});
-                    return result;
+            if (source.scoring_mode == RatingTreeScoringMode::inherit_h21) {
+                for (const auto& component_id : node.component_category_ids) {
+                    if (!contains(*resolved->applicable_components, component_id)) {
+                        result.issues.push_back({
+                            "rating_tree_h21_indicator_not_applicable",
+                            "H21 指标不适用于评定树节点 " + node.id +
+                                " 声明的构件 " + component_id + "。"});
+                        return result;
+                    }
                 }
             }
             const auto& indicator = *resolved->indicator;
@@ -292,6 +341,14 @@ RatingTreeCompileResult RatingTreeCompiler::compile(
                     "H21 指标引用的扣分规则不存在或不完整。"});
                 return result;
             }
+            if (!source.source_scale_descriptions.empty() &&
+                source.source_scale_descriptions.size() !=
+                    indicator["allowed_scales"].size()) {
+                result.issues.push_back({
+                    "rating_tree_source_scale_invalid",
+                    "来源标度说明必须与所引用 H21 扣分曲线的标度完整对应。"});
+                return result;
+            }
             for (const auto& scale_value : indicator["allowed_scales"]) {
                 if (!scale_value.isInt()) {
                     result.issues.push_back({
@@ -300,9 +357,13 @@ RatingTreeCompileResult RatingTreeCompiler::compile(
                 }
                 const int scale = scale_value.asInt();
                 const auto key = std::to_string(scale);
+                const auto source_description =
+                    source.source_scale_descriptions.find(scale);
                 if (!indicator["scale_descriptions"][key].isString() ||
                     indicator["scale_descriptions"][key].asString().empty() ||
-                    !(*deduction)["points"][key].isInt()) {
+                    !(*deduction)["points"][key].isInt() ||
+                    (!source.source_scale_descriptions.empty() &&
+                     source_description == source.source_scale_descriptions.end())) {
                     result.issues.push_back({
                         "rating_tree_h21_rule_incomplete",
                         "H21 每个允许标度都必须有判定文字和扣分。"});
@@ -310,7 +371,10 @@ RatingTreeCompileResult RatingTreeCompiler::compile(
                 }
                 node.allowed_scales.push_back(scale);
                 node.scale_descriptions.emplace(
-                    scale, indicator["scale_descriptions"][key].asString());
+                    scale,
+                    source_description == source.source_scale_descriptions.end()
+                        ? indicator["scale_descriptions"][key].asString()
+                        : source_description->second);
                 node.deduction_points.emplace(
                     scale, (*deduction)["points"][key].asInt());
             }
@@ -319,6 +383,19 @@ RatingTreeCompileResult RatingTreeCompiler::compile(
             node.is_scoring = false;
         }
         tree.nodes.emplace(id, std::move(node));
+    }
+
+    for (const auto& mapping : extension.source_mappings) {
+        const auto target = tree.nodes.find(mapping.target_node_id);
+        if (target == tree.nodes.end() ||
+            target->second.node_type != RatingTreeNodeType::defect ||
+            !target->second.is_selectable) {
+            result.issues.push_back({
+                "rating_tree_source_mapping_target_invalid",
+                "来源指标映射必须指向可选择的评定树病害节点。"});
+            return result;
+        }
+        target->second.source_mappings.push_back(mapping);
     }
 
     for (const auto& alias : tree.aliases) {

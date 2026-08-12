@@ -203,7 +203,7 @@
           "type": "string"
         },
         "version": {
-          "const": "3.0",
+          "const": "4.0",
           "title": "Version",
           "type": "string"
         },
@@ -460,6 +460,7 @@
                 "controlled_alias",
                 "controlled_keyword",
                 "fuzzy_candidate",
+                "source_indicator",
                 "manual"
               ],
               "type": "string"
@@ -494,6 +495,54 @@
           ],
           "default": null,
           "title": "Standard Defect Indicator Id"
+        },
+        "source_defect_group_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Defect Group Id"
+        },
+        "source_defect_group_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Defect Group Number"
+        },
+        "source_defect_indicator_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Defect Indicator Id"
+        },
+        "source_defect_indicator_number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Defect Indicator Number"
         },
         "photo_references": {
           "items": {
@@ -557,18 +606,6 @@
           ],
           "title": "Review Status",
           "type": "string"
-        },
-        "review_note": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Review Note"
         },
         "range_split_origin": {
           "anyOf": [
@@ -829,17 +866,6 @@
         "extracted_file": {
           "$ref": "#/$defs/ExtractedPhotoFile"
         },
-        "match_status": {
-          "enum": [
-            "高置信候选",
-            "待校对",
-            "已确认",
-            "未关联",
-            "已忽略"
-          ],
-          "title": "Match Status",
-          "type": "string"
-        },
         "source_ref": {
           "$ref": "#/$defs/SourceRef"
         },
@@ -848,16 +874,6 @@
           "minimum": 0,
           "title": "Confidence",
           "type": "number"
-        },
-        "review_status": {
-          "enum": [
-            "待确认",
-            "已确认",
-            "已修改",
-            "已忽略"
-          ],
-          "title": "Review Status",
-          "type": "string"
         },
         "warnings": {
           "items": {
@@ -871,10 +887,8 @@
         "candidate_id",
         "photo_number",
         "extracted_file",
-        "match_status",
         "source_ref",
         "confidence",
-        "review_status",
         "warnings"
       ],
       "title": "PhotoCandidate",

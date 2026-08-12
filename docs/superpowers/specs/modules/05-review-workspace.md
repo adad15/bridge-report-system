@@ -6,6 +6,8 @@
 
 > 2026-07-13 修订说明：依据 `docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md`，契约升级为 1.2。模块 05 增加详细位置、病害标度、病害扣分和构件评分双值校对；C++ 入库前独立复算并写入构件级 `condition_ratings`。本文中与该修订冲突的“评分不复算、不校验”以及把 `severity` 写为病害标度的行为不再适用。
 
+> 2026-08-10 现行修订：契约升级为 4.0，删除照片级 `match_status`、`review_status` 和逐张确认/取消确认动作。照片只支持查看、添加、删除、上传和重新关联；确认病害组时同时确认当前照片关系。下文与此冲突的旧规则仅作历史记录。
+
 ## 1. 背景与目标
 
 本模块是桥梁报告系统第五个小模块，负责把模块 04 输出的 `BridgeAnnualInspectionData` 候选 JSON 变成可人工校对、可保存草稿、可确认入库的年度事实。
@@ -327,7 +329,7 @@ warnings/errors
 
 ### 8.1 病害候选
 
-第一版允许编辑：
+现行版本允许编辑：
 
 ```text
 structure_part
@@ -363,21 +365,18 @@ errors
 ```text
 photo_number
 linked_defect_candidate_id
-match_status
-review_status
 ```
 
 用户可以：
 
 ```text
-确认匹配
-取消匹配
-标记未关联
-标记忽略
-修改照片编号
+添加照片
+删除照片
+上传缺失照片
+重新关联照片
 ```
 
-第一版不做图片裁剪、重传和复杂排序。
+照片不再维护独立人工状态。病害组确认是该组当前照片关系的唯一确认动作。
 
 `extracted_file.original_caption` 是从 Word 中读取到的原始题注，第一版作为证据只读。若后续需要人工改照片标题或照片说明，应先扩展模块 03 契约，再进入实施。
 
@@ -640,7 +639,7 @@ is_manually_confirmed = true
 ### 11.6 照片入库
 
 ```text
-photos[] 中 已确认 / 已修改 且关联到已入库病害
+photos[] 中关联到已入库病害且归档文件完整的照片
   -> defect_photos
 ```
 
@@ -763,7 +762,7 @@ ratings.evaluation_parts[]
 6. 已确认病害写入 `defect_observations`。
 7. 尺寸结构化结果写入 `defect_measurements`。
 8. 有尺寸原文但无结构化尺寸时写 `未识别尺寸`。
-9. 已确认照片写入 `defect_photos`。
+9. 与已确认病害关联且归档完整的照片写入 `defect_photos`；未关联照片不阻止入库。
 10. 已确认评分写入 `condition_ratings`。
 11. 构件评分以 `rating_level=构件` 绑定 `bridge_component_id`，并保存来源分、复算分、最终分、校验状态和计算明细。
 12. 同桥同年已有当前有效事实且未确认修订时拒绝入库。
@@ -816,6 +815,7 @@ ratings.evaluation_parts[]
 
 ## 17. 变更记录
 
+- 2026-08-10：合同升级为 4.0；删除照片级匹配/校对状态和逐张确认动作，病害组确认统一确认当前照片关系。
 - 2026-07-12：合同升级为 1.1；合并病害与照片校对；加入逐张照片决策、缺图确认和构件类别分色。
 - 2026-07-12：新增 Word 解析编排、照片正式归档、受控照片内容接口，以及确认事务内读取锁定最新草稿。
 - 2026-07-12：来源证据改为弹窗；终态记录只读；保存草稿加入 revision 竞态保护。

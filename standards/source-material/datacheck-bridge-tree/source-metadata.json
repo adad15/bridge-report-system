@@ -1,0 +1,12 @@
+{
+  "snapshot_version": 1,
+  "exported_at": "2026-08-07T09:08:51.181292+00:00",
+  "source_database_sha256": "sha256:dc831111644ee0b85d3a5ba2ad21f5c88837bdc64607089c77d87ee1d9a2f56d",
+  "source_table_row_counts": {
+    "judgeTree": 96,
+    "judgeIndex": 271,
+    "judgeTree2Index": 403
+  },
+  "unique_group_indicator_pairs": 403,
+  "contains_business_records": false
+}

@@ -340,8 +340,7 @@ begin
     source_file_id,
     photo_number,
     photo_title,
-    photo_description,
-    match_status
+    photo_description
   )
   values (
     v_observation_id,
@@ -350,8 +349,7 @@ begin
     v_source_file_id,
     '照片2.1-1',
     '2-1#板底板横向裂缝',
-    '病害检查表照片编号与照片区标题一致',
-    '已确认'
+    '病害检查表照片编号与照片区标题一致'
   );
 
   update inspection_years

@@ -227,12 +227,12 @@ std::string insert_defect_observation(
         " structure_part, part_name, component_type, business_component_code, "
         " defect_location, rating_tree_node_id, standard_defect_indicator_id, "
         " defect_type, defect_description_raw, scale, "
-        " extraction_confidence, review_status, review_note) "
+        " extraction_confidence, review_status) "
         "values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, "
         "        $5, $6, $7, $8::jsonb, "
         "        $9, $10, $11, $12, "
         "        $13, nullif($14,'')::uuid, nullif($15,''), $16, $17, $18, "
-        "        $19, $20, $21) "
+        "        $19, $20) "
         "returning id",
         inspection_year_id,
         bridge_id,
@@ -256,8 +256,7 @@ std::string insert_defect_observation(
         defect.defect_description_raw,
         defect.scale,
         defect.extraction_confidence,
-        defect.review_status,
-        defect.review_note
+        defect.review_status
     );
     return result[0]["id"].as<std::string>();
 }
@@ -292,8 +291,8 @@ void insert_defect_photo(
 ) {
     tx->execSqlSync(
         "insert into defect_photos "
-        "(defect_observation_id, archived_file_id, source_import_record_id, photo_number, photo_title, match_status) "
-        "values ($1::uuid, $2::uuid, $3::uuid, $4, $5, '已确认')",
+        "(defect_observation_id, archived_file_id, source_import_record_id, photo_number, photo_title) "
+        "values ($1::uuid, $2::uuid, $3::uuid, $4, $5)",
         defect_observation_id,
         archived_file_id,
         import_record_id,

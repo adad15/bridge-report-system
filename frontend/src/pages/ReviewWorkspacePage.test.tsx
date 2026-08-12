@@ -155,7 +155,7 @@ function reviewResponse(): ReviewResponse {
       object_warning_count: 0,
     },
     has_current_annual_facts: false,
-    contract_compatibility: "native_3_0",
+    contract_compatibility: "native_4_0",
     technical_condition_standard: null,
     reopen: null,
     edit_lock: null,

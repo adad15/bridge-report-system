@@ -19,10 +19,8 @@ function photo(overrides: Partial<PhotoCandidate>): PhotoCandidate {
       original_caption: null,
       archive_relative_path: "photos/photo.jpg",
     },
-    match_status: "高置信候选",
     source_ref: { source_type: "word" },
     confidence: 0.9,
-    review_status: "待确认",
     warnings: [],
     ...overrides,
   };
@@ -55,8 +53,6 @@ function draftWithThreeCards(): { draft: BridgeAnnualInspectionData; defect: Def
       candidate_id: "manual_photo_0001",
       photo_number: "补-1",
       source_ref: { source_type: "manual" },
-      match_status: "已确认",
-      review_status: "已确认",
     }),
   ];
   return { draft, defect: draft.defects[0] };
@@ -126,13 +122,12 @@ describe("buildDefectPhotoCards", () => {
     ]);
   });
 
-  it("reports whether each photo card is already confirmed", () => {
+  it("does not add a second confirmation state to photo cards", () => {
     const { draft, defect } = draftWithThreeCards();
 
     const cards = buildDefectPhotoCards(draft, defect);
 
-    expect(cards.find((card) => card.photoNumber === "2.1-5")?.confirmed).toBe(false);
-    expect(cards.find((card) => card.photoNumber === "补-1")?.confirmed).toBe(true);
+    expect(cards.every((card) => !("confirmed" in card))).toBe(true);
   });
 
   it("ignores photos linked to another defect", () => {

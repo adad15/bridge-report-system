@@ -110,6 +110,7 @@ describe("ComponentBindingWorkspace", () => {
         tree_content_checksum: "sha256:test",
         status: "published",
         published_at: "2026-07-30T00:00:00Z",
+        is_default: true,
         h21_package_version: "1.0.3",
         maintenance_package_version: "1.0.0",
       },

@@ -30,13 +30,14 @@ export function ReviewMessageDock({ saveMessage, preflight, onDismissSaveMessage
   if (!saveMessage && !preflight) return null;
 
   const preflightIssueCount = preflight ? preflight.blocking_errors.length + preflight.warnings.length : 0;
+  const saveMessageText = saveMessage?.text.trim() || (saveMessage?.kind === "error" ? "操作失败，请稍后重试。" : "操作已完成。");
 
   return (
     <div className="review-message-dock">
       {saveMessage ? (
         <div className={saveMessage.kind === "error" ? "review-dock-row review-dock-error" : "review-dock-row review-dock-success"}>
           <div className="review-dock-body">
-            <p className={saveMessage.kind === "error" ? "error-text" : undefined}>{saveMessage.text}</p>
+            <p className={saveMessage.kind === "error" ? "error-text" : undefined}>{saveMessageText}</p>
             {saveMessage.issues && saveMessage.issues.length > 0 ? (
               <ul className="review-warning-list">
                 {saveMessage.issues.map((issue, index) => (

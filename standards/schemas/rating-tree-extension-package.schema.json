@@ -91,6 +91,7 @@
       "properties": {
         "id": {"type": "string", "minLength": 1},
         "parent_id": {"type": ["string", "null"]},
+        "display_number": {"type": "string", "minLength": 1},
         "display_name": {"type": "string", "minLength": 1},
         "node_type": {
           "enum": [
@@ -117,6 +118,12 @@
           "enum": ["inherit_h21", "reference_h21", "non_scoring"]
         },
         "h21_indicator_id": {"type": "string", "minLength": 1},
+        "source_scale_descriptions": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {"pattern": "^[1-9][0-9]*$"},
+          "additionalProperties": {"type": "string", "minLength": 1}
+        },
         "is_selectable": {"type": "boolean"},
         "organization_note": {"type": "string"},
         "source_ids": {
@@ -124,6 +131,24 @@
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 1}
         }
+      }
+    },
+    "source_mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_group_id",
+        "source_indicator_id",
+        "source_group_number",
+        "source_indicator_number",
+        "target_node_id"
+      ],
+      "properties": {
+        "source_group_id": {"type": "string", "minLength": 1},
+        "source_indicator_id": {"type": "string", "minLength": 1},
+        "source_group_number": {"type": "string", "minLength": 1},
+        "source_indicator_number": {"type": "string", "minLength": 1},
+        "target_node_id": {"type": "string", "minLength": 1}
       }
     }
   }

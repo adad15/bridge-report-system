@@ -238,7 +238,6 @@ void append_components_and_defects(
 
         defect_plan.extraction_confidence = optional_double_member(defect, "confidence").value_or(0.0);
         defect_plan.review_status = status;
-        defect_plan.review_note = optional_string_member(defect, "review_note");
 
         append_measurements(defect, defect_plan);
 
@@ -257,8 +256,7 @@ void append_photos(const Json::Value& data, const std::unordered_set<std::string
     }
 
     for (const auto& photo : data["photos"]) {
-        if (!photo.isObject() || !is_review_settled(review_status_of(photo))
-            || string_member_or_empty(photo, "match_status") != "已确认") {
+        if (!photo.isObject()) {
             continue;
         }
 

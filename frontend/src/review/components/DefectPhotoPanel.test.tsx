@@ -67,17 +67,12 @@ afterEach(() => {
 });
 
 describe("DefectPhotoPanel", () => {
-  it("confirms and unconfirms the photo on the card", () => {
-    const draft = fixtureData();
-    draft.photos[0] = { ...draft.photos[0], match_status: "待校对" };
-    const dispatch = renderPanel(draft);
+  it("does not expose a separate photo confirmation action", () => {
+    renderPanel(fixtureData());
 
-    fireEvent.click(screen.getByRole("button", { name: "确认照片" }));
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "confirm_photo",
-      photoCandidateId: "photo_0001",
-      confirmed: true,
-    });
+    expect(screen.queryByRole("button", { name: "确认照片" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "撤销确认" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除照片" })).toBeInTheDocument();
   });
 
   it("returns a Word photo to the unassigned list only after confirmation", () => {
@@ -205,7 +200,6 @@ describe("DefectPhotoPanel", () => {
     renderPanel(draft, { disabled: true });
 
     expect(screen.getByRole("button", { name: "添加照片" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "撤销确认" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "删除照片" })).toBeDisabled();
     // 看图不算编辑：缩略图按钮在只读态照常可用。
     expect(screen.getByRole("button", { name: "查看照片 2.1-1" })).toBeEnabled();

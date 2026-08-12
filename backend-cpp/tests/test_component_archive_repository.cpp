@@ -149,8 +149,8 @@ protected:
             "values ($1::uuid, 'photo.jpg', 'photo.jpg', 'photos/m06-test.jpg', '图片', 'Word病害照片', '.jpg') "
             "returning id", bridge_id_);
         defect_photo_id_ = insert_returning_id(
-            "insert into defect_photos (defect_observation_id, archived_file_id, photo_number, match_status) "
-            "values ($1::uuid, $2::uuid, '2.1-1', '已确认') returning id",
+            "insert into defect_photos (defect_observation_id, archived_file_id, photo_number) "
+            "values ($1::uuid, $2::uuid, '2.1-1') returning id",
             bound_observation_, archived_file_id_);
     }
 

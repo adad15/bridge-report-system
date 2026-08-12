@@ -347,10 +347,15 @@ AssessmentPreview calculate_assessment_preview(
             }
             const auto indicator_id =
                 node->h21_indicator_id.value_or("");
+            const auto submitted_indicator_id = string_member(
+                defect,
+                "standard_defect_indicator_id");
+            // H21 指标是评定树节点的服务端派生值。人工选择节点后、草稿保存前，
+            // 客户端会把这个字段留空；试算应与保存时的规范化逻辑一致，直接采用
+            // 节点指标。非空但不一致的提交仍然阻断，避免接受伪造或陈旧指标。
             if (indicator_id.empty() ||
-                string_member(
-                    defect,
-                    "standard_defect_indicator_id") != indicator_id) {
+                (!submitted_indicator_id.empty() &&
+                 submitted_indicator_id != indicator_id)) {
                 preview.issues.push_back(issue(
                     "assessment_rating_tree_indicator_mismatch",
                     "病害的 H21 评分来源与评定树节点解析结果不一致。",

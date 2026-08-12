@@ -101,11 +101,8 @@ def build_photo_candidates(
                     component_number, defect.get("defect_type", ""), defect.get("defect_description", "")),
                 "archive_relative_path": None,
             },
-            # 归属来自外键而不是编号推断，所以匹配状态直接是已确认；是否入库仍由人校对。
-            "match_status": "已确认",
             "source_ref": {"source_type": "word"},
             "confidence": 1.0,
-            "review_status": "待确认",
             "warnings": warnings,
         })
         defect["photo_references"].append({

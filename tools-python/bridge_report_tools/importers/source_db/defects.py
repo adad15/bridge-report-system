@@ -1,6 +1,6 @@
 """把来源库的病害记录组装成契约里的病害候选。
 
-只做能在解析阶段确定的事：构件认领、尺寸拼装、标度搬运、指标换算。
+只做能在解析阶段确定的事：构件认领、尺寸拼装、标度搬运、来源身份搬运。
 **不选评定树节点**——那要看桥型与构件类别，是后端在导入落库时的上下文，
 而且构件重新绑定后还会重算，解析器越权只会产生一份很快作废的结果。
 """
@@ -36,11 +36,6 @@ class DefectLink:
 
     candidate_id: str
     tree_id: str
-
-
-def h21_indicator_id(index_code: str) -> str:
-    """`5.1.1-2` → `h21.defect.5_1_1_2`。"""
-    return "h21.defect." + index_code.replace(".", "_").replace("-", "_")
 
 
 def resolve_component(tree: list[ComponentNode], tree_id: str) -> ComponentNode | None:
@@ -110,8 +105,8 @@ def _measurements(defect: SourceDefect) -> list[dict[str, Any]]:
 def build_defect_candidates(
     defects: list[SourceDefect],
     tree: list[ComponentNode],
+    group_codes: dict[str, tuple[str, str]],
     indicator_codes: dict[str, tuple[str, str]],
-    h21_indicator_ids: set[str],
     category_names: dict[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, DefectLink]]:
     """返回 (病害候选, 源病害 id → DefectLink)。
@@ -137,11 +132,8 @@ def build_defect_candidates(
             component_name, name_warnings = _component_name(component, by_level, category_names)
             warnings.extend(name_warnings)
 
-        # H21 里没有的编号一律留空。硬凑一个不存在的指标只会让下游拿着它查不到东西，
-        # 而这些病害的类型文字（如「渗水泛碱」）本来就能走别名匹配。
-        code, _ = indicator_codes.get(defect.judge_index_id, ("", ""))
-        indicator = h21_indicator_id(code) if code else ""
-        standard_indicator = indicator if indicator in h21_indicator_ids else None
+        group_number, _ = group_codes.get(defect.judge_tree_id, ("", ""))
+        indicator_number, _ = indicator_codes.get(defect.judge_index_id, ("", ""))
 
         candidate_id = f"source_defect_{position:04d}"
         links[defect.id] = DefectLink(candidate_id, defect.tree_id)
@@ -155,8 +147,13 @@ def build_defect_candidates(
             "defect_scale": defect.degree,
             "measurements": _measurements(defect),
             "measurement_text": defect.description or None,
-            "standard_defect_indicator_id": standard_indicator,
-            # 选节点是后端的活：要看桥型与构件类别，且构件重绑后会重算。
+            "source_defect_group_id": defect.judge_tree_id or None,
+            "source_defect_group_number": group_number or None,
+            "source_defect_indicator_id": defect.judge_index_id or None,
+            "source_defect_indicator_number": indicator_number or None,
+            # 选节点和它派生的 standard_defect_indicator_id 都是后端的活：要看桥型
+            # 与构件类别，且构件重绑与草稿保存都会重算。解析器只报来源怎么标的。
+            "standard_defect_indicator_id": None,
             "rating_tree_version_id": None,
             "rating_tree_node_id": None,
             "rating_tree_match_method": None,

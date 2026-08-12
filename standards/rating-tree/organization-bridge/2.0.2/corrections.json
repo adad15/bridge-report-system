@@ -1,0 +1,15 @@
+{
+  "corrections": [
+    {
+      "correction_id": "C001",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-11",
+      "field": "name",
+      "source_value": "墩身其它病害",
+      "corrected_value": "台身其它病害",
+      "reason": "指标位于9.2.1台身分组，原名称疑似复制自9.1.1墩身。",
+      "impact": "display_only",
+      "scoring_policy": "non_scoring"
+    }
+  ]
+}

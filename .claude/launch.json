@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "c++-backend",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "scripts/dev/start-cpp-backend.ps1"],
+      "port": 18080
+    },
+    {
+      "name": "python-tools",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "scripts/dev/start-python-tools.ps1"],
+      "port": 18081
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "scripts/dev/start-frontend.ps1"],
+      "port": 5173
+    }
+  ]
+}

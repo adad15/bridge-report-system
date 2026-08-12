@@ -31,6 +31,23 @@ describe("parseMeasurements", () => {
     },
   );
 
+  it("binds Chinese range labels to their dimension types", () => {
+    const measurements = parseMeasurements(
+      "多条纵、横向裂缝，长度范围：0.5～4.0m，宽度范围：0.5～1.0cm，面积范围：1～2m²，间距范围：10～20cm",
+    );
+
+    expect(measurements.map((item) => item.dimension_type)).toEqual([
+      "长度", "宽度", "面积", "间距",
+    ]);
+    expect(measurements.map((item) => item.value_type)).toEqual([
+      "range", "range", "range", "range",
+    ]);
+    expect(measurements[0]).toMatchObject({ minimum_value: 0.5, maximum_value: 4, unit: "m" });
+    expect(measurements[1]).toMatchObject({ minimum_value: 0.5, maximum_value: 1, unit: "cm" });
+    expect(measurements[2]).toMatchObject({ minimum_value: 1, maximum_value: 2, unit: "m2" });
+    expect(measurements[3]).toMatchObject({ minimum_value: 10, maximum_value: 20, unit: "cm" });
+  });
+
   it("keeps approximate single values and Chinese labels without separators", () => {
     expect(parseMeasurements("总面积约1.0m²")).toEqual([
       {

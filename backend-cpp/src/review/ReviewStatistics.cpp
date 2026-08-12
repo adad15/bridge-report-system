@@ -71,7 +71,6 @@ ReviewStatistics build_review_statistics(const Json::Value& parsed_result) {
         const auto& photos = parsed_result["photos"];
         stats.photo_count = static_cast<int>(photos.size());
         for (const auto& photo : photos) {
-            tally_review_status(photo, stats);
             tally_object_warnings(photo, stats);
         }
     }

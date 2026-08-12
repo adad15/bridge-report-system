@@ -46,13 +46,12 @@ export type ReviewDraftAction =
   | { type: "edit_defect_field"; candidateId: string; field: "defect_location"; value: string }
   | { type: "edit_defect_field"; candidateId: string; field: "defect_scale"; value: number | null }
   | { type: "edit_defect_field"; candidateId: string; field: "defect_type"; value: string }
-  | { type: "edit_defect_field"; candidateId: string; field: "defect_description"; value: string }
   | { type: "edit_defect_field"; candidateId: string; field: "quantity_text"; value: string | null }
   | { type: "edit_defect_field"; candidateId: string; field: "photo_numbers"; value: string[] }
   // review_status 既可通过 set_defect_status 设置，也可通过 edit_defect_field 设置——两条路径
   // 等价，都不套用下面 nextStatusAfterContentEdit 的“内容编辑自动流转为已修改”规则。
   | { type: "edit_defect_field"; candidateId: string; field: "review_status"; value: ReviewStatus }
-  | { type: "edit_defect_field"; candidateId: string; field: "review_note"; value: string | null }
+  | { type: "edit_defect_field"; candidateId: string; field: "defect_description"; value: string }
   | { type: "edit_measurement_text"; candidateId: string; text: string | null }
   | {
       type: "select_rating_tree_node";
@@ -63,8 +62,18 @@ export type ReviewDraftAction =
       isScoring: boolean;
       matchEvidence: string;
     }
+  | {
+      type: "select_rating_tree_nodes";
+      candidateIds: string[];
+      versionId: string;
+      nodeId: string;
+      nodeName: string;
+      isScoring: boolean;
+      matchEvidence: string;
+    }
   // 后端批量匹配返回的唯一自动结果。方式沿用后端给的 exact/controlled_alias/
-  // controlled_keyword，保存时服务端会用同一份规则复核，伪造的自动方式会被降级为人工。
+  // controlled_keyword/source_indicator，保存时服务端会用同一份规则复核，
+  // 伪造的自动方式会被降级为人工。
   | {
       type: "apply_rating_tree_auto_matches";
       versionId: string;
@@ -78,11 +87,9 @@ export type ReviewDraftAction =
     }
   | { type: "ignore_defect"; candidateId: string }
   | { type: "restore_ignored_defect"; candidateId: string }
-  // 照片四原语（见 docs/superpowers/specs/2026-07-31-defect-photo-actions-redesign-design.md）。
-  // 换绑不是原语：先 unlink 再 link 两步完成。
+  // 照片归属由 link/unlink 表达；换绑仍是先 unlink 再 link。
   | { type: "link_photo_to_defect"; photoCandidateId: string; defectCandidateId: string }
   | { type: "unlink_photo_from_defect"; photoCandidateId: string }
-  | { type: "confirm_photo"; photoCandidateId: string; confirmed: boolean }
   | {
       type: "set_photo_reference_missing";
       defectCandidateId: string;
@@ -170,8 +177,6 @@ function applyDefectContentEdit(defect: DefectCandidate, action: EditDefectConte
         review_status,
         group_review_status: "待确认",
       };
-    case "review_note":
-      return { ...defect, review_note: action.value, review_status, group_review_status: "待确认" };
   }
 }
 
@@ -193,6 +198,30 @@ function nextUnusedCandidateId(
     }
   }
   throw new Error("无法生成唯一的人工病害编号");
+}
+
+function applyRatingTreeSelection(
+  defect: DefectCandidate,
+  selection: {
+    versionId: string;
+    nodeId: string;
+    nodeName: string;
+    isScoring: boolean;
+    matchEvidence: string;
+  },
+): DefectCandidate {
+  return {
+    ...defect,
+    rating_tree_version_id: selection.versionId,
+    rating_tree_node_id: selection.nodeId,
+    rating_tree_match_method: "manual",
+    rating_tree_match_evidence: selection.matchEvidence,
+    standard_defect_indicator_id: null,
+    defect_type: selection.nodeName,
+    defect_scale: selection.isScoring ? defect.defect_scale : null,
+    review_status: nextStatusAfterContentEdit(defect.review_status),
+    group_review_status: "待确认",
+  };
 }
 
 function reduceReviewDraft(
@@ -239,7 +268,6 @@ function reduceReviewDraft(
         source_ref: { source_type: "manual" },
         confidence: 1,
         review_status: "已修改",
-        review_note: null,
         warnings: [],
       };
       return { ...state, defects: [...state.defects, defect] };
@@ -255,8 +283,6 @@ function reduceReviewDraft(
             ? {
                 ...photo,
                 linked_defect_candidate_id: null,
-                match_status: "未关联",
-                review_status: "已修改",
               }
             : photo
         ),
@@ -327,18 +353,21 @@ function reduceReviewDraft(
     case "select_rating_tree_node": {
       return {
         ...state,
-        defects: updateDefect(state.defects, action.candidateId, (defect) => ({
-          ...defect,
-          rating_tree_version_id: action.versionId,
-          rating_tree_node_id: action.nodeId,
-          rating_tree_match_method: "manual",
-          rating_tree_match_evidence: action.matchEvidence,
-          standard_defect_indicator_id: null,
-          defect_type: action.nodeName,
-          defect_scale: action.isScoring ? defect.defect_scale : null,
-          review_status: nextStatusAfterContentEdit(defect.review_status),
-          group_review_status: "待确认",
-        })),
+        defects: updateDefect(state.defects, action.candidateId, (defect) =>
+          applyRatingTreeSelection(defect, action)),
+      };
+    }
+
+    case "select_rating_tree_nodes": {
+      const candidateIds = new Set(action.candidateIds);
+      return {
+        ...state,
+        defects: state.defects.map((defect) =>
+          candidateIds.has(defect.candidate_id) &&
+          defect.review_status !== "已忽略" &&
+          defect.group_review_status !== "已确认"
+            ? applyRatingTreeSelection(defect, action)
+            : defect),
       };
     }
 
@@ -429,12 +458,9 @@ function reduceReviewDraft(
           })),
           [previousOwner, action.defectCandidateId],
         ),
-        // 主动挑一张挂上，本身就表达了"这张是对的"，不再要求二次确认。
         photos: updatePhoto(state.photos, photo.candidate_id, (item) => ({
           ...item,
           linked_defect_candidate_id: action.defectCandidateId,
-          match_status: "已确认",
-          review_status: "已确认",
         })),
       };
     }
@@ -467,47 +493,6 @@ function reduceReviewDraft(
         photos: updatePhoto(state.photos, photo.candidate_id, (item) => ({
           ...item,
           linked_defect_candidate_id: null,
-          match_status: "未关联",
-          review_status: "已修改",
-        })),
-      };
-    }
-
-    case "confirm_photo": {
-      const photo = state.photos.find((item) => item.candidate_id === action.photoCandidateId);
-      if (!photo || !photo.linked_defect_candidate_id) return state;
-      const owner = photo.linked_defect_candidate_id;
-      return {
-        ...state,
-        defects: invalidateDefectGroups(
-          updateDefect(state.defects, owner, (item) => ({
-            ...item,
-            photo_references: item.photo_references.map((reference) =>
-              reference.photo_number === photo.photo_number
-                ? action.confirmed
-                  ? {
-                      ...reference,
-                      resolution: "matched" as const,
-                      photo_candidate_id: photo.candidate_id,
-                      resolved_defect_candidate_id: item.candidate_id,
-                    }
-                  : {
-                      ...reference,
-                      resolution: "pending" as const,
-                      photo_candidate_id: null,
-                      resolved_defect_candidate_id: null,
-                    }
-                : reference,
-            ),
-          })),
-          [owner],
-        ),
-        // 撤销确认只撤确认：照片仍挂在本病害上，解除归属是 unlink 的职责。
-        // 退回"待校对"而不是"高置信候选"——人工干预过之后不该再宣称是系统的高置信结论。
-        photos: updatePhoto(state.photos, photo.candidate_id, (item) => ({
-          ...item,
-          match_status: action.confirmed ? "已确认" : "待校对",
-          review_status: action.confirmed ? "已确认" : "已修改",
         })),
       };
     }
@@ -571,7 +556,6 @@ function reduceReviewDraft(
 
     case "confirm_defect_groups": {
       const selectedIds = new Set(action.candidateIds);
-      const confirmedPhotoIds = new Set<string>();
       const defects = state.defects.map((defect) => {
         if (!selectedIds.has(defect.candidate_id) || defect.review_status === "已忽略") {
           return defect;
@@ -582,12 +566,10 @@ function reduceReviewDraft(
             (photo) =>
               photo.photo_number === reference.photo_number &&
               photo.linked_defect_candidate_id === defect.candidate_id &&
-              photo.review_status !== "已忽略" &&
               Boolean(photo.extracted_file.archive_relative_path),
           );
           if (candidates.length !== 1) return reference;
           const photo = candidates[0];
-          confirmedPhotoIds.add(photo.candidate_id);
           return {
             ...reference,
             resolution: "matched" as const,
@@ -610,11 +592,6 @@ function reduceReviewDraft(
       return {
         ...state,
         defects,
-        photos: state.photos.map((photo) =>
-          confirmedPhotoIds.has(photo.candidate_id)
-            ? { ...photo, match_status: "已确认", review_status: "已确认" }
-            : photo,
-        ),
       };
     }
 

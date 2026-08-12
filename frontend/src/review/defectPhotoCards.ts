@@ -22,8 +22,6 @@ export interface DefectPhotoCard {
   reference: PhotoReference | null;
   /** 照片来自 Word 抽取还是人工上传——决定"删除"是退回未归属还是永久删除。 */
   source: "word" | "manual";
-  /** 照片卡：是否已经人工确认。 */
-  confirmed: boolean;
   /** 缺图卡：是否已确认"原报告就没有这张图"。 */
   acknowledgedMissing: boolean;
 }
@@ -73,7 +71,6 @@ export function buildDefectPhotoCards(
         photo,
         reference,
         source: photoSource(photo),
-        confirmed: photo.match_status === "已确认",
         acknowledgedMissing: false,
       });
       continue;
@@ -85,7 +82,6 @@ export function buildDefectPhotoCards(
       photo: null,
       reference,
       source: "word",
-      confirmed: false,
       // relinked / unrelated 是旧模型的结论，新模型不再产生；存量草稿里的这两个值
       // 要重新回到待核对，不能当成已处理放过（设计 §9.4）。
       acknowledgedMissing: reference.resolution === "missing",
@@ -101,7 +97,6 @@ export function buildDefectPhotoCards(
       photo,
       reference: referenceByNumber.get(photo.photo_number) ?? null,
       source: photoSource(photo),
-      confirmed: photo.match_status === "已确认",
       acknowledgedMissing: false,
     });
   }

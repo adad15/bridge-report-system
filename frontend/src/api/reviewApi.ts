@@ -44,7 +44,7 @@ export interface ReviewStatistics {
   object_warning_count: number;
 }
 
-export type ContractCompatibility = "native_3_0";
+export type ContractCompatibility = "native_4_0";
 
 export interface ReviewTechnicalConditionStandard {
   package_id: string;
@@ -140,7 +140,8 @@ export interface ConfirmRequestBody {
 }
 
 export interface ParseWordImportRequest {
-  rule_profile: "辽宁国省干线";
+  /** Word 解析用的规则档。接口同步导入没有这一层，后端按导入记录的来源决定调哪个端点。 */
+  rule_profile?: "辽宁国省干线";
   import_mode: "已有桥年度导入";
   file_role: "当前年度检测资料";
   data_role: "当前年度";

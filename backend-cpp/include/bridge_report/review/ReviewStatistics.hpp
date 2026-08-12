@@ -26,7 +26,7 @@ struct ReviewStatistics {
  * - defect_count / photo_count：defects / photos 数组长度
  * - rating_item_count：固定为 0；系统评分由独立评定接口返回，不属于导入候选
  * - pending/confirmed/modified/ignored_count：defects + photos
- *   三层候选的 review_status 汇总（待确认/已确认/已修改/已忽略）
+ *   病害候选的 review_status 汇总（待确认/已确认/已修改/已忽略）
  * - object_warning_count：defects 和 photos 中对象级 warnings[] 非空的候选数
  *
  * parsed_result 为空对象 `{}` 或缺键时，全部字段为 0。

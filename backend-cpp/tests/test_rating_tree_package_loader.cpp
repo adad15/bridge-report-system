@@ -24,6 +24,11 @@ std::filesystem::path organization_package_root_v103() {
         "standards/rating-tree/organization-bridge/1.0.3";
 }
 
+std::filesystem::path organization_package_root_v202() {
+    return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
+        "standards/rating-tree/organization-bridge/2.0.2";
+}
+
 void write_json(const std::filesystem::path& path, const Json::Value& value) {
     Json::StreamWriterBuilder builder;
     builder["indentation"] = "  ";
@@ -77,6 +82,7 @@ protected:
         Json::Value defect;
         defect["id"] = "org.bridge.water_damage";
         defect["parent_id"] = "org.bridge";
+        defect["display_number"] = "5.1.1-13";
         defect["display_name"] = "水损";
         defect["node_type"] = "defect";
         defect["sort_order"] = 2;
@@ -88,6 +94,11 @@ protected:
         defect["h21_indicator_id"] = "h21.defect.5_1_1_6";
         defect["is_selectable"] = true;
         defect["organization_note"] = "参照混凝土碳化执行";
+        defect["source_scale_descriptions"] = Json::Value(Json::objectValue);
+        defect["source_scale_descriptions"]["1"] = "少量";
+        defect["source_scale_descriptions"]["2"] = "局部渗水泛碱";
+        defect["source_scale_descriptions"]["3"] = "水蚀严重";
+        defect["source_scale_descriptions"]["4"] = "—";
         tree["nodes"].append(defect);
         return tree;
     }
@@ -117,6 +128,36 @@ protected:
         document["package_version"] = "1.0.0";
         document["keyword_rules"] = rules;
         return document;
+    }
+
+    Json::Value source_mapping(
+        const std::string& group_id = "source-group-1",
+        const std::string& indicator_id = "source-indicator-1",
+        const std::string& group_number = "5.1.1",
+        const std::string& indicator_number = "5.1.1-13",
+        const std::string& target = "org.bridge.water_damage") const {
+        Json::Value mapping;
+        mapping["source_group_id"] = group_id;
+        mapping["source_indicator_id"] = indicator_id;
+        mapping["source_group_number"] = group_number;
+        mapping["source_indicator_number"] = indicator_number;
+        mapping["target_node_id"] = target;
+        return mapping;
+    }
+
+    void write_package_with_source_mappings(const Json::Value& mappings) {
+        write_valid_package();
+        Json::Value document;
+        document["mappings"] = mappings;
+        write_json(root_ / "source-index-map.json", document);
+        auto manifest = valid_manifest();
+        manifest["entry_files"].append("source-index-map.json");
+        write_json(root_ / "manifest.json", manifest);
+        bridge_report::rating_tree::RatingTreePackageLoader loader;
+        const auto checksum = loader.calculate_checksum(root_);
+        ASSERT_TRUE(checksum.checksum.has_value());
+        manifest["content_checksum"] = *checksum.checksum;
+        write_json(root_ / "manifest.json", manifest);
     }
 
     // 写入带规则包的完整包并回填正确摘要，供各条冲突用例复用。
@@ -177,6 +218,81 @@ TEST_F(RatingTreePackageLoaderTest, LoadsAValidImmutableExtensionPackage) {
     EXPECT_EQ(result.package->manifest.tree_code, "organization-bridge");
     EXPECT_EQ(result.package->nodes.size(), 2U);
     EXPECT_EQ(result.package->aliases.size(), 1U);
+    EXPECT_EQ(
+        result.package->nodes.at("org.bridge.water_damage")
+            .source_scale_descriptions.at(2),
+        "局部渗水泛碱");
+}
+
+TEST_F(RatingTreePackageLoaderTest, LoadsExplicitNumberAndSourceMapping) {
+    Json::Value mappings(Json::arrayValue);
+    mappings.append(source_mapping());
+    write_package_with_source_mappings(mappings);
+
+    const auto result =
+        bridge_report::rating_tree::RatingTreePackageLoader().load(root_);
+
+    ASSERT_TRUE(result.ok());
+    ASSERT_TRUE(result.package->nodes.at("org.bridge.water_damage")
+                    .display_number.has_value());
+    EXPECT_EQ(
+        *result.package->nodes.at("org.bridge.water_damage").display_number,
+        "5.1.1-13");
+    ASSERT_EQ(result.package->source_mappings.size(), 1U);
+    EXPECT_EQ(
+        result.package->source_mappings.front().target_node_id,
+        "org.bridge.water_damage");
+}
+
+TEST_F(RatingTreePackageLoaderTest, RejectsBlankDisplayNumber) {
+    auto tree = valid_tree();
+    tree["nodes"][1]["display_number"] = "";
+    write_json(root_ / "tree.json", tree);
+    Json::Value aliases;
+    aliases["aliases"] = Json::Value(Json::arrayValue);
+    write_json(root_ / "aliases.json", aliases);
+    Json::Value sources;
+    sources["sources"] = Json::Value(Json::arrayValue);
+    write_json(root_ / "sources.json", sources);
+    auto manifest = valid_manifest();
+    write_json(root_ / "manifest.json", manifest);
+    bridge_report::rating_tree::RatingTreePackageLoader loader;
+    const auto checksum = loader.calculate_checksum(root_);
+    ASSERT_TRUE(checksum.checksum.has_value());
+    manifest["content_checksum"] = *checksum.checksum;
+    write_json(root_ / "manifest.json", manifest);
+
+    const auto result = loader.load(root_);
+
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "rating_tree_node_invalid");
+}
+
+TEST_F(RatingTreePackageLoaderTest, RejectsDuplicateSourceIdentityPairs) {
+    Json::Value mappings(Json::arrayValue);
+    mappings.append(source_mapping());
+    mappings.append(source_mapping(
+        "source-group-1", "source-indicator-1", "5.1.1", "5.1.1-14"));
+    write_package_with_source_mappings(mappings);
+
+    const auto result =
+        bridge_report::rating_tree::RatingTreePackageLoader().load(root_);
+
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "rating_tree_source_mapping_conflict");
+}
+
+TEST_F(RatingTreePackageLoaderTest, RejectsSourceMappingToUnselectableNode) {
+    Json::Value mappings(Json::arrayValue);
+    mappings.append(source_mapping(
+        "source-group-1", "source-indicator-1", "5", "5.1.1-13", "org.bridge"));
+    write_package_with_source_mappings(mappings);
+
+    const auto result =
+        bridge_report::rating_tree::RatingTreePackageLoader().load(root_);
+
+    ASSERT_FALSE(result.ok());
+    EXPECT_EQ(result.issues.front().code, "rating_tree_source_mapping_invalid");
 }
 
 TEST_F(RatingTreePackageLoaderTest, RejectsDuplicateNodeIds) {
@@ -346,6 +462,46 @@ TEST(RatingTreePackageLoaderIntegrationTest, Version103ShipsTheControlledRulePac
     EXPECT_EQ(result.package->keyword_rules.size(), 4U);
     for (const auto& alias : result.package->aliases) {
         EXPECT_EQ(alias.target_node_id, "org.bridge.defect.5_1_1_water_damage");
+    }
+}
+
+TEST(RatingTreePackageLoaderIntegrationTest, Version202LoadsTheCurrentSourceTree) {
+    const auto result = bridge_report::rating_tree::RatingTreePackageLoader().load(
+        organization_package_root_v202());
+
+    ASSERT_TRUE(result.ok())
+        << (result.issues.empty() ? "" : result.issues.front().message);
+    EXPECT_EQ(result.package->manifest.package_version, "2.0.2");
+    EXPECT_EQ(result.package->nodes.size(), 500u);
+    EXPECT_EQ(result.package->source_mappings.size(), 403u);
+    EXPECT_TRUE(result.package->aliases.empty());
+    EXPECT_TRUE(result.package->keyword_rules.empty());
+    const auto& reused =
+        result.package->nodes.at("org.bridge.defect.9_1_2__9_1_1_1");
+    EXPECT_EQ(reused.display_number, "9.1.1-1");
+    const auto& crack = result.package->nodes.at("org.bridge.defect.9_1_2_1");
+    EXPECT_EQ(crack.display_number, "9.1.2-1");
+    EXPECT_EQ(crack.h21_indicator_id, "h21.defect.9_1_2");
+    const auto& water =
+        result.package->nodes.at("org.bridge.defect.9_1_1_10");
+    EXPECT_EQ(
+        water.scoring_mode,
+        bridge_report::rating_tree::RatingTreeScoringMode::reference_h21);
+    EXPECT_EQ(water.h21_indicator_id, "h21.defect.9_1_1_5");
+    EXPECT_EQ(water.source_scale_descriptions.at(2), "局部渗水泛碱；范围＜10%");
+    const auto& other = result.package->nodes.at("org.bridge.defect.9_1_1_11");
+    EXPECT_EQ(
+        other.scoring_mode,
+        bridge_report::rating_tree::RatingTreeScoringMode::non_scoring);
+    EXPECT_EQ(result.package->nodes.at("org.bridge.defect.9_1_1_1").sort_order, 10);
+    EXPECT_EQ(result.package->nodes.at("org.bridge.defect.9_1_1_9").sort_order, 90);
+    EXPECT_EQ(result.package->nodes.at("org.bridge.defect.9_1_1_10").sort_order, 100);
+    EXPECT_EQ(result.package->nodes.at("org.bridge.defect.9_1_1_11").sort_order, 110);
+    for (const auto& [id, _] : result.package->nodes) {
+        EXPECT_FALSE(id.starts_with("org.bridge.group.11"));
+        EXPECT_FALSE(id.starts_with("org.bridge.group.12"));
+        EXPECT_FALSE(id.starts_with("org.bridge.group.13"));
+        EXPECT_FALSE(id.starts_with("org.bridge.group.14"));
     }
 }
 

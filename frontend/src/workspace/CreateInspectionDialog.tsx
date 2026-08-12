@@ -28,7 +28,9 @@ export function CreateInspectionDialog({ bridgeId, onClose, onCreated }: Props) 
       .then((items) => {
         if (cancelled) return;
         setTrees(items);
-        if (items.length === 1) setRatingTreeVersionId(items[0].id);
+        const defaultTree = items.find((item) => item.is_default) ??
+          (items.length === 1 ? items[0] : undefined);
+        if (defaultTree) setRatingTreeVersionId(defaultTree.id);
       })
       .catch((caught) => setError(workspaceErrorMessage(caught)));
     return () => { cancelled = true; };

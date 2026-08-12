@@ -28,6 +28,7 @@ def build_source_db(path):
             "宽度" text, "宽度单位" text, "面积一" text, "面积一单位" text, "走向" text);
         create table images (id text primary key, taskId text, fileName text, contentType text,
             w integer, h integer, ForeignTable text, ForeignKey text, memberNum text);
+        create table judgeTree (id text primary key, chapterNum text, name text);
         create table judgeIndex (id text primary key, tableNum text, name text);
         """
     )
@@ -39,6 +40,7 @@ def build_source_db(path):
     db.execute("insert into taskTrees values (?,?,?,?,?,?,?)",
                ("t-a", TASK, "25-1#板", "001001001", 3, None, "空心板"))
     db.execute("insert into judgeIndex values ('idx-1','5.1.1-2','剥落、掉角')")
+    db.execute("insert into judgeTree values ('jt-1','5.1.1','板式构件')")
     db.execute("insert into outerCheckData values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                ("d-1", TASK, "t-a", "受渗水侵蚀，混凝土剥蚀破损", "受渗水侵蚀，总面积：2.5㎡",
                 "左侧翼缘板", 2, "idx-1", "jt-1", "", None, None, None, None, None, None,
@@ -51,21 +53,11 @@ def build_source_db(path):
     return path
 
 
-def build_h21_package(root):
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "defect-indicators.json").write_text(json.dumps({
-        "definitions": [{"id": "h21.defect_catalog.5_1_1",
-                         "indicators": [{"id": "h21.defect.5_1_1_2", "name": "剥落、掉角"}]}]
-    }, ensure_ascii=False), encoding="utf-8")
-    return root
-
-
 @pytest.fixture()
 def request_payload(tmp_path):
     return SourceImportRequest(
         source_db_path=build_source_db(tmp_path / "source.sqlite"),
         task_id=TASK,
-        h21_package_path=build_h21_package(tmp_path / "h21"),
         temporary_photo_output_dir=tmp_path / "photos",
         import_mode="已有桥年度导入",
         file_role="当前年度检测资料",
@@ -101,7 +93,10 @@ def test_carries_the_indicator_scale_and_photo_binding(request_payload):
     response = parse_source_import(request_payload)
 
     defect = response.data.defects[0]
-    assert defect.standard_defect_indicator_id == "h21.defect.5_1_1_2"
+    assert defect.source_defect_group_id == "jt-1"
+    assert defect.source_defect_group_number == "5.1.1"
+    assert defect.source_defect_indicator_id == "idx-1"
+    assert defect.source_defect_indicator_number == "5.1.1-2"
     assert defect.defect_scale == 2
     assert defect.measurements[0].dimension_type == "面积"
     assert response.data.photos[0].linked_defect_candidate_id == defect.candidate_id
@@ -176,3 +171,50 @@ def test_word_endpoint_is_untouched():
     response = client.post("/imports/word/parse", json={})
 
     assert response.status_code == 422  # 仍按原有请求模型校验
+
+
+# ---------------------------------------------------------------------------
+# 任务列表：taskId 是厂商库里的 UUID，用户不可能手填，界面必须先能列出来选。
+# ---------------------------------------------------------------------------
+
+def test_lists_the_tasks_in_the_offline_database(tmp_path):
+    client = TestClient(app)
+    path = build_source_db(tmp_path / "list.sqlite")
+
+    response = client.post("/imports/source/tasks", json={"source_db_path": str(path)})
+
+    assert response.status_code == 200
+    tasks = response.json()["tasks"]
+    assert tasks == [{
+        "task_id": TASK,
+        "name": "百股大桥",
+        "check_date": "2024-06-21",
+        "defect_count": 1,
+        "photo_count": 1,
+    }]
+
+
+def test_task_rows_carry_enough_to_tell_two_years_apart(tmp_path):
+    """同一座桥的两个年度只靠桥名分不开；日期与条数才是人能认的依据。"""
+    path = build_source_db(tmp_path / "two.sqlite")
+    db = sqlite3.connect(path)
+    db.execute("insert into tasks values ('t-2','百股大桥','2025-06-20')")
+    db.execute("insert into outerCheckData values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               ("d-2", "t-2", "t-a", "破损", "破损", "", 1, "idx-1", "jt-1", "",
+                None, None, None, None, None, None, None, None, None))
+    db.commit()
+    db.close()
+
+    response = TestClient(app).post("/imports/source/tasks", json={"source_db_path": str(path)})
+
+    rows = response.json()["tasks"]
+    assert [r["check_date"] for r in rows] == ["2024-06-21", "2025-06-20"]
+    assert [r["defect_count"] for r in rows] == [1, 1]
+
+
+def test_listing_reports_a_missing_database_with_a_coded_error(tmp_path):
+    response = TestClient(app).post(
+        "/imports/source/tasks", json={"source_db_path": str(tmp_path / "nope.sqlite")})
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "source_db_not_found"

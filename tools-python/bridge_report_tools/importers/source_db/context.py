@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -25,6 +24,7 @@ from bridge_report_tools.importers.source_db.reader import (
     SourceDatabaseError,
     load_component_tree,
     load_defects,
+    load_group_codes,
     load_indicator_codes,
     load_photos,
     load_task,
@@ -44,9 +44,6 @@ class SourceImportRequest(BaseModel):
 
     source_db_path: Path
     task_id: str = Field(min_length=1)
-    #: H21 规范包目录。用来判断源软件的指标编号在 H21 里是否真实存在——由调用方给出，
-    #: 解析器不猜仓库布局。
-    h21_package_path: Path
     temporary_photo_output_dir: Path
     import_mode: str
     file_role: Module04FileRole
@@ -63,26 +60,16 @@ class SourceImportRequest(BaseModel):
     section_map: dict[str, str] | None = None
 
 
-def _load_h21_indicator_ids(package_path: Path) -> set[str]:
-    target = package_path / "defect-indicators.json"
-    if not target.is_file():
-        raise SourceDatabaseError(
-            "h21_package_not_found", f"H21 规范包不存在或缺少指标定义：{target}")
-    document = json.loads(target.read_text(encoding="utf-8"))
-    return {
-        indicator["id"]
-        for catalog in document["definitions"]
-        for indicator in catalog.get("indicators", [])
-    }
-
-
 def parse_source_import(request: SourceImportRequest) -> WordImportResponse:
-    h21_indicator_ids = _load_h21_indicator_ids(request.h21_package_path)
     with open_source_db(request.source_db_path) as db:
         task = load_task(db, request.task_id)
         tree = load_component_tree(db, request.task_id)
         defects, links = build_defect_candidates(
-            load_defects(db, request.task_id), tree, load_indicator_codes(db), h21_indicator_ids)
+            load_defects(db, request.task_id),
+            tree,
+            load_group_codes(db),
+            load_indicator_codes(db),
+        )
         photos, temporary_photo_files = build_photo_candidates(
             db, load_photos(db, request.task_id), defects, links, tree,
             request.temporary_photo_output_dir, request.section_map)
@@ -91,7 +78,7 @@ def parse_source_import(request: SourceImportRequest) -> WordImportResponse:
         data = BridgeAnnualInspectionData(
             contract=ContractInfo(
                 name="BridgeAnnualInspectionData",
-                version="3.0",
+                version="4.0",
                 generated_at=datetime.now(timezone.utc),
                 producer="python-tools",
                 parser_name="source_db_importer",

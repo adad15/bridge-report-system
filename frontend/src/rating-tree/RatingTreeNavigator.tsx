@@ -53,7 +53,8 @@ export function RatingTreeNavigator({
               onClick={() => onSelect(node)}
             >
               <span className="rating-tree-search-path">
-                {node.path?.map((item) => item.display_name).join(" / ") ?? node.display_name}
+                {node.path?.map((item) => ratingTreeDisplayLabel(item)).join(" / ") ??
+                  ratingTreeDisplayLabel(node)}
               </span>
               <span className="rating-tree-search-name">{nodeLabel(node)}</span>
             </button>

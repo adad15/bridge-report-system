@@ -1,5 +1,9 @@
-.rating-tree-page {
-  width: min(1680px, calc(100vw - 24px));
+/* 宽度跟着 .app-content-wide 走；高度由 flex 撑满剩余空间，两个面板各自内部滚动。 */
+.app-content > .rating-tree-page {
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  flex: 1;
   gap: 8px;
 }
 
@@ -13,8 +17,10 @@
   font-size: 20px;
 }
 
+/* 48% 是页面被压在 1180px 里时的应急比例——树标签最深有五级编号，不给够就折行。
+   放宽之后按像素夹取：树够用即可，富余全部给右侧的标度表。 */
 .rating-tree-page .rating-tree-workspace {
-  grid-template-columns: minmax(420px, 48%) minmax(0, 1fr);
+  grid-template-columns: clamp(360px, 30%, 480px) minmax(0, 1fr);
   border-radius: 8px;
 }
 
@@ -70,6 +76,15 @@
 .rating-tree-page .rating-tree-detail-pane {
   padding: 0 0 36px;
   background: #fff;
+  /* 详情宽度由上面那个 clamp 决定，跟视口宽度对不上，内部分栏只能按容器宽度判断。 */
+  container-type: inline-size;
+}
+
+/* 四张卡各自只放一句"4 类""继承 H21 评分"，两列排就成了两行矮卡片加一片空白。 */
+@container (min-width: 860px) {
+  .rating-tree-page .rating-tree-detail-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .rating-tree-page .rating-tree-detail > header {
@@ -145,6 +160,29 @@
   text-align: center;
 }
 
+/* 整行一个条目在窄面板里没问题，放宽之后就是"5.1 混凝土梁式桥"后面跟着一千像素空白
+   再摆一个 ›。宽度够就摊成卡片网格：一行放得下几项就放几项，边框长在按钮上，
+   不用去算哪几个是首行首列。 */
+@container (min-width: 900px) {
+  .rating-tree-child-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 8px;
+    padding: 12px 18px;
+  }
+
+  .rating-tree-child-list li + li {
+    border-top: 0;
+  }
+
+  .rating-tree-child-list button {
+    min-height: 40px;
+    padding: 9px 12px;
+    border: 1px solid #dfe4ea;
+    border-radius: 8px;
+  }
+}
+
 .rating-tree-page .rating-tree-detail-grid {
   margin: 18px 22px;
 }
@@ -155,12 +193,7 @@
   margin-left: 22px;
 }
 
-@media (max-width: 1000px) {
-  .rating-tree-page .rating-tree-workspace {
-    grid-template-columns: minmax(340px, 43%) minmax(0, 1fr);
-  }
-}
-
+/* 1000px 断点原来是把树列从 48% 收到 43%；clamp 的 360px 下限已经覆盖这一段。 */
 @media (max-width: 760px) {
   .rating-tree-page .rating-tree-workspace {
     grid-template-columns: 1fr;

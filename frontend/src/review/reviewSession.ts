@@ -18,7 +18,7 @@ export function deriveReviewSession(
   contractCompatibility: ContractCompatibility,
   reopenScope: ReopenScope | null = null
 ): ReviewSession {
-  if (importStatus === "待校对" && contractCompatibility === "native_3_0" && reopenScope !== null) {
+  if (importStatus === "待校对" && contractCompatibility === "native_4_0" && reopenScope !== null) {
     // 重开校对态：可编辑，但顶部横幅提示范围与后续流程（修订版入库）。
     return {
       readOnly: false,
@@ -28,7 +28,7 @@ export function deriveReviewSession(
           : "已重开校对（仅带警告的病害可修改）。修改完成后需保存草稿、通过入库前检查并确认修订版入库。",
     };
   }
-  if (importStatus === "待校对" && contractCompatibility === "native_3_0") {
+  if (importStatus === "待校对" && contractCompatibility === "native_4_0") {
     return { readOnly: false, bannerText: null };
   }
   if (importStatus === "已确认") {

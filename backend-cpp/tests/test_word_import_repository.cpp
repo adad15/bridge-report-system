@@ -268,6 +268,42 @@ TEST_F(WordImportRepositoryTest, ParseFailureKeepsSourceForConfiguredRetention) 
     EXPECT_EQ(rows[0]["import_status"].as<std::string>(), "解析失败");
 }
 
+TEST_F(WordImportRepositoryTest, DiscardsFailedImportAndReturnsOwnedArtifactPaths) {
+    const auto archived = client_->execSqlSync(
+        "insert into archived_files(bridge_id,inspection_year_id,original_file_name,current_file_name,"
+        "storage_relative_path,file_type,file_purpose,file_extension,file_size_bytes,file_hash) "
+        "values($1::uuid,$2::uuid,'old.jpg','old.jpg','tests/old.jpg','图片','Word病害照片','.jpg',8,$3) "
+        "returning id::text",
+        bridge_id_, year_id_, std::string(64, 'b'));
+    const auto archived_id = archived[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "insert into import_record_files(import_record_id,archived_file_id,file_role,process_status) "
+        "values($1::uuid,$2::uuid,'附件','处理成功')",
+        import_id_, archived_id);
+    const auto parse_work_path = "work/word-import/" + import_id_ + "-abcdef12";
+    client_->execSqlSync(
+        "update import_source_files set active_parse_work_relative_path=$2 "
+        "where import_record_id=$1::uuid",
+        import_id_, parse_work_path);
+
+    bridge_report::db::WordImportRepository repository(client_);
+    const auto outcome = repository.discard_failed_import(import_id_);
+
+    ASSERT_TRUE(outcome.deleted) << outcome.error_message;
+    ASSERT_EQ(outcome.temporary_source_paths.size(), 1u);
+    EXPECT_EQ(outcome.temporary_source_paths[0], source_relative_path_);
+    ASSERT_EQ(outcome.archived_file_paths.size(), 1u);
+    EXPECT_EQ(outcome.archived_file_paths[0], "tests/old.jpg");
+    ASSERT_EQ(outcome.parse_work_paths.size(), 1u);
+    EXPECT_EQ(outcome.parse_work_paths[0], parse_work_path);
+    EXPECT_TRUE(client_->execSqlSync(
+        "select 1 from import_records where id=$1::uuid", import_id_).empty());
+    EXPECT_TRUE(client_->execSqlSync(
+        "select 1 from import_source_files where import_record_id=$1::uuid", import_id_).empty());
+    EXPECT_TRUE(client_->execSqlSync(
+        "select 1 from archived_files where id=$1::uuid", archived_id).empty());
+}
+
 TEST_F(WordImportRepositoryTest, NonCurrentAnnualWordCannotBeLoadedForParsing) {
     bridge_report::db::WordImportRepository repository(client_);
     client_->execSqlSync("update inspection_years set is_current = false where id = $1::uuid", year_id_);

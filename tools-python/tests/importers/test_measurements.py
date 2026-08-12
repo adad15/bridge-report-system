@@ -35,6 +35,23 @@ def test_parse_range_measurements_with_supported_separators() -> None:
         assert measurement.source_text == source_text
 
 
+def test_bind_chinese_range_labels_to_dimension_types() -> None:
+    text = (
+        "多条纵、横向裂缝，长度范围：0.5～4.0m，宽度范围：0.5～1.0cm，"
+        "面积范围：1～2m²，间距范围：10～20cm"
+    )
+
+    measurements, warnings = parse_measurements(text, "defect_ranges")
+
+    assert warnings == []
+    assert [item.dimension_type for item in measurements] == ["长度", "宽度", "面积", "间距"]
+    assert [item.value_type for item in measurements] == ["range", "range", "range", "range"]
+    assert (measurements[0].minimum_value, measurements[0].maximum_value, measurements[0].unit) == (0.5, 4.0, "m")
+    assert (measurements[1].minimum_value, measurements[1].maximum_value, measurements[1].unit) == (0.5, 1.0, "cm")
+    assert (measurements[2].minimum_value, measurements[2].maximum_value, measurements[2].unit) == (1.0, 2.0, "m2")
+    assert (measurements[3].minimum_value, measurements[3].maximum_value, measurements[3].unit) == (10.0, 20.0, "cm")
+
+
 def test_parse_approximate_area_and_unseparated_chinese_length() -> None:
     area, area_warnings = parse_measurements("总面积约1.0m²", "defect_area")
     length, length_warnings = parse_measurements("长度20.0m", "defect_length")

@@ -26,6 +26,7 @@ const treeNode: RatingTreeNode = {
   id: "tree-node-crack",
   node_key: "org.bridge.defect.crack",
   parent_node_id: "tree-group",
+  display_number: "5.1.1-1",
   display_name: "裂缝",
   node_type: "defect",
   sort_order: 1,
@@ -72,8 +73,6 @@ function safeDraft() {
     resolved_defect_candidate_id: "defect_0001",
     review_note: null,
   }];
-  draft.photos[0].match_status = "已确认";
-  draft.photos[0].review_status = "已确认";
   return draft;
 }
 
@@ -145,7 +144,29 @@ describe("buildDefectPhotoReviewModel", () => {
     expect(model.safeCandidateIds.has("defect_0001")).toBe(true);
   });
 
-  it("treats one archived high-confidence photo as an atomic batch-confirm candidate", () => {
+  it("allows individual confirmation of a range split without photos but keeps it out of batch confirmation", () => {
+    const draft = safeDraft();
+    draft.defects[0].photo_references = [];
+    draft.defects[0].warnings = [{
+      code: "component_range_split_review_required",
+      message: "该病害由构件范围拆分，请人工核对构件、病害和照片关联。",
+      severity: "warning",
+      target_candidate_id: "defect_0001",
+    }];
+
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code))
+      .toEqual(["component_range_split_review_required"]);
+    expect(row.confirmEligible).toBe(true);
+    expect(row.batchEligible).toBe(false);
+  });
+
+  it("treats one linked archived photo as an atomic batch-confirm candidate", () => {
     const draft = safeDraft();
     draft.defects[0].photo_references[0] = {
       photo_number: "2.1-1",
@@ -154,9 +175,6 @@ describe("buildDefectPhotoReviewModel", () => {
       resolved_defect_candidate_id: null,
       review_note: null,
     };
-    draft.photos[0].match_status = "高置信候选";
-    draft.photos[0].review_status = "待确认";
-
     const row = buildDefectPhotoReviewModel({
       draft,
       ...treeWiring(),
@@ -459,11 +477,8 @@ describe("buildDefectPhotoReviewModel", () => {
     expect(row.batchEligible).toBe(true);
   });
 
-  // 高置信候选会被批量确认自动接受，不算问题；待校对的不会，必须挡住，
-  // 否则它悄悄进不了 defect_photos，用户还以为确认过了。
-  it("flags a linked photo that batch confirmation would not pick up", () => {
+  it("does not require a second confirmation for a linked archived photo", () => {
     const draft = safeDraft();
-    draft.photos[0] = { ...draft.photos[0], match_status: "待校对", review_status: "待确认" };
 
     const row = buildDefectPhotoReviewModel({
       draft,
@@ -471,8 +486,7 @@ describe("buildDefectPhotoReviewModel", () => {
       assessmentIssues: [],
     }).rows[0];
 
-    expect(row.problems.map((problem) => problem.code)).toContain("photo_not_confirmed");
-    expect(row.batchEligible).toBe(false);
+    expect(row.batchEligible).toBe(true);
   });
 
   it("flags a confirmed photo whose archived file is missing", () => {

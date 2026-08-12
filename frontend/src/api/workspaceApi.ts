@@ -110,6 +110,7 @@ export interface RatingTreeVersionSummary {
   published_at: string;
   h21_package_version: string;
   maintenance_package_version: string;
+  is_default: boolean;
 }
 
 export interface WorkspaceStandardPackage {
@@ -287,6 +288,58 @@ export async function uploadWordImport(
   return body.import_record;
 }
 
+export interface SourceTaskRow {
+  task_id: string;
+  name: string;
+  check_date: string | null;
+  defect_count: number;
+  photo_count: number;
+}
+
+/**
+ * 列出离线库里有哪些检测任务。
+ *
+ * taskId 是来源软件自己库里的 UUID，用户不可能知道；路径留空则用来源软件的默认位置，
+ * 后端把最终读的那份路径一并回来。
+ */
+export async function listSourceTasks(
+  baseUrl: string,
+  sourceDbPath?: string
+): Promise<{ source_db_path: string; tasks: SourceTaskRow[] }> {
+  return request<{ source_db_path: string; tasks: SourceTaskRow[] }>(
+    `${baseUrl}/api/source-imports/tasks`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source_db_path: sourceDbPath ?? "" }),
+    }
+  );
+}
+
+/** 登记一次接口同步导入：只送离线库的本机路径与任务 id，不上传库本体。 */
+export async function createSourceDbImport(
+  baseUrl: string,
+  inspectionYearId: string,
+  sourceDbPath: string,
+  taskId: string,
+  importName?: string
+): Promise<WorkspaceImport> {
+  const body = await request<{ import_record: WorkspaceImport }>(
+    `${baseUrl}/api/inspection-years/${encodeURIComponent(inspectionYearId)}/import-records/source`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        source_db_path: sourceDbPath,
+        task_id: taskId,
+        // 离线库文件名是个 "1"，导入列表里认不出来；用选中的任务标签更有用。
+        import_name: importName ?? "",
+      }),
+    }
+  );
+  return body.import_record;
+}
+
 export function workspaceErrorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return "操作失败，请稍后重试。";
   const stable: Record<string, string> = {
@@ -294,6 +347,14 @@ export function workspaceErrorMessage(error: unknown): string {
     inspection_year_not_found: "年度检测不存在或已被删除。",
     inspection_year_not_current: "该年度已不是当前版本，不能继续导入资料。",
     inspection_year_already_exists: "该年度已经存在，将进入已有年度。",
+    source_db_not_found: "找不到来源软件的离线库；请确认路径，并先在桌面程序里打开该桥。",
+    source_db_not_readable: "选中的文件不是来源软件的离线库。",
+    source_task_id_required: "请填写要导入的检测任务 id。",
+    source_task_not_found: "离线库里没有这个检测任务；请先在桌面程序里打开该桥并下载该年度。",
+    source_db_table_missing: "离线库的表结构与预期不符，来源软件版本可能已升级。",
+    source_db_column_missing: "离线库的表结构与预期不符，来源软件版本可能已升级。",
+    source_reference_storage_failed: "来源引用保存失败，请稍后重试。",
+    source_import_failed: "来源库导入登记失败，请稍后重试。",
     rating_tree_required: "请选择本年度使用的评定树。",
     rating_tree_not_found: "所选评定树不存在，请刷新后重新选择。",
     rating_tree_unavailable: "所选评定树或其底层规范当前不可用，请重新选择。",

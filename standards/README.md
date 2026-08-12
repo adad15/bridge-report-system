@@ -68,4 +68,27 @@ standards/
 - 装载时校验目标节点存在且可选择、规则适用范围不超出目标节点自身范围、正向关键词非空、`rule_id` 唯一、规则不引用其他评定树版本，并拒绝同一适用范围内指向不同节点的冲突自动规则；
 - `auto_bind` 为假的规则只能产生候选，必须由人工确认后才写入病害。
 
+当前 `organization-bridge/2.0.2` 是来源软件桥梁评定树的结构快照，仅纳入第 5 至 10 节：
+
+- `tree.json` 保存来源分组、病害名称和显式 `display_number`，页面不再根据节点 ID 猜编号；
+- `source-index-map.json` 以“来源分组 ID + 来源指标 ID”为首选精确映射，以“来源分组编号 + 来源指标编号”为兼容回退；病害文字、别名和关键词不参与自动匹配；
+- 同一来源指标可以出现在不同分组中，显示编号保持来源软件原值。例如 `9.1.2` 下复用的指标仍显示 `9.1.1-1`，不会被改写为 `9.1.2-1`；
+- 能与 H21 对应的节点只引用 H21 标度和扣分；没有评分依据的“其他病害”等节点使用 `non_scoring`，仍可选择但不扣分；
+- `9.1.1-10 墩身水损害` 和 `6.2.1` 下的 `9.2.1-10 水损害` 使用来源软件的四级判定文字，并引用 H21 四级扣分曲线（`0/25/40/50`）；页面分别标明判定来源与扣分参照；
+- 同级病害按完整显示编号自然升序排列。例如墩身病害按 `9.1.1-1` 至 `9.1.1-11` 显示，不沿用来源软件把新增指标置顶的内部顺序；
+- 来源快照、人工修正、构件适用范围和评分例外保存在 `standards/source-material/datacheck-bridge-tree/`，生成包不得手工修改。
+
+在 `tools-python` 目录执行以下命令可校验已提交的最新包与生成源完全一致：
+
+```powershell
+uv run python -m bridge_report_tools.rating_tree.package_generator --check
+```
+
+需要从新的离线数据库重新提取脱敏结构时，先生成快照，再审阅修正和映射文件，最后重新生成包：
+
+```powershell
+uv run python -m bridge_report_tools.rating_tree.source_snapshot --source-db <数据库文件> --output-dir ../standards/source-material/datacheck-bridge-tree
+uv run python -m bridge_report_tools.rating_tree.package_generator
+```
+
 清单与节点字段见 `schemas/rating-tree-extension-package.schema.json`。其 `content_checksum` 与规范包使用完全相同的稳定 JSON 摘要约定。

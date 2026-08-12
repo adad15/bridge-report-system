@@ -80,7 +80,7 @@ def parse_word_import(request: WordImportRequest) -> WordImportResponse:
         data = BridgeAnnualInspectionData(
             contract=ContractInfo(
                 name="BridgeAnnualInspectionData",
-                version="3.0",
+                version="4.0",
                 generated_at=datetime.now(timezone.utc),
                 producer="python-tools",
                 parser_name="word_importer",

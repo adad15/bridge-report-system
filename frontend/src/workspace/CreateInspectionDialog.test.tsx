@@ -17,6 +17,7 @@ const trees = [{
   package_version: "1.0.0",
   h21_package_version: "1.0.1",
   maintenance_package_version: "1.0.0",
+  is_default: true,
 }];
 
 describe("CreateInspectionDialog", () => {
@@ -52,13 +53,13 @@ describe("CreateInspectionDialog", () => {
     expect(createInspectionYear).not.toHaveBeenCalled();
   });
 
-  it("does not auto-select when multiple tree versions are published", async () => {
+  it("auto-selects the marked default when multiple tree versions are published", async () => {
     vi.mocked(fetchRatingTreeVersions).mockResolvedValue([
-      ...trees,
-      { ...trees[0], id: "rating-tree-2", package_version: "2.0.0" },
+      { ...trees[0], is_default: false },
+      { ...trees[0], id: "rating-tree-2", package_version: "2.0.0", is_default: true },
     ] as never);
     render(<CreateInspectionDialog bridgeId="bridge-1" onClose={vi.fn()} onCreated={vi.fn()} />);
     const tree = await screen.findByRole("combobox", { name: "桥梁评定树" });
-    expect(tree).toHaveValue("");
+    expect(tree).toHaveValue("rating-tree-2");
   });
 });

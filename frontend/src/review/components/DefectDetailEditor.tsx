@@ -1,6 +1,5 @@
-import { useEffect, useState, type Dispatch } from "react";
+import { useEffect, useMemo, useState, type Dispatch } from "react";
 
-import type { ComponentInventoryRevision } from "../../api/componentInventoryApi";
 import {
   fetchRatingTreeNode,
   ratingTreeErrorMessage,
@@ -8,10 +7,14 @@ import {
   type RatingTreeNodeSummary,
 } from "../../api/ratingTreeApi";
 import type { BridgeAnnualInspectionData } from "../../contracts/annualInspection";
+import {
+  ratingTreeDisplayLabel,
+  ratingTreeOptionLabel,
+  sortRatingTreeNodes,
+} from "../../rating-tree/ratingTreeLabels";
 import { matchMethodLabel, type DefectReviewRow } from "../defectPhotoReviewModel";
 import type { ReviewDraftAction } from "../reviewDraft";
-import { ComponentMatchField } from "./ComponentMatchField";
-import { displayDefectLocation } from "./displayHelpers";
+import { displayDefectLocation, displayMatchEvidence } from "./displayHelpers";
 import { DefectPhotoPanel } from "./DefectPhotoPanel";
 
 interface DefectDetailEditorProps {
@@ -19,7 +22,6 @@ interface DefectDetailEditorProps {
   row: DefectReviewRow;
   ratingTreeVersionId: string | null;
   applicableNodes: RatingTreeNodeSummary[];
-  componentInventory?: ComponentInventoryRevision | null;
   importRecordId: string;
   baseUrl: string;
   initialPhotoCandidateId?: string | null;
@@ -41,7 +43,6 @@ export function DefectDetailEditor({
   row,
   ratingTreeVersionId,
   applicableNodes,
-  componentInventory,
   importRecordId,
   baseUrl,
   initialPhotoCandidateId,
@@ -56,9 +57,27 @@ export function DefectDetailEditor({
   const defect = row.defect;
   const [treeNode, setTreeNode] = useState<RatingTreeNode | null>(row.ratingTreeNode);
   const [treeNodeError, setTreeNodeError] = useState("");
+  const orderedApplicableNodes = useMemo(
+    () => sortRatingTreeNodes(applicableNodes),
+    [applicableNodes],
+  );
   // 候选是后端这次算出来的临时结果，不在草稿里；采用候选后按人工选择处理。
-  const evidence =
-    defect.rating_tree_match_evidence ?? row.matchResult?.reason_message ?? "";
+  const evidence = displayMatchEvidence(
+    defect.rating_tree_match_evidence ?? row.matchResult?.reason_message,
+    defect.rating_tree_match_method,
+  );
+  // 尺寸原文只是解析用的输入，本身没有单独展示的价值；展示解析结果即可。
+  // 解析不出来时才退回原文，那种情况下原文是唯一的记录。
+  const measurementSummary = defect.measurements.length > 0
+    ? defect.measurements
+        .map((item) => {
+          const value = item.value_type === "range"
+            ? `${item.minimum_value ?? "?"}~${item.maximum_value ?? "?"}`
+            : `${item.value ?? "?"}`;
+          return `${item.dimension_type} ${value}${item.unit}`;
+        })
+        .join("、")
+    : defect.measurement_text ?? "";
   const selectNode = (nodeId: string) => {
     const selected = applicableNodes.find((item) => item.id === nodeId);
     if (!selected || !ratingTreeVersionId) return;
@@ -117,49 +136,65 @@ export function DefectDetailEditor({
           <button type="button" className="defect-detail-close" aria-label="关闭精细维护" onClick={onClose}>×</button>
         </div>
       </div>
-      {row.problems.length > 0 ? (
-        <div className="defect-detail-problems">
-          {row.problems.map((problem) => <span key={problem.code}>{problem.message}</span>)}
-        </div>
-      ) : null}
-      <div className="defect-detail-fields">
-        <label>实际构件<ComponentMatchField defect={defect} inventory={componentInventory ?? null} /></label>
-        <div className="defect-detail-wide defect-rating-tree-result" aria-label="评定树病害">
-          <div className="defect-rating-tree-result-head">
-            <span>评定树病害</span>
-            <strong>{treeNode?.display_name ?? "尚未确定规范病害"}</strong>
-            <em className={`defect-match-method ${row.matchState}`}>
-              {defect.rating_tree_node_id
-                ? matchMethodLabel(defect.rating_tree_match_method)
-                : row.matchLabel}
-            </em>
-          </div>
-          {/* 匹配依据必须写清命中的原文、别名或关键词，以及构件适用理由：
-              用户要能不打开评定树就判断这条自动结果该不该认。 */}
-          {evidence ? <p className="defect-match-evidence">{evidence}</p> : null}
-          {row.matchState === "composite" ? (
-            <p className="warning-text">
-              这条记录同时命中多个规范病害。请改写描述拆成单一病害，或在下方候选中确认为其中一个。
-            </p>
+      {/* 判定与照片并排：这一步的动作就是"看图判断这条该不该是这个评定树节点"，
+          两者不同屏就得来回滚。窄到放不下两列时由容器查询退回单列。 */}
+      <div className="defect-detail-body">
+        <div className="defect-detail-primary">
+          {row.problems.length > 0 ? (
+            <div className="defect-detail-problems">
+              {row.problems.map((problem) => <span key={problem.code}>{problem.message}</span>)}
+            </div>
           ) : null}
-          {row.matchCandidates.length > 0 ? (
-            <ul className="defect-match-candidates">
-              {row.matchCandidates.map((candidate) => (
-                <li key={candidate.rating_tree_node_id}>
-                  <button
-                    type="button"
-                    disabled={disabled || !ratingTreeVersionId}
-                    onClick={() => selectNode(candidate.rating_tree_node_id)}
-                  >
-                    采用「{candidate.display_name}」
-                  </button>
-                  <small>{matchMethodLabel(candidate.match_method)} · {candidate.evidence}</small>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          <details open={!defect.rating_tree_node_id}>
-            <summary>展开完整评定树人工选择</summary>
+          <div className="defect-rating-tree-result" aria-label="评定树病害">
+            <div className="defect-rating-tree-result-head">
+              <span>评定树病害</span>
+              {/* 定了病害就不在这里重复写名字——下面的下拉显示的就是它。
+                  没定时这句红字必须留着：下拉那时只是一片空白，说不出"还没定"。 */}
+              {defect.rating_tree_node_id ? null : <strong>尚未确定规范病害</strong>}
+              <em className={`defect-match-method ${row.matchState}`}>
+                {defect.rating_tree_node_id
+                  ? matchMethodLabel(defect.rating_tree_match_method)
+                  : row.matchLabel}
+              </em>
+            </div>
+            {/* 匹配依据必须写清命中的原文、别名或关键词，以及构件适用理由：
+                用户要能不打开评定树就判断这条自动结果该不该认。 */}
+            {/* 组合病害时后端的 reason_message 与下面那句说的是同一件事，
+                只留带行动指引的那句，不把同一句话在同一屏说两遍。 */}
+            {evidence && row.matchState !== "composite" ? (
+              <p className="defect-match-evidence">{evidence}</p>
+            ) : null}
+            {row.matchState === "composite" ? (
+              <p className="warning-text">
+                这条记录同时命中多个规范病害。请改写描述拆成单一病害，或在下方候选中确认为其中一个。
+              </p>
+            ) : null}
+            {row.matchCandidates.length > 0 ? (
+              <ul className="defect-match-candidates">
+                {row.matchCandidates.map((candidate) => (
+                  <li key={candidate.rating_tree_node_id}>
+                    <div className="defect-match-candidate-text">
+                      <strong>{candidate.display_name}</strong>
+                      <small>
+                        {matchMethodLabel(candidate.match_method)}
+                        {displayMatchEvidence(candidate.evidence, candidate.match_method)
+                          ? ` · ${displayMatchEvidence(candidate.evidence, candidate.match_method)}`
+                          : ""}
+                      </small>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={disabled || !ratingTreeVersionId}
+                      onClick={() => selectNode(candidate.rating_tree_node_id)}
+                    >
+                      采用
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {/* 下拉本身就是当前值的显示，同时也是唯一的赋值入口
+                （无匹配的病害没有候选可点），所以常驻，不藏在折叠或按钮后面。 */}
             <select
               aria-label="评定树病害"
               disabled={disabled || !ratingTreeVersionId}
@@ -167,73 +202,92 @@ export function DefectDetailEditor({
               onChange={(event) => selectNode(event.target.value)}
             >
               <option value="">请选择评定树病害</option>
-              {applicableNodes.map((item) => (
+              {orderedApplicableNodes.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.display_name}{item.is_scoring ? "" : "（暂不计分）"}
+                  {ratingTreeOptionLabel(item, orderedApplicableNodes)}{item.is_scoring ? "" : "（暂不计分）"}
                 </option>
               ))}
             </select>
-          </details>
+            {/* 路径和评分规则说的就是上面这个下拉选中的节点，原先却独占一块带边框的
+                灰条摆在字段区下方；并进这张卡，读的时候不用在两块之间来回对。 */}
+            {treeNode ? (
+              <div className="defect-rating-tree-context">
+                <div>
+                  <span>评定树路径</span>
+                  <strong>{treeNode.path.map((item) => ratingTreeDisplayLabel(item)).join(" / ")}</strong>
+                </div>
+                <div>
+                  <span>评分规则</span>
+                  <strong>{treeNode.is_scoring ? `继承 H21 · ${treeNode.h21_indicator_name ?? treeNode.h21_indicator_id}` : "暂不计分"}</strong>
+                </div>
+                <a
+                  href={`/rating-trees/${encodeURIComponent(ratingTreeVersionId!)}?node=${encodeURIComponent(treeNode.id)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  在评定树中查看
+                </a>
+              </div>
+            ) : null}
+          </div>
+          {treeNodeError ? <p className="form-error" role="alert">{treeNodeError}</p> : null}
+          <div className="defect-detail-fields">
+            <label>位置<input disabled={disabled} value={defect.defect_location} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} onBlur={() => onDefectTextCommitted?.(defect.candidate_id)} /></label>
+            <label>
+              标度
+              {/* 标度只列出该节点允许的取值并附完整规范判定文字；不按描述推断标度。 */}
+              <select
+                disabled={disabled || !treeNode?.is_scoring}
+                value={defect.defect_scale ?? ""}
+                onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_scale", value: event.target.value === "" ? null : Number(event.target.value) })}
+              >
+                <option value="">{treeNode ? (treeNode.is_scoring ? "请选择标度" : "该节点暂不计分") : "请先确定规范病害"}</option>
+                {treeNode?.allowed_scales.map((scale) => (
+                  <option key={scale} value={scale}>
+                    {scale} · {treeNode.scale_descriptions[String(scale)] ?? ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="defect-detail-wide">
+              病害描述
+              {/* 描述由位置和病害类型拼成，尺寸另有一列；尺寸原文只喂解析器，
+                  不再单独给一个框——那是"同一句话出现两遍"的来源。 */}
+              <input
+                disabled={disabled}
+                value={defect.defect_description}
+                onChange={(event) => dispatch({
+                  type: "edit_defect_field",
+                  candidateId: defect.candidate_id,
+                  field: "defect_description",
+                  value: event.target.value,
+                })}
+                onBlur={() => onDefectTextCommitted?.(defect.candidate_id)}
+              />
+            </label>
+            {measurementSummary ? (
+              <p className="defect-detail-wide defect-measurement-summary">
+                尺寸：{measurementSummary}
+                {defect.measurements.length === 0 ? "（未能解析，按原文入库）" : ""}
+              </p>
+            ) : null}
+          </div>
         </div>
-        <label>位置<input disabled={disabled} value={defect.defect_location} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} onBlur={() => onDefectTextCommitted?.(defect.candidate_id)} /></label>
-        <label>
-          标度
-          {/* 标度只列出该节点允许的取值并附完整规范判定文字；不按描述推断标度。 */}
-          <select
-            disabled={disabled || !treeNode?.is_scoring}
-            value={defect.defect_scale ?? ""}
-            onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_scale", value: event.target.value === "" ? null : Number(event.target.value) })}
-          >
-            <option value="">{treeNode ? (treeNode.is_scoring ? "请选择标度" : "该节点暂不计分") : "请先确定规范病害"}</option>
-            {treeNode?.allowed_scales.map((scale) => (
-              <option key={scale} value={scale}>
-                {scale} · {treeNode.scale_descriptions[String(scale)] ?? ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="defect-detail-wide">病害描述<input disabled={disabled} value={defect.defect_description} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_description", value: event.target.value })} onBlur={() => onDefectTextCommitted?.(defect.candidate_id)} /></label>
+        <div className="defect-detail-photo-column">
+          <DefectPhotoPanel
+            draft={draft}
+            defect={defect}
+            cards={row.photoCards}
+            importRecordId={importRecordId}
+            baseUrl={baseUrl}
+            initialPhotoCandidateId={initialPhotoCandidateId}
+            dispatch={dispatch}
+            disabled={disabled}
+            editLockToken={editLockToken}
+            allowUpload={allowDelete}
+          />
+        </div>
       </div>
-      {treeNodeError ? <p className="form-error" role="alert">{treeNodeError}</p> : null}
-      {treeNode ? (
-        <div className="defect-rating-tree-context">
-          <div>
-            <span>评定树路径</span>
-            <strong>{treeNode.path.map((item) => item.display_name).join(" / ")}</strong>
-          </div>
-          <div>
-            <span>评分规则</span>
-            <strong>{treeNode.is_scoring ? `继承 H21 · ${treeNode.h21_indicator_name ?? treeNode.h21_indicator_id}` : "暂不计分"}</strong>
-          </div>
-          <a
-            href={`/rating-trees/${encodeURIComponent(ratingTreeVersionId!)}?node=${encodeURIComponent(treeNode.id)}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            在评定树中查看
-          </a>
-        </div>
-      ) : null}
-      <details>
-        <summary>检测量与补充信息</summary>
-        <div className="defect-detail-fields">
-          <label>数量<input disabled={disabled} value={defect.quantity_text ?? ""} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "quantity_text", value: event.target.value || null })} /></label>
-          <label>尺寸原文<input disabled={disabled} value={defect.measurement_text ?? ""} onChange={(event) => dispatch({ type: "edit_measurement_text", candidateId: defect.candidate_id, text: event.target.value || null })} /></label>
-          <label className="defect-detail-wide">校对备注<input disabled={disabled} value={defect.review_note ?? ""} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "review_note", value: event.target.value || null })} /></label>
-        </div>
-      </details>
-      <DefectPhotoPanel
-        draft={draft}
-        defect={defect}
-        cards={row.photoCards}
-        importRecordId={importRecordId}
-        baseUrl={baseUrl}
-        initialPhotoCandidateId={initialPhotoCandidateId}
-        dispatch={dispatch}
-        disabled={disabled}
-        editLockToken={editLockToken}
-        allowUpload={allowDelete}
-      />
       <div className="defect-detail-actions">
         {defect.review_status === "已忽略" ? (
           <button type="button" disabled={disabled} onClick={() => dispatch({ type: "restore_ignored_defect", candidateId: defect.candidate_id })}>恢复病害</button>
@@ -248,7 +302,7 @@ export function DefectDetailEditor({
             dispatch({ type: "delete_defect", candidateId: defect.candidate_id });
           }
         }}>删除病害</button> : null}
-        <button type="button" className="review-action-primary" disabled={disabled || !row.batchEligible} onClick={onConfirm}>确认本组</button>
+        <button type="button" className="review-action-primary" disabled={disabled || !row.confirmEligible} onClick={onConfirm}>确认本组</button>
       </div>
     </section>
   );

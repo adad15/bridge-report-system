@@ -65,6 +65,20 @@ describe("apiClient request/parseError", () => {
     expect(apiError.details).toEqual(codelessBody);
   });
 
+  it("uses the HTTP fallback when an error response contains a blank message", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ code: "database_unavailable", message: "   " }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const error = await request("http://127.0.0.1:18080/api/thing").catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).message).toBe("请求失败（HTTP 503，错误码 database_unavailable）");
+  });
+
   it("throws ApiError(invalid_response_body) when a 2xx body is not valid JSON", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

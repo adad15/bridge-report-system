@@ -34,7 +34,7 @@ std::string read_fixture_text(const std::string& file_name) {
     auto current_file_name = file_name;
     const auto version_marker = current_file_name.find(".v2.");
     if (version_marker != std::string::npos) {
-        current_file_name.replace(version_marker, 4, ".v3.");
+        current_file_name.replace(version_marker, 4, ".v4.");
     }
     const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) / "samples" / "contracts" / current_file_name;
     std::ifstream input(path, std::ios::binary);
@@ -460,7 +460,7 @@ TEST_F(ReviewRepositoryTest, preflight_flow_blocks_on_pending_candidates_then_co
     ASSERT_TRUE(initial_detail->inspection_year.has_value());
     data["inspection"]["inspection_year"] = *initial_detail->inspection_year;
 
-    // 样例默认病害和照片候选都是“待确认”，直接保存即可覆盖候选阻断场景。
+    // 样例默认病害候选是“待确认”，直接保存即可覆盖候选阻断场景。
     ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
 
     const auto pending_report = run_preflight_flow(repository, import_record_id_);
@@ -727,7 +727,7 @@ protected:
         client_->closeAll();
     }
 
-    // 组装与本 fixture 标识对齐、且病害和照片候选全部“已确认”的 3.0 样例数据。
+    // 组装与本 fixture 标识对齐、且病害组已经确认的 4.0 样例数据。
     Json::Value build_confirmed_data() const {
         auto data = parse_json_text(read_fixture_text("bridge_annual_inspection_data.v2.valid.json"));
         data["import_context"]["import_record_system_number"] = import_record_system_number_;
@@ -972,10 +972,9 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     EXPECT_EQ(measurement_result.size(), 3u);
 
     const auto photo_result = client_->execSqlSync(
-        "select match_status, photo_number, archived_file_id from defect_photos where defect_observation_id = $1::uuid", observation_id
+        "select photo_number, archived_file_id from defect_photos where defect_observation_id = $1::uuid", observation_id
     );
     ASSERT_EQ(photo_result.size(), 1u);
-    EXPECT_EQ(photo_result[0]["match_status"].as<std::string>(), "已确认");
     EXPECT_EQ(photo_result[0]["photo_number"].as<std::string>(), "2.1-1");
     EXPECT_FALSE(photo_result[0]["archived_file_id"].isNull());
 

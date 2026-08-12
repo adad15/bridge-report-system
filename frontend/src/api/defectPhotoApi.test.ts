@@ -12,10 +12,8 @@ const photo = {
     original_caption: "补拍",
     archive_relative_path: "photos/manual.jpg",
   },
-  match_status: "已确认",
   source_ref: { source_type: "manual" },
   confidence: 1,
-  review_status: "已确认",
   warnings: [],
 };
 

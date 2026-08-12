@@ -1,0 +1,27 @@
+{
+  "sources": [
+    {
+      "id": "source.h21.official",
+      "source_type": "technical_condition",
+      "title": "JTG/T H21—2011《公路桥梁技术状况评定标准》",
+      "reference": "standards/technical-condition/jtg-t-h21-2011/1.0.3"
+    },
+    {
+      "id": "source.jtg5120.official",
+      "source_type": "maintenance",
+      "title": "JTG 5120—2021《公路桥涵养护规范》",
+      "reference": "standards/maintenance/jtg-5120-2021/1.0.0"
+    },
+    {
+      "id": "source.organization.rating_tree",
+      "source_type": "organization",
+      "title": "来源软件桥梁评定树脱敏结构快照",
+      "reference": "standards/source-material/datacheck-bridge-tree/source-tree.json"
+    }
+  ],
+  "snapshot": {
+    "source_database_sha256": "sha256:dc831111644ee0b85d3a5ba2ad21f5c88837bdc64607089c77d87ee1d9a2f56d",
+    "exported_at": "2026-08-07T09:08:51.181292+00:00",
+    "unique_group_indicator_pairs": 403
+  }
+}

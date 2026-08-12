@@ -75,19 +75,19 @@ ContractCompatibilityResult normalize_review_contract(
 ) {
     (void)import_status;
     reconcile_component_match_warnings(data);
-    return {std::move(data), ContractCompatibility::Native30};
+    return {std::move(data), ContractCompatibility::Native40};
 }
 
 std::string_view contract_compatibility_name(ContractCompatibility value) {
     switch (value) {
-    case ContractCompatibility::Native30:
-        return "native_3_0";
+    case ContractCompatibility::Native40:
+        return "native_4_0";
     }
-    return "native_3_0";
+    return "native_4_0";
 }
 
 bool stored_contract_requires_reparse(const Json::Value& stored_data) {
-    return contract_version_of(stored_data) != "3.0";
+    return contract_version_of(stored_data) != "4.0";
 }
 
 }  // namespace bridge_report::review

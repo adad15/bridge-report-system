@@ -25,6 +25,7 @@ export interface RatingTreeVersionSummary {
   published_at: string;
   h21_package_version?: string;
   maintenance_package_version?: string;
+  is_default: boolean;
 }
 
 export interface RatingTreeVersion extends RatingTreeVersionSummary {
@@ -36,6 +37,7 @@ export interface RatingTreeVersion extends RatingTreeVersionSummary {
 export interface RatingTreePathItem {
   id: string;
   node_key: string;
+  display_number: string | null;
   display_name: string;
   node_type: string;
 }
@@ -44,6 +46,7 @@ export interface RatingTreeNodeSummary {
   id: string;
   node_key: string;
   parent_node_id: string | null;
+  display_number: string | null;
   display_name: string;
   node_type: string;
   sort_order: number;
@@ -61,6 +64,7 @@ export interface RatingTreeNode extends RatingTreeNodeSummary {
   allowed_scales: number[];
   h21_indicator_name: string | null;
   h21_source_table: string | null;
+  uses_source_scale_descriptions?: boolean;
   scale_descriptions: Record<string, string>;
   deduction_points: Record<string, number>;
   path: RatingTreePathItem[];

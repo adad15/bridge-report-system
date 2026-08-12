@@ -21,7 +21,6 @@ SourceType = Literal["软件导出Word", "正式Word", "Excel病害表", "图片
 FileRole = Literal["当前年度检测资料", "历史正式报告", "历史基线资料", "修订资料"]
 DataRole = Literal["当前年度", "历史基线", "修订版"]
 BridgeMatchStatus = Literal["匹配", "不匹配", "待人工确认"]
-PhotoMatchStatus = Literal["高置信候选", "待校对", "已确认", "未关联", "已忽略"]
 ComparisonType = Literal[
     "原病害无明显变化",
     "原病害发展",
@@ -62,7 +61,7 @@ class SourceRef(ContractModel):
 
 class ContractInfo(ContractModel):
     name: Literal["BridgeAnnualInspectionData"]
-    version: Literal["3.0"]
+    version: Literal["4.0"]
     generated_at: datetime
     producer: str
     parser_name: str
@@ -193,10 +192,19 @@ class DefectCandidate(ContractModel):
     rating_tree_version_id: str | None = None
     rating_tree_node_id: str | None = None
     rating_tree_match_method: Literal[
-        "exact", "controlled_alias", "controlled_keyword", "fuzzy_candidate", "manual"
+        "exact", "controlled_alias", "controlled_keyword", "fuzzy_candidate",
+        # 来源软件直接标注的评定指标：不是从文字推断的，来源要能区分开
+        "source_indicator", "manual",
     ] | None = None
     rating_tree_match_evidence: str | None = None
     standard_defect_indicator_id: str | None = None
+    #: 来源软件原始评定分组和指标身份。ID 来自 judgeTreeId / judgeIndexId，编号来自
+    #: judgeTree.chapterNum / judgeIndex.tableNum。它们与派生的 H21 指标严格分开，重绑与
+    #: 草稿保存都不得清空。
+    source_defect_group_id: str | None = None
+    source_defect_group_number: str | None = None
+    source_defect_indicator_id: str | None = None
+    source_defect_indicator_number: str | None = None
     photo_references: list[PhotoReference]
     group_review_status: DefectGroupReviewStatus
     severity: Severity | None = None
@@ -222,6 +230,10 @@ class DefectCandidate(ContractModel):
         "rating_tree_node_id",
         "rating_tree_match_evidence",
         "standard_defect_indicator_id",
+        "source_defect_group_id",
+        "source_defect_group_number",
+        "source_defect_indicator_id",
+        "source_defect_indicator_number",
     )
     @classmethod
     def require_non_empty_server_reference(cls, value: str | None) -> str | None:
@@ -248,10 +260,8 @@ class PhotoCandidate(ContractModel):
     photo_number: str
     linked_defect_candidate_id: str | None = None
     extracted_file: ExtractedPhotoFile
-    match_status: PhotoMatchStatus
     source_ref: SourceRef
     confidence: float = Field(ge=0, le=1)
-    review_status: ReviewStatus
     warnings: list[WarningItem]
 
 

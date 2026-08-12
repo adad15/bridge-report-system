@@ -112,9 +112,6 @@ Json::Value build_uploaded_photo_candidate(
     candidate["extracted_file"]["original_caption"] =
         caption.empty() ? Json::Value() : Json::Value(caption);
     candidate["extracted_file"]["archive_relative_path"] = archive_relative_path;
-    // 主动添加即确认：人工上传不是机器推断，两个状态直接到位。
-    candidate["match_status"] = "已确认";
-    candidate["review_status"] = "已确认";
     candidate["source_ref"]["source_type"] = "manual";
     candidate["confidence"] = 1.0;
     candidate["warnings"] = Json::Value(Json::arrayValue);

@@ -22,14 +22,6 @@ interface DefectPhotoPanelProps {
   allowUpload?: boolean;
 }
 
-function cardStatusLabel(card: DefectPhotoCard): string {
-  if (card.kind === "missing") {
-    return card.acknowledgedMissing ? "原报告缺图" : "待核对";
-  }
-  if (card.confirmed) return "已确认";
-  return card.source === "manual" ? "待确认" : "系统候选";
-}
-
 export function DefectPhotoPanel({
   draft,
   defect,
@@ -207,7 +199,9 @@ export function DefectPhotoPanel({
                 <span className="defect-photo-card-empty">无图</span>
               )}
               <strong>{card.photoNumber}</strong>
-              <small>{cardStatusLabel(card)}</small>
+              {card.kind === "missing" ? (
+                <small>{card.acknowledgedMissing ? "原报告缺图" : "待核对"}</small>
+              ) : null}
             </button>
 
             <div className="defect-photo-card-actions">
@@ -225,27 +219,14 @@ export function DefectPhotoPanel({
                   {card.acknowledgedMissing ? "撤销缺图" : "确认缺图"}
                 </button>
               ) : (
-                <>
-                  <button
-                    type="button"
-                    disabled={disabled || busy}
-                    onClick={() => dispatch({
-                      type: "confirm_photo",
-                      photoCandidateId: card.photo!.candidate_id,
-                      confirmed: !card.confirmed,
-                    })}
-                  >
-                    {card.confirmed ? "撤销确认" : "确认照片"}
-                  </button>
-                  <button
-                    type="button"
-                    className="danger-text-button"
-                    disabled={disabled || busy}
-                    onClick={() => { void removeCard(card); }}
-                  >
-                    删除照片
-                  </button>
-                </>
+                <button
+                  type="button"
+                  className="danger-text-button"
+                  disabled={disabled || busy}
+                  onClick={() => { void removeCard(card); }}
+                >
+                  删除照片
+                </button>
               )}
             </div>
           </div>

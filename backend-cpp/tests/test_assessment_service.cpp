@@ -251,6 +251,24 @@ TEST(AssessmentServiceTest, StableIndicatorIdRemainsTruthWhenDisplayNameChanges)
         "板式支座老化变质、开裂");
 }
 
+TEST(AssessmentServiceTest, MissingDerivedIndicatorUsesRatingTreeNode) {
+    const auto package = bridge_report::tests::h21::load_package();
+    const standards::H21Evaluator evaluator(package);
+    const auto context = complete_context(package);
+    auto draft = draft_with_bearing_defect(context);
+    draft["defects"][0]["standard_defect_indicator_id"] = Json::Value();
+    draft["defects"][0]["rating_tree_match_method"] = "manual";
+
+    const auto preview = assessment::calculate_assessment_preview(
+        evaluator, package, context, draft, 4);
+
+    EXPECT_TRUE(preview.issues.empty());
+    ASSERT_TRUE(preview.result.has_value());
+    EXPECT_EQ(
+        preview.input_summary["defects"][0]["defect_indicator_id"].asString(),
+        "h21.defect.5_3_1_1");
+}
+
 TEST(AssessmentServiceTest, UnknownIndicatorIsStructuredBlocker) {
     const auto package = bridge_report::tests::h21::load_package();
     const standards::H21Evaluator evaluator(package);

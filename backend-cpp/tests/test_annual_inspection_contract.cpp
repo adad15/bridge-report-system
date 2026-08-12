@@ -15,7 +15,7 @@ Json::Value read_contract_fixture(const std::string& file_name) {
     auto current_file_name = file_name;
     const auto version_marker = current_file_name.find(".v2.");
     if (version_marker != std::string::npos) {
-        current_file_name.replace(version_marker, 4, ".v3.");
+        current_file_name.replace(version_marker, 4, ".v4.");
     }
     const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
                       "samples" / "contracts" / current_file_name;
@@ -42,7 +42,7 @@ void expect_summary_contains(
 
 }  // namespace
 
-TEST(AnnualInspectionContractTest, AcceptsValidVersionThreeContractFixture) {
+TEST(AnnualInspectionContractTest, AcceptsValidVersionFourContractFixture) {
     const auto root =
         read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
 
@@ -60,7 +60,7 @@ TEST(AnnualInspectionContractTest, RejectsVersionOneTwoWithoutTransitionMode) {
     const auto final_result =
         bridge_report::contracts::validate_bridge_annual_inspection_data(root);
     EXPECT_FALSE(final_result.ok());
-    expect_summary_contains(final_result, "contract.version: must be 3.0");
+    expect_summary_contains(final_result, "contract.version: must be 4.0");
 }
 
 TEST(AnnualInspectionContractTest, AcceptsComparisonCandidateFixture) {
@@ -73,8 +73,8 @@ TEST(AnnualInspectionContractTest, AcceptsComparisonCandidateFixture) {
     EXPECT_TRUE(result.ok()) << result.summary();
 }
 
-TEST(AnnualInspectionContractTest, RejectsEveryNonThreeContractVersion) {
-    for (const auto* version : {"1.0", "1.1", "1.2", "2", "2.0", "2.1", "3"}) {
+TEST(AnnualInspectionContractTest, RejectsEveryNonFourContractVersion) {
+    for (const auto* version : {"1.0", "1.1", "1.2", "2", "2.0", "2.1", "3", "3.0", "4"}) {
         auto root =
             read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
         root["contract"]["version"] = version;
@@ -83,7 +83,7 @@ TEST(AnnualInspectionContractTest, RejectsEveryNonThreeContractVersion) {
             bridge_report::contracts::validate_bridge_annual_inspection_data(root);
 
         EXPECT_FALSE(result.ok());
-        expect_summary_contains(result, "contract.version: must be 3.0");
+        expect_summary_contains(result, "contract.version: must be 4.0");
     }
 }
 
@@ -97,7 +97,7 @@ TEST(AnnualInspectionContractTest, RejectsImportedRatingsWithExactPath) {
 
     EXPECT_FALSE(result.ok());
     expect_summary_contains(
-        result, "ratings: is not allowed in contract 3.0");
+        result, "ratings: is not allowed in contract 4.0");
 }
 
 TEST(AnnualInspectionContractTest, RejectsWordDeductionWithExactPath) {
@@ -111,7 +111,21 @@ TEST(AnnualInspectionContractTest, RejectsWordDeductionWithExactPath) {
     EXPECT_FALSE(result.ok());
     expect_summary_contains(
         result,
-        "defects[0].defect_deduction: is not allowed in contract 3.0");
+        "defects[0].defect_deduction: is not allowed in contract 4.0");
+}
+
+TEST(AnnualInspectionContractTest, RejectsLegacyPhotoReviewState) {
+    for (const auto* field : {"match_status", "review_status"}) {
+        auto root =
+            read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+        root["photos"][0][field] = "已确认";
+
+        const auto result =
+            bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+        EXPECT_FALSE(result.ok()) << field;
+        expect_summary_contains(result, "photos[0]." + std::string(field));
+    }
 }
 
 TEST(AnnualInspectionContractTest, RejectsLegacyDefectNames) {
@@ -168,6 +182,10 @@ TEST(AnnualInspectionContractTest, ValidatesRatingTreeAssociationFields) {
     defect["rating_tree_match_method"] = "controlled_alias";
     defect["rating_tree_match_evidence"] = "controlled alias";
     defect["standard_defect_indicator_id"] = "indicator-1";
+    defect["source_defect_group_id"] = "source-group-1";
+    defect["source_defect_group_number"] = "9.1.2";
+    defect["source_defect_indicator_id"] = "source-indicator-1";
+    defect["source_defect_indicator_number"] = "9.1.2-1";
 
     EXPECT_TRUE(bridge_report::contracts::validate_bridge_annual_inspection_data(root).ok());
 
@@ -176,6 +194,10 @@ TEST(AnnualInspectionContractTest, ValidatesRatingTreeAssociationFields) {
              "rating_tree_node_id",
              "rating_tree_match_evidence",
              "standard_defect_indicator_id",
+             "source_defect_group_id",
+             "source_defect_group_number",
+             "source_defect_indicator_id",
+             "source_defect_indicator_number",
          }) {
         auto invalid_root =
             read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");

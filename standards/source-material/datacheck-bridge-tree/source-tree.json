@@ -1,0 +1,4366 @@
+{
+  "snapshot_version": 1,
+  "included_chapters": [
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "groups": [
+    {
+      "source_group_id": "04844012-f2db-477e-b67a-010bc5840bb9",
+      "display_number": "5",
+      "display_name": "梁式桥上部结构",
+      "level_code": "001"
+    },
+    {
+      "source_group_id": "b2b95e72-7d3b-4d68-a0cf-39f31842910f",
+      "display_number": "5.1",
+      "display_name": "混凝土梁式桥",
+      "level_code": "001001"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "display_number": "5.1.1",
+      "display_name": "上部承重构件、上部一般构件",
+      "level_code": "001001001"
+    },
+    {
+      "source_group_id": "f80bde9d-e3c0-4e59-995b-0e8593280981",
+      "display_number": "5.2",
+      "display_name": "钢梁桥",
+      "level_code": "001002"
+    },
+    {
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "display_number": "5.2.1",
+      "display_name": "钢结构梁桥上部结构构件",
+      "level_code": "001002001"
+    },
+    {
+      "source_group_id": "273b64ec-e0e7-4fa3-ab05-55813583e24d",
+      "display_number": "5.3",
+      "display_name": "支座",
+      "level_code": "001003"
+    },
+    {
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "display_number": "5.3.1",
+      "display_name": "橡胶支座",
+      "level_code": "001003001"
+    },
+    {
+      "source_group_id": "7715a8f0-77b4-4434-ab31-02e9405cb7f8",
+      "display_number": "5.3.2",
+      "display_name": "钢支座",
+      "level_code": "001003002"
+    },
+    {
+      "source_group_id": "ba582266-6f8a-47d4-ba6b-49e8c0969788",
+      "display_number": "5.3.3",
+      "display_name": "混凝土摆式支座",
+      "level_code": "001003003"
+    },
+    {
+      "source_group_id": "b3e4b1c6-ee4f-4033-8801-05e9df3b1976",
+      "display_number": "5.3.4",
+      "display_name": "特殊支座",
+      "level_code": "001003004"
+    },
+    {
+      "source_group_id": "6b339305-d22d-43ce-88ed-33b7a15b21f1",
+      "display_number": "6",
+      "display_name": "拱式桥上部结构",
+      "level_code": "002"
+    },
+    {
+      "source_group_id": "0a78ce4d-1283-47bf-ad68-a806bf0a86bf",
+      "display_number": "6.1",
+      "display_name": "圬工拱桥",
+      "level_code": "002001"
+    },
+    {
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "display_number": "6.1.1",
+      "display_name": "主拱圈",
+      "level_code": "002001001"
+    },
+    {
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "display_number": "6.1.2",
+      "display_name": "拱上结构",
+      "level_code": "002001002"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "display_number": "6.1.3",
+      "display_name": "桥面板",
+      "level_code": "002001003"
+    },
+    {
+      "source_group_id": "7e9ec053-40e3-45bb-a597-fa022209f02f",
+      "display_number": "6.2",
+      "display_name": "钢筋混凝土拱桥",
+      "level_code": "002002"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "display_number": "6.2.1",
+      "display_name": "板拱桥、肋拱桥和箱拱桥主拱圈",
+      "level_code": "002002001"
+    },
+    {
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "display_number": "6.2.2",
+      "display_name": "板拱桥、肋拱桥和箱拱桥拱上结构",
+      "level_code": "002002002"
+    },
+    {
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "display_number": "6.2.3",
+      "display_name": "双曲拱桥主拱圈",
+      "level_code": "002002003"
+    },
+    {
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "display_number": "6.2.5",
+      "display_name": "刚架拱桥的刚架拱片以及微弯板",
+      "level_code": "002002004"
+    },
+    {
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "display_number": "6.2.6",
+      "display_name": "刚架拱桥横向联结系",
+      "level_code": "002002005"
+    },
+    {
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "display_number": "6.2.7",
+      "display_name": "桁架拱桥的桁架拱片及微弯板",
+      "level_code": "002002006"
+    },
+    {
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "display_number": "6.2.8",
+      "display_name": "桁架拱桥的横向联结系",
+      "level_code": "002002007"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "display_number": "6.2.9",
+      "display_name": "桥面板",
+      "level_code": "002002008"
+    },
+    {
+      "source_group_id": "55dd6b83-ce6e-40e4-98ce-4b105a7d1027",
+      "display_number": "6.3",
+      "display_name": "钢—混凝土组合拱桥",
+      "level_code": "002003"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "display_number": "6.3.1",
+      "display_name": "拱肋、横向联结系",
+      "level_code": "002003001"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "display_number": "6.3.2",
+      "display_name": "立柱",
+      "level_code": "002003002"
+    },
+    {
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "display_number": "6.3.3",
+      "display_name": "吊杆",
+      "level_code": "002003003"
+    },
+    {
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "display_number": "6.3.4",
+      "display_name": "系杆及防护板",
+      "level_code": "002003004"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "display_number": "6.3.5",
+      "display_name": "桥面板",
+      "level_code": "002003005"
+    },
+    {
+      "source_group_id": "42c8aa17-2ffa-49b2-9777-082bb1c42265",
+      "display_number": "6.4",
+      "display_name": "钢拱桥",
+      "level_code": "002004"
+    },
+    {
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "display_number": "6.4.1",
+      "display_name": "钢拱桥",
+      "level_code": "002004001"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "display_number": "6.4.2",
+      "display_name": "桥面板",
+      "level_code": "002004002"
+    },
+    {
+      "source_group_id": "f7853791-d90c-4b6f-86af-ba2ce34ac11b",
+      "display_number": "7",
+      "display_name": "悬索桥",
+      "level_code": "003"
+    },
+    {
+      "source_group_id": "2c46d53b-9917-4b35-ada3-f6571f6da93d",
+      "display_number": "7.1",
+      "display_name": "主缆",
+      "level_code": "003001"
+    },
+    {
+      "source_group_id": "a2e93514-d304-46cb-b94d-7e02f793d292",
+      "display_number": "7.1.1",
+      "display_name": "主缆",
+      "level_code": "003001001"
+    },
+    {
+      "source_group_id": "1adfb511-eadb-4228-b06f-0d4770e5b531",
+      "display_number": "7.2",
+      "display_name": "索夹",
+      "level_code": "003002"
+    },
+    {
+      "source_group_id": "5ecf3fc7-9e9a-491d-bc7b-18bcd4a692d8",
+      "display_number": "7.2.1",
+      "display_name": "索夹",
+      "level_code": "003002001"
+    },
+    {
+      "source_group_id": "144c4866-b7d7-4264-a8ba-7aa1be3c4d7e",
+      "display_number": "7.3",
+      "display_name": "吊索",
+      "level_code": "003003"
+    },
+    {
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "display_number": "7.3.1",
+      "display_name": "吊索",
+      "level_code": "003003001"
+    },
+    {
+      "source_group_id": "6510c381-b1f6-46a3-9d2e-0168040bc38e",
+      "display_number": "7.4",
+      "display_name": "加劲梁",
+      "level_code": "003004"
+    },
+    {
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "display_number": "7.4.1",
+      "display_name": "预应力混凝土加劲梁",
+      "level_code": "003004001"
+    },
+    {
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "display_number": "7.4.2",
+      "display_name": "钢桁架加劲梁",
+      "level_code": "003004002"
+    },
+    {
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "display_number": "7.4.3",
+      "display_name": "钢箱加劲梁",
+      "level_code": "003004003"
+    },
+    {
+      "source_group_id": "65c335c0-a538-4470-be10-bc2cfba8e9eb",
+      "display_number": "7.5",
+      "display_name": "索塔",
+      "level_code": "003005"
+    },
+    {
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "display_number": "7.5.1",
+      "display_name": "索塔",
+      "level_code": "003005001"
+    },
+    {
+      "source_group_id": "f0a4e55f-3059-45a7-be32-4651fcefa48b",
+      "display_number": "7.6",
+      "display_name": "索鞍",
+      "level_code": "003006"
+    },
+    {
+      "source_group_id": "08d72514-56bf-429f-8445-9b280e442143",
+      "display_number": "7.6.1",
+      "display_name": "索鞍",
+      "level_code": "003006001"
+    },
+    {
+      "source_group_id": "f9a95c6c-cd22-488b-8884-ede50f9c03bb",
+      "display_number": "7.7",
+      "display_name": "锚锭",
+      "level_code": "003007"
+    },
+    {
+      "source_group_id": "f10a4e4f-4b9f-478b-ae58-9c59452b64d9",
+      "display_number": "7.7.1",
+      "display_name": "悬索桥锚锭",
+      "level_code": "003007001"
+    },
+    {
+      "source_group_id": "d99f4b0b-4338-40ca-847b-12c6632fb8b3",
+      "display_number": "7.8",
+      "display_name": "锚杆",
+      "level_code": "003008"
+    },
+    {
+      "source_group_id": "d48d11aa-1ce8-44d5-8d40-e7dd983f263f",
+      "display_number": "7.8.1",
+      "display_name": "锚杆",
+      "level_code": "003008001"
+    },
+    {
+      "source_group_id": "e5c685e2-e9af-42b1-91ec-3eeb4a253ca4",
+      "display_number": "8",
+      "display_name": "斜拉桥",
+      "level_code": "004"
+    },
+    {
+      "source_group_id": "004873f0-98a0-40f5-9bd8-52f3e53c6711",
+      "display_number": "8.1",
+      "display_name": "斜拉索",
+      "level_code": "004001"
+    },
+    {
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "display_number": "8.1.1",
+      "display_name": "斜拉索",
+      "level_code": "004001001"
+    },
+    {
+      "source_group_id": "8322c14b-eb8e-4ac6-9a9f-eae41d22da81",
+      "display_number": "8.2",
+      "display_name": "斜拉索护套",
+      "level_code": "004002"
+    },
+    {
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "display_number": "8.2.1",
+      "display_name": "斜拉索护套",
+      "level_code": "004002001"
+    },
+    {
+      "source_group_id": "1845bc95-5b2f-47a4-b6dd-5f5abb6548e7",
+      "display_number": "8.4",
+      "display_name": "索塔",
+      "level_code": "004003"
+    },
+    {
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "display_number": "8.4.1",
+      "display_name": "索塔",
+      "level_code": "004003001"
+    },
+    {
+      "source_group_id": "fef1e49e-5db1-4242-afb2-128e999696a0",
+      "display_number": "8.5",
+      "display_name": "锚具",
+      "level_code": "004004"
+    },
+    {
+      "source_group_id": "14529eeb-f082-48ff-a276-d47bd4e2b27d",
+      "display_number": "8.5.1",
+      "display_name": "锚具",
+      "level_code": "004004001"
+    },
+    {
+      "source_group_id": "9336a682-6933-4e2b-8847-c2fd15816944",
+      "display_number": "8.6",
+      "display_name": "减震装置",
+      "level_code": "004005"
+    },
+    {
+      "source_group_id": "0a7c24b8-6d70-43bf-9c0d-d315268ab061",
+      "display_number": "8.6.1",
+      "display_name": "减震装置",
+      "level_code": "004005001"
+    },
+    {
+      "source_group_id": "e0d5dfe6-be5e-4bcb-9076-64e8b6b54825",
+      "display_number": "8.7",
+      "display_name": "锚垫板异常（测试）",
+      "level_code": "004006"
+    },
+    {
+      "source_group_id": "92ef89d2-8854-4a10-b0b1-60bd1d669849",
+      "display_number": "8.7.1",
+      "display_name": "锚垫板异常",
+      "level_code": "004006001"
+    },
+    {
+      "source_group_id": "fe96f159-0798-4d4e-9dbf-37ec7c8240c3",
+      "display_number": "9",
+      "display_name": "桥梁下部结构",
+      "level_code": "005"
+    },
+    {
+      "source_group_id": "5d93a405-e5c2-4ff9-9563-1f5f7dc8430c",
+      "display_number": "9.1",
+      "display_name": "桥墩",
+      "level_code": "005001"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "display_number": "9.1.1",
+      "display_name": "墩身",
+      "level_code": "005001001"
+    },
+    {
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "display_number": "9.1.2",
+      "display_name": "盖梁和系梁",
+      "level_code": "005001002"
+    },
+    {
+      "source_group_id": "71882781-accc-4325-8145-45396eabbd57",
+      "display_number": "9.2",
+      "display_name": "桥台",
+      "level_code": "005002"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "display_number": "9.2.1",
+      "display_name": "台身",
+      "level_code": "005002001"
+    },
+    {
+      "source_group_id": "11a54dd2-f98d-4b63-b255-58030580d70e",
+      "display_number": "9.2.2",
+      "display_name": "台帽",
+      "level_code": "005002002"
+    },
+    {
+      "source_group_id": "14588f41-50d5-43eb-ab39-817337a58eb8",
+      "display_number": "9.3",
+      "display_name": "基础",
+      "level_code": "005003"
+    },
+    {
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "display_number": "9.3.2",
+      "display_name": "基础（包括水下基础）",
+      "level_code": "005003001"
+    },
+    {
+      "source_group_id": "250d8e33-960c-4c15-b554-c0f609a6eb7c",
+      "display_number": "9.4",
+      "display_name": "翼墙、耳墙",
+      "level_code": "005004"
+    },
+    {
+      "source_group_id": "5e63284c-5883-4a6d-9f14-8a31968720af",
+      "display_number": "9.4.1",
+      "display_name": "翼墙、耳墙",
+      "level_code": "005004001"
+    },
+    {
+      "source_group_id": "c2c59dc0-0718-494d-ab7d-187b9211c3cd",
+      "display_number": "9.5",
+      "display_name": "锥坡、护坡",
+      "level_code": "005005"
+    },
+    {
+      "source_group_id": "9a83d0e4-4e8c-486e-9f4f-51708029bdc5",
+      "display_number": "9.5.1",
+      "display_name": "锥坡、护坡",
+      "level_code": "005005001"
+    },
+    {
+      "source_group_id": "b34dc571-64f4-4ba5-8e23-62e488f02689",
+      "display_number": "9.6",
+      "display_name": "河床及调治构造物",
+      "level_code": "005006"
+    },
+    {
+      "source_group_id": "ec71dd0c-d225-4bea-8410-9e826a2be608",
+      "display_number": "9.6.1",
+      "display_name": "河床",
+      "level_code": "005006001"
+    },
+    {
+      "source_group_id": "5839fb7d-2a27-43cc-9498-79a30d53dae4",
+      "display_number": "9.6.2",
+      "display_name": "调治构造物",
+      "level_code": "005006002"
+    },
+    {
+      "source_group_id": "45639f17-c704-4833-b5df-b115de1d710a",
+      "display_number": "10",
+      "display_name": "桥面系",
+      "level_code": "006"
+    },
+    {
+      "source_group_id": "dcb7d1c6-10a9-46ee-8914-8e78973cf41c",
+      "display_number": "10.1",
+      "display_name": "桥面铺装",
+      "level_code": "006001"
+    },
+    {
+      "source_group_id": "75781860-144b-4584-b3d6-9617ab878131",
+      "display_number": "10.1.1",
+      "display_name": "沥青混凝土桥面铺装",
+      "level_code": "006001001"
+    },
+    {
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "display_number": "10.1.2",
+      "display_name": "水泥混凝土桥面铺装",
+      "level_code": "006001002"
+    },
+    {
+      "source_group_id": "e4fc74f5-93e6-48ad-acb6-0a94d4162077",
+      "display_number": "10.2",
+      "display_name": "伸缩缝装置",
+      "level_code": "006002"
+    },
+    {
+      "source_group_id": "f519a6fd-6351-4881-98ac-d65e07dd252b",
+      "display_number": "10.2.1",
+      "display_name": "伸缩缝",
+      "level_code": "006002001"
+    },
+    {
+      "source_group_id": "f28be23d-7ff2-40c0-aeb9-076e0e7a9774",
+      "display_number": "10.3",
+      "display_name": "人行道",
+      "level_code": "006003"
+    },
+    {
+      "source_group_id": "3dde21bf-0b02-42bb-8b6f-e48f1f45efc0",
+      "display_number": "10.3.1",
+      "display_name": "人行道",
+      "level_code": "006003001"
+    },
+    {
+      "source_group_id": "283da92e-bb70-48a9-976b-181f7c19d896",
+      "display_number": "10.4",
+      "display_name": "栏杆、护栏",
+      "level_code": "006004"
+    },
+    {
+      "source_group_id": "ff33d523-fb3b-47f5-be80-b73d5acdad5e",
+      "display_number": "10.4.1",
+      "display_name": "栏杆、护栏",
+      "level_code": "006004001"
+    },
+    {
+      "source_group_id": "ec48f390-1916-4683-927c-17cf0caa4531",
+      "display_number": "10.5",
+      "display_name": "防排水系统",
+      "level_code": "006005"
+    },
+    {
+      "source_group_id": "53843dda-e4dc-4e6f-8aad-6d9dbdbbac4e",
+      "display_number": "10.5.1",
+      "display_name": "排水不畅",
+      "level_code": "006005001"
+    },
+    {
+      "source_group_id": "4a4c622b-0abd-4558-b984-83d9d97399e9",
+      "display_number": "10.5.2",
+      "display_name": "泄水管、引水槽缺陷",
+      "level_code": "006005002"
+    },
+    {
+      "source_group_id": "511d9494-81f4-48e4-9164-84ac4f932b78",
+      "display_number": "10.6",
+      "display_name": "照明、标志",
+      "level_code": "006006"
+    },
+    {
+      "source_group_id": "f0ff904d-65f3-42cc-a2de-fa6d7f3d8cd8",
+      "display_number": "10.6.1",
+      "display_name": "照明、标志",
+      "level_code": "006006001"
+    }
+  ],
+  "indicators": [
+    {
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_number": "5.1.1-1",
+      "display_name": "蜂窝、麻面"
+    },
+    {
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_number": "5.1.1-2",
+      "display_name": "剥落、掉角"
+    },
+    {
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_number": "5.1.1-3",
+      "display_name": "空洞、孔洞"
+    },
+    {
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "display_number": "5.1.1-4",
+      "display_name": "保护层厚度"
+    },
+    {
+      "source_indicator_id": "c97678b0-48e4-4025-a582-586380c8aa97",
+      "display_number": "5.1.1-4",
+      "display_name": "混凝土保护层厚度"
+    },
+    {
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "display_number": "5.1.1-5",
+      "display_name": "钢筋锈蚀"
+    },
+    {
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "display_number": "5.1.1-6",
+      "display_name": "混凝土碳化"
+    },
+    {
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "display_number": "5.1.1-7",
+      "display_name": "混凝土强度"
+    },
+    {
+      "source_indicator_id": "4e880e29-aed8-457a-bcd8-b22e2d8449d8",
+      "display_number": "5.1.1-8",
+      "display_name": "跨中挠度"
+    },
+    {
+      "source_indicator_id": "e5c4cc60-ccae-4ddb-91de-e76dfb6c7123",
+      "display_number": "5.1.1-9",
+      "display_name": "结构变位"
+    },
+    {
+      "source_indicator_id": "7430418e-ad8b-4b66-a010-ad268b4956b8",
+      "display_number": "5.1.1-10",
+      "display_name": "预应力构件损伤"
+    },
+    {
+      "source_indicator_id": "dc87a997-abb2-471d-9f23-b192bb08d9df",
+      "display_number": "5.1.1-11",
+      "display_name": "简支梁（板）桥、刚架桥裂缝"
+    },
+    {
+      "source_indicator_id": "4f2cfb4a-5027-4a2f-9ba5-ef631ecf7e5e",
+      "display_number": "5.1.1-12",
+      "display_name": "连续梁桥、连续刚构桥、悬臂梁桥、 T 型刚构桥裂缝"
+    },
+    {
+      "source_indicator_id": "b146158a-d5c7-4e08-b3d5-b9c79a987e13",
+      "display_number": "5.1.1-13",
+      "display_name": "桥面板其它病害"
+    },
+    {
+      "source_indicator_id": "ce3a2d6d-a453-4799-9128-76e2fb5ef38c",
+      "display_number": "5.1.1-13",
+      "display_name": "水损（参照混凝土碳化执行）"
+    },
+    {
+      "source_indicator_id": "9911f80e-d826-4095-8e54-39af3c13e63c",
+      "display_number": "5.1.1-14",
+      "display_name": "上部其它病害"
+    },
+    {
+      "source_indicator_id": "0233eeca-a51e-4f99-aaf0-9fd744a264e2",
+      "display_number": "5.2.1-1",
+      "display_name": "涂层劣化"
+    },
+    {
+      "source_indicator_id": "da70a903-bf0a-4764-9a25-45fe15eb3e6a",
+      "display_number": "5.2.1-2",
+      "display_name": "锈蚀"
+    },
+    {
+      "source_indicator_id": "f33b9c1b-614f-4c21-8372-5a307a135472",
+      "display_number": "5.2.1-3",
+      "display_name": "焊缝开裂"
+    },
+    {
+      "source_indicator_id": "cb5f6e74-9e8f-422f-b3e2-a48af089a831",
+      "display_number": "5.2.1-4",
+      "display_name": "铆钉（螺栓）损失"
+    },
+    {
+      "source_indicator_id": "7da50a55-c19f-46b4-a118-20542c63df7a",
+      "display_number": "5.2.1-5",
+      "display_name": "构件裂缝"
+    },
+    {
+      "source_indicator_id": "8006dc38-cb70-4aab-b983-42347aa1cb2b",
+      "display_number": "5.2.1-6",
+      "display_name": "跨中挠度"
+    },
+    {
+      "source_indicator_id": "2dc6f651-3bd9-4441-a170-199e2241ae4a",
+      "display_number": "5.2.1-7",
+      "display_name": "构件变形"
+    },
+    {
+      "source_indicator_id": "ab732c09-c1c2-4d02-87f6-bc3979de98a8",
+      "display_number": "5.2.1-8",
+      "display_name": "结构变位"
+    },
+    {
+      "source_indicator_id": "da2fcbd4-9dd6-40e2-94ba-1d82d8d31390",
+      "display_number": "5.2.1-9",
+      "display_name": "上部其它病害"
+    },
+    {
+      "source_indicator_id": "82156c03-edc1-492c-9b12-30cb5d68fa51",
+      "display_number": "5.2.1-9",
+      "display_name": "钢拱桥其它病害"
+    },
+    {
+      "source_indicator_id": "7f5e9f5c-8058-4d31-ae50-70da1845c725",
+      "display_number": "5.3.1-1",
+      "display_name": "板式支座老化变质、开裂"
+    },
+    {
+      "source_indicator_id": "e29d1dd6-63a8-40ac-9413-0cea967c5330",
+      "display_number": "5.3.1-2",
+      "display_name": "板式支座缺陷"
+    },
+    {
+      "source_indicator_id": "c394ce27-de96-4c2e-ae98-f2f83108c4a1",
+      "display_number": "5.3.1-3",
+      "display_name": "板式支座位置串动、脱空或剪切超限"
+    },
+    {
+      "source_indicator_id": "ecd85cf2-0685-45f2-a7ea-1d85b0e1a1e3",
+      "display_number": "5.3.1-4",
+      "display_name": "盆式支座组件损坏"
+    },
+    {
+      "source_indicator_id": "0f3f314e-f40b-42dc-86fe-c1c6c3279f53",
+      "display_number": "5.3.1-5",
+      "display_name": "聚四氟乙烯滑板磨损"
+    },
+    {
+      "source_indicator_id": "28e1374e-69eb-49a9-aa97-16974a452ac9",
+      "display_number": "5.3.1-6",
+      "display_name": "盆式支座位移、转角超限"
+    },
+    {
+      "source_indicator_id": "a644016f-25bd-4b44-b779-3487ff6deea6",
+      "display_number": "5.3.1-7",
+      "display_name": "橡胶支座其它病害"
+    },
+    {
+      "source_indicator_id": "66b0c8c1-33ac-42c0-8da7-5fd7dd31a05c",
+      "display_number": "5.3.2-1",
+      "display_name": "钢支座组件或功能缺陷"
+    },
+    {
+      "source_indicator_id": "f56ea564-14f0-4c3b-8032-31fb25bf7657",
+      "display_number": "5.3.2-2",
+      "display_name": "钢支座位移、转角超限"
+    },
+    {
+      "source_indicator_id": "f7852027-82e8-49df-bb1e-f7155683be4d",
+      "display_number": "5.3.2-3",
+      "display_name": "钢支座部件磨损、裂缝"
+    },
+    {
+      "source_indicator_id": "07b61a4d-2c8b-4828-b341-f79a3742f3d5",
+      "display_number": "5.3.2-4",
+      "display_name": "钢支座其它病害"
+    },
+    {
+      "source_indicator_id": "75962585-f36f-4c72-8543-6c66459ece32",
+      "display_number": "5.3.3-1",
+      "display_name": "混凝土缺损"
+    },
+    {
+      "source_indicator_id": "aac71c75-dcf2-4d80-9247-4ed318dd8326",
+      "display_number": "5.3.3-2",
+      "display_name": "活动支座滑动面不平整、生锈咬死"
+    },
+    {
+      "source_indicator_id": "aa0d2db8-375b-4009-87b6-0221b534140d",
+      "display_number": "5.3.3-3",
+      "display_name": "轴承有裂纹、切口或偏移"
+    },
+    {
+      "source_indicator_id": "eb875da2-5710-4338-8800-275109b03327",
+      "display_number": "5.3.3-4",
+      "display_name": "摆式支座其它病害"
+    },
+    {
+      "source_indicator_id": "5652f521-12f5-4d25-a050-b8e973ddcc80",
+      "display_number": "5.3.4-1",
+      "display_name": "螺纹、螺帽松动或锚螺杆剪切"
+    },
+    {
+      "source_indicator_id": "5d44587e-4ef6-47d4-81c0-10ace11a8bed",
+      "display_number": "5.3.4-2",
+      "display_name": "上下座板(盆)锈蚀"
+    },
+    {
+      "source_indicator_id": "dba886c8-b6ca-4228-bb70-7a9cc5199366",
+      "display_number": "5.3.4-3",
+      "display_name": "纵横线扭转"
+    },
+    {
+      "source_indicator_id": "d08cfb05-97ba-4b9d-ac65-bade7938ca75",
+      "display_number": "5.3.4-4",
+      "display_name": "特殊支座其它病害"
+    },
+    {
+      "source_indicator_id": "45ae453a-62a3-41aa-98a8-08062e144827",
+      "display_number": "6.1.1-1",
+      "display_name": "主拱圈变形"
+    },
+    {
+      "source_indicator_id": "4c447755-6dd8-4e9b-aa7d-36edab762689",
+      "display_number": "6.1.1-2",
+      "display_name": "主拱圈裂缝"
+    },
+    {
+      "source_indicator_id": "cd2e40a3-04da-44e0-893e-fd974939358a",
+      "display_number": "6.1.1-3",
+      "display_name": "灰缝松散脱落"
+    },
+    {
+      "source_indicator_id": "a0cf48d2-e52c-4c96-9c94-f2855c98e6d6",
+      "display_number": "6.1.1-4",
+      "display_name": "渗水"
+    },
+    {
+      "source_indicator_id": "a8ec1da1-f587-4c48-89c9-e43e3427e84d",
+      "display_number": "6.1.1-5",
+      "display_name": "砌块断裂、脱落"
+    },
+    {
+      "source_indicator_id": "c1894ac8-a6fd-4ce1-9b7a-871216b3e375",
+      "display_number": "6.1.1-6",
+      "display_name": "风化"
+    },
+    {
+      "source_indicator_id": "4e93882c-a6c3-4c02-8ad5-554eee93173f",
+      "display_number": "6.1.1-7",
+      "display_name": "拱脚位移"
+    },
+    {
+      "source_indicator_id": "2548b480-0232-4a24-a66e-f2890ddc2dfd",
+      "display_number": "6.1.1-8",
+      "display_name": "主拱圈其它病害"
+    },
+    {
+      "source_indicator_id": "7a143604-99be-4103-a115-ad160e75c514",
+      "display_number": "6.1.2-1",
+      "display_name": "实腹拱的侧墙与主拱圈脱裂"
+    },
+    {
+      "source_indicator_id": "bdeef944-3f07-473c-aa98-87a6a713fab4",
+      "display_number": "6.1.2-2",
+      "display_name": "实腹拱的侧墙变形、位移"
+    },
+    {
+      "source_indicator_id": "a403a2b1-7bd1-441d-9081-515081aafcaf",
+      "display_number": "6.1.2-3",
+      "display_name": "实腹拱的拱上填料沉陷或开裂"
+    },
+    {
+      "source_indicator_id": "0efbcc9d-3360-4e1f-8311-e08507b1ed66",
+      "display_number": "6.1.2-4",
+      "display_name": "空腹拱的腹拱或横向联系变形、错位"
+    },
+    {
+      "source_indicator_id": "ec692c16-8973-43f3-aa95-00a47834f445",
+      "display_number": "6.1.2-5",
+      "display_name": "立墙或立柱倾斜、开裂或脱落"
+    },
+    {
+      "source_indicator_id": "8b0d62b7-620e-43c6-81cc-9be68444636f",
+      "display_number": "6.1.2-6",
+      "display_name": "拱上结构裂缝"
+    },
+    {
+      "source_indicator_id": "dac90965-e3f2-4559-bf5b-86f18bf28fc8",
+      "display_number": "6.1.2-7",
+      "display_name": "拱上填料排水不畅"
+    },
+    {
+      "source_indicator_id": "7811f4d9-0280-4cbc-bfaa-4e248084e969",
+      "display_number": "6.1.2-8",
+      "display_name": "拱上结构其它病害"
+    },
+    {
+      "source_indicator_id": "5eeff87e-6415-4364-a600-8d5d94279dbe",
+      "display_number": "6.2.1-1",
+      "display_name": "主拱圈变形"
+    },
+    {
+      "source_indicator_id": "f030f70a-205c-49e0-ba8f-3012ad33d56f",
+      "display_number": "6.2.1-2",
+      "display_name": "主拱圈裂缝"
+    },
+    {
+      "source_indicator_id": "e2a41565-4c8e-4d38-b7c5-75b5c0631a8b",
+      "display_number": "6.2.1-4",
+      "display_name": "拱铰功能受损"
+    },
+    {
+      "source_indicator_id": "5b7e4fcb-b89a-47f0-a1b3-6438d73e68b9",
+      "display_number": "6.2.1-5",
+      "display_name": "拱脚位移"
+    },
+    {
+      "source_indicator_id": "c15d98a2-1eee-4c8d-b879-f825931e3b72",
+      "display_number": "6.2.1-6",
+      "display_name": "其它病害"
+    },
+    {
+      "source_indicator_id": "aeefc5ab-1bc8-4b10-92c2-b09d8683f481",
+      "display_number": "6.2.2-1",
+      "display_name": "实腹拱的侧墙与主拱圈间脱裂"
+    },
+    {
+      "source_indicator_id": "1087ed5b-7b29-475e-9276-3c820d18a5be",
+      "display_number": "6.2.2-2",
+      "display_name": "侧墙变形"
+    },
+    {
+      "source_indicator_id": "c5e8bda9-c92d-4b75-8b80-16f35fdf0036",
+      "display_number": "6.2.2-3",
+      "display_name": "实腹拱的拱上填料沉陷或开裂"
+    },
+    {
+      "source_indicator_id": "d3f00498-bee7-41cb-b224-a5379859ebc4",
+      "display_number": "6.2.2-4",
+      "display_name": "空腹拱的腹拱或横向联系变形、错位"
+    },
+    {
+      "source_indicator_id": "7188c6dd-7bb2-4505-a69d-8d0f02c6a071",
+      "display_number": "6.2.2-5",
+      "display_name": "立墙或立柱倾斜"
+    },
+    {
+      "source_indicator_id": "32c69b68-76cd-4513-a576-d2b262bede6a",
+      "display_number": "6.2.2-6",
+      "display_name": "表面缺陷"
+    },
+    {
+      "source_indicator_id": "dc4e2abc-4867-4285-93c2-95edae76c569",
+      "display_number": "6.2.2-7",
+      "display_name": "拱上结构裂缝"
+    },
+    {
+      "source_indicator_id": "b8267c91-9858-4c3b-952b-390f9fcc28a0",
+      "display_number": "6.2.2-8",
+      "display_name": "拱上填料排水不畅"
+    },
+    {
+      "source_indicator_id": "24906d73-f4e8-4b3b-93e2-c3f9abd5e218",
+      "display_number": "6.2.2-9",
+      "display_name": "其它病害"
+    },
+    {
+      "source_indicator_id": "7aae11e1-2bd6-481b-8bd5-4ad3027b285a",
+      "display_number": "6.2.3-1",
+      "display_name": "主拱圈、横向联系变形"
+    },
+    {
+      "source_indicator_id": "07b624f2-cddc-46e3-b8e0-c934efcdf35f",
+      "display_number": "6.2.3-2",
+      "display_name": "渗水"
+    },
+    {
+      "source_indicator_id": "5bf87a01-ff44-4d5d-a7ea-b5e2bd155df3",
+      "display_number": "6.2.3-3",
+      "display_name": "主拱圈裂缝"
+    },
+    {
+      "source_indicator_id": "3087fb47-96b1-408a-a6cc-e25fcf180ecf",
+      "display_number": "6.2.3-4",
+      "display_name": "其它病害"
+    },
+    {
+      "source_indicator_id": "49c97c40-9116-4109-8609-87560c54d7b4",
+      "display_number": "6.2.5-1",
+      "display_name": "跨中挠度"
+    },
+    {
+      "source_indicator_id": "5d4a72db-1903-488b-bbed-6f0a693c1b2c",
+      "display_number": "6.2.5-2",
+      "display_name": "横系梁与拱片联结松动、开裂"
+    },
+    {
+      "source_indicator_id": "b2fc2b08-ec34-4af9-a821-18ac2747434d",
+      "display_number": "6.2.5-3",
+      "display_name": "微弯板穿孔、塌陷、露筋"
+    },
+    {
+      "source_indicator_id": "fa7ebca7-fbbc-4112-bc6e-507b959f1b4c",
+      "display_number": "6.2.5-4",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "e78dc074-12b9-426c-8789-9660159a8899",
+      "display_number": "6.2.6-1",
+      "display_name": "混凝土压碎"
+    },
+    {
+      "source_indicator_id": "868d2b26-64a0-4e15-b91f-dc0b6ef8e1a8",
+      "display_number": "6.2.6-2",
+      "display_name": "连接部钢板锈蚀、断裂"
+    },
+    {
+      "source_indicator_id": "8d7fd22a-6ada-47e8-b89f-6d7baaef3540",
+      "display_number": "6.2.6-3",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "f6ee5853-96a0-42d8-bbb7-1f78429fd977",
+      "display_number": "6.2.6-4",
+      "display_name": "变形"
+    },
+    {
+      "source_indicator_id": "cc29d484-52ff-4421-80e1-07921af07110",
+      "display_number": "6.2.7-1",
+      "display_name": "构件变形"
+    },
+    {
+      "source_indicator_id": "aa1e1b4e-2ef8-45ef-bde0-a6e4aded15b4",
+      "display_number": "6.2.7-2",
+      "display_name": "拱片连接处混凝土断裂"
+    },
+    {
+      "source_indicator_id": "b6909bcb-3765-4a2d-8b0e-11d7073b92a9",
+      "display_number": "6.2.7-3",
+      "display_name": "上弦杆缺陷"
+    },
+    {
+      "source_indicator_id": "06c003ed-b714-40b4-82a5-575630cc55fd",
+      "display_number": "6.2.7-4",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "b8ddc8fc-70ef-441f-94a5-39acbff0cc45",
+      "display_number": "6.2.8-1",
+      "display_name": "变形"
+    },
+    {
+      "source_indicator_id": "1f67125d-d4ab-43b9-baf0-44cc70e3c822",
+      "display_number": "6.2.8-2",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "975cb630-7b32-4532-b7bc-eba2b4a7405c",
+      "display_number": "6.3.1-1",
+      "display_name": "涂层缺陷"
+    },
+    {
+      "source_indicator_id": "33e31c4a-1f9d-45f4-8057-da30696fd821",
+      "display_number": "6.3.1-2",
+      "display_name": "焊缝开裂"
+    },
+    {
+      "source_indicator_id": "b080ff6a-4a3a-4ff3-b9b2-41ee245b4ae0",
+      "display_number": "6.3.1-3",
+      "display_name": "混凝土裂缝"
+    },
+    {
+      "source_indicator_id": "7619bfa9-8627-43a9-8c2b-fc98d52fb077",
+      "display_number": "6.3.1-4",
+      "display_name": "构件扭曲变形、局部损伤"
+    },
+    {
+      "source_indicator_id": "b6c3cdfe-d410-4782-aecc-dd8fc30c45b5",
+      "display_number": "6.3.1-5",
+      "display_name": "构件腐蚀、生锈"
+    },
+    {
+      "source_indicator_id": "fe663c69-50ac-4817-8755-0b09572ef05f",
+      "display_number": "6.3.1-6",
+      "display_name": "管内混凝土填充不密实或脱空"
+    },
+    {
+      "source_indicator_id": "77d2fece-24ca-491f-98cf-0050b5af1969",
+      "display_number": "6.3.1-7",
+      "display_name": "主拱圈挠度"
+    },
+    {
+      "source_indicator_id": "d0b5d0c1-3e3a-4dc9-9060-89590934ebe9",
+      "display_number": "6.3.1-8",
+      "display_name": "拱肋位移"
+    },
+    {
+      "source_indicator_id": "4776971b-90f6-4171-bc4d-4e2a3e378ded",
+      "display_number": "6.3.1-9",
+      "display_name": "拱肋、横向联结系其它病害"
+    },
+    {
+      "source_indicator_id": "5ee08dc2-e31a-468c-a900-9f4a8211f5cd",
+      "display_number": "6.3.2-1",
+      "display_name": "混凝土裂缝"
+    },
+    {
+      "source_indicator_id": "f64f74fc-544b-4c40-8074-34fa1f623f8b",
+      "display_number": "6.3.2-2",
+      "display_name": "立柱其它病害"
+    },
+    {
+      "source_indicator_id": "c0aa47d6-93aa-418f-ad08-05619fd02d20",
+      "display_number": "6.3.3-2",
+      "display_name": "锈蚀(锚头、螺栓、钢管护套等)"
+    },
+    {
+      "source_indicator_id": "2b9c977b-0cc6-42ee-834e-bab948e341f6",
+      "display_number": "6.3.3-3",
+      "display_name": "锚头损坏"
+    },
+    {
+      "source_indicator_id": "dabaa125-0cfb-4921-9e39-619a1b009366",
+      "display_number": "6.3.3-4",
+      "display_name": "橡胶老化变质(吊杆端部及减振器)"
+    },
+    {
+      "source_indicator_id": "73a24e3c-5ab6-4eb5-964a-e43eda318a3d",
+      "display_number": "6.3.3-6",
+      "display_name": "吊杆的防护层破坏"
+    },
+    {
+      "source_indicator_id": "09e15da3-d00f-4956-b182-5532af14f364",
+      "display_number": "6.3.3-7",
+      "display_name": "断丝"
+    },
+    {
+      "source_indicator_id": "286b53e6-9186-47a0-9062-7787feb5f11f",
+      "display_number": "6.3.3-8",
+      "display_name": "吊杆其它病害"
+    },
+    {
+      "source_indicator_id": "56db13f7-b308-4cef-820e-66a5ca10cfd5",
+      "display_number": "6.3.4-1",
+      "display_name": "锈蚀(锚头、防护罩、钢箱)"
+    },
+    {
+      "source_indicator_id": "ac5de0a8-988b-4554-a43e-eefecf95047e",
+      "display_number": "6.3.4-2",
+      "display_name": "系杆外部涂层脱落"
+    },
+    {
+      "source_indicator_id": "f6ced803-ebfc-4e31-ae14-5a1edaa6bcc3",
+      "display_number": "6.3.4-3",
+      "display_name": "系杆连接松动"
+    },
+    {
+      "source_indicator_id": "b2baa0d4-c368-4267-b9b8-b4fadd93e6d0",
+      "display_number": "6.3.4-4",
+      "display_name": "锚头、防护套损坏"
+    },
+    {
+      "source_indicator_id": "f273bed6-5b14-4a73-8c67-5864e728ec10",
+      "display_number": "6.3.4-5",
+      "display_name": "断丝"
+    },
+    {
+      "source_indicator_id": "c805f8c3-3143-44a5-a1f1-52700e24fb8e",
+      "display_number": "6.3.4-6",
+      "display_name": "混凝土裂缝(混凝土防护板、系杆锚固区等)"
+    },
+    {
+      "source_indicator_id": "7630f80f-5243-45cf-9d9f-01cf5318dc15",
+      "display_number": "6.3.4-7",
+      "display_name": "系杆及防护板其它病害"
+    },
+    {
+      "source_indicator_id": "8b818d8b-78f3-4a04-8efd-91f608d85f9f",
+      "display_number": "6.4-1",
+      "display_name": "拱脚位移"
+    },
+    {
+      "source_indicator_id": "b3a9caa7-2ce7-4d83-842c-b15aaf6f1ed2",
+      "display_number": "7.1.1-1",
+      "display_name": "主缆防护损坏"
+    },
+    {
+      "source_indicator_id": "8966d1e4-ded2-429a-8878-911b5c7ce7ae",
+      "display_number": "7.1.1-2",
+      "display_name": "主缆线形"
+    },
+    {
+      "source_indicator_id": "95aa0b4c-ce72-481f-93ed-2e6b918f78f3",
+      "display_number": "7.1.1-3",
+      "display_name": "扶手绳及栏杆绳损坏"
+    },
+    {
+      "source_indicator_id": "b18bfb29-e5f5-464c-a3ee-275268121ad4",
+      "display_number": "7.1.1-4",
+      "display_name": "主缆腐蚀或索股损坏（脱皮、锈蚀、伤痕）"
+    },
+    {
+      "source_indicator_id": "f5f9c0a4-c697-467c-b0f9-fd4b61fc9444",
+      "display_number": "7.1.1-5",
+      "display_name": "涂膜劣化"
+    },
+    {
+      "source_indicator_id": "ec4a588f-51c6-42ff-9277-f0ad2ee4065a",
+      "display_number": "7.2.1-1",
+      "display_name": "错位、滑移"
+    },
+    {
+      "source_indicator_id": "736c8afc-96a2-4040-b6e7-4198d09ec1a0",
+      "display_number": "7.2.1-2",
+      "display_name": "面漆起皮"
+    },
+    {
+      "source_indicator_id": "30027b3a-6e2a-40c0-9990-44ac76a39462",
+      "display_number": "7.2.1-3",
+      "display_name": "索夹密封填料损坏"
+    },
+    {
+      "source_indicator_id": "20ca0373-7407-42d5-bb3d-f4bca065986f",
+      "display_number": "7.2.1-4",
+      "display_name": "裂纹和锈蚀"
+    },
+    {
+      "source_indicator_id": "2db90ba5-0da7-4866-9284-aae7f80c659a",
+      "display_number": "7.3.1-1",
+      "display_name": "渗水(吊索两端的锚固部位、冷铸锚头、横梁锚固构造、吊索套管、减振器等)"
+    },
+    {
+      "source_indicator_id": "084980d1-f9a3-4039-87b4-78258904239d",
+      "display_number": "7.3.1-2",
+      "display_name": "锈蚀、腐蚀(钢丝、锚头、螺栓、钢管护套等)"
+    },
+    {
+      "source_indicator_id": "7ec05479-e55e-4fb0-8f81-466492bae3c4",
+      "display_number": "7.3.1-3",
+      "display_name": "锚头损坏(松动、裂缝或破损)"
+    },
+    {
+      "source_indicator_id": "114d6ca9-f09c-43d4-8cce-937f05d8975f",
+      "display_number": "7.3.1-4",
+      "display_name": "橡胶老化变质(吊索端部及减振器)"
+    },
+    {
+      "source_indicator_id": "a1549b8b-ea9b-4502-8ae0-dac751c6a4dc",
+      "display_number": "7.3.1-5",
+      "display_name": "掉漆、起皮"
+    },
+    {
+      "source_indicator_id": "759a4924-619e-49fa-9ca5-4737a492da0a",
+      "display_number": "7.3.1-6",
+      "display_name": "防护套破坏"
+    },
+    {
+      "source_indicator_id": "616519c1-23b3-496e-9d54-dd00173fc75f",
+      "display_number": "7.3.1-7",
+      "display_name": "吊索的防护层破坏(裂纹、破损、老化和积水)"
+    },
+    {
+      "source_indicator_id": "1fe2d6e7-e46b-47e5-a952-8d91d336b7af",
+      "display_number": "7.3.1-8",
+      "display_name": "钢丝断丝"
+    },
+    {
+      "source_indicator_id": "9006a44d-46e0-4f2b-92d4-85e2a995cdc5",
+      "display_number": "7.4.1-1",
+      "display_name": "剥落、露筋"
+    },
+    {
+      "source_indicator_id": "3793c812-9174-4423-898c-735cfbce6f60",
+      "display_number": "7.4.1-2",
+      "display_name": "跨中挠度"
+    },
+    {
+      "source_indicator_id": "1c68f1c7-3b21-4aad-ab19-9e205d0fe64c",
+      "display_number": "7.4.1-3",
+      "display_name": "构件变形"
+    },
+    {
+      "source_indicator_id": "53f63040-badb-4bff-8120-034f3701e7f0",
+      "display_number": "7.4.1-4",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "dce9cab5-892b-4e08-a495-1aa34c6f673a",
+      "display_number": "7.4.2-1",
+      "display_name": "构件变形"
+    },
+    {
+      "source_indicator_id": "caca7c76-2450-4118-9c8d-76791046015d",
+      "display_number": "7.4.2-2",
+      "display_name": "锈蚀"
+    },
+    {
+      "source_indicator_id": "42f7422b-5f2e-45c7-9733-1fdd3903b2a0",
+      "display_number": "7.4.2-3",
+      "display_name": "跨中挠度"
+    },
+    {
+      "source_indicator_id": "355a3b03-bd48-4561-aad1-7f7bfe5a1c27",
+      "display_number": "7.4.2-4",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "e6a67dce-06cb-4468-b4dc-bd86cedf79f1",
+      "display_number": "7.4.3-1",
+      "display_name": "构件变形"
+    },
+    {
+      "source_indicator_id": "c32ad419-cf61-40db-b827-e8c093321b90",
+      "display_number": "7.4.3-2",
+      "display_name": "锈蚀"
+    },
+    {
+      "source_indicator_id": "57bcedee-50bc-4f37-9f28-f884c1959887",
+      "display_number": "7.4.3-3",
+      "display_name": "跨中挠度"
+    },
+    {
+      "source_indicator_id": "22feb2b5-cd7f-4236-a111-538900400ae4",
+      "display_number": "7.4.3-4",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "00daf836-3429-4fe2-979e-ef68f8a7a4dd",
+      "display_number": "7.5.1-1",
+      "display_name": "倾斜变形"
+    },
+    {
+      "source_indicator_id": "0cd5cbd1-3ca8-4e5d-ba6f-709822c8a7fe",
+      "display_number": "7.5.1-2",
+      "display_name": "蜂窝、麻面"
+    },
+    {
+      "source_indicator_id": "8791f766-da21-4909-a981-a92ce2ba9414",
+      "display_number": "7.5.1-3",
+      "display_name": "剥落、露筋"
+    },
+    {
+      "source_indicator_id": "e2e16e76-fdd7-4d08-aa73-30cd007b0cb6",
+      "display_number": "7.5.1-4",
+      "display_name": "钢筋锈蚀"
+    },
+    {
+      "source_indicator_id": "70e45ad2-97c1-4956-8629-f7a22475275a",
+      "display_number": "7.5.1-5",
+      "display_name": "混凝土裂缝"
+    },
+    {
+      "source_indicator_id": "544a7d09-3929-4115-a6dc-c264eaedcf13",
+      "display_number": "7.5.1-6",
+      "display_name": "沉降"
+    },
+    {
+      "source_indicator_id": "a23aa04f-ef57-4c4f-8f23-46bf973edb41",
+      "display_number": "7.5.1-7",
+      "display_name": "基础冲刷"
+    },
+    {
+      "source_indicator_id": "d4d14da0-41e3-4cd4-9009-9bd0d7a9c669",
+      "display_number": "7.6.1-1",
+      "display_name": "上座板与下座板的相对位移"
+    },
+    {
+      "source_indicator_id": "6466f02b-d53b-4631-9d7e-9e94d5faa659",
+      "display_number": "7.6.1-2",
+      "display_name": "鞍座螺杆、锚栓状况"
+    },
+    {
+      "source_indicator_id": "6e8affac-731b-44ba-b0fb-0b5a1358106c",
+      "display_number": "7.6.1-3",
+      "display_name": "锈蚀"
+    },
+    {
+      "source_indicator_id": "feb760e6-a0c8-423e-92ca-edf282a26dde",
+      "display_number": "7.7.1-1",
+      "display_name": "锚坑漏水"
+    },
+    {
+      "source_indicator_id": "24118ff8-55ac-4dd9-a6c1-fb0978614673",
+      "display_number": "7.7.1-2",
+      "display_name": "顶板、侧墙损坏"
+    },
+    {
+      "source_indicator_id": "a182b0ed-c081-4e25-a911-e17c75bdb646",
+      "display_number": "7.7.1-3",
+      "display_name": "锚碇均匀沉降"
+    },
+    {
+      "source_indicator_id": "14242b54-2c00-41da-a600-48dd7cf017be",
+      "display_number": "7.7.1-4",
+      "display_name": "表观病害"
+    },
+    {
+      "source_indicator_id": "fad20456-39e0-47e6-a272-17e170087bc6",
+      "display_number": "7.7.1-5",
+      "display_name": "水平位移"
+    },
+    {
+      "source_indicator_id": "17a67be2-003c-4e35-92f2-631f5cc465fd",
+      "display_number": "7.8.1-1",
+      "display_name": "掉皮"
+    },
+    {
+      "source_indicator_id": "e817adc3-e033-4e1f-8ae2-1b810c8195a6",
+      "display_number": "7.8.1-2",
+      "display_name": "锈蚀"
+    },
+    {
+      "source_indicator_id": "aa0a3490-4ef1-401b-9323-8deb5f4425d9",
+      "display_number": "7.8.1-3",
+      "display_name": "出现裂纹"
+    },
+    {
+      "source_indicator_id": "75059dfd-3143-4f14-8501-b960fdce4b68",
+      "display_number": "8.1.1-1",
+      "display_name": "拉索锈蚀、断丝"
+    },
+    {
+      "source_indicator_id": "5a7ade74-94d0-4ca8-ae21-eac5bc4e84ed",
+      "display_number": "8.1.1-2",
+      "display_name": "滑移变位"
+    },
+    {
+      "source_indicator_id": "ea24b3f1-c51f-4249-b20c-0a976a22f0d3",
+      "display_number": "8.1.1-3",
+      "display_name": "涂层损坏"
+    },
+    {
+      "source_indicator_id": "2e9a31de-a29f-404a-be5c-ace5c8dfdf46",
+      "display_number": "8.1.1-4",
+      "display_name": "护套内的材料老化变质"
+    },
+    {
+      "source_indicator_id": "8fd41a0c-9ecf-4cd5-8c19-9c07045631a9",
+      "display_number": "8.1.1-5",
+      "display_name": "锚固区损坏"
+    },
+    {
+      "source_indicator_id": "c84beeb5-5b63-45ea-9bf7-fee5feba81fd",
+      "display_number": "8.1.1-6",
+      "display_name": "拉索线形异常"
+    },
+    {
+      "source_indicator_id": "dcef9afb-7709-4969-a63a-1aa93a0c0b61",
+      "display_number": "8.2.1-1",
+      "display_name": "漆膜损坏"
+    },
+    {
+      "source_indicator_id": "41610de8-5667-4946-8e68-426cb7eec4e1",
+      "display_number": "8.2.1-2",
+      "display_name": "护套裂缝"
+    },
+    {
+      "source_indicator_id": "4a5d4fc8-932b-4d78-8e85-2d6ac56be268",
+      "display_number": "8.2.1-3",
+      "display_name": "护套锈蚀"
+    },
+    {
+      "source_indicator_id": "ec068d64-9435-4d2e-abe4-0bf4d4882cab",
+      "display_number": "8.2.1-4",
+      "display_name": "防护层破损"
+    },
+    {
+      "source_indicator_id": "6bb1a661-6c4b-42b1-be0f-b00dd1e63977",
+      "display_number": "8.2.1-5",
+      "display_name": "护套上端浆液离析"
+    },
+    {
+      "source_indicator_id": "2da3fb0f-2e79-47d0-aec5-3904c407d237",
+      "display_number": "8.2.1-6",
+      "display_name": "渗水"
+    },
+    {
+      "source_indicator_id": "f49c54c2-bb0d-484b-ac87-e2d69e05869f",
+      "display_number": "8.4.1-1",
+      "display_name": "倾斜变形"
+    },
+    {
+      "source_indicator_id": "36add40b-65c6-40d4-aeb7-1731d7bf23cd",
+      "display_number": "8.4.1-2",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "92db2226-3c9a-46ba-8410-db8401b88cb1",
+      "display_number": "8.4.1-3",
+      "display_name": "沉降"
+    },
+    {
+      "source_indicator_id": "2e506985-666d-485e-acdf-c3883f5cd1d7",
+      "display_number": "8.4.1-4",
+      "display_name": "锚固区渗水"
+    },
+    {
+      "source_indicator_id": "47108af0-baa5-4ebe-afd3-d3d3c40da55c",
+      "display_number": "8.5.1-1",
+      "display_name": "锚杯积水"
+    },
+    {
+      "source_indicator_id": "811afe88-2f0e-4c02-8848-d54de9718b16",
+      "display_number": "8.5.1-2",
+      "display_name": "锚具内潮湿"
+    },
+    {
+      "source_indicator_id": "eba6b4b2-7ac5-4483-bcd0-4d8ef9e6a86a",
+      "display_number": "8.5.1-3",
+      "display_name": "防锈油结块"
+    },
+    {
+      "source_indicator_id": "0785790a-bb19-431c-acb0-14f4108b17b1",
+      "display_number": "8.5.1-4",
+      "display_name": "锚具锈蚀"
+    },
+    {
+      "source_indicator_id": "607ca2a8-a4c5-4936-8e9d-ad130eab9e6a",
+      "display_number": "8.6.1",
+      "display_name": "减震装置"
+    },
+    {
+      "source_indicator_id": "b53e9e87-032a-43d1-b83f-db1a203959ad",
+      "display_number": "8.7.1",
+      "display_name": "锚垫板异常"
+    },
+    {
+      "source_indicator_id": "7cb25139-fd1f-48ed-9ee6-32ba5a7d9580",
+      "display_number": "9.1.1-1",
+      "display_name": "蜂窝、麻面"
+    },
+    {
+      "source_indicator_id": "4d762e27-6450-4d56-ab9b-9e3eccdd2bee",
+      "display_number": "9.1.1-2",
+      "display_name": "剥落、露筋"
+    },
+    {
+      "source_indicator_id": "5d3ecd4d-6f76-41d2-829a-79efe102ef9a",
+      "display_number": "9.1.1-3",
+      "display_name": "空洞、孔洞"
+    },
+    {
+      "source_indicator_id": "0d775ac4-5590-49c4-b26f-438b8001fdfa",
+      "display_number": "9.1.1-4",
+      "display_name": "钢筋锈蚀"
+    },
+    {
+      "source_indicator_id": "c53de155-5213-4009-84f4-ceb3437641a8",
+      "display_number": "9.1.1-5",
+      "display_name": "混凝土碳化、腐蚀"
+    },
+    {
+      "source_indicator_id": "13c0a08d-4d99-491d-bd8a-560d9d7d59ef",
+      "display_number": "9.1.1-6",
+      "display_name": "磨损"
+    },
+    {
+      "source_indicator_id": "06590b54-d65c-4b95-be91-dbb908078e1e",
+      "display_number": "9.1.1-7",
+      "display_name": "圬工砌体缺陷"
+    },
+    {
+      "source_indicator_id": "033e4374-c582-439e-a362-cd23826cfb21",
+      "display_number": "9.1.1-8",
+      "display_name": "位移"
+    },
+    {
+      "source_indicator_id": "20e86571-a67c-46fa-aced-5d5fa55b56b2",
+      "display_number": "9.1.1-9",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "1cc0b372-94dc-4993-86b9-33bc044b6b64",
+      "display_number": "9.1.1-10",
+      "display_name": "水损害"
+    },
+    {
+      "source_indicator_id": "9ea464b6-60aa-4a78-9355-48cc86bba877",
+      "display_number": "9.1.1-11",
+      "display_name": "墩身其它病害"
+    },
+    {
+      "source_indicator_id": "63cd142a-2363-4697-81f8-e425a4073949",
+      "display_number": "9.1.2-1",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "3ab76433-6786-492d-aacf-d3f655c5f592",
+      "display_number": "9.1.2-2",
+      "display_name": "盖梁和系梁病害"
+    },
+    {
+      "source_indicator_id": "abb2b08f-c0ff-486e-8331-582eb70c69da",
+      "display_number": "9.2.1-1",
+      "display_name": "剥落"
+    },
+    {
+      "source_indicator_id": "7ced5965-9371-4f39-b7ae-3823d8e3873d",
+      "display_number": "9.2.1-2",
+      "display_name": "空洞、孔洞"
+    },
+    {
+      "source_indicator_id": "b3785069-a78b-41c7-8785-e9acb3e8d19f",
+      "display_number": "9.2.1-3",
+      "display_name": "磨损"
+    },
+    {
+      "source_indicator_id": "b6775216-be8f-4b88-9de4-e7fc93d0c2df",
+      "display_number": "9.2.1-4",
+      "display_name": "混凝土碳化、腐蚀"
+    },
+    {
+      "source_indicator_id": "a829557e-ea81-4f43-9f3a-f7c2668b6990",
+      "display_number": "9.2.1-5",
+      "display_name": "圬工砌体缺陷"
+    },
+    {
+      "source_indicator_id": "c0126c45-7914-43e2-a46b-41cb0e9fadca",
+      "display_number": "9.2.1-6",
+      "display_name": "桥头跳车"
+    },
+    {
+      "source_indicator_id": "2a43a6cf-5baa-4ab7-8100-0c80d0efeb23",
+      "display_number": "9.2.1-7",
+      "display_name": "台背排水状况"
+    },
+    {
+      "source_indicator_id": "37f309ef-ef92-4443-a61f-8041bbf4f25f",
+      "display_number": "9.2.1-8",
+      "display_name": "位移"
+    },
+    {
+      "source_indicator_id": "d74715da-5299-40e9-a8af-5636e0f6d714",
+      "display_number": "9.2.1-9",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "35a4a72f-b4ec-4577-afb6-da2a2f06bdf8",
+      "display_number": "9.2.1-10",
+      "display_name": "水损害"
+    },
+    {
+      "source_indicator_id": "27b5c8e1-1a55-4a81-b037-7c87b17afef3",
+      "display_number": "9.2.1-10",
+      "display_name": "水损害（参照台身混凝土碳化、腐蚀）"
+    },
+    {
+      "source_indicator_id": "9d0cb667-901b-4708-8544-eb519b1d4c39",
+      "display_number": "9.2.1-11",
+      "display_name": "墩身其它病害"
+    },
+    {
+      "source_indicator_id": "d2f9d20c-5f02-4a8b-bcfd-bb9244bcf552",
+      "display_number": "9.2.2-1",
+      "display_name": "破损"
+    },
+    {
+      "source_indicator_id": "0594b528-aecc-41f3-bc49-3871e287d784",
+      "display_number": "9.2.2-2",
+      "display_name": "混凝土碳化、腐蚀"
+    },
+    {
+      "source_indicator_id": "8eccd2d6-b6c9-45cb-8d5b-593c9871af70",
+      "display_number": "9.2.2-3",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "4af62c2c-062e-49a5-ba8a-43515c9644f7",
+      "display_number": "9.2.2-4",
+      "display_name": "台帽其它病害"
+    },
+    {
+      "source_indicator_id": "ad5cc83d-3776-44d4-915f-ba2a76fb8ebe",
+      "display_number": "9.3.2-1",
+      "display_name": "冲刷、掏空"
+    },
+    {
+      "source_indicator_id": "877ffba4-83d2-4879-bac7-70e3cf88b47a",
+      "display_number": "9.3.2-2",
+      "display_name": "剥落、露筋"
+    },
+    {
+      "source_indicator_id": "0943f9af-db9b-42b1-8a84-33f0f91e618a",
+      "display_number": "9.3.2-3",
+      "display_name": "冲蚀"
+    },
+    {
+      "source_indicator_id": "d797e0ad-77ae-44a6-bab0-77b0a4e1205e",
+      "display_number": "9.3.2-4",
+      "display_name": "河底铺砌"
+    },
+    {
+      "source_indicator_id": "ad28e67b-e144-4569-9643-8ea7a2587dce",
+      "display_number": "9.3.2-5",
+      "display_name": "基础沉降"
+    },
+    {
+      "source_indicator_id": "664949a9-95ab-468d-8b18-4dbaf18aca70",
+      "display_number": "9.3.2-6",
+      "display_name": "滑移和倾斜"
+    },
+    {
+      "source_indicator_id": "3231236e-be08-4bfb-87ad-98a87fb97811",
+      "display_number": "9.3.2-7",
+      "display_name": "基础裂缝"
+    },
+    {
+      "source_indicator_id": "78210fcb-3ba4-498a-8bd8-bbc2814a5faa",
+      "display_number": "9.3.2-8",
+      "display_name": "基础其它病害"
+    },
+    {
+      "source_indicator_id": "1d87961d-1863-4fce-92e4-bdadcbe5bcc6",
+      "display_number": "9.4.1-1",
+      "display_name": "破损"
+    },
+    {
+      "source_indicator_id": "d23ec476-6944-4b4d-9db0-d1d7de415884",
+      "display_number": "9.4.1-2",
+      "display_name": "位移"
+    },
+    {
+      "source_indicator_id": "66008d87-0241-477a-96c0-775f57bdbeaf",
+      "display_number": "9.4.1-3",
+      "display_name": "鼓肚、砌体松动"
+    },
+    {
+      "source_indicator_id": "df9def73-8a16-433c-a06f-bf9ddbd062d7",
+      "display_number": "9.4.1-4",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "30022783-2077-42df-b686-02c8f0b97ed0",
+      "display_number": "9.4.1-5",
+      "display_name": "翼墙、耳墙其它病害"
+    },
+    {
+      "source_indicator_id": "161e7aec-a8c1-4963-bfb0-11d88b015e38",
+      "display_number": "9.5.1-1",
+      "display_name": "缺陷"
+    },
+    {
+      "source_indicator_id": "f3042c98-676a-439d-a60d-4f1a51c20d51",
+      "display_number": "9.5.1-2",
+      "display_name": "冲刷"
+    },
+    {
+      "source_indicator_id": "7c5cb180-0d46-4cfe-aea0-31c69e1dd151",
+      "display_number": "9.5.1-3",
+      "display_name": "锥坡、护坡其它病害"
+    },
+    {
+      "source_indicator_id": "d57ce73f-1578-4152-9beb-3f4853dff9d7",
+      "display_number": "9.6.1-1",
+      "display_name": "堵塞"
+    },
+    {
+      "source_indicator_id": "2ab085b2-8cf6-4b35-807a-920d419678f8",
+      "display_number": "9.6.1-2",
+      "display_name": "冲刷"
+    },
+    {
+      "source_indicator_id": "79628bc3-1873-4869-87ae-9154e65b7d6c",
+      "display_number": "9.6.1-3",
+      "display_name": "河床变迁"
+    },
+    {
+      "source_indicator_id": "8302b6c5-0b88-452d-9965-6d8fe4b5d099",
+      "display_number": "9.6.1-4",
+      "display_name": "河床其它病害"
+    },
+    {
+      "source_indicator_id": "ca1f04a3-f47a-4270-87c1-7da30f06f63f",
+      "display_number": "9.6.2-1",
+      "display_name": "损坏"
+    },
+    {
+      "source_indicator_id": "1a95ea57-fef9-45a0-93a7-a3d58010cbc3",
+      "display_number": "9.6.2-2",
+      "display_name": "冲刷、变形"
+    },
+    {
+      "source_indicator_id": "1cd40ac6-8b0a-4ecc-878d-5d409131eef9",
+      "display_number": "9.6.2-3",
+      "display_name": "调治构造物其它病害"
+    },
+    {
+      "source_indicator_id": "76c78305-62ca-41d9-b13a-f3c9da209d97",
+      "display_number": "10.1.1-1",
+      "display_name": "变形"
+    },
+    {
+      "source_indicator_id": "13553543-ebd2-4dd3-9b6e-983afbd1758f",
+      "display_number": "10.1.1-2",
+      "display_name": "泛油"
+    },
+    {
+      "source_indicator_id": "afb10bf9-75ad-4d9c-b1e0-ba5430d2b37a",
+      "display_number": "10.1.1-3",
+      "display_name": "破损"
+    },
+    {
+      "source_indicator_id": "4b07cca5-6aad-4785-b4d6-36c2fcee4fb9",
+      "display_number": "10.1.1-4",
+      "display_name": "裂缝"
+    },
+    {
+      "source_indicator_id": "f998058b-453b-4148-9ac8-4de1d69038cd",
+      "display_number": "10.1.1-5",
+      "display_name": "其它病害"
+    },
+    {
+      "source_indicator_id": "e1a858d1-c176-4cf9-90b8-d71e3f2c871b",
+      "display_number": "10.1.1-5",
+      "display_name": "桥头搭板（自定义）"
+    },
+    {
+      "source_indicator_id": "1fd95fb5-56dc-4d36-bdec-8f4b2e2b2a35",
+      "display_number": "10.1.2-1",
+      "display_name": "磨光、脱皮、露骨"
+    },
+    {
+      "source_indicator_id": "a0440c5a-759d-40a7-ac71-198ff0774029",
+      "display_number": "10.1.2-2",
+      "display_name": "错台"
+    },
+    {
+      "source_indicator_id": "92dd28b9-ddc7-42a5-97f4-4d553710e973",
+      "display_number": "10.1.2-3",
+      "display_name": "坑洞"
+    },
+    {
+      "source_indicator_id": "21fa54d5-2796-46d6-a092-f927fb39f95f",
+      "display_number": "10.1.2-4",
+      "display_name": "剥落"
+    },
+    {
+      "source_indicator_id": "9e5bf5d7-f988-4f1e-aad0-46bce9518868",
+      "display_number": "10.1.2-5",
+      "display_name": "拱起"
+    },
+    {
+      "source_indicator_id": "0aafc728-3d59-4bf5-8f35-23503582923f",
+      "display_number": "10.1.2-6",
+      "display_name": "接缝料损坏"
+    },
+    {
+      "source_indicator_id": "9cf69692-5715-432b-a57a-375550e73242",
+      "display_number": "10.1.2-7",
+      "display_name": "裂缝(板角断裂、破碎板)"
+    },
+    {
+      "source_indicator_id": "9000416e-9cf0-4711-8bec-229705385d10",
+      "display_number": "10.1.2-8",
+      "display_name": "其它病害"
+    },
+    {
+      "source_indicator_id": "3c20cac8-8a47-4be5-8a38-c9cc2c07201a",
+      "display_number": "10.2.1-1",
+      "display_name": "凹凸不平"
+    },
+    {
+      "source_indicator_id": "a101e856-959c-4a6c-bf50-43329d6249a3",
+      "display_number": "10.2.1-2",
+      "display_name": "伸缩缝锚固区缺陷"
+    },
+    {
+      "source_indicator_id": "d208c865-3350-48d0-b0c0-4ddbaa4fbcbc",
+      "display_number": "10.2.1-3",
+      "display_name": "伸缩缝破损"
+    },
+    {
+      "source_indicator_id": "0207811a-2438-4238-a2fc-fd8065d7e315",
+      "display_number": "10.2.1-4",
+      "display_name": "伸缩缝失效"
+    },
+    {
+      "source_indicator_id": "4faba831-17d3-4606-9251-091d2d01b660",
+      "display_number": "10.2.1-5",
+      "display_name": "伸缩缝其它病害"
+    },
+    {
+      "source_indicator_id": "97786e20-1306-4a68-98bd-268187f132a7",
+      "display_number": "10.3.1-1",
+      "display_name": "人行道破损"
+    },
+    {
+      "source_indicator_id": "4dac02ae-8f68-4c5c-869c-80ca7fe8acd1",
+      "display_number": "10.3.1-2",
+      "display_name": "人行道缺失"
+    },
+    {
+      "source_indicator_id": "0773bd71-c0d0-4621-906b-bb066596454f",
+      "display_number": "10.3.1-3",
+      "display_name": "人行道其它病害"
+    },
+    {
+      "source_indicator_id": "961c1e97-4426-4159-95b6-2bbe9e0b37a1",
+      "display_number": "10.4.1-1",
+      "display_name": "撞坏、缺失"
+    },
+    {
+      "source_indicator_id": "23a1f8da-ced8-49e1-9f4b-2482ce1cc81e",
+      "display_number": "10.4.1-2",
+      "display_name": "破损"
+    },
+    {
+      "source_indicator_id": "5f7150ba-851c-445a-86ba-153c3dfb8e16",
+      "display_number": "10.4.2-3",
+      "display_name": "护栏、栏杆其它病害"
+    },
+    {
+      "source_indicator_id": "1067d9a8-e895-4adb-8f09-22218edddc96",
+      "display_number": "10.5.1-1",
+      "display_name": "排水不畅"
+    },
+    {
+      "source_indicator_id": "f1a273a6-88ce-4952-8a57-df0301984fdd",
+      "display_number": "10.5.1-2",
+      "display_name": "泄水管、引水槽缺陷"
+    },
+    {
+      "source_indicator_id": "8945e12c-de98-4c72-a712-1c724003af6b",
+      "display_number": "10.5.1-3",
+      "display_name": "铰缝渗水"
+    },
+    {
+      "source_indicator_id": "2ee1629f-297b-45e8-bba7-d05175290d47",
+      "display_number": "10.6.1-1",
+      "display_name": "污损或损坏"
+    },
+    {
+      "source_indicator_id": "ee3debc3-a645-4f03-a2ba-96dc7f1cc1b4",
+      "display_number": "10.6.1-2",
+      "display_name": "照明设施缺失"
+    },
+    {
+      "source_indicator_id": "d1d54e68-feaa-4974-85ec-72a1524d0f82",
+      "display_number": "10.6.1-3",
+      "display_name": "标志脱落、缺失"
+    },
+    {
+      "source_indicator_id": "9fee88c2-890b-4b78-9416-d35e530f72bc",
+      "display_number": "10.6.1-4",
+      "display_name": "照明、标志其它病害"
+    }
+  ],
+  "relations": [
+    {
+      "source_relation_id": "de7f59b7-14e0-4f4a-951c-806ffbafb08b",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "ce3a2d6d-a453-4799-9128-76e2fb5ef38c",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "916016f5-6f09-48a4-986c-ce9f21482530",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "9911f80e-d826-4095-8e54-39af3c13e63c",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "01ef647f-0b1b-48e4-8628-dbadcf82c197",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "6c313f8e-3c80-4cbf-adce-e72de6d347b8",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "a0706db3-fd63-48aa-9907-4e0ad96931b0",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "66733e2b-191d-4c0e-bf2c-7079c49df3ee",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "d3bdefb5-1c46-451a-8778-5280ab3f2290",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "de5a3273-ef3b-457d-bf6e-617b23cd3bb8",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "999f1e78-33ba-4c4d-8920-ce8797b1253e",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "630ee66d-8cba-4571-8dfc-1bd1b54806c5",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "4e880e29-aed8-457a-bcd8-b22e2d8449d8",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "7e79c6ce-b711-4d36-9c9c-de1db5381fe8",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "e5c4cc60-ccae-4ddb-91de-e76dfb6c7123",
+      "display_order": 9
+    },
+    {
+      "source_relation_id": "5de5fea1-374d-4f0c-a0dc-dc50e80a67b0",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "7430418e-ad8b-4b66-a010-ad268b4956b8",
+      "display_order": 10
+    },
+    {
+      "source_relation_id": "e0ed982c-3bf7-4ab0-8350-8896260c8d09",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "dc87a997-abb2-471d-9f23-b192bb08d9df",
+      "display_order": 11
+    },
+    {
+      "source_relation_id": "d1d7c587-2d46-4a6a-8440-aa4a3c7175c8",
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "4f2cfb4a-5027-4a2f-9ba5-ef631ecf7e5e",
+      "display_order": 12
+    },
+    {
+      "source_relation_id": "e7883e87-8dce-419f-9c16-d4b272554f28",
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "da2fcbd4-9dd6-40e2-94ba-1d82d8d31390",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "ddaa0a8d-3775-44a2-ab28-2306448298ee",
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "0233eeca-a51e-4f99-aaf0-9fd744a264e2",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "ba4497c0-f740-4226-8686-e5cb687e36d9",
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "da70a903-bf0a-4764-9a25-45fe15eb3e6a",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "f7a05070-cdc2-4e70-a949-a5c438ad3927",
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "f33b9c1b-614f-4c21-8372-5a307a135472",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "86813e66-462d-486d-8c8c-e47d1954d46b",
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "cb5f6e74-9e8f-422f-b3e2-a48af089a831",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "7512ad02-9b3d-4e20-9234-47f6bd4161eb",
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "7da50a55-c19f-46b4-a118-20542c63df7a",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "1c96e15f-1b85-43ec-8c36-e043e6bcd90c",
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "8006dc38-cb70-4aab-b983-42347aa1cb2b",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "71af4317-e143-4357-b6ec-8ec6402ea7a5",
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "2dc6f651-3bd9-4441-a170-199e2241ae4a",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "ae3af88f-368b-4146-a4e4-288fc53e216d",
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "ab732c09-c1c2-4d02-87f6-bc3979de98a8",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "38a2c867-8a81-4975-957e-92141556ac3c",
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "a644016f-25bd-4b44-b779-3487ff6deea6",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "ff41ca18-2bc1-40f6-ae33-f501c9af14d2",
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "7f5e9f5c-8058-4d31-ae50-70da1845c725",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "d2244a03-4d84-41d5-8746-106f95e7f26b",
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "e29d1dd6-63a8-40ac-9413-0cea967c5330",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "9ce966c4-9784-428c-8fc4-7e66ebf107f2",
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "c394ce27-de96-4c2e-ae98-f2f83108c4a1",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "1e7f8ac9-6b3b-4cae-a110-1a05687f35b6",
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "ecd85cf2-0685-45f2-a7ea-1d85b0e1a1e3",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "b4d9b769-494d-4ada-9974-8df04e6d32d4",
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "0f3f314e-f40b-42dc-86fe-c1c6c3279f53",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "ad26d35b-e762-4358-b6be-f80ede6971dd",
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "28e1374e-69eb-49a9-aa97-16974a452ac9",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "e2ab288b-b538-441d-b95f-65cc8d318eca",
+      "source_group_id": "7715a8f0-77b4-4434-ab31-02e9405cb7f8",
+      "source_indicator_id": "07b61a4d-2c8b-4828-b341-f79a3742f3d5",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "fb89917c-9e5c-4665-bd64-6288723bca86",
+      "source_group_id": "7715a8f0-77b4-4434-ab31-02e9405cb7f8",
+      "source_indicator_id": "66b0c8c1-33ac-42c0-8da7-5fd7dd31a05c",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "43c6a3c3-65af-4026-b62e-47d81cce075b",
+      "source_group_id": "7715a8f0-77b4-4434-ab31-02e9405cb7f8",
+      "source_indicator_id": "f56ea564-14f0-4c3b-8032-31fb25bf7657",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "ed3809a3-dd1b-4cca-80c6-051616e92962",
+      "source_group_id": "7715a8f0-77b4-4434-ab31-02e9405cb7f8",
+      "source_indicator_id": "f7852027-82e8-49df-bb1e-f7155683be4d",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "7ae9aca1-0b7a-498e-8d2b-e0a23da1ed5b",
+      "source_group_id": "ba582266-6f8a-47d4-ba6b-49e8c0969788",
+      "source_indicator_id": "eb875da2-5710-4338-8800-275109b03327",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "47477d02-712d-416d-b66a-a5773eaa28bf",
+      "source_group_id": "ba582266-6f8a-47d4-ba6b-49e8c0969788",
+      "source_indicator_id": "75962585-f36f-4c72-8543-6c66459ece32",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "a67caf96-35a0-48c0-b5c2-fd052c6bdb80",
+      "source_group_id": "ba582266-6f8a-47d4-ba6b-49e8c0969788",
+      "source_indicator_id": "aac71c75-dcf2-4d80-9247-4ed318dd8326",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "dad838c0-e2d5-4d7d-87e9-20f21a5d5aca",
+      "source_group_id": "ba582266-6f8a-47d4-ba6b-49e8c0969788",
+      "source_indicator_id": "aa0d2db8-375b-4009-87b6-0221b534140d",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "e96940f3-699f-47f0-ab6b-c65d1feaec6d",
+      "source_group_id": "b3e4b1c6-ee4f-4033-8801-05e9df3b1976",
+      "source_indicator_id": "d08cfb05-97ba-4b9d-ac65-bade7938ca75",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "5e408d90-17a8-4420-8862-2f868a0e4194",
+      "source_group_id": "b3e4b1c6-ee4f-4033-8801-05e9df3b1976",
+      "source_indicator_id": "5652f521-12f5-4d25-a050-b8e973ddcc80",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "7b86a22a-fbb7-46fb-b4a6-8d5a9deee099",
+      "source_group_id": "b3e4b1c6-ee4f-4033-8801-05e9df3b1976",
+      "source_indicator_id": "5d44587e-4ef6-47d4-81c0-10ace11a8bed",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "5b6b179b-dda3-4f73-8345-739014cc4944",
+      "source_group_id": "b3e4b1c6-ee4f-4033-8801-05e9df3b1976",
+      "source_indicator_id": "dba886c8-b6ca-4228-bb70-7a9cc5199366",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "5b0a7c00-7687-4559-afd9-62029140b9ff",
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "2548b480-0232-4a24-a66e-f2890ddc2dfd",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "6a123525-c197-4609-9018-5b4859164032",
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "45ae453a-62a3-41aa-98a8-08062e144827",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "06644f54-88d8-4f68-8c88-a880938f8e57",
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "4c447755-6dd8-4e9b-aa7d-36edab762689",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "ac55cc8b-20f7-4fb9-b14a-bf3b595ea12b",
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "cd2e40a3-04da-44e0-893e-fd974939358a",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "2ccb1f57-9d6f-4868-8970-abf3a5adf7ba",
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "a0cf48d2-e52c-4c96-9c94-f2855c98e6d6",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "b0ddda2a-27c9-455b-ab3d-72b562c4f851",
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "a8ec1da1-f587-4c48-89c9-e43e3427e84d",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "4ebdc84e-0b0f-464e-9d30-d784ee02d147",
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "c1894ac8-a6fd-4ce1-9b7a-871216b3e375",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "b43d6d54-5e87-48c3-89c5-102b8e96d784",
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "4e93882c-a6c3-4c02-8ad5-554eee93173f",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "be728759-a526-4ad4-8295-ebdc81180614",
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "7811f4d9-0280-4cbc-bfaa-4e248084e969",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "16926798-87aa-4c90-96d6-4ac215b88dde",
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "7a143604-99be-4103-a115-ad160e75c514",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "c53d3d40-de8e-4a02-8113-394eb2dd4f5c",
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "bdeef944-3f07-473c-aa98-87a6a713fab4",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "bda16427-a2d1-40a5-82ff-7cc6b0869d77",
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "a403a2b1-7bd1-441d-9081-515081aafcaf",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "81ee1389-80c5-49ca-a948-7294fc6a7082",
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "0efbcc9d-3360-4e1f-8311-e08507b1ed66",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "35b3269d-397d-4da3-8b38-cc66201b5bb4",
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "ec692c16-8973-43f3-aa95-00a47834f445",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "6e9307e5-57c6-4bc5-bf43-a9db249bd6ac",
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "8b0d62b7-620e-43c6-81cc-9be68444636f",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "f01b07fe-8230-43ee-9eba-87cb2a226abf",
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "dac90965-e3f2-4559-bf5b-86f18bf28fc8",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "b173cb18-2d48-4549-bd8f-ee26f9dfb705",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "be84514b-9cb5-40da-a6b8-094a6af6e50b",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "f8ae0f2b-1568-43ed-8ae3-8be7ba1c771d",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "e3d8fe40-aef8-4957-9e8a-83081abf07ce",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "4e4357c6-dd75-47c1-ac91-eeb8184f3076",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "658bc463-3dda-41b0-919f-96a683aee82a",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "b6f15331-a2d2-4a6e-a2ec-60a31615fb73",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "3b818c22-06f7-4dd3-bd33-fd0f52228f24",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "4e880e29-aed8-457a-bcd8-b22e2d8449d8",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "7ad872f0-2244-41d6-b919-732f91ac7c04",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "e5c4cc60-ccae-4ddb-91de-e76dfb6c7123",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "42f2a764-d951-40e0-9b4c-8fc2c029d4e3",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "7430418e-ad8b-4b66-a010-ad268b4956b8",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "d1ba2c0b-d768-41f6-b992-89190078a276",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "dc87a997-abb2-471d-9f23-b192bb08d9df",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "e0d100ac-ffa9-46c3-84a4-181381038552",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "4f2cfb4a-5027-4a2f-9ba5-ef631ecf7e5e",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "5b9b6778-224b-4adc-97f2-6e40728a4f85",
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "b146158a-d5c7-4e08-b3d5-b9c79a987e13",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "e6445ea9-143e-46cd-af27-059f857989eb",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "c15d98a2-1eee-4c8d-b879-f825931e3b72",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "7321bc56-7831-4f8e-854d-e9e951dc3410",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "5eeff87e-6415-4364-a600-8d5d94279dbe",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "45d9ec15-c01c-4639-9016-bdbc0643947f",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "f030f70a-205c-49e0-ba8f-3012ad33d56f",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "ec9f9af6-2841-4d21-a5f7-d77785a2f70e",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "35a4a72f-b4ec-4577-afb6-da2a2f06bdf8",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "f0f6ebc4-d357-4fb4-ad97-562aa9bc9fad",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "e2a41565-4c8e-4d38-b7c5-75b5c0631a8b",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "e3ca8678-5fe1-436d-b36d-1082d8e6639a",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "5b7e4fcb-b89a-47f0-a1b3-6438d73e68b9",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "8b954975-5a1d-436e-ba21-c9568003af04",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "aa008d46-ad60-439b-8a18-f8b8f61f5abf",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "e8938e21-642d-44ea-b4ba-761f0fee26ff",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "26351ca0-6838-493f-b068-c44bac85fecc",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "display_order": 9
+    },
+    {
+      "source_relation_id": "c1552029-3088-484a-bca0-c405068de106",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "display_order": 10
+    },
+    {
+      "source_relation_id": "8874f0ce-22d9-4363-b8d4-e81935ad5768",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "display_order": 11
+    },
+    {
+      "source_relation_id": "dd3f0de4-3e82-473c-8c60-4aae75a195a3",
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "display_order": 12
+    },
+    {
+      "source_relation_id": "10d05324-76da-4ce4-acb6-4dce844f4978",
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "24906d73-f4e8-4b3b-93e2-c3f9abd5e218",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "15cf24fd-2a1b-4e84-ae56-c695f46877e3",
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "aeefc5ab-1bc8-4b10-92c2-b09d8683f481",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "fb321e8e-55af-45c6-a76d-3bfa119dc0fc",
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "1087ed5b-7b29-475e-9276-3c820d18a5be",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "1b59c15c-2109-4a9b-ad76-3803744fa758",
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "c5e8bda9-c92d-4b75-8b80-16f35fdf0036",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "368522fe-9af7-4bb6-9e6a-666c73b55a94",
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "d3f00498-bee7-41cb-b224-a5379859ebc4",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "e4e5c876-c991-4e7a-aa95-0a31fc6e97b6",
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "7188c6dd-7bb2-4505-a69d-8d0f02c6a071",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "55063915-d554-4769-b0af-01ca6a89523f",
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "32c69b68-76cd-4513-a576-d2b262bede6a",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "c1f62f4e-bdd0-4501-ada8-8b1456e2cb01",
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "dc4e2abc-4867-4285-93c2-95edae76c569",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "d2a21585-4605-4e17-bd54-13e4b2d27da1",
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "b8267c91-9858-4c3b-952b-390f9fcc28a0",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "3b85956a-d685-4269-8f15-befaa3fc4890",
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "3087fb47-96b1-408a-a6cc-e25fcf180ecf",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "2450b50a-669a-4fe0-bb2e-a9232af46b61",
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "7aae11e1-2bd6-481b-8bd5-4ad3027b285a",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "14d9d7f8-067a-44db-a99f-c7cdbc0b95ca",
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "07b624f2-cddc-46e3-b8e0-c934efcdf35f",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "2e642fb2-3dec-4267-a6c7-38c048c12fc6",
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "5bf87a01-ff44-4d5d-a7ea-b5e2bd155df3",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "9714d0c3-2b9d-4225-8325-61c1a3b4cfbd",
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "5b7e4fcb-b89a-47f0-a1b3-6438d73e68b9",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "a52989dc-280d-49da-b81e-e05638fc23cb",
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "9b004580-a035-4243-bf25-fa39a28a8ca5",
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "1325e658-0dc2-47c1-a5d5-27235cb853ca",
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "c72a55d5-ca4c-4894-8f8b-17fcc3ba38ed",
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "49c97c40-9116-4109-8609-87560c54d7b4",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "36cda010-10cb-4eb5-bf2b-c8a657e0d89f",
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "5d4a72db-1903-488b-bbed-6f0a693c1b2c",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "84007104-7cf0-421b-a389-71da895a771a",
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "b2fc2b08-ec34-4af9-a821-18ac2747434d",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "ce3daa83-82c8-4535-820a-bfdc3bf97518",
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "fa7ebca7-fbbc-4112-bc6e-507b959f1b4c",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "c6255e9f-e1d4-46f1-9988-486b1677b00f",
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "5b7e4fcb-b89a-47f0-a1b3-6438d73e68b9",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "bed45835-ec11-4a42-8706-6d3195b2f7cb",
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "e88a006c-db65-4923-a7ef-b0b77a0a4111",
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "f58441fb-f977-45aa-87fa-e55376f96b43",
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "bc5952af-66c0-4d51-885e-09488b235d3e",
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "e78dc074-12b9-426c-8789-9660159a8899",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "38ed244c-c7d7-495f-9e43-8d725af583f0",
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "868d2b26-64a0-4e15-b91f-dc0b6ef8e1a8",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "c0b7f48f-efa7-4851-ac45-8f3a592d5a10",
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "8d7fd22a-6ada-47e8-b89f-6d7baaef3540",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "368141a1-1a91-429b-a203-a7d4fd9e6693",
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "f6ee5853-96a0-42d8-bbb7-1f78429fd977",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "2dde04ff-7f31-4132-bc45-f8cbbf24235d",
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "2993f86e-95ce-4804-8b4d-60ec4c9bd30d",
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "0b5e377f-b5b6-4d75-878d-ca7c2799a046",
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "c647fa47-f3f0-4332-8c1e-14382d42b9a5",
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "cc29d484-52ff-4421-80e1-07921af07110",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "64b161d9-a7d4-4fa7-8a88-159e83d58b72",
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "aa1e1b4e-2ef8-45ef-bde0-a6e4aded15b4",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "f9353e1a-df15-465b-aa9e-dec27a6fe05d",
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "b6909bcb-3765-4a2d-8b0e-11d7073b92a9",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "50817fe6-d1e4-45e7-b574-35ab9cfa6136",
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "06c003ed-b714-40b4-82a5-575630cc55fd",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "0aee77a2-1aa6-42a1-b82e-267829179ce6",
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "b2fc2b08-ec34-4af9-a821-18ac2747434d",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "3d3e59fb-8c25-45a0-9994-e8ad4ddf80c4",
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "5b7e4fcb-b89a-47f0-a1b3-6438d73e68b9",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "64519d44-0cef-4a63-ad6b-b8a601885857",
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "6c45ba4d-54c4-4601-b21d-45c37e05d9b0",
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "a4ee2eab-f896-446d-aafc-d2ae8cb8a87a",
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 9
+    },
+    {
+      "source_relation_id": "68e23ad3-54f2-4b08-9563-02eb0842aad6",
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "b8ddc8fc-70ef-441f-94a5-39acbff0cc45",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "97b46db5-cf79-4e4b-9e93-7e72876edfdd",
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "1f67125d-d4ab-43b9-baf0-44cc70e3c822",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "807001eb-4c4e-4c4f-b249-f115a62f6d6e",
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "e78dc074-12b9-426c-8789-9660159a8899",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "ce59b3b9-b5bf-4379-b8c3-438785df7c74",
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "96ba3b96-4839-44b6-8818-2531d6a75e6d",
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "b29109b6-f9a6-437b-a2a9-f3d84cb80a36",
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "9a0e8e2a-7915-4f66-9259-814a9ea2fe39",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "7228c4ef-3e4b-4f02-b62d-ef99a7c7747d",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "d9ba0049-8823-4d32-be8f-ad97a03075d3",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "0faa40f9-1bf1-4711-b8f2-f9990a7a4f99",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "c97678b0-48e4-4025-a582-586380c8aa97",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "7fcf9516-f15f-42a0-a1d3-c5c88e44aa8c",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "9b8a1d65-075c-40cc-9172-124980c75b93",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "a6c8c879-f877-4e1a-98f9-99101623d08b",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "fb77b877-cb45-419c-bb06-acacf4d7332d",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "4e880e29-aed8-457a-bcd8-b22e2d8449d8",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "30a09662-f78b-4fda-b2c2-fd46aecc1adf",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "e5c4cc60-ccae-4ddb-91de-e76dfb6c7123",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "4b576d00-7de4-4b65-8cd7-65ca3184fff3",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "7430418e-ad8b-4b66-a010-ad268b4956b8",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "dcabd7a0-abf0-42e7-9543-1941843c7ce0",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "dc87a997-abb2-471d-9f23-b192bb08d9df",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "9e3dccea-93ba-4401-8558-37b97145c831",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "4f2cfb4a-5027-4a2f-9ba5-ef631ecf7e5e",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "397c142b-9ad7-4e0f-a2cb-5cf749d4e76c",
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "b146158a-d5c7-4e08-b3d5-b9c79a987e13",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "89f202e2-801c-4b08-a658-9e20aa691f8b",
+      "source_group_id": "55dd6b83-ce6e-40e4-98ce-4b105a7d1027",
+      "source_indicator_id": "e1a858d1-c176-4cf9-90b8-d71e3f2c871b",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "1dd69077-dc26-444e-801d-5b0a71af8269",
+      "source_group_id": "55dd6b83-ce6e-40e4-98ce-4b105a7d1027",
+      "source_indicator_id": "a0440c5a-759d-40a7-ac71-198ff0774029",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "53695bab-eaa6-4d88-ac2c-da62087c2bb2",
+      "source_group_id": "55dd6b83-ce6e-40e4-98ce-4b105a7d1027",
+      "source_indicator_id": "1067d9a8-e895-4adb-8f09-22218edddc96",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "f1096531-e7d5-4897-907a-a833f2857afb",
+      "source_group_id": "55dd6b83-ce6e-40e4-98ce-4b105a7d1027",
+      "source_indicator_id": "8945e12c-de98-4c72-a712-1c724003af6b",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "669c6eb5-f4a0-4bb1-a461-bd621b5e99c9",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "4776971b-90f6-4171-bc4d-4e2a3e378ded",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "a891bc5c-89bf-4483-8c59-0b75ec579730",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "975cb630-7b32-4532-b7bc-eba2b4a7405c",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "f7817dd2-4e95-4ef8-b0fc-9ae36a7a6a30",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "33e31c4a-1f9d-45f4-8057-da30696fd821",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "4c97654c-4e66-4d26-8030-ebd24407f2ad",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "b080ff6a-4a3a-4ff3-b9b2-41ee245b4ae0",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "5b3069bc-bb20-46d7-b883-1eb81bfd6fda",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "7619bfa9-8627-43a9-8c2b-fc98d52fb077",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "5046fa08-9263-43e6-8f7d-e8459b8fb7e4",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "b6c3cdfe-d410-4782-aecc-dd8fc30c45b5",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "cc7eed23-b16e-4ab7-9400-4a518782233b",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "fe663c69-50ac-4817-8755-0b09572ef05f",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "b2b46694-7883-4eb4-aa40-3c71f191538a",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "77d2fece-24ca-491f-98cf-0050b5af1969",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "fb304a14-665b-4247-9cd6-0c402641e814",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "d0b5d0c1-3e3a-4dc9-9060-89590934ebe9",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "c58b85ae-e9b8-45ca-8c69-a9d69f43d7fd",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 9
+    },
+    {
+      "source_relation_id": "665c0e1a-b500-4108-bc1f-44084f73d4f4",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 10
+    },
+    {
+      "source_relation_id": "50c06f24-b1f0-4508-b7b9-a2ed1ab2732b",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 11
+    },
+    {
+      "source_relation_id": "2eb5f5b2-e03f-4e0b-b35f-b034054e435e",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "display_order": 12
+    },
+    {
+      "source_relation_id": "205e6faa-7b1c-483f-9378-54167d0ca7ae",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "display_order": 13
+    },
+    {
+      "source_relation_id": "c992072e-089b-4fcd-b04f-6de45f714fa7",
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "display_order": 14
+    },
+    {
+      "source_relation_id": "2a597f6f-c242-4267-ad61-8eb4ee3206f9",
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "f64f74fc-544b-4c40-8074-34fa1f623f8b",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "3a3f1f42-14bb-4bcf-9615-215e28510754",
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "5ee08dc2-e31a-468c-a900-9f4a8211f5cd",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "483b25df-a394-4b2b-b980-73034bb820f4",
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "975cb630-7b32-4532-b7bc-eba2b4a7405c",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "88d47f17-2d9b-41f6-8cb3-1c8eb3446477",
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "33e31c4a-1f9d-45f4-8057-da30696fd821",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "a29556e9-a9b1-41ce-aadb-33ce26847d6c",
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "7619bfa9-8627-43a9-8c2b-fc98d52fb077",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "3232a146-2ac1-4115-a908-0d664c5b822c",
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "b6c3cdfe-d410-4782-aecc-dd8fc30c45b5",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "015132ca-851b-40d8-9a41-02acc95a6dbb",
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "fe663c69-50ac-4817-8755-0b09572ef05f",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "754a8704-3c4e-4a59-92ac-ac1769217f7e",
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "48e5681e-10c0-410c-a5c1-83745117eb74",
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "6e082dba-5ee2-43ff-8c94-29efa498a7fe",
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 9
+    },
+    {
+      "source_relation_id": "882ced20-b357-43e5-91d6-111d57166015",
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "display_order": 10
+    },
+    {
+      "source_relation_id": "d98082fc-c26d-4ea7-b774-ba6f3113735a",
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "286b53e6-9186-47a0-9062-7787feb5f11f",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "12da40dd-9f45-4313-b6d5-8dc3ea68c0ac",
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "c0aa47d6-93aa-418f-ad08-05619fd02d20",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "edee0e3d-322c-41d0-acaf-04831f49af02",
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "2b9c977b-0cc6-42ee-834e-bab948e341f6",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "d4dee5c3-acef-4f99-9d2d-f93a3c832fe6",
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "dabaa125-0cfb-4921-9e39-619a1b009366",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "356c222e-994c-41ad-90dd-14a98814d715",
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "73a24e3c-5ab6-4eb5-964a-e43eda318a3d",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "1d7bfd45-a15e-44c7-b665-e9b1454efb4f",
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "09e15da3-d00f-4956-b182-5532af14f364",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "05d625c6-c2e8-40ed-964d-af9e6996266c",
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "1d082f69-570a-4dbe-935a-767df251b1c0",
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "e906be68-3070-4241-bd0c-507bcfe0637c",
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "4c33557a-0c7c-4238-9939-9c19b9dbcef1",
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "7630f80f-5243-45cf-9d9f-01cf5318dc15",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "9ac869fb-e3fc-4267-9ab7-885dd98bff9d",
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "56db13f7-b308-4cef-820e-66a5ca10cfd5",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "b93c3742-1a70-44e8-ba7d-45785c166c5d",
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "ac5de0a8-988b-4554-a43e-eefecf95047e",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "c8bf8db7-c209-4a28-957d-948c8613e169",
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "f6ced803-ebfc-4e31-ae14-5a1edaa6bcc3",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "b9e31689-0c1b-4f86-b454-5069ae97c741",
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "b2baa0d4-c368-4267-b9b8-b4fadd93e6d0",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "42e3b7f9-b686-44c7-b763-2075c66b16a9",
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "f273bed6-5b14-4a73-8c67-5864e728ec10",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "6e0d0a1d-1168-4339-9a42-164d0f66b865",
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "c805f8c3-3143-44a5-a1f1-52700e24fb8e",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "1fe69425-5fe0-42c4-a948-07ab4fe2572f",
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "da5456b8-4b25-4f81-8abb-689ee833e7fb",
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "2723bebd-b35e-4519-bc89-5cff131cc52e",
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 9
+    },
+    {
+      "source_relation_id": "22194231-330e-4d83-af23-9289eeff459d",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "3badd7d6-9c02-4d86-864d-d1bd9f30757c",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "9bdfd0c4-90f1-4c19-8bf1-618132fac0cc",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "c1cd0ed3-744b-4fb7-b9de-584bd41f4723",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "c6743cdc-6659-46ff-8603-10e3142e41a2",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "defb5bad-204a-487f-bb73-2e10d8a8f400",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "d6ed8f3f-5922-42bc-a363-341baaa91411",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "2b5737f0-221c-42cd-b0a2-366ab2236e68",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "4e880e29-aed8-457a-bcd8-b22e2d8449d8",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "020eb6fa-c248-490a-b68d-433d78f32eec",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "e5c4cc60-ccae-4ddb-91de-e76dfb6c7123",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "e7a8c245-141b-4eb0-9be7-20d3dafb7be2",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "7430418e-ad8b-4b66-a010-ad268b4956b8",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "27821723-c0b3-4b7f-813f-f173c949ba04",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "dc87a997-abb2-471d-9f23-b192bb08d9df",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "a0578553-fd91-4047-ab5e-ecb9a7980200",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "4f2cfb4a-5027-4a2f-9ba5-ef631ecf7e5e",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "65af7b95-4f1e-47d9-9638-5f3d6fac0f93",
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "b146158a-d5c7-4e08-b3d5-b9c79a987e13",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "fb9f6393-26d9-4be4-93ba-27235f70dcaa",
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "82156c03-edc1-492c-9b12-30cb5d68fa51",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "4f67f523-2b6d-41c0-a437-469e00ce2199",
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "0233eeca-a51e-4f99-aaf0-9fd744a264e2",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "e91b6d95-d133-4c6a-b436-138f9246fa7d",
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "da70a903-bf0a-4764-9a25-45fe15eb3e6a",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "655049e1-730a-49df-9764-810375a9402d",
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "f33b9c1b-614f-4c21-8372-5a307a135472",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "ed37de4c-4144-4f23-9984-5afc84a5b5db",
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "cb5f6e74-9e8f-422f-b3e2-a48af089a831",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "dbe8485b-e870-4e92-b406-41f935689e6f",
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "7da50a55-c19f-46b4-a118-20542c63df7a",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "5206a12c-f499-4c50-a735-8c0fa39e3a71",
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "8006dc38-cb70-4aab-b983-42347aa1cb2b",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "9e6a70e2-8829-4aad-9959-aecbc00630fe",
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "2dc6f651-3bd9-4441-a170-199e2241ae4a",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "9c3df003-4f47-4503-a068-0570caa759e9",
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "ab732c09-c1c2-4d02-87f6-bc3979de98a8",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "2c55a83e-8a03-452c-8ed8-ee52bed2a906",
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "8b818d8b-78f3-4a04-8efd-91f608d85f9f",
+      "display_order": 9
+    },
+    {
+      "source_relation_id": "7d5d3613-627e-4b16-b156-7b2f77292c94",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "0dcb7570-f4be-4584-8e61-0ffb458af580",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "9894a041-8be9-412d-82e3-115c176ce075",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "3647ea1e-529a-48dd-9127-6026c1507869",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "88a8cfc4-eb0b-4318-a7f0-d820166df3f7",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "8e38adde-84cb-4831-8c5d-f6f4f369aa7d",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "da2805fa-c22d-4118-9c4a-217ebf95ea66",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "c99cb444-da81-4d07-b4d7-173ad0e38923",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "4e880e29-aed8-457a-bcd8-b22e2d8449d8",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "e4f3c057-4573-4430-90b2-0577334e0ca1",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "e5c4cc60-ccae-4ddb-91de-e76dfb6c7123",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "42ff3c51-f219-41a8-9e19-7d7c88ac9c16",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "7430418e-ad8b-4b66-a010-ad268b4956b8",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "1f772a84-a52e-4371-b310-4fa83e723d51",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "dc87a997-abb2-471d-9f23-b192bb08d9df",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "185a94f3-f638-42ab-be54-3385ed029544",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "4f2cfb4a-5027-4a2f-9ba5-ef631ecf7e5e",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "6fd25729-623a-449c-a0e3-66fc604c3f86",
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "b146158a-d5c7-4e08-b3d5-b9c79a987e13",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "3bb488c5-1270-4329-9c80-48d90c9ef9af",
+      "source_group_id": "a2e93514-d304-46cb-b94d-7e02f793d292",
+      "source_indicator_id": "b3a9caa7-2ce7-4d83-842c-b15aaf6f1ed2",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "564ef304-e66f-45cf-af50-8d7bc05e0d92",
+      "source_group_id": "a2e93514-d304-46cb-b94d-7e02f793d292",
+      "source_indicator_id": "8966d1e4-ded2-429a-8878-911b5c7ce7ae",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "4d176008-f12a-4776-813b-5f53a08e4503",
+      "source_group_id": "a2e93514-d304-46cb-b94d-7e02f793d292",
+      "source_indicator_id": "95aa0b4c-ce72-481f-93ed-2e6b918f78f3",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "5dd5aa4f-2ecb-4024-b313-682b2301b27e",
+      "source_group_id": "a2e93514-d304-46cb-b94d-7e02f793d292",
+      "source_indicator_id": "b18bfb29-e5f5-464c-a3ee-275268121ad4",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "34b71e1a-c467-4007-8bef-a19dc3eb9d66",
+      "source_group_id": "a2e93514-d304-46cb-b94d-7e02f793d292",
+      "source_indicator_id": "f5f9c0a4-c697-467c-b0f9-fd4b61fc9444",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "9682ce0a-0cee-4cf9-8c6d-4deb9983984b",
+      "source_group_id": "5ecf3fc7-9e9a-491d-bc7b-18bcd4a692d8",
+      "source_indicator_id": "ec4a588f-51c6-42ff-9277-f0ad2ee4065a",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "e61c6dbc-cfa9-4591-9f5f-5b9f315e1fe4",
+      "source_group_id": "5ecf3fc7-9e9a-491d-bc7b-18bcd4a692d8",
+      "source_indicator_id": "736c8afc-96a2-4040-b6e7-4198d09ec1a0",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "44243eea-e417-4034-8578-d36d57288656",
+      "source_group_id": "5ecf3fc7-9e9a-491d-bc7b-18bcd4a692d8",
+      "source_indicator_id": "30027b3a-6e2a-40c0-9990-44ac76a39462",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "2f3daac2-7b81-4082-a88f-1d47538922a8",
+      "source_group_id": "5ecf3fc7-9e9a-491d-bc7b-18bcd4a692d8",
+      "source_indicator_id": "20ca0373-7407-42d5-bb3d-f4bca065986f",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "35268eef-87f8-4205-868b-cd517572dcbf",
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "2db90ba5-0da7-4866-9284-aae7f80c659a",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "9e93db55-ce23-4799-bcdb-10ff79b3aac6",
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "084980d1-f9a3-4039-87b4-78258904239d",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "41719aa7-eaba-4501-9926-f0cb90c3b476",
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "7ec05479-e55e-4fb0-8f81-466492bae3c4",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "0086dfc3-c331-4fdc-b5bd-7a2972aa2a62",
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "114d6ca9-f09c-43d4-8cce-937f05d8975f",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "2588aeef-f9a8-43fb-861b-1d0a704410a4",
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "a1549b8b-ea9b-4502-8ae0-dac751c6a4dc",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "053860eb-a9bf-4b64-85db-fe37e5222c43",
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "759a4924-619e-49fa-9ca5-4737a492da0a",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "ffec8c2f-aa57-474a-8baa-daa5fa4627e4",
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "616519c1-23b3-496e-9d54-dd00173fc75f",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "05617d61-4e40-406a-9400-4ae531606b96",
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "1fe2d6e7-e46b-47e5-a952-8d91d336b7af",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "e41b33bd-0c18-458b-87ce-adc49bfe3f9e",
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "9006a44d-46e0-4f2b-92d4-85e2a995cdc5",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "51dc0487-518f-46e0-ab20-beee072c31ed",
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "3793c812-9174-4423-898c-735cfbce6f60",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "ce74bf0a-b88e-416a-9205-58677ce4b598",
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "1c68f1c7-3b21-4aad-ab19-9e205d0fe64c",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "79ce5033-40cf-4b1f-a703-16b66d5cafd8",
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "53f63040-badb-4bff-8120-034f3701e7f0",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "05ac3c7c-6eb9-45b9-a631-94ff437ca25e",
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "7d182878-14e9-4042-b90c-90a623a4e729",
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "c35bbc27-e8e6-4769-8d74-d02ae652d8fa",
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "afaad0e3-dd57-4098-ad3a-7b7c90e0d0f1",
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "47efbfed-5ac6-4557-941b-51a208e31619",
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "display_order": 9
+    },
+    {
+      "source_relation_id": "c4e7eb91-7e12-4243-8c90-c9df0c87ff55",
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "display_order": 10
+    },
+    {
+      "source_relation_id": "20f63166-73fc-4a6a-bc79-e574445691e0",
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "dce9cab5-892b-4e08-a495-1aa34c6f673a",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "5149eae7-a16d-4c93-872d-0ee527fb7db1",
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "caca7c76-2450-4118-9c8d-76791046015d",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "86fc9d44-7d2e-495e-9324-88576c3c52c6",
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "42f7422b-5f2e-45c7-9733-1fdd3903b2a0",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "b5aa1104-db36-4603-b991-e3dae80d01cb",
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "355a3b03-bd48-4561-aad1-7f7bfe5a1c27",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "8cf646de-9f29-4f70-aa29-e9a5f303772a",
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "0233eeca-a51e-4f99-aaf0-9fd744a264e2",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "87142a86-2dfe-46fe-938e-db761830666b",
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "f33b9c1b-614f-4c21-8372-5a307a135472",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "054b717a-ec4c-4773-95b2-8c8a328b0a35",
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "cb5f6e74-9e8f-422f-b3e2-a48af089a831",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "06e0cd34-9caf-4ff8-b14d-3eb00b9f0ac8",
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "ab732c09-c1c2-4d02-87f6-bc3979de98a8",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "01ebb5c9-9913-4dca-a405-334ab4de3c63",
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "e6a67dce-06cb-4468-b4dc-bd86cedf79f1",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "ba0ab5c8-d51f-446a-9378-76e357f9341a",
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "c32ad419-cf61-40db-b827-e8c093321b90",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "d1ca1284-9b6f-40ab-b976-61c42bb79650",
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "57bcedee-50bc-4f37-9f28-f884c1959887",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "a790ad57-83e7-4309-b429-efa0dcc212be",
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "22feb2b5-cd7f-4236-a111-538900400ae4",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "e19c8064-f13f-4b8c-a4f7-ad6ca7b55364",
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "0233eeca-a51e-4f99-aaf0-9fd744a264e2",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "4ec227d2-ffc5-43ba-a5a6-1a7368d67bbe",
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "f33b9c1b-614f-4c21-8372-5a307a135472",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "21c3385c-1f01-48d8-bb8c-6c25b393d6bc",
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "cb5f6e74-9e8f-422f-b3e2-a48af089a831",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "458e0b3b-a086-483b-b268-6213ce8ec864",
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "ab732c09-c1c2-4d02-87f6-bc3979de98a8",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "46ba0a35-2274-43a2-9c2b-d7ab81d1b499",
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "00daf836-3429-4fe2-979e-ef68f8a7a4dd",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "7dc1246a-6370-441f-92fe-236e6f40ba36",
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "0cd5cbd1-3ca8-4e5d-ba6f-709822c8a7fe",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "786e8668-0384-4b6a-bfe7-dc334b71b89c",
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "8791f766-da21-4909-a981-a92ce2ba9414",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "e8c28421-56ab-4265-b429-39760829663e",
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "e2e16e76-fdd7-4d08-aa73-30cd007b0cb6",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "39600633-c034-42e5-8b7a-389d3a435847",
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "70e45ad2-97c1-4956-8629-f7a22475275a",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "a556f88a-31f4-4db9-83fb-92f55db1e0e6",
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "544a7d09-3929-4115-a6dc-c264eaedcf13",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "d2bc6301-c84b-4a64-88b1-6a7810eef6f3",
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "a23aa04f-ef57-4c4f-8f23-46bf973edb41",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "bca58f70-8977-4640-b120-b0e116683795",
+      "source_group_id": "08d72514-56bf-429f-8445-9b280e442143",
+      "source_indicator_id": "d4d14da0-41e3-4cd4-9009-9bd0d7a9c669",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "89043461-c59b-4149-8937-e1e2a96820a7",
+      "source_group_id": "08d72514-56bf-429f-8445-9b280e442143",
+      "source_indicator_id": "6466f02b-d53b-4631-9d7e-9e94d5faa659",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "0366b4f9-a2e4-4a4b-bb97-84dccb1a73a0",
+      "source_group_id": "08d72514-56bf-429f-8445-9b280e442143",
+      "source_indicator_id": "6e8affac-731b-44ba-b0fb-0b5a1358106c",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "bd389aca-7cf2-43f1-9308-d0c1d2e5a2c1",
+      "source_group_id": "f10a4e4f-4b9f-478b-ae58-9c59452b64d9",
+      "source_indicator_id": "feb760e6-a0c8-423e-92ca-edf282a26dde",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "f5d8ff7e-62b8-4d90-b80d-d6104c38880f",
+      "source_group_id": "f10a4e4f-4b9f-478b-ae58-9c59452b64d9",
+      "source_indicator_id": "24118ff8-55ac-4dd9-a6c1-fb0978614673",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "4a4b6977-43df-437f-8328-77b06462c0fb",
+      "source_group_id": "f10a4e4f-4b9f-478b-ae58-9c59452b64d9",
+      "source_indicator_id": "a182b0ed-c081-4e25-a911-e17c75bdb646",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "866fc312-6ecb-4d3c-9d97-bbe0825fed54",
+      "source_group_id": "f10a4e4f-4b9f-478b-ae58-9c59452b64d9",
+      "source_indicator_id": "14242b54-2c00-41da-a600-48dd7cf017be",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "21c96ca6-5b6a-4b7f-85c2-2af2e53b1c06",
+      "source_group_id": "f10a4e4f-4b9f-478b-ae58-9c59452b64d9",
+      "source_indicator_id": "fad20456-39e0-47e6-a272-17e170087bc6",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "f97bc54b-f3dc-4635-9ef5-03d3ec6caab0",
+      "source_group_id": "d48d11aa-1ce8-44d5-8d40-e7dd983f263f",
+      "source_indicator_id": "17a67be2-003c-4e35-92f2-631f5cc465fd",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "eebf460e-8b32-4334-8090-5f2bfb19cbe6",
+      "source_group_id": "d48d11aa-1ce8-44d5-8d40-e7dd983f263f",
+      "source_indicator_id": "e817adc3-e033-4e1f-8ae2-1b810c8195a6",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "3da20f8d-4944-45ee-b369-65afdc2254ab",
+      "source_group_id": "d48d11aa-1ce8-44d5-8d40-e7dd983f263f",
+      "source_indicator_id": "aa0a3490-4ef1-401b-9323-8deb5f4425d9",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "7c335c2b-c1c4-440c-a025-4a12a5543aca",
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "75059dfd-3143-4f14-8501-b960fdce4b68",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "9896dad6-3b6d-42fa-bea3-ad0ef7d44d96",
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "5a7ade74-94d0-4ca8-ae21-eac5bc4e84ed",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "fbbef63d-95c1-487a-9039-369923bc0b07",
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "ea24b3f1-c51f-4249-b20c-0a976a22f0d3",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "ecbb84d5-4a27-48b4-9246-e5154f684004",
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "2e9a31de-a29f-404a-be5c-ace5c8dfdf46",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "696c8ee5-f367-4419-9393-cd2e804464df",
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "8fd41a0c-9ecf-4cd5-8c19-9c07045631a9",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "1c9df65e-30ad-4d3e-98cc-15d62626e640",
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "c84beeb5-5b63-45ea-9bf7-fee5feba81fd",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "63eca166-63cd-459a-8ef8-624a5b6a80d9",
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "dcef9afb-7709-4969-a63a-1aa93a0c0b61",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "e06e3fd9-451e-4644-9c62-a180e1e43304",
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "41610de8-5667-4946-8e68-426cb7eec4e1",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "d115be99-c5a1-4a63-b905-863c8ee03b3a",
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "4a5d4fc8-932b-4d78-8e85-2d6ac56be268",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "44734bbd-25bb-4572-80e5-728f40e024b7",
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "ec068d64-9435-4d2e-abe4-0bf4d4882cab",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "42f803d7-59e0-4f60-b134-6eed33c494f4",
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "6bb1a661-6c4b-42b1-be0f-b00dd1e63977",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "6bfd9154-058d-4069-a71c-edb924ec3696",
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "2da3fb0f-2e79-47d0-aec5-3904c407d237",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "b78c6e92-295b-4157-831e-9e87244d1a68",
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "f49c54c2-bb0d-484b-ac87-e2d69e05869f",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "2dc3d969-b2b3-468d-a9ef-c8cf9ba0d1be",
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "36add40b-65c6-40d4-aeb7-1731d7bf23cd",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "f688315e-6fad-4e3f-b0fd-5b032c000432",
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "92db2226-3c9a-46ba-8410-db8401b88cb1",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "69d107e8-23c5-4ceb-9bdb-53e6df0e4499",
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "2e506985-666d-485e-acdf-c3883f5cd1d7",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "d3d45b80-a032-43d7-a698-edf1b818d2a4",
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "0cd5cbd1-3ca8-4e5d-ba6f-709822c8a7fe",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "f0c8ed2d-3803-4942-a455-950fc5c81328",
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "8791f766-da21-4909-a981-a92ce2ba9414",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "c345fde3-1079-449c-bf1b-bd86e1810e32",
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "e2e16e76-fdd7-4d08-aa73-30cd007b0cb6",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "e719804b-f4a6-469d-87c9-7d90a899a4ba",
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "a23aa04f-ef57-4c4f-8f23-46bf973edb41",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "d0a45b99-c3f7-4047-9362-b0787854b406",
+      "source_group_id": "14529eeb-f082-48ff-a276-d47bd4e2b27d",
+      "source_indicator_id": "47108af0-baa5-4ebe-afd3-d3d3c40da55c",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "451e3675-097a-4a15-9d65-8554f43cd059",
+      "source_group_id": "14529eeb-f082-48ff-a276-d47bd4e2b27d",
+      "source_indicator_id": "811afe88-2f0e-4c02-8848-d54de9718b16",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "375bcac5-e444-44cf-86c0-038d46bd907d",
+      "source_group_id": "14529eeb-f082-48ff-a276-d47bd4e2b27d",
+      "source_indicator_id": "eba6b4b2-7ac5-4483-bcd0-4d8ef9e6a86a",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "b99ee168-8757-4e61-9385-09ce2f814cc9",
+      "source_group_id": "14529eeb-f082-48ff-a276-d47bd4e2b27d",
+      "source_indicator_id": "0785790a-bb19-431c-acb0-14f4108b17b1",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "7dfce4b8-3654-4d45-bd87-79d055063ec9",
+      "source_group_id": "0a7c24b8-6d70-43bf-9c0d-d315268ab061",
+      "source_indicator_id": "607ca2a8-a4c5-4936-8e9d-ad130eab9e6a",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "ccffd11a-43df-41a6-a778-e9e6e09e81ea",
+      "source_group_id": "92ef89d2-8854-4a10-b0b1-60bd1d669849",
+      "source_indicator_id": "b53e9e87-032a-43d1-b83f-db1a203959ad",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "f08a82b5-9dcf-410e-aa37-940610a8f238",
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "1cc0b372-94dc-4993-86b9-33bc044b6b64",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "2b949c36-fc5e-420f-b930-7e0cd275db4c",
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "9ea464b6-60aa-4a78-9355-48cc86bba877",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "8025a7d8-f4c2-4dfe-a4a7-3adb687234e4",
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "7cb25139-fd1f-48ed-9ee6-32ba5a7d9580",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "562ba237-b058-4c39-96b9-0264c7134c60",
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "4d762e27-6450-4d56-ab9b-9e3eccdd2bee",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "f598f22b-2e82-4d70-a488-44a6612cac28",
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "5d3ecd4d-6f76-41d2-829a-79efe102ef9a",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "2ccd9338-514b-4dc5-b3c5-618275143e3d",
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "0d775ac4-5590-49c4-b26f-438b8001fdfa",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "94a80450-c8e6-4e4e-a189-5bb762b60307",
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "c53de155-5213-4009-84f4-ceb3437641a8",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "144e7e77-c341-49b5-8628-7e62467a31b5",
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "13c0a08d-4d99-491d-bd8a-560d9d7d59ef",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "dff78b59-b926-4d2b-b4fe-d25ddaecc83c",
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "06590b54-d65c-4b95-be91-dbb908078e1e",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "a76bc5c7-5444-4ae5-b50b-7b1e59dc3371",
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "033e4374-c582-439e-a362-cd23826cfb21",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "8000d3dd-b246-4b94-8a89-cde1c93f6cbc",
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "20e86571-a67c-46fa-aced-5d5fa55b56b2",
+      "display_order": 9
+    },
+    {
+      "source_relation_id": "40feb4ca-0f55-429e-bff6-071f179d8d11",
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "7cb25139-fd1f-48ed-9ee6-32ba5a7d9580",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "acc6cef6-21ae-41cb-a237-4b29d75ec11a",
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "4d762e27-6450-4d56-ab9b-9e3eccdd2bee",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "006e45c8-5421-4782-a3a7-31ae2286f355",
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "5d3ecd4d-6f76-41d2-829a-79efe102ef9a",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "469a18e3-2592-4811-baab-f03a889ecc89",
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "0d775ac4-5590-49c4-b26f-438b8001fdfa",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "3f4bd57b-6689-43bd-9784-ced6eaadfeeb",
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "c53de155-5213-4009-84f4-ceb3437641a8",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "6bcbd4bf-4f73-4064-a2fe-a28230938ea6",
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "3ab76433-6786-492d-aacf-d3f655c5f592",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "da5b9207-06c1-4627-b3c1-6d80b02fe942",
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "63cd142a-2363-4697-81f8-e425a4073949",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "afac6ac0-c593-4eee-8c9a-30ccf3707963",
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "27b5c8e1-1a55-4a81-b037-7c87b17afef3",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "0820757c-00ec-48a4-b2de-6cb8d08355f5",
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "9d0cb667-901b-4708-8544-eb519b1d4c39",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "e75651fa-fc87-41b9-a1bd-a65d80753c93",
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "abb2b08f-c0ff-486e-8331-582eb70c69da",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "9e47fcd3-a7b2-4762-ac6d-3d8c72066ded",
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "7ced5965-9371-4f39-b7ae-3823d8e3873d",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "f082faa0-84a4-4aa9-ac5a-877c0bc70691",
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "b3785069-a78b-41c7-8785-e9acb3e8d19f",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "305a824d-8387-4129-a711-03686c993f0b",
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "b6775216-be8f-4b88-9de4-e7fc93d0c2df",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "10e245c3-0403-4940-8727-de43424a070e",
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "a829557e-ea81-4f43-9f3a-f7c2668b6990",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "9e75b323-03cf-4e47-b63a-465617533912",
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "c0126c45-7914-43e2-a46b-41cb0e9fadca",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "5670e498-fff7-4f2b-9a8b-b3d5c956607a",
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "2a43a6cf-5baa-4ab7-8100-0c80d0efeb23",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "d8679971-7c7a-4807-9da7-6f1951434c1f",
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "37f309ef-ef92-4443-a61f-8041bbf4f25f",
+      "display_order": 8
+    },
+    {
+      "source_relation_id": "44983594-c628-455e-a01f-c45b1fecda3d",
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "d74715da-5299-40e9-a8af-5636e0f6d714",
+      "display_order": 9
+    },
+    {
+      "source_relation_id": "cb32ae41-ae62-4d71-8b01-39bc1729396c",
+      "source_group_id": "11a54dd2-f98d-4b63-b255-58030580d70e",
+      "source_indicator_id": "4af62c2c-062e-49a5-ba8a-43515c9644f7",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "5bb4edf5-1c34-47f7-a0a4-b55261478a51",
+      "source_group_id": "11a54dd2-f98d-4b63-b255-58030580d70e",
+      "source_indicator_id": "d2f9d20c-5f02-4a8b-bcfd-bb9244bcf552",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "2e672ce5-56e4-40d9-be54-5bca5374a4d2",
+      "source_group_id": "11a54dd2-f98d-4b63-b255-58030580d70e",
+      "source_indicator_id": "0594b528-aecc-41f3-bc49-3871e287d784",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "882bae5f-cf6f-4513-b354-31fc0eddd0ac",
+      "source_group_id": "11a54dd2-f98d-4b63-b255-58030580d70e",
+      "source_indicator_id": "8eccd2d6-b6c9-45cb-8d5b-593c9871af70",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "4f5e6bab-58f3-46b9-87f5-a8b715f9c472",
+      "source_group_id": "11a54dd2-f98d-4b63-b255-58030580d70e",
+      "source_indicator_id": "7ced5965-9371-4f39-b7ae-3823d8e3873d",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "e3b903bc-faf9-489e-9569-1ca6ebef1101",
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "78210fcb-3ba4-498a-8bd8-bbc2814a5faa",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "fe7585b2-5310-4340-82ee-c5d24c88043b",
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "ad5cc83d-3776-44d4-915f-ba2a76fb8ebe",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "a1b35dfc-74e7-4496-b1c2-9f681b76e1e9",
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "877ffba4-83d2-4879-bac7-70e3cf88b47a",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "57ab7b64-71b6-4856-abde-9df8b7434605",
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "0943f9af-db9b-42b1-8a84-33f0f91e618a",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "107e105e-3c73-4326-ba7c-ed514297c13e",
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "d797e0ad-77ae-44a6-bab0-77b0a4e1205e",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "adbe4aac-4db7-482f-aa92-9b0992d3e113",
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "ad28e67b-e144-4569-9643-8ea7a2587dce",
+      "display_order": 5
+    },
+    {
+      "source_relation_id": "eab122ac-ff8c-4901-87ee-c0ebc1fd1983",
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "664949a9-95ab-468d-8b18-4dbaf18aca70",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "155b556d-a475-41e9-9751-5700002f38bb",
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "3231236e-be08-4bfb-87ad-98a87fb97811",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "9db65335-f394-46e9-8580-1d6dbef74ddd",
+      "source_group_id": "5e63284c-5883-4a6d-9f14-8a31968720af",
+      "source_indicator_id": "30022783-2077-42df-b686-02c8f0b97ed0",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "7437b47c-1e98-4144-b3b3-3b2331da62a4",
+      "source_group_id": "5e63284c-5883-4a6d-9f14-8a31968720af",
+      "source_indicator_id": "1d87961d-1863-4fce-92e4-bdadcbe5bcc6",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "6b67441e-9a61-4021-bbbc-4993290fbc23",
+      "source_group_id": "5e63284c-5883-4a6d-9f14-8a31968720af",
+      "source_indicator_id": "d23ec476-6944-4b4d-9db0-d1d7de415884",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "cc2a1e1e-891c-4848-bf5a-964d9c627659",
+      "source_group_id": "5e63284c-5883-4a6d-9f14-8a31968720af",
+      "source_indicator_id": "66008d87-0241-477a-96c0-775f57bdbeaf",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "958ad400-9507-4ef0-aa9d-dc0be1423008",
+      "source_group_id": "5e63284c-5883-4a6d-9f14-8a31968720af",
+      "source_indicator_id": "df9def73-8a16-433c-a06f-bf9ddbd062d7",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "5d42e7d3-be89-4d48-9bd6-de607b68f81b",
+      "source_group_id": "9a83d0e4-4e8c-486e-9f4f-51708029bdc5",
+      "source_indicator_id": "7c5cb180-0d46-4cfe-aea0-31c69e1dd151",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "b8ce137c-4594-4eef-82e6-e7f5b058dff9",
+      "source_group_id": "9a83d0e4-4e8c-486e-9f4f-51708029bdc5",
+      "source_indicator_id": "161e7aec-a8c1-4963-bfb0-11d88b015e38",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "7f169f9a-028d-4555-9e10-9d2cc861958f",
+      "source_group_id": "9a83d0e4-4e8c-486e-9f4f-51708029bdc5",
+      "source_indicator_id": "f3042c98-676a-439d-a60d-4f1a51c20d51",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "c04ff205-66b6-4da9-91bc-3b71fb7c719e",
+      "source_group_id": "ec71dd0c-d225-4bea-8410-9e826a2be608",
+      "source_indicator_id": "8302b6c5-0b88-452d-9965-6d8fe4b5d099",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "4839fb86-32b0-4af7-a867-b2e6dc29fcd1",
+      "source_group_id": "ec71dd0c-d225-4bea-8410-9e826a2be608",
+      "source_indicator_id": "d57ce73f-1578-4152-9beb-3f4853dff9d7",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "6d27af52-f096-4973-9200-fa993af6502c",
+      "source_group_id": "ec71dd0c-d225-4bea-8410-9e826a2be608",
+      "source_indicator_id": "2ab085b2-8cf6-4b35-807a-920d419678f8",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "2634ea30-fcaa-4845-a798-f4f360896e6f",
+      "source_group_id": "ec71dd0c-d225-4bea-8410-9e826a2be608",
+      "source_indicator_id": "79628bc3-1873-4869-87ae-9154e65b7d6c",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "6963f4de-aa53-4d36-846e-ed8be2154da1",
+      "source_group_id": "5839fb7d-2a27-43cc-9498-79a30d53dae4",
+      "source_indicator_id": "1cd40ac6-8b0a-4ecc-878d-5d409131eef9",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "71cdb035-6645-45a4-ab6a-8c6b6d377eee",
+      "source_group_id": "5839fb7d-2a27-43cc-9498-79a30d53dae4",
+      "source_indicator_id": "ca1f04a3-f47a-4270-87c1-7da30f06f63f",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "2f963f1a-c70d-4edc-ab8f-8c05f9d712e4",
+      "source_group_id": "5839fb7d-2a27-43cc-9498-79a30d53dae4",
+      "source_indicator_id": "1a95ea57-fef9-45a0-93a7-a3d58010cbc3",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "5c0cfbb0-6ea6-4c2c-a185-dd8a34d28298",
+      "source_group_id": "75781860-144b-4584-b3d6-9617ab878131",
+      "source_indicator_id": "76c78305-62ca-41d9-b13a-f3c9da209d97",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "ee8be48a-b00c-4069-94a9-32fdb8754809",
+      "source_group_id": "75781860-144b-4584-b3d6-9617ab878131",
+      "source_indicator_id": "13553543-ebd2-4dd3-9b6e-983afbd1758f",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "db7f0686-555d-4973-b35f-75c7d8ce9bc6",
+      "source_group_id": "75781860-144b-4584-b3d6-9617ab878131",
+      "source_indicator_id": "afb10bf9-75ad-4d9c-b1e0-ba5430d2b37a",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "eb1bbb77-152f-4c3f-8e77-d658cfbc14da",
+      "source_group_id": "75781860-144b-4584-b3d6-9617ab878131",
+      "source_indicator_id": "4b07cca5-6aad-4785-b4d6-36c2fcee4fb9",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "baef384c-03ed-460c-82b3-bd1fb4879a38",
+      "source_group_id": "75781860-144b-4584-b3d6-9617ab878131",
+      "source_indicator_id": "f998058b-453b-4148-9ac8-4de1d69038cd",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "1c785cb9-bc3b-4e49-9111-b729b0e5469e",
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "1fd95fb5-56dc-4d36-bdec-8f4b2e2b2a35",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "32c85a86-fba6-4e30-bdf4-eaa11e9b39e1",
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "a0440c5a-759d-40a7-ac71-198ff0774029",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "9ef8db42-e880-4273-8e2b-17443a865361",
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "92dd28b9-ddc7-42a5-97f4-4d553710e973",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "17379279-4590-4d87-bab8-151996f34c75",
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "21fa54d5-2796-46d6-a092-f927fb39f95f",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "5ef92af0-ca80-45f3-98a0-ff4ee27e7002",
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "9e5bf5d7-f988-4f1e-aad0-46bce9518868",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "c33ca537-2a95-4198-98dc-f1f715b8efb1",
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "9000416e-9cf0-4711-8bec-229705385d10",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "63f98840-5abf-4778-994a-459184f2f26f",
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "0aafc728-3d59-4bf5-8f35-23503582923f",
+      "display_order": 6
+    },
+    {
+      "source_relation_id": "88f1d23c-0fee-4072-bfd7-26b0d290fb80",
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "9cf69692-5715-432b-a57a-375550e73242",
+      "display_order": 7
+    },
+    {
+      "source_relation_id": "03204654-032b-44e7-a794-6dc259368269",
+      "source_group_id": "f519a6fd-6351-4881-98ac-d65e07dd252b",
+      "source_indicator_id": "4faba831-17d3-4606-9251-091d2d01b660",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "d9831439-4d2f-4f65-beb4-672da228d170",
+      "source_group_id": "f519a6fd-6351-4881-98ac-d65e07dd252b",
+      "source_indicator_id": "3c20cac8-8a47-4be5-8a38-c9cc2c07201a",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "65619b83-70ac-41dd-9718-a213be3b2d06",
+      "source_group_id": "f519a6fd-6351-4881-98ac-d65e07dd252b",
+      "source_indicator_id": "a101e856-959c-4a6c-bf50-43329d6249a3",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "2eeda02b-434a-4c3f-85ab-a1b090c07914",
+      "source_group_id": "f519a6fd-6351-4881-98ac-d65e07dd252b",
+      "source_indicator_id": "d208c865-3350-48d0-b0c0-4ddbaa4fbcbc",
+      "display_order": 3
+    },
+    {
+      "source_relation_id": "38f0ec77-c2ce-4550-986e-9f721a12f67e",
+      "source_group_id": "f519a6fd-6351-4881-98ac-d65e07dd252b",
+      "source_indicator_id": "0207811a-2438-4238-a2fc-fd8065d7e315",
+      "display_order": 4
+    },
+    {
+      "source_relation_id": "56fbfb02-2553-44c2-8b5c-955cf53bc705",
+      "source_group_id": "3dde21bf-0b02-42bb-8b6f-e48f1f45efc0",
+      "source_indicator_id": "97786e20-1306-4a68-98bd-268187f132a7",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "2f3b6dc2-cecc-460c-8510-8d5ace4d43c0",
+      "source_group_id": "3dde21bf-0b02-42bb-8b6f-e48f1f45efc0",
+      "source_indicator_id": "0773bd71-c0d0-4621-906b-bb066596454f",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "a2a10d4c-a55c-417b-8919-76c7c1740fc2",
+      "source_group_id": "3dde21bf-0b02-42bb-8b6f-e48f1f45efc0",
+      "source_indicator_id": "4dac02ae-8f68-4c5c-869c-80ca7fe8acd1",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "fd0c78a8-89b3-4756-ae11-398e039b4a1b",
+      "source_group_id": "ff33d523-fb3b-47f5-be80-b73d5acdad5e",
+      "source_indicator_id": "5f7150ba-851c-445a-86ba-153c3dfb8e16",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "2ed1a360-dda8-44c7-b813-9a5c1a6d55d1",
+      "source_group_id": "ff33d523-fb3b-47f5-be80-b73d5acdad5e",
+      "source_indicator_id": "961c1e97-4426-4159-95b6-2bbe9e0b37a1",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "937c5488-82ba-4ddd-9b00-46a746d0a675",
+      "source_group_id": "ff33d523-fb3b-47f5-be80-b73d5acdad5e",
+      "source_indicator_id": "23a1f8da-ced8-49e1-9f4b-2482ce1cc81e",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "8373b9e0-b117-4ed7-9435-f6731f9f52cf",
+      "source_group_id": "53843dda-e4dc-4e6f-8aad-6d9dbdbbac4e",
+      "source_indicator_id": "1067d9a8-e895-4adb-8f09-22218edddc96",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "cd7b4f6b-2bd4-4d53-a0ef-19d3f98cd5c2",
+      "source_group_id": "4a4c622b-0abd-4558-b984-83d9d97399e9",
+      "source_indicator_id": "f1a273a6-88ce-4952-8a57-df0301984fdd",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "089c6622-19a6-4b27-95b2-6a0e42a323ca",
+      "source_group_id": "f0ff904d-65f3-42cc-a2de-fa6d7f3d8cd8",
+      "source_indicator_id": "9fee88c2-890b-4b78-9416-d35e530f72bc",
+      "display_order": 0
+    },
+    {
+      "source_relation_id": "2365db9e-0650-4f7a-a5ae-aacaae84d414",
+      "source_group_id": "f0ff904d-65f3-42cc-a2de-fa6d7f3d8cd8",
+      "source_indicator_id": "2ee1629f-297b-45e8-bba7-d05175290d47",
+      "display_order": 1
+    },
+    {
+      "source_relation_id": "a0adb75e-43f2-4028-989f-ec3d4a441260",
+      "source_group_id": "f0ff904d-65f3-42cc-a2de-fa6d7f3d8cd8",
+      "source_indicator_id": "ee3debc3-a645-4f03-a2ba-96dc7f1cc1b4",
+      "display_order": 2
+    },
+    {
+      "source_relation_id": "9f07aa0a-6de5-47c7-a1f7-fe5148d41a31",
+      "source_group_id": "f0ff904d-65f3-42cc-a2de-fa6d7f3d8cd8",
+      "source_indicator_id": "d1d54e68-feaa-4974-85ec-72a1524d0f82",
+      "display_order": 3
+    }
+  ]
+}

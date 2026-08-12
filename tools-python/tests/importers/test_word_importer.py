@@ -321,7 +321,7 @@ def test_parse_word_import_outputs_contract_data_and_photo_files(tmp_path: Path)
     assert response.temporary_photo_files == ["photo_0001.png"]
     data = response.data
     assert data.contract.name == "BridgeAnnualInspectionData"
-    assert data.contract.version == "3.0"
+    assert data.contract.version == "4.0"
     assert data.contract.parser_name == "word_importer"
     assert data.import_context.source_type == "软件导出Word"
     assert data.import_context.file_role == "当前年度检测资料"
@@ -339,7 +339,7 @@ def test_parse_word_import_outputs_contract_data_and_photo_files(tmp_path: Path)
     )
     assert len(data.photos) == 1
     assert data.photos[0].linked_defect_candidate_id == "defect_0001"
-    assert data.contract.version == "3.0"
+    assert data.contract.version == "4.0"
     assert not hasattr(data, "ratings")
     assert data.comparison_candidates == []
     assert data.report_text_candidates == []
@@ -365,7 +365,7 @@ def test_parse_word_import_keeps_defect_table_missing_as_contract_error(tmp_path
     assert response.data.defects == []
     assert response.data.photos == []
     assert response.data.errors[0].code == "defect_tables_not_found"
-    assert response.data.contract.version == "3.0"
+    assert response.data.contract.version == "4.0"
     assert not hasattr(response.data, "ratings")
 
 
@@ -383,7 +383,7 @@ def test_parse_word_import_succeeds_when_rating_table_missing(tmp_path: Path) ->
 
     response = parse_word_import(request)
 
-    assert response.data.contract.version == "3.0"
+    assert response.data.contract.version == "4.0"
     assert len(response.data.defects) == 1
     assert not hasattr(response.data, "ratings")
     assert "rating_table_not_found" not in {
@@ -445,7 +445,7 @@ def test_parse_word_endpoint_accepts_document_without_rating_table(tmp_path: Pat
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["data"]["contract"]["version"] == "3.0"
+    assert payload["data"]["contract"]["version"] == "4.0"
     assert "ratings" not in payload["data"]
 
 
@@ -489,7 +489,8 @@ def test_extract_and_match_photos_links_caption_to_defect(tmp_path: Path) -> Non
     assert len(photos) == 1
     assert photos[0].photo_number == "2.1-1"
     assert photos[0].linked_defect_candidate_id == "defect_0001"
-    assert photos[0].match_status == "高置信候选"
+    assert not hasattr(photos[0], "match_status")
+    assert not hasattr(photos[0], "review_status")
     assert photos[0].extracted_file.temporary_file_name == "photo_0001.png"
     assert photos[0].extracted_file.original_caption == "照片2.1-1 主梁梁底裂缝"
 
@@ -557,7 +558,7 @@ def test_extract_and_match_photos_links_table_cell_caption_below_image(tmp_path:
     assert len(photos) == 1
     assert photos[0].photo_number == "2.1-1"
     assert photos[0].linked_defect_candidate_id == "defect_0001"
-    assert photos[0].match_status == "高置信候选"
+    assert not hasattr(photos[0], "match_status")
     assert photos[0].extracted_file.original_caption == "照片2.1-1 主梁梁底裂缝"
 
 
@@ -610,7 +611,7 @@ def test_extract_and_match_photos_keeps_unreferenced_photo_warning(tmp_path: Pat
     assert temporary_files == ["photo_0001.png"]
     assert photos[0].photo_number == "2.1-3"
     assert photos[0].linked_defect_candidate_id is None
-    assert photos[0].match_status == "未关联"
+    assert not hasattr(photos[0], "match_status")
     assert photos[0].warnings[0].code == "photo_not_referenced_by_defect"
 
 

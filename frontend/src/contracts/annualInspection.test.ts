@@ -6,7 +6,7 @@ import { isBridgeAnnualInspectionData, RATING_TREE_MATCH_METHODS } from "./annua
 const validData: BridgeAnnualInspectionData = {
   contract: {
     name: "BridgeAnnualInspectionData",
-    version: "3.0",
+    version: "4.0",
     generated_at: "2026-07-03T00:00:00+08:00",
     producer: "bridge-report-system",
     parser_name: "annual_inspection_contract_parser",
@@ -87,7 +87,6 @@ const validData: BridgeAnnualInspectionData = {
       },
       confidence: 0.92,
       review_status: "待确认",
-      review_note: null,
       warnings: [],
     },
   ],
@@ -101,10 +100,8 @@ const validData: BridgeAnnualInspectionData = {
         original_caption: "主梁梁底裂缝",
         archive_relative_path: "photos/2.1-1.jpg",
       },
-      match_status: "高置信候选",
       source_ref: { source_type: "word", table_index: 1, row_index: 1 },
       confidence: 0.95,
-      review_status: "待确认",
       warnings: [],
     },
   ],
@@ -118,14 +115,14 @@ function cloneValidData(): BridgeAnnualInspectionData {
   return JSON.parse(JSON.stringify(validData)) as BridgeAnnualInspectionData;
 }
 
-describe("isBridgeAnnualInspectionData 3.0", () => {
-  it("accepts valid version three data without imported ratings", () => {
+describe("isBridgeAnnualInspectionData 4.0", () => {
+  it("accepts valid version four data without imported ratings or photo review state", () => {
     expect(isBridgeAnnualInspectionData(validData)).toBe(true);
     expect("ratings" in validData).toBe(false);
     expect("defect_deduction" in validData.defects[0]).toBe(false);
   });
 
-  it.each(["1.0", "1.1", "1.2", "2", "2.0", "2.1", "3"])(
+  it.each(["1.0", "1.1", "1.2", "2", "2.0", "2.1", "3", "3.0", "4"])(
     "rejects contract version %s",
     (version) => {
       expect(
@@ -136,6 +133,15 @@ describe("isBridgeAnnualInspectionData 3.0", () => {
       ).toBe(false);
     },
   );
+
+  it.each(["match_status", "review_status"])("rejects legacy photo field %s", (fieldName) => {
+    expect(
+      isBridgeAnnualInspectionData({
+        ...validData,
+        photos: [{ ...validData.photos[0], [fieldName]: "已确认" }],
+      }),
+    ).toBe(false);
+  });
 
   it("rejects imported ratings", () => {
     expect(
@@ -211,6 +217,10 @@ describe("isBridgeAnnualInspectionData 3.0", () => {
       rating_tree_match_method: "controlled_alias",
       rating_tree_match_evidence: "裂缝 -> 裂缝（受力裂缝）",
       standard_defect_indicator_id: "indicator-1",
+      source_defect_group_id: "source-group-1",
+      source_defect_group_number: "9.1.2",
+      source_defect_indicator_id: "source-indicator-1",
+      source_defect_indicator_number: "9.1.2-1",
     });
     expect(isBridgeAnnualInspectionData(data)).toBe(true);
 
@@ -219,6 +229,10 @@ describe("isBridgeAnnualInspectionData 3.0", () => {
       "rating_tree_node_id",
       "rating_tree_match_evidence",
       "standard_defect_indicator_id",
+      "source_defect_group_id",
+      "source_defect_group_number",
+      "source_defect_indicator_id",
+      "source_defect_indicator_number",
     ]) {
       const invalid = cloneValidData();
       Object.assign(invalid.defects[0], { [fieldName]: "   " });

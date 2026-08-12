@@ -64,7 +64,7 @@ export function RatingTreeNodeDetail({
     <article className="rating-tree-detail">
       <header>
         <div className="rating-tree-breadcrumb">
-          {node.path.map((item) => item.display_name).join(" / ")}
+          {node.path.map((item) => ratingTreeDisplayLabel(item)).join(" / ")}
         </div>
         <div className="rating-tree-detail-title-row">
           <h2>{ratingTreeDisplayLabel(node)}</h2>
@@ -124,11 +124,21 @@ export function RatingTreeNodeDetail({
         </div>
         <div>
           <span>评分模式</span>
-          <strong>{node.is_scoring ? "继承 H21 评分" : "不参与本期评分"}</strong>
+          <strong>
+            {node.uses_source_scale_descriptions
+              ? "参照 H21 扣分"
+              : node.is_scoring
+                ? "继承 H21 评分"
+                : "不参与本期评分"}
+          </strong>
         </div>
         <div>
-          <span>H21 指标</span>
-          <strong>{node.h21_indicator_name || node.h21_indicator_id || "无"}</strong>
+          <span>{node.uses_source_scale_descriptions ? "H21 扣分参照" : "H21 指标"}</span>
+          <strong>
+            {node.uses_source_scale_descriptions
+              ? (node.h21_source_table ? `表 ${node.h21_source_table}` : "无")
+              : (node.h21_indicator_name || node.h21_indicator_id || "无")}
+          </strong>
         </div>
       </section>
 
@@ -142,7 +152,13 @@ export function RatingTreeNodeDetail({
       {node.is_scoring ? (
         <section className="rating-tree-detail-section">
           <h3>标度判定与扣分</h3>
-          {node.h21_source_table && <p className="rating-tree-source-table">来源：{node.h21_source_table}</p>}
+          {node.uses_source_scale_descriptions ? (
+            <p className="rating-tree-source-table">
+              判定来源：来源软件 {node.display_number || ""}；扣分参照：H21 {node.h21_source_table || "—"}
+            </p>
+          ) : (
+            node.h21_source_table && <p className="rating-tree-source-table">来源：{node.h21_source_table}</p>
+          )}
           <div className="rating-tree-scale-table-wrap">
             <table className="rating-tree-scale-table">
               <thead>

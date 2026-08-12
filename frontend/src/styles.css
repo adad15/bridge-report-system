@@ -15,11 +15,31 @@ body {
   padding: 32px;
 }
 
+/* 没有全局 box-sizing 重置，min-height:100vh 量的是内容盒，32px 的上下内边距是额外
+   加上去的——于是本该正好铺满一屏的双栏页还能再滚 64px。只在这类页面上改，卡片流
+   页面本来就靠内容撑高，不受影响。 */
+.app-shell:has(> .app-content-wide) {
+  box-sizing: border-box;
+}
+
 .app-content {
   width: min(1180px, 100%);
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+/* 双栏浏览页（评定树）：1180px 是给单栏卡片流定的行宽上限，套在"树 + 详情"上会把
+   两边一起挤瘦。高度也一并交给这里——页面自己写 calc(100vh - 92px) 猜不准页眉与
+   外壳内边距，猜少了整页会多出几十像素的滚动。 */
+.app-content-wide {
+  width: min(1680px, 100%);
+}
+
+/* 定高只在双栏页真正渲染出来时给：首次加载和出错时这里放的是一张普通 status-panel
+   小卡片，钉死高度只会让它在一片空白里飘着。 */
+.app-content-wide:has(> .rating-tree-page) {
+  height: calc(100vh - 64px);
 }
 
 .top-nav {
@@ -564,7 +584,7 @@ body {
    五个分区的标题层级这才对齐。三者都在各自的 flex 标题行里且已 margin:0，
    故只需统一字号。 */
 .review-main .binding-heading h3,
-.review-main .defect-section-heading h2,
+.review-main .defect-review-toolbar h2,
 .review-main .assessment-heading h2 {
   font-size: 16px;
 }
@@ -726,10 +746,14 @@ body {
   background: rgba(24, 32, 42, 0.48);
 }
 
+/* 未归属照片区横跨整个分区宽度，只写 max-width 的话一张 4:3 现场照要占一千多像素高，
+   和精细维护面板里那张大图是同一个毛病，用同一条限高。 */
 .defect-photo-stage-image {
   display: block;
   max-width: 100%;
+  max-height: min(46vh, 480px);
   height: auto;
+  object-fit: contain;
 }
 
 .defect-photo-meta {
@@ -837,11 +861,8 @@ body {
   cursor: not-allowed;
 }
 
-.review-disabled-fieldset {
+.defect-review-body {
   min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
 }
 
 /* 窄屏退回文档流：整页滚动，底栏（含消息面板）吸底。 */
@@ -2154,7 +2175,6 @@ body {
   font-weight: 700;
 }
 
-.defect-section-heading,
 .defect-card-heading {
   display: flex;
   align-items: center;
@@ -2162,7 +2182,6 @@ body {
   gap: 12px;
 }
 
-.defect-section-heading h2 { margin: 0; }
 .defect-delete-button { color: #b42318; border-color: #f3b6b2; background: #fff7f6; }
 
 .manual-defect-form {
@@ -3338,43 +3357,62 @@ body {
 .defect-review-toolbar {
   display: grid;
   gap: 8px;
-  margin: 14px 0 10px;
+  margin: 4px 0 10px;
   padding: 0 0 10px;
   border-bottom: 1px solid #e2e8f0;
 }
 
-.defect-section-heading-actions {
+/* 第一行：分区标题、七个统计筹码、上一轮匹配的一句话，以及三个主动作。
+   原先标题、筹码、汇总、视图切换各占一行，每行右侧都空着一千多像素，
+   合计 250px 全从工作区身上扣。 */
+.defect-review-toolbar-primary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.defect-review-toolbar-primary h2 {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.defect-review-toolbar-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* 靠右：与第二行的"全选可确认项"对齐到同一条竖线上。 */
+  margin-left: auto;
 }
 
-/* 标题行与工具条吸顶：内容区（.review-main）下滑时筛选和搜索始终可用。
-   两者分属 section 与 fieldset 两个父元素，包不进同一个 sticky 容器，所以各自
-   吸顶，工具条的 top 用变量对齐到标题行高度——与 .binding-heading 同一套做法。
-   背景必须不透明，且标题行的下内边距要吃掉两者之间的间隙，否则滚动的行会从
-   那道透明缝里穿过去。 */
+.defect-review-summary-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 20px;
+  background: #e2e8f0;
+}
+
+/* 工具条吸顶：内容区（.review-main）下滑时筛选和搜索始终可用。标题已经并进
+   工具条，整块是一个 sticky 元素，背景必须不透明。 */
 .review-main .defect-photo-section {
-  /* .review-main 自己的上内边距。sticky 的 top 相对它的内边距盒计算，所以标题行
+  /* .review-main 自己的上内边距。sticky 的 top 相对它的内边距盒计算，所以工具条
      停住时顶上会漏出这么一条缝，滚动的行从缝里穿过去。 */
   --review-main-pad-top: 10px;
-  /* 标题行高度 = 上内边距 4 + 按钮 32 + 下内边距 12。 */
-  --defect-heading-height: 48px;
 }
 
-.review-main .defect-section-heading {
+.review-main .defect-review-toolbar {
   position: sticky;
   top: 0;
   z-index: 3;
-  box-sizing: border-box;
-  padding: 4px 0 12px;
+  margin-top: 0;
   background: #fff;
 }
 
-/* 用伪元素把上方那条缝涂白，而不是给标题行加上内边距——加内边距会把标题行与上方
-   的编辑锁横幅推开，而且吸顶瞬间按钮会向上跳一下。伪元素跟着 sticky 元素走，
+/* 用伪元素把上方那条缝涂白，而不是给工具条加上内边距——加内边距会把它与上方的
+   编辑锁横幅推开，而且吸顶瞬间按钮会向上跳一下。伪元素跟着 sticky 元素走，
    不占布局。 */
-.review-main .defect-section-heading::before {
+.review-main .defect-review-toolbar::before {
   content: "";
   position: absolute;
   right: 0;
@@ -3384,20 +3422,12 @@ body {
   background: #fff;
 }
 
-.review-main .defect-review-toolbar {
-  position: sticky;
-  top: var(--defect-heading-height);
-  z-index: 2;
-  margin-top: 0;
-  background: #fff;
-}
-
 /* 这片区域此前没有任何按钮规则，七个控件全在吃浏览器默认样式：高度 18~37px 不等，
    outset/inset 立体边框，直角，还都是 Arial 而非页面字体。统一成一套：
    同高 32px、同字号、同圆角，只用配色区分主次。 */
-.defect-section-heading-actions button,
+.defect-review-toolbar-actions button,
 .defect-review-summary button,
-.defect-review-filters input,
+.defect-review-filters .defect-review-search,
 .defect-review-filters select,
 .defect-review-filters button {
   box-sizing: border-box;
@@ -3412,20 +3442,20 @@ body {
   line-height: 1;
 }
 
-.defect-review-filters input {
+.defect-review-filters .defect-review-search {
   padding: 0 10px;
 }
 
-.defect-section-heading-actions button:not(:disabled):hover,
+.defect-review-toolbar-actions button:not(:disabled):hover,
 .defect-review-summary button:not(.active):not(:disabled):hover,
 .defect-review-filters button:not(.review-action-primary):not(:disabled):hover {
   background: #f3f5f8;
 }
 
-.defect-review-filters input:focus-visible,
+.defect-review-filters .defect-review-search:focus-visible,
 .defect-review-filters select:focus-visible,
 .defect-review-summary button:focus-visible,
-.defect-section-heading-actions button:focus-visible,
+.defect-review-toolbar-actions button:focus-visible,
 .defect-review-filters button:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 1px;
@@ -3433,6 +3463,7 @@ body {
 
 .defect-review-summary,
 .defect-review-filters,
+.defect-review-mode,
 .defect-detail-heading,
 .defect-detail-actions,
 .review-dialog-actions {
@@ -3440,6 +3471,39 @@ body {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.defect-review-mode {
+  width: max-content;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  background: #f3f5f8;
+}
+
+.defect-review-mode button {
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.defect-review-mode button[aria-pressed="true"] {
+  background: #fff;
+  color: #1d4ed8;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 12%);
+}
+
+.defect-review-mode button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
 }
 
 /* 原来是 min-width:108px + space-between，标签与计数被撑到按钮两端，读起来
@@ -3457,8 +3521,241 @@ body {
   font-weight: 600;
 }
 
-.defect-review-filters input {
-  flex: 1 1 280px;
+/* 原来是 flex:1 1 280px，宽屏下搜索框会被撑到近 1000px——一个只放十来个字的输入框
+   占掉整行。定死 320px，富余留给右侧的全选。 */
+.defect-review-filters .defect-review-search {
+  flex: 0 1 320px;
+}
+
+.defect-review-filters .defect-review-select-all {
+  margin-left: auto;
+}
+
+.defect-review-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.defect-review-select-all:hover {
+  background: #f3f5f8;
+}
+
+.defect-review-select-all:has(input:disabled) {
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.defect-review-select-all input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #2456c9;
+}
+
+.defect-review-select-all:focus-within {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.defect-issue-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.defect-issue-groups-summary {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.defect-issue-groups-summary strong {
+  color: #1f2937;
+  font-size: 15px;
+}
+
+.defect-issue-group {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #d9e0e8;
+  border-left: 3px solid #d97706;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.defect-issue-group-heading,
+.defect-issue-group-action,
+.defect-issue-group-meta,
+.defect-issue-group-samples {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.defect-issue-group-heading {
+  justify-content: space-between;
+}
+
+.defect-issue-group-heading p,
+.defect-issue-group-heading h3,
+.defect-issue-group-manual,
+.defect-issue-group-problems {
+  margin: 0;
+}
+
+.defect-issue-group-heading p {
+  color: #b45309;
+  font-size: 12px;
+}
+
+.defect-issue-group-heading h3 {
+  margin-top: 2px;
+  color: #18202a;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.defect-issue-group-heading > strong {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 12px;
+}
+
+.defect-issue-group-meta {
+  flex-wrap: wrap;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.defect-issue-group-meta span + span::before {
+  content: "·";
+  margin-right: 8px;
+  color: #94a3b8;
+}
+
+.defect-issue-group-problems {
+  display: grid;
+  gap: 3px;
+  padding-left: 18px;
+  color: #9a3412;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.defect-issue-group-samples {
+  flex-wrap: wrap;
+}
+
+.defect-issue-group-samples button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  background: #f8fafc;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.defect-issue-group-samples button:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.defect-issue-group-samples span {
+  overflow: hidden;
+  max-width: 150px;
+  color: #64748b;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.defect-issue-group-action {
+  align-items: stretch;
+}
+
+.defect-issue-group-action select {
+  min-width: 0;
+  flex: 1;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  font-size: 13px;
+}
+
+.defect-issue-group-action button {
+  flex: none;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.defect-issue-group-action .review-action-primary {
+  border: 1px solid #2456c9;
+  border-radius: 6px;
+  background: #2456c9;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.defect-issue-group-action .review-action-primary:disabled {
+  border-color: #a9bce7;
+  background: #a9bce7;
+}
+
+.defect-issue-group-confirm-action {
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 2px;
+}
+
+.defect-issue-group-confirm-action .defect-issue-group-manual {
+  min-width: 0;
+}
+
+.defect-issue-group-manual {
+  color: #64748b;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .defect-issue-group-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .defect-issue-group-action button {
+    width: 100%;
+  }
 }
 
 .defect-quick-review {
@@ -3468,8 +3765,10 @@ body {
   gap: 6px;
 }
 
+/* 260px 曾经是标题行 48 + 四行工具条 190 的高度；工具条压成两行后只剩 120。
+   上限也从 820 放宽——2K 屏上原本会在工作区下方白白留一截。 */
 .defect-review-workspace {
-  height: clamp(520px, calc(100vh - 260px), 820px);
+  height: clamp(520px, calc(100vh - 120px), 1100px);
   min-height: 0;
 }
 
@@ -3488,8 +3787,10 @@ body {
   overflow: hidden;
 }
 
+/* 列表在拆分态只显示编号、位置和一个徽标，纯百分比会让它在超宽屏上长到 800px
+   去摆这三样东西。夹在 300~460px 之间，富余全部流进详情面板。 */
 .defect-review-workspace.detail-open .defect-review-list-pane {
-  flex: 1 1 calc(100% - var(--defect-detail-width));
+  flex: 0 1 clamp(300px, calc(100% - var(--defect-detail-width)), 460px);
 }
 
 .defect-review-list-pane .defect-quick-review {
@@ -3499,12 +3800,14 @@ body {
 }
 
 .defect-detail-pane {
-  flex: 0 0 var(--defect-detail-width);
+  flex: 1 1 auto;
   min-width: 0;
   height: 100%;
   overflow-y: auto;
   scrollbar-gutter: stable;
   background: #fff;
+  /* 面板宽度由拖拽条决定，跟视口宽度对不上，所以内部分栏只能按容器宽度判断。 */
+  container-type: inline-size;
 }
 
 .defect-detail-resize-handle {
@@ -3773,11 +4076,39 @@ body {
   font-size: 12px;
 }
 
+/* 判定列与照片列。宽度够就并排：这一步要做的判断是"看图定这条病害的评定树节点"，
+   图和判定不同屏就得来回滚。窄到放不下 340px 的照片列时退回单列。 */
+.defect-detail-body {
+  display: grid;
+  gap: 16px 32px;
+  margin: 12px 0;
+}
+
+@container (min-width: 900px) {
+  .defect-detail-body {
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 500px);
+    align-items: start;
+  }
+}
+
+.defect-detail-primary,
+.defect-detail-photo-column {
+  min-width: 0;
+}
+
 .defect-detail-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 14px;
-  margin: 12px 0;
+  margin: 12px 0 0;
+}
+
+/* 网格项默认 min-width:auto，会被内容顶开：下拉的最小宽度由最长的那个选项决定，
+   标度里"承重构件有少量碳化现象，且所有碳化深度均小于混凝土保护层厚度"这种
+   长句能撑出几百像素，1fr 也压不住，于是整个面板出横向滚动条。 */
+.defect-detail-fields > *,
+.defect-detail-fields label {
+  min-width: 0;
 }
 
 /* 原先标签与输入值同为 16px，一眼分不清哪个是字段名哪个是内容。 */
@@ -3788,9 +4119,68 @@ body {
   font-size: 13px;
 }
 
-/* 这个面板此前同样没有控件规则，输入框是 inset 立体边框、按钮是 outset、字体全是
-   Arial，高度 19~26px 不等。统一成与病害工具条同一套：32px 高、1px 实线、6px 圆角、
-   继承页面字体；值 14px 比标签 13px 略大，主次靠字号和颜色区分。 */
+/* 精细维护面板的控件基线：32px 高、1px 实线、6px 圆角、继承页面字体，与病害工具条
+   同一套。这里按"面板内全体控件"来写，而不是逐个列举字段区和动作条——逐个列举的
+   写法漏掉了"添加照片""采用""确认缺图"这些按钮和照片说明输入框（一直是 outset
+   立体边框加 Arial），而且评定树下拉从字段区挪进判定卡那一下就掉回了默认样式。
+   规则放在所有具体规则之前，具体规则同特指度靠源码顺序覆盖它。 */
+.defect-detail-editor button,
+.defect-detail-editor select,
+.defect-detail-editor input[type="text"],
+.defect-detail-editor input:not([type]) {
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.defect-detail-editor button:not(:disabled):not(.review-action-primary):hover {
+  background: #f3f5f8;
+}
+
+.defect-detail-editor button:focus-visible,
+.defect-detail-editor select:focus-visible,
+.defect-detail-editor input:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+/* 图形按钮不套基线：缩略图和缺图占位是一张图加一行编号，套上 32px 定高会被压扁。 */
+.defect-detail-editor .defect-photo-card-main,
+.defect-detail-editor .defect-photo-picker-existing button {
+  height: auto;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+}
+
+/* 关闭键保留基线的描边，只把它改回圆形。 */
+.defect-detail-editor .defect-detail-close {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  color: #64748b;
+  font-size: 17px;
+}
+
+/* 危险动作的红字：基线的 color 特指度比 .danger-text-button 高，得抢回来。 */
+.defect-detail-editor .danger-text-button {
+  color: #b42318;
+}
+
+/* 原生文件选择器没法完整改样式，至少让它别用 Arial。 */
+.defect-photo-upload input[type="file"] {
+  font: inherit;
+  font-size: 13px;
+}
+
 .defect-detail-fields input,
 .defect-detail-fields select,
 .defect-detail-actions button {
@@ -3805,6 +4195,8 @@ body {
 
 .defect-detail-fields input,
 .defect-detail-fields select {
+  width: 100%;
+  min-width: 0;
   padding: 0 10px;
   color: #18202a;
   font-size: 14px;
@@ -3867,6 +4259,14 @@ body {
 
 .defect-detail-wide {
   grid-column: 1 / -1;
+}
+
+/* 尺寸是解析结果，不是可编辑字段：一行灰字说清解析出了什么就够了。 */
+.defect-measurement-summary {
+  margin: -4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .defect-detail-editor details {
@@ -3958,9 +4358,9 @@ body {
     grid-column: auto;
   }
 }
+/* 宽高全部交给 .app-content > .rating-tree-page（见 ratingTreePage.css）：这里原来
+   写的 min(1500px) 和 calc(100vh - 92px) 都被外壳压住，是两条永远不生效的声明。 */
 .rating-tree-page {
-  width: min(1500px, calc(100vw - 32px));
-  height: calc(100vh - 92px);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -4336,15 +4736,16 @@ body {
     grid-template-columns: 1fr;
   }
 }
+/* 路径与评分规则现在长在评定树结果卡里，说的就是卡里那个下拉选中的节点。
+   卡本身已经有底色和边框，这里只留一条分隔线收口。 */
 .defect-rating-tree-context {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) auto;
+  align-items: start;
   gap: 8px;
-  margin: 10px 0 12px;
-  padding: 10px;
-  border: 1px solid #dbe4ef;
-  border-radius: 8px;
-  background: #f8fafc;
+  margin: 4px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid #e2e8f0;
 }
 
 .defect-rating-tree-context > div {
@@ -4438,22 +4839,22 @@ body {
   color: #b45309;
 }
 
+/* 原来是一整块带边框的折叠面板，里面"多个候选/疑似组合/无法识别"三个数字与上一排
+   统计筹码逐字相同。留下筹码说不出来的那几项，压成同排的一句灰字。 */
 .defect-match-summary {
-  margin: 6px 0 0;
-  padding: 8px 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
-  font-size: 13px;
-}
-
-.defect-match-summary p {
-  margin: 6px 0 0;
-  color: #64748b;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 结果卡：规范病害名、匹配方式、命中依据和候选依据要在同一处读完。 */
 .defect-rating-tree-result {
+  min-width: 0;
   display: grid;
   gap: 6px;
   padding: 10px 12px;
@@ -4496,17 +4897,46 @@ body {
   list-style: none;
 }
 
+/* 名称与依据占左侧，动作按钮贴右——原来 grid 会把按钮拉成整行空条。 */
 .defect-match-candidates li {
-  display: grid;
-  gap: 3px;
-  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   background: #ffffff;
 }
 
+.defect-match-candidate-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.defect-match-candidate-text strong {
+  font-size: 14px;
+}
+
+.defect-match-candidates li > button {
+  flex: 0 0 auto;
+  padding: 0 16px;
+}
+
 .defect-match-candidates small {
   color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 下拉里是完整的规范病害名，撑满才不会把长名字截掉。它是这张卡的当前值，
+   字号和字色跟字段区的值看齐（14px 深色），比基线的 13px 灰再重一档。 */
+.defect-rating-tree-result > select {
+  width: 100%;
+  padding: 0 10px;
+  color: #18202a;
+  font-size: 14px;
 }
 
 .defect-batch-distribution {
@@ -4662,15 +5092,39 @@ body {
   gap: 6px;
 }
 
+/* 卡片只有 152px 宽，两个按钮并排放不下基线的 32px + 11px 内边距。 */
 .defect-photo-card-actions button {
   flex: 1 1 auto;
-  padding: 4px 8px;
-  font-size: 13px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
 }
 
+/* 只写 max-width 的后果：面板越宽，图越高。1130px 宽的面板里一张 4:3 的现场照
+   要占 820px，比整个工作区还高，评定树、标度和确认按钮全被顶出可视区。限高之后
+   面板再宽也只是图更清楚，不会再把下面的内容推走。 */
 .defect-photo-panel .defect-photo-stage img {
   display: block;
   max-width: 100%;
+  max-height: min(46vh, 480px);
   height: auto;
+  object-fit: contain;
   border-radius: 8px;
+}
+
+/* 离线库路径与"重新读取"按钮同排：路径通常是后端填好的，按钮只在改了路径后才用。 */
+.import-source-path-row {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.import-source-path-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.import-source-path-row button {
+  flex: none;
+  white-space: nowrap;
 }
