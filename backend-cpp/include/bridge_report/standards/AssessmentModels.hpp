@@ -72,6 +72,7 @@ struct ComponentAssessmentResult {
 
 struct ComponentCategoryAssessmentResult {
     std::string component_type_id;
+    std::string component_type_name;
     StructurePart structure_part{StructurePart::superstructure};
     bool major{false};
     double score{0.0};

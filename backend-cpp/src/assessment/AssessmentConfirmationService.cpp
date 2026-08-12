@@ -73,6 +73,7 @@ Json::Value component_json(const standards::ComponentAssessmentResult& component
 Json::Value category_json(const standards::ComponentCategoryAssessmentResult& category) {
     Json::Value json;
     json["component_type_id"] = category.component_type_id;
+    json["component_type_name"] = category.component_type_name;
     json["structure_part"] = standards::to_string(category.structure_part);
     json["major"] = category.major;
     json["score"] = category.score;

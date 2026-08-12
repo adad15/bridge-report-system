@@ -3302,6 +3302,27 @@ body {
   font-size: 24px;
 }
 
+.assessment-category-results {
+  display: grid;
+  gap: 8px;
+}
+
+.assessment-category-results h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.assessment-category-table th,
+.assessment-category-table td {
+  white-space: nowrap;
+}
+
+.assessment-category-table th:nth-child(3),
+.assessment-category-table td:nth-child(3) {
+  width: 36%;
+  white-space: normal;
+}
+
 .assessment-issues {
   padding: 12px 14px;
   border: 1px solid #f2c66d;

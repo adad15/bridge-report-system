@@ -49,6 +49,7 @@ TEST(H21PartEvaluationTest, CategoryUsesMeanMinimumAndComponentCountFactor) {
 
     ASSERT_TRUE(outcome.ok());
     const auto& result = category(*outcome.result, "h21.component.beam.upper_bearing");
+    EXPECT_EQ(result.component_type_name, "上部承重构件（主梁、挂梁）");
     EXPECT_DOUBLE_EQ(result.mean_component_score, 82.5);
     EXPECT_DOUBLE_EQ(result.minimum_component_score, 65.0);
     ASSERT_TRUE(result.component_count_factor.has_value());

@@ -600,6 +600,8 @@ AssessmentOutcome H21Evaluator::evaluate(const BridgeAssessmentInput& input) con
     for (const auto& [component_type_id, instances] : category_inputs) {
         ComponentCategoryAssessmentResult category;
         category.component_type_id = component_type_id;
+        category.component_type_name =
+            definition(package_, component_type_id)->payload["name"].asString();
         category.structure_part = profile->component_parts.at(component_type_id);
         category.major = string_array_contains(major_ids, component_type_id);
         category.configured_weight = profile->component_weights.at(component_type_id);

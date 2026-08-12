@@ -75,6 +75,7 @@ Json::Value result_json_impl(const standards::BridgeAssessmentResult& result) {
         for (const auto& category : part.categories) {
             Json::Value category_json;
             category_json["component_type_id"] = category.component_type_id;
+            category_json["component_type_name"] = category.component_type_name;
             category_json["structure_part"] = standards::to_string(category.structure_part);
             category_json["major"] = category.major;
             category_json["score"] = category.score;

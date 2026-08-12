@@ -31,6 +31,7 @@ export interface AssessmentTrace {
 
 export interface AssessmentCategoryResult {
   component_type_id: string;
+  component_type_name?: string;
   structure_part: string;
   major: boolean;
   score: number;

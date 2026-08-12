@@ -12,10 +12,56 @@ function successfulResponse(): AssessmentPreviewResponse {
     standard: { standard_id: "JTG_H21_2011", standard_code: "JTG/T H21—2011", standard_name: "公路桥梁技术状况评定标准", official_edition: "2011", package_version: "1.0.1", content_checksum: `sha256:${"b".repeat(64)}`, algorithm_id: "jtg-h21-2011" },
     result: {
       standard_id: "JTG_H21_2011", package_version: "1.0.1", bridge_type_id: "beam", overall_score: 87.25, calculated_grade: 2, final_grade: 2, explanation: "系统按 H21 计算。",
-      structure_parts: [{ structure_part: "superstructure", score: 85.5, grade: 2, overall_weight: 0.4, categories: [] }],
+      structure_parts: [
+        {
+          structure_part: "superstructure", score: 85.5, grade: 2, overall_weight: 0.4,
+          categories: [category("h21.component.beam.upper_bearing", "上部承重构件（主梁、挂梁）", "superstructure", 81.54, 0.7, 25)],
+        },
+        {
+          structure_part: "substructure", score: 88.89, grade: 2, overall_weight: 0.4,
+          categories: [category("h21.component.lower.pier", "桥墩", "substructure", 78.41, 0.3, 11)],
+        },
+        {
+          structure_part: "deck_system", score: 71.51, grade: 3, overall_weight: 0.2,
+          categories: [category("h21.component.deck.pavement", "桥面铺装", "deck_system", 72.21, 0.2, 8)],
+        },
+      ],
       triggered_controls: [], trace: [{ step: "component", rule_id: "rule-1", entity_id: "component-1", source_reference: "4.1.1", inputs: {}, output: {} }],
     },
     issues: [], assessment_run_id: "run-1",
+  };
+}
+
+function category(
+  componentTypeId: string,
+  componentTypeName: string,
+  structurePart: string,
+  score: number,
+  effectiveWeight: number,
+  componentCount: number,
+) {
+  return {
+    component_type_id: componentTypeId,
+    component_type_name: componentTypeName,
+    structure_part: structurePart,
+    major: false,
+    score,
+    grade: score >= 80 ? 2 : 3,
+    mean_component_score: score,
+    minimum_component_score: score,
+    configured_weight: effectiveWeight,
+    effective_weight: effectiveWeight,
+    low_score_passthrough: false,
+    component_count_factor: null,
+    components: Array.from({ length: componentCount }, (_, index) => ({
+      component_instance_id: `component-${componentTypeId}-${index}`,
+      component_type_id: componentTypeId,
+      structure_part: structurePart,
+      major: false,
+      score,
+      ordered_deductions: [],
+      defects: [],
+    })),
   };
 }
 
@@ -25,6 +71,13 @@ describe("AssessmentSection", () => {
     expect(screen.getByText(/JTG\/T H21—2011/)).toBeInTheDocument();
     expect(screen.getByText(/规则包 1.0.1/)).toBeInTheDocument();
     expect(screen.getByText("87.25")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "部件类别评分" })).toBeInTheDocument();
+    expect(screen.getByText("上部承重构件")).toBeInTheDocument();
+    expect(screen.getByText("桥墩")).toBeInTheDocument();
+    expect(screen.getByText("桥面铺装")).toBeInTheDocument();
+    expect(screen.getByText("81.54")).toBeInTheDocument();
+    expect(screen.getByText("0.7000")).toBeInTheDocument();
+    expect(screen.getByText("25")).toBeInTheDocument();
     expect(screen.getByText(/4.1.1/)).toBeInTheDocument();
     expect(screen.queryByText(/Word 评分/)).not.toBeInTheDocument();
   });
