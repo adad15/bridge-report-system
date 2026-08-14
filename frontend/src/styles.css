@@ -2,51 +2,70 @@
   font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
   color: #18202a;
   background: #f3f5f8;
+  /* 外壳左右留白。页眉和主体共用同一个值，页眉才不会和下面的卡片错开一截。 */
+  --shell-gutter: 32px;
 }
 
 body {
   margin: 0;
 }
 
-.app-shell {
+/* 应用外框：整宽页眉在上，主体吃掉剩下的高度。评定树和校对工作台的"占满一屏"
+   过去是靠 100vh 减一个手写的页眉高度算出来的，页眉挪出去之后交给 flex，
+   不再有猜出来的魔数。 */
+.app-frame {
+  box-sizing: border-box;
   min-height: 100vh;
   display: flex;
-  justify-content: center;
-  padding: 32px;
+  flex-direction: column;
 }
 
-/* 没有全局 box-sizing 重置，min-height:100vh 量的是内容盒，32px 的上下内边距是额外
-   加上去的——于是本该正好铺满一屏的双栏页还能再滚 64px。只在这类页面上改，卡片流
-   页面本来就靠内容撑高，不受影响。 */
-.app-shell:has(> .app-content-wide) {
+/* 整宽页眉：贴着视口两边，不随下面的内容宽度（1180 / 1680 / 满宽）伸缩。 */
+.app-header {
   box-sizing: border-box;
+  flex: none;
+  padding: 0 var(--shell-gutter);
+  background: #ffffff;
+  border-bottom: 1px solid #d9e0e8;
+}
+
+.app-shell {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  padding: var(--shell-gutter);
 }
 
 .app-content {
   width: min(1180px, 100%);
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
 /* 双栏浏览页（评定树）：1180px 是给单栏卡片流定的行宽上限，套在"树 + 详情"上会把
-   两边一起挤瘦。高度也一并交给这里——页面自己写 calc(100vh - 92px) 猜不准页眉与
-   外壳内边距，猜少了整页会多出几十像素的滚动。 */
+   两边一起挤瘦。高度不用在这里写——.app-shell 是 stretch 的 flex 容器，
+   子元素本来就跟外壳一样高。 */
 .app-content-wide {
   width: min(1680px, 100%);
 }
 
-/* 定高只在双栏页真正渲染出来时给：首次加载和出错时这里放的是一张普通 status-panel
-   小卡片，钉死高度只会让它在一片空白里飘着。 */
-.app-content-wide:has(> .rating-tree-page) {
-  height: calc(100vh - 64px);
+/* 应用式页面（评定树 / 校对工作台）：外壳正好吃掉页眉之外的剩余高度，内部面板各自
+   滚动，整页不滚。flex-basis 取 0 让高度只由剩余空间决定，不被内容的自然高度顶大；
+   min-height:0 是配套的——不写的话 flex item 的自动最小尺寸又会把内容高度顶回来。 */
+.app-shell:has(> .app-content-wide),
+.app-shell-workbench {
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 .top-nav {
   display: flex;
+  align-items: center;
   gap: 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #d9e0e8;
+  padding: 10px 0 8px;
 }
 
 .top-nav-link {
@@ -115,11 +134,9 @@ body {
   border-color: #b9c4d0;
 }
 
-/* 登录页：单卡片整屏居中，表单纵向排布。
-   app-shell 的 min-height:100vh 量的是内容盒，32px 内边距会额外加上去，不改
-   border-box 的话居中后整页还能再滚 64px——和双栏页那条是同一个坑。 */
+/* 登录页：单卡片整屏居中，表单纵向排布。未登录时不渲染 .app-header，
+   外壳自己就是整个 .app-frame，居中即整屏居中。 */
 .app-shell:has(> .app-content > .login-panel) {
-  box-sizing: border-box;
   align-items: center;
   background: linear-gradient(180deg, #e9eef7 0%, #f3f5f8 340px);
 }
@@ -456,16 +473,11 @@ body {
   padding: 0;
 }
 
+/* 高度不用写：外壳已经是"剩余高度"，.app-content 作为 stretch 的 flex item 跟着一样高。
+   顶栏也不用再单独补白底和内边距——它现在是整宽 .app-header 的一部分，三种页面共用。 */
 .app-content-workbench {
   width: 100%;
-  height: 100vh;
   gap: 0;
-}
-
-.app-content-workbench .top-nav {
-  background: #ffffff;
-  padding: 10px 20px 8px;
-  border-bottom: 1px solid #d9e0e8;
 }
 
 /* 加载中 / 出错等早退状态仍渲染独立卡片，在无内边距的工作台容器里手动给出留白。 */
@@ -1039,9 +1051,14 @@ body {
 
 /* 窄屏退回文档流：整页滚动，底栏（含消息面板）吸底。 */
 @media (max-width: 1100px) {
+  /* 撤掉"钉死在剩余高度"，让外壳跟着内容长高，整页滚动。 */
+  .app-shell-workbench {
+    flex: 1 0 auto;
+    min-height: 0;
+  }
+
   .app-content-workbench {
-    height: auto;
-    min-height: 100vh;
+    min-height: 100%;
   }
 
   .review-workspace {
@@ -2375,8 +2392,9 @@ body {
 }
 
 @media (max-width: 720px) {
-  .app-shell {
-    padding: 14px;
+  /* 页眉和主体共用这个值，改一处两边一起收窄。 */
+  :root {
+    --shell-gutter: 14px;
   }
 
   /* .bridge-title-row 不在这里了：它现在是桥名/徽章/编号四个同级元素排成一行，

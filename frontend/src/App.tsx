@@ -44,6 +44,10 @@ function CurrentUserBadge() {
 // 校对工作台是应用式工作台页面（占满视口、页眉/侧栏/底栏固定），需要突破 .app-content
 // 给普通页面用的 880px 居中卡片流。useLocation 只能在 Router 的子组件里调用，所以拆出
 // 这一层，而不是在 App() 里直接判断。
+//
+// 顶栏放在 .app-shell 之外的整宽 .app-header 里：它以前是 .app-content 的子元素，
+// 于是宽度跟着页面走（卡片流 1180px、评定树 1680px、工作台满宽），切页时导航栏会
+// 整条横向瞬移两百多像素。常驻 chrome 不该跟着内容宽度跑。
 function AppShell() {
   const { user, restoring } = useAuth();
   const location = useLocation();
@@ -51,8 +55,8 @@ function AppShell() {
   // 是普通卡片流页面，正则必须锚定 imports 段避免误匹配。
   const isReviewWorkspace = /\/imports\/[^/]+\/review$/.test(location.pathname);
   // 评定树是"树 + 节点详情"的双栏浏览页，和校对工作台一样吃得下整块屏幕：500 个节点
-  // 的树要显示深层编号，右侧标度表有三列。但它保留普通页眉和卡片外观，所以只放宽
-  // .app-content 的 1180px 上限，不套全屏工作台壳。
+  // 的树要显示深层编号，右侧标度表有三列。但它保留卡片外观，所以只放宽 .app-content
+  // 的 1180px 上限，不套全屏工作台壳。
   const isWidePage = location.pathname.startsWith("/rating-trees");
   const contentClass = isReviewWorkspace
     ? "app-content app-content-workbench"
@@ -63,29 +67,33 @@ function AppShell() {
   // 启动恢复会话期间不渲染登录页，避免"闪一下登录页再进入系统"。
   if (restoring) {
     return (
-      <main className="app-shell">
-        <div className="app-content">
-          <section className="status-panel">
-            <p>正在恢复登录会话…</p>
-          </section>
-        </div>
-      </main>
+      <div className="app-frame">
+        <main className="app-shell">
+          <div className="app-content">
+            <section className="status-panel">
+              <p>正在恢复登录会话…</p>
+            </section>
+          </div>
+        </main>
+      </div>
     );
   }
 
   if (user === null) {
     return (
-      <main className="app-shell">
-        <div className="app-content">
-          <LoginPage />
-        </div>
-      </main>
+      <div className="app-frame">
+        <main className="app-shell">
+          <div className="app-content">
+            <LoginPage />
+          </div>
+        </main>
+      </div>
     );
   }
 
   return (
-    <main className={isReviewWorkspace ? "app-shell app-shell-workbench" : "app-shell"}>
-      <div className={contentClass}>
+    <div className="app-frame">
+      <header className="app-header">
         <nav className="top-nav">
           <NavLink to="/bridges" className={({ isActive }) => (isActive ? "top-nav-link active" : "top-nav-link")}>
             桥梁档案
@@ -95,26 +103,30 @@ function AppShell() {
           </NavLink>
           <CurrentUserBadge />
         </nav>
-        <Routes>
-          <Route path="/" element={<Navigate replace to="/bridges" />} />
-          <Route path="/bridges" element={<BridgesPage />} />
-          <Route path="/rating-trees" element={<RatingTreePage />} />
-          <Route path="/rating-trees/:versionId" element={<RatingTreePage />} />
-          <Route path="/bridges/:bridgeId" element={<BridgeWorkspaceShell />}>
-            <Route index element={<BridgeOverviewPage />} />
-            <Route path="inventory" element={<ComponentInventoryPage />} />
-            <Route path="inspections" element={<InspectionWorkspacePage />} />
-            <Route path="inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
-            <Route path="components" element={<ComponentArchivePage />} />
-            <Route path="components/:componentId" element={<ComponentArchivePage />} />
-            <Route path="defect-threads/review" element={<DefectThreadReviewPage />} />
-          </Route>
-          <Route
-            path="/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review"
-            element={<ReviewWorkspacePage />}
-          />
-        </Routes>
-      </div>
-    </main>
+      </header>
+      <main className={isReviewWorkspace ? "app-shell app-shell-workbench" : "app-shell"}>
+        <div className={contentClass}>
+          <Routes>
+            <Route path="/" element={<Navigate replace to="/bridges" />} />
+            <Route path="/bridges" element={<BridgesPage />} />
+            <Route path="/rating-trees" element={<RatingTreePage />} />
+            <Route path="/rating-trees/:versionId" element={<RatingTreePage />} />
+            <Route path="/bridges/:bridgeId" element={<BridgeWorkspaceShell />}>
+              <Route index element={<BridgeOverviewPage />} />
+              <Route path="inventory" element={<ComponentInventoryPage />} />
+              <Route path="inspections" element={<InspectionWorkspacePage />} />
+              <Route path="inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
+              <Route path="components" element={<ComponentArchivePage />} />
+              <Route path="components/:componentId" element={<ComponentArchivePage />} />
+              <Route path="defect-threads/review" element={<DefectThreadReviewPage />} />
+            </Route>
+            <Route
+              path="/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review"
+              element={<ReviewWorkspacePage />}
+            />
+          </Routes>
+        </div>
+      </main>
+    </div>
   );
 }
