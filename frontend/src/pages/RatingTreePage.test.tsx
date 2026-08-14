@@ -120,11 +120,24 @@ function renderPage() {
   );
 }
 
+// 顶栏的"评定树"链接不带版本号，来回切页走的是这条路径。
+function renderIndex() {
+  return render(
+    <MemoryRouter initialEntries={["/rating-trees"]}>
+      <Routes>
+        <Route path="/rating-trees" element={<RatingTreePage />} />
+        <Route path="/rating-trees/:versionId" element={<RatingTreePage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 describe("RatingTreePage", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     clearRatingTreeViewStateForTests();
     vi.spyOn(ratingTreeApi, "fetchRatingTreeVersion").mockResolvedValue(version);
+    vi.spyOn(ratingTreeApi, "fetchRatingTreeVersions").mockResolvedValue([version as never]);
     vi.spyOn(ratingTreeApi, "fetchRatingTreeChildren").mockImplementation(
       async (_baseUrl, _versionId, parentId) =>
         children.get(parentId ?? "root") ?? [],
@@ -164,6 +177,52 @@ describe("RatingTreePage", () => {
     expect(screen.queryByText("org.bridge.root")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "规则来源" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /新增|编辑|发布|停用|删除/ })).not.toBeInTheDocument();
+  });
+
+  it("skips the version lookup when returning to the tree in the same session", async () => {
+    const lookup = ratingTreeApi.fetchRatingTreeVersions;
+
+    const first = renderIndex();
+    await screen.findByRole("heading", { name: "单位桥梁评定树" });
+    expect(lookup).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    // 第二次进来直接跳到记住的版本，不再问一遍"有哪些版本、哪个是默认的"。
+    renderIndex();
+    await screen.findByRole("heading", { name: "单位桥梁评定树" });
+    expect(lookup).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the tree before the previously expanded branches finish loading", async () => {
+    const first = renderIndex();
+    await screen.findByRole("heading", { name: "单位桥梁评定树" });
+    fireEvent.click(screen.getByRole("button", { name: "5 梁式桥上部结构" }));
+    // 树里一个、右侧下级列表里一个，两处都叫这个名字。
+    await screen.findAllByRole("button", { name: "5.1 混凝土梁式桥" });
+    first.unmount();
+
+    // 重进时上次展开的子树按层拉，每层一个往返；这些往返不该挡在首屏前面。
+    let releaseChildren: (() => void) | null = null;
+    const blocked = new Promise<void>((resolve) => {
+      releaseChildren = resolve;
+    });
+    vi.spyOn(ratingTreeApi, "fetchRatingTreeChildren").mockImplementation(
+      async (_baseUrl, _versionId, parentId) => {
+        if (parentId === group5.id) await blocked;
+        return children.get(parentId ?? "root") ?? [];
+      },
+    );
+
+    renderIndex();
+    // 5.1 还堵在网络里，树本身已经画出来了。
+    expect(await screen.findByRole("button", { name: "5 梁式桥上部结构" })).toBeInTheDocument();
+    expect(screen.queryAllByRole("button", { name: "5.1 混凝土梁式桥" })).toHaveLength(0);
+
+    releaseChildren!();
+    await waitFor(() =>
+      expect(screen.queryAllByRole("button", { name: "5.1 混凝土梁式桥" }).length)
+        .toBeGreaterThan(0),
+    );
   });
 
   it("restores search and selection after the route component is remounted", async () => {

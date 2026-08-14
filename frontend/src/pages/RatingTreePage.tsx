@@ -21,7 +21,9 @@ import { backendBaseUrl } from "../config";
 import { RatingTreeNavigator } from "../rating-tree/RatingTreeNavigator";
 import { RatingTreeNodeDetail } from "../rating-tree/RatingTreeNodeDetail";
 import {
+  readLastRatingTreeVersionId,
   readRatingTreeViewState,
+  writeLastRatingTreeVersionId,
   writeRatingTreeViewState,
 } from "../rating-tree/ratingTreeViewState";
 import "../rating-tree/ratingTreePage.css";
@@ -58,6 +60,14 @@ export function RatingTreePage() {
 
   useEffect(() => {
     if (versionId !== undefined) return;
+    // 本次会话里已经打开过评定树：直接跳回那个版本，省掉"取版本列表"这一次往返。
+    // 顶栏的"评定树"链接永远指向不带版本号的 /rating-trees，来回切页时这一跳
+    // 每次都要走一遍。
+    const remembered = readLastRatingTreeVersionId();
+    if (remembered !== null) {
+      navigate(`/rating-trees/${encodeURIComponent(remembered)}`, { replace: true });
+      return;
+    }
     let active = true;
     void fetchRatingTreeVersions(backendBaseUrl)
       .then((versions) => {
@@ -98,18 +108,44 @@ export function RatingTreePage() {
     setSearchTerm(restored.searchTerm);
     setSearchResults(restored.searchTerm ? [] : null);
 
+    // 首屏渲染之后再补上次展开的子树。这段是按层递归拉的，每一层一个往返，
+    // 挂在首屏前面会让"回到评定树"越用越慢——上次展开得越深，白屏越久。
+    // 每拉到一层就并进状态，树逐层长出来；期间对应节点挂在 loadingNodeIds 上，
+    // 用的是展开节点本来就有的那个加载态。
     async function hydrateExpanded(
       nodes: RatingTreeNodeSummary[],
-      loaded: Map<string, RatingTreeNodeSummary[]>,
+      expanded: Set<string>,
     ): Promise<void> {
       const parents = nodes.filter(
-        (node) => restoredExpanded.has(node.id) && node.node_type !== "defect",
+        (node) => expanded.has(node.id) && node.node_type !== "defect",
       );
-      await Promise.all(parents.map(async (parent) => {
-        const children = await fetchRatingTreeChildren(backendBaseUrl, versionId!, parent.id);
-        loaded.set(parent.id, children);
-        await hydrateExpanded(children, loaded);
-      }));
+      if (parents.length === 0) return;
+      const parentIds = parents.map((parent) => parent.id);
+      setLoadingNodeIds((current) => {
+        const next = new Set(current);
+        for (const id of parentIds) next.add(id);
+        return next;
+      });
+      try {
+        await Promise.all(parents.map(async (parent) => {
+          const children = await fetchRatingTreeChildren(backendBaseUrl, versionId!, parent.id);
+          if (!active) return;
+          setChildrenByParent((current) => {
+            // 用户在补齐期间自己展开过这个节点，就别拿旧结果盖掉。
+            if (current.has(parent.id)) return current;
+            return new Map(current).set(parent.id, children);
+          });
+          await hydrateExpanded(children, expanded);
+        }));
+      } finally {
+        if (active) {
+          setLoadingNodeIds((current) => {
+            const next = new Set(current);
+            for (const id of parentIds) next.delete(id);
+            return next;
+          });
+        }
+      }
     }
 
     void Promise.all([
@@ -138,27 +174,23 @@ export function RatingTreePage() {
             initialExpanded.add(firstNode.id);
           }
         }
-        await hydrateExpanded(navigationRoots, loadedChildren);
-        const newlyExpandedParents = navigationRoots.filter(
-          (node) =>
-            initialExpanded.has(node.id) &&
-            node.node_type !== "defect" &&
-            !loadedChildren.has(node.id),
-        );
-        await Promise.all(newlyExpandedParents.map(async (parent) => {
-          const children = await fetchRatingTreeChildren(backendBaseUrl, versionId, parent.id);
-          loadedChildren.set(parent.id, children);
-        }));
         if (!active) return;
+        // 首屏到此为止：根节点列表已经够画出整棵可见的树。
         setVersion(loadedVersion);
         setRoots(loadedRoots);
         setChildrenByParent(loadedChildren);
         setExpandedNodeIds(initialExpanded);
         setSelectedNodeId(initialSelectedNodeId);
         setLoading(false);
+        writeLastRatingTreeVersionId(versionId);
+
+        await hydrateExpanded(navigationRoots, initialExpanded);
       })
       .catch((caught) => {
         if (active) {
+          // 记住的版本可能已经停用了，清掉它：下次回到 /rating-trees 会重新解析
+          // 默认版本，而不是一头撞进同一个错误。
+          writeLastRatingTreeVersionId(null);
           setError(ratingTreeErrorMessage(caught));
           setLoading(false);
         }
@@ -306,8 +338,41 @@ export function RatingTreePage() {
     ? []
     : childrenByParent.get(selectedNode.id) ?? [];
 
+  // 骨架和真正的树共用 .rating-tree-page / .rating-tree-workspace 这套外框类，
+  // 加载完成时只有内容换掉，页头、分栏、圆角都在原地——原来这里是一张 status-panel
+  // 小卡片，尺寸和树差着一整屏。
   if (loading) {
-    return <section className="status-panel"><p>首次加载评定树…</p></section>;
+    return (
+      <section className="rating-tree-page rating-tree-page-skeleton" aria-busy="true">
+        <header className="rating-tree-page-header">
+          <div>
+            <p className="section-kicker">桥梁评定规则</p>
+            <span className="rating-tree-skeleton-line rating-tree-skeleton-title" />
+            <span className="rating-tree-skeleton-line rating-tree-skeleton-meta" />
+          </div>
+        </header>
+        <div className="rating-tree-workspace">
+          <aside className="rating-tree-sidebar">
+            <div className="rating-tree-search">
+              <span>搜索节点或病害</span>
+              <span className="rating-tree-skeleton-line rating-tree-skeleton-input" />
+            </div>
+            <div className="rating-tree-navigation-scroll">
+              <ul className="rating-tree-list">
+                {Array.from({ length: 9 }, (_, index) => (
+                  <li key={index} className="rating-tree-row">
+                    <span className="rating-tree-skeleton-line" />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </aside>
+          <main className="rating-tree-detail-pane">
+            <p className="rating-tree-detail-state">正在加载评定树…</p>
+          </main>
+        </div>
+      </section>
+    );
   }
   if (error && version === null) {
     return <section className="status-panel"><p className="error-text">{error}</p></section>;

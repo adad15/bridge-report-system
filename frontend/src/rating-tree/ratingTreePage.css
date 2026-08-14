@@ -73,6 +73,66 @@
   font-size: 14px;
 }
 
+/* 加载骨架。外框类和真正的树完全一致，这里只画灰条。 */
+.rating-tree-page-skeleton .rating-tree-row {
+  padding-left: 14px;
+}
+
+.rating-tree-skeleton-line {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e9edf2 25%, #f3f6f9 50%, #e9edf2 75%);
+  background-size: 300% 100%;
+  animation: rating-tree-skeleton-sweep 1.5s ease-in-out infinite;
+}
+
+.rating-tree-page-skeleton .rating-tree-row .rating-tree-skeleton-line {
+  flex: 1;
+  max-width: 260px;
+}
+
+/* 长短错开，免得九条一样长的灰条看着像表格而不是树。 */
+.rating-tree-page-skeleton .rating-tree-row:nth-child(3n) .rating-tree-skeleton-line {
+  max-width: 190px;
+}
+
+.rating-tree-page-skeleton .rating-tree-row:nth-child(3n + 2) .rating-tree-skeleton-line {
+  max-width: 225px;
+}
+
+.rating-tree-skeleton-title {
+  width: 190px;
+  height: 20px;
+  margin: 3px 0 9px;
+}
+
+.rating-tree-skeleton-meta {
+  width: 280px;
+  height: 13px;
+}
+
+.rating-tree-skeleton-input {
+  height: 32px;
+  border-radius: 7px;
+}
+
+@keyframes rating-tree-skeleton-sweep {
+  from {
+    background-position: 150% 0;
+  }
+
+  to {
+    background-position: -50% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rating-tree-skeleton-line {
+    animation: none;
+  }
+}
+
 .rating-tree-page .rating-tree-detail-pane {
   padding: 0 0 36px;
   background: #fff;
