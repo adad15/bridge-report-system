@@ -351,6 +351,14 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       setNotCreated(false);
       return true;
     } catch (caught) {
+      // 手里这个修订版已经不可写：桥上已有基于其他版本的草稿。只弹一句提示的话，
+      // 用户会对着同一个不可写的 id 反复点同一个按钮，所以直接重新拉取，
+      // 让后续操作落在最新草稿上。load() 会先清空 error，故提示放在它之后。
+      if (caught instanceof ApiError && caught.code === "inventory_revision_superseded") {
+        await load();
+        setError(componentInventoryErrorMessage(caught));
+        return false;
+      }
       setError(componentInventoryErrorMessage(caught));
       if (caught instanceof ApiError) {
         const details = caught.details as { blockers?: InventoryBlocker[] } | undefined;

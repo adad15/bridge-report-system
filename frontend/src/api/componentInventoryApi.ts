@@ -209,6 +209,7 @@ export function componentInventoryErrorMessage(error: unknown): string {
   const messages: Record<string, string> = {
     component_inventory_not_found: "这座桥还没有构件台账，请先生成初始台账。",
     component_inventory_conflict: "台账已变化或存在重复编号，请刷新后检查。",
+    inventory_revision_superseded: "台账已有基于其他版本的草稿，已为你切到最新草稿，请重新操作。",
     component_is_referenced: "该构件已被病害或正式项目引用，只能停用。",
     component_inventory_confirmation_blocked: "台账仍有未解决项，暂时不能确认。",
     standard_package_unavailable: "所选技术评定规范包当前不可用。",

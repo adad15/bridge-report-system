@@ -17,6 +17,10 @@ enum class ComponentInventoryStatus {
     Conflict,
     Referenced,
     Blocked,
+    // 客户端拿着的已确认版本已被别的草稿取代：桥上存在基于另一版本的草稿，
+    // 再派生一条会让一桥出现两条草稿分支。与 Conflict 分开，是因为前端要据此
+    // 重新拉取台账并采纳新的修订版 id，而不是只弹一句"已变化"。
+    Superseded,
     Failed,
 };
 

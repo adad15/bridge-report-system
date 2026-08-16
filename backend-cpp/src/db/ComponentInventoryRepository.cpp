@@ -127,6 +127,9 @@ struct EditableTarget {
     std::string revision_id;
     std::string entry_id;
     std::string component_id;
+    // 桥上已有基于另一个版本的草稿，本次请求携带的已确认版本不能再派生。
+    // 放在末尾是为了不打断既有的位置初始化。
+    bool superseded{false};
 };
 
 EditableTarget ensure_editable_target(
@@ -155,13 +158,41 @@ EditableTarget ensure_editable_target(
     }
 
     const auto bridge_id = source[0]["bridge_id"].as<std::string>();
-    auto draft = tx->execSqlSync(
+    // 锁到桥上，不是锁到修订版上。两个并发请求若从不同的已确认版本派生，
+    // 上面那句 for update 锁的是两行不同的修订版，谁也挡不住谁，结果各建一条草稿。
+    tx->execSqlSync("select 1 from bridges where id=$1::uuid for update", bridge_id);
+
+    // 只有最新的已确认版本能派生草稿。从更早的版本派生，会把它之后确认的改动丢在
+    // 一边，而派生出的草稿一旦确认就成了最新版——等于静默回滚。
+    const auto latest_confirmed = tx->execSqlSync(
         "select id::text from bridge_component_inventory_revisions "
-        "where bridge_id=$1::uuid and status='草稿' and baseline_revision_id=$2::uuid "
-        "order by revision_number desc limit 1 for update",
-        bridge_id, source_revision_id);
+        "where bridge_id=$1::uuid and status='已确认' order by revision_number desc limit 1",
+        bridge_id);
+    if (!latest_confirmed.empty() &&
+        latest_confirmed[0]["id"].as<std::string>() != source_revision_id) {
+        EditableTarget stale;
+        stale.superseded = true;
+        return stale;
+    }
+
+    // 按 baseline 找草稿是不够的：桥上已有基于 R2 的草稿时，拿 R1 进来会找不到匹配，
+    // 于是又建一条以 R1 为 baseline 的草稿，一桥两条分支，而 get_latest_revision()
+    // 只挑得中其中一条。这里改成先看"有没有草稿"，baseline 不符直接判 superseded。
+    auto draft = tx->execSqlSync(
+        "select id::text,baseline_revision_id::text from bridge_component_inventory_revisions "
+        "where bridge_id=$1::uuid and status='草稿' limit 1 for update",
+        bridge_id);
     std::string draft_id;
-    if (draft.empty()) {
+    if (!draft.empty()) {
+        const bool same_baseline = !draft[0]["baseline_revision_id"].isNull() &&
+            draft[0]["baseline_revision_id"].as<std::string>() == source_revision_id;
+        if (!same_baseline) {
+            EditableTarget stale;
+            stale.superseded = true;
+            return stale;
+        }
+        draft_id = draft[0]["id"].as<std::string>();
+    } else {
         const auto inserted = tx->execSqlSync(
             "insert into bridge_component_inventory_revisions "
             "(bridge_id,revision_number,baseline_revision_id,created_by_user_id) "
@@ -194,8 +225,6 @@ EditableTarget ensure_editable_target(
             "and ne.bridge_component_id=oe.bridge_component_id "
             "where oe.inventory_revision_id=$2::uuid",
             draft_id, source_revision_id);
-    } else {
-        draft_id = draft[0]["id"].as<std::string>();
     }
 
     std::string draft_entry_id;
@@ -369,6 +398,7 @@ ComponentInventoryOutcome ComponentInventoryRepository::update_entry(
     try {
         tx = db_client_->newTransaction(latch->callback());
         const auto target = ensure_editable_target(tx, revision_id, entry_id, user_id);
+        if (target.superseded) { tx->rollback(); return {ComponentInventoryStatus::Superseded}; }
         if (!target.found) { tx->rollback(); return {ComponentInventoryStatus::NotFound}; }
         if (duplicate_number(tx, target.revision_id, target.entry_id,
                              update.site_component_type, update.component_number)) {
@@ -401,6 +431,7 @@ ComponentInventoryOutcome ComponentInventoryRepository::add_entry(
     try {
         tx = db_client_->newTransaction(latch->callback());
         const auto target = ensure_editable_target(tx, revision_id, std::nullopt, user_id);
+        if (target.superseded) { tx->rollback(); return {ComponentInventoryStatus::Superseded}; }
         if (!target.found) { tx->rollback(); return {ComponentInventoryStatus::NotFound}; }
         if (duplicate_number(tx, target.revision_id,
                              "00000000-0000-0000-0000-000000000000",
@@ -455,6 +486,7 @@ ComponentInventoryOutcome ComponentInventoryRepository::delete_entry(
             tx->rollback(); return {ComponentInventoryStatus::Referenced};
         }
         const auto target = ensure_editable_target(tx, revision_id, entry_id, user_id);
+        if (target.superseded) { tx->rollback(); return {ComponentInventoryStatus::Superseded}; }
         if (!target.found) { tx->rollback(); return {ComponentInventoryStatus::NotFound}; }
         tx->execSqlSync("delete from bridge_component_inventory_entries where id=$1::uuid",
                         target.entry_id);
@@ -486,6 +518,7 @@ ComponentInventoryOutcome ComponentInventoryRepository::deactivate_entry(
     try {
         tx = db_client_->newTransaction(latch->callback());
         const auto target = ensure_editable_target(tx, revision_id, entry_id, user_id);
+        if (target.superseded) { tx->rollback(); return {ComponentInventoryStatus::Superseded}; }
         if (!target.found) { tx->rollback(); return {ComponentInventoryStatus::NotFound}; }
         tx->execSqlSync(
             "update bridge_component_inventory_entries set is_active=false,deactivated_at=now(),"
@@ -515,6 +548,7 @@ ComponentInventoryOutcome ComponentInventoryRepository::set_mapping(
     try {
         tx = db_client_->newTransaction(latch->callback());
         const auto target = ensure_editable_target(tx, revision_id, entry_id, user_id);
+        if (target.superseded) { tx->rollback(); return {ComponentInventoryStatus::Superseded}; }
         if (!target.found) { tx->rollback(); return {ComponentInventoryStatus::NotFound}; }
         const auto package = tx->execSqlSync(
             "select 1 from standard_packages where id=$1::uuid "

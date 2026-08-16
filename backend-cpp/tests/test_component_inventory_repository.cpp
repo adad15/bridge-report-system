@@ -276,3 +276,126 @@ TEST_F(ComponentInventoryRepositoryTest, ConfirmationReportsUnmappedManualEntry)
     ASSERT_FALSE(confirmation.blockers.empty());
     EXPECT_EQ(confirmation.blockers.front().code, "component_mapping_required");
 }
+
+// ---------------------------------------------------------------------------
+// 每桥至多一条草稿。派生路径原先按 baseline_revision_id 查找现有草稿，而
+// generate_draft() 见到任何草稿就返回 Conflict——两条路径对同一个不变量的假设相反，
+// 数据库也没有约束保证它，于是一桥可以长出两条草稿分支。
+// ---------------------------------------------------------------------------
+
+TEST_F(ComponentInventoryRepositoryTest, SingleDraftIndexRejectsSecondDraft) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    const auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+
+    // 绕过仓储直接插第二条草稿，验证约束本身在数据库层生效，而不是只靠代码自觉。
+    EXPECT_THROW(
+        client->execSqlSync(
+            "insert into bridge_component_inventory_revisions"
+            "(bridge_id,revision_number,created_by_user_id) values($1::uuid,999,$2::uuid)",
+            bridge_id, user_id),
+        drogon::orm::DrogonDbException);
+
+    const auto drafts = client->execSqlSync(
+        "select count(*)::int as count from bridge_component_inventory_revisions "
+        "where bridge_id=$1::uuid and status='草稿'",
+        bridge_id);
+    EXPECT_EQ(drafts[0]["count"].as<int>(), 1);
+}
+
+TEST_F(ComponentInventoryRepositoryTest, WritingToSupersededConfirmedRevisionIsRejected) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto first_entry = created.revision->entries.front();
+
+    db::InventoryMappingUpdate mapping;
+    mapping.standard_package_id = package_id;
+    mapping.standard_bridge_type_id = input.bridge_type_id;
+    mapping.standard_component_category_id = "test.component.main_girder";
+    mapping.structure_part = "superstructure";
+    ASSERT_EQ(repository.set_mapping(created.revision->id, first_entry.id, user_id, mapping).status,
+              db::ComponentInventoryStatus::Ok);
+    const auto revision_one = repository.confirm_revision(created.revision->id, user_id, "第一版");
+    ASSERT_EQ(revision_one.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_one_id = revision_one.revision->id;
+
+    // 对已确认版本写入会派生草稿，确认它得到第二个已确认版本。
+    db::InventoryEntryUpdate update;
+    update.component_number = "派生-01";
+    update.site_name = first_entry.site_name;
+    update.site_component_type = first_entry.site_component_type;
+    update.span_or_location = first_entry.span_or_location;
+    auto derived = repository.update_entry(revision_one_id, first_entry.id, user_id, update);
+    ASSERT_EQ(derived.status, db::ComponentInventoryStatus::Ok);
+    ASSERT_NE(derived.revision->id, revision_one_id) << "写入已确认版本应派生出新草稿";
+    const auto revision_two = repository.confirm_revision(derived.revision->id, user_id, "第二版");
+    ASSERT_EQ(revision_two.status, db::ComponentInventoryStatus::Ok);
+
+    // 此时再拿第一版进来：它已不是最新已确认版本，不能再派生第二条分支。
+    update.component_number = "回到旧版-01";
+    const auto stale = repository.update_entry(
+        revision_one_id, first_entry.id, user_id, update);
+    EXPECT_EQ(stale.status, db::ComponentInventoryStatus::Superseded);
+
+    const auto drafts = client->execSqlSync(
+        "select count(*)::int as count from bridge_component_inventory_revisions "
+        "where bridge_id=$1::uuid and status='草稿'",
+        bridge_id);
+    EXPECT_EQ(drafts[0]["count"].as<int>(), 0) << "被拒绝的写入不应留下草稿";
+}
+
+TEST_F(ComponentInventoryRepositoryTest, RepeatedWritesToConfirmedRevisionReuseOneDraft) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 2);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto entries = created.revision->entries;
+    ASSERT_EQ(entries.size(), 2u);
+
+    db::InventoryMappingUpdate mapping;
+    mapping.standard_package_id = package_id;
+    mapping.standard_bridge_type_id = input.bridge_type_id;
+    mapping.standard_component_category_id = "test.component.main_girder";
+    mapping.structure_part = "superstructure";
+    for (const auto& entry : entries) {
+        ASSERT_EQ(repository.set_mapping(created.revision->id, entry.id, user_id, mapping).status,
+                  db::ComponentInventoryStatus::Ok);
+    }
+    const auto confirmed = repository.confirm_revision(created.revision->id, user_id, "基线版");
+    ASSERT_EQ(confirmed.status, db::ComponentInventoryStatus::Ok);
+    const auto baseline_id = confirmed.revision->id;
+
+    // 连着两次写同一个已确认版本：第二次必须落在第一次派生出的那条草稿上。
+    db::InventoryEntryUpdate update;
+    update.site_name = entries[0].site_name;
+    update.site_component_type = entries[0].site_component_type;
+    update.span_or_location = entries[0].span_or_location;
+    update.component_number = "改-A";
+    const auto first_write = repository.update_entry(baseline_id, entries[0].id, user_id, update);
+    ASSERT_EQ(first_write.status, db::ComponentInventoryStatus::Ok);
+
+    update.site_name = entries[1].site_name;
+    update.site_component_type = entries[1].site_component_type;
+    update.span_or_location = entries[1].span_or_location;
+    update.component_number = "改-B";
+    const auto second_write = repository.update_entry(baseline_id, entries[1].id, user_id, update);
+    ASSERT_EQ(second_write.status, db::ComponentInventoryStatus::Ok);
+    EXPECT_EQ(second_write.revision->id, first_write.revision->id);
+
+    const auto drafts = client->execSqlSync(
+        "select count(*)::int as count from bridge_component_inventory_revisions "
+        "where bridge_id=$1::uuid and status='草稿'",
+        bridge_id);
+    EXPECT_EQ(drafts[0]["count"].as<int>(), 1);
+}

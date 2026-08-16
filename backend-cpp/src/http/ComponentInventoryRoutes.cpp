@@ -62,6 +62,15 @@ void respond_inventory_outcome(
                      drogon::k409Conflict);
         return;
     }
+    // 与 Conflict 分开：前端要据此重新拉取台账并采纳新的修订版 id，
+    // 只提示"已变化"会让用户对着同一个不可写的 id 反复点。
+    if (outcome.status == db::ComponentInventoryStatus::Superseded) {
+        respond_json(callback,
+                     make_error_body("inventory_revision_superseded",
+                                     "构件台账已有基于其他版本的草稿，请刷新后在最新草稿上修改。"),
+                     drogon::k409Conflict);
+        return;
+    }
     if (outcome.status == db::ComponentInventoryStatus::Referenced) {
         respond_json(callback, make_error_body(
             "component_is_referenced", "该实际构件已被病害或正式项目引用，只能停用。"),
