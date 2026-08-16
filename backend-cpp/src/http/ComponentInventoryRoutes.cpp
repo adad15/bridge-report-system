@@ -40,9 +40,14 @@ void respond_inventory_outcome(
     const HttpCallback& callback,
     const db::ComponentInventoryOutcome& outcome,
     const drogon::HttpStatusCode success_status = drogon::k200OK) {
-    if (outcome.status == db::ComponentInventoryStatus::Ok && outcome.revision.has_value()) {
-        Json::Value body;
-        body["revision"] = inventory::inventory_revision_json(*outcome.revision);
+    // 写响应的形状与汇总端点一致（revision / groups / blockers），另带被改动的那一条
+    // 构件。前端拿到后整份替换汇总、就地补那一条，不必再拉一遍全量。
+    if (outcome.status == db::ComponentInventoryStatus::Ok && outcome.summary.has_value()) {
+        Json::Value body = *outcome.summary;
+        if (outcome.entry.has_value()) {
+            body["entry"] = inventory::located_entry_json(
+                outcome.entry->entry, outcome.entry->position);
+        }
         if (outcome.entry_id.has_value()) body["entry_id"] = *outcome.entry_id;
         respond_json(callback, body, success_status);
         return;

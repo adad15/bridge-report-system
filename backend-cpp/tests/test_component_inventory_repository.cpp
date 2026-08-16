@@ -71,6 +71,15 @@ protected:
     std::string bridge_id;
 };
 
+namespace {
+
+// 除 generate_draft 外的写方法不再回传全量修订版；修订版 id 从汇总里取。
+std::string revision_id_of(const db::ComponentInventoryOutcome& outcome) {
+    return (*outcome.summary)["revision"]["id"].asString();
+}
+
+}  // namespace
+
 TEST_F(ComponentInventoryRepositoryTest, GeneratedComponentsKeepStableIdentityWhenNumberChanges) {
     if (!client) GTEST_SKIP();
     const auto input = girder_input(5, 6);
@@ -99,8 +108,9 @@ TEST_F(ComponentInventoryRepositoryTest, GeneratedComponentsKeepStableIdentityWh
     const auto updated = repository.update_entry(
         created.revision->id, original.id, user_id, update);
     ASSERT_EQ(updated.status, db::ComponentInventoryStatus::Ok);
-    ASSERT_TRUE(updated.revision.has_value());
-    const auto& updated_entry = updated.revision->entries.front();
+    ASSERT_TRUE(updated.summary.has_value());
+    ASSERT_TRUE(updated.entry.has_value());
+    const auto& updated_entry = updated.entry->entry;
     EXPECT_EQ(updated_entry.bridge_component_id, original.bridge_component_id);
     EXPECT_EQ(updated_entry.component_number, "自定义-01");
 
@@ -109,21 +119,21 @@ TEST_F(ComponentInventoryRepositoryTest, GeneratedComponentsKeepStableIdentityWh
     duplicate.site_name = "重复主梁";
     duplicate.site_component_type = "主梁";
     EXPECT_EQ(
-        repository.add_entry(updated.revision->id, user_id, duplicate).status,
+        repository.add_entry(revision_id_of(updated), user_id, duplicate).status,
         db::ComponentInventoryStatus::Conflict);
 
     db::InventoryNewEntry removable;
     removable.component_number = "临时-01";
     removable.site_name = "误生成构件";
     removable.site_component_type = "临时构件";
-    const auto added = repository.add_entry(updated.revision->id, user_id, removable);
+    const auto added = repository.add_entry(revision_id_of(updated), user_id, removable);
     ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
     const auto added_entry = *added.entry_id;
     const auto physical_id = client->execSqlSync(
         "select bridge_component_id::text from bridge_component_inventory_entries where id=$1::uuid",
         added_entry)[0]["bridge_component_id"].as<std::string>();
     const auto removed = repository.delete_entry(
-        updated.revision->id, added_entry, user_id);
+        revision_id_of(updated), added_entry, user_id);
     ASSERT_EQ(removed.status, db::ComponentInventoryStatus::Ok);
     EXPECT_TRUE(client->execSqlSync(
         "select 1 from bridge_components where id=$1::uuid", physical_id).empty());
@@ -152,7 +162,7 @@ TEST_F(ComponentInventoryRepositoryTest, ConfirmedEditCreatesDraftAndReferencedC
     ASSERT_EQ(mapped.status, db::ComponentInventoryStatus::Ok);
     auto confirmed = repository.confirm_revision(revision_one, user_id, "仓储测试确认");
     ASSERT_EQ(confirmed.status, db::ComponentInventoryStatus::Ok);
-    EXPECT_EQ(confirmed.revision->status, "已确认");
+    EXPECT_EQ((*confirmed.summary)["revision"]["status"].asString(), "已确认");
 
     db::InventoryEntryUpdate update;
     update.component_number = "修改后编号";
@@ -161,10 +171,13 @@ TEST_F(ComponentInventoryRepositoryTest, ConfirmedEditCreatesDraftAndReferencedC
     update.span_or_location = entry_one.span_or_location;
     auto edited = repository.update_entry(revision_one, entry_one.id, user_id, update);
     ASSERT_EQ(edited.status, db::ComponentInventoryStatus::Ok);
-    ASSERT_EQ(edited.revision->revision_number, 2);
-    ASSERT_EQ(edited.revision->status, "草稿");
-    ASSERT_EQ(edited.revision->entries.size(), 1u);
-    EXPECT_EQ(edited.revision->entries[0].bridge_component_id, entry_one.bridge_component_id);
+    ASSERT_TRUE(edited.summary.has_value());
+    const auto& edited_revision = (*edited.summary)["revision"];
+    ASSERT_EQ(edited_revision["revision_number"].asInt(), 2);
+    ASSERT_EQ(edited_revision["status"].asString(), "草稿");
+    ASSERT_EQ(edited_revision["active_entry_count"].asInt(), 1);
+    ASSERT_TRUE(edited.entry.has_value());
+    EXPECT_EQ(edited.entry->entry.bridge_component_id, entry_one.bridge_component_id);
 
     const auto year_id = client->execSqlSync(
         "insert into inspection_years(bridge_id,inspection_year,status,"
@@ -179,13 +192,14 @@ TEST_F(ComponentInventoryRepositoryTest, ConfirmedEditCreatesDraftAndReferencedC
 
     EXPECT_EQ(
         repository.delete_entry(
-            edited.revision->id, edited.revision->entries[0].id, user_id).status,
+            revision_id_of(edited), edited.entry->entry.id, user_id).status,
         db::ComponentInventoryStatus::Referenced);
     const auto deactivated = repository.deactivate_entry(
-        edited.revision->id, edited.revision->entries[0].id, user_id, "现场已停用");
+        revision_id_of(edited), edited.entry->entry.id, user_id, "现场已停用");
     ASSERT_EQ(deactivated.status, db::ComponentInventoryStatus::Ok);
-    EXPECT_FALSE(deactivated.revision->entries[0].is_active);
-    EXPECT_EQ(deactivated.revision->entries[0].deactivation_reason, "现场已停用");
+    ASSERT_TRUE(deactivated.entry.has_value());
+    EXPECT_FALSE(deactivated.entry->entry.is_active);
+    EXPECT_EQ(deactivated.entry->entry.deactivation_reason, "现场已停用");
 }
 
 TEST_F(ComponentInventoryRepositoryTest, GeneratedMappingsAreConfirmedByGeneratingUser) {
@@ -229,18 +243,24 @@ TEST_F(ComponentInventoryRepositoryTest, PendingMappingsCanBeConfirmedInBatch) {
     // 按构件类别只确认横隔板。
     auto partial = repository.confirm_pending_mappings(revision_id, user_id, "横隔板");
     ASSERT_EQ(partial.status, db::ComponentInventoryStatus::Ok);
-    for (const auto& entry : partial.revision->entries) {
-        const auto expected = entry.site_component_type == "横隔板" ? "已确认" : "待确认";
-        ASSERT_EQ(entry.mappings.size(), 1u);
-        EXPECT_EQ(entry.mappings[0].confirmation_status, expected);
+    // 写响应不再带全量构件；同样的意图由分组计数表达：只有横隔板整组转成已确认。
+    ASSERT_TRUE(partial.summary.has_value());
+    for (const auto& group : (*partial.summary)["groups"]) {
+        const bool targeted = group["site_component_type"].asString() == "横隔板";
+        const auto active = group["active_count"].asInt();
+        EXPECT_EQ(group["confirmed_count"].asInt(), targeted ? active : 0)
+            << group["site_component_type"].asString();
+        EXPECT_EQ(group["pending_count"].asInt(), targeted ? 0 : active)
+            << group["site_component_type"].asString();
     }
 
     // 不带筛选时确认全部剩余映射。
     auto all = repository.confirm_pending_mappings(revision_id, user_id, "");
     ASSERT_EQ(all.status, db::ComponentInventoryStatus::Ok);
-    for (const auto& entry : all.revision->entries) {
-        ASSERT_EQ(entry.mappings.size(), 1u);
-        EXPECT_EQ(entry.mappings[0].confirmation_status, "已确认");
+    ASSERT_TRUE(all.summary.has_value());
+    for (const auto& group : (*all.summary)["groups"]) {
+        EXPECT_EQ(group["pending_count"].asInt(), 0);
+        EXPECT_EQ(group["confirmed_count"].asInt(), group["active_count"].asInt());
     }
 
     // 已确认版本不允许再批量确认映射。
@@ -337,9 +357,8 @@ TEST_F(ComponentInventoryRepositoryTest, BlockerRuleAgreesBetweenInspectionAndCo
         manual.site_component_type = "自定义类型";
         const auto added = repository.add_entry(created.revision->id, user_id, manual);
         ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
-        for (const auto& entry : added.revision->entries) {
-            if (entry.component_number == number) expected.insert(entry.id);
-        }
+        ASSERT_TRUE(added.entry.has_value());
+        expected.insert(added.entry->entry.id);
     }
     ASSERT_EQ(expected.size(), 2u);
 
@@ -419,7 +438,7 @@ TEST_F(ComponentInventoryRepositoryTest, WritingToSupersededConfirmedRevisionIsR
               db::ComponentInventoryStatus::Ok);
     const auto revision_one = repository.confirm_revision(created.revision->id, user_id, "第一版");
     ASSERT_EQ(revision_one.status, db::ComponentInventoryStatus::Ok);
-    const auto revision_one_id = revision_one.revision->id;
+    const auto revision_one_id = revision_id_of(revision_one);
 
     // 对已确认版本写入会派生草稿，确认它得到第二个已确认版本。
     db::InventoryEntryUpdate update;
@@ -429,8 +448,8 @@ TEST_F(ComponentInventoryRepositoryTest, WritingToSupersededConfirmedRevisionIsR
     update.span_or_location = first_entry.span_or_location;
     auto derived = repository.update_entry(revision_one_id, first_entry.id, user_id, update);
     ASSERT_EQ(derived.status, db::ComponentInventoryStatus::Ok);
-    ASSERT_NE(derived.revision->id, revision_one_id) << "写入已确认版本应派生出新草稿";
-    const auto revision_two = repository.confirm_revision(derived.revision->id, user_id, "第二版");
+    ASSERT_NE(revision_id_of(derived), revision_one_id) << "写入已确认版本应派生出新草稿";
+    const auto revision_two = repository.confirm_revision(revision_id_of(derived), user_id, "第二版");
     ASSERT_EQ(revision_two.status, db::ComponentInventoryStatus::Ok);
 
     // 此时再拿第一版进来：它已不是最新已确认版本，不能再派生第二条分支。
@@ -468,7 +487,7 @@ TEST_F(ComponentInventoryRepositoryTest, RepeatedWritesToConfirmedRevisionReuseO
     }
     const auto confirmed = repository.confirm_revision(created.revision->id, user_id, "基线版");
     ASSERT_EQ(confirmed.status, db::ComponentInventoryStatus::Ok);
-    const auto baseline_id = confirmed.revision->id;
+    const auto baseline_id = revision_id_of(confirmed);
 
     // 连着两次写同一个已确认版本：第二次必须落在第一次派生出的那条草稿上。
     db::InventoryEntryUpdate update;
@@ -485,7 +504,7 @@ TEST_F(ComponentInventoryRepositoryTest, RepeatedWritesToConfirmedRevisionReuseO
     update.component_number = "改-B";
     const auto second_write = repository.update_entry(baseline_id, entries[1].id, user_id, update);
     ASSERT_EQ(second_write.status, db::ComponentInventoryStatus::Ok);
-    EXPECT_EQ(second_write.revision->id, first_write.revision->id);
+    EXPECT_EQ(revision_id_of(second_write), revision_id_of(first_write));
 
     const auto drafts = client->execSqlSync(
         "select count(*)::int as count from bridge_component_inventory_revisions "
@@ -563,9 +582,8 @@ TEST_F(ComponentInventoryRepositoryTest, SummaryRangeCountsOnlyActiveEntriesAndK
         order += 10;
         const auto added = repository.add_entry(revision_id, user_id, manual);
         ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
-        for (const auto& entry : added.revision->entries) {
-            if (entry.component_number == number) cone_ids.push_back(entry.id);
-        }
+        ASSERT_TRUE(added.entry.has_value());
+        cone_ids.push_back(added.entry->entry.id);
     }
     ASSERT_EQ(cone_ids.size(), 3u);
 
@@ -698,9 +716,8 @@ TEST_F(ComponentInventoryRepositoryTest, GroupEntriesPageKeepsPositionAcrossDeac
         manual.sort_order = 100 + index;
         const auto added = repository.add_entry(revision_id, user_id, manual);
         ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
-        for (const auto& entry : added.revision->entries) {
-            if (entry.component_number == manual.component_number) ids.push_back(entry.id);
-        }
+        ASSERT_TRUE(added.entry.has_value());
+        ids.push_back(added.entry->entry.id);
     }
     ASSERT_EQ(ids.size(), 5u);
 
@@ -818,9 +835,11 @@ TEST_F(ComponentInventoryRepositoryTest, PositionAgreesBetweenPageSearchAndBlock
         order += 1;
         const auto added = repository.add_entry(revision_id, user_id, manual);
         ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
-        for (const auto& entry : added.revision->entries) {
-            if (entry.component_number != number) continue;
-            if (std::string(number) == "P-3") { unmapped_id = entry.id; continue; }
+        ASSERT_TRUE(added.entry.has_value());
+        const auto& entry = added.entry->entry;
+        if (std::string(number) == "P-3") {
+            unmapped_id = entry.id;
+        } else {
             db::InventoryMappingUpdate mapping;
             mapping.standard_package_id = package_id;
             mapping.standard_bridge_type_id = input.bridge_type_id;
@@ -854,6 +873,83 @@ TEST_F(ComponentInventoryRepositoryTest, PositionAgreesBetweenPageSearchAndBlock
         }
     }
     EXPECT_EQ(sample_position, page_position) << "blocker 样本必须用同一套序号";
+}
+
+// 写响应的形状。汇总在提交前的同一个事务里算出，所以它反映的必须是这次写入之后的
+// 状态；派生草稿时还必须基于派生出来的那个修订版，而不是请求里带的那个。
+TEST_F(ComponentInventoryRepositoryTest, WriteSummaryFollowsDerivedDraftAndCarriesChangedEntry) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    ASSERT_TRUE(created.summary.has_value()) << "生成台账也要带回汇总";
+    const auto entry = created.revision->entries.front();
+    const auto confirmed = repository.confirm_revision(created.revision->id, user_id, "基线版");
+    ASSERT_EQ(confirmed.status, db::ComponentInventoryStatus::Ok);
+    const auto confirmed_id = revision_id_of(confirmed);
+
+    db::InventoryEntryUpdate update;
+    update.component_number = "派生后编号";
+    update.site_name = entry.site_name;
+    update.site_component_type = entry.site_component_type;
+    update.span_or_location = entry.span_or_location;
+    const auto derived = repository.update_entry(confirmed_id, entry.id, user_id, update);
+    ASSERT_EQ(derived.status, db::ComponentInventoryStatus::Ok);
+    ASSERT_TRUE(derived.summary.has_value());
+
+    const auto derived_id = revision_id_of(derived);
+    EXPECT_NE(derived_id, confirmed_id) << "写已确认版本应派生新草稿";
+    EXPECT_EQ((*derived.summary)["revision"]["status"].asString(), "草稿")
+        << "汇总必须基于派生出来的草稿，而不是请求里那个已确认版本";
+
+    // 受影响构件随响应带回，前端据此就地补页，不必再拉一遍。
+    ASSERT_TRUE(derived.entry.has_value());
+    EXPECT_EQ(derived.entry->entry.component_number, "派生后编号");
+    EXPECT_EQ(derived.entry->entry.bridge_component_id, entry.bridge_component_id)
+        << "派生后仍是同一个实际构件";
+    EXPECT_EQ(derived.entry->position, 0);
+
+    // 汇总确实取自新草稿：拿它的 id 单独再查一次，编号应当已经是改后的。
+    const auto reread = repository.load_summary(derived_id);
+    ASSERT_TRUE(reread.has_value());
+    ASSERT_EQ((*reread)["groups"].size(), 1u);
+    EXPECT_EQ((*reread)["groups"][0]["first_number"].asString(), "派生后编号");
+}
+
+TEST_F(ComponentInventoryRepositoryTest, WritesWithoutASingleTargetOmitTheChangedEntry) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 2);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = created.revision->id;
+
+    db::InventoryNewEntry manual;
+    manual.component_number = "待删除-1";
+    manual.site_name = "临时构件";
+    manual.site_component_type = "临时类型";
+    const auto added = repository.add_entry(revision_id, user_id, manual);
+    ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
+    ASSERT_TRUE(added.entry.has_value()) << "新增有明确的受影响构件";
+
+    // 删除之后那条构件已经不存在，回传它没有意义。
+    const auto removed = repository.delete_entry(revision_id, added.entry->entry.id, user_id);
+    ASSERT_EQ(removed.status, db::ComponentInventoryStatus::Ok);
+    ASSERT_TRUE(removed.summary.has_value());
+    EXPECT_FALSE(removed.entry.has_value());
+    for (const auto& group : (*removed.summary)["groups"]) {
+        EXPECT_NE(group["site_component_type"].asString(), "临时类型")
+            << "删掉最后一条后该组不该还在汇总里";
+    }
+
+    // 批量确认映射天然影响所有分组，同样没有单一的受影响构件。
+    const auto bulk = repository.confirm_pending_mappings(revision_id, user_id, "");
+    ASSERT_EQ(bulk.status, db::ComponentInventoryStatus::Ok);
+    ASSERT_TRUE(bulk.summary.has_value());
+    EXPECT_FALSE(bulk.entry.has_value());
 }
 
 // 搬迁验收的导出口。compare-inventory-summary.ps1 需要"新实现"那一侧的输出，

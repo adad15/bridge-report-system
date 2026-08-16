@@ -311,8 +311,9 @@ ComponentInventoryOutcome finish(
     if (!latch->wait()) return {};
     ComponentInventoryOutcome outcome;
     outcome.status = ComponentInventoryStatus::Ok;
-    outcome.revision = inventory::InventoryRevision{};
-    outcome.revision->id = revision_id;
+    // 这里刻意不再塞一个只有 id 的空壳 revision。除 generate_draft 外的写方法不再
+    // 装配全量，留个 entries 为空的壳只会让调用方拿到"看起来有、其实是空"的数据；
+    // 留成 nullopt，误用会当场失败。修订版 id 由 entry_id 之外的 summary 带回。
     outcome.entry_id = entry_id;
     return outcome;
 }
@@ -342,6 +343,12 @@ std::optional<std::string> ComponentInventoryRepository::find_latest_revision_id
 
 std::optional<Json::Value> ComponentInventoryRepository::load_summary(
     const std::string& revision_id) const {
+    return load_summary_with(db_client_, revision_id);
+}
+
+std::optional<Json::Value> ComponentInventoryRepository::load_summary_with(
+    const drogon::orm::DbClientPtr& executor,
+    const std::string& revision_id) {
     // blocker 规则用 blocker_cte_sql() 的文本，与 confirm 嵌的是同一段。
     const std::string sql =
         "with " + blocker_cte_sql() + ","
@@ -455,7 +462,7 @@ std::optional<Json::Value> ComponentInventoryRepository::load_summary(
         "order by ord_group,sort_order,tie) from sample_limited),'[]'::json))"
         ") as summary";
 
-    const auto rows = db_client_->execSqlSync(sql, revision_id);
+    const auto rows = executor->execSqlSync(sql, revision_id);
     if (rows.empty()) return std::nullopt;
     Json::Value summary;
     Json::CharReaderBuilder builder;
@@ -492,11 +499,12 @@ constexpr const char* kIsReferencedSql =
 // 逐条取映射会让往返次数随页大小线性增长，那正是本次要消灭的形态。
 ComponentInventoryRepository::EntryLookup
 ComponentInventoryRepository::load_entry_page(
+    const drogon::orm::DbClientPtr& executor,
     const std::string& revision_id,
     const std::string& scope_predicate,
     const std::string& scope_value,
     std::int64_t offset,
-    std::int64_t limit) const {
+    std::int64_t limit) {
     EntryLookup lookup;
 
     // total 单独查一次。放在分页语句里用 count(*) over () 的话，页码越界时返回零行，
@@ -504,7 +512,7 @@ ComponentInventoryRepository::load_entry_page(
     const std::string count_sql =
         "select count(*)::bigint as value from bridge_component_inventory_entries e "
         "where e.inventory_revision_id=$1::uuid and " + scope_predicate;
-    lookup.total = db_client_->execSqlSync(count_sql, revision_id, scope_value)[0]["value"]
+    lookup.total = executor->execSqlSync(count_sql, revision_id, scope_value)[0]["value"]
                        .as<std::int64_t>();
 
     const std::string page_sql =
@@ -523,7 +531,7 @@ ComponentInventoryRepository::load_entry_page(
         "from numbered p where " + scope_predicate +
         " order by p.sort_order,p.id offset $3 limit $4";
 
-    const auto rows = db_client_->execSqlSync(page_sql, revision_id, scope_value, offset, limit);
+    const auto rows = executor->execSqlSync(page_sql, revision_id, scope_value, offset, limit);
     std::vector<std::string> page_ids;
     std::unordered_map<std::string, std::size_t> index_by_id;
     for (const auto& row : rows) {
@@ -570,7 +578,7 @@ ComponentInventoryRepository::load_entry_page(
         "join page_rows pr on pr.id=m.inventory_entry_id "
         "where m.is_active order by m.inventory_entry_id,m.created_at,m.id";
     const auto mapping_rows =
-        db_client_->execSqlSync(mapping_sql, revision_id, scope_value, offset, limit);
+        executor->execSqlSync(mapping_sql, revision_id, scope_value, offset, limit);
     for (const auto& row : mapping_rows) {
         const auto entry_id = row["inventory_entry_id"].as<std::string>();
         const auto found = index_by_id.find(entry_id);
@@ -590,13 +598,22 @@ ComponentInventoryRepository::load_entry_page(
     return lookup;
 }
 
+std::optional<inventory::LocatedInventoryEntry> ComponentInventoryRepository::load_entry_with(
+    const drogon::orm::DbClientPtr& executor,
+    const std::string& revision_id,
+    const std::string& entry_id) {
+    auto lookup = load_entry_page(executor, revision_id, "id=$2::uuid", entry_id, 0, 1);
+    if (lookup.entries.empty()) return std::nullopt;
+    return std::move(lookup.entries.front());
+}
+
 ComponentInventoryRepository::EntryLookup ComponentInventoryRepository::load_group_entries(
     const std::string& revision_id,
     const std::string& site_component_type,
     std::int64_t offset,
     std::int64_t limit) const {
-    return load_entry_page(revision_id, "site_component_type=$2", site_component_type,
-                           offset, limit);
+    return load_entry_page(db_client_, revision_id, "site_component_type=$2",
+                           site_component_type, offset, limit);
 }
 
 ComponentInventoryRepository::EntryLookup ComponentInventoryRepository::search_entries(
@@ -604,6 +621,7 @@ ComponentInventoryRepository::EntryLookup ComponentInventoryRepository::search_e
     const std::string& number_fragment,
     std::int64_t limit) const {
     return load_entry_page(
+        db_client_,
         revision_id,
         "component_number like '%'||" + escaped_like_expr("$2") + "||'%' escape '\\'",
         number_fragment, 0, limit);
@@ -695,8 +713,10 @@ ComponentInventoryOutcome ComponentInventoryRepository::generate_draft(
                 input.bridge_type_id, item.standard_component_category_id, item.structure_part,
                 user_id);
         }
+        auto summary = load_summary_with(tx, revision_id);
         auto outcome = finish(tx, latch, revision_id);
         if (outcome.status == ComponentInventoryStatus::Ok) {
+            outcome.summary = std::move(summary);
             outcome.revision = get_revision(revision_id);
         }
         return outcome;
@@ -729,9 +749,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::update_entry(
             "updated_at=now() where id=$6::uuid",
             update.component_number, update.site_name, update.site_component_type,
             update.span_or_location.value_or(""), update.remarks.value_or(""), target.entry_id);
+        // 汇总在提交前的同一个事务里算出，提交确认后才返回。放到事务外重读的话，
+        // 提交与重读之间的并发写会混进来，响应就不再是这次写入的结果。
+        auto summary = load_summary_with(tx, target.revision_id);
+        auto changed = load_entry_with(tx, target.revision_id, target.entry_id);
         auto outcome = finish(tx, latch, target.revision_id, target.entry_id);
-        if (outcome.status == ComponentInventoryStatus::Ok)
-            outcome.revision = get_revision(target.revision_id);
+        if (outcome.status == ComponentInventoryStatus::Ok) {
+            outcome.summary = std::move(summary);
+            outcome.entry = std::move(changed);
+        }
         return outcome;
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
@@ -777,9 +803,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::add_entry(
             entry.site_name, entry.site_component_type, entry.span_or_location.value_or(""),
             entry.sort_order, entry.remarks.value_or(""));
         const auto new_entry_id = inserted[0]["id"].as<std::string>();
+        // 汇总在提交前的同一个事务里算出，提交确认后才返回。放到事务外重读的话，
+        // 提交与重读之间的并发写会混进来，响应就不再是这次写入的结果。
+        auto summary = load_summary_with(tx, target.revision_id);
+        auto changed = load_entry_with(tx, target.revision_id, new_entry_id);
         auto outcome = finish(tx, latch, target.revision_id, new_entry_id);
-        if (outcome.status == ComponentInventoryStatus::Ok)
-            outcome.revision = get_revision(target.revision_id);
+        if (outcome.status == ComponentInventoryStatus::Ok) {
+            outcome.summary = std::move(summary);
+            outcome.entry = std::move(changed);
+        }
         return outcome;
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
@@ -816,9 +848,12 @@ ComponentInventoryOutcome ComponentInventoryRepository::delete_entry(
         if (remaining == 0) {
             tx->execSqlSync("delete from bridge_components where id=$1::uuid", component_id);
         }
+        // 汇总在提交前的同一个事务里算出，提交确认后才返回。放到事务外重读的话，
+        // 提交与重读之间的并发写会混进来，响应就不再是这次写入的结果。
+        auto summary = load_summary_with(tx, target.revision_id);
         auto outcome = finish(tx, latch, target.revision_id);
         if (outcome.status == ComponentInventoryStatus::Ok)
-            outcome.revision = get_revision(target.revision_id);
+            outcome.summary = std::move(summary);
         return outcome;
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
@@ -843,9 +878,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::deactivate_entry(
             "update bridge_component_inventory_entries set is_active=false,deactivated_at=now(),"
             "deactivation_reason=$1,updated_at=now() where id=$2::uuid",
             reason, target.entry_id);
+        // 汇总在提交前的同一个事务里算出，提交确认后才返回。放到事务外重读的话，
+        // 提交与重读之间的并发写会混进来，响应就不再是这次写入的结果。
+        auto summary = load_summary_with(tx, target.revision_id);
+        auto changed = load_entry_with(tx, target.revision_id, target.entry_id);
         auto outcome = finish(tx, latch, target.revision_id, target.entry_id);
-        if (outcome.status == ComponentInventoryStatus::Ok)
-            outcome.revision = get_revision(target.revision_id);
+        if (outcome.status == ComponentInventoryStatus::Ok) {
+            outcome.summary = std::move(summary);
+            outcome.entry = std::move(changed);
+        }
         return outcome;
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
@@ -889,9 +930,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::set_mapping(
             target.entry_id, mapping.standard_package_id, mapping.standard_bridge_type_id,
             mapping.standard_component_category_id, mapping.structure_part,
             mapping_source, user_id);
+        // 汇总在提交前的同一个事务里算出，提交确认后才返回。放到事务外重读的话，
+        // 提交与重读之间的并发写会混进来，响应就不再是这次写入的结果。
+        auto summary = load_summary_with(tx, target.revision_id);
+        auto changed = load_entry_with(tx, target.revision_id, target.entry_id);
         auto outcome = finish(tx, latch, target.revision_id, target.entry_id);
-        if (outcome.status == ComponentInventoryStatus::Ok)
-            outcome.revision = get_revision(target.revision_id);
+        if (outcome.status == ComponentInventoryStatus::Ok) {
+            outcome.summary = std::move(summary);
+            outcome.entry = std::move(changed);
+        }
         return outcome;
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
@@ -925,9 +972,12 @@ ComponentInventoryOutcome ComponentInventoryRepository::confirm_pending_mappings
             "and e.is_active and m.is_active and m.confirmation_status='待确认' "
             "and ($3='' or e.site_component_type=$3)",
             revision_id, user_id, site_component_type);
+        // 汇总在提交前的同一个事务里算出，提交确认后才返回。放到事务外重读的话，
+        // 提交与重读之间的并发写会混进来，响应就不再是这次写入的结果。
+        auto summary = load_summary_with(tx, revision_id);
         auto outcome = finish(tx, latch, revision_id);
         if (outcome.status == ComponentInventoryStatus::Ok)
-            outcome.revision = get_revision(revision_id);
+            outcome.summary = std::move(summary);
         return outcome;
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
@@ -985,9 +1035,12 @@ ComponentInventoryOutcome ComponentInventoryRepository::confirm_revision(
             "confirmed_by_user_id=$1::uuid,confirmed_at=now(),confirmation_note=nullif($2,''),"
             "updated_at=now() where id=$3::uuid",
             user_id, note, revision_id);
+        // 汇总在提交前的同一个事务里算出，提交确认后才返回。放到事务外重读的话，
+        // 提交与重读之间的并发写会混进来，响应就不再是这次写入的结果。
+        auto summary = load_summary_with(tx, revision_id);
         auto outcome = finish(tx, latch, revision_id);
         if (outcome.status == ComponentInventoryStatus::Ok)
-            outcome.revision = get_revision(revision_id);
+            outcome.summary = std::move(summary);
         return outcome;
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }

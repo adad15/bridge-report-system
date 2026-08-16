@@ -46,7 +46,15 @@ struct InventoryMappingUpdate {
 
 struct ComponentInventoryOutcome {
     ComponentInventoryStatus status{ComponentInventoryStatus::Failed};
+    // 仅 generate_draft 仍然填充：它刚刚把整份台账造出来，调用方要看结果，
+    // 而且是每座桥一次的动作。其余七个写方法不再装配全量——改一条构件的备注却
+    // 在服务端把五千多条构件连同映射拼一遍，是这次要消灭的形态。
     std::optional<inventory::InventoryRevision> revision;
+    // 写入后的分组汇总，在提交前的同一个事务里算出，提交确认后才返回。
+    std::optional<Json::Value> summary;
+    // 被改动的那一条构件（新增 / 修改 / 停用 / 设映射时有；删除、批量确认、
+    // 确认台账、生成台账没有）。同样在事务内取，事务外按 id 重读会破坏同快照。
+    std::optional<inventory::LocatedInventoryEntry> entry;
     std::optional<std::string> entry_id;
     std::vector<inventory::InventoryBlocker> blockers;
 };
@@ -95,13 +103,26 @@ public:
         std::int64_t limit) const;
 
 private:
+    // executor 传连接就是普通只读路径，传当前事务就是写路径——同一段 SQL 复用，
+    // 不产生嵌套事务，也不会出现两套规则。
+    static std::optional<Json::Value> load_summary_with(
+        const drogon::orm::DbClientPtr& executor,
+        const std::string& revision_id);
+
     // 分组分页与编号搜索的共同实现，差别只在 scope_predicate（$2 是它的取值）。
-    EntryLookup load_entry_page(
+    static EntryLookup load_entry_page(
+        const drogon::orm::DbClientPtr& executor,
         const std::string& revision_id,
         const std::string& scope_predicate,
         const std::string& scope_value,
         std::int64_t offset,
-        std::int64_t limit) const;
+        std::int64_t limit);
+
+    // 单条构件，连同它的组内序号。写响应用它，取自写入所在的那个事务。
+    static std::optional<inventory::LocatedInventoryEntry> load_entry_with(
+        const drogon::orm::DbClientPtr& executor,
+        const std::string& revision_id,
+        const std::string& entry_id);
 
 public:
 
