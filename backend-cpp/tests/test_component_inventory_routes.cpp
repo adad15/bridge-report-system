@@ -121,3 +121,77 @@ TEST(ComponentInventoryRoutesTest, SerializesPartCatalogForBridgeType) {
     }
     EXPECT_TRUE(has_girder);
 }
+
+// 单条构件的序列化是从 inventory_revision_json() 里抽出来的，供分组分页、编号搜索
+// 和写响应共用。这两条用例钉住抽取没有走样：整份修订版里的每一条，必须与单独序列化
+// 同一条构件的结果逐字段相同——否则聚合接口和 /latest 会给出两种形状。
+TEST(ComponentInventoryModelsTest, RevisionEntriesMatchStandaloneEntrySerialization) {
+    inventory::InventoryMapping mapping;
+    mapping.id = "mapping-1";
+    mapping.standard_package_id = "package-1";
+    mapping.standard_bridge_type_id = "h21.bridge_type.beam";
+    mapping.standard_component_category_id = "h21.component.beam.upper_bearing";
+    mapping.structure_part = "superstructure";
+    mapping.mapping_source = "模板生成";
+    mapping.confirmation_status = "已确认";
+
+    inventory::InventoryEntry entry;
+    entry.id = "entry-1";
+    entry.bridge_component_id = "component-1";
+    entry.component_number = "1-1#梁";
+    entry.site_name = "梁";
+    entry.site_component_type = "梁";
+    entry.sort_order = 7;
+    entry.mappings.push_back(mapping);
+
+    inventory::InventoryEntry deactivated = entry;
+    deactivated.id = "entry-2";
+    deactivated.bridge_component_id = "component-2";
+    deactivated.component_number = "1-2#梁";
+    deactivated.is_active = false;
+    deactivated.deactivated_at = "2026-08-16T00:00:00Z";
+    deactivated.deactivation_reason = "现场已拆除";
+    deactivated.span_or_location = "第 1 孔";
+    deactivated.remarks = "备注";
+
+    inventory::InventoryRevision revision;
+    revision.id = "revision-1";
+    revision.bridge_id = "bridge-1";
+    revision.revision_number = 2;
+    revision.status = "草稿";
+    revision.entries = {entry, deactivated};
+
+    const auto revision_json = inventory::inventory_revision_json(revision);
+    ASSERT_EQ(revision_json["entries"].size(), 2u);
+    EXPECT_EQ(revision_json["entries"][0], inventory::inventory_entry_json(entry));
+    EXPECT_EQ(revision_json["entries"][1], inventory::inventory_entry_json(deactivated));
+
+    // 空的 optional 要序列化成 null，不能塌成缺字段——前端按 null 判断显示破折号。
+    const auto first = inventory::inventory_entry_json(entry);
+    EXPECT_TRUE(first["span_or_location"].isNull());
+    EXPECT_TRUE(first["deactivated_at"].isNull());
+    EXPECT_TRUE(first["remarks"].isNull());
+    EXPECT_EQ(first["mappings"].size(), 1u);
+    EXPECT_EQ(first["mappings"][0]["confirmation_status"].asString(), "已确认");
+
+    const auto second = inventory::inventory_entry_json(deactivated);
+    EXPECT_EQ(second["span_or_location"].asString(), "第 1 孔");
+    EXPECT_EQ(second["deactivation_reason"].asString(), "现场已拆除");
+    EXPECT_FALSE(second["is_active"].asBool());
+}
+
+TEST(ComponentInventoryModelsTest, LocatedEntryAddsOnlyPosition) {
+    inventory::InventoryEntry entry;
+    entry.id = "entry-1";
+    entry.bridge_component_id = "component-1";
+    entry.component_number = "33-2-50#支座";
+    entry.site_name = "支座";
+    entry.site_component_type = "支座";
+
+    auto expected = inventory::inventory_entry_json(entry);
+    const auto located = inventory::located_entry_json(entry, 3299);
+    EXPECT_EQ(located["position"].asInt64(), 3299);
+
+    expected["position"] = static_cast<Json::Int64>(3299);
+    EXPECT_EQ(located, expected) << "组内序号之外不应有任何差异";
+}

@@ -24,6 +24,39 @@ Json::Value mapping_json(const InventoryMapping& mapping) {
 
 }  // namespace
 
+// 从 inventory_revision_json() 里抽出来的：分组分页、编号搜索和写响应里的单条构件
+// 都要用它，不能各自再实现一份。/latest 仍返回整份修订版，所以下面那个函数保留，
+// 只是改成调用这里。
+Json::Value inventory_entry_json(const InventoryEntry& entry) {
+    Json::Value item;
+    item["id"] = entry.id;
+    item["bridge_component_id"] = entry.bridge_component_id;
+    item["component_number"] = entry.component_number;
+    item["site_name"] = entry.site_name;
+    item["site_component_type"] = entry.site_component_type;
+    item["span_or_location"] = entry.span_or_location.has_value()
+        ? Json::Value(*entry.span_or_location) : Json::Value(Json::nullValue);
+    item["is_active"] = entry.is_active;
+    item["deactivated_at"] = entry.deactivated_at.has_value()
+        ? Json::Value(*entry.deactivated_at) : Json::Value(Json::nullValue);
+    item["deactivation_reason"] = entry.deactivation_reason.has_value()
+        ? Json::Value(*entry.deactivation_reason) : Json::Value(Json::nullValue);
+    item["sort_order"] = entry.sort_order;
+    item["remarks"] = entry.remarks.has_value()
+        ? Json::Value(*entry.remarks) : Json::Value(Json::nullValue);
+    item["is_referenced"] = entry.is_referenced;
+    item["mappings"] = Json::Value(Json::arrayValue);
+    for (const auto& mapping : entry.mappings) item["mappings"].append(mapping_json(mapping));
+    return item;
+}
+
+// 分组分页与搜索结果里的构件多带一个组内序号，供前端算页码、定位到具体一行。
+Json::Value located_entry_json(const InventoryEntry& entry, std::int64_t position) {
+    Json::Value item = inventory_entry_json(entry);
+    item["position"] = static_cast<Json::Int64>(position);
+    return item;
+}
+
 Json::Value inventory_revision_json(const InventoryRevision& revision) {
     Json::Value value;
     value["id"] = revision.id;
@@ -36,26 +69,7 @@ Json::Value inventory_revision_json(const InventoryRevision& revision) {
         ? Json::Value(*revision.confirmed_at) : Json::Value(Json::nullValue);
     value["entries"] = Json::Value(Json::arrayValue);
     for (const auto& entry : revision.entries) {
-        Json::Value item;
-        item["id"] = entry.id;
-        item["bridge_component_id"] = entry.bridge_component_id;
-        item["component_number"] = entry.component_number;
-        item["site_name"] = entry.site_name;
-        item["site_component_type"] = entry.site_component_type;
-        item["span_or_location"] = entry.span_or_location.has_value()
-            ? Json::Value(*entry.span_or_location) : Json::Value(Json::nullValue);
-        item["is_active"] = entry.is_active;
-        item["deactivated_at"] = entry.deactivated_at.has_value()
-            ? Json::Value(*entry.deactivated_at) : Json::Value(Json::nullValue);
-        item["deactivation_reason"] = entry.deactivation_reason.has_value()
-            ? Json::Value(*entry.deactivation_reason) : Json::Value(Json::nullValue);
-        item["sort_order"] = entry.sort_order;
-        item["remarks"] = entry.remarks.has_value()
-            ? Json::Value(*entry.remarks) : Json::Value(Json::nullValue);
-        item["is_referenced"] = entry.is_referenced;
-        item["mappings"] = Json::Value(Json::arrayValue);
-        for (const auto& mapping : entry.mappings) item["mappings"].append(mapping_json(mapping));
-        value["entries"].append(std::move(item));
+        value["entries"].append(inventory_entry_json(entry));
     }
     return value;
 }
