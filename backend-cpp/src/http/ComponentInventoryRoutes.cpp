@@ -274,7 +274,9 @@ void register_component_inventory_routes(
     const std::string generate_path = "/api/bridges/{bridge_id}/component-inventories/generate";
     const std::string part_catalog_path = "/api/component-inventories/part-catalog";
     const std::string latest_path = "/api/bridges/{bridge_id}/component-inventories/latest";
+    const std::string latest_summary_path = latest_path + "/summary";
     const std::string revision_path = "/api/component-inventories/{revision_id}";
+    const std::string revision_summary_path = revision_path + "/summary";
     const std::string entries_path = "/api/component-inventories/{revision_id}/entries";
     const std::string entry_path = "/api/component-inventories/{revision_id}/entries/{entry_id}";
     const std::string deactivate_path = entry_path + "/deactivate";
@@ -380,6 +382,55 @@ void register_component_inventory_routes(
                 }
                 Json::Value body; body["revision"] = inventory::inventory_revision_json(*revision);
                 respond_json(callback, body);
+            } catch (...) { respond_db_unavailable(callback); }
+        }, {drogon::Get});
+
+    // 分组汇总。整份台账页首屏只需要这一份，约几 KB；原来的 /latest 会把全部构件
+    // 连同映射装配成几 MB，仅为在客户端算出十几行分组数字。
+    drogon::app().registerHandler(
+        revision_summary_path,
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                    const std::string& revision_id) {
+            if (!is_valid_uuid(revision_id)) {
+                respond_json(callback, make_error_body("component_inventory_not_found", "构件台账不存在。"),
+                             drogon::k404NotFound); return;
+            }
+            try {
+                if (!require_user(db_client, request, callback).has_value()) return;
+                db::ComponentInventoryRepository repository(db_client);
+                const auto summary = repository.load_summary(revision_id);
+                if (!summary.has_value()) {
+                    respond_json(callback, make_error_body("component_inventory_not_found", "构件台账不存在。"),
+                                 drogon::k404NotFound); return;
+                }
+                respond_json(callback, *summary);
+            } catch (...) { respond_db_unavailable(callback); }
+        }, {drogon::Get});
+
+    // 只解析出最新修订版的 id 再转调按 id 那条，绝不走 get_latest_revision()——
+    // 它内部会装配全部构件与映射，复用它等于响应体小了而后端一点没省。
+    drogon::app().registerHandler(
+        latest_summary_path,
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                    const std::string& bridge_id) {
+            if (!is_valid_uuid(bridge_id)) {
+                respond_json(callback, make_error_body("component_inventory_not_found", "构件台账不存在。"),
+                             drogon::k404NotFound); return;
+            }
+            try {
+                if (!require_user(db_client, request, callback).has_value()) return;
+                db::ComponentInventoryRepository repository(db_client);
+                const auto revision_id = repository.find_latest_revision_id(bridge_id);
+                if (!revision_id.has_value()) {
+                    respond_json(callback, make_error_body("component_inventory_not_found", "构件台账不存在。"),
+                                 drogon::k404NotFound); return;
+                }
+                const auto summary = repository.load_summary(*revision_id);
+                if (!summary.has_value()) {
+                    respond_json(callback, make_error_body("component_inventory_not_found", "构件台账不存在。"),
+                                 drogon::k404NotFound); return;
+                }
+                respond_json(callback, *summary);
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Get});
 

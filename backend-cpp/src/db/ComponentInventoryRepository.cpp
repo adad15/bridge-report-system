@@ -316,6 +316,147 @@ std::optional<inventory::InventoryRevision> ComponentInventoryRepository::get_re
     return revision;
 }
 
+std::optional<std::string> ComponentInventoryRepository::find_latest_revision_id(
+    const std::string& bridge_id) const {
+    // 排序与 get_latest_revision() 一致：草稿优先于已确认，与 revision_number 无关。
+    const auto rows = db_client_->execSqlSync(
+        "select id::text from bridge_component_inventory_revisions where bridge_id=$1::uuid "
+        "order by (status='草稿') desc,revision_number desc limit 1",
+        bridge_id);
+    if (rows.empty()) return std::nullopt;
+    return rows[0]["id"].as<std::string>();
+}
+
+std::optional<Json::Value> ComponentInventoryRepository::load_summary(
+    const std::string& revision_id) const {
+    // blocker 规则用 blocker_cte_sql() 的文本，与 confirm 嵌的是同一段。
+    const std::string sql =
+        "with " + blocker_cte_sql() + ","
+        "target as ("
+        "select id,bridge_id,revision_number,status,baseline_revision_id,confirmed_at "
+        "from bridge_component_inventory_revisions where id=$1::uuid"
+        "),"
+        // 先按构件把生效映射收敛成一行。直接 left join 映射表的话，一个挂了多个规范包
+        // 生效映射的构件会展开成多行，下面的 count(*) 就把它数了好几遍。
+        "entry_mapping as ("
+        "select m.inventory_entry_id,"
+        "bool_or(m.confirmation_status='已确认') as has_confirmed,"
+        "(array_agg(m.structure_part order by m.created_at,m.id))[1] as structure_part,"
+        "(array_agg(m.standard_package_id::text order by m.created_at,m.id))[1] as package_id,"
+        "(array_agg(m.standard_component_category_id order by m.created_at,m.id))[1] as category_id "
+        "from bridge_component_standard_mappings m "
+        "join bridge_component_inventory_entries e on e.id=m.inventory_entry_id "
+        "where e.inventory_revision_id=$1::uuid and m.is_active "
+        "group by m.inventory_entry_id"
+        "),"
+        // 组内序号：分页与"定位"共用的唯一权威，不按 is_active 过滤——停用构件在
+        // 分组弹窗里仍然可见并占位，过滤掉会让页码对不上。
+        "numbered as ("
+        "select e.id,e.component_number,e.site_component_type,e.sort_order,e.is_active,"
+        "em.has_confirmed,em.structure_part as em_part,em.package_id as em_package,"
+        "em.category_id as em_category,em.inventory_entry_id is not null as has_mapping,"
+        "row_number() over (partition by e.site_component_type "
+        "order by e.sort_order,e.id)-1 as position "
+        "from bridge_component_inventory_entries e "
+        "left join entry_mapping em on em.inventory_entry_id=e.id "
+        "where e.inventory_revision_id=$1::uuid"
+        "),"
+        "grouped as ("
+        "select n.site_component_type,"
+        "count(*) filter (where n.is_active) as active_count,"
+        // 编号范围只统计启用构件，与 active_count 口径一致。取的是遍历首尾而不是
+        // min/max：编号是字符串，字典序下 '9-2-9#支座' > '33-2-50#支座'，33 孔的桥
+        // 用 min/max 会把范围末端取到第 9 孔。
+        "(array_agg(n.component_number order by n.sort_order,n.id) "
+        "filter (where n.is_active))[1] as first_number,"
+        "(array_agg(n.component_number order by n.sort_order desc,n.id desc) "
+        "filter (where n.is_active))[1] as last_number,"
+        // 首个取值非 other 的启用构件；全是 other 或都没映射时留 other。
+        "coalesce((array_agg(n.em_part order by n.sort_order,n.id) "
+        "filter (where n.is_active and n.em_part is not null and n.em_part<>'other'))[1],"
+        "'other') as structure_part,"
+        "(array_agg(n.em_category order by n.sort_order,n.id) "
+        "filter (where n.is_active and n.has_mapping))[1] as category_id,"
+        "(array_agg(n.em_package order by n.sort_order,n.id) "
+        "filter (where n.is_active and n.has_mapping))[1] as package_id,"
+        // 三分互斥且覆盖全部启用构件，三者之和等于 active_count。
+        "count(*) filter (where n.is_active and n.has_confirmed) as confirmed_count,"
+        "count(*) filter (where n.is_active and n.has_mapping and not n.has_confirmed) "
+        "as pending_count,"
+        "count(*) filter (where n.is_active and not n.has_mapping) as unmapped_count,"
+        // 分组顺序按首个构件的 (sort_order,id)。sort_order 没有唯一约束且默认 0，
+        // 手工新增的构件会撞在一起，只按 min(sort_order) 排会不稳定。
+        "(array_agg(n.sort_order order by n.sort_order,n.id))[1] as ord_so,"
+        "(array_agg(n.id::text order by n.sort_order,n.id))[1] as ord_id "
+        "from numbered n group by n.site_component_type"
+        "),"
+        "totals as ("
+        "select coalesce(sum(pending_count),0)::bigint as pending_total,"
+        "coalesce(sum(unmapped_count),0)::bigint as unmapped_total from grouped"
+        "),"
+        "empty_flag as ("
+        "select case when (select value from inventory_active_entries)=0 then 1 else 0 end as v"
+        "),"
+        // 样本只收空台账和"完全没有生效映射"的构件；有待确认映射的那批由界面上
+        // "N 个构件的规范映射待确认"那一行代表，进样本会被数两遍。
+        "sample_rows as ("
+        "select 0 as ord_group,'inventory_empty' as code,'inventory_revision' as entity_type,"
+        "$1::text as entity_id,'entries' as field_path,"
+        "'构件台账至少需要一个启用构件。' as message,"
+        "null::text as site_component_type,null::bigint as position,"
+        "0 as sort_order,'' as tie "
+        "where (select value from inventory_active_entries)=0 "
+        "union all "
+        "select 1,'component_mapping_required','inventory_entry',n.id::text,'mappings',"
+        "'构件 '||n.component_number||' 至少需要一个已确认的有效规范映射。',"
+        "n.site_component_type,n.position,n.sort_order,n.id::text "
+        "from numbered n where n.is_active and not n.has_mapping"
+        "),"
+        "sample_limited as ("
+        "select * from sample_rows order by ord_group,sort_order,tie limit 30"
+        ") "
+        "select json_build_object("
+        "'revision',(select json_build_object("
+        "'id',id::text,'bridge_id',bridge_id::text,'revision_number',revision_number,"
+        "'status',status,'baseline_revision_id',baseline_revision_id::text,"
+        "'confirmed_at',confirmed_at::text,"
+        "'active_entry_count',(select value from inventory_active_entries)) from target),"
+        "'groups',coalesce((select json_agg(json_build_object("
+        "'site_component_type',site_component_type,'structure_part',structure_part,"
+        "'active_count',active_count,'first_number',first_number,'last_number',last_number,"
+        "'confirmed_count',confirmed_count,'pending_count',pending_count,"
+        "'unmapped_count',unmapped_count,'standard_package_id',package_id,"
+        "'standard_component_category_id',category_id) order by ord_so,ord_id) "
+        "from grouped),'[]'::json),"
+        "'blockers',json_build_object("
+        // total = 待确认 + individual_total；"其余 N 项"用 individual_total 算，
+        // 用 total 会把待确认那批数两遍。
+        "'total',(select pending_total+unmapped_total from totals)+(select v from empty_flag),"
+        "'individual_total',(select unmapped_total from totals)+(select v from empty_flag),"
+        "'by_code',json_build_object("
+        "'inventory_empty',(select v from empty_flag),"
+        "'component_mapping_required',(select pending_total+unmapped_total from totals)),"
+        "'samples',coalesce((select json_agg(json_build_object("
+        "'code',code,'entity_type',entity_type,'entity_id',entity_id,"
+        "'field_path',field_path,'message',message,"
+        "'site_component_type',site_component_type,'position',position) "
+        "order by ord_group,sort_order,tie) from sample_limited),'[]'::json))"
+        ") as summary";
+
+    const auto rows = db_client_->execSqlSync(sql, revision_id);
+    if (rows.empty()) return std::nullopt;
+    Json::Value summary;
+    Json::CharReaderBuilder builder;
+    std::string errors;
+    const auto text = rows[0]["summary"].as<std::string>();
+    std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+    if (!reader->parse(text.data(), text.data() + text.size(), &summary, &errors)) {
+        return std::nullopt;
+    }
+    if (summary["revision"].isNull()) return std::nullopt;
+    return summary;
+}
+
 std::optional<inventory::InventoryRevision> ComponentInventoryRepository::get_latest_revision(
     const std::string& bridge_id) const {
     const auto rows = db_client_->execSqlSync(

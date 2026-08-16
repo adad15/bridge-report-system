@@ -58,6 +58,21 @@ public:
     std::optional<inventory::InventoryRevision> get_revision(const std::string& revision_id) const;
     std::optional<inventory::InventoryRevision> get_latest_revision(const std::string& bridge_id) const;
 
+    // 只解析出最新修订版的 id，不装配构件与映射。
+    // 汇总端点必须走这条，不能用 get_latest_revision()——后者内部调 get_revision()，
+    // 会把全部构件连同映射装配一遍；复用它的话响应体虽小，后端仍完整跑一次全量装配，
+    // 优化只做了一半，而且从响应上完全看不出来。
+    std::optional<std::string> find_latest_revision_id(const std::string& bridge_id) const;
+
+    // 分组汇总。整份结果由一条语句产出，靠单语句快照保证 revision / groups / blockers
+    // 三段来自同一时点——拆成多条查询时，默认的 READ COMMITTED 会让每条 SELECT 各取
+    // 一个新快照，出现"blocker 报未映射构件但 unmapped_count 全为 0"这类自相矛盾。
+    //
+    // 返回的是最终响应形状的 JSON 而不是结构体：既然快照要求逼出了单语句，
+    // 异构的三段就只能在 SQL 里用 json_build_object 拼；再解析回结构体又序列化回去
+    // 是纯粹的往返开销。代价是响应形状落在了 SQL 里，改形状要改 SQL。
+    std::optional<Json::Value> load_summary(const std::string& revision_id) const;
+
     ComponentInventoryOutcome generate_draft(
         const std::string& bridge_id,
         const std::string& user_id,

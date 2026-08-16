@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <fstream>
 #include <memory>
 #include <set>
 #include <string>
@@ -491,4 +492,211 @@ TEST_F(ComponentInventoryRepositoryTest, RepeatedWritesToConfirmedRevisionReuseO
         "where bridge_id=$1::uuid and status='草稿'",
         bridge_id);
     EXPECT_EQ(drafts[0]["count"].as<int>(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// 分组汇总。这些用例覆盖的情形在现网真实数据上一个都不出现（每构件仅 1 个生效映射、
+// 无停用构件、sort_order 不重复），所以真实数据比对不能替代它们——一个把 count(*)
+// 写错的实现照样能在比对里全绿。
+// ---------------------------------------------------------------------------
+
+namespace {
+
+Json::Value group_of(const Json::Value& summary, const std::string& type) {
+    for (const auto& group : summary["groups"]) {
+        if (group["site_component_type"].asString() == type) return group;
+    }
+    return Json::Value(Json::nullValue);
+}
+
+}  // namespace
+
+TEST_F(ComponentInventoryRepositoryTest, SummaryNumberRangeUsesTraversalOrderNotLexicographic) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = created.revision->id;
+
+    // 33 孔的桥：字典序下 '9-2-9#支座' > '33-2-50#支座'，用 min/max 会把范围末端
+    // 取到第 9 孔去。
+    int order = 10;
+    for (const auto* number : {"1-1-1#支座", "9-2-9#支座", "33-2-50#支座"}) {
+        db::InventoryNewEntry manual;
+        manual.component_number = number;
+        manual.site_name = "支座";
+        manual.site_component_type = "支座";
+        manual.sort_order = order;
+        order += 10;
+        ASSERT_EQ(repository.add_entry(revision_id, user_id, manual).status,
+                  db::ComponentInventoryStatus::Ok);
+    }
+
+    const auto summary = repository.load_summary(revision_id);
+    ASSERT_TRUE(summary.has_value());
+    const auto bearings = group_of(*summary, "支座");
+    ASSERT_FALSE(bearings.isNull());
+    EXPECT_EQ(bearings["first_number"].asString(), "1-1-1#支座");
+    EXPECT_EQ(bearings["last_number"].asString(), "33-2-50#支座");
+    EXPECT_EQ(bearings["active_count"].asInt(), 3);
+}
+
+TEST_F(ComponentInventoryRepositoryTest, SummaryRangeCountsOnlyActiveEntriesAndKeepsEmptyGroup) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = created.revision->id;
+
+    std::vector<std::string> cone_ids;
+    int order = 10;
+    for (const auto* number : {"0#台左侧锥坡", "0#台右侧锥坡", "33#台右侧锥坡"}) {
+        db::InventoryNewEntry manual;
+        manual.component_number = number;
+        manual.site_name = "锥坡";
+        manual.site_component_type = "锥坡";
+        manual.sort_order = order;
+        order += 10;
+        const auto added = repository.add_entry(revision_id, user_id, manual);
+        ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
+        for (const auto& entry : added.revision->entries) {
+            if (entry.component_number == number) cone_ids.push_back(entry.id);
+        }
+    }
+    ASSERT_EQ(cone_ids.size(), 3u);
+
+    // 停用末尾那条：范围要跟着收，不能出现"数量 2、范围到 33#"这种数量与范围打架。
+    ASSERT_EQ(repository.deactivate_entry(revision_id, cone_ids.back(), user_id, "现场已拆除").status,
+              db::ComponentInventoryStatus::Ok);
+    auto summary = repository.load_summary(revision_id);
+    ASSERT_TRUE(summary.has_value());
+    auto cones = group_of(*summary, "锥坡");
+    ASSERT_FALSE(cones.isNull());
+    EXPECT_EQ(cones["active_count"].asInt(), 2);
+    EXPECT_EQ(cones["first_number"].asString(), "0#台左侧锥坡");
+    EXPECT_EQ(cones["last_number"].asString(), "0#台右侧锥坡");
+
+    // 整组停完：该组仍要出现在汇总里，否则界面上这组会凭空消失。
+    for (size_t index = 0; index + 1 < cone_ids.size(); ++index) {
+        ASSERT_EQ(repository.deactivate_entry(revision_id, cone_ids[index], user_id, "现场已拆除").status,
+                  db::ComponentInventoryStatus::Ok);
+    }
+    summary = repository.load_summary(revision_id);
+    ASSERT_TRUE(summary.has_value());
+    cones = group_of(*summary, "锥坡");
+    ASSERT_FALSE(cones.isNull()) << "整组停用后该组仍应返回";
+    EXPECT_EQ(cones["active_count"].asInt(), 0);
+    EXPECT_TRUE(cones["first_number"].isNull());
+    EXPECT_TRUE(cones["last_number"].isNull());
+    EXPECT_EQ(cones["structure_part"].asString(), "other") << "structure_part 非空，缺省为 other";
+}
+
+TEST_F(ComponentInventoryRepositoryTest, SummaryDoesNotInflateCountsForMultiPackageMappings) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = created.revision->id;
+    const auto entry = created.revision->entries.front();
+
+    // 第二个规范包的生效映射。唯一索引按 (构件, 规范包)，两条可以并存。
+    db::InventoryMappingUpdate mapping;
+    mapping.standard_package_id = other_package_id;
+    mapping.standard_bridge_type_id = input.bridge_type_id;
+    mapping.standard_component_category_id = "other-standard.component.main_girder";
+    mapping.structure_part = "superstructure";
+    ASSERT_EQ(repository.set_mapping(revision_id, entry.id, user_id, mapping).status,
+              db::ComponentInventoryStatus::Ok);
+    client->execSqlSync(
+        "update bridge_component_standard_mappings set confirmation_status='待确认',"
+        "confirmed_by_user_id=null,confirmed_at=null "
+        "where inventory_entry_id=$1::uuid and standard_package_id=$2::uuid and is_active",
+        entry.id, other_package_id);
+
+    const auto summary = repository.load_summary(revision_id);
+    ASSERT_TRUE(summary.has_value());
+    const auto girders = group_of(*summary, entry.site_component_type);
+    ASSERT_FALSE(girders.isNull());
+    EXPECT_EQ(girders["active_count"].asInt(), 1) << "两个生效映射不该把构件数翻倍";
+    // some 口径：存在任一已确认生效映射即算已确认，不因另一个包还待确认而落进待确认。
+    EXPECT_EQ(girders["confirmed_count"].asInt(), 1);
+    EXPECT_EQ(girders["pending_count"].asInt(), 0);
+    EXPECT_EQ(girders["unmapped_count"].asInt(), 0);
+    EXPECT_EQ(girders["confirmed_count"].asInt() + girders["pending_count"].asInt() +
+                  girders["unmapped_count"].asInt(),
+              girders["active_count"].asInt())
+        << "三分必须互斥且覆盖全部启用构件";
+    EXPECT_EQ((*summary)["blockers"]["total"].asInt(), 0);
+}
+
+TEST_F(ComponentInventoryRepositoryTest, SummaryBlockerCountsSeparatePendingFromUnmapped) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = created.revision->id;
+    const auto generated_entry = created.revision->entries.front();
+
+    // 一个完全没有映射的手工构件，外加把生成构件的映射改成待确认。
+    db::InventoryNewEntry manual;
+    manual.component_number = "Z-1";
+    manual.site_name = "自定义现场构件";
+    manual.site_component_type = "自定义类型";
+    manual.sort_order = 500;
+    ASSERT_EQ(repository.add_entry(revision_id, user_id, manual).status,
+              db::ComponentInventoryStatus::Ok);
+
+    client->execSqlSync(
+        "update bridge_component_standard_mappings set confirmation_status='待确认',"
+        "confirmed_by_user_id=null,confirmed_at=null "
+        "where inventory_entry_id=$1::uuid and is_active",
+        generated_entry.id);
+
+    const auto summary = repository.load_summary(revision_id);
+    ASSERT_TRUE(summary.has_value());
+    const auto blockers = (*summary)["blockers"];
+
+    // 待确认那批只进计数，不进样本——界面上它们由"N 个构件的规范映射待确认"
+    // 那一行代表，进样本会被数两遍。
+    EXPECT_EQ(blockers["by_code"]["component_mapping_required"].asInt(), 2);
+    EXPECT_EQ(blockers["individual_total"].asInt(), 1);
+    EXPECT_EQ(blockers["total"].asInt(), 2);
+    ASSERT_EQ(blockers["samples"].size(), 1u);
+    EXPECT_EQ(blockers["samples"][0]["entity_type"].asString(), "inventory_entry");
+    EXPECT_EQ(blockers["samples"][0]["site_component_type"].asString(), "自定义类型");
+    EXPECT_FALSE(blockers["samples"][0]["position"].isNull());
+    EXPECT_EQ(blockers["by_code"]["inventory_empty"].asInt(), 0);
+}
+
+// 搬迁验收的导出口。compare-inventory-summary.ps1 需要"新实现"那一侧的输出，
+// 而汇总 SQL 只存在于 load_summary() 里。与其在脚本里复制一份 SQL——那正是这次
+// 要消灭的分叉——不如让脚本调真正的实现。
+//
+// 两个环境变量都不设时跳过，所以它在常规测试运行里是惰性的。
+TEST(ComponentInventorySummaryDumpTest, DumpsSummaryForParityScript) {
+    const char* revision = std::getenv("INVENTORY_PARITY_REVISION");
+    const char* destination = std::getenv("INVENTORY_PARITY_OUT");
+    if (revision == nullptr || destination == nullptr) GTEST_SKIP();
+
+    auto client = bridge_report::db::create_db_client(
+        bridge_report::config::PostgresConfig{}, 1);
+    db::ComponentInventoryRepository repository(client);
+    const auto summary = repository.load_summary(revision);
+    ASSERT_TRUE(summary.has_value()) << "修订版 " << revision << " 不存在";
+
+    std::ofstream file(destination, std::ios::binary);
+    ASSERT_TRUE(file.is_open()) << "无法写入 " << destination;
+    Json::StreamWriterBuilder builder;
+    builder["indentation"] = "";
+    file << Json::writeString(builder, *summary);
+    file.close();
+    client->closeAll();
 }
