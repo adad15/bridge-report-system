@@ -239,6 +239,32 @@ EditableTarget ensure_editable_target(
     return {true, draft_id, draft_entry_id, component_id};
 }
 
+// 确认前置校验的唯一规则来源：只产出具名 CTE 的 SQL 文本，不执行查询。
+// confirm 语句和汇总语句各自把它嵌进自己那条 SQL——共用的是文本而不是一次查询执行，
+// 这样两处永远是同一套判定，又都各自处在单语句快照里。
+// 约定 $1 = inventory_revision_id。
+//
+// 判定用 not exists 而不是 join + count：唯一索引是
+// (inventory_entry_id, standard_package_id) where is_active，一个构件可以按规范包
+// 挂多个生效映射，join 会把它展开成多行，count 随之偏大。
+std::string blocker_cte_sql() {
+    return
+        "inventory_active_entries as ("
+        "select count(*)::int as value from bridge_component_inventory_entries "
+        "where inventory_revision_id=$1::uuid and is_active"
+        "),"
+        "inventory_unconfirmed_entries as ("
+        "select e.id::text as entry_id,e.component_number,e.site_component_type,e.sort_order,"
+        "exists(select 1 from bridge_component_standard_mappings m "
+        "where m.inventory_entry_id=e.id and m.is_active) as has_mapping "
+        "from bridge_component_inventory_entries e "
+        "where e.inventory_revision_id=$1::uuid and e.is_active "
+        "and not exists(select 1 from bridge_component_standard_mappings m "
+        "where m.inventory_entry_id=e.id and m.is_active "
+        "and m.confirmation_status='已确认')"
+        ")";
+}
+
 bool duplicate_number(
     const TransactionPtr& tx,
     const std::string& revision_id,
@@ -633,25 +659,26 @@ ComponentInventoryOutcome ComponentInventoryRepository::confirm_revision(
             tx->rollback(); return {ComponentInventoryStatus::Conflict};
         }
         std::vector<inventory::InventoryBlocker> blockers;
-        const auto entries = tx->execSqlSync(
-            "select e.id::text,e.component_number,count(m.id)::int as confirmed_mapping_count "
-            "from bridge_component_inventory_entries e left join bridge_component_standard_mappings m "
-            "on m.inventory_entry_id=e.id and m.is_active and m.confirmation_status='已确认' "
-            "where e.inventory_revision_id=$1::uuid and e.is_active "
-            "group by e.id,e.component_number order by e.sort_order,e.id",
+        // 左连接一个恒真条件，是为了"没有任何未确认构件"时也能拿到 active_count 那一行；
+        // 否则空结果集里读不出启用构件数，判不了 inventory_empty。
+        const auto rows = tx->execSqlSync(
+            "with " + blocker_cte_sql() + " "
+            "select a.value as active_count,u.entry_id,u.component_number "
+            "from inventory_active_entries a "
+            "left join inventory_unconfirmed_entries u on true "
+            "order by u.sort_order nulls first,u.entry_id",
             revision_id);
-        if (entries.empty()) {
+        if (rows[0]["active_count"].as<int>() == 0) {
             blockers.push_back({"inventory_empty", "inventory_revision", revision_id,
                                 "entries", "构件台账至少需要一个启用构件。"});
         }
-        for (const auto& row : entries) {
-            if (row["confirmed_mapping_count"].as<int>() < 1) {
-                blockers.push_back({
-                    "component_mapping_required", "inventory_entry",
-                    row["id"].as<std::string>(), "mappings",
-                    "构件 " + row["component_number"].as<std::string>() +
-                        " 至少需要一个已确认的有效规范映射。"});
-            }
+        for (const auto& row : rows) {
+            if (row["entry_id"].isNull()) continue;
+            blockers.push_back({
+                "component_mapping_required", "inventory_entry",
+                row["entry_id"].as<std::string>(), "mappings",
+                "构件 " + row["component_number"].as<std::string>() +
+                    " 至少需要一个已确认的有效规范映射。"});
         }
         if (!blockers.empty()) {
             tx->rollback();

@@ -65,18 +65,12 @@ export function inventoryConfirmationBlockers(revision: ComponentInventoryRevisi
       field_path: "entries", message: "构件台账至少需要一个启用构件。",
     });
   }
-  const seen = new Map<string, string>();
+  // 这里原本还查重复编号。数据库上已有
+  // unique (inventory_revision_id, site_component_type, component_number)，
+  // add_entry / update_entry 也各自主动查重，重复根本插不进来——这条规则永远为 0，
+  // 留着只会让人以为服务端漏了一项校验。
   for (const entry of revision.entries) {
-    const key = `${entry.site_component_type}\u0000${entry.component_number}`;
-    const duplicate = seen.get(key);
-    if (duplicate) {
-      blockers.push({
-        code: "duplicate_component_number", entity_type: "inventory_entry", entity_id: entry.id,
-        field_path: "component_number", message: `${entry.site_component_type}中存在重复编号 ${entry.component_number}。`,
-      });
-    } else {
-      seen.set(key, entry.id);
-    }
+    // 按"存在任一已确认生效映射"判断，与服务端 blocker_cte_sql 的 not exists 一致。
     if (entry.is_active && !entry.mappings.some((mapping) => mapping.is_active && mapping.confirmation_status === "已确认")) {
       blockers.push({
         code: "component_mapping_required", entity_type: "inventory_entry", entity_id: entry.id,
@@ -438,7 +432,10 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
 
   async function confirmExistingMapping(entry: ComponentInventoryEntry) {
     if (!revision) return;
-    const mapping = entry.mappings.find((item) => item.is_active);
+    // 确认的是一条明确选定的待确认映射，不是"首个生效映射"原样重交——多映射时
+    // 首个可能已经是已确认的，重交它等于什么也没做。
+    const mapping = entry.mappings.find(
+      (item) => item.is_active && item.confirmation_status !== "已确认");
     if (!mapping) return;
     await mutate(() => setComponentInventoryMapping(backendBaseUrl, revision.id, entry.id, {
       standard_package_id: mapping.standard_package_id,
@@ -486,7 +483,13 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     if (!revision) return null;
     const showType = options?.showType ?? false;
     const draft = drafts[entry.id] ?? entryDraft(entry);
-    const activeMapping = entry.mappings.find((item) => item.is_active);
+    /* 一个构件可以按规范包挂多个生效映射（唯一索引是 entry + package）。状态要按
+       "存在任一已确认"判断，和汇总、confirm 是同一套口径；只看首个映射的话，
+       [待确认(包A)、已确认(包B)] 会在一个"全部已确认"的分组里显示成待确认，
+       还允许再确认一次 A。 */
+    const activeMappings = entry.mappings.filter((item) => item.is_active);
+    const activeMapping = activeMappings[0];
+    const hasConfirmedMapping = activeMappings.some((item) => item.confirmation_status === "已确认");
     const mappingDraft = mappingDrafts[entry.id];
     const mappingCatalog = catalogs.find((item) => item.package.id === mappingDraft?.packageId);
     const mappingCategories = mappingCatalog?.component_categories.filter(
@@ -500,7 +503,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     if (editingEntryId !== entry.id) {
       const reason = !entry.is_active ? "已停用"
         : !activeMapping ? "无映射"
-        : activeMapping.confirmation_status !== "已确认" ? "待确认映射"
+        : !hasConfirmedMapping ? "待确认映射"
         : null;
       return (
         <tr key={entry.id} {...rowProps} className={!entry.is_active ? "inventory-entry-inactive" : undefined}>
@@ -547,7 +550,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
                 <summary aria-label={`更多操作 ${entry.component_number}`}>更多</summary>
                 <div>
                   {/* 已确认的映射整组一致、分组核对表已经显示，这里只在需要处理时才出现。 */}
-                  {activeMapping && activeMapping.confirmation_status !== "已确认" ? (
+                  {activeMapping && !hasConfirmedMapping ? (
                     <button type="button" disabled={busy} onClick={() => void confirmExistingMapping(entry)}>确认映射</button>
                   ) : null}
                   {!activeMapping && !mappingDraft ? (

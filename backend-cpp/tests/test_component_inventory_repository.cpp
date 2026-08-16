@@ -277,6 +277,99 @@ TEST_F(ComponentInventoryRepositoryTest, ConfirmationReportsUnmappedManualEntry)
     EXPECT_EQ(confirmation.blockers.front().code, "component_mapping_required");
 }
 
+// 多生效映射：唯一索引是 (inventory_entry_id, standard_package_id) where is_active，
+// 一个构件可以按规范包挂多个生效映射。判定必须按"存在任一已确认生效映射"，
+// 而不是 join + count——后者会把这类构件展开成多行。
+TEST_F(ComponentInventoryRepositoryTest, ConfirmationAcceptsEntryWithOnePendingAndOneConfirmedMapping) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto entry = created.revision->entries.front();
+
+    db::InventoryMappingUpdate mapping;
+    mapping.standard_package_id = package_id;
+    mapping.standard_bridge_type_id = input.bridge_type_id;
+    mapping.standard_component_category_id = "test.component.main_girder";
+    mapping.structure_part = "superstructure";
+    ASSERT_EQ(repository.set_mapping(created.revision->id, entry.id, user_id, mapping).status,
+              db::ComponentInventoryStatus::Ok);
+
+    mapping.standard_package_id = other_package_id;
+    mapping.standard_component_category_id = "other-standard.component.main_girder";
+    ASSERT_EQ(repository.set_mapping(created.revision->id, entry.id, user_id, mapping).status,
+              db::ComponentInventoryStatus::Ok);
+
+    // 把第二个包的映射改回待确认，构件于是同时挂着 [已确认(A)、待确认(B)]。
+    client->execSqlSync(
+        "update bridge_component_standard_mappings set confirmation_status='待确认',"
+        "confirmed_by_user_id=null,confirmed_at=null "
+        "where inventory_entry_id=$1::uuid and standard_package_id=$2::uuid and is_active",
+        entry.id, other_package_id);
+
+    const auto confirmation = repository.confirm_revision(
+        created.revision->id, user_id, "任一已确认即可");
+    EXPECT_EQ(confirmation.status, db::ComponentInventoryStatus::Ok)
+        << "存在任一已确认生效映射就应放行，不该因为另一个包还待确认而被拦";
+}
+
+// blocker 规则只有一份来源（blocker_cte_sql 产出的 CTE 文本）。这条用例钉住
+// "汇总侧看到的问题"与"confirm 实际拦截的问题"是同一套判定——将来谁把两边拆成
+// 两份规则，它就会红。
+TEST_F(ComponentInventoryRepositoryTest, BlockerRuleAgreesBetweenInspectionAndConfirmation) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+
+    // 模板生成的构件在 generate_draft 里已经带上"模板生成 / 已确认"的映射，
+    // 缺映射的只会是手工新增的构件——这两个应当同时出现在两侧。
+    std::set<std::string> expected;
+    for (const auto* number : {"Z-1", "Z-2"}) {
+        db::InventoryNewEntry manual;
+        manual.component_number = number;
+        manual.site_name = std::string("自定义现场构件") + number;
+        manual.site_component_type = "自定义类型";
+        const auto added = repository.add_entry(created.revision->id, user_id, manual);
+        ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
+        for (const auto& entry : added.revision->entries) {
+            if (entry.component_number == number) expected.insert(entry.id);
+        }
+    }
+    ASSERT_EQ(expected.size(), 2u);
+
+    const auto confirmation = repository.confirm_revision(created.revision->id, user_id, "应被阻断");
+    ASSERT_EQ(confirmation.status, db::ComponentInventoryStatus::Blocked);
+
+    std::set<std::string> blocked_ids;
+    for (const auto& blocker : confirmation.blockers) {
+        EXPECT_EQ(blocker.code, "component_mapping_required");
+        blocked_ids.insert(blocker.entity_id);
+    }
+    EXPECT_EQ(blocked_ids, expected);
+
+    // 直接跑规则片段，结果集必须与 confirm 报出的构件集合完全一致。
+    const auto inspected = client->execSqlSync(
+        "with inventory_active_entries as ("
+        "select count(*)::int as value from bridge_component_inventory_entries "
+        "where inventory_revision_id=$1::uuid and is_active),"
+        "inventory_unconfirmed_entries as ("
+        "select e.id::text as entry_id from bridge_component_inventory_entries e "
+        "where e.inventory_revision_id=$1::uuid and e.is_active "
+        "and not exists(select 1 from bridge_component_standard_mappings m "
+        "where m.inventory_entry_id=e.id and m.is_active "
+        "and m.confirmation_status='已确认')) "
+        "select entry_id from inventory_unconfirmed_entries",
+        created.revision->id);
+    std::set<std::string> inspected_ids;
+    for (const auto& row : inspected) inspected_ids.insert(row["entry_id"].as<std::string>());
+    EXPECT_EQ(inspected_ids, blocked_ids);
+}
+
 // ---------------------------------------------------------------------------
 // 每桥至多一条草稿。派生路径原先按 baseline_revision_id 查找现有草稿，而
 // generate_draft() 见到任何草稿就返回 Conflict——两条路径对同一个不变量的假设相反，

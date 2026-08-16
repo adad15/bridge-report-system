@@ -285,15 +285,4 @@ describe("ComponentInventoryEditor", () => {
       }),
     ]);
   });
-
-  it("reports duplicate numbers before confirmation", () => {
-    const blockers = inventoryConfirmationBlockers({
-      ...revision,
-      entries: [
-        { ...revision.entries[0], is_referenced: false, mappings: [{ ...revision.entries[0].mappings[0], confirmation_status: "已确认" }] },
-        { ...revision.entries[0], id: "entry-2", bridge_component_id: "component-2", mappings: [{ ...revision.entries[0].mappings[0], id: "mapping-2", confirmation_status: "已确认" }] },
-      ],
-    });
-    expect(blockers).toEqual(expect.arrayContaining([expect.objectContaining({ code: "duplicate_component_number", entity_id: "entry-2" })]));
-  });
 });
