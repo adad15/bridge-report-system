@@ -122,6 +122,53 @@ TEST(ComponentInventoryRoutesTest, SerializesPartCatalogForBridgeType) {
     EXPECT_TRUE(has_girder);
 }
 
+// 分页参数的边界。放过非法值的代价不对称：number= 空串会退化成 like '%%'，
+// 一次命中全表——正是这次聚合要消灭的那种响应。
+TEST(ComponentInventoryRoutesTest, TrimsQueryValuesSoBlankIsTreatedAsMissing) {
+    EXPECT_EQ(http::trimmed_query_value("  支座 "), "支座");
+    EXPECT_TRUE(http::trimmed_query_value("").empty());
+    EXPECT_TRUE(http::trimmed_query_value("   ").empty()) << "纯空白必须等同于缺失";
+    EXPECT_TRUE(http::trimmed_query_value("\t\r\n").empty());
+}
+
+TEST(ComponentInventoryRoutesTest, ParsesBoundedQueryIntegers) {
+    std::int64_t value = -1;
+    std::string message;
+
+    // 缺省与纯空白取默认值。
+    EXPECT_TRUE(http::parse_bounded_query_int("", "size", 100, 1, 200, value, message));
+    EXPECT_EQ(value, 100);
+    EXPECT_TRUE(http::parse_bounded_query_int("   ", "size", 100, 1, 200, value, message));
+    EXPECT_EQ(value, 100);
+
+    EXPECT_TRUE(http::parse_bounded_query_int("50", "size", 100, 1, 200, value, message));
+    EXPECT_EQ(value, 50);
+
+    // 越上界截断，不报错：页大小要得过大只是浪费，不是语义错误。
+    EXPECT_TRUE(http::parse_bounded_query_int("999", "size", 100, 1, 200, value, message));
+    EXPECT_EQ(value, 200);
+    EXPECT_TRUE(http::parse_bounded_query_int("999", "limit", 50, 1, 100, value, message));
+    EXPECT_EQ(value, 100);
+
+    // 越下界与非整数一律拒绝。
+    EXPECT_FALSE(http::parse_bounded_query_int("0", "size", 100, 1, 200, value, message));
+    EXPECT_FALSE(http::parse_bounded_query_int("-1", "size", 100, 1, 200, value, message));
+    EXPECT_FALSE(http::parse_bounded_query_int("abc", "page", 0, 0, 2147483647, value, message));
+    // stoll 会把 "1.5" 解析成 1 并停在小数点上，必须整串消费完才算整数。
+    EXPECT_FALSE(http::parse_bounded_query_int("1.5", "size", 100, 1, 200, value, message));
+    EXPECT_FALSE(http::parse_bounded_query_int("12abc", "size", 100, 1, 200, value, message));
+    EXPECT_FALSE(message.empty());
+
+    // page 的下界是 0（第一页），不是 1。
+    EXPECT_TRUE(http::parse_bounded_query_int("0", "page", 0, 0, 2147483647, value, message));
+    EXPECT_EQ(value, 0);
+
+    // 超大整数按上限截断，不溢出。偏移量在路由里用 64 位算，page*size 不会绕回。
+    EXPECT_TRUE(http::parse_bounded_query_int(
+        "99999999999999", "page", 0, 0, 2147483647, value, message));
+    EXPECT_EQ(value, 2147483647);
+}
+
 // 单条构件的序列化是从 inventory_revision_json() 里抽出来的，供分组分页、编号搜索
 // 和写响应共用。这两条用例钉住抽取没有走样：整份修订版里的每一条，必须与单独序列化
 // 同一条构件的结果逐字段相同——否则聚合接口和 /latest 会给出两种形状。

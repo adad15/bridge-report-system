@@ -676,6 +676,186 @@ TEST_F(ComponentInventoryRepositoryTest, SummaryBlockerCountsSeparatePendingFrom
     EXPECT_EQ(blockers["by_code"]["inventory_empty"].asInt(), 0);
 }
 
+// ---------------------------------------------------------------------------
+// 分组分页与编号搜索。
+// ---------------------------------------------------------------------------
+
+TEST_F(ComponentInventoryRepositoryTest, GroupEntriesPageKeepsPositionAcrossDeactivatedEntries) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = created.revision->id;
+
+    std::vector<std::string> ids;
+    for (int index = 0; index < 5; ++index) {
+        db::InventoryNewEntry manual;
+        manual.component_number = "B-" + std::to_string(index);
+        manual.site_name = "支座";
+        manual.site_component_type = "支座";
+        manual.sort_order = 100 + index;
+        const auto added = repository.add_entry(revision_id, user_id, manual);
+        ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
+        for (const auto& entry : added.revision->entries) {
+            if (entry.component_number == manual.component_number) ids.push_back(entry.id);
+        }
+    }
+    ASSERT_EQ(ids.size(), 5u);
+
+    // 停用中间一条：它仍然占位，后面几条的序号不能因此前移，否则"定位"会跳错页。
+    ASSERT_EQ(repository.deactivate_entry(revision_id, ids[2], user_id, "现场已拆除").status,
+              db::ComponentInventoryStatus::Ok);
+
+    const auto page = repository.load_group_entries(revision_id, "支座", 0, 100);
+    EXPECT_EQ(page.total, 5) << "total 含停用构件";
+    ASSERT_EQ(page.entries.size(), 5u);
+    for (std::size_t index = 0; index < page.entries.size(); ++index) {
+        EXPECT_EQ(page.entries[index].position, static_cast<std::int64_t>(index));
+        EXPECT_EQ(page.entries[index].entry.component_number, "B-" + std::to_string(index));
+    }
+    EXPECT_FALSE(page.entries[2].entry.is_active);
+
+    // 分页与越界：越界页返回空列表但 total 仍是真实值，前端据此夹取页码。
+    const auto second = repository.load_group_entries(revision_id, "支座", 2, 2);
+    ASSERT_EQ(second.entries.size(), 2u);
+    EXPECT_EQ(second.entries.front().position, 2);
+    const auto beyond = repository.load_group_entries(revision_id, "支座", 500, 100);
+    EXPECT_TRUE(beyond.entries.empty());
+    EXPECT_EQ(beyond.total, 5) << "越界页也要带回真实 total";
+}
+
+TEST_F(ComponentInventoryRepositoryTest, GroupEntriesReturnOnlyActiveMappings) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = created.revision->id;
+    const auto entry = created.revision->entries.front();
+
+    // 造一条失效的历史映射。全量装配不过滤 is_active，会把历次改动积累的失效映射
+    // 一并带出，单页体积随之不可控；而前端所有消费点都只读生效映射。
+    client->execSqlSync(
+        "insert into bridge_component_standard_mappings"
+        "(inventory_entry_id,standard_package_id,standard_bridge_type_id,"
+        "standard_component_category_id,structure_part,mapping_source,confirmation_status,"
+        "is_active) values($1::uuid,$2::uuid,$3,$4,'superstructure','历史','待确认',false)",
+        entry.id, package_id, input.bridge_type_id, "test.component.main_girder");
+
+    const auto page = repository.load_group_entries(revision_id, entry.site_component_type, 0, 100);
+    ASSERT_EQ(page.entries.size(), 1u);
+    ASSERT_FALSE(page.entries.front().entry.mappings.empty());
+    for (const auto& mapping : page.entries.front().entry.mappings) {
+        EXPECT_TRUE(mapping.is_active) << "失效映射不该出现在明细里";
+    }
+}
+
+TEST_F(ComponentInventoryRepositoryTest, SearchMatchesSubstringAndEscapesWildcards) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = created.revision->id;
+
+    int order = 200;
+    for (const auto* number : {"3-5#梁", "13-5#梁", "23-5#梁", "100%特殊"}) {
+        db::InventoryNewEntry manual;
+        manual.component_number = number;
+        manual.site_name = "梁";
+        manual.site_component_type = "检索用类型";
+        manual.sort_order = order;
+        order += 1;
+        ASSERT_EQ(repository.add_entry(revision_id, user_id, manual).status,
+                  db::ComponentInventoryStatus::Ok);
+    }
+
+    // 子串语义与前端原来的 String.includes 一致：搜 3-5 也会命中 13-5#梁 和 23-5#梁。
+    const auto hits = repository.search_entries(revision_id, "3-5", 50);
+    EXPECT_EQ(hits.total, 3);
+    ASSERT_EQ(hits.entries.size(), 3u);
+
+    // 截断时 total 仍是未截断的命中数——界面上"匹配 N 个构件，显示前 M 个"依赖它。
+    const auto truncated = repository.search_entries(revision_id, "3-5", 2);
+    EXPECT_EQ(truncated.total, 3);
+    EXPECT_EQ(truncated.entries.size(), 2u);
+
+    // 通配符必须按字面匹配，否则搜一个 % 就命中全表。
+    const auto wildcard = repository.search_entries(revision_id, "%", 50);
+    EXPECT_EQ(wildcard.total, 1);
+    ASSERT_EQ(wildcard.entries.size(), 1u);
+    EXPECT_EQ(wildcard.entries.front().entry.component_number, "100%特殊");
+
+    // 零命中：窗口函数在没有行时带不回总数，实现必须显式规定 total = 0。
+    const auto empty = repository.search_entries(revision_id, "不存在的编号", 50);
+    EXPECT_EQ(empty.total, 0);
+    EXPECT_TRUE(empty.entries.empty());
+}
+
+TEST_F(ComponentInventoryRepositoryTest, PositionAgreesBetweenPageSearchAndBlockerSample) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = created.revision->id;
+
+    // 前两条有映射、第三条没有：第三条会同时出现在分页、搜索和 blocker 样本里，
+    // 三处的组内序号必须一致，否则"定位"按钮算出来的页码是错的。
+    std::string unmapped_id;
+    int order = 300;
+    for (const auto* number : {"P-1", "P-2", "P-3"}) {
+        db::InventoryNewEntry manual;
+        manual.component_number = number;
+        manual.site_name = "定位用构件";
+        manual.site_component_type = "定位用类型";
+        manual.sort_order = order;
+        order += 1;
+        const auto added = repository.add_entry(revision_id, user_id, manual);
+        ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
+        for (const auto& entry : added.revision->entries) {
+            if (entry.component_number != number) continue;
+            if (std::string(number) == "P-3") { unmapped_id = entry.id; continue; }
+            db::InventoryMappingUpdate mapping;
+            mapping.standard_package_id = package_id;
+            mapping.standard_bridge_type_id = input.bridge_type_id;
+            mapping.standard_component_category_id = "test.component.main_girder";
+            mapping.structure_part = "superstructure";
+            ASSERT_EQ(repository.set_mapping(revision_id, entry.id, user_id, mapping).status,
+                      db::ComponentInventoryStatus::Ok);
+        }
+    }
+    ASSERT_FALSE(unmapped_id.empty());
+
+    std::int64_t page_position = -1;
+    for (const auto& located : repository.load_group_entries(revision_id, "定位用类型", 0, 100).entries) {
+        if (located.entry.id == unmapped_id) page_position = located.position;
+    }
+    ASSERT_NE(page_position, -1);
+    EXPECT_EQ(page_position, 2);
+
+    std::int64_t search_position = -1;
+    for (const auto& located : repository.search_entries(revision_id, "P-3", 50).entries) {
+        if (located.entry.id == unmapped_id) search_position = located.position;
+    }
+    EXPECT_EQ(search_position, page_position) << "搜索结果与分页必须用同一套序号";
+
+    const auto summary = repository.load_summary(revision_id);
+    ASSERT_TRUE(summary.has_value());
+    std::int64_t sample_position = -1;
+    for (const auto& sample : (*summary)["blockers"]["samples"]) {
+        if (sample["entity_id"].asString() == unmapped_id) {
+            sample_position = sample["position"].asInt64();
+        }
+    }
+    EXPECT_EQ(sample_position, page_position) << "blocker 样本必须用同一套序号";
+}
+
 // 搬迁验收的导出口。compare-inventory-summary.ps1 需要"新实现"那一侧的输出，
 // 而汇总 SQL 只存在于 load_summary() 里。与其在脚本里复制一份 SQL——那正是这次
 // 要消灭的分叉——不如让脚本调真正的实现。

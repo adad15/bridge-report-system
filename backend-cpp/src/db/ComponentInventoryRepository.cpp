@@ -239,6 +239,19 @@ EditableTarget ensure_editable_target(
     return {true, draft_id, draft_entry_id, component_id};
 }
 
+// 组内序号的唯一定义。分组分页、编号搜索、汇总里的 blocker 样本三处都用它——
+// 各写一遍必然漂移，而"定位"按钮就是拿这个序号算页码的，漂了就会跳到错的页。
+// 刻意不按 is_active 过滤：停用构件在分组弹窗里仍然可见并占位。
+std::string entry_position_window_sql() {
+    return "row_number() over (partition by e.site_component_type "
+           "order by e.sort_order,e.id)-1";
+}
+
+// 用户输入按字面匹配。不转义的话搜一个 % 就会命中全表——那正是聚合要消灭的响应。
+std::string escaped_like_expr(const std::string& parameter) {
+    return "replace(replace(replace(" + parameter + ",'\\','\\\\'),'%','\\%'),'_','\\_')";
+}
+
 // 确认前置校验的唯一规则来源：只产出具名 CTE 的 SQL 文本，不执行查询。
 // confirm 语句和汇总语句各自把它嵌进自己那条 SQL——共用的是文本而不是一次查询执行，
 // 这样两处永远是同一套判定，又都各自处在单语句快照里。
@@ -355,8 +368,7 @@ std::optional<Json::Value> ComponentInventoryRepository::load_summary(
         "select e.id,e.component_number,e.site_component_type,e.sort_order,e.is_active,"
         "em.has_confirmed,em.structure_part as em_part,em.package_id as em_package,"
         "em.category_id as em_category,em.inventory_entry_id is not null as has_mapping,"
-        "row_number() over (partition by e.site_component_type "
-        "order by e.sort_order,e.id)-1 as position "
+        + entry_position_window_sql() + " as position "
         "from bridge_component_inventory_entries e "
         "left join entry_mapping em on em.inventory_entry_id=e.id "
         "where e.inventory_revision_id=$1::uuid"
@@ -455,6 +467,146 @@ std::optional<Json::Value> ComponentInventoryRepository::load_summary(
     }
     if (summary["revision"].isNull()) return std::nullopt;
     return summary;
+}
+
+namespace {
+
+// is_referenced 的判定与 load_revision() 里那段一致：被病害、病害线索、技术状况评定
+// 或年度检测引用过的构件只能停用、不能删除。区别只在于这里只对翻到的那一页跑，
+// 而不是对整份台账的每一行跑。
+constexpr const char* kIsReferencedSql =
+    "exists(select 1 from defect_observations o "
+    "where o.bridge_component_id=p.bridge_component_id "
+    "union all select 1 from defect_threads t "
+    "where t.bridge_component_id=p.bridge_component_id "
+    "union all select 1 from condition_ratings cr "
+    "where cr.bridge_component_id=p.bridge_component_id "
+    "union all select 1 from inspection_years iy "
+    "join bridge_component_inventory_entries ie "
+    "on ie.inventory_revision_id=iy.component_inventory_revision_id "
+    "where ie.bridge_component_id=p.bridge_component_id limit 1)";
+
+}  // namespace
+
+// 两个查询共用的装配：先取一页构件，再一次性把这页的生效映射取回来按构件归组。
+// 逐条取映射会让往返次数随页大小线性增长，那正是本次要消灭的形态。
+ComponentInventoryRepository::EntryLookup
+ComponentInventoryRepository::load_entry_page(
+    const std::string& revision_id,
+    const std::string& scope_predicate,
+    const std::string& scope_value,
+    std::int64_t offset,
+    std::int64_t limit) const {
+    EntryLookup lookup;
+
+    // total 单独查一次。放在分页语句里用 count(*) over () 的话，页码越界时返回零行，
+    // 就没有任何一行能把总数带回来，前端也就无从夹取页码。
+    const std::string count_sql =
+        "select count(*)::bigint as value from bridge_component_inventory_entries e "
+        "where e.inventory_revision_id=$1::uuid and " + scope_predicate;
+    lookup.total = db_client_->execSqlSync(count_sql, revision_id, scope_value)[0]["value"]
+                       .as<std::int64_t>();
+
+    const std::string page_sql =
+        "with numbered as ("
+        "select e.id,e.bridge_component_id,e.component_number,e.site_name,"
+        "e.site_component_type,e.span_or_location,e.is_active,e.deactivated_at,"
+        "e.deactivation_reason,e.sort_order,e.remarks," +
+        entry_position_window_sql() + " as position "
+        "from bridge_component_inventory_entries e "
+        "where e.inventory_revision_id=$1::uuid"
+        ") "
+        "select p.id::text,p.bridge_component_id::text,p.component_number,p.site_name,"
+        "p.site_component_type,p.span_or_location,p.is_active,p.deactivated_at::text,"
+        "p.deactivation_reason,p.sort_order,p.remarks,p.position," +
+        std::string(kIsReferencedSql) + " as is_referenced "
+        "from numbered p where " + scope_predicate +
+        " order by p.sort_order,p.id offset $3 limit $4";
+
+    const auto rows = db_client_->execSqlSync(page_sql, revision_id, scope_value, offset, limit);
+    std::vector<std::string> page_ids;
+    std::unordered_map<std::string, std::size_t> index_by_id;
+    for (const auto& row : rows) {
+        inventory::LocatedInventoryEntry located;
+        auto& entry = located.entry;
+        entry.id = row["id"].as<std::string>();
+        entry.bridge_component_id = row["bridge_component_id"].as<std::string>();
+        entry.component_number = row["component_number"].as<std::string>();
+        entry.site_name = row["site_name"].as<std::string>();
+        entry.site_component_type = row["site_component_type"].as<std::string>();
+        if (!row["span_or_location"].isNull())
+            entry.span_or_location = row["span_or_location"].as<std::string>();
+        entry.is_active = row["is_active"].as<bool>();
+        if (!row["deactivated_at"].isNull())
+            entry.deactivated_at = row["deactivated_at"].as<std::string>();
+        if (!row["deactivation_reason"].isNull())
+            entry.deactivation_reason = row["deactivation_reason"].as<std::string>();
+        entry.sort_order = row["sort_order"].as<int>();
+        if (!row["remarks"].isNull()) entry.remarks = row["remarks"].as<std::string>();
+        entry.is_referenced = row["is_referenced"].as<bool>();
+        located.position = row["position"].as<std::int64_t>();
+        index_by_id.emplace(entry.id, lookup.entries.size());
+        page_ids.push_back(entry.id);
+        lookup.entries.push_back(std::move(located));
+    }
+    if (lookup.entries.empty()) return lookup;
+
+    // 只返回生效映射。现有的全量装配不过滤，会把历次改动积累的失效映射一并带出，
+    // 单页体积随之不可控；而前端所有消费点都只读生效映射。
+    const std::string mapping_sql =
+        "with numbered as ("
+        "select e.id,e.component_number,e.site_component_type,e.sort_order," +
+        entry_position_window_sql() + " as position "
+        "from bridge_component_inventory_entries e "
+        "where e.inventory_revision_id=$1::uuid"
+        "),page_rows as ("
+        "select p.id from numbered p where " + scope_predicate +
+        " order by p.sort_order,p.id offset $3 limit $4"
+        ") "
+        "select m.inventory_entry_id::text,m.id::text,m.standard_package_id::text,"
+        "m.standard_bridge_type_id,m.standard_component_category_id,m.structure_part,"
+        "m.mapping_source,m.confirmation_status,m.is_active "
+        "from bridge_component_standard_mappings m "
+        "join page_rows pr on pr.id=m.inventory_entry_id "
+        "where m.is_active order by m.inventory_entry_id,m.created_at,m.id";
+    const auto mapping_rows =
+        db_client_->execSqlSync(mapping_sql, revision_id, scope_value, offset, limit);
+    for (const auto& row : mapping_rows) {
+        const auto entry_id = row["inventory_entry_id"].as<std::string>();
+        const auto found = index_by_id.find(entry_id);
+        if (found == index_by_id.end()) continue;
+        inventory::InventoryMapping mapping;
+        mapping.id = row["id"].as<std::string>();
+        mapping.standard_package_id = row["standard_package_id"].as<std::string>();
+        mapping.standard_bridge_type_id = row["standard_bridge_type_id"].as<std::string>();
+        mapping.standard_component_category_id =
+            row["standard_component_category_id"].as<std::string>();
+        mapping.structure_part = row["structure_part"].as<std::string>();
+        mapping.mapping_source = row["mapping_source"].as<std::string>();
+        mapping.confirmation_status = row["confirmation_status"].as<std::string>();
+        mapping.is_active = row["is_active"].as<bool>();
+        lookup.entries[found->second].entry.mappings.push_back(std::move(mapping));
+    }
+    return lookup;
+}
+
+ComponentInventoryRepository::EntryLookup ComponentInventoryRepository::load_group_entries(
+    const std::string& revision_id,
+    const std::string& site_component_type,
+    std::int64_t offset,
+    std::int64_t limit) const {
+    return load_entry_page(revision_id, "site_component_type=$2", site_component_type,
+                           offset, limit);
+}
+
+ComponentInventoryRepository::EntryLookup ComponentInventoryRepository::search_entries(
+    const std::string& revision_id,
+    const std::string& number_fragment,
+    std::int64_t limit) const {
+    return load_entry_page(
+        revision_id,
+        "component_number like '%'||" + escaped_like_expr("$2") + "||'%' escape '\\'",
+        number_fragment, 0, limit);
 }
 
 std::optional<inventory::InventoryRevision> ComponentInventoryRepository::get_latest_revision(

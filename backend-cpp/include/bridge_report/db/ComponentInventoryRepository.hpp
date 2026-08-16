@@ -73,6 +73,38 @@ public:
     // 是纯粹的往返开销。代价是响应形状落在了 SQL 里，改形状要改 SQL。
     std::optional<Json::Value> load_summary(const std::string& revision_id) const;
 
+    // 分组分页与编号搜索共用的返回形状。page / size 由路由按请求回显，不在这里存。
+    struct EntryLookup {
+        std::int64_t total{0};
+        std::vector<inventory::LocatedInventoryEntry> entries;
+    };
+
+    // 某一类别的构件，按 (sort_order, id) 分页。含停用构件——它们在分组弹窗里
+    // 仍然可见并占位，过滤掉会让页码与"定位"对不上。
+    EntryLookup load_group_entries(
+        const std::string& revision_id,
+        const std::string& site_component_type,
+        std::int64_t offset,
+        std::int64_t limit) const;
+
+    // 按编号子串检索，语义与前端原来的 String.includes 一致（搜 3-5 也会命中 13-5#梁）。
+    // total 是未截断的命中数，界面上"匹配 N 个构件，显示前 M 个"依赖它。
+    EntryLookup search_entries(
+        const std::string& revision_id,
+        const std::string& number_fragment,
+        std::int64_t limit) const;
+
+private:
+    // 分组分页与编号搜索的共同实现，差别只在 scope_predicate（$2 是它的取值）。
+    EntryLookup load_entry_page(
+        const std::string& revision_id,
+        const std::string& scope_predicate,
+        const std::string& scope_value,
+        std::int64_t offset,
+        std::int64_t limit) const;
+
+public:
+
     ComponentInventoryOutcome generate_draft(
         const std::string& bridge_id,
         const std::string& user_id,

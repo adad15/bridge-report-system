@@ -170,16 +170,48 @@ bool validate_part_selection_standard(
 
 }  // namespace
 
+std::string trimmed_query_value(const std::string& value) {
+    const auto begin = value.find_first_not_of(" \t\r\n");
+    if (begin == std::string::npos) return {};
+    return value.substr(begin, value.find_last_not_of(" \t\r\n") - begin + 1);
+}
+
+bool parse_bounded_query_int(
+    const std::string& raw_value,
+    const std::string& name,
+    std::int64_t fallback,
+    std::int64_t minimum,
+    std::int64_t maximum,
+    std::int64_t& output,
+    std::string& message) {
+    const auto raw = trimmed_query_value(raw_value);
+    if (raw.empty()) { output = fallback; return true; }
+    std::size_t consumed = 0;
+    std::int64_t parsed = 0;
+    try {
+        parsed = std::stoll(raw, &consumed);
+    } catch (...) {
+        message = name + " 必须是整数。";
+        return false;
+    }
+    // stoll 会把 "1.5" 解析成 1 并停在小数点上；必须整串消费完才算整数。
+    if (consumed != raw.size()) { message = name + " 必须是整数。"; return false; }
+    if (parsed < minimum) {
+        message = name + " 不能小于 " + std::to_string(minimum) + "。";
+        return false;
+    }
+    // 越上界按上限截断而不是报错：页大小要得过大只是浪费，不是语义错误。
+    output = parsed > maximum ? maximum : parsed;
+    return true;
+}
+
 Json::Value serialize_part_catalog(
     const standards::StandardPackage& package, const std::string& bridge_type_id) {
     Json::Value parts(Json::arrayValue);
     for (const auto& part : inventory::component_parts()) {
         const auto category = package.definitions.find(part.standard_component_category_id);
         if (category == package.definitions.end() ||
-            category->second.source_file != "component-taxonomy.json" ||
-            !definition_supports_bridge_type(category->second, bridge_type_id) ||
-            category->second.payload["structure_part"].asString() != part.structure_part ||
-            !category->second.payload.get("generatable", false).asBool())
+            !definition_supports_inventory_part(category->second, part, bridge_type_id))
             continue;
         Json::Value item;
         item["part_key"] = part.part_key;
@@ -431,6 +463,60 @@ void register_component_inventory_routes(
                                  drogon::k404NotFound); return;
                 }
                 respond_json(callback, *summary);
+            } catch (...) { respond_db_unavailable(callback); }
+        }, {drogon::Get});
+
+    // 分组分页与编号搜索。两者共用这一条路由和同一种 entry 序列化，但响应外层不同：
+    // 分组带 page / size，搜索不带，所以前端是两个类型，不宣称形状相同。
+    drogon::app().registerHandler(
+        entries_path,
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                    const std::string& revision_id) {
+            if (!is_valid_uuid(revision_id)) {
+                respond_json(callback, make_error_body("component_inventory_not_found", "构件台账不存在。"),
+                             drogon::k404NotFound); return;
+            }
+            const auto group = trimmed_query_value(request->getParameter("group"));
+            const auto number = trimmed_query_value(request->getParameter("number"));
+            if (group.empty() == number.empty()) {
+                respond_json(callback, make_error_body(
+                    "inventory_query_invalid", "group 与 number 必须且只能提供一个。"),
+                    drogon::k400BadRequest); return;
+            }
+
+            std::string message;
+            // 上限超了按上限截断，非整数与 0/负数一律 400——number= 空串若放过去，
+            // like '%%' 会命中全表，正是聚合要消灭的那种响应。
+            std::int64_t page = 0;
+            std::int64_t size = 100;
+            std::int64_t limit = 50;
+            if (!parse_bounded_query_int(request->getParameter("page"), "page", 0, 0, 2147483647, page, message) ||
+                !parse_bounded_query_int(request->getParameter("size"), "size", 100, 1, 200, size, message) ||
+                !parse_bounded_query_int(request->getParameter("limit"), "limit", 50, 1, 100, limit, message)) {
+                respond_json(callback, make_error_body("inventory_query_invalid", message),
+                             drogon::k400BadRequest); return;
+            }
+
+            try {
+                if (!require_user(db_client, request, callback).has_value()) return;
+                db::ComponentInventoryRepository repository(db_client);
+                Json::Value body;
+                db::ComponentInventoryRepository::EntryLookup lookup;
+                if (!group.empty()) {
+                    // 偏移用 64 位算：page 上限 INT32_MAX，乘以 size 会溢出 32 位。
+                    lookup = repository.load_group_entries(revision_id, group, page * size, size);
+                    body["page"] = static_cast<Json::Int64>(page);
+                    body["size"] = static_cast<Json::Int64>(size);
+                } else {
+                    lookup = repository.search_entries(revision_id, number, limit);
+                }
+                body["total"] = static_cast<Json::Int64>(lookup.total);
+                body["entries"] = Json::Value(Json::arrayValue);
+                for (const auto& located : lookup.entries) {
+                    body["entries"].append(
+                        inventory::located_entry_json(located.entry, located.position));
+                }
+                respond_json(callback, body);
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Get});
 

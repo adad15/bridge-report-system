@@ -22,6 +22,21 @@ bool validate_inventory_generation_standard(
 Json::Value serialize_part_catalog(
     const standards::StandardPackage& package,
     const std::string& bridge_type_id);
+// 去掉首尾空白。纯空白的 group / number 必须与缺失同等对待——放过去会让
+// like '%%' 一次命中全表。
+std::string trimmed_query_value(const std::string& value);
+
+// 分页参数：空值取默认；非整数或越下界返回 false（路由据此回 400）；
+// 越上界按上限截断。
+bool parse_bounded_query_int(
+    const std::string& raw_value,
+    const std::string& name,
+    std::int64_t fallback,
+    std::int64_t minimum,
+    std::int64_t maximum,
+    std::int64_t& output,
+    std::string& message);
+
 bool parse_inventory_entry_update(
     const Json::Value& body,
     db::InventoryEntryUpdate& output,

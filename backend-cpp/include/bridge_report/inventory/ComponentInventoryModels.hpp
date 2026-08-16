@@ -75,6 +75,12 @@ struct InventoryRevision {
     std::vector<InventoryEntry> entries;
 };
 
+// 分组分页与编号搜索返回的构件，多带一个组内序号（从 0 起）。
+struct LocatedInventoryEntry {
+    InventoryEntry entry;
+    std::int64_t position{0};
+};
+
 struct InventoryBlocker {
     std::string code;
     std::string entity_type;
