@@ -31,15 +31,19 @@
 
 **目标**
 
-1. 首屏从 3.4 MB 降到 KB 级。
-2. 写操作的响应从 3.4 MB 降到 KB 级。
-3. 服务端补齐重复编号校验，使"确认前还需处理 N 项"与 confirm 的实际拦截口径一致。
+1. **台账页**首屏从 3.4 MB 降到 KB 级。
+2. 台账页写操作的响应从 3.4 MB 降到 KB 级。
+3. 统一确认校验口径：前端"确认前还需处理 N 项"与 confirm 的实际拦截由同一份
+   服务端实现给出（含多映射下的 `some` 口径，见问题 5）。
 
 **非目标**
 
 - 不引入台账写操作的编辑锁（现状无锁，后写覆盖先写，本次保持）。
 - 不改 `is_referenced` 的语义。
-- 不改向导（`InventoryPlanPanel`）与生成逻辑。
+- 不改向导（`InventoryPlanPanel`）与生成逻辑——空修订版渲染编辑器而非向导，
+  正是为了不触碰 `generate_draft()` 的"已有草稿即 Conflict"。
+- **不改造校对工作台**。它的构件选择器仍通过 `/latest` 拉取全量台账，
+  3.4 MB 的问题在那条路径上依然存在，另开后续。
 - 不做响应压缩。聚合之后载荷已是 KB 级，压缩省的是带宽而序列化 CPU 一分不少，
   收益不再显著。
 
@@ -99,19 +103,32 @@ group.activeCount += 1;
 边界：某组构件被全部停用时 `active_count` 为 0、编号范围为空，该组**仍需返回**，
 界面显示 `—`。用 `array_agg(...) filter (where is_active)` 天然得到 NULL，无需分支。
 
-### 3. 前端与后端的确认校验口径不一致
+### 3. 重复编号由数据库唯一约束保证，前端那条规则是冗余的
 
-| 规则 | 前端 | 后端 |
-| --- | --- | --- |
-| `inventory_empty` | 有 | 有 |
-| `component_mapping_required` | 有 | 有 |
-| `duplicate_component_number` | 有 | **无** |
+`011_component_inventory_revisions.sql:93`：
 
-绕过前端调用 API 可以确认掉带重复编号的台账。本次把校验统一到服务端，由
-`compute_blockers()` 一份实现同时服务汇总端点与 confirm 路径。
+```sql
+unique (inventory_revision_id, site_component_type, component_number)
+```
 
-另需注意：前端 `inventoryConfirmationBlockers` 的重复检查遍历全部构件，
-**不按 `is_active` 过滤**，服务端实现保持一致。
+重复编号在数据库层面就不可能存在，`add_entry()` / `update_entry()` 另有主动检查。
+因此：
+
+- 正常 API 造不出重复；直接插库也会被约束拒绝；
+- confirm 缺少重复检查只是逻辑上不完整，**不是可绕过的漏洞**；
+- 想为它构造连库测试 fixture 也做不到——唯一约束会先拒绝插入。
+
+**处置：删除 `duplicate_component_number` blocker**，以数据库唯一约束为权威。
+保留一条永远为 0 的规则只会误导后来人。前端 `inventoryConfirmationBlockers`
+里的重复检查随之删除。
+
+（本设计早期版本据此断言"绕过前端可以确认掉带重复编号的台账"，该断言不成立，
+已更正。）
+
+服务端校验仍需集中：`inventory_empty` 与 `component_mapping_required` 由
+`compute_blockers()` 一份实现同时服务汇总端点与 confirm 路径。前端聚合后拿不到
+构件级数据，"定位"按钮所需的 `entity_id` 与 `position` 只能由服务端给出——
+这仍是校验必须落在服务端的理由，只是与重复编号无关。
 
 ### 4. 一个构件可以有多个生效映射
 
@@ -193,10 +210,11 @@ create unique index ux_component_standard_mappings_active
   ],
   "blockers": {
     "total": 0,
-    "by_code": { "component_mapping_required": 0, "duplicate_component_number": 0 },
+    "individual_total": 0,
+    "by_code": { "inventory_empty": 0, "component_mapping_required": 0 },
     "samples": [
-      { "code": "duplicate_component_number", "entity_type": "inventory_entry",
-        "entity_id": "…", "field_path": "component_number", "message": "…",
+      { "code": "component_mapping_required", "entity_type": "inventory_entry",
+        "entity_id": "…", "field_path": "mappings", "message": "…",
         "site_component_type": "梁", "position": 54 }
     ]
   }
@@ -206,11 +224,16 @@ create unique index ux_component_standard_mappings_active
 按字段估算约 4.5 KB（未实测）。`groups` 按首个构件的 `(sort_order, id)` 排序
 （见问题 1b），与向导顺序一致。
 
-**可空字段**：`first_number`、`last_number`、`structure_part`、
-`standard_package_id`、`standard_component_category_id` 类型均为 `string | null`。
-整组构件被全部停用时前两者为 `null`；该组无任何生效映射时后三者为 `null`。
-新增的前端类型必须显式可空——现有 `InventoryGroupSummary` 的
-`firstNumber: string` 是必填，不能照搬。
+**字段可空性**（早期版本此处与 ⑦、SQL 自相矛盾，以本表为准）：
+
+| 字段 | 类型 | 何时为空 |
+| --- | --- | --- |
+| `first_number` / `last_number` | `string \| null` | 整组构件全部停用 |
+| `structure_part` | `StructurePart`，**非空** | 无映射或全为 `other` 时取 `"other"` |
+| `standard_package_id` / `standard_component_category_id` | `string \| null` | 该组无任何生效映射 |
+
+新增的前端类型必须照此写。现有 `InventoryGroupSummary` 的 `firstNumber: string`
+是必填，不能照搬。
 
 `revision.active_entry_count` **只计启用构件**（界面"共 N 个启用构件"用它），
 与 ② 中的 `total`（该组构件总数，**含停用**，用于翻页）语义不同，勿混。
@@ -231,10 +254,16 @@ create unique index ux_component_standard_mappings_active
 { "total": 3300, "page": 0, "size": 100, "entries": [ /* 完整构件对象，含 mappings 与 is_referenced */ ] }
 ```
 
-`total` 是该组的构件总数（含停用），用于翻页。100 条约 70 KB。
+类型名 `InventoryGroupEntriesResponse`。`total` 是该组的构件总数（含停用），
+用于翻页。
 
-`page` 默认 0，`size` 默认 100（与现有 `kEntriesPageSize` 一致），上限 200；
-超出上限按上限处理，负值返回 400。
+`entries[].mappings` **只返回 `is_active = true` 的映射**。现有全量装配不过滤，
+会把历次改动积累的失效映射一并带出；而前端所有消费点（台账页 5 处、校对工作台
+`DefectsSection` / `ComponentBindingWorkspace` 共 7 处）无一读取失效映射。
+不过滤则单页体积不可控，性能门槛也就无从谈起。映射历史如日后需要，另设端点。
+
+**`total` 不能只靠 `count(*) over ()`**：越界页返回零行，窗口函数便没有任何一行
+可携带总数。需用独立 count 查询，或 CTE 左连接使无分页行时仍返回 `total`。
 
 ### ③ 编号搜索
 
@@ -244,13 +273,29 @@ create unique index ux_component_standard_mappings_active
 { "total": 5, "entries": [ { "…": "…", "site_component_type": "梁", "position": 54 } ] }
 ```
 
-`total` 是**未截断**的命中数，用 `count(*) over ()` 在同一次查询里得出——界面上
-"匹配 N 个构件，显示前 50 个"依赖真实命中数。
+类型名 `InventorySearchResponse`。`total` 是**未截断**的命中数，用
+`count(*) over ()` 在同一次查询里得出——界面上"匹配 N 个构件，显示前 50 个"
+依赖真实命中数。**零命中时查询返回零行，没有任何一行携带 `total`，实现必须
+显式规定 `rows.empty() ⇒ total = 0`。**
 
-`limit` 默认 50（与现有 `kMaxSearchResults` 一致），上限 100。
+`entries[].mappings` 同 ②，只返回生效映射。
 
-②③ 复用同一路由与同一响应形状，仅过滤条件不同。`group` 与 `number` 二选一，
-同时缺失或同时提供时返回 400。
+②③ 复用同一路由与同一 entry 序列化，但**响应 envelope 不同**（②有 `page`/`size`，
+③没有），因此定义为两个类型，不宣称形状相同。
+
+### ②③ 的参数边界
+
+| 参数 | 规则 | 违反时 |
+| --- | --- | --- |
+| `page` | 整数，`0..INT32_MAX` | 400 |
+| `size` | 整数，`1..200`，默认 100（同 `kEntriesPageSize`） | 超上限截为 200；`0`、负数、非整数返回 400 |
+| `limit` | 整数，`1..100`，默认 50（同 `kMaxSearchResults`） | 超上限截为 100；`0`、负数、非整数返回 400 |
+| `group` | 非空字符串 | 空或仅空白返回 400 |
+| `number` | trim 后非空 | 空或仅空白返回 400 |
+| `group` / `number` | 二选一 | 同时提供或同时缺失返回 400 |
+
+`number` 若允许为空，`like '%%'` 会命中全部构件——这正是聚合要消除的那种响应。
+偏移量 `page * size` 用 64 位计算并检查溢出。
 
 ### ④ 全部写端点的响应
 
@@ -285,21 +330,40 @@ order by sort_order, id) - 1`，**不按 `is_active` 过滤**（与现有弹窗�
 现有界面把 blocker 分两类显示：有待确认映射的构件汇总成一行"N 个构件的规范映射
 待确认"加一键确认按钮；其余逐条列出并带"定位"按钮。服务端照此拆分：
 
-- `samples` **只含**重复编号、以及完全没有生效映射的构件；
+- `samples` **只含**完全没有生效映射的构件，以及 `inventory_empty`；
 - 有待确认映射的那批**不进 `samples`**，界面上那一行的数字取自
   `groups[].pending_count` 之和（现有 `pendingMappingCount` 就是这么算的，
   数据源不变，只是从客户端汇总改为读汇总响应）。
 
-计数与样本的关系需明确：`by_code.component_mapping_required` 统计
-**全部缺少已确认生效映射的启用构件**，按问题 5 统一后的 `some` 口径判定，
-等于 `pending_count + unmapped_count` 之和；而 `samples` 只收其中
-`unmapped_count` 那部分。两者不相等是有意的。
+**计数关系必须写死，否则会双重计数**：
 
-（统一到 `some` 之前这条等式不成立——`pending_count` 按首个映射算、blocker 按任意
-映射算，多映射时两边会各说各话。这正是问题 5 要消除的。）
+```
+pending_total    = sum(groups[].pending_count)
+unmapped_total   = sum(groups[].unmapped_count)
+individual_total = (inventory_empty ? 1 : 0) + unmapped_total
+total            = pending_total + individual_total
+remaining        = individual_total - samples.length
+```
 
-`samples` 上限取 30（现有 `kMaxIndividualBlockers` 的值），"……其余 N 项"由
-`total` 减样本数得出。
+`by_code.component_mapping_required` = `pending_total + unmapped_total`
+（按问题 5 统一后的 `some` 口径：缺少已确认生效映射的启用构件）。
+
+**"……其余 N 项"必须用 `individual_total` 减样本数，不能用 `total`。**
+反例：100 个待确认、0 个无映射时 `total = 100`、`samples = []`，用 `total`
+会让页面同时显示"100 个构件的规范映射待确认"和"……其余 100 项"，同一批构件数了
+两遍。现有前端用的是 `individualBlockers.length`，本设计早期版本抄错了。
+
+`samples` 上限取 30（现有 `kMaxIndividualBlockers` 的值）。
+
+**`inventory_empty` 的展示载体**：它以 `entity_type: "inventory_revision"` 进入
+`samples`。现有渲染逻辑对 `entity_type !== "inventory_entry"` 的条目不显示"定位"
+按钮，天然适配，无需前端分支。否则空台账会出现"还需处理 1 项"却列不出任何内容。
+
+**`by_code` 是固定字段**（`inventory_empty`、`component_mapping_required`），
+不是动态键；无对应 blocker 时取 0，便于前端类型化。
+
+**样本顺序**：`inventory_empty` 在前，其余构件按 `(sort_order, id)` 升序，
+保证截断结果稳定可测。
 
 ### ⑦ `structure_part` 与规范类别的取值规则
 
@@ -309,7 +373,8 @@ order by sort_order, id) - 1`，**不按 `is_active` 过滤**（与现有弹窗�
 一致）的 `structure_part` / `standard_component_category_id` / `standard_package_id`。
 
 **分组级**：`structure_part` 取该组内**首个（按 `sort_order, id`）取值非 `other`
-的启用构件**；全组都是 `other` 或都无映射时为 `other`。现有代码
+的启用构件**；全组都是 `other`、都无映射、或整组停用时均为 `other`（此字段非空，
+见 ① 的可空性表）。现有代码
 `if (group.structurePart === "other" && mapping.structure_part)` 起始值就是
 `"other"`，赋 `"other"` 等于没赋，循环会继续往后找——所以它不是"首个生效映射"，
 而是"首个非 `other`"。
@@ -372,18 +437,50 @@ order by (array_agg(e.sort_order order by e.sort_order, e.id))[1],
          (array_agg(e.id::text order by e.sort_order, e.id))[1];
 ```
 
+外层还需返回 `package_id`，与 `category_id` **必须用相同的过滤与排序**，
+保证两者来自同一个构件：
+
+```sql
+       (array_agg(em.package_id order by e.sort_order, e.id)
+          filter (where e.is_active and em.inventory_entry_id is not null))[1] as package_id,
+```
+
 `bool_or(... = '已确认')` 即问题 5 定下的 `some` 口径；三个计数用
 `em.inventory_entry_id is null / not null` 加 `has_confirmed` 三分，互斥且
-覆盖全部启用构件。`package_id` 同 `category_id` 取法，为节省篇幅未列出。
+覆盖全部启用构件。
 
-### 快照一致性
+### 快照一致性：需要 REPEATABLE READ，不是"同一个事务"
 
-`load_summary()` 由修订信息、`groups`、`blockers` 多条查询组成。契约声称
-"每次拿到的汇总完整自洽"，因此这几条**必须在同一个只读事务里执行**，取同一个
-快照；否则并发写入时 `groups` 与 `blockers` 可能来自不同时点，出现
-"blocker 说有未映射构件，但分组里 `unmapped_count` 全为 0"这类自相矛盾。
+`load_summary()` 由修订信息、`groups`、`blockers` 多条查询组成，契约声称
+"每次拿到的汇总完整自洽"。
 
-写端点的响应同理：写入与随后的汇总重算要在同一事务内完成。
+**仅仅放进同一个事务不够**：PostgreSQL 默认隔离级别是 READ COMMITTED，
+该级别下同一事务内的每条 SELECT 各自取一个新快照，仍可能看到不同的已提交状态。
+于是会出现"blocker 说有未映射构件，但分组里 `unmapped_count` 全为 0"这类自相矛盾。
+
+两种做法，二选一：
+
+```sql
+begin transaction isolation level repeatable read read only;
+```
+
+或把修订信息、groups、blockers 合成**一条** SQL，靠单语句快照保证一致。
+
+选 REPEATABLE READ 时须一并规定：序列化失败映射成什么错误码、是否重试、
+最多重试几次、写事务是否也提升隔离级别。本设计倾向**合成一条 SQL** ——
+只读路径不必引入重试逻辑，且三段数据本就来自同两张表。
+
+写端点同理：写入与随后的汇总重算必须在同一事务内完成，且：
+
+- summary 在提交**前**计算，但必须等提交确认后才返回；
+- 提交失败不得返回已算好的成功响应；
+- confirm 被 blocker 拒绝时，返回事务内算出的结果；
+- 派生草稿时，summary 必须基于**派生后**的 revision id。
+
+这不是改 `respond_inventory_outcome()` 就能做到的。现有仓储写方法的流程是
+"执行写入 → `finish()` 提交 → 事务外 `get_revision()` 重读 → 返回"，
+要改成"执行写入 → 同事务算 summary → 提交 → 返回"，**所有写方法都要重构**。
+具体落法在实施计划里展开。
 
 搜索使用 `like '%' || 转义(输入) || '%'`，保留现有 `.includes()` 的子串语义
 （搜 `3-5` 会同时命中 `13-5#梁`）。用户输入中的 `%`、`_`、`\` 必须转义。
@@ -401,12 +498,34 @@ order by (array_agg(e.sort_order order by e.sort_order, e.id))[1],
 
 ### 随之删除
 
-- `GET /api/component-inventories/{revision_id}`（按 id 取全量）——前端无调用者
-- `inventory_revision_json()` 及其调用的全量装配路径——失去调用者
-- 前端 `fetchComponentInventory()` 及相关类型
+| 端点 | 处置 | 理由 |
+| --- | --- | --- |
+| `GET /api/component-inventories/{revision_id}` | **删除** | 全仓无调用者 |
+| `GET /api/bridges/{id}/component-inventories/latest` | **保留** | 见下 |
 
-`load_revision()` 中逐行的 `is_referenced` 相关子查询不删除，移入 ②，
-只在实际翻到的一页（100 行）上执行。
+前端 `fetchComponentInventory()` 及相关类型随第一条一并删除。删除公开端点属
+**breaking change**，需在发布说明中标注；本系统前后端同仓库同发布，不做弃用观察期。
+
+**`/latest` 必须保留——它不止台账页在用。** 校对工作台有三处调用
+`fetchLatestComponentInventory()`：
+
+- `review/binding/ComponentBindingWorkspace.tsx:253`、`:426`
+- `review/components/DefectsSection.tsx`
+
+它们用全量 `entries` 构建构件选择器（筛选条件是
+`entry.is_active && entry.mappings.some(m => m.is_active)`）。删掉 `/latest`
+会直接打断病害绑定流程。
+
+**因此 `inventory_revision_json()` 与 `load_revision()` 不能删除**，本设计早期
+版本"失去调用者"的说法不成立。
+
+**遗留问题（本次不处理，另开后续）**：校对工作台仍会为这两个选择器拉取
+同一份 3.4 MB。它需要的是"按类别/编号检索构件"，与 ③ 的形状接近，
+但改造涉及病害绑定流程，超出本次范围。本次结束后台账页不再触发全量装配，
+`/latest` 的调用量随之下降，但单次体积不变。
+
+`load_revision()` 中逐行的 `is_referenced` 相关子查询同样保留，同时在 ② 中
+以相同语义实现，只在实际翻到的一页（100 行）上执行。
 
 ## 前端实现
 
@@ -445,6 +564,33 @@ order by (array_agg(e.sort_order order by e.sort_order, e.id))[1],
 搜索防抖沿用评定树页的 250 ms `setTimeout` 写法。搜索与分组弹窗各自需要
 独立的 loading 态——现为纯客户端过滤，尚无此概念。
 
+### 写成功后的刷新协议
+
+"不进 resourceCache"只能防跨挂载的陈旧，**防不住当前 React 状态里的
+`groupEntries` / `searchResults` / `drafts` / `editingEntryId`**。只把响应里的
+`entry` 就地打补丁是不够的：删除与批量确认根本不带 `entry`，改类别还会让构件
+换组、改变分页集合。会看到的现象包括：删除后汇总已减少而弹窗仍列着被删行；
+批量确认后汇总显示已确认而已打开的行仍是待确认；改编号后当前搜索结果已不再匹配。
+
+写成功后按固定顺序执行（**顺序不能颠倒**，否则会用旧 revision id 去请求）：
+
+1. 用响应中的 `summary` 替换当前 `summary`；
+2. 更新持有的 `revision.id`（可能因派生草稿而改变）；
+3. 丢弃旧 revision 的 `drafts`，取消其所有在途请求；
+4. 分组弹窗若开着，用新 revision id 重新请求当前分组与页码；
+5. 搜索词若仍有效，用新 revision id 重新执行搜索；
+6. 按新 `total` 夹取页码，越界则再请求一次；
+7. 该组 `total` 归零则关闭弹窗。
+
+### 异步响应乱序
+
+250 ms 防抖只减少请求数，**不保证返回顺序**。搜 `3` 与搜 `33` 两个请求，
+若后者先返回，前者的旧结果会把页面覆盖回去；分组快速翻页同理。
+
+必须落实其一：`AbortController` 取消旧请求，或单调递增的请求序号，或响应落地前
+比对 `(revisionId, group/number, page, size)` 是否仍与当前状态一致。
+revision id 因写操作变化时，旧 revision 的在途响应一律丢弃。
+
 ### 组件拆分
 
 `ComponentInventoryEditor.tsx` 现有 819 行，同时承担向导、汇总表、搜索、分组弹窗、
@@ -478,11 +624,32 @@ stale-while-revalidate 语义不变。分组页与搜索结果不进缓存：它
 | 页码越界（删构件后该组变短） | 返回空 `entries` 与真实 `total`，前端据此夹取页码并重取 |
 | 分组已空（最后一条被删） | `total` 为 0，前端关闭弹窗回到汇总表 |
 | 搜索词含 `%` `_` `\` | 服务端转义后按字面匹配；搜 `%` 得到"匹配 0 个" |
-| 台账为空 | `groups: []`，`blockers` 含 `inventory_empty`；前端显示向导 |
-| 台账不存在 | 汇总端点返回 `component_inventory_not_found`，前端 `notCreated` 分支不变 |
+| 修订版存在但一条构件都没有 | `groups: []`，`blockers` 含 `inventory_empty`；**前端渲染编辑器（可手工新增），不是向导** |
+| 有构件但全部停用 | `groups` **非空**、每组 `active_count` 为 0，`blockers` 同样含 `inventory_empty` |
+| 台账不存在 | 汇总端点返回 `component_inventory_not_found`，前端 `notCreated` 显示向导——这是唯一显示向导的条件 |
 | 规范目录未到达 | 汇总返回 category id 而非标签，前端仍显示 `—`，目录到达后重算 |
 | confirm 被拦截 | 返回与汇总同形状的 `blockers`；`mutate()` 中 `details.blockers[0].entity_id` 改为 `details.blockers.samples[0]`，并用 `position` 算页码后跳转 |
 | `group` 与 `number` 同时提供或同时缺失 | 400 |
+
+### `inventory_empty` 的两种成因不可混为一谈
+
+后端 confirm 里 `inventory_empty` 的实际口径是**启用构件数为 0**，它覆盖两种情形：
+
+- 修订版一条构件都没有 → `groups: []`
+- 有构件但全部停用 → `groups` 非空，每组 `active_count` 为 0
+
+**前端不能用 `groups.length === 0` 判断"空台账"**，否则第二种情形会走错分支。
+本次不新增 error code（后端口径不变），但前端必须分别处理这两种渲染。
+
+### 空修订版不能显示向导，否则用户走进死路
+
+`generate_draft()` 只要发现该桥已有草稿就返回 Conflict
+（`ComponentInventoryRepository.cpp:293`）。若空修订版显示向导，就会出现：
+删光构件 → 页面显示向导 → 用户点生成 → 后端发现草稿仍在 → 409 —— 用户无法自救。
+
+现有前端只在 `component_inventory_not_found` 时显示向导，本来没有这个问题；
+本设计早期版本写的"台账为空显示向导"会**引入**它。已按上表更正：
+修订版存在就渲染编辑器，允许手工新增构件。生成逻辑保持不动（见非目标）。
 
 ### 写入已确认版本会派生草稿——响应里的 revision id 可能变
 
@@ -502,6 +669,16 @@ stale-while-revalidate 语义不变。分组页与搜索结果不进缓存：它
 **并发写维持现状**：台账写端点不使用 `X-Edit-Lock-Token`（仅校对工作台使用），
 两人同时改同一条构件仍为后写覆盖先写。此处明确记录，以免被误认为搬迁疏漏。
 
+### `position` 是尽力定位，不是保证
+
+无锁并发下，blocker 生成之后、用户点"定位"之前，别人可能增删或移动构件，
+使该 `position` 失效。契约明确：
+
+- `position` 是**汇总生成时刻的快照位置**；
+- 前端按它取页后若在返回结果里找不到 `entity_id`，重新拉一次汇总，
+  读取新样本的 `site_component_type` / `position` 再试一次；
+- 仍找不到则提示"该问题已被其他操作改变或解决"，**不无限重试**。
+
 ## 测试与验收
 
 ### 后端口径测试（连库，置于 `test_component_inventory_repository.cpp`）
@@ -515,21 +692,47 @@ stale-while-revalidate 语义不变。分组页与搜索结果不进缓存：它
 | **多映射下的 `some` 口径** | [待确认(A)、已确认(B)] 记入 `confirmed_count`，且不产生 blocker（有意变更之二） | **不能**，需构造 |
 | `structure_part` 两级取值 | 首个映射为 `other` 时继续往后找；全为 `other` 则 `other` | **不能**，需构造 |
 | **两组 `sort_order` 撞 0** | 分组顺序按 `(sort_order, id)` 稳定，不因平局抖动 | **不能**，需构造 |
-| 重复编号 | 被检出 | **不能**（当前 0 组重复），需构造 |
 | `position` 与分页 | 同一 window，不按 `is_active` 过滤，停用构件占位 | 部分 |
 | 搜索转义 | 搜 `%` 命中 0 条；搜 `3-5` 同时命中 `13-5#梁` | 能 |
-| blocker 两级拆分 | 待确认映射不进 `samples`，完全无映射进 `samples` | **不能**，需构造 |
+| **搜索零命中** | `total = 0`（窗口函数无行可携带总数） | 能 |
+| **分页越界** | 返回空 `entries` 但 `total` 仍为真实值 | 能 |
+| blocker 计数关系 | `total = pending_total + individual_total`；100 待确认 0 无映射时 `remaining` 为 0 而非 100 | **不能**，需构造 |
+| `inventory_empty` 两种成因 | 无条目（`groups: []`）与全部停用（`groups` 非空、`active_count` 全 0）都产生该 blocker | **不能**，需构造 |
+| 明细只含生效映射 | 构件有失效历史映射时，②③ 不返回它们 | **不能**，需构造 |
 | 写入已确认版本 | 派生草稿，响应 `revision.id` 与请求不同 | **不能**，需构造 |
 
-第三列是这次评审补上的：**11 条里有 8 条在当前真实数据上不可见**。
+第三列是评审补上的：**13 条里有 8 条在当前真实数据上不可见**。
 `test_component_inventory_repository.cpp:148` 已经会创建两个生效映射，
 多映射那几条在现有测试里就会触发。
 
+**重复编号不再有测试项**：数据库唯一约束
+`(inventory_revision_id, site_component_type, component_number)` 使其无法构造，
+该 blocker 已按问题 3 删除。不得为构造该 fixture 而临时移除唯一约束。
+
 ### 校验一致性回归测试
 
-构造"存在重复编号但映射均已确认"的台账：汇总端点必须报
-`duplicate_component_number`，confirm 必须拒绝。此用例是 `compute_blockers()`
-单一实现的守门人。
+构造"部分构件无生效映射"与"全部构件停用"两种台账：汇总端点报出的 blocker
+与 confirm 的拒绝理由必须一致（同样的 code、同样的构件集合）。此用例是
+`compute_blockers()` 单一实现的守门人——将来谁把两边拆成两份实现，它就会红。
+
+（早期版本用重复编号做这个用例，因唯一约束无法构造，已替换。）
+
+### 快照一致性与并发测试
+
+- 汇总查询进行期间并发更新映射：`groups` 与 `blockers` 必须来自同一快照，
+  不得出现"blocker 报未映射构件但 `unmapped_count` 全为 0"；
+- 写事务计算 summary 期间另一写请求到达：等待或冲突，不得读到中间态；
+- 提交失败时不得返回已算好的成功 summary。
+
+### 前端刷新与乱序测试
+
+- 删除构件后重新拉取当前分组页，弹窗不再显示被删行；
+- 改类别后构件换组，原分组重新拉取；
+- 批量确认后分组与搜索结果都重新拉取；
+- 写入已确认版本后，用响应里的**新** revision id 重新拉取；
+- 页码越界时夹取并二次请求；
+- 分组 `total` 归零时关闭弹窗；
+- 旧搜索响应晚于新搜索返回时，不得覆盖新结果。
 
 ### 路由参数测试（不连库，置于 `test_component_inventory_routes.cpp`）
 
@@ -570,17 +773,25 @@ stale-while-revalidate 语义不变。分组页与搜索结果不进缓存：它
 须以 **Release 构建**复测（Debug 关优化且开 `_ITERATOR_DEBUG_LEVEL=2`，
 数千条构件的 JSON 序列化约慢 4 倍，Debug 下的数字无参考价值）：
 
+**测量口径**：响应体按 **UTF-8 原始 JSON 字节数**计，不含 HTTP 头，不启用压缩。
+SQL 耗时为热缓存下的 `Execution Time`，不含事务与序列化开销。
+
 | 指标 | 现在 | 门槛 |
 | --- | --- | --- |
-| 首屏响应体 | 3.4 MB | ≤ 10 KB |
-| 单条构件改动的响应体 | 3.4 MB | ≤ 10 KB |
-| 汇总 SQL | ——（原为 42 ms 取全量） | ≤ 100 ms（已实测 52 ms） |
-| 打开一组（100 条） | 0（本地过滤） | ≤ 100 KB |
+| 首屏响应体（汇总，`samples` 取满 30 条） | 3.4 MB | ≤ 10 KB |
+| 写响应，不带 `entry`（删除 / 批量确认 / confirm） | 3.4 MB | ≤ 10 KB |
+| 写响应，带一条 `entry` | 3.4 MB | ≤ 20 KB |
+| 汇总 SQL（18 组，5174 条） | ——（原为 42 ms 取全量） | ≤ 150 ms（已实测 76.0 ms，与"后端实现·SQL"一节同一条语句） |
+| 打开一组（100 条，仅生效映射） | 0（本地过滤） | ≤ 100 KB |
+
+写响应拆成两档，是因为带 `entry` 时多出一条完整构件；`entry` 只含生效映射
+（见 ②），否则历史映射会让体积不可控。
 
 ## 实施顺序建议
 
-1. 后端：`compute_blockers()` 与重复编号规则，按问题 5 的 `some` 口径实现，
-   接入 confirm，补一致性回归测试。此步单独可发布，先修好口径分歧。
+1. 后端：`compute_blockers()` 按问题 5 的 `some` 口径实现，接入 confirm，
+   补一致性回归测试；前端删除 `duplicate_component_number` 检查。
+   此步单独可发布。
 2. 后端：汇总端点。先写**构造数据**的口径单测（多映射、停用、平局、
    全组停用、`structure_part` 两级取值），再跑真实数据比对脚本。
    顺序不能倒过来——真实数据全绿并不能说明多映射写对了。
@@ -588,5 +799,7 @@ stale-while-revalidate 语义不变。分组页与搜索结果不进缓存：它
 4. 后端：写端点响应改形状；写入与汇总重算同事务；补"写入已确认版本派生草稿、
    响应 revision.id 变化"的用例。
 5. 前端：状态模型与组件拆分，改用新端点；`mutate()` 采纳响应里的 revision id。
-6. 删除失去调用者的全量路径与前端两个导出函数。
+6. 删除按 revision id 的全量 GET 与前端两个导出函数。
+   **`/latest` 与 `load_revision()` / `inventory_revision_json()` 保留**——
+   校对工作台仍在用。
 7. Release 构建下复测性能门槛。
