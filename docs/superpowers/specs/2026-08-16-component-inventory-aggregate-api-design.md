@@ -128,7 +128,7 @@ unique (inventory_revision_id, site_component_type, component_number)
 已更正。）
 
 服务端校验仍需集中：`inventory_empty` 与 `component_mapping_required` 由
-`compute_blockers()` 一份实现同时服务汇总端点与 confirm 路径。前端聚合后拿不到
+`blocker_cte_sql()` 一份 SQL 片段同时服务汇总端点与 confirm 路径。前端聚合后拿不到
 构件级数据，"定位"按钮所需的 `entity_id` 与 `position` 只能由服务端给出——
 这仍是校验必须落在服务端的理由，只是与重复编号无关。
 
@@ -245,6 +245,13 @@ create unique index ux_component_standard_mappings_active
 
 `get_latest_revision()` 的排序是 `(status='草稿') desc, revision_number desc`
 ——**草稿优先于已确认**，与 `revision_number` 无关。
+
+> **禁止用 `get_latest_revision()` 解析 latest。** 它内部调用 `get_revision()`，
+> 会把全部 entries 与 mappings 装配一遍——`/latest/summary` 若图省事复用它，
+> 响应体虽小，后端仍完整跑一次 3.4 MB 的装配，优化只做了一半。
+> 应新增轻量的 `find_latest_revision_id(bridge_id)`（只做那条 `order by … limit 1`
+> 取 id），或在汇总合并语句里把 `target` CTE 改成按 `bridge_id` 直接选出该行。
+> 代码落点与性能测试都要显式挡住这条捷径。
 
 `revision.active_entry_count` **只计启用构件**（界面"共 N 个启用构件"用它），
 与 ② 中的 `total`（该组构件总数，**含停用**，用于翻页）语义不同，勿混。
@@ -407,10 +414,15 @@ remaining        = individual_total - samples.length
 
 | 查询 | 实测 |
 | --- | --- |
-| 汇总（18 组） | 76.0 ms |
+| **汇总合并语句**（revision + groups + blockers 一条出） | 首次 92.4 ms，随后 46.4 / 50.0 ms |
+| 其中 groups 聚合单独跑 | 76.0 ms |
 | 组内序号 | 9.9 ms |
 | blocker 片段（无映射构件 + 空台账判定） | 3.7 ms |
 | 编号搜索 | 8.4 ms |
+
+性能门槛对的是**合并语句**那一行（这才是运行时真正执行的东西），其余几行是
+拆开度量、用于定位瓶颈。合并语句的返回体实测 **6705 字节**（18 组、0 条 blocker
+样本）。
 
 汇总查询。`entry_mapping` 这层 CTE 是必需的：直接
 `left join ... and m.is_active` 会让多生效映射的构件展开成多行，把 `count(*)`
@@ -460,29 +472,32 @@ order by (array_agg(e.sort_order order by e.sort_order, e.id))[1],
 `em.inventory_entry_id is null / not null` 加 `has_confirmed` 三分，互斥且
 覆盖全部启用构件。
 
-### 快照一致性：需要 REPEATABLE READ，不是"同一个事务"
+### 快照一致性：汇总合成一条语句
 
-`load_summary()` 由修订信息、`groups`、`blockers` 多条查询组成，契约声称
-"每次拿到的汇总完整自洽"。
-
-**仅仅放进同一个事务不够**：PostgreSQL 默认隔离级别是 READ COMMITTED，
-该级别下同一事务内的每条 SELECT 各自取一个新快照，仍可能看到不同的已提交状态。
-于是会出现"blocker 说有未映射构件，但分组里 `unmapped_count` 全为 0"这类自相矛盾。
+契约声称"每次拿到的汇总完整自洽"。修订信息、`groups`、`blockers` 若拆成多条查询，
+**仅仅放进同一个事务是不够的**：PostgreSQL 默认隔离级别是 READ COMMITTED，
+该级别下同一事务内的每条 SELECT 各自取一个新快照，仍可能看到不同的已提交状态，
+于是出现"blocker 说有未映射构件，但分组里 `unmapped_count` 全为 0"这类自相矛盾。
 
 **决定：合成一条 SQL**，靠单语句快照保证一致，不使用 REPEATABLE READ——
 只读路径因此不必引入序列化失败的错误映射与重试策略。
 
-这与"`compute_blockers()` 只有一份实现"看似冲突：真把 blocker 逻辑写进汇总大 SQL，
+这与"blocker 规则只有一份实现"看似冲突：真把 blocker 逻辑写进汇总大 SQL，
 它就在那里长出第二份，正好毁掉本设计声称要防的那件事。**解法是让共用的单位是
 SQL 片段而不是查询执行**：
 
-- 由一个 C++ 函数产出具名 CTE 的 SQL 文本（判定"启用且无已确认生效映射的构件"
-  与"启用构件数为 0"）；
+- 由 `blocker_cte_sql()` 产出具名 CTE 的 SQL **文本**（判定"启用且无已确认生效
+  映射的构件"与"启用构件数为 0"）。命名刻意不叫 `compute_blockers()`——
+  后者听起来像会执行查询并返回结果，而它只产出文本；
 - 汇总语句把它作为 CTE 嵌进自己那条 SQL；
 - confirm 语句嵌入同一段文本；
 - 规则文本只有一处来源，两个调用点又各自处在单语句快照内。
 
 "校验一致性回归测试"仍然保留，用来钉住两处确实嵌的是同一段文本。
+
+**已验证可行**：按此形态写出的完整语句（`target` / `entry_mapping` / `numbered` /
+`grouped` / `blocker_entries` 五个 CTE + `json_build_object` 组装）在真实数据上
+一次返回完整汇总，见下方性能表。
 
 写端点同理：写入与随后的汇总重算必须在同一事务内完成，且：
 
@@ -508,7 +523,7 @@ SQL 片段而不是查询执行**：
 
 | 文件 | 变化 |
 | --- | --- |
-| `ComponentInventoryRepository` | 新增 `load_summary(executor, revision_id)` / `load_group_entries()` / `search_entries()`；`compute_blockers()` 改为产出具名 CTE 的 SQL 片段 |
+| `ComponentInventoryRepository` | 新增 `load_summary(executor, revision_id)` / `find_latest_revision_id()` / `load_group_entries()` / `search_entries()` / `blocker_cte_sql()`（产出 CTE 文本，不执行查询） |
 | `ComponentInventoryModels` | 新增 `inventory_summary_json()`、`inventory_group_json()`、`inventory_entry_json()`、`located_entry_json()`；现有 `inventory_blockers_json()` 改造为计数加样本形状 |
 | `ComponentInventoryRoutes` | 新增 3 条路由；`respond_inventory_outcome` 改为回传汇总形状 |
 | migration | 新增每桥单草稿的部分唯一索引（见"既有缺陷"一节） |
@@ -528,8 +543,8 @@ struct ComponentInventoryOutcome {
 
 需新增的模型：`InventoryRevisionSummary`、`InventoryGroupSummary`、
 `InventoryBlockerSummary`、`InventorySummary`、`InventoryEntryPage`、
-`InventorySearchResult`、`LocatedInventoryEntry`（entry 加 `site_component_type`
-与 `position`）。
+`InventorySearchResult`、`LocatedInventoryEntry`（`InventoryEntry` 已有
+`site_component_type`，只需再加 `position`）。
 
 约定：`total` / `page` / `size` / `position` 用 `int64_t`；可空字段用
 `std::optional`；`by_code` 是固定字段的 struct 而非 map（见 ⑥）；
@@ -542,8 +557,8 @@ entry / mapping 的序列化目前嵌在 `inventory_revision_json()` 内部。�
 保留，该函数不删，但需**把 entry 与 mapping 的序列化抽成独立函数**供分页、搜索、
 写响应复用，不是重新实现一份。
 
-`compute_blockers()` 由汇总端点与 confirm 路径共用，是三号问题的机制性修复：
-不依赖"两边都记得改"，而是只存在一份实现。
+`blocker_cte_sql()` 产出的 CTE 文本由汇总语句与 confirm 语句共同嵌入，
+是三号问题的机制性修复：不依赖"两边都记得改"，而是只存在一份规则文本。
 
 ### 随之删除
 
@@ -653,7 +668,6 @@ revision id 因写操作变化时，旧 revision 的在途响应一律丢弃。
 | `InventoryEntrySearch` | 搜索框与结果表 | `searchResults` |
 | `InventoryBlockersPanel` | "确认前还需处理 N 项"与定位 | `summary.blockers` |
 | `InventoryEntryRow` | 单条构件行（编辑 / 停用 / 映射） | 传入 |
-
 | `InventoryPlanPanel` | 向导 | 已存在，不动 |
 
 `InventoryEntryRow` 必须抽出：现有 `renderEntryRow` 被搜索结果与分组弹窗共用，
@@ -770,6 +784,19 @@ where bridge_id=$1::uuid and status='草稿' and baseline_revision_id=$2::uuid
 
 因涉及 schema，本次范围包含**一条 migration**。
 
+**新错误码需要贯通整条链路。** 现有 `respond_inventory_outcome()` 把
+`ComponentInventoryStatus::Conflict` 固定序列化为
+`component_inventory_conflict`／"构件台账已变化或编号重复。"，没有位置放新码。
+因此要一并改：
+
+- `ComponentInventoryStatus` 新增 `Superseded`（或给 outcome 加结构化的
+  `error_code` / `message`，二选一，实施计划里定）；
+- responder 增加对应分支，返回 409 + `inventory_revision_superseded`；
+- 前端 `componentInventoryErrorMessage` 的码表补这一条；
+- 前端 `mutate()` 增加分支：收到该码时**重新拉取 latest 汇总**并采纳新的
+  revision id，而不是只弹一句错误——用户此时手里的 id 已经不可写，
+  只提示会让他反复点同一个按钮。
+
 **并发写维持现状**：台账写端点不使用 `X-Edit-Lock-Token`（仅校对工作台使用），
 两人同时改同一条构件仍为后写覆盖先写。此处明确记录，以免被误认为搬迁疏漏。
 
@@ -820,9 +847,13 @@ where bridge_id=$1::uuid and status='草稿' and baseline_revision_id=$2::uuid
 | `inventory_empty` 两种成因 | 无条目（`groups: []`）与全部停用（`groups` 非空、`active_count` 全 0）都产生该 blocker | **不能**，需构造 |
 | 明细只含生效映射 | 构件有失效历史映射时，②③ 不返回它们 | **不能**，需构造 |
 | 写入已确认版本 | 派生草稿，响应 `revision.id` 与请求不同 | **不能**，需构造 |
+| **同桥插入第二条草稿** | 被部分唯一索引拒绝 | **不能**，需构造 |
+| **已有 R2 草稿时写 R1** | 返回 409 `inventory_revision_superseded` | **不能**，需构造 |
+| **并发从不同已确认版本派生** | 桥级锁串行化，最终至多一条草稿 | **不能**，需构造 |
+| **`/latest/summary` 不装配全量** | 不经 `get_revision()`；断言未加载 entries | **不能**，需构造 |
 
-第三列是评审补上的：**15 项里有 10 项在当前真实数据上不可见**
-（能覆盖 4 项、部分覆盖 1 项、需构造 10 项）。
+第三列是评审补上的：**19 项里有 14 项在当前真实数据上不可见**
+（能覆盖 4 项、部分覆盖 1 项、需构造 14 项）。
 `test_component_inventory_repository.cpp:148` 已经会创建两个生效映射，
 多映射那几条在现有测试里就会触发。
 
@@ -834,7 +865,7 @@ where bridge_id=$1::uuid and status='草稿' and baseline_revision_id=$2::uuid
 
 构造"部分构件无生效映射"与"全部构件停用"两种台账：汇总端点报出的 blocker
 与 confirm 的拒绝理由必须一致（同样的 code、同样的构件集合）。此用例是
-`compute_blockers()` 单一实现的守门人——将来谁把两边拆成两份实现，它就会红。
+`blocker_cte_sql()` 单一来源的守门人——将来谁把两边拆成两份规则，它就会红。
 
 （早期版本用重复编号做这个用例，因唯一约束无法构造，已替换。）
 
@@ -885,7 +916,7 @@ where bridge_id=$1::uuid and status='草稿' and baseline_revision_id=$2::uuid
 | `firstNumber` / `lastNumber` | `first_number` / `last_number` | 直接比；新值可为 `null`，比对时按界面口径折算成 `—` |
 | `mappingLabel`（由 catalog 解析得到的中文标签） | `standard_package_id` + `standard_component_category_id` | **不能直接比**。脚本须用同一份 catalog 把新接口的 package/category 解析成标签后再比，或改比旧逻辑内部选出的 package/category |
 
-**这条验收是必要不充分的。** 上表第三列显示，本设计要处理的 15 项里有 10 项
+**这条验收是必要不充分的。** 上表第三列显示，本设计要处理的 19 项里有 14 项
 在这份数据上根本不出现——包括多生效映射导致的计数放大这个最严重的问题。
 换句话说：**一个把 `count(*)` 写错的实现，也能在这份真实数据上全绿通过。**
 
@@ -899,8 +930,11 @@ where bridge_id=$1::uuid and status='草稿' and baseline_revision_id=$2::uuid
 
 ### 前端测试改造
 
-`ComponentInventoryEditor.test.tsx` 中直接调用两个导出函数的 5 处用例
-（第 106 / 109 / 117 / 264 / 290 行）连同 fixture 迁至后端口径测试。
+`ComponentInventoryEditor.test.tsx` 中调用 `inventoryGroupSummaries` 的 4 处用例
+（第 106 / 109 / 117 / 264 行）连同 fixture 迁至后端口径测试。
+
+第 290 行 `reports duplicate numbers before confirmation` **直接删除**——它测的是
+按问题 3 已删除的重复编号规则，没有可迁移的去处。
 组件层用例改为 mock 三个新端点，断言：进页面只发一次汇总请求；点"查看构件"
 才发明细请求；写操作后汇总被替换且不再触发全量拉取。
 
@@ -917,10 +951,10 @@ SQL 耗时为热缓存下的 `Execution Time`，不含事务与序列化开销�
 
 | 指标 | 现在 | 门槛 |
 | --- | --- | --- |
-| 首屏响应体（汇总，`samples` 取满 30 条） | 3.4 MB | ≤ 10 KB |
-| 写响应，不带 `entry`（删除 / 批量确认 / confirm） | 3.4 MB | ≤ 10 KB |
+| 首屏响应体（汇总，`samples` 取满 30 条） | 3.4 MB | ≤ 12 KB（0 样本时已实测 6705 字节，30 条样本约再加 3 KB） |
+| 写响应，不带 `entry`（删除 / 批量确认 / confirm） | 3.4 MB | ≤ 12 KB |
 | 写响应，带一条 `entry` | 3.4 MB | ≤ 20 KB |
-| 汇总 SQL（18 组，5174 条） | ——（原为 42 ms 取全量） | ≤ 150 ms（已实测 76.0 ms，与"后端实现·SQL"一节同一条语句） |
+| 汇总合并语句（18 组，5174 条） | ——（原为 42 ms 取全量） | ≤ 150 ms（已实测热态 46–50 ms、首次 92 ms） |
 | 打开一组（100 条，仅生效映射） | 0（本地过滤） | ≤ 100 KB |
 
 写响应拆成两档，是因为带 `entry` 时多出一条完整构件；`entry` 只含生效映射
@@ -929,8 +963,11 @@ SQL 耗时为热缓存下的 `Execution Time`，不含事务与序列化开销�
 ## 实施顺序建议
 
 0. migration：每桥单草稿的部分唯一索引；派生逻辑限定于最新已确认版本，
-   baseline 不符返回 409。修既有缺陷，与聚合改造互不依赖，可先行发布。
-1. 后端：`compute_blockers()` 按问题 5 的 `some` 口径实现为 SQL 片段，接入 confirm，
+   baseline 不符返回 409；贯通 `Superseded` 状态、responder、前端码表与重拉分支；
+   补三条守门测试（索引拒绝第二条草稿、R2 草稿在时写 R1 报
+   `inventory_revision_superseded`、并发派生最终至多一条）。
+   修既有缺陷，与聚合改造互不依赖，可先行发布。
+1. 后端：`blocker_cte_sql()` 按问题 5 的 `some` 口径实现为 CTE 文本，接入 confirm，
    补一致性回归测试；前端删除 `duplicate_component_number` 检查，
    并把 `InventoryEntryRow` 的状态判定改成 `some`。此步单独可发布。
 2. 后端：汇总端点。先写**构造数据**的口径单测（多映射、停用、平局、
