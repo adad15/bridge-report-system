@@ -236,10 +236,6 @@ export function fetchLatestComponentInventory(baseUrl: string, bridgeId: string)
   return revisionRequest(`${baseUrl}/api/bridges/${encodeURIComponent(bridgeId)}/component-inventories/latest`);
 }
 
-export function fetchComponentInventory(baseUrl: string, revisionId: string) {
-  return revisionRequest(`${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}`);
-}
-
 export async function fetchPartCatalog(
   baseUrl: string,
   standardPackageId: string,

@@ -715,10 +715,7 @@ ComponentInventoryOutcome ComponentInventoryRepository::generate_draft(
         }
         auto summary = load_summary_with(tx, revision_id);
         auto outcome = finish(tx, latch, revision_id);
-        if (outcome.status == ComponentInventoryStatus::Ok) {
-            outcome.summary = std::move(summary);
-            outcome.revision = get_revision(revision_id);
-        }
+        if (outcome.status == ComponentInventoryStatus::Ok) outcome.summary = std::move(summary);
         return outcome;
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }

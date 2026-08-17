@@ -46,10 +46,6 @@ struct InventoryMappingUpdate {
 
 struct ComponentInventoryOutcome {
     ComponentInventoryStatus status{ComponentInventoryStatus::Failed};
-    // 仅 generate_draft 仍然填充：它刚刚把整份台账造出来，调用方要看结果，
-    // 而且是每座桥一次的动作。其余七个写方法不再装配全量——改一条构件的备注却
-    // 在服务端把五千多条构件连同映射拼一遍，是这次要消灭的形态。
-    std::optional<inventory::InventoryRevision> revision;
     // 写入后的分组汇总，在提交前的同一个事务里算出，提交确认后才返回。
     std::optional<Json::Value> summary;
     // 被改动的那一条构件（新增 / 修改 / 停用 / 设映射时有；删除、批量确认、

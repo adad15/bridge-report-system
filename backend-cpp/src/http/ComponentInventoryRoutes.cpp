@@ -320,9 +320,10 @@ void register_component_inventory_routes(
     const std::string mapping_path = entry_path + "/mapping";
     const std::string confirm_path = revision_path + "/confirm";
     const std::string confirm_mappings_path = revision_path + "/mappings/confirm-pending";
-    for (const auto& path : {generate_path, part_catalog_path, latest_path, revision_path,
-                             entries_path, entry_path, deactivate_path, mapping_path, confirm_path,
-                             confirm_mappings_path})
+    // revision_path 只作其余路径的前缀，本身不再暴露 GET——按 id 取全量台账已无调用者。
+    for (const auto& path : {generate_path, part_catalog_path, latest_path, revision_summary_path,
+                             latest_summary_path, entries_path, entry_path, deactivate_path,
+                             mapping_path, confirm_path, confirm_mappings_path})
         register_options_handler(path);
 
     drogon::app().registerHandler(
@@ -521,27 +522,6 @@ void register_component_inventory_routes(
                     body["entries"].append(
                         inventory::located_entry_json(located.entry, located.position));
                 }
-                respond_json(callback, body);
-            } catch (...) { respond_db_unavailable(callback); }
-        }, {drogon::Get});
-
-    drogon::app().registerHandler(
-        revision_path,
-        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
-                    const std::string& revision_id) {
-            if (!is_valid_uuid(revision_id)) {
-                respond_json(callback, make_error_body("component_inventory_not_found", "构件台账不存在。"),
-                             drogon::k404NotFound); return;
-            }
-            try {
-                if (!require_user(db_client, request, callback).has_value()) return;
-                db::ComponentInventoryRepository repository(db_client);
-                const auto revision = repository.get_revision(revision_id);
-                if (!revision.has_value()) {
-                    respond_json(callback, make_error_body("component_inventory_not_found", "构件台账不存在。"),
-                                 drogon::k404NotFound); return;
-                }
-                Json::Value body; body["revision"] = inventory::inventory_revision_json(*revision);
                 respond_json(callback, body);
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Get});
