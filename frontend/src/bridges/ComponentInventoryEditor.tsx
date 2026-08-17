@@ -754,9 +754,9 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
           </div>
         </div>
       ) : null}
-      {blockers.length > 0 ? (
+      {blockerTotal > 0 ? (
         <div className="inventory-blockers" role="status">
-          <strong>确认前还需处理 {blockers.length} 项</strong>
+          <strong>确认前还需处理 {blockerTotal} 项</strong>
           <ul>
             {pendingMappingCount > 0 ? (
               <li>
