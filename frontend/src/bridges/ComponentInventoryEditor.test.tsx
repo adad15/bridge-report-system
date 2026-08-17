@@ -4,9 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   confirmPendingComponentInventoryMappings,
-  fetchLatestComponentInventory,
+  fetchInventoryGroupEntries,
+  fetchInventorySummary,
+  searchInventoryEntries,
   setComponentInventoryMapping,
-  type ComponentInventoryRevision,
+  type InventoryGroupEntriesResponse,
+  type InventoryGroupSummary as ServerGroupSummary,
+  type InventorySummary,
+  type LocatedInventoryEntry,
 } from "../api/componentInventoryApi";
 import {
   fetchStandardMappingCatalogs,
@@ -16,8 +21,7 @@ import { clearCachedForTests } from "../api/resourceCache";
 import {
   ComponentInventoryEditor,
   groupAnomalyText,
-  inventoryConfirmationBlockers,
-  inventoryGroupSummaries,
+  toGroupSummary,
 } from "./ComponentInventoryEditor";
 
 vi.mock("../api/componentInventoryApi", async (importOriginal) => {
@@ -25,7 +29,9 @@ vi.mock("../api/componentInventoryApi", async (importOriginal) => {
   return {
     ...original,
     confirmPendingComponentInventoryMappings: vi.fn(),
-    fetchLatestComponentInventory: vi.fn(),
+    fetchInventorySummary: vi.fn(),
+    fetchInventoryGroupEntries: vi.fn(),
+    searchInventoryEntries: vi.fn(),
     setComponentInventoryMapping: vi.fn(),
   };
 });
@@ -35,34 +41,75 @@ vi.mock("../api/standardsApi", async (importOriginal) => {
   return { ...original, fetchStandardMappingCatalogs: vi.fn() };
 });
 
-const revision: ComponentInventoryRevision = {
-  id: "revision-1", bridge_id: "bridge-1", revision_number: 1, status: "草稿",
-  baseline_revision_id: null, confirmed_at: null,
-  entries: [{
-    id: "entry-1", bridge_component_id: "internal-component-id", component_number: "1-1#",
-    site_name: "主梁", site_component_type: "主梁", span_or_location: "第1跨", is_active: true,
-    deactivated_at: null, deactivation_reason: null, sort_order: 1, remarks: null, is_referenced: true,
-    mappings: [{
-      id: "mapping-1", standard_package_id: "package-1", standard_bridge_type_id: "beam",
-      standard_component_category_id: "girder", structure_part: "superstructure",
-      mapping_source: "自动生成", confirmation_status: "待确认", is_active: true,
-    }],
+const entry: LocatedInventoryEntry = {
+  id: "entry-1", bridge_component_id: "internal-component-id", component_number: "1-1#",
+  site_name: "主梁", site_component_type: "主梁", span_or_location: "第1跨", is_active: true,
+  deactivated_at: null, deactivation_reason: null, sort_order: 1, remarks: null,
+  is_referenced: true, position: 0,
+  mappings: [{
+    id: "mapping-1", standard_package_id: "package-1", standard_bridge_type_id: "beam",
+    standard_component_category_id: "girder", structure_part: "superstructure",
+    mapping_source: "自动生成", confirmation_status: "待确认", is_active: true,
   }],
 };
+
+const group: ServerGroupSummary = {
+  site_component_type: "主梁", structure_part: "superstructure", active_count: 1,
+  first_number: "1-1#", last_number: "1-1#", confirmed_count: 0, pending_count: 1,
+  unmapped_count: 0, standard_package_id: "package-1",
+  standard_component_category_id: "girder",
+};
+
+const summary: InventorySummary = {
+  revision: {
+    id: "revision-1", bridge_id: "bridge-1", revision_number: 1, status: "草稿",
+    baseline_revision_id: null, confirmed_at: null, active_entry_count: 1,
+  },
+  groups: [group],
+  // 唯一的构件挂着待确认映射：计数记 1，但样本为空——待确认那批由界面上
+  // "N 个构件的规范映射待确认"那一行代表，不进逐条列表。
+  blockers: {
+    total: 1, individual_total: 0,
+    by_code: { inventory_empty: 0, component_mapping_required: 1 }, samples: [],
+  },
+};
+
+// 全部映射确认之后的汇总，几处写操作用例共用。
+const confirmedSummary: InventorySummary = {
+  ...summary,
+  groups: [{ ...group, confirmed_count: 1, pending_count: 0 }],
+  blockers: { total: 0, individual_total: 0,
+              by_code: { inventory_empty: 0, component_mapping_required: 0 }, samples: [] },
+};
+
+const groupPage: InventoryGroupEntriesResponse = {
+  total: 1, page: 0, size: 100, entries: [entry],
+};
+
+const catalogs = [{
+  package: { id: "package-1", standard_code: "JTG/T H21—2011" },
+  component_categories: [{ id: "girder", name: "上部承重构件" }],
+}] as unknown as StandardCatalog[];
 
 describe("ComponentInventoryEditor", () => {
   beforeEach(() => {
     clearCachedForTests();  // 缓存是模块作用域的，不清会让用例顺序影响结果
     vi.resetAllMocks();
-    vi.mocked(fetchLatestComponentInventory).mockResolvedValue(revision);
+    vi.mocked(fetchInventorySummary).mockResolvedValue(summary);
+    vi.mocked(fetchInventoryGroupEntries).mockResolvedValue(groupPage);
+    vi.mocked(searchInventoryEntries).mockResolvedValue({ total: 0, entries: [] });
     // 轻量目录决定映射列显示的是友好名称还是原始 ID，必须给出真实形状。
-    vi.mocked(fetchStandardMappingCatalogs).mockResolvedValue([{
-      package: { id: "package-1", standard_code: "JTG/T H21—2011" },
-      component_categories: [{ id: "girder", name: "上部承重构件" }],
-    } as never]);
+    vi.mocked(fetchStandardMappingCatalogs).mockResolvedValue(catalogs);
+    const confirmedEntry: LocatedInventoryEntry = {
+      ...entry,
+      mappings: [{ ...entry.mappings[0], confirmation_status: "已确认" }],
+    };
     vi.mocked(setComponentInventoryMapping).mockResolvedValue({
-      ...revision,
-      entries: [{ ...revision.entries[0], mappings: [{ ...revision.entries[0].mappings[0], confirmation_status: "已确认" }] }],
+      ...summary,
+      groups: [{ ...group, confirmed_count: 1, pending_count: 0 }],
+      blockers: { total: 0, individual_total: 0,
+                  by_code: { inventory_empty: 0, component_mapping_required: 0 }, samples: [] },
+      entry: confirmedEntry,
     });
   });
 
@@ -71,7 +118,7 @@ describe("ComponentInventoryEditor", () => {
   it("renders from cache on remount while still revalidating", async () => {
     const first = render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     await screen.findByText("分组核对");
-    expect(fetchLatestComponentInventory).toHaveBeenCalledTimes(1);
+    expect(fetchInventorySummary).toHaveBeenCalledTimes(1);
     first.unmount();
 
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
@@ -79,7 +126,7 @@ describe("ComponentInventoryEditor", () => {
     expect(screen.getByText("分组核对")).toBeInTheDocument();
     expect(screen.queryByText("正在加载台账与规范映射…")).not.toBeInTheDocument();
     // 但仍然重新拉了一次，避免停留在过期数据上。
-    await waitFor(() => expect(fetchLatestComponentInventory).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchInventorySummary).toHaveBeenCalledTimes(2));
   });
 
   it("groups the review table by structure part and drops the redundant 现场名称 column", async () => {
@@ -103,23 +150,19 @@ describe("ComponentInventoryEditor", () => {
   // 规范目录是另一条请求。台账现在能瞬时渲染，目录还在路上的那段窗口里，
   // 不能把 h21.component.* 这类原始 ID 当作映射名显示给用户。
   it("leaves the mapping label empty until the standard catalog arrives", () => {
-    const withoutCatalogs = inventoryGroupSummaries(revision, []);
-    expect(withoutCatalogs[0].mappingLabel).toBe("");
-
-    const withCatalogs = inventoryGroupSummaries(revision, [{
-      package: { id: "package-1", standard_code: "JTG/T H21—2011" },
-      component_categories: [{ id: "girder", name: "上部承重构件" }],
-    } as never]);
-    expect(withCatalogs[0].mappingLabel).toBe("JTG/T H21—2011 · 上部承重构件");
+    expect(toGroupSummary(group, []).mappingLabel).toBe("");
+    expect(toGroupSummary(group, catalogs).mappingLabel).toBe("JTG/T H21—2011 · 上部承重构件");
   });
 
   it("uses a newer catalog with the same stable category id for a historical mapping", () => {
-    const summaries = inventoryGroupSummaries(revision, [{
+    // 映射记的是历史规范包，但类别 id 稳定；换一个包版本仍要解析出同一个名称。
+    const newerCatalog = [{
       package: { id: "package-2", standard_code: "JTG/T H21—2011" },
       component_categories: [{ id: "girder", name: "上部承重构件" }],
-    } as never]);
+    }] as unknown as StandardCatalog[];
 
-    expect(summaries[0].mappingLabel).toBe("JTG/T H21—2011 · 上部承重构件");
+    expect(toGroupSummary(group, newerCatalog).mappingLabel)
+      .toBe("JTG/T H21—2011 · 上部承重构件");
   });
 
   it("shows the inventory and mapping labels together on the first visit", async () => {
@@ -190,14 +233,7 @@ describe("ComponentInventoryEditor", () => {
   });
 
   it("confirms pending mappings by group and in one click", async () => {
-    const confirmedRevision = {
-      ...revision,
-      entries: [{
-        ...revision.entries[0],
-        mappings: [{ ...revision.entries[0].mappings[0], confirmation_status: "已确认" }],
-      }],
-    };
-    vi.mocked(confirmPendingComponentInventoryMappings).mockResolvedValue(confirmedRevision);
+    vi.mocked(confirmPendingComponentInventoryMappings).mockResolvedValue(confirmedSummary);
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
 
     expect(await screen.findByText("分组核对")).toBeInTheDocument();
@@ -207,9 +243,9 @@ describe("ComponentInventoryEditor", () => {
       expect.any(String), "revision-1", "主梁");
     expect(await screen.findByText(/规范映射均已确认/)).toBeInTheDocument();
 
-    vi.mocked(fetchLatestComponentInventory).mockResolvedValue(revision);
+    vi.mocked(fetchInventorySummary).mockResolvedValue(summary);
     vi.mocked(confirmPendingComponentInventoryMappings).mockClear();
-    vi.mocked(confirmPendingComponentInventoryMappings).mockResolvedValue(confirmedRevision);
+    vi.mocked(confirmPendingComponentInventoryMappings).mockResolvedValue(confirmedSummary);
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     await userEvent.click(await screen.findByRole("button", { name: "一键确认全部待确认映射" }));
     expect(confirmPendingComponentInventoryMappings).toHaveBeenCalledWith(
@@ -229,60 +265,104 @@ describe("ComponentInventoryEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: "关闭" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
+    vi.mocked(searchInventoryEntries).mockResolvedValue({ total: 1, entries: [entry] });
     await userEvent.type(screen.getByLabelText("按编号搜索构件"), "1-1");
     const results = await screen.findByRole("heading", { name: "搜索结果" });
     const section = results.closest("div") as HTMLElement;
-    expect(within(section).getByText("1-1#")).toBeInTheDocument();
-    expect(screen.getByText(/匹配 1 个构件/)).toBeInTheDocument();
+    // 搜索防抖 250ms 后才发请求，结果是异步到达的。
+    expect(await within(section).findByText("1-1#")).toBeInTheDocument();
+    expect(await screen.findByText(/匹配 1 个构件/)).toBeInTheDocument();
   });
 
-  it("paginates a large expanded group", async () => {
-    const confirmedMapping = { ...revision.entries[0].mappings[0], confirmation_status: "已确认" };
-    vi.mocked(fetchLatestComponentInventory).mockResolvedValue({
-      ...revision,
-      entries: Array.from({ length: 120 }, (_, index) => ({
-        ...revision.entries[0],
-        id: `entry-${index + 1}`,
-        bridge_component_id: `component-${index + 1}`,
-        component_number: `${index + 1}#`,
-        mappings: [{ ...confirmedMapping, id: `mapping-${index + 1}` }],
+  it("fetches one page at a time instead of slicing a full list", async () => {
+    // 分页现在在服务端做：翻页要真的再发一次请求，而不是在本地切数组。
+    const pageOf = (index: number): InventoryGroupEntriesResponse => ({
+      total: 120, page: index, size: 100,
+      entries: Array.from({ length: index === 0 ? 100 : 20 }, (_, offset) => ({
+        ...entry,
+        id: `entry-${index * 100 + offset + 1}`,
+        component_number: `${index * 100 + offset + 1}#`,
+        position: index * 100 + offset,
+        mappings: [{ ...entry.mappings[0], confirmation_status: "已确认" }],
       })),
     });
+    vi.mocked(fetchInventoryGroupEntries).mockImplementation(
+      async (_base, _revisionId, _group, page) => pageOf(page));
+
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     await userEvent.click(await screen.findByRole("button", { name: "查看构件 主梁" }));
 
     const dialog = await screen.findByRole("dialog", { name: /主梁 构件/ });
-    expect(within(dialog).getByText("1#")).toBeInTheDocument();
+    expect(await within(dialog).findByText("1#")).toBeInTheDocument();
     expect(within(dialog).queryByText("101#")).not.toBeInTheDocument();
     expect(screen.getByText("第 1 / 2 页")).toBeInTheDocument();
+
     await userEvent.click(screen.getByRole("button", { name: "下一页" }));
     expect(await within(dialog).findByText("101#")).toBeInTheDocument();
     expect(within(dialog).queryByText("1#")).not.toBeInTheDocument();
+    // 第二页是另一次请求，不是本地切片。
+    expect(fetchInventoryGroupEntries).toHaveBeenCalledWith(
+      expect.any(String), "revision-1", "主梁", 1, 100, expect.anything());
   });
 
-  it("summarizes generated groups for checking", () => {
-    const summaries = inventoryGroupSummaries({
-      ...revision,
-      entries: [
-        revision.entries[0],
-        { ...revision.entries[0], id: "entry-2", component_number: "2-1#" },
-        {
-          ...revision.entries[0], id: "entry-3", component_number: "P1",
-          site_component_type: "桥墩", site_name: "桥墩", mappings: [],
-        },
-      ],
-    }, []);
-    expect(summaries).toEqual([
-      expect.objectContaining({
-        siteComponentType: "主梁", activeCount: 2, firstNumber: "1-1#", lastNumber: "2-1#",
-        pendingCount: 2, confirmedCount: 0, unmappedCount: 0,
-        // 目录未加载（此处传空数组）时不给标签，避免显示原始类别 ID。
-        mappingLabel: "",
-      }),
-      expect.objectContaining({
-        siteComponentType: "桥墩", activeCount: 1, firstNumber: "P1", lastNumber: "P1",
-        pendingCount: 0, unmappedCount: 1, mappingLabel: "",
-      }),
-    ]);
+  it("maps server group fields onto the review table shape", () => {
+    // 分组汇总由服务端算，这里只负责翻形状。整组停用时服务端给 null 编号范围，
+    // 界面按空串走原有的破折号分支。
+    const emptied: ServerGroupSummary = {
+      ...group, site_component_type: "桥墩", active_count: 0,
+      first_number: null, last_number: null,
+      confirmed_count: 0, pending_count: 0, unmapped_count: 0,
+      standard_package_id: null, standard_component_category_id: null,
+    };
+
+    expect(toGroupSummary(group, catalogs)).toEqual({
+      siteComponentType: "主梁", structurePart: "superstructure", activeCount: 1,
+      firstNumber: "1-1#", lastNumber: "1-1#",
+      mappingLabel: "JTG/T H21—2011 · 上部承重构件",
+      confirmedCount: 0, pendingCount: 1, unmappedCount: 0,
+    });
+    expect(toGroupSummary(emptied, catalogs)).toEqual({
+      siteComponentType: "桥墩", structurePart: "superstructure", activeCount: 0,
+      firstNumber: "", lastNumber: "", mappingLabel: "",
+      confirmedCount: 0, pendingCount: 0, unmappedCount: 0,
+    });
   });
+
+
+  // 聚合改造的核心承诺：进页面只发一次汇总请求，构件明细要等用户真的点开某一组
+  // 才取。原来是一进来就把整份台账（这座桥五千多条）拉下来。
+  it("loads only the summary on mount and fetches entries on demand", async () => {
+    render(<ComponentInventoryEditor bridgeId="bridge-1" />);
+    await screen.findByText("分组核对");
+
+    expect(fetchInventorySummary).toHaveBeenCalledTimes(1);
+    expect(fetchInventoryGroupEntries).not.toHaveBeenCalled();
+    expect(searchInventoryEntries).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
+    await screen.findByRole("dialog", { name: /主梁 构件/ });
+    expect(fetchInventoryGroupEntries).toHaveBeenCalledTimes(1);
+    // 打开分组不会再去拉一遍汇总。
+    expect(fetchInventorySummary).toHaveBeenCalledTimes(1);
+  });
+
+  // 写操作的响应自带新汇总；拿到之后还要把当前打开的那一组重取一遍——只把响应里
+  // 那条构件补进去是不够的，删除和批量确认根本不带构件，改类别还会让构件换组。
+  it("replaces the summary from the write response and refetches the open group", async () => {
+    render(<ComponentInventoryEditor bridgeId="bridge-1" />);
+    await userEvent.click(await screen.findByRole("button", { name: "查看构件 主梁" }));
+    await screen.findByRole("dialog", { name: /主梁 构件/ });
+    expect(fetchInventoryGroupEntries).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(await screen.findByRole("button", { name: "编辑" }));
+    await userEvent.click(await screen.findByRole("button", { name: "确认映射" }));
+
+    // 汇总换成写响应里的那份，界面立刻反映"全部已确认"。
+    expect(await screen.findByText(/规范映射均已确认/)).toBeInTheDocument();
+    // 当前分组被重取，而不是靠本地打补丁。
+    await waitFor(() => expect(fetchInventoryGroupEntries).toHaveBeenCalledTimes(2));
+    // 全程没有再拉一遍汇总——它是随写响应回来的。
+    expect(fetchInventorySummary).toHaveBeenCalledTimes(1);
+  });
+
 });

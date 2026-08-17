@@ -8,15 +8,21 @@ import {
   confirmPendingComponentInventoryMappings,
   deactivateComponentInventoryEntry,
   deleteComponentInventoryEntry,
-  fetchLatestComponentInventory,
+  fetchInventoryGroupEntries,
+  fetchInventorySummary,
   generateComponentInventory,
+  searchInventoryEntries,
   setComponentInventoryMapping,
   updateComponentInventoryEntry,
   type ComponentInventoryEntry,
-  type ComponentInventoryRevision,
   type GenerateComponentInventoryInput,
-  type InventoryBlocker,
+  type InventoryBlockerSummary,
   type InventoryEntryInput,
+  type InventoryGroupEntriesResponse,
+  type InventoryGroupSummary as ServerGroupSummary,
+  type InventorySearchResponse,
+  type InventorySummary,
+  type InventoryWriteResult,
 } from "../api/componentInventoryApi";
 import {
   dropCached,
@@ -56,30 +62,8 @@ function draftIsDirty(entry: ComponentInventoryEntry, draft: InventoryEntryInput
   return (Object.keys(base) as Array<keyof InventoryEntryInput>).some((key) => base[key] !== draft[key]);
 }
 
-export function inventoryConfirmationBlockers(revision: ComponentInventoryRevision): InventoryBlocker[] {
-  const active = revision.entries.filter((entry) => entry.is_active);
-  const blockers: InventoryBlocker[] = [];
-  if (active.length === 0) {
-    blockers.push({
-      code: "inventory_empty", entity_type: "inventory_revision", entity_id: revision.id,
-      field_path: "entries", message: "构件台账至少需要一个启用构件。",
-    });
-  }
-  // 这里原本还查重复编号。数据库上已有
-  // unique (inventory_revision_id, site_component_type, component_number)，
-  // add_entry / update_entry 也各自主动查重，重复根本插不进来——这条规则永远为 0，
-  // 留着只会让人以为服务端漏了一项校验。
-  for (const entry of revision.entries) {
-    // 按"存在任一已确认生效映射"判断，与服务端 blocker_cte_sql 的 not exists 一致。
-    if (entry.is_active && !entry.mappings.some((mapping) => mapping.is_active && mapping.confirmation_status === "已确认")) {
-      blockers.push({
-        code: "component_mapping_required", entity_type: "inventory_entry", entity_id: entry.id,
-        field_path: "mappings", message: `构件 ${entry.component_number} 还没有已确认的规范映射。`,
-      });
-    }
-  }
-  return blockers;
-}
+// 确认前置校验与分组汇总都搬到服务端了：聚合之后前端拿不到构件级数据，
+// "定位"按钮所需的 entity_id 与组内序号只能由服务端给出，规则也就只该有那一份实现。
 
 function inventoryStatus(status: string) {
   return status === "已确认" ? "已确认" : status === "草稿" ? "草稿" : status;
@@ -97,57 +81,38 @@ export interface InventoryGroupSummary {
   unmappedCount: number;
 }
 
-export function inventoryGroupSummaries(
-  revision: ComponentInventoryRevision,
+// 服务端返回的分组汇总转成界面用的形状。规范标签仍在前端解析：规范目录是另一条
+// 请求，未到达前显示"—"而不是回退成 h21.component.* 这类原始 ID。
+export function toGroupSummary(
+  group: ServerGroupSummary,
   catalogs: StandardCatalog[]
-): InventoryGroupSummary[] {
-  const groups = new Map<string, InventoryGroupSummary>();
-  for (const entry of revision.entries) {
-    let group = groups.get(entry.site_component_type);
-    if (!group) {
-      group = {
-        siteComponentType: entry.site_component_type,
-        structurePart: "other",
-        activeCount: 0,
-        firstNumber: entry.component_number,
-        lastNumber: entry.component_number,
-        mappingLabel: "",
-        confirmedCount: 0,
-        pendingCount: 0,
-        unmappedCount: 0,
-      };
-      groups.set(entry.site_component_type, group);
-    }
-    group.lastNumber = entry.component_number;
-    if (!entry.is_active) continue;
-    group.activeCount += 1;
-    const mapping = entry.mappings.find((item) => item.is_active);
-    if (!mapping) {
-      group.unmappedCount += 1;
-      continue;
-    }
-    if (mapping.confirmation_status === "已确认") group.confirmedCount += 1;
-    else group.pendingCount += 1;
-    // 结构分部取自已生效的规范映射；没有映射的构件留在"其他"。
-    if (group.structurePart === "other" && mapping.structure_part)
-      group.structurePart = mapping.structure_part;
-    // 规范目录是另一条请求，未到达前不要回退成 h21.component.* 这类原始 ID——
-    // 那对用户是噪声。空标签由渲染层显示为 "—"，目录到达后本 memo 会重算。
-    if (!group.mappingLabel && catalogs.length > 0) {
-      const catalog =
-        catalogs.find((item) => item.package.id === mapping.standard_package_id) ??
-        catalogs.find((item) => item.component_categories.some(
-          (category) => category.id === mapping.standard_component_category_id
-        ));
-      const category = catalog?.component_categories.find(
-        (item) => item.id === mapping.standard_component_category_id
-      );
-      group.mappingLabel = `${catalog?.package.standard_code ?? "技术评定规范"} · ${
-        category?.name ?? mapping.standard_component_category_id
-      }`;
-    }
+): InventoryGroupSummary {
+  let mappingLabel = "";
+  if (catalogs.length > 0 && group.standard_component_category_id) {
+    const catalog =
+      catalogs.find((item) => item.package.id === group.standard_package_id) ??
+      catalogs.find((item) => item.component_categories.some(
+        (category) => category.id === group.standard_component_category_id
+      ));
+    const category = catalog?.component_categories.find(
+      (item) => item.id === group.standard_component_category_id
+    );
+    mappingLabel = `${catalog?.package.standard_code ?? "技术评定规范"} · ${
+      category?.name ?? group.standard_component_category_id
+    }`;
   }
-  return [...groups.values()];
+  return {
+    siteComponentType: group.site_component_type,
+    structurePart: group.structure_part,
+    activeCount: group.active_count,
+    // 整组停用时服务端给 null；界面按空串走原有的破折号分支。
+    firstNumber: group.first_number ?? "",
+    lastNumber: group.last_number ?? "",
+    mappingLabel,
+    confirmedCount: group.confirmed_count,
+    pendingCount: group.pending_count,
+    unmappedCount: group.unmapped_count,
+  };
 }
 
 // 全部确认时只给一个对勾：数量列已经写了同一个数字，再写"已确认 N"没有信息量。
@@ -162,12 +127,20 @@ export function groupAnomalyText(group: InventoryGroupSummary): string | null {
   return parts.length > 0 ? parts.join("、") : null;
 }
 
-const kMaxIndividualBlockers = 30;
+const kSearchDebounceMs = 250;
 const kEntriesPageSize = 100;
 const kMaxSearchResults = 50;
 
 export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
-  const [revision, setRevision] = useState<ComponentInventoryRevision | null>(null);
+  // 首屏只要分组汇总；构件明细与搜索结果按需取，不再把整份台账放进内存。
+  const [summary, setSummary] = useState<InventorySummary | null>(null);
+  const [groupEntries, setGroupEntries] = useState<InventoryGroupEntriesResponse | null>(null);
+  const [groupEntriesLoading, setGroupEntriesLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<InventorySearchResponse | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  // 写操作成功后自增，触发当前分组页与搜索结果重取。
+  const [refreshToken, setRefreshToken] = useState(0);
+  const revision = summary?.revision ?? null;
   const [notCreated, setNotCreated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -202,9 +175,9 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     // 有上次的结果就先渲染它、不显示"加载中"，再在后台重新校验：
     // 台账有数千条构件，每次切回页签都从头等一遍不符合正常网页的观感。
     const cacheKey = inventoryCacheKey(bridgeId);
-    const cached = readCached<ComponentInventoryRevision>(cacheKey);
+    const cached = readCached<InventorySummary>(cacheKey);
     if (cached) {
-      setRevision(cached);
+      setSummary(cached);
       setNotCreated(false);
       setLoading(false);
     } else {
@@ -212,14 +185,14 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     }
     setError(null);
     try {
-      const latest = await fetchLatestComponentInventory(backendBaseUrl, bridgeId);
+      const latest = await fetchInventorySummary(backendBaseUrl, bridgeId);
       writeCached(cacheKey, latest);
-      setRevision(latest);
+      setSummary(latest);
       setNotCreated(false);
     } catch (caught) {
       if (caught instanceof ApiError && caught.code === "component_inventory_not_found") {
         dropCached(cacheKey);
-        setRevision(null);
+        setSummary(null);
         setNotCreated(true);
       } else {
         setError(componentInventoryErrorMessage(caught));
@@ -231,10 +204,61 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
 
   useEffect(() => { void load(); }, [load]);
 
+  // 草稿只覆盖"当前屏幕上有的"构件。原来是给全部五千多条各建一份，翻不到的那些
+  // 永远用不上。
   useEffect(() => {
-    if (!revision) return;
-    setDrafts(Object.fromEntries(revision.entries.map((entry) => [entry.id, entryDraft(entry)])));
-  }, [revision]);
+    const loaded = [...(groupEntries?.entries ?? []), ...(searchResults?.entries ?? [])];
+    if (loaded.length === 0) return;
+    setDrafts((current) => {
+      const next = { ...current };
+      for (const entry of loaded) next[entry.id] = entryDraft(entry);
+      return next;
+    });
+  }, [groupEntries, searchResults]);
+
+
+  // 打开分组、翻页、或写操作之后：取该组的一页构件。
+  // AbortController 是必须的——防抖只减少请求数，保证不了返回顺序：快速翻页时
+  // 先发的请求后返回，就会把新页覆盖回旧页。
+  useEffect(() => {
+    if (!revision || !expandedGroup) { setGroupEntries(null); return; }
+    const controller = new AbortController();
+    setGroupEntriesLoading(true);
+    fetchInventoryGroupEntries(
+      backendBaseUrl, revision.id, expandedGroup, groupPage, kEntriesPageSize, controller.signal)
+      .then((next) => {
+        if (controller.signal.aborted) return;
+        setGroupEntries(next);
+        // 删构件后该组可能变短甚至清空：按新 total 夹取页码，归零则关掉弹窗。
+        if (next.total === 0) { setExpandedGroup(null); return; }
+        const lastPage = Math.max(0, Math.ceil(next.total / kEntriesPageSize) - 1);
+        if (groupPage > lastPage) setGroupPage(lastPage);
+      })
+      .catch((caught) => {
+        if (controller.signal.aborted) return;
+        setError(componentInventoryErrorMessage(caught));
+      })
+      .finally(() => { if (!controller.signal.aborted) setGroupEntriesLoading(false); });
+    return () => controller.abort();
+  }, [revision?.id, expandedGroup, groupPage, refreshToken]);
+
+  // 编号搜索：防抖 250ms，同样用 AbortController 防乱序。
+  useEffect(() => {
+    const term = search.trim();
+    if (!revision || !term) { setSearchResults(null); return; }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setSearchLoading(true);
+      searchInventoryEntries(
+        backendBaseUrl, revision.id, term, kMaxSearchResults, controller.signal)
+        .then((next) => { if (!controller.signal.aborted) setSearchResults(next); })
+        .catch((caught) => {
+          if (!controller.signal.aborted) setError(componentInventoryErrorMessage(caught));
+        })
+        .finally(() => { if (!controller.signal.aborted) setSearchLoading(false); });
+    }, kSearchDebounceMs);
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [revision?.id, search, refreshToken]);
 
   // 映射页只需要规范身份、桥型和构件类别。使用一个轻量聚合接口，避免先取规范包列表，
   // 再为每个版本下载包含全部病害指标的完整目录。
@@ -266,10 +290,9 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     return () => { cancelled = true; };
   }, []);
 
-  const blockers = useMemo(() => revision ? inventoryConfirmationBlockers(revision) : [], [revision]);
   const groupSummaries = useMemo(
-    () => (revision ? inventoryGroupSummaries(revision, catalogs) : []),
-    [revision, catalogs]
+    () => (summary?.groups ?? []).map((group) => toGroupSummary(group, catalogs)),
+    [summary, catalogs]
   );
   // 按结构分部分段，顺序与向导一致（上部 → 下部 → 桥面系），空分部不显示。
   const groupSections = useMemo(
@@ -282,47 +305,28 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
         .filter((section) => section.groups.length > 0),
     [groupSummaries]
   );
-  const entriesById = useMemo(
-    () => new Map((revision?.entries ?? []).map((entry) => [entry.id, entry])),
-    [revision]
-  );
+  const blockerTotal = summary?.blockers.total ?? 0;
   const pendingMappingCount = useMemo(
     () => groupSummaries.reduce((total, group) => total + group.pendingCount, 0),
     [groupSummaries]
   );
-  const individualBlockers = useMemo(
-    () =>
-      blockers.filter((blocker) => {
-        if (blocker.code !== "component_mapping_required") return true;
-        const entry = entriesById.get(blocker.entity_id);
-        return !entry?.mappings.some(
-          (mapping) => mapping.is_active && mapping.confirmation_status === "待确认"
-        );
-      }),
-    [blockers, entriesById]
-  );
+  // 服务端已经按两级拆好：待确认那批只进计数、由上面那行代表，样本里只有无映射构件
+  // 和空台账。这里不用再过滤一遍。
+  const individualBlockers = summary?.blockers.samples ?? [];
+  // "其余 N 项"必须用 individual_total 减样本数。用 total 会把待确认那批数两遍——
+  // 100 个待确认、0 个无映射时，页面会同时显示"100 个待确认"和"其余 100 项"。
+  const remainingBlockers =
+    (summary?.blockers.individual_total ?? 0) - individualBlockers.length;
   const searchTerm = search.trim();
-  const searchMatches = useMemo(
-    () =>
-      searchTerm
-        ? (revision?.entries ?? []).filter((entry) => entry.component_number.includes(searchTerm))
-        : [],
-    [revision, searchTerm]
-  );
-  const expandedGroupEntries = useMemo(
-    () =>
-      expandedGroup
-        ? (revision?.entries ?? []).filter((entry) => entry.site_component_type === expandedGroup)
-        : [],
-    [revision, expandedGroup]
-  );
+  const searchMatches = searchResults?.entries ?? [];
   const expandedGroupMapping = useMemo(
     () => groupSummaries.find((group) => group.siteComponentType === expandedGroup)?.mappingLabel ?? "",
     [groupSummaries, expandedGroup]
   );
-  const pageCount = Math.max(1, Math.ceil(expandedGroupEntries.length / kEntriesPageSize));
+  const groupTotal = groupEntries?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(groupTotal / kEntriesPageSize));
   const page = Math.min(groupPage, pageCount - 1);
-  const pageEntries = expandedGroupEntries.slice(page * kEntriesPageSize, (page + 1) * kEntriesPageSize);
+  const pageEntries = groupEntries?.entries ?? [];
 
   useEffect(() => {
     if (!pendingFocusId) return;
@@ -334,15 +338,22 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     }
   }, [pendingFocusId, expandedGroup, page, revision]);
 
-  async function mutate(action: () => Promise<ComponentInventoryRevision>) {
+  async function mutate(action: () => Promise<InventoryWriteResult>) {
     setBusy(true);
     setError(null);
     try {
       const next = await action();
-      // 改动后的结果直接写回缓存，下次挂载不会闪出改动前的旧台账。
-      writeCached(inventoryCacheKey(bridgeId), next);
-      setRevision(next);
+      // 顺序不能颠倒：先换汇总（里面带着可能已经变了的修订版 id），再按新 id 重取
+      // 明细与搜索，否则会拿旧 id 去请求。
+      const nextSummary: InventorySummary = {
+        revision: next.revision, groups: next.groups, blockers: next.blockers,
+      };
+      writeCached(inventoryCacheKey(bridgeId), nextSummary);
+      setSummary(nextSummary);
       setNotCreated(false);
+      // 只把响应里那条构件补进当前页是不够的：删除和批量确认根本不带构件，
+      // 改类别还会让构件换组、改变分页集合。统一重取当前打开的那一组与搜索结果。
+      setRefreshToken((token) => token + 1);
       return true;
     } catch (caught) {
       // 手里这个修订版已经不可写：桥上已有基于其他版本的草稿。只弹一句提示的话，
@@ -355,9 +366,12 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       }
       setError(componentInventoryErrorMessage(caught));
       if (caught instanceof ApiError) {
-        const details = caught.details as { blockers?: InventoryBlocker[] } | undefined;
-        const target = details?.blockers?.[0]?.entity_id;
-        if (target) focusEntry(target);
+        // 不能盲取 samples[0]：inventory_empty 排在最前，而它是修订版级问题，
+        // 没有组内序号；blocker 全是待确认映射时样本还可能为空。
+        const details = caught.details as { blockers?: InventoryBlockerSummary } | undefined;
+        const locatable = details?.blockers?.samples?.find(
+          (sample) => sample.entity_type === "inventory_entry" && sample.position !== null);
+        if (locatable) focusEntry(locatable);
       }
       return false;
     } finally {
@@ -365,19 +379,17 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     }
   }
 
-  function focusEntry(entryId: string) {
-    const entry = entriesById.get(entryId);
-    if (!entry) return;
+  // 定位到某个构件：服务端给的是组内序号，页码在这里算。找不到可定位的样本时
+  // 只展示错误，不猜页码。
+  function focusEntry(sample: { site_component_type: string | null; position: number | null;
+                                entity_id: string }) {
+    if (sample.site_component_type === null || sample.position === null) return;
     setSearch("");
-    setExpandedGroup(entry.site_component_type);
-    const groupEntries = (revision?.entries ?? []).filter(
-      (item) => item.site_component_type === entry.site_component_type
-    );
-    const index = groupEntries.findIndex((item) => item.id === entryId);
-    setGroupPage(index >= 0 ? Math.floor(index / kEntriesPageSize) : 0);
-    setPendingFocusId(entryId);
+    setExpandedGroup(sample.site_component_type);
+    setGroupPage(Math.floor(sample.position / kEntriesPageSize));
+    setPendingFocusId(sample.entity_id);
     // 从"确认前还需处理"跳过来就是奔着改这一行去的，直接开编辑态，省一次点击。
-    setEditingEntryId(entryId);
+    setEditingEntryId(sample.entity_id);
     setDeactivatingId(null);
   }
 
@@ -405,7 +417,10 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   }
 
   function cancelEdit() {
-    const current = editingEntryId ? entriesById.get(editingEntryId) : undefined;
+    // 只在当前加载出来的构件里找——全量表已经不在内存里了。
+    const current = editingEntryId
+      ? [...pageEntries, ...searchMatches].find((entry) => entry.id === editingEntryId)
+      : undefined;
     if (current) setDrafts((drafts) => ({ ...drafts, [current.id]: entryDraft(current) }));
     closeEditor();
   }
@@ -606,7 +621,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       <section className="workspace-card component-inventory-panel">
         <h1>实际构件台账</h1>
         <p>这座桥还没有构件台账。填写数量后，系统会生成每一个实际构件编号。</p>
-        <BridgeInventoryWizard onPlanChange={setPlan} />
+        <InventoryPlanPanel onPlanChange={setPlan} />
         {error ? <p className="error-text" role="alert">{error}</p> : null}
         <div className="inventory-panel-actions">
           <button type="button" disabled={busy || !plan} onClick={() => void generate()}>
@@ -755,19 +770,22 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
                 </button>
               </li>
             ) : null}
-            {individualBlockers.slice(0, kMaxIndividualBlockers).map((blocker, index) => (
+            {/* 样本已由服务端截断到 30 条，这里不再自己 slice。 */}
+            {individualBlockers.map((blocker, index) => (
               <li key={`${blocker.code}-${blocker.entity_id}-${index}`}>
                 {blocker.message}
-                {blocker.entity_type === "inventory_entry" ? <button type="button" onClick={() => focusEntry(blocker.entity_id)}>定位</button> : null}
+                {blocker.entity_type === "inventory_entry" && blocker.position !== null ? (
+                  <button type="button" onClick={() => focusEntry(blocker)}>定位</button>
+                ) : null}
               </li>
             ))}
-            {individualBlockers.length > kMaxIndividualBlockers ? (
-              <li>……其余 {individualBlockers.length - kMaxIndividualBlockers} 项处理后依次显示。</li>
+            {remainingBlockers > 0 ? (
+              <li>……其余 {remainingBlockers} 项处理后依次显示。</li>
             ) : null}
           </ul>
         </div>
       ) : (
-        <p className="inventory-confirmation-summary">共 {revision.entries.filter((entry) => entry.is_active).length} 个启用构件；编号无重复；规范映射均已确认。</p>
+        <p className="inventory-confirmation-summary">共 {revision.active_entry_count} 个启用构件，规范映射均已确认。</p>
       )}
       {error && !expandedGroup ? <p className="error-text" role="alert">{error}</p> : null}
       {expandedGroup ? (
@@ -780,7 +798,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
           >
             <div className="inventory-group-dialog-header">
               <h2 id="inventory-group-dialog-title">
-                {expandedGroup} 构件（共 {expandedGroupEntries.length} 个）
+                {expandedGroup} 构件（共 {groupTotal} 个）
               </h2>
               {/* 整组共用同一个规范映射，在标题处说明一次，不再逐行重复。 */}
               {expandedGroupMapping ? (
@@ -821,7 +839,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       ) : null}
       <div className="inventory-panel-actions">
         <button type="button" disabled={busy} onClick={() => setAdding(true)}>＋ 手动添加构件</button>
-        <button type="button" className="is-primary-action" disabled={busy || revision.status === "已确认" || blockers.length > 0} onClick={() => void mutate(() => confirmComponentInventory(backendBaseUrl, revision.id))}>
+        <button type="button" className="is-primary-action" disabled={busy || revision.status === "已确认" || blockerTotal > 0} onClick={() => void mutate(() => confirmComponentInventory(backendBaseUrl, revision.id))}>
           {busy ? "正在处理…" : "确认本版台账"}
         </button>
       </div>

@@ -97,6 +97,86 @@ export interface InventoryBlocker {
   message: string;
 }
 
+
+// ---- 聚合接口 ----
+// 台账页首屏只要这份分组汇总；构件明细按需另取。整份修订版仍由 /latest 提供，
+// 校对工作台的构件选择器在用，本轮不动。
+
+export interface InventoryGroupSummary {
+  site_component_type: string;
+  structure_part: StructurePart;
+  active_count: number;
+  // 整组构件被全部停用时为 null（编号范围只统计启用构件）。
+  first_number: string | null;
+  last_number: string | null;
+  confirmed_count: number;
+  pending_count: number;
+  unmapped_count: number;
+  // 该组没有任何生效映射时为 null。
+  standard_package_id: string | null;
+  standard_component_category_id: string | null;
+}
+
+export interface InventoryBlockerSample {
+  code: string;
+  entity_type: string;
+  entity_id: string;
+  field_path: string;
+  message: string;
+  // inventory_empty 这类修订版级问题没有这两项。
+  site_component_type: string | null;
+  position: number | null;
+}
+
+export interface InventoryBlockerSummary {
+  total: number;
+  // 逐条列出的那部分（无映射构件 + 空台账）。"其余 N 项"要用它减样本数，
+  // 用 total 会把待确认那批数两遍。
+  individual_total: number;
+  by_code: { inventory_empty: number; component_mapping_required: number };
+  samples: InventoryBlockerSample[];
+}
+
+export interface InventoryRevisionSummary {
+  id: string;
+  bridge_id: string;
+  revision_number: number;
+  status: string;
+  baseline_revision_id: string | null;
+  confirmed_at: string | null;
+  active_entry_count: number;
+}
+
+export interface InventorySummary {
+  revision: InventoryRevisionSummary;
+  groups: InventoryGroupSummary[];
+  blockers: InventoryBlockerSummary;
+}
+
+// 分组分页与编号搜索返回的构件，多带一个组内序号。
+export interface LocatedInventoryEntry extends ComponentInventoryEntry {
+  position: number;
+}
+
+export interface InventoryGroupEntriesResponse {
+  total: number;
+  page: number;
+  size: number;
+  entries: LocatedInventoryEntry[];
+}
+
+export interface InventorySearchResponse {
+  // 未截断的命中数，界面上"匹配 N 个构件，显示前 M 个"依赖它。
+  total: number;
+  entries: LocatedInventoryEntry[];
+}
+
+// 写操作的响应：新的汇总，外加被改动的那一条构件（删除、批量确认、确认台账没有）。
+export interface InventoryWriteResult extends InventorySummary {
+  entry?: LocatedInventoryEntry;
+  entry_id?: string;
+}
+
 const json = (method: string, body: unknown): RequestInit => ({
   method,
   headers: { "Content-Type": "application/json" },
@@ -105,6 +185,51 @@ const json = (method: string, body: unknown): RequestInit => ({
 
 async function revisionRequest(url: string, init?: RequestInit): Promise<ComponentInventoryRevision> {
   return (await request<{ revision: ComponentInventoryRevision }>(url, init)).revision;
+}
+
+// 除生成台账外的写操作都回传这个形状。
+function writeRequest(url: string, init?: RequestInit): Promise<InventoryWriteResult> {
+  return request<InventoryWriteResult>(url, init);
+}
+
+export function fetchInventorySummary(baseUrl: string, bridgeId: string) {
+  return request<InventorySummary>(
+    `${baseUrl}/api/bridges/${encodeURIComponent(bridgeId)}/component-inventories/latest/summary`);
+}
+
+// 写操作可能派生出新的修订版，之后所有请求都要用响应里带回的那个 id。
+export function fetchInventorySummaryByRevision(baseUrl: string, revisionId: string) {
+  return request<InventorySummary>(
+    `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/summary`);
+}
+
+export function fetchInventoryGroupEntries(
+  baseUrl: string,
+  revisionId: string,
+  siteComponentType: string,
+  page: number,
+  size: number,
+  signal?: AbortSignal
+) {
+  const query = new URLSearchParams({
+    group: siteComponentType, page: String(page), size: String(size),
+  });
+  return request<InventoryGroupEntriesResponse>(
+    `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/entries?${query}`,
+    { signal });
+}
+
+export function searchInventoryEntries(
+  baseUrl: string,
+  revisionId: string,
+  numberFragment: string,
+  limit: number,
+  signal?: AbortSignal
+) {
+  const query = new URLSearchParams({ number: numberFragment, limit: String(limit) });
+  return request<InventorySearchResponse>(
+    `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/entries?${query}`,
+    { signal });
 }
 
 export function fetchLatestComponentInventory(baseUrl: string, bridgeId: string) {
@@ -130,14 +255,14 @@ export async function fetchPartCatalog(
 }
 
 export function generateComponentInventory(baseUrl: string, bridgeId: string, input: GenerateComponentInventoryInput) {
-  return revisionRequest(
+  return writeRequest(
     `${baseUrl}/api/bridges/${encodeURIComponent(bridgeId)}/component-inventories/generate`,
     json("POST", input)
   );
 }
 
 export function addComponentInventoryEntry(baseUrl: string, revisionId: string, input: InventoryEntryInput) {
-  return revisionRequest(
+  return writeRequest(
     `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/entries`,
     json("POST", input)
   );
@@ -149,14 +274,14 @@ export function updateComponentInventoryEntry(
   entryId: string,
   input: InventoryEntryInput
 ) {
-  return revisionRequest(
+  return writeRequest(
     `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/entries/${encodeURIComponent(entryId)}`,
     json("PATCH", input)
   );
 }
 
 export function deleteComponentInventoryEntry(baseUrl: string, revisionId: string, entryId: string) {
-  return revisionRequest(
+  return writeRequest(
     `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/entries/${encodeURIComponent(entryId)}`,
     { method: "DELETE" }
   );
@@ -168,7 +293,7 @@ export function deactivateComponentInventoryEntry(
   entryId: string,
   reason: string
 ) {
-  return revisionRequest(
+  return writeRequest(
     `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/entries/${encodeURIComponent(entryId)}/deactivate`,
     json("POST", { reason })
   );
@@ -180,7 +305,7 @@ export function setComponentInventoryMapping(
   entryId: string,
   input: InventoryMappingInput
 ) {
-  return revisionRequest(
+  return writeRequest(
     `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/entries/${encodeURIComponent(entryId)}/mapping`,
     json("PUT", input)
   );
@@ -191,14 +316,14 @@ export function confirmPendingComponentInventoryMappings(
   revisionId: string,
   siteComponentType?: string
 ) {
-  return revisionRequest(
+  return writeRequest(
     `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/mappings/confirm-pending`,
     json("POST", siteComponentType ? { site_component_type: siteComponentType } : {})
   );
 }
 
 export function confirmComponentInventory(baseUrl: string, revisionId: string, note = "") {
-  return revisionRequest(
+  return writeRequest(
     `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/confirm`,
     json("POST", { note })
   );

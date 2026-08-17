@@ -37,8 +37,15 @@ describe("CreateBridgeDialog", () => {
       route_name: null, administrative_region: null, station_mark: null, status: "在用", bridge_scale: null,
     });
     vi.mocked(generateComponentInventory).mockResolvedValue({
-      id: "revision-1", bridge_id: "bridge-1", revision_number: 1, status: "draft",
-      baseline_revision_id: null, confirmed_at: null, entries: [],
+      revision: {
+        id: "revision-1", bridge_id: "bridge-1", revision_number: 1, status: "draft",
+        baseline_revision_id: null, confirmed_at: null, active_entry_count: 0,
+      },
+      groups: [],
+      blockers: {
+        total: 0, individual_total: 0,
+        by_code: { inventory_empty: 0, component_mapping_required: 0 }, samples: [],
+      },
     });
   });
 

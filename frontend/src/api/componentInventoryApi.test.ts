@@ -53,17 +53,21 @@ describe("componentInventoryApi", () => {
   });
 
   it("generates a draft from part_selections without legacy groups", async () => {
-    const revision = { id: "revision-1", entries: [] };
+    // 生成台账现在也回传汇总形状，不再是整份修订版。
+    const summary = {
+      revision: { id: "revision-1", active_entry_count: 0 },
+      groups: [], blockers: { total: 0, individual_total: 0, by_code: {}, samples: [] },
+    };
     const input = {
       standard_package_id: "package-1",
       bridge_type_id: "h21.bridge_type.beam",
       span_count: 5,
       part_selections: [{ part_key: "beam.girder", site_name: "空心板", counts: [13] }],
     };
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201, json: async () => ({ revision }) });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201, json: async () => summary });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(generateComponentInventory("http://backend", "bridge-1", input)).resolves.toEqual(revision);
+    await expect(generateComponentInventory("http://backend", "bridge-1", input)).resolves.toEqual(summary);
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(body.part_selections[0].part_key).toBe("beam.girder");
     expect(body.groups).toBeUndefined();
