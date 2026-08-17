@@ -621,7 +621,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       <section className="workspace-card component-inventory-panel">
         <h1>实际构件台账</h1>
         <p>这座桥还没有构件台账。填写数量后，系统会生成每一个实际构件编号。</p>
-        <InventoryPlanPanel onPlanChange={setPlan} />
+        <BridgeInventoryWizard onPlanChange={setPlan} />
         {error ? <p className="error-text" role="alert">{error}</p> : null}
         <div className="inventory-panel-actions">
           <button type="button" disabled={busy || !plan} onClick={() => void generate()}>
