@@ -1,10 +1,10 @@
 // 批量替换的预览计算。设计见
 // docs/superpowers/specs/2026-07-24-bulk-binding-replace-design.md §4。
 //
-// 全部在前端算：绑定页已把台账 entries 加载在手（手工搜索就用它），无需新增查询接口。
+// 全部在前端算。entries 由批量替换对话框打开时按需取回（精简响应，只含这里用到的
+// 三个字段），不再依赖"绑定页已经把整份台账加载在手"。
 
-import type { ComponentInventoryEntry } from "../../api/componentInventoryApi";
-import type { BindingRow } from "../../api/importBindingApi";
+import type { BindingReplaceInventoryEntry, BindingRow } from "../../api/importBindingApi";
 import { normalizeComponentNumber } from "./normalizeComponentNumber";
 import { compilePattern } from "./replacePattern";
 
@@ -40,7 +40,7 @@ function participates(row: BindingRow): boolean {
 
 export function buildReplacePreview(
   rows: BindingRow[],
-  entries: ComponentInventoryEntry[],
+  entries: BindingReplaceInventoryEntry[],
   find: string,
   replace: string
 ): ReplacePreviewResult {
@@ -50,8 +50,11 @@ export function buildReplacePreview(
   // 按归一化编号建索引；同号可能有多个，故存数组以便判歧义。
   // 不限定部件类别（spec §4.2）：限定需要报告部件名→规范类别的对照表，那在后端；
   // 不限定的代价只是跨部件同号时判歧义并跳过——宁可跳过让人工处理，不可绑错。
-  const byNumber = new Map<string, ComponentInventoryEntry[]>();
+  const byNumber = new Map<string, BindingReplaceInventoryEntry[]>();
   for (const entry of entries) {
+    // 服务端已经过滤过停用构件，这一行仍然保留：它是防御性判断，而 is_active 字段
+    // 一旦从响应里消失，!undefined 为真会把每一条都跳过，预览安静地全判成
+    // not_in_inventory——不报错、不崩溃，只是全错。
     if (!entry.is_active) continue;
     const key = normalizeComponentNumber(entry.component_number);
     const bucket = byNumber.get(key);

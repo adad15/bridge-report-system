@@ -190,7 +190,8 @@ function missingBindingOverview(): ComponentBindingOverview {
         defect_count: 1,
         status: "missing",
         bridge_component_id: null,
-        candidate_component_ids: [],
+        bound_component: null,
+        candidate_components: [],
       }],
     }],
   };
@@ -351,7 +352,8 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
       await Promise.resolve();
     });
     const bindingRequests = vi.mocked(fetchComponentBinding).mock.calls.length;
-    expect(fetchLatestComponentInventory).toHaveBeenCalledTimes(1);
+    // 绑定分区改成按需检索之后不再拉整份台账；这里从"只拉一次"改成"一次都不拉"。
+    expect(fetchLatestComponentInventory).not.toHaveBeenCalled();
     // 从没点开过的分区连 DOM 都不存在。
     expect(document.querySelector("[data-review-group='ratings']")).toBeNull();
 
@@ -370,7 +372,7 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     expect(screen.getByRole("button", { name: "已标记缺失 1" })).toBe(missingFilter);
     expect(missingFilter).toHaveAttribute("aria-pressed", "true");
     expect(fetchComponentBinding).toHaveBeenCalledTimes(bindingRequests);
-    expect(fetchLatestComponentInventory).toHaveBeenCalledTimes(1);
+    expect(fetchLatestComponentInventory).not.toHaveBeenCalled();
   });
 
   // 绑定分区的写操作（绑定 / 批量替换 / 标记缺失 / 取消绑定 / 范围拆分）由后端直接

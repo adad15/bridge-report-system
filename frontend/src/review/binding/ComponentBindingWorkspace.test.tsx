@@ -1,8 +1,11 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fetchLatestComponentInventory } from "../../api/componentInventoryApi";
+import {
+  fetchLatestComponentInventory,
+  searchInventoryEntries,
+} from "../../api/componentInventoryApi";
 import {
   bindComponent,
   bindInspectionRatingTree,
@@ -10,6 +13,7 @@ import {
   markComponentMissing,
   previewComponentRangeSplit,
   INVENTORY_REVISION_CHANGED,
+  type BindingComponentSummary,
   type ComponentBindingOverview,
 } from "../../api/importBindingApi";
 import { ApiError } from "../../api/apiClient";
@@ -26,6 +30,7 @@ vi.mock("../../api/importBindingApi", async (importOriginal) => {
     markComponentMissing: vi.fn(),
     previewComponentRangeSplit: vi.fn(),
     clearComponentBinding: vi.fn(),
+    fetchBindingReplaceInventory: vi.fn(),
   };
 });
 
@@ -36,7 +41,11 @@ vi.mock("../../api/ratingTreeApi", async (importOriginal) => {
 
 vi.mock("../../api/componentInventoryApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../api/componentInventoryApi")>();
-  return { ...original, fetchLatestComponentInventory: vi.fn() };
+  return {
+    ...original,
+    fetchLatestComponentInventory: vi.fn(),
+    searchInventoryEntries: vi.fn(),
+  };
 });
 
 const inventory = {
@@ -76,6 +85,16 @@ const inventory = {
   ],
 };
 
+function summary(id: string): BindingComponentSummary {
+  return {
+    entry_id: `entry-${id}`,
+    bridge_component_id: id,
+    component_number: "1-1#梁",
+    site_component_type: "空心板",
+    site_name: "空心板",
+  };
+}
+
 function overview(status: "unmatched" | "bound" | "missing"): ComponentBindingOverview {
   return {
     inventory_confirmed: true,
@@ -94,7 +113,9 @@ function overview(status: "unmatched" | "bound" | "missing"): ComponentBindingOv
             defect_count: 3,
             status,
             bridge_component_id: status === "bound" ? "c1" : null,
-            candidate_component_ids: status === "unmatched" ? ["c1"] : [],
+            // 候选带完整展示信息，否则这条用例覆盖不到下拉里的候选项。
+            bound_component: status === "bound" ? summary("c1") : null,
+            candidate_components: status === "unmatched" ? [summary("c1")] : [],
             split_eligible: false,
             split_expanded_count: null,
           },
@@ -108,6 +129,7 @@ describe("ComponentBindingWorkspace", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(fetchLatestComponentInventory).mockResolvedValue(inventory);
+    vi.mocked(searchInventoryEntries).mockResolvedValue({ total: 0, entries: [] });
     vi.mocked(fetchComponentBinding).mockResolvedValue(overview("unmatched"));
     vi.mocked(fetchRatingTreeVersions).mockResolvedValue([
       {
@@ -241,6 +263,67 @@ describe("ComponentBindingWorkspace", () => {
     await waitFor(() => expect(onDraftInvalidated).toHaveBeenCalledTimes(1));
   });
 
+  // 首屏只等概览。此前并排拉一份完整台账（约 3.4 MB），两个都回来才渲染。
+  // 评定树版本列表是另一个非阻塞请求，所以不能笼统断言"只发一次请求"。
+  it("loads only the overview on first paint", async () => {
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    expect(await screen.findByText("上部承重构件")).toBeInTheDocument();
+
+    expect(fetchComponentBinding).toHaveBeenCalledTimes(1);
+    expect(fetchLatestComponentInventory).not.toHaveBeenCalled();
+    expect(fetchRatingTreeVersions).toHaveBeenCalledTimes(1);
+  });
+
+  // 概览自带候选的展示信息，搜索之前就该看得见。
+  it("shows overview candidates before any search", async () => {
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    const select = await screen.findByLabelText("为 1-1#梁 选择实际构件");
+
+    expect(within(select).getByRole("option", { name: /候选 · 1-1#梁/ })).toBeInTheDocument();
+    expect(searchInventoryEntries).not.toHaveBeenCalled();
+  });
+
+  it("searches the server after a pause and keeps candidates in front", async () => {
+    vi.mocked(searchInventoryEntries).mockResolvedValue({
+      total: 1,
+      entries: [{
+        id: "entry-c9", bridge_component_id: "c9", component_number: "9-9#梁",
+        site_name: "边跨空心板", site_component_type: "空心板", span_or_location: null,
+        is_active: true, deactivated_at: null, deactivation_reason: null,
+        sort_order: 2, remarks: null, is_referenced: false, mappings: [], position: 1,
+      }],
+    });
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    await userEvent.type(await screen.findByLabelText("搜索实际构件 1-1#梁"), "9-9");
+
+    await waitFor(() => expect(searchInventoryEntries).toHaveBeenCalled());
+    const [, revisionId, keyword, limit, , bindingEligible] =
+      vi.mocked(searchInventoryEntries).mock.calls[0];
+    expect(revisionId).toBe("rev-1");
+    expect(keyword).toBe("9-9");
+    expect(limit).toBe(20);
+    expect(bindingEligible).toBe(true);
+
+    const select = screen.getByLabelText("为 1-1#梁 选择实际构件");
+    await waitFor(() =>
+      expect(within(select).getByRole("option", { name: /9-9#梁/ })).toBeInTheDocument());
+    // 候选在前，搜索结果追加在后，且候选不占用 limit 名额。
+    const options = within(select).getAllByRole("option").map((o) => o.textContent ?? "");
+    expect(options[1]).toContain("候选 · ");
+    expect(options[2]).toContain("9-9#梁");
+  });
+
+  // 搜索失败不该把概览带来的候选也一起清掉。
+  it("keeps candidates when the search request fails", async () => {
+    vi.mocked(searchInventoryEntries).mockRejectedValue(new Error("boom"));
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    await userEvent.type(await screen.findByLabelText("搜索实际构件 1-1#梁"), "9-9");
+
+    await waitFor(() => expect(searchInventoryEntries).toHaveBeenCalled());
+    const select = screen.getByLabelText("为 1-1#梁 选择实际构件");
+    expect(within(select).getByRole("option", { name: /候选 · 1-1#梁/ })).toBeInTheDocument();
+  });
+
   // 写操作要声明依据哪个台账版本；漏传的话后端会自己挑一个，用户看到的候选就和
   // 校验用的台账对不上了。
   it("sends the overview revision id with every write", async () => {
@@ -315,4 +398,6 @@ describe("ComponentBindingWorkspace", () => {
     await Promise.resolve();
     expect(screen.queryByRole("dialog", { name: "拆分构件范围" })).not.toBeInTheDocument();
   });
+
+
 });

@@ -36,6 +36,16 @@ bool definition_supports_bridge_type(
     return false;
 }
 
+bool definition_supports_inventory_part(
+    const standards::StandardDefinition& definition,
+    const inventory::CatalogPart& part,
+    const std::string& bridge_type_id) {
+    return definition.source_file == "component-taxonomy.json" &&
+        definition_supports_bridge_type(definition, bridge_type_id) &&
+        definition.payload["structure_part"].asString() == part.structure_part &&
+        definition.payload.get("generatable", false).asBool();
+}
+
 void respond_inventory_outcome(
     const HttpCallback& callback,
     const db::ComponentInventoryOutcome& outcome,
@@ -124,7 +134,7 @@ long long expected_generation_size(
     return size;
 }
 
-// 目录路径校验：每个选中部件在梁式桥目录中、其规范类别在包 taxonomy 且适用桥型且可生成、
+// 目录路径校验：每个选中部件在产品目录中、其规范类别在包 taxonomy 且适用桥型且可生成、
 // 数量维数量与目录一致、生成总规模不超 50000。
 bool validate_part_selection_standard(
     const inventory::GenerateInventoryInput& input,
@@ -152,10 +162,7 @@ bool validate_part_selection_standard(
         }
         const auto category = package.definitions.find(part->standard_component_category_id);
         if (category == package.definitions.end() ||
-            category->second.source_file != "component-taxonomy.json" ||
-            !definition_supports_bridge_type(category->second, input.bridge_type_id) ||
-            category->second.payload["structure_part"].asString() != part->structure_part ||
-            !category->second.payload.get("generatable", false).asBool()) {
+            !definition_supports_inventory_part(category->second, *part, input.bridge_type_id)) {
             error_code = "inventory_component_category_not_supported";
             error_message = "构件类别不属于所选规范和桥型，不能静默归入其他类别。";
             return false;
@@ -483,15 +490,20 @@ void register_component_inventory_routes(
                              drogon::k404NotFound); return;
             }
             const auto group = trimmed_query_value(request->getParameter("group"));
-            const auto number = trimmed_query_value(request->getParameter("number"));
-            if (group.empty() == number.empty()) {
+            const auto keyword = trimmed_query_value(request->getParameter("keyword"));
+            if (group.empty() == keyword.empty()) {
                 respond_json(callback, make_error_body(
-                    "inventory_query_invalid", "group 与 number 必须且只能提供一个。"),
+                    "inventory_query_invalid", "group 与 keyword 必须且只能提供一个。"),
                     drogon::k400BadRequest); return;
             }
+            // 只返回启用且有生效映射的构件。绑定面板传它，台账管理页不传——后者要能
+            // 看见停用与未映射的构件。过滤必须在服务端、在 limit 之前生效：先取前 20
+            // 条再由前端筛掉的话，这 20 条可能全是停用构件，真正可绑的被截断在后面。
+            const bool binding_eligible =
+                trimmed_query_value(request->getParameter("binding_eligible")) == "true";
 
             std::string message;
-            // 上限超了按上限截断，非整数与 0/负数一律 400——number= 空串若放过去，
+            // 上限超了按上限截断，非整数与 0/负数一律 400——keyword= 空串若放过去，
             // like '%%' 会命中全表，正是聚合要消灭的那种响应。
             std::int64_t page = 0;
             std::int64_t size = 100;
@@ -514,7 +526,8 @@ void register_component_inventory_routes(
                     body["page"] = static_cast<Json::Int64>(page);
                     body["size"] = static_cast<Json::Int64>(size);
                 } else {
-                    lookup = repository.search_entries(revision_id, number, limit);
+                    lookup = repository.search_entries(
+                        revision_id, keyword, binding_eligible, limit);
                 }
                 body["total"] = static_cast<Json::Int64>(lookup.total);
                 body["entries"] = Json::Value(Json::arrayValue);

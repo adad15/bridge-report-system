@@ -800,25 +800,131 @@ TEST_F(ComponentInventoryRepositoryTest, SearchMatchesSubstringAndEscapesWildcar
     }
 
     // 子串语义与前端原来的 String.includes 一致：搜 3-5 也会命中 13-5#梁 和 23-5#梁。
-    const auto hits = repository.search_entries(revision_id, "3-5", 50);
+    const auto hits = repository.search_entries(revision_id, "3-5", false, 50);
     EXPECT_EQ(hits.total, 3);
     ASSERT_EQ(hits.entries.size(), 3u);
 
     // 截断时 total 仍是未截断的命中数——界面上"匹配 N 个构件，显示前 M 个"依赖它。
-    const auto truncated = repository.search_entries(revision_id, "3-5", 2);
+    const auto truncated = repository.search_entries(revision_id, "3-5", false, 2);
     EXPECT_EQ(truncated.total, 3);
     EXPECT_EQ(truncated.entries.size(), 2u);
 
     // 通配符必须按字面匹配，否则搜一个 % 就命中全表。
-    const auto wildcard = repository.search_entries(revision_id, "%", 50);
+    const auto wildcard = repository.search_entries(revision_id, "%", false, 50);
     EXPECT_EQ(wildcard.total, 1);
     ASSERT_EQ(wildcard.entries.size(), 1u);
     EXPECT_EQ(wildcard.entries.front().entry.component_number, "100%特殊");
 
     // 零命中：窗口函数在没有行时带不回总数，实现必须显式规定 total = 0。
-    const auto empty = repository.search_entries(revision_id, "不存在的编号", 50);
+    const auto empty = repository.search_entries(revision_id, "不存在的编号", false, 50);
     EXPECT_EQ(empty.total, 0);
     EXPECT_TRUE(empty.entries.empty());
+}
+
+// 绑定面板按编号、构件类别、现场名称三个字段搜；台账页文案也据此改过。
+TEST_F(ComponentInventoryRepositoryTest, SearchMatchesTypeAndSiteNameToo) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = revision_id_of(created);
+
+    db::InventoryNewEntry manual;
+    manual.component_number = "Z-1";
+    manual.site_name = "东侧栏杆";
+    manual.site_component_type = "人行道栏杆";
+    manual.sort_order = 400;
+    ASSERT_EQ(repository.add_entry(revision_id, user_id, manual).status,
+              db::ComponentInventoryStatus::Ok);
+
+    EXPECT_EQ(repository.search_entries(revision_id, "Z-1", false, 50).total, 1);
+    EXPECT_EQ(repository.search_entries(revision_id, "人行道栏杆", false, 50).total, 1);
+    EXPECT_EQ(repository.search_entries(revision_id, "东侧", false, 50).total, 1);
+}
+
+// binding_eligible 的两个条件缺一不可，而且必须在服务端、在 limit 之前生效。
+TEST_F(ComponentInventoryRepositoryTest, BindingEligibleFiltersBeforeTheLimit) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = revision_id_of(created);
+
+    // 前 20 条排在前面且都不可绑（停用），第 21 条才是唯一可绑的那条。
+    // 先取 20 条再由调用方过滤的话，这 20 条会把它整个挤出结果。
+    std::string usable_id;
+    for (int i = 0; i < 21; ++i) {
+        db::InventoryNewEntry manual;
+        manual.component_number = "F-" + std::to_string(i);
+        manual.site_name = "过滤用构件";
+        manual.site_component_type = "过滤用类型";
+        manual.sort_order = 500 + i;
+        const auto added = repository.add_entry(revision_id, user_id, manual);
+        ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
+        const auto& entry = added.entry->entry;
+        db::InventoryMappingUpdate mapping;
+        mapping.standard_package_id = package_id;
+        mapping.standard_bridge_type_id = input.bridge_type_id;
+        mapping.standard_component_category_id = "test.component.main_girder";
+        mapping.structure_part = "superstructure";
+        ASSERT_EQ(repository.set_mapping(revision_id, entry.id, user_id, mapping).status,
+                  db::ComponentInventoryStatus::Ok);
+        if (i < 20) {
+            ASSERT_EQ(repository.deactivate_entry(revision_id, entry.id, user_id, "测试停用").status,
+                      db::ComponentInventoryStatus::Ok);
+        } else {
+            usable_id = entry.id;
+        }
+    }
+
+    const auto all = repository.search_entries(revision_id, "F-", false, 20);
+    EXPECT_EQ(all.total, 21) << "不过滤时应当看得见全部，含停用构件";
+
+    const auto eligible = repository.search_entries(revision_id, "F-", true, 20);
+    EXPECT_EQ(eligible.total, 1) << "total 必须与 entries 用同一套过滤范围";
+    ASSERT_EQ(eligible.entries.size(), 1u);
+    EXPECT_EQ(eligible.entries.front().entry.id, usable_id);
+}
+
+// 启用但没有生效映射的构件同样不可绑。只筛 is_active 会把它放进来，用户点了应用之后
+// validate_target() 找不到映射，整批冲突。
+TEST_F(ComponentInventoryRepositoryTest, BindingEligibleAlsoRequiresAnActiveMapping) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = revision_id_of(created);
+
+    db::InventoryNewEntry manual;
+    manual.component_number = "N-1";
+    manual.site_name = "无映射构件";
+    manual.site_component_type = "无映射类型";
+    manual.sort_order = 600;
+    const auto added = repository.add_entry(revision_id, user_id, manual);
+    ASSERT_EQ(added.status, db::ComponentInventoryStatus::Ok);
+
+    EXPECT_EQ(repository.search_entries(revision_id, "N-1", false, 50).total, 1);
+    EXPECT_EQ(repository.search_entries(revision_id, "N-1", true, 50).total, 0);
+
+    // 映射装配那条语句用的是同一段谓词。谓词在那里拼错时它返回零行，构件会整批
+    // 丢掉映射而不报错——所以这里必须断言映射确实被带回来了。
+    db::InventoryMappingUpdate mapping;
+    mapping.standard_package_id = package_id;
+    mapping.standard_bridge_type_id = input.bridge_type_id;
+    mapping.standard_component_category_id = "test.component.main_girder";
+    mapping.structure_part = "superstructure";
+    ASSERT_EQ(repository.set_mapping(revision_id, added.entry->entry.id, user_id, mapping).status,
+              db::ComponentInventoryStatus::Ok);
+
+    const auto hits = repository.search_entries(revision_id, "N-1", true, 50);
+    ASSERT_EQ(hits.entries.size(), 1u);
+    EXPECT_FALSE(hits.entries.front().entry.mappings.empty()) << "映射装配丢了整批映射";
 }
 
 TEST_F(ComponentInventoryRepositoryTest, PositionAgreesBetweenPageSearchAndBlockerSample) {
@@ -867,7 +973,7 @@ TEST_F(ComponentInventoryRepositoryTest, PositionAgreesBetweenPageSearchAndBlock
     EXPECT_EQ(page_position, 2);
 
     std::int64_t search_position = -1;
-    for (const auto& located : repository.search_entries(revision_id, "P-3", 50).entries) {
+    for (const auto& located : repository.search_entries(revision_id, "P-3", false, 50).entries) {
         if (located.entry.id == unmapped_id) search_position = located.position;
     }
     EXPECT_EQ(search_position, page_position) << "搜索结果与分页必须用同一套序号";

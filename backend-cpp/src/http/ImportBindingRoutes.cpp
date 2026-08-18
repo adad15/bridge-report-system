@@ -9,6 +9,20 @@
 
 namespace bridge_report::http {
 
+namespace {
+
+Json::Value binding_component_json(const db::BindingComponentSummary& summary) {
+    Json::Value value(Json::objectValue);
+    value["entry_id"] = summary.entry_id;
+    value["bridge_component_id"] = summary.bridge_component_id;
+    value["component_number"] = summary.component_number;
+    value["site_component_type"] = summary.site_component_type;
+    value["site_name"] = summary.site_name;
+    return value;
+}
+
+}  // namespace
+
 Json::Value binding_overview_json(const db::BindingOverview& overview) {
     Json::Value value;
     value["inventory_confirmed"] = overview.inventory_confirmed;
@@ -43,9 +57,13 @@ Json::Value binding_overview_json(const db::BindingOverview& overview) {
             row_json["status"] = row.status;
             row_json["bridge_component_id"] = row.bridge_component_id.has_value()
                 ? Json::Value(*row.bridge_component_id) : Json::Value(Json::nullValue);
-            row_json["candidate_component_ids"] = Json::Value(Json::arrayValue);
-            for (const auto& candidate : row.candidate_component_ids) {
-                row_json["candidate_component_ids"].append(candidate);
+            // candidate_component_ids 不再进 JSON：前端要的是可显示的构件信息，
+            // 裸 id 只能靠拉整份台账去换。行状态仍由那批 id 在后端判定。
+            row_json["bound_component"] = row.bound_component.has_value()
+                ? binding_component_json(*row.bound_component) : Json::Value(Json::nullValue);
+            row_json["candidate_components"] = Json::Value(Json::arrayValue);
+            for (const auto& candidate : row.candidate_components) {
+                row_json["candidate_components"].append(binding_component_json(candidate));
             }
             row_json["split_eligible"] = row.split_eligible;
             row_json["split_expanded_count"] = row.split_expanded_count
@@ -274,6 +292,7 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
     for (const auto& path : {base, base + "/bind", base + "/bind-batch",
                              base + "/rating-tree",
                              base + "/mark-missing", base + "/clear",
+                             base + "/inventory",
                              base + "/split-preview", base + "/split-apply"}) {
         register_options_handler(path);
     }
@@ -317,6 +336,60 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                 respond_db_unavailable(callback);
             }
         }, {drogon::Post});
+
+    // 批量替换取数。GET，只校验版本、绝不锁定：打开一次对话框就把年度锁死，
+    // 是任何人都不会预期的副作用，浏览器预取或重试还会重复触发。
+    drogon::app().registerHandler(
+        base + "/inventory",
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                    const std::string& import_id) {
+            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
+            const auto expected = request->getParameter("expected_inventory_revision_id");
+            if (!is_valid_uuid(expected)) {
+                respond_json(callback, make_error_body(
+                    "invalid_component_binding_inventory_request",
+                    "expected_inventory_revision_id 必须是有效的台账版本 UUID。"),
+                    drogon::k400BadRequest);
+                return;
+            }
+            try {
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback); return;
+                }
+                const auto outcome =
+                    db::ImportBindingRepository(db_client).load_replace_inventory(
+                        import_id, expected);
+                switch (outcome.status) {
+                    case db::BindingStatus::NotFound:
+                        respond_import_record_not_found(callback); return;
+                    case db::BindingStatus::Conflict:
+                        respond_json(callback, make_error_body(
+                            outcome.error_code.empty()
+                                ? "component_binding_conflict" : outcome.error_code,
+                            outcome.error_message.empty()
+                                ? "导入记录不在待校对阶段。" : outcome.error_message),
+                            drogon::k409Conflict);
+                        return;
+                    case db::BindingStatus::Failed:
+                        respond_db_unavailable(callback); return;
+                    default: break;
+                }
+                Json::Value body;
+                body["inventory_revision_id"] = outcome.replace_revision_id;
+                body["entries"] = Json::Value(Json::arrayValue);
+                for (const auto& entry : outcome.replace_entries) {
+                    Json::Value item(Json::objectValue);
+                    item["bridge_component_id"] = entry.bridge_component_id;
+                    item["component_number"] = entry.component_number;
+                    // 服务端已经过滤掉停用构件，字段仍然要返回：前端预览里有一句
+                    // if (!entry.is_active) continue，缺字段时 !undefined 为真，
+                    // 会把每一条都跳过，预览安静地全判成"台账里没有"。
+                    item["is_active"] = entry.is_active;
+                    body["entries"].append(std::move(item));
+                }
+                respond_json(callback, body);
+            } catch (...) { respond_db_unavailable(callback); }
+        }, {drogon::Get});
 
     drogon::app().registerHandler(
         base + "/split-preview",

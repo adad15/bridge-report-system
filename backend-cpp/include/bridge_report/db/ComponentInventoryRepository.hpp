@@ -73,9 +73,24 @@ public:
     std::optional<inventory::InventoryRevision> get_latest_confirmed_revision(
         const std::string& bridge_id) const;
 
+    // 版本解析的结果引用：只有 id 与所属桥梁，不含构件。
+    struct ConfirmedRevisionRef {
+        std::string id;
+        std::string bridge_id;
+    };
+
     // 解析某次操作应当使用的已确认台账版本：检测年度锁定的版本优先，年度未锁定时取该桥
     // 最新的已确认版本。绑定与范围拆分都必须走这里——各自实现一份的话规则迟早漂移，
     // 范围拆分此前就是这么绕开年度锁定版本、又踩上草稿优先排序的。
+    //
+    // 只需要版本 id 的调用方（概览、批量取数、标记缺失/清除、评定树绑定）用这一条，
+    // 装配整份台账再从里面取一个 id 是纯粹的浪费。
+    std::optional<ConfirmedRevisionRef> resolve_confirmed_revision_ref(
+        const std::string& bridge_id,
+        const std::optional<std::string>& locked_revision_id) const;
+
+    // 需要完整台账做 validate_target() 或范围分析的调用方用这一条。
+    // 内部先走 resolve_confirmed_revision_ref()，两者共用同一套版本解析规则。
     std::optional<inventory::InventoryRevision> resolve_confirmed_revision(
         const std::string& bridge_id,
         const std::optional<std::string>& locked_revision_id) const;
@@ -112,12 +127,33 @@ public:
         std::int64_t offset,
         std::int64_t limit) const;
 
-    // 按编号子串检索，语义与前端原来的 String.includes 一致（搜 3-5 也会命中 13-5#梁）。
+    // 关键词子串检索，语义与前端原来的 String.includes 一致（搜 3-5 也会命中 13-5#梁），
+    // 匹配编号、构件类别与现场名称三个字段。
     // total 是未截断的命中数，界面上"匹配 N 个构件，显示前 M 个"依赖它。
+    //
+    // binding_eligible：只返回启用且至少有一个生效映射的构件。这是"台账层面可供选择"，
+    // **不等于**对某一行可绑——部件名与规范类别的兼容性仍由 validate_target() 在正式
+    // 绑定时判定。台账管理页不传它，仍能看见停用与未映射构件。
     EntryLookup search_entries(
         const std::string& revision_id,
-        const std::string& number_fragment,
+        const std::string& keyword,
+        bool binding_eligible,
         std::int64_t limit) const;
+
+    // 供绑定概览按 id 定向取展示信息：查的是这几十个 id，不是整份台账。
+    // 过滤条件与 binding_eligible 完全一致，以复现旧前端 usableEntries() 的可见范围。
+    std::vector<inventory::InventoryEntry> load_bindable_entries_by_component_ids(
+        const std::string& revision_id,
+        const std::vector<std::string>& bridge_component_ids) const;
+
+    // 批量替换预览用的精简条目：只有 bridge_component_id / component_number / is_active。
+    struct ReplaceEntry {
+        std::string bridge_component_id;
+        std::string component_number;
+        bool is_active{true};
+    };
+    std::vector<ReplaceEntry> load_bindable_replace_entries(
+        const std::string& revision_id) const;
 
 private:
     // executor 传连接就是普通只读路径，传当前事务就是写路径——同一段 SQL 复用，
@@ -126,12 +162,28 @@ private:
         const drogon::orm::DbClientPtr& executor,
         const std::string& revision_id);
 
-    // 分组分页与编号搜索的共同实现，差别只在 scope_predicate（$2 是它的取值）。
+    // 分组分页与关键词检索的共同取数条件。
+    struct EntryQuery {
+        // 三选一：按 id 定位、按类别分组、或按关键词检索。都为空表示取该版本全部构件。
+        std::string entry_id;
+        std::string site_component_type;
+        std::string keyword;
+        bool binding_eligible{false};
+    };
+
+    // 分组分页与关键词检索的共同实现。
+    //
+    // 三条语句（count / 分页 / 映射装配）都从同名 CTE scoped 取数、统一别名 s，
+    // 过滤条件只生成一次。此前是把一段谓词文本分别拼进三处，而三处别名并不相同
+    // （实表 e、两个 CTE 各自的 p），且映射查询那个 CTE 连 is_active 都没 select
+    // 出来；带别名的谓词在那里直接报错，不带别名的裸 id 更糟——它会就近解析成
+    // 子查询里的 m.id，条件恒假，搜索静默返回零行。
+    //
+    // 不变量：**谓词引用到的每一列，三处 CTE 都必须 select 出来。**
     static EntryLookup load_entry_page(
         const drogon::orm::DbClientPtr& executor,
         const std::string& revision_id,
-        const std::string& scope_predicate,
-        const std::string& scope_value,
+        const EntryQuery& query,
         std::int64_t offset,
         std::int64_t limit);
 

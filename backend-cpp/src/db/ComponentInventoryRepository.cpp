@@ -1,5 +1,7 @@
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 
+#include <cctype>
+
 #include <memory>
 #include <sstream>
 #include <unordered_map>
@@ -483,53 +485,131 @@ namespace {
 // 而不是对整份台账的每一行跑。
 constexpr const char* kIsReferencedSql =
     "exists(select 1 from defect_observations o "
-    "where o.bridge_component_id=p.bridge_component_id "
+    "where o.bridge_component_id=s.bridge_component_id "
     "union all select 1 from defect_threads t "
-    "where t.bridge_component_id=p.bridge_component_id "
+    "where t.bridge_component_id=s.bridge_component_id "
     "union all select 1 from condition_ratings cr "
-    "where cr.bridge_component_id=p.bridge_component_id "
+    "where cr.bridge_component_id=s.bridge_component_id "
     "union all select 1 from inspection_years iy "
     "join bridge_component_inventory_entries ie "
     "on ie.inventory_revision_id=iy.component_inventory_revision_id "
-    "where ie.bridge_component_id=p.bridge_component_id limit 1)";
+    "where ie.bridge_component_id=s.bridge_component_id limit 1)";
+
+// 启用且至少有一个生效映射。CTE 里先算好，谓词就只是引用一列，不必把带子查询的
+// 表达式重复拼进三条语句。
+constexpr const char* kHasActiveMappingSql =
+    "exists(select 1 from bridge_component_standard_mappings m "
+    "where m.inventory_entry_id=e.id and m.is_active)";
+
+// 拼 Postgres 数组字面量，作为参数绑定（不进 SQL 文本，故无注入面）。
+// 但候选 id 来自 parsed_result_json，是历史遗留数据；一个畸形值会让 ::uuid[] 转换
+// 抛错，把整个绑定概览拖成 503。这里直接跳过不合法的，宁可少显示一个候选。
+bool looks_like_uuid(const std::string& value) {
+    if (value.size() != 36) return false;
+    for (std::size_t i = 0; i < value.size(); ++i) {
+        const char c = value[i];
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            if (c != '-') return false;
+        } else if (!std::isxdigit(static_cast<unsigned char>(c))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::string pg_uuid_array(const std::vector<std::string>& ids) {
+    std::string joined = "{";
+    bool first = true;
+    for (const auto& id : ids) {
+        if (!looks_like_uuid(id)) continue;
+        if (!first) joined += ',';
+        joined += id;
+        first = false;
+    }
+    return joined + "}";
+}
 
 }  // namespace
 
 // 两个查询共用的装配：先取一页构件，再一次性把这页的生效映射取回来按构件归组。
 // 逐条取映射会让往返次数随页大小线性增长，那正是本次要消灭的形态。
+namespace {
+
+// 谓词与 CTE 的 select 列表在这里一并决定，保证"谓词引用到的列，CTE 一定 select 了"。
+// $2 是取值槽：分组是类别名，检索是关键词；两者都不用时传空串，谓词也不引用它。
+struct ScopedSql {
+    std::string predicate;   // 已按别名 s 限定
+    std::string extra_columns;  // 谓词需要、而基础列表里没有的列
+};
+
+ScopedSql scoped_sql_for(const std::string& entry_id,
+                         const std::string& site_component_type,
+                         const std::string& keyword, bool binding_eligible) {
+    std::vector<std::string> clauses;
+    std::string extra;
+    if (!entry_id.empty()) {
+        clauses.emplace_back("s.id=$2::uuid");
+    } else if (!site_component_type.empty()) {
+        clauses.emplace_back("s.site_component_type=$2");
+    } else if (!keyword.empty()) {
+        // 三个字段任一命中即可；子串语义与前端原来的 String.includes 一致。
+        const auto like = "'%'||" + escaped_like_expr("$2") + "||'%' escape '\\'";
+        clauses.emplace_back(
+            "(s.component_number like " + like +
+            " or s.site_component_type like " + like +
+            " or s.site_name like " + like + ")");
+    }
+    if (binding_eligible) {
+        clauses.emplace_back("s.is_active and s.has_active_mapping");
+        extra = std::string(kHasActiveMappingSql) + " as has_active_mapping,";
+    }
+    std::string predicate = "true";
+    for (const auto& clause : clauses) predicate += " and " + clause;
+    return {predicate, extra};
+}
+
+}  // namespace
+
 ComponentInventoryRepository::EntryLookup
 ComponentInventoryRepository::load_entry_page(
     const drogon::orm::DbClientPtr& executor,
     const std::string& revision_id,
-    const std::string& scope_predicate,
-    const std::string& scope_value,
+    const EntryQuery& query,
     std::int64_t offset,
     std::int64_t limit) {
     EntryLookup lookup;
+    const auto scoped = scoped_sql_for(query.entry_id, query.site_component_type,
+                                      query.keyword, query.binding_eligible);
+    const std::string scope_value = !query.entry_id.empty() ? query.entry_id
+        : !query.site_component_type.empty() ? query.site_component_type : query.keyword;
 
+    // count 的 CTE 不必算位置窗口与 is_referenced，只需谓词用到的列。
+    const std::string count_sql =
+        "with scoped as (select e.is_active,e.component_number,e.site_component_type,"
+        "e.site_name," + scoped.extra_columns +
+        "e.id from bridge_component_inventory_entries e "
+        "where e.inventory_revision_id=$1::uuid) "
+        "select count(*)::bigint as value from scoped s where " + scoped.predicate;
     // total 单独查一次。放在分页语句里用 count(*) over () 的话，页码越界时返回零行，
     // 就没有任何一行能把总数带回来，前端也就无从夹取页码。
-    const std::string count_sql =
-        "select count(*)::bigint as value from bridge_component_inventory_entries e "
-        "where e.inventory_revision_id=$1::uuid and " + scope_predicate;
     lookup.total = executor->execSqlSync(count_sql, revision_id, scope_value)[0]["value"]
                        .as<std::int64_t>();
 
     const std::string page_sql =
-        "with numbered as ("
+        "with scoped as ("
         "select e.id,e.bridge_component_id,e.component_number,e.site_name,"
         "e.site_component_type,e.span_or_location,e.is_active,e.deactivated_at,"
-        "e.deactivation_reason,e.sort_order,e.remarks," +
+        "e.deactivation_reason,e.sort_order,e.remarks," + scoped.extra_columns +
         entry_position_window_sql() + " as position "
         "from bridge_component_inventory_entries e "
         "where e.inventory_revision_id=$1::uuid"
         ") "
-        "select p.id::text,p.bridge_component_id::text,p.component_number,p.site_name,"
-        "p.site_component_type,p.span_or_location,p.is_active,p.deactivated_at::text,"
-        "p.deactivation_reason,p.sort_order,p.remarks,p.position," +
+        "select s.id::text,s.bridge_component_id::text,s.component_number,s.site_name,"
+        "s.site_component_type,s.span_or_location,s.is_active,s.deactivated_at::text,"
+        "s.deactivation_reason,s.sort_order,s.remarks,s.position," +
         std::string(kIsReferencedSql) + " as is_referenced "
-        "from numbered p where " + scope_predicate +
-        " order by p.sort_order,p.id offset $3 limit $4";
+        "from scoped s where " + scoped.predicate +
+        " order by s.sort_order,s.id offset $3 limit $4";
 
     const auto rows = executor->execSqlSync(page_sql, revision_id, scope_value, offset, limit);
     std::vector<std::string> page_ids;
@@ -561,15 +641,18 @@ ComponentInventoryRepository::load_entry_page(
 
     // 只返回生效映射。现有的全量装配不过滤，会把历次改动积累的失效映射一并带出，
     // 单页体积随之不可控；而前端所有消费点都只读生效映射。
+    // 这段 CTE 的 select 列表此前漏了 is_active，谓词一旦引用它就必然出事。
+    // 三处共用同一个 scoped.extra_columns，正是为了不再各写各的。
     const std::string mapping_sql =
-        "with numbered as ("
-        "select e.id,e.component_number,e.site_component_type,e.sort_order," +
+        "with scoped as ("
+        "select e.id,e.component_number,e.site_component_type,e.site_name,"
+        "e.is_active,e.sort_order," + scoped.extra_columns +
         entry_position_window_sql() + " as position "
         "from bridge_component_inventory_entries e "
         "where e.inventory_revision_id=$1::uuid"
         "),page_rows as ("
-        "select p.id from numbered p where " + scope_predicate +
-        " order by p.sort_order,p.id offset $3 limit $4"
+        "select s.id from scoped s where " + scoped.predicate +
+        " order by s.sort_order,s.id offset $3 limit $4"
         ") "
         "select m.inventory_entry_id::text,m.id::text,m.standard_package_id::text,"
         "m.standard_bridge_type_id,m.standard_component_category_id,m.structure_part,"
@@ -602,7 +685,7 @@ std::optional<inventory::LocatedInventoryEntry> ComponentInventoryRepository::lo
     const drogon::orm::DbClientPtr& executor,
     const std::string& revision_id,
     const std::string& entry_id) {
-    auto lookup = load_entry_page(executor, revision_id, "id=$2::uuid", entry_id, 0, 1);
+    auto lookup = load_entry_page(executor, revision_id, EntryQuery{entry_id}, 0, 1);
     if (lookup.entries.empty()) return std::nullopt;
     return std::move(lookup.entries.front());
 }
@@ -612,19 +695,69 @@ ComponentInventoryRepository::EntryLookup ComponentInventoryRepository::load_gro
     const std::string& site_component_type,
     std::int64_t offset,
     std::int64_t limit) const {
-    return load_entry_page(db_client_, revision_id, "site_component_type=$2",
-                           site_component_type, offset, limit);
+    return load_entry_page(db_client_, revision_id,
+                           EntryQuery{"", site_component_type}, offset, limit);
 }
 
 ComponentInventoryRepository::EntryLookup ComponentInventoryRepository::search_entries(
     const std::string& revision_id,
-    const std::string& number_fragment,
+    const std::string& keyword,
+    bool binding_eligible,
     std::int64_t limit) const {
-    return load_entry_page(
-        db_client_,
-        revision_id,
-        "component_number like '%'||" + escaped_like_expr("$2") + "||'%' escape '\\'",
-        number_fragment, 0, limit);
+    return load_entry_page(db_client_, revision_id,
+                           EntryQuery{"", "", keyword, binding_eligible}, 0, limit);
+}
+
+// 绑定概览只要这几十个 id 的展示信息。装配整份修订版再从里面挑，正是这次要去掉的形态。
+std::vector<inventory::InventoryEntry>
+ComponentInventoryRepository::load_bindable_entries_by_component_ids(
+    const std::string& revision_id,
+    const std::vector<std::string>& bridge_component_ids) const {
+    std::vector<inventory::InventoryEntry> entries;
+    if (bridge_component_ids.empty()) return entries;
+    // 过滤条件与 binding_eligible 一致：启用且至少有一个生效映射。
+    const auto rows = db_client_->execSqlSync(
+        "select e.id::text,e.bridge_component_id::text,e.component_number,"
+        "e.site_name,e.site_component_type "
+        "from bridge_component_inventory_entries e "
+        "where e.inventory_revision_id=$1::uuid "
+        "and e.bridge_component_id = any($2::uuid[]) and e.is_active "
+        "and exists(select 1 from bridge_component_standard_mappings m "
+        "where m.inventory_entry_id=e.id and m.is_active)",
+        revision_id, pg_uuid_array(bridge_component_ids));
+    for (const auto& row : rows) {
+        inventory::InventoryEntry entry;
+        entry.id = row["id"].as<std::string>();
+        entry.bridge_component_id = row["bridge_component_id"].as<std::string>();
+        entry.component_number = row["component_number"].as<std::string>();
+        entry.site_name = row["site_name"].as<std::string>();
+        entry.site_component_type = row["site_component_type"].as<std::string>();
+        entries.push_back(std::move(entry));
+    }
+    return entries;
+}
+
+std::vector<ComponentInventoryRepository::ReplaceEntry>
+ComponentInventoryRepository::load_bindable_replace_entries(
+    const std::string& revision_id) const {
+    // is_active 恒为 true（下面已按它过滤），仍然要返回：前端的预览算法里有一句
+    // if (!entry.is_active) continue，字段缺失时 !undefined 为真，会把每一条都跳过，
+    // 预览安静地全判成"台账里没有"。保留字段比让两边互相假设对方过滤过更稳。
+    const auto rows = db_client_->execSqlSync(
+        "select e.bridge_component_id::text,e.component_number "
+        "from bridge_component_inventory_entries e "
+        "where e.inventory_revision_id=$1::uuid and e.is_active "
+        "and exists(select 1 from bridge_component_standard_mappings m "
+        "where m.inventory_entry_id=e.id and m.is_active) "
+        "order by e.sort_order,e.id",
+        revision_id);
+    std::vector<ReplaceEntry> entries;
+    entries.reserve(rows.size());
+    for (const auto& row : rows) {
+        entries.push_back({row["bridge_component_id"].as<std::string>(),
+                           row["component_number"].as<std::string>(), true});
+    }
+    return entries;
 }
 
 std::optional<inventory::InventoryRevision> ComponentInventoryRepository::get_latest_revision(
@@ -650,19 +783,36 @@ ComponentInventoryRepository::get_latest_confirmed_revision(
     return get_revision(rows[0]["id"].as<std::string>());
 }
 
+std::optional<ComponentInventoryRepository::ConfirmedRevisionRef>
+ComponentInventoryRepository::resolve_confirmed_revision_ref(
+    const std::string& bridge_id,
+    const std::optional<std::string>& locked_revision_id) const {
+    // 锁定版本是外部传进来的，所以这里连同"属于本桥"和"确实已确认"一起判掉；
+    // 未锁定时才轮到"该桥最新已确认"这条规则。
+    const auto rows = locked_revision_id.has_value()
+        ? db_client_->execSqlSync(
+              "select id::text,bridge_id::text from bridge_component_inventory_revisions "
+              "where id=$1::uuid and bridge_id=$2::uuid "
+              "and status in ('已确认','confirmed')",
+              *locked_revision_id, bridge_id)
+        : db_client_->execSqlSync(
+              "select id::text,bridge_id::text from bridge_component_inventory_revisions "
+              "where bridge_id=$1::uuid and status in ('已确认','confirmed') "
+              "order by revision_number desc limit 1",
+              bridge_id);
+    if (rows.empty()) return std::nullopt;
+    return ConfirmedRevisionRef{rows[0]["id"].as<std::string>(),
+                                rows[0]["bridge_id"].as<std::string>()};
+}
+
 std::optional<inventory::InventoryRevision>
 ComponentInventoryRepository::resolve_confirmed_revision(
     const std::string& bridge_id,
     const std::optional<std::string>& locked_revision_id) const {
-    const auto revision = locked_revision_id.has_value()
-        ? get_revision(*locked_revision_id)
-        : get_latest_confirmed_revision(bridge_id);
-    // 锁定版本是外部传进来的，仍要确认它属于本桥且确实已确认。
-    if (!revision.has_value() || revision->bridge_id != bridge_id
-        || !(revision->status == "已确认" || revision->status == "confirmed")) {
-        return std::nullopt;
-    }
-    return revision;
+    // 规则只有上面那一份；这里只负责把解析出来的版本完整装配出来。
+    const auto ref = resolve_confirmed_revision_ref(bridge_id, locked_revision_id);
+    if (!ref.has_value()) return std::nullopt;
+    return get_revision(ref->id);
 }
 
 bool ComponentInventoryRepository::lock_pending_year_revision(

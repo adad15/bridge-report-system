@@ -2,8 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ComponentInventoryEntry } from "../../api/componentInventoryApi";
-import type { BindingRow } from "../../api/importBindingApi";
+import type { BindingReplaceInventoryEntry, BindingRow } from "../../api/importBindingApi";
 import { BulkReplaceDialog } from "./BulkReplaceDialog";
 
 function row(component_number: string, status: BindingRow["status"] = "unmatched"): BindingRow {
@@ -12,26 +11,13 @@ function row(component_number: string, status: BindingRow["status"] = "unmatched
     defect_count: 1,
     status,
     bridge_component_id: null,
-    candidate_component_ids: [],
+    bound_component: null,
+    candidate_components: [],
   };
 }
 
-function entry(id: string, component_number: string): ComponentInventoryEntry {
-  return {
-    id: `entry-${id}`,
-    bridge_component_id: id,
-    component_number,
-    site_name: "桥面铺装",
-    site_component_type: "桥面铺装",
-    span_or_location: null,
-    is_active: true,
-    deactivated_at: null,
-    deactivation_reason: null,
-    sort_order: 1,
-    remarks: null,
-    is_referenced: false,
-    mappings: [],
-  };
+function entry(id: string, component_number: string): BindingReplaceInventoryEntry {
+  return { bridge_component_id: id, component_number, is_active: true };
 }
 
 const rows = [row("第32孔桥面"), row("第33孔桥面"), row("第7孔桥面")];
@@ -60,6 +46,27 @@ async function fillPattern(find: string, replace: string) {
 }
 
 describe("BulkReplaceDialog", () => {
+  // 取数完成前用空数组顶替，会让预览把每一条都判成"台账中无此编号"——不报错、
+  // 不崩溃，只是全错。所以未加载必须是 null，而且此时不许输入。
+  it("does not preview before the inventory arrives", async () => {
+    renderDialog({ entries: null, loading: true });
+
+    expect(screen.getByText("正在加载台账构件…")).toBeInTheDocument();
+    expect(screen.getByLabelText("查找")).toBeDisabled();
+    expect(screen.getByLabelText("替换为")).toBeDisabled();
+    expect(screen.queryByText("台账中无此编号")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
+  });
+
+  it("offers a retry when the inventory failed to load", async () => {
+    const onRetry = vi.fn();
+    renderDialog({ entries: null, loading: false, onRetry });
+
+    await userEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+
   it("previews each row and totals bindable versus skipped", async () => {
     renderDialog();
     await fillPattern("第*孔桥面", "*#跨桥面铺装");

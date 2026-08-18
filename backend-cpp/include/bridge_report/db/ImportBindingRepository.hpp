@@ -6,7 +6,20 @@
 
 #include <drogon/orm/DbClient.h>
 
+#include "bridge_report/db/ComponentInventoryRepository.hpp"
+
 namespace bridge_report::db {
+
+// 下拉里显示一个构件所需的全部信息。entry_id 是 <option> 的 key，
+// bridge_component_id 是它的 value，两者不能合并。
+// site_name 一并返回：它参与关键词匹配，不显示的话用户看不出为什么命中。
+struct BindingComponentSummary {
+    std::string entry_id;
+    std::string bridge_component_id;
+    std::string component_number;
+    std::string site_component_type;
+    std::string site_name;
+};
 
 // 绑定视图的一行 = 报告里出现的一个不同 (部件名称, 归一化编号)。
 struct BindingRow {
@@ -14,7 +27,15 @@ struct BindingRow {
     int defect_count{0};                              // 引用该编号的病害数
     std::string status;                               // bound|ambiguous|unmatched|missing
     std::optional<std::string> bridge_component_id;   // 已绑定的实际构件
-    std::vector<std::string> candidate_component_ids; // 歧义候选
+    // 歧义候选的内部 id。**不出现在 JSON 里**，但字段必须保留：行状态是否为
+    // ambiguous 由它判定，那是业务逻辑，不是显示数据。
+    std::vector<std::string> candidate_component_ids;
+    // 上面两者对应的展示信息，只填充"启用且有生效映射"的构件。
+    // 因此可能出现 candidate_component_ids 有两个、candidate_components 只有一个
+    // （构件被删、停用或没有生效映射）——此时行**仍然是 ambiguous**，
+    // 展示对象缺失只影响显示，不改变行状态。
+    std::optional<BindingComponentSummary> bound_component;
+    std::vector<BindingComponentSummary> candidate_components;
     bool split_eligible{false};
     std::optional<int> split_expanded_count;
 };
@@ -67,6 +88,9 @@ struct BindingOutcome {
     // 默认错误码。形状与 ComponentRangeSplitOutcome 一致，三条路径才能共用一套机制。
     std::string error_code;
     std::string error_message;
+    // 批量替换取数专用。
+    std::string replace_revision_id;
+    std::vector<ComponentInventoryRepository::ReplaceEntry> replace_entries;
 };
 
 struct BindingTarget {
@@ -82,6 +106,12 @@ public:
     explicit ImportBindingRepository(drogon::orm::DbClientPtr db_client);
 
     [[nodiscard]] BindingOutcome overview(const std::string& import_id);
+
+    // 批量替换预览的取数。读操作：只校验 expected_revision_id 仍然有效，不锁定年度。
+    // 返回精简条目——预览只用 bridge_component_id / component_number / is_active，
+    // 整份台账（含映射、类别、现场名）比它大一个数量级。
+    [[nodiscard]] BindingOutcome load_replace_inventory(
+        const std::string& import_id, const std::string& expected_revision_id);
 
     // 以下写操作都带 expected_revision_id：调用方声明"本次操作依据的是这个台账版本"。
     // 事务内解析出的版本与它不符即返回 component_inventory_revision_changed，

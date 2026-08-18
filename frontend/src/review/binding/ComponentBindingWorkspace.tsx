@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  fetchLatestComponentInventory,
+  searchInventoryEntries,
   type ComponentInventoryEntry,
-  type ComponentInventoryRevision,
 } from "../../api/componentInventoryApi";
 import {
   bindComponent,
@@ -15,7 +14,10 @@ import {
   markComponentMissing,
   previewComponentRangeSplit,
   applyComponentRangeSplit,
+  fetchBindingReplaceInventory,
   INVENTORY_REVISION_CHANGED,
+  type BindingComponentSummary,
+  type BindingReplaceInventoryEntry,
   type BindingRow,
   type BindingTarget,
   type ComponentRangeSplitPreview,
@@ -42,13 +44,6 @@ const STATUS_LABELS: Record<string, string> = {
 
 type BindingFilter = "pending" | "bound" | "missing" | "all";
 
-function usableEntries(inventory: ComponentInventoryRevision | null): ComponentInventoryEntry[] {
-  if (!inventory) return [];
-  return inventory.entries.filter(
-    (entry) => entry.is_active && entry.mappings.some((mapping) => mapping.is_active)
-  );
-}
-
 function errorMessage(caught: unknown): string {
   if (caught instanceof ApiError) {
     if (caught.code === "component_binding_conflict") {
@@ -73,21 +68,86 @@ function requireRevisionId(overview: ComponentBindingOverview): string {
   return overview.inventory_revision_id;
 }
 
+/**
+ * 候选与搜索结果来自两个来源，字段名不同（概览是 entry_id，检索返回的是 id）。
+ * 混进同一个下拉时 <option key> 会取到 undefined，React 会报重复 key 并错误复用节点，
+ * 所以两边都先转成这一种模型再合并。
+ */
+interface BindingComponentOption {
+  entryId: string;
+  bridgeComponentId: string;
+  componentNumber: string;
+  siteComponentType: string;
+  siteName: string;
+  candidate: boolean;
+}
+
+function optionFromSummary(summary: BindingComponentSummary): BindingComponentOption {
+  return {
+    entryId: summary.entry_id,
+    bridgeComponentId: summary.bridge_component_id,
+    componentNumber: summary.component_number,
+    siteComponentType: summary.site_component_type,
+    siteName: summary.site_name,
+    candidate: true,
+  };
+}
+
+function optionFromEntry(entry: ComponentInventoryEntry): BindingComponentOption {
+  return {
+    entryId: entry.id,
+    bridgeComponentId: entry.bridge_component_id,
+    componentNumber: entry.component_number,
+    siteComponentType: entry.site_component_type,
+    siteName: entry.site_name,
+    candidate: false,
+  };
+}
+
 interface RowActionProps {
   row: BindingRow;
-  entries: ComponentInventoryEntry[];
-  byId: Map<string, ComponentInventoryEntry>;
+  revisionId: string;
   busy: boolean;
   onBind: (bridgeComponentId: string) => void;
   onMarkMissing: () => void;
   onClear: () => void;
 }
 
-function RowAction({ row, entries, byId, busy, onBind, onMarkMissing, onClear }: RowActionProps) {
+function RowAction({ row, revisionId, busy, onBind, onMarkMissing, onClear }: RowActionProps) {
   const [search, setSearch] = useState("");
+  const [results, setResults] = useState<BindingComponentOption[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  // 行内搜索改走服务端：整份台账有五千多条，为了这个下拉把它整个下载下来正是本次
+  // 要去掉的形态。防抖避免逐字发请求；AbortController 保证慢的旧响应覆盖不了新的。
+  useEffect(() => {
+    const term = search.trim();
+    if (!term) {
+      setResults([]);
+      setSearchError(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      searchInventoryEntries(
+        backendBaseUrl, revisionId, term, MAX_SEARCH_RESULTS, controller.signal, true)
+        .then((response) => {
+          setResults(response.entries.map(optionFromEntry));
+          setSearchError(null);
+        })
+        .catch((caught) => {
+          if (controller.signal.aborted) return;   // 主动取消不是错误
+          setSearchError(errorMessage(caught));
+        });
+    }, 250);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [search, revisionId]);
 
   if (row.status === "bound") {
-    const bound = row.bridge_component_id ? byId.get(row.bridge_component_id) : undefined;
+    const bound = row.bound_component;
     // 绝大多数行都是按同名精确匹配绑上的，重复显示一遍同样的编号只是噪声——
     // "已绑定"徽标已经说明状态。只有绑到了别的编号（人工改绑）才值得标出来。
     const rebound = bound && bound.component_number !== row.component_number;
@@ -116,39 +176,30 @@ function RowAction({ row, entries, byId, busy, onBind, onMarkMissing, onClear }:
     );
   }
 
-  const candidates = new Set(row.candidate_component_ids);
   const term = search.trim();
-  const options = new Map<string, ComponentInventoryEntry>();
-  for (const id of row.candidate_component_ids) {
-    const entry = byId.get(id);
-    if (entry) options.set(entry.bridge_component_id, entry);
+  // 候选始终在前且保持概览给的顺序，搜索结果追加在后，按构件去重。
+  // limit 只约束服务端返回条数，候选另计——候选被搜索结果挤掉是旧实现的毛病。
+  const options = new Map<string, BindingComponentOption>();
+  for (const candidate of row.candidate_components) {
+    options.set(candidate.bridge_component_id, optionFromSummary(candidate));
   }
-  if (term) {
-    for (const entry of entries) {
-      if (options.size >= MAX_SEARCH_RESULTS) break;
-      if (
-        entry.component_number.includes(term) ||
-        entry.site_component_type.includes(term) ||
-        entry.site_name.includes(term)
-      ) {
-        options.set(entry.bridge_component_id, entry);
-      }
-    }
+  for (const result of results) {
+    if (!options.has(result.bridgeComponentId)) options.set(result.bridgeComponentId, result);
   }
 
   return (
     <div className="binding-row-action">
       <input
         aria-label={`搜索实际构件 ${row.component_number}`}
-        placeholder="输入编号或名称搜索"
+        placeholder="编号、类别或现场名"
         value={search}
-        disabled={busy || entries.length === 0}
+        disabled={busy}
         onChange={(event) => setSearch(event.target.value)}
       />
       <select
         aria-label={`为 ${row.component_number} 选择实际构件`}
         value=""
-        disabled={busy || entries.length === 0}
+        disabled={busy}
         onChange={(event) => {
           if (event.target.value) onBind(event.target.value);
         }}
@@ -156,13 +207,15 @@ function RowAction({ row, entries, byId, busy, onBind, onMarkMissing, onClear }:
         <option value="">
           {term && options.size === 0 ? "没有匹配的构件" : "请选择实际构件（可先搜索）"}
         </option>
-        {[...options.values()].map((entry) => (
-          <option key={entry.id} value={entry.bridge_component_id}>
-            {candidates.has(entry.bridge_component_id) ? "候选 · " : ""}
-            {entry.component_number} / {entry.site_component_type}
+        {[...options.values()].map((option) => (
+          <option key={option.entryId} value={option.bridgeComponentId}>
+            {option.candidate ? "候选 · " : ""}
+            {option.componentNumber} / {option.siteComponentType} / {option.siteName}
           </option>
         ))}
       </select>
+      {/* 搜索失败只报在行内，概览带来的候选项照常可用。 */}
+      {searchError ? <span className="binding-row-error">{searchError}</span> : null}
       <button type="button" disabled={busy} aria-label={`标记缺失 ${row.component_number}`} onClick={onMarkMissing}>
         标记缺失
       </button>
@@ -194,7 +247,12 @@ export function ComponentBindingWorkspace({
   onDraftInvalidated?: () => void;
 }) {
   const [overview, setOverview] = useState<ComponentBindingOverview | null>(null);
-  const [inventory, setInventory] = useState<ComponentInventoryRevision | null>(null);
+  // 批量替换的取数结果按台账版本缓存：同版本重开对话框可复用，版本一变即失效。
+  // 不能按 bridgeId 缓存——那正是"预览与校验用了不同版本"那类错误的温床。
+  const [replaceInventory, setReplaceInventory] =
+    useState<{ revisionId: string; entries: BindingReplaceInventoryEntry[] } | null>(null);
+  const [replaceLoading, setReplaceLoading] = useState(false);
+  const replaceRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -219,14 +277,11 @@ export function ComponentBindingWorkspace({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      fetchComponentBinding(backendBaseUrl, importId),
-      fetchLatestComponentInventory(backendBaseUrl, bridgeId).catch(() => null),
-    ])
-      .then(([boundOverview, revision]) => {
+    // 首屏只等概览。此前还并排拉一份完整台账（约 3.4 MB），两个都回来才渲染。
+    fetchComponentBinding(backendBaseUrl, importId)
+      .then((boundOverview) => {
         if (cancelled) return;
         setOverview(boundOverview);
-        setInventory(revision);
         setError(null);
         onOverviewChange?.(boundOverview);
       })
@@ -259,12 +314,6 @@ export function ComponentBindingWorkspace({
       setSelectedRatingTreeId(ratingTrees[0].id);
     }
   }, [overview?.rating_tree?.version_id, ratingTrees]);
-
-  const entries = useMemo(() => usableEntries(inventory), [inventory]);
-  const byId = useMemo(
-    () => new Map(entries.map((entry) => [entry.bridge_component_id, entry])),
-    [entries]
-  );
 
   const progress = useMemo(
     () => (overview ? bindingProgress(overview) : { total: 0, resolved: 0, pending: 0 }),
@@ -355,6 +404,37 @@ export function ComponentBindingWorkspace({
   }, [overview]);
 
   // 单条绑定 / 标记缺失 / 取消绑定共用；三者都会改写后端草稿里的病害构件关联。
+  // 只在打开批量替换对话框时取数，且只取精简条目。关掉对话框就取消在途请求——
+  // 取消是用户的动作，不显示为加载失败。
+  useEffect(() => {
+    if (replaceGroup === null || !overview?.inventory_revision_id) return;
+    const revisionId = overview.inventory_revision_id;
+    if (replaceInventory?.revisionId === revisionId) return;   // 同版本复用缓存
+    const requestId = ++replaceRequest.current;
+    const controller = new AbortController();
+    setReplaceLoading(true);
+    setReplaceError(null);
+    fetchBindingReplaceInventory(backendBaseUrl, importId, revisionId, controller.signal)
+      .then((response) => {
+        if (replaceRequest.current !== requestId) return;
+        // 响应里的版本与当前概览不一致就不生成预览，走版本变化流程。
+        if (response.inventory_revision_id !== revisionId) {
+          void refreshAfterRevisionChange();
+          return;
+        }
+        setReplaceInventory({ revisionId, entries: response.entries });
+      })
+      .catch((caught) => {
+        if (controller.signal.aborted || replaceRequest.current !== requestId) return;
+        if (isRevisionChanged(caught)) void refreshAfterRevisionChange();
+        else setReplaceError(errorMessage(caught));
+      })
+      .finally(() => {
+        if (replaceRequest.current === requestId) setReplaceLoading(false);
+      });
+    return () => controller.abort();
+  }, [replaceGroup, overview?.inventory_revision_id, replaceInventory?.revisionId, importId]);
+
   // 台账版本变了：重新拉概览并说清楚发生了什么。只显示一条错误的话，用户会对着
   // 一份已经过期的候选反复重试。
   async function refreshAfterRevisionChange() {
@@ -364,6 +444,9 @@ export function ComponentBindingWorkspace({
       onOverviewChange?.(next);
       setSplitPreview(null);
       splitPreviewRequest.current += 1;
+      // 批量缓存按版本失效；在途的取数也要作废，否则旧响应会覆盖新状态。
+      setReplaceInventory(null);
+      replaceRequest.current += 1;
       setError("构件台账版本已变化，已为你刷新，请确认后重试。");
     } catch (caught) {
       setError(errorMessage(caught));
@@ -411,11 +494,9 @@ export function ComponentBindingWorkspace({
       );
       setOverview(next);
       onOverviewChange?.(next);
-      setInventory(
-        await fetchLatestComponentInventory(backendBaseUrl, bridgeId).catch(
-          () => inventory
-        )
-      );
+      // 绑评定树确实会改年度使用的台账版本，但响应已经带回按新版本生成的完整概览，
+      // 不必再单独取一次台账。缓存按版本失效即可。
+      setReplaceInventory(null);
       setRatingTreeMessage(
         overview?.rating_tree ? "评定树已切换。" : "评定树已绑定。"
       );
@@ -611,8 +692,7 @@ export function ComponentBindingWorkspace({
               </span>
               <RowAction
                 row={row}
-                entries={entries}
-                byId={byId}
+                revisionId={requireRevisionId(overview)}
                 busy={busy}
                 onBind={(id) =>
                   run(() =>
@@ -648,10 +728,21 @@ export function ComponentBindingWorkspace({
         <BulkReplaceDialog
           partName={replaceGroup}
           rows={overview.groups.find((item) => item.part_name === replaceGroup)?.rows ?? []}
-          entries={entries}
+          entries={
+            replaceInventory?.revisionId === overview.inventory_revision_id
+              ? replaceInventory.entries : null
+          }
+          loading={replaceLoading}
           busy={busy}
           error={replaceError}
-          onClose={() => setReplaceGroup(null)}
+          onRetry={() => {
+            setReplaceInventory(null);
+            setReplaceError(null);
+          }}
+          onClose={() => {
+            replaceRequest.current += 1;   // 取消在途取数
+            setReplaceGroup(null);
+          }}
           onApply={async (targets) => {
             setBusy(true);
             try {

@@ -662,17 +662,17 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
           构件"和"确认本版台账"：确认是看完表格才做的终点动作，不能排在被确认的内容前面。 */}
       <div className="inventory-entry-tools">
         <label>
-          按编号搜索构件
+          搜索构件
           <input
-            aria-label="按编号搜索构件"
-            placeholder="如 3-5#"
+            aria-label="搜索构件"
+            placeholder="编号、类别或现场名，如 3-5# 或 支座"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
         </label>
         {/* 提示语和搜索框是一件事，拆成两条横带只会让卡片显得散。搜索时让位给结果计数。 */}
         {searchTerm ? null : (
-          <p className="inventory-entry-hint">输入构件编号可直接定位单个构件，或在分组核对表中点击“查看构件”，在弹窗中查看并编辑该组构件。</p>
+          <p className="inventory-entry-hint">按编号、构件类别或现场名称搜索；结果只显示前若干条，要完整查看整组构件请在分组核对表中点击“查看构件”，在弹窗中分页浏览并编辑。</p>
         )}
       </div>
       {searchTerm ? (

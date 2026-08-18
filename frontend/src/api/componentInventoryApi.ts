@@ -219,14 +219,24 @@ export function fetchInventoryGroupEntries(
     { signal });
 }
 
+/**
+ * 关键词检索，匹配编号、构件类别、现场名称三个字段。
+ *
+ * bindingEligible：只返回启用且有生效映射的构件，绑定面板传 true。过滤在服务端、在
+ * limit 之前生效——先取前 N 条再由前端筛的话，这 N 条可能全是停用构件，真正可绑的
+ * 被截断在后面。它表示"台账层面可供选择"，**不保证**对某一行可绑：部件名与规范类别
+ * 的兼容性仍由后端在正式绑定时判定。
+ */
 export function searchInventoryEntries(
   baseUrl: string,
   revisionId: string,
-  numberFragment: string,
+  keyword: string,
   limit: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  bindingEligible = false
 ) {
-  const query = new URLSearchParams({ number: numberFragment, limit: String(limit) });
+  const query = new URLSearchParams({ keyword, limit: String(limit) });
+  if (bindingEligible) query.set("binding_eligible", "true");
   return request<InventorySearchResponse>(
     `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/entries?${query}`,
     { signal });

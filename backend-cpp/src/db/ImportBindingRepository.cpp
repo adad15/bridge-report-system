@@ -142,6 +142,16 @@ std::optional<std::string> optional_row_text(
         : std::optional<std::string>(row[column].as<std::string>());
 }
 
+// 只要版本 id 的路径走这条：概览、标记缺失/清除、评定树绑定都不需要构件内容，
+// 为拿一个 id 去装配五千多条构件是纯粹的浪费。
+std::optional<ComponentInventoryRepository::ConfirmedRevisionRef> resolve_confirmed_revision_ref(
+    const drogon::orm::DbClientPtr& client,
+    const std::string& bridge_id,
+    const std::optional<std::string>& locked_revision_id) {
+    return ComponentInventoryRepository(client).resolve_confirmed_revision_ref(
+        bridge_id, locked_revision_id);
+}
+
 // 规则本身住在 ComponentInventoryRepository，范围拆分与这里共用同一份。
 std::optional<inventory::InventoryRevision> resolve_confirmed_revision(
     const drogon::orm::DbClientPtr& client,
@@ -149,6 +159,52 @@ std::optional<inventory::InventoryRevision> resolve_confirmed_revision(
     const std::optional<std::string>& locked_revision_id) {
     return ComponentInventoryRepository(client).resolve_confirmed_revision(
         bridge_id, locked_revision_id);
+}
+
+// 概览此前会把整份台账（五千多条构件加同样多的映射）装配一遍，只为把行上的几十个
+// id 换成可读信息。改成按这批 id 定向查一次。
+void fill_component_summaries(
+    const drogon::orm::DbClientPtr& client,
+    const std::string& revision_id,
+    BindingOverview& overview) {
+    std::vector<std::string> wanted;
+    for (const auto& group : overview.groups) {
+        for (const auto& row : group.rows) {
+            if (row.bridge_component_id.has_value()) wanted.push_back(*row.bridge_component_id);
+            wanted.insert(wanted.end(), row.candidate_component_ids.begin(),
+                          row.candidate_component_ids.end());
+        }
+    }
+    if (wanted.empty()) return;
+    std::sort(wanted.begin(), wanted.end());
+    wanted.erase(std::unique(wanted.begin(), wanted.end()), wanted.end());
+
+    std::unordered_map<std::string, BindingComponentSummary> by_component;
+    for (auto& entry : ComponentInventoryRepository(client)
+                           .load_bindable_entries_by_component_ids(revision_id, wanted)) {
+        BindingComponentSummary summary;
+        summary.entry_id = entry.id;
+        summary.bridge_component_id = entry.bridge_component_id;
+        summary.component_number = entry.component_number;
+        summary.site_component_type = entry.site_component_type;
+        summary.site_name = entry.site_name;
+        by_component.emplace(entry.bridge_component_id, std::move(summary));
+    }
+
+    for (auto& group : overview.groups) {
+        for (auto& row : group.rows) {
+            if (row.bridge_component_id.has_value()) {
+                const auto found = by_component.find(*row.bridge_component_id);
+                if (found != by_component.end()) row.bound_component = found->second;
+            }
+            // 按 candidate_component_ids 的原顺序回填：SQL 的返回顺序不保证与它一致，
+            // 照返回顺序装的话候选显示顺序会漂，相关断言也跟着不稳。
+            for (const auto& id : row.candidate_component_ids) {
+                const auto found = by_component.find(id);
+                if (found != by_component.end()) row.candidate_components.push_back(found->second);
+            }
+        }
+    }
 }
 
 // 台账版本在两次请求之间被人换掉了。必须让用户看见这件事：静默改用新版本的话，
@@ -176,6 +232,42 @@ bool attach_revision_to_pending_year(
 ImportBindingRepository::ImportBindingRepository(drogon::orm::DbClientPtr db_client)
     : db_client_(std::move(db_client)) {}
 
+BindingOutcome ImportBindingRepository::load_replace_inventory(
+    const std::string& import_id, const std::string& expected_revision_id) {
+    try {
+        const auto rows = db_client_->execSqlSync(
+            "select ir.bridge_id::text as bridge_id,ir.import_status,"
+            "iy.component_inventory_revision_id::text as inventory_revision_id "
+            "from import_records ir "
+            "left join inspection_years iy on iy.id=ir.inspection_year_id "
+            "where ir.id=$1::uuid",
+            import_id);
+        if (rows.empty()) return {BindingStatus::NotFound};
+        if (rows[0]["import_status"].as<std::string>() != "待校对") {
+            return {BindingStatus::Conflict};
+        }
+        const auto revision = resolve_confirmed_revision_ref(
+            db_client_, rows[0]["bridge_id"].as<std::string>(),
+            optional_row_text(rows[0], "inventory_revision_id"));
+        if (!revision.has_value()) {
+            BindingOutcome outcome{BindingStatus::Conflict};
+            outcome.error_code = "component_binding_inventory_unavailable";
+            outcome.error_message = "该桥尚无可用的已确认构件台账。";
+            return outcome;
+        }
+        // 只校验，不锁定——这是读操作。
+        if (revision->id != expected_revision_id) return revision_changed_outcome();
+
+        BindingOutcome outcome;
+        outcome.replace_revision_id = revision->id;
+        outcome.replace_entries =
+            ComponentInventoryRepository(db_client_).load_bindable_replace_entries(revision->id);
+        return outcome;
+    } catch (...) {
+        return {BindingStatus::Failed};
+    }
+}
+
 BindingOutcome ImportBindingRepository::overview(const std::string& import_id) {
     try {
         const auto rows = db_client_->execSqlSync(
@@ -200,14 +292,17 @@ BindingOutcome ImportBindingRepository::overview(const std::string& import_id) {
         if (rows[0]["import_status"].as<std::string>() != "待校对") return {BindingStatus::Conflict};
         Json::Value parsed;
         parse_json(rows[0]["parsed"].as<std::string>(), parsed);
-        const auto revision = resolve_confirmed_revision(
+        const auto revision = resolve_confirmed_revision_ref(
             db_client_, rows[0]["bridge_id"].as<std::string>(),
             optional_row_text(rows[0], "inventory_revision_id"));
         const bool confirmed = revision.has_value();
         BindingOutcome outcome;
         outcome.overview = aggregate(parsed, confirmed);
         // 与 inventory_confirmed 严格同生共死：两者不得出现矛盾组合。
-        if (confirmed) outcome.overview->inventory_revision_id = revision->id;
+        if (confirmed) {
+            outcome.overview->inventory_revision_id = revision->id;
+            fill_component_summaries(db_client_, revision->id, *outcome.overview);
+        }
         if (const auto version_id =
                 optional_row_text(rows[0], "rating_tree_version_id");
             version_id.has_value()) {
@@ -569,7 +664,7 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
         const auto locked_revision_id =
             optional_row_text(context[0], "inventory_revision_id");
         const auto source_revision =
-            resolve_confirmed_revision(tx, bridge_id, locked_revision_id);
+            resolve_confirmed_revision_ref(tx, bridge_id, locked_revision_id);
         if (!source_revision.has_value()) {
             rollback();
             return {BindingStatus::Conflict};
@@ -857,7 +952,7 @@ BindingOutcome mutate_group(
         const auto locked_revision_id =
             optional_row_text(rows[0], "inventory_revision_id");
         const auto revision =
-            resolve_confirmed_revision(tx, bridge_id, locked_revision_id);
+            resolve_confirmed_revision_ref(tx, bridge_id, locked_revision_id);
         // 标记缺失/清除绑定不需要台账内容，台账未确认时照样可用——这里保持原样，
         // 只在确实解析出版本（也就是下面真会锁定它）时才校验期望版本。
         if (revision.has_value()) {

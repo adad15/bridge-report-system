@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
 
-import type { ComponentInventoryEntry } from "../../api/componentInventoryApi";
-import type { BindingRow } from "../../api/importBindingApi";
+import type { BindingReplaceInventoryEntry, BindingRow } from "../../api/importBindingApi";
 import { buildReplacePreview, type ReplaceOutcome } from "./replacePreview";
 
 // 批量查找替换。设计见
 // docs/superpowers/specs/2026-07-24-bulk-binding-replace-design.md §3。
-// 预览全在前端算（台账 entries 已在手），只有"应用"才打后端。
+// 预览在前端算，entries 由父组件在打开对话框时按需取回，只有"应用"才打后端。
 
 const OUTCOME_LABELS: Record<ReplaceOutcome, string> = {
   will_bind: "将绑定",
@@ -25,16 +24,21 @@ export function BulkReplaceDialog({
   partName,
   rows,
   entries,
+  loading = false,
   busy,
   error,
+  onRetry,
   onApply,
   onClose,
 }: {
   partName: string;
   rows: BindingRow[];
-  entries: ComponentInventoryEntry[];
+  /** null 表示尚未取回。不能用空数组代替——那会让预览把所有编号判成"台账中无此编号"。 */
+  entries: BindingReplaceInventoryEntry[] | null;
+  loading?: boolean;
   busy: boolean;
   error?: string | null;
+  onRetry?: () => void;
   onApply: (targets: BulkReplaceTarget[]) => void | Promise<void>;
   onClose: () => void;
 }) {
@@ -42,14 +46,16 @@ export function BulkReplaceDialog({
   const [replace, setReplace] = useState("");
 
   const preview = useMemo(
-    () => (find === "" ? null : buildReplacePreview(rows, entries, find, replace)),
+    () => (find === "" || entries === null
+      ? null : buildReplacePreview(rows, entries, find, replace)),
     [rows, entries, find, replace]
   );
 
   const bindable = preview?.ok
     ? preview.items.filter((item) => item.outcome === "will_bind")
     : [];
-  const canApply = !busy && preview?.ok === true && bindable.length > 0;
+  const ready = entries !== null && !loading;
+  const canApply = ready && !busy && preview?.ok === true && bindable.length > 0;
 
   return (
     <div className="dialog-backdrop" role="presentation">
@@ -68,13 +74,30 @@ export function BulkReplaceDialog({
         <div className="bulk-replace-inputs">
           <label>
             查找
-            <input value={find} onChange={(event) => setFind(event.target.value)} />
+            <input
+              value={find}
+              disabled={!ready}
+              onChange={(event) => setFind(event.target.value)}
+            />
           </label>
           <label>
             替换为
-            <input value={replace} onChange={(event) => setReplace(event.target.value)} />
+            <input
+              value={replace}
+              disabled={!ready}
+              onChange={(event) => setReplace(event.target.value)}
+            />
           </label>
         </div>
+
+        {/* 取数完成前不生成预览，也不让人输入——否则会看到一份"全都不在台账里"的假结果。 */}
+        {loading ? <p className="bulk-replace-summary">正在加载台账构件…</p> : null}
+        {!loading && entries === null && !error ? (
+          <p className="error-text" role="alert">
+            台账构件加载失败。
+            {onRetry ? <button type="button" onClick={onRetry}>重试</button> : null}
+          </p>
+        ) : null}
 
         {preview && !preview.ok ? (
           <p className="error-text" role="alert">{preview.error}</p>

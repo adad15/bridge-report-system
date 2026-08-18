@@ -266,7 +266,7 @@ describe("ComponentInventoryEditor", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     vi.mocked(searchInventoryEntries).mockResolvedValue({ total: 1, entries: [entry] });
-    await userEvent.type(screen.getByLabelText("按编号搜索构件"), "1-1");
+    await userEvent.type(screen.getByLabelText("搜索构件"), "1-1");
     const results = await screen.findByRole("heading", { name: "搜索结果" });
     const section = results.closest("div") as HTMLElement;
     // 搜索防抖 250ms 后才发请求，结果是异步到达的。

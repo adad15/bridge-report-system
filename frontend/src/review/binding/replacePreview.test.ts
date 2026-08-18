@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ComponentInventoryEntry } from "../../api/componentInventoryApi";
-import type { BindingRow } from "../../api/importBindingApi";
+import type { BindingReplaceInventoryEntry, BindingRow } from "../../api/importBindingApi";
 import { normalizeComponentNumber } from "./normalizeComponentNumber";
 import { buildReplacePreview } from "./replacePreview";
 
@@ -11,26 +10,13 @@ function row(component_number: string, status: BindingRow["status"]): BindingRow
     defect_count: 1,
     status,
     bridge_component_id: status === "bound" ? "bound-id" : null,
-    candidate_component_ids: [],
+    bound_component: null,
+    candidate_components: [],
   };
 }
 
-function entry(id: string, component_number: string): ComponentInventoryEntry {
-  return {
-    id: `entry-${id}`,
-    bridge_component_id: id,
-    component_number,
-    site_name: "桥面铺装",
-    site_component_type: "桥面铺装",
-    span_or_location: null,
-    is_active: true,
-    deactivated_at: null,
-    deactivation_reason: null,
-    sort_order: 1,
-    remarks: null,
-    is_referenced: false,
-    mappings: [],
-  };
+function entry(id: string, component_number: string): BindingReplaceInventoryEntry {
+  return { bridge_component_id: id, component_number, is_active: true };
 }
 
 const entries = [entry("c32", "32#跨桥面铺装"), entry("c33", "33#跨桥面铺装")];

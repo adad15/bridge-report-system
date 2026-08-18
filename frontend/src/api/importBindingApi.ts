@@ -2,12 +2,27 @@ import { request } from "./apiClient";
 
 export type ComponentBindingStatus = "bound" | "unmatched" | "ambiguous" | "missing";
 
+/** 下拉里显示一个构件所需的全部信息。entry_id 是 <option> 的 key，bridge_component_id 是 value。 */
+export interface BindingComponentSummary {
+  entry_id: string;
+  bridge_component_id: string;
+  component_number: string;
+  site_component_type: string;
+  site_name: string;
+}
+
 export interface BindingRow {
   component_number: string;
   defect_count: number;
   status: ComponentBindingStatus;
   bridge_component_id: string | null;
-  candidate_component_ids: string[];
+  /**
+   * 概览直接带回可显示的构件信息，前端不必再为把 id 换成编号去拉整份台账。
+   * 只含"启用且有生效映射"的构件，所以可能比后端的内部候选数少——展示对象缺失
+   * 不改变行状态，歧义行仍然是歧义行。
+   */
+  bound_component: BindingComponentSummary | null;
+  candidate_components: BindingComponentSummary[];
   split_eligible?: boolean;
   split_expanded_count?: number | null;
 }
@@ -187,6 +202,37 @@ export function clearComponentBinding(
   return overviewRequest(
     bindingUrl(baseUrl, importId, "/clear"),
     json("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId })
+  );
+}
+
+/** 批量替换预览用的精简条目，见 buildReplacePreview。 */
+export interface BindingReplaceInventoryEntry {
+  bridge_component_id: string;
+  component_number: string;
+  is_active: boolean;
+}
+
+export interface BindingReplaceInventory {
+  inventory_revision_id: string;
+  entries: BindingReplaceInventoryEntry[];
+}
+
+/**
+ * 批量替换取数。只在打开对话框时调；服务端只校验版本、不锁定年度。
+ * 响应只含预览真正用得上的三个字段，整份台账比它大一个数量级。
+ */
+export function fetchBindingReplaceInventory(
+  baseUrl: string,
+  importId: string,
+  expectedInventoryRevisionId: string,
+  signal?: AbortSignal
+) {
+  const query = new URLSearchParams({
+    expected_inventory_revision_id: expectedInventoryRevisionId,
+  });
+  return request<BindingReplaceInventory>(
+    bindingUrl(baseUrl, importId, `/inventory?${query}`),
+    { signal }
   );
 }
 

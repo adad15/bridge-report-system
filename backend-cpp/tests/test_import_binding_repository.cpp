@@ -249,6 +249,99 @@ TEST_F(ImportBindingRepositoryTest, OverviewStaysConfirmedWhileADraftExists) {
     EXPECT_TRUE(outcome.overview->inventory_confirmed);
 }
 
+// 概览要自带可显示的构件信息，前端才不必为把 id 换成编号去拉整份台账。
+TEST_F(ImportBindingRepositoryTest, OverviewCarriesDisplayableComponents) {
+    ImportBindingRepository repository(client_);
+    ASSERT_EQ(repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_,
+                              revision_id_).status,
+              BindingStatus::Ok);
+
+    const auto outcome = repository.overview(import_id_);
+    ASSERT_EQ(outcome.status, BindingStatus::Ok);
+    const auto* row = find_row(*outcome.overview, "上部承重构件", "1-1#梁");
+    ASSERT_NE(row, nullptr);
+    ASSERT_TRUE(row->bound_component.has_value());
+    EXPECT_EQ(row->bound_component->component_number, "1-1#梁");
+    EXPECT_EQ(row->bound_component->site_component_type, "空心板");
+    EXPECT_EQ(row->bound_component->site_name, "空心板");
+    // entry_id 是下拉 <option> 的 key，不能省。
+    EXPECT_FALSE(row->bound_component->entry_id.empty());
+}
+
+// 展示对象只填"启用且有生效映射"的构件，复现旧前端 usableEntries() 的可见范围。
+// 绑的构件在当前版本里查不到时（历史绑定、构件已从台账移除），旧代码走的是
+// "已绑定构件"那条文案分支，而不是显示编号。
+TEST_F(ImportBindingRepositoryTest, OverviewOmitsBoundComponentOutsideTheRevision) {
+    // 一个不在本版本台账里的构件；直接写进 parsed_result_json，绕开 bind 的校验。
+    const auto orphan_id = client_->execSqlSync(
+        "insert into bridge_components(bridge_id,structure_part,component_type,"
+        "business_component_code,normalized_component_key,current_status,creation_source) "
+        "values($1::uuid,'上部结构','空心板','9-1#梁','bind-key-orphan','已确认','人工录入') "
+        "returning id::text",
+        bridge_id_)[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "update import_records set parsed_result_json=jsonb_set("
+        "parsed_result_json,'{defects,0,bridge_component_id}',to_jsonb($2::text)) "
+        "where id=$1::uuid",
+        import_id_, orphan_id);
+
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.overview(import_id_);
+    const auto* row = find_row(*outcome.overview, "上部承重构件", "1-1#梁");
+    ASSERT_NE(row, nullptr);
+    EXPECT_EQ(row->status, "bound") << "行状态不受展示对象缺失影响";
+    EXPECT_FALSE(row->bound_component.has_value());
+}
+
+// 展示对象缺失只影响显示：内部候选 id 还在，行就还是 ambiguous。
+TEST_F(ImportBindingRepositoryTest, MissingSummariesDoNotChangeRowStatus) {
+    // 造一条带两个候选的病害，其中一个 id 在台账里根本不存在。
+    client_->execSqlSync(
+        "update import_records set parsed_result_json=jsonb_set("
+        "parsed_result_json,'{defects,3,component_match_candidate_ids}',"
+        "$2::jsonb) where id=$1::uuid",
+        import_id_,
+        "[\"" + component_id_ + "\",\"11111111-1111-1111-1111-111111111111\"]");
+
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.overview(import_id_);
+    const auto* row = find_row(*outcome.overview, "支座", "2-1#支座");
+    ASSERT_NE(row, nullptr);
+    EXPECT_EQ(row->status, "ambiguous");
+    EXPECT_EQ(row->candidate_component_ids.size(), 2u);
+    // 只有真实存在且可绑的那一个能显示出来。
+    ASSERT_EQ(row->candidate_components.size(), 1u);
+    EXPECT_EQ(row->candidate_components.front().bridge_component_id, component_id_);
+}
+
+// 批量替换取数：精简条目、按可绑过滤、只校验不锁定。
+TEST_F(ImportBindingRepositoryTest, ReplaceInventoryReturnsTrimmedBindableEntries) {
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.load_replace_inventory(import_id_, revision_id_);
+    ASSERT_EQ(outcome.status, BindingStatus::Ok);
+    EXPECT_EQ(outcome.replace_revision_id, revision_id_);
+    ASSERT_EQ(outcome.replace_entries.size(), 1u);
+    EXPECT_EQ(outcome.replace_entries.front().component_number, "1-1#梁");
+    EXPECT_EQ(outcome.replace_entries.front().bridge_component_id, component_id_);
+    // 服务端已按 is_active 过滤，字段仍必须带回：前端预览里 !entry.is_active 会跳过，
+    // 字段缺失时 !undefined 为真，整批安静地判成"台账里没有"。
+    EXPECT_TRUE(outcome.replace_entries.front().is_active);
+
+    // 取数不许锁定年度版本。
+    const auto year = client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id "
+        "from inspection_years where id=$1::uuid", year_id_);
+    EXPECT_TRUE(year[0]["revision_id"].isNull());
+}
+
+TEST_F(ImportBindingRepositoryTest, ReplaceInventoryRejectsAStaleExpectedRevision) {
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.load_replace_inventory(
+        import_id_, "11111111-1111-1111-1111-111111111111");
+    EXPECT_EQ(outcome.status, BindingStatus::Conflict);
+    EXPECT_EQ(outcome.error_code, "component_inventory_revision_changed");
+}
+
 // 前端拿这个 id 当搜索寻址、缓存键和写操作的 expected 版本，缺了整条契约就断了。
 TEST_F(ImportBindingRepositoryTest, OverviewCarriesTheResolvedRevisionId) {
     ImportBindingRepository repository(client_);
