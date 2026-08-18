@@ -13,8 +13,6 @@ import {
 import { previewAssessment, type AssessmentPreviewResponse } from "../api/assessmentApi";
 import { ApiError } from "../api/apiClient";
 import {
-  fetchLatestComponentInventory,
-  type ComponentInventoryRevision,
 } from "../api/componentInventoryApi";
 import {
   clearComponentBinding,
@@ -70,7 +68,7 @@ vi.mock("../api/importBindingApi", async (importOriginal) => {
 
 vi.mock("../api/componentInventoryApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../api/componentInventoryApi")>();
-  return { ...original, fetchLatestComponentInventory: vi.fn() };
+  return { ...original };
 });
 
 vi.mock("../auth/AuthContext", () => ({
@@ -197,16 +195,6 @@ function missingBindingOverview(): ComponentBindingOverview {
   };
 }
 
-const bindingInventory: ComponentInventoryRevision = {
-  id: "inventory-1",
-  bridge_id: "bridge-1",
-  revision_number: 1,
-  status: "已确认",
-  baseline_revision_id: null,
-  confirmed_at: "2026-07-17T08:00:00+08:00",
-  entries: [],
-};
-
 async function renderEditableReview(): Promise<HTMLInputElement> {
   render(
     <MemoryRouter initialEntries={["/imports/import-1/review"]}>
@@ -248,7 +236,6 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     vi.mocked(releaseEditLock).mockResolvedValue({ released: true });
     vi.mocked(previewAssessment).mockImplementation(async (_baseUrl, _recordId, _draft, revision) => assessmentResponse(revision));
     vi.mocked(fetchComponentBinding).mockResolvedValue(missingBindingOverview());
-    vi.mocked(fetchLatestComponentInventory).mockResolvedValue(bindingInventory);
   });
 
   afterEach(() => {
@@ -352,8 +339,6 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
       await Promise.resolve();
     });
     const bindingRequests = vi.mocked(fetchComponentBinding).mock.calls.length;
-    // 绑定分区改成按需检索之后不再拉整份台账；这里从"只拉一次"改成"一次都不拉"。
-    expect(fetchLatestComponentInventory).not.toHaveBeenCalled();
     // 从没点开过的分区连 DOM 都不存在。
     expect(document.querySelector("[data-review-group='ratings']")).toBeNull();
 
@@ -372,7 +357,6 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     expect(screen.getByRole("button", { name: "已标记缺失 1" })).toBe(missingFilter);
     expect(missingFilter).toHaveAttribute("aria-pressed", "true");
     expect(fetchComponentBinding).toHaveBeenCalledTimes(bindingRequests);
-    expect(fetchLatestComponentInventory).not.toHaveBeenCalled();
   });
 
   // 绑定分区的写操作（绑定 / 批量替换 / 标记缺失 / 取消绑定 / 范围拆分）由后端直接

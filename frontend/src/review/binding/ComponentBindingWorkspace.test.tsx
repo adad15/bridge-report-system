@@ -2,10 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  fetchLatestComponentInventory,
-  searchInventoryEntries,
-} from "../../api/componentInventoryApi";
+import { searchInventoryEntries } from "../../api/componentInventoryApi";
 import {
   bindComponent,
   bindInspectionRatingTree,
@@ -41,11 +38,7 @@ vi.mock("../../api/ratingTreeApi", async (importOriginal) => {
 
 vi.mock("../../api/componentInventoryApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../../api/componentInventoryApi")>();
-  return {
-    ...original,
-    fetchLatestComponentInventory: vi.fn(),
-    searchInventoryEntries: vi.fn(),
-  };
+  return { ...original, searchInventoryEntries: vi.fn() };
 });
 
 const inventory = {
@@ -128,7 +121,6 @@ function overview(status: "unmatched" | "bound" | "missing"): ComponentBindingOv
 describe("ComponentBindingWorkspace", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(fetchLatestComponentInventory).mockResolvedValue(inventory);
     vi.mocked(searchInventoryEntries).mockResolvedValue({ total: 0, entries: [] });
     vi.mocked(fetchComponentBinding).mockResolvedValue(overview("unmatched"));
     vi.mocked(fetchRatingTreeVersions).mockResolvedValue([
@@ -270,7 +262,6 @@ describe("ComponentBindingWorkspace", () => {
     expect(await screen.findByText("上部承重构件")).toBeInTheDocument();
 
     expect(fetchComponentBinding).toHaveBeenCalledTimes(1);
-    expect(fetchLatestComponentInventory).not.toHaveBeenCalled();
     expect(fetchRatingTreeVersions).toHaveBeenCalledTimes(1);
   });
 

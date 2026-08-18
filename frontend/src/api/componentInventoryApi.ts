@@ -99,8 +99,8 @@ export interface InventoryBlocker {
 
 
 // ---- 聚合接口 ----
-// 台账页首屏只要这份分组汇总；构件明细按需另取。整份修订版仍由 /latest 提供，
-// 校对工作台的构件选择器在用，本轮不动。
+// 台账页首屏只要这份分组汇总；构件明细按需另取。整份修订版的接口已经删除——
+// 它最后两个消费者（绑定面板、校对页手动添加病害）都改成了按需检索。
 
 export interface InventoryGroupSummary {
   site_component_type: string;
@@ -186,10 +186,6 @@ const json = (method: string, body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-async function revisionRequest(url: string, init?: RequestInit): Promise<ComponentInventoryRevision> {
-  return (await request<{ revision: ComponentInventoryRevision }>(url, init)).revision;
-}
-
 // 除生成台账外的写操作都回传这个形状。
 function writeRequest(url: string, init?: RequestInit): Promise<InventoryWriteResult> {
   return request<InventoryWriteResult>(url, init);
@@ -243,10 +239,6 @@ export function searchInventoryEntries(
   return request<InventorySearchResponse>(
     `${baseUrl}/api/component-inventories/${encodeURIComponent(revisionId)}/entries?${query}`,
     { signal });
-}
-
-export function fetchLatestComponentInventory(baseUrl: string, bridgeId: string) {
-  return revisionRequest(`${baseUrl}/api/bridges/${encodeURIComponent(bridgeId)}/component-inventories/latest`);
 }
 
 export async function fetchPartCatalog(

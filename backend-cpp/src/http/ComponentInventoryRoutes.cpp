@@ -317,8 +317,8 @@ void register_component_inventory_routes(
     std::shared_ptr<const standards::StandardRegistry> registry) {
     const std::string generate_path = "/api/bridges/{bridge_id}/component-inventories/generate";
     const std::string part_catalog_path = "/api/component-inventories/part-catalog";
-    const std::string latest_path = "/api/bridges/{bridge_id}/component-inventories/latest";
-    const std::string latest_summary_path = latest_path + "/summary";
+    const std::string latest_summary_path =
+        "/api/bridges/{bridge_id}/component-inventories/latest/summary";
     const std::string revision_path = "/api/component-inventories/{revision_id}";
     const std::string revision_summary_path = revision_path + "/summary";
     const std::string entries_path = "/api/component-inventories/{revision_id}/entries";
@@ -328,7 +328,9 @@ void register_component_inventory_routes(
     const std::string confirm_path = revision_path + "/confirm";
     const std::string confirm_mappings_path = revision_path + "/mappings/confirm-pending";
     // revision_path 只作其余路径的前缀，本身不再暴露 GET——按 id 取全量台账已无调用者。
-    for (const auto& path : {generate_path, part_catalog_path, latest_path, revision_summary_path,
+    // .../latest 同理：整份台账的最后两个消费者（绑定面板、校对页手动添加病害）都已
+    // 改成按需检索，端点连同它的序列化一起去掉，免得日后又有人顺手把它拉回来。
+    for (const auto& path : {generate_path, part_catalog_path, revision_summary_path,
                              latest_summary_path, entries_path, entry_path, deactivate_path,
                              mapping_path, confirm_path, confirm_mappings_path})
         register_options_handler(path);
@@ -405,27 +407,6 @@ void register_component_inventory_routes(
                 }
                 Json::Value body;
                 body["parts"] = serialize_part_catalog(*package, bridge_type_id);
-                respond_json(callback, body);
-            } catch (...) { respond_db_unavailable(callback); }
-        }, {drogon::Get});
-
-    drogon::app().registerHandler(
-        latest_path,
-        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
-                    const std::string& bridge_id) {
-            if (!is_valid_uuid(bridge_id)) {
-                respond_json(callback, make_error_body("component_inventory_not_found", "构件台账不存在。"),
-                             drogon::k404NotFound); return;
-            }
-            try {
-                if (!require_user(db_client, request, callback).has_value()) return;
-                db::ComponentInventoryRepository repository(db_client);
-                const auto revision = repository.get_latest_revision(bridge_id);
-                if (!revision.has_value()) {
-                    respond_json(callback, make_error_body("component_inventory_not_found", "构件台账不存在。"),
-                                 drogon::k404NotFound); return;
-                }
-                Json::Value body; body["revision"] = inventory::inventory_revision_json(*revision);
                 respond_json(callback, body);
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Get});

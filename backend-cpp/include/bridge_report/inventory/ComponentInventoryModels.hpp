@@ -89,12 +89,10 @@ struct InventoryBlocker {
     std::string message;
 };
 
-// 单条构件的序列化。分组分页、编号搜索、写响应里的受影响构件共用这一份；
-// inventory_revision_json() 也改成调它，避免同一形状写两遍。
+// 单条构件的序列化。分组分页、编号搜索、写响应里的受影响构件共用这一份。
 Json::Value inventory_entry_json(const InventoryEntry& entry);
 // 同上，另带组内序号（从 0 起），供前端算页码与定位。
 Json::Value located_entry_json(const InventoryEntry& entry, std::int64_t position);
-Json::Value inventory_revision_json(const InventoryRevision& revision);
 Json::Value inventory_blockers_json(const std::vector<InventoryBlocker>& blockers);
 
 bool parse_generate_inventory_input(

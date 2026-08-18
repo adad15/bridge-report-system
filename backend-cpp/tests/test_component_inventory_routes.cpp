@@ -169,10 +169,9 @@ TEST(ComponentInventoryRoutesTest, ParsesBoundedQueryIntegers) {
     EXPECT_EQ(value, 2147483647);
 }
 
-// 单条构件的序列化是从 inventory_revision_json() 里抽出来的，供分组分页、编号搜索
-// 和写响应共用。这两条用例钉住抽取没有走样：整份修订版里的每一条，必须与单独序列化
-// 同一条构件的结果逐字段相同——否则聚合接口和 /latest 会给出两种形状。
-TEST(ComponentInventoryModelsTest, RevisionEntriesMatchStandaloneEntrySerialization) {
+// 单条构件的序列化供分组分页、编号搜索和写响应共用。可选字段是最容易走样的地方：
+// 空值必须序列化成 null 而不是塌成缺字段，前端按 null 判断显示破折号。
+TEST(ComponentInventoryModelsTest, EntrySerializationKeepsEmptyOptionalsAsNull) {
     inventory::InventoryMapping mapping;
     mapping.id = "mapping-1";
     mapping.standard_package_id = "package-1";
@@ -201,19 +200,6 @@ TEST(ComponentInventoryModelsTest, RevisionEntriesMatchStandaloneEntrySerializat
     deactivated.span_or_location = "第 1 孔";
     deactivated.remarks = "备注";
 
-    inventory::InventoryRevision revision;
-    revision.id = "revision-1";
-    revision.bridge_id = "bridge-1";
-    revision.revision_number = 2;
-    revision.status = "草稿";
-    revision.entries = {entry, deactivated};
-
-    const auto revision_json = inventory::inventory_revision_json(revision);
-    ASSERT_EQ(revision_json["entries"].size(), 2u);
-    EXPECT_EQ(revision_json["entries"][0], inventory::inventory_entry_json(entry));
-    EXPECT_EQ(revision_json["entries"][1], inventory::inventory_entry_json(deactivated));
-
-    // 空的 optional 要序列化成 null，不能塌成缺字段——前端按 null 判断显示破折号。
     const auto first = inventory::inventory_entry_json(entry);
     EXPECT_TRUE(first["span_or_location"].isNull());
     EXPECT_TRUE(first["deactivated_at"].isNull());

@@ -565,7 +565,7 @@ entry / mapping 的序列化目前嵌在 `inventory_revision_json()` 内部。�
 | 端点 | 处置 | 理由 |
 | --- | --- | --- |
 | `GET /api/component-inventories/{revision_id}` | **删除** | 全仓无调用者 |
-| `GET /api/bridges/{id}/component-inventories/latest` | **保留** | 见下 |
+| `GET /api/bridges/{id}/component-inventories/latest` | ~~保留~~ → **已删除（2026-08-18）** | 见下 |
 
 前端 `fetchComponentInventory()` 及相关类型随第一条一并删除。删除公开端点属
 **breaking change**，需在发布说明中标注；本系统前后端同仓库同发布，不做弃用观察期。

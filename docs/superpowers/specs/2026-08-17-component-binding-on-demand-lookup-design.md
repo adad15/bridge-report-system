@@ -716,7 +716,43 @@ interface BindingReplaceInventoryEntry {
   校验，那仍由 `validate_target()` 在正式绑定时执行。
 - 不改绑定、标记缺失、批量替换的业务语义。
 
-## 遗留
+## 遗留（2026-08-18 已完成）
 
-`DefectsSection` 的手动添加病害表单仍拉整份台账，且用 `<select>` 承载五千多个选项。
-它是 `/latest` 最后一个调用者；改造它之后，那条全量路径才可能真正退场。
+`DefectsSection` 已改造：手动添加病害的构件选择器换成按需检索，其余所需信息改从分组
+汇总与草稿自身取。过程中发现真正的大头不在这个表单——校对页响应 `/review` 本身就内嵌
+整份台账（约 3.6 MB），每次打开都传，且同样踩了草稿优先解析。两处一并去掉后，
+`/latest` 端点与 `inventory_revision_json()` 已无任何调用者，随之删除。
+
+**仍未处理**：`get_latest_revision()`（草稿优先）在校对保存、入库前检查、病害自动匹配
+与 Word 导入四条路径上还有 6 个调用点，与本文档"缺陷一"同源，详见下节。
+
+## 草稿优先解析的剩余调用点（2026-08-18 审查发现，尚未修）
+
+缺陷一修的是绑定面板与范围拆分两处。清理死代码时把 `get_latest_revision()` 的调用方
+全部过了一遍，**同一个坑还有 6 处**，都在"应当使用已确认台账"的语义下用了草稿优先的
+接口：
+
+| 位置 | 用途 | 桥上存在草稿时的后果 |
+| --- | --- | --- |
+| `ReviewRoutes.cpp:271` | 保存校对草稿前校验病害与构件的关联 | **最严重**，见下 |
+| `ImportConfirmRoutes.cpp:71` | 入库前检查的上下文 | 预检按草稿版本判定 |
+| `ReviewRepository.cpp:837` | 确认事务内的预检复核 | 同上 |
+| `DefectMatchingRoutes.cpp:188` | 病害→构件自动匹配 | 匹配到不在已确认台账里的构件 |
+| `WordImportRepository.cpp:67` | 导入时的构件匹配 | 同上 |
+| `WordImportRepository.cpp:164` | 导入时的评定树匹配 | 同上 |
+
+前三处的判定链条最清楚。`DraftValidation.cpp:194`：
+
+```cpp
+if (!latest_revision.has_value() || revision_id != latest_revision->id) {
+    result.issues.push_back({path, "关联所依据的构件台账已变化，请重新选择。"});
+```
+
+左边 `revision_id` 是绑定时写进病害的**已确认**版本（`write_binding()` 的第五个参数），
+右边却是草稿优先解析出来的版本。两者在有草稿时必然不等，于是**每一条已绑定病害都会
+报错，整个校对草稿保存不下去**。
+
+这几处都不在本轮改动范围内，且修法已经现成（`resolve_confirmed_revision()` /
+`get_latest_confirmed_revision()`），但每一处都要先确认它到底该用"年度锁定版本"还是
+"最新已确认版本"——`WordImportRepository` 那两处已经带着 `locked_revision_id` 分支，
+形状与修正前的 `resolve_confirmed_revision()` 一模一样。

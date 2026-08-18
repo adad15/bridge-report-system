@@ -24,9 +24,8 @@ Json::Value mapping_json(const InventoryMapping& mapping) {
 
 }  // namespace
 
-// 从 inventory_revision_json() 里抽出来的：分组分页、编号搜索和写响应里的单条构件
-// 都要用它，不能各自再实现一份。/latest 仍返回整份修订版，所以下面那个函数保留，
-// 只是改成调用这里。
+// 分组分页、编号搜索和写响应里的单条构件都用它。整份修订版的序列化随 /latest
+// 一起去掉了——那是最后一个会把五千多条构件一次性发出去的地方。
 Json::Value inventory_entry_json(const InventoryEntry& entry) {
     Json::Value item;
     item["id"] = entry.id;
@@ -55,23 +54,6 @@ Json::Value located_entry_json(const InventoryEntry& entry, std::int64_t positio
     Json::Value item = inventory_entry_json(entry);
     item["position"] = static_cast<Json::Int64>(position);
     return item;
-}
-
-Json::Value inventory_revision_json(const InventoryRevision& revision) {
-    Json::Value value;
-    value["id"] = revision.id;
-    value["bridge_id"] = revision.bridge_id;
-    value["revision_number"] = revision.revision_number;
-    value["status"] = revision.status;
-    value["baseline_revision_id"] = revision.baseline_revision_id.has_value()
-        ? Json::Value(*revision.baseline_revision_id) : Json::Value(Json::nullValue);
-    value["confirmed_at"] = revision.confirmed_at.has_value()
-        ? Json::Value(*revision.confirmed_at) : Json::Value(Json::nullValue);
-    value["entries"] = Json::Value(Json::arrayValue);
-    for (const auto& entry : revision.entries) {
-        value["entries"].append(inventory_entry_json(entry));
-    }
-    return value;
 }
 
 Json::Value inventory_blockers_json(const std::vector<InventoryBlocker>& blockers) {

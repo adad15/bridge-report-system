@@ -1,7 +1,6 @@
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
 import { isBridgeAnnualInspectionData } from "../contracts/annualInspection";
 import { ApiError, request } from "./apiClient";
-import type { ComponentInventoryRevision } from "./componentInventoryApi";
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 

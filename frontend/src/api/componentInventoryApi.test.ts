@@ -4,7 +4,6 @@ import {
   confirmComponentInventory,
   confirmPendingComponentInventoryMappings,
   deleteComponentInventoryEntry,
-  fetchLatestComponentInventory,
   fetchPartCatalog,
   generateComponentInventory,
   setComponentInventoryMapping,
@@ -13,21 +12,6 @@ import {
 
 describe("componentInventoryApi", () => {
   afterEach(() => vi.restoreAllMocks());
-
-  it("loads the latest revision and encodes bridge ids", async () => {
-    const revision = { id: "revision-1", entries: [] };
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ revision }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(fetchLatestComponentInventory("http://backend", "bridge/1")).resolves.toEqual(revision);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://backend/api/bridges/bridge%2F1/component-inventories/latest"
-    );
-  });
 
   it("fetches the part catalog for a bridge type", async () => {
     const parts = [
