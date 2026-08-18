@@ -216,6 +216,33 @@ export function ImportWordDialog({
           </>
         )}
 
+        {/* 检查日期排在来源相关字段之前：它的浮层向下展开约 300px，
+           放在表单末尾会把对话框的可滚动高度撑出去、滚动条一出现整个弹窗就重排。 */}
+        <div className="import-field-row">
+          <div className="import-field required">
+            <label htmlFor="import-inspection-date">检查日期</label>
+            <InspectionDatePicker
+              id="import-inspection-date"
+              ref={inspectionDateRef}
+              required
+              disabled={busy}
+              value={inspectionDate}
+              onChange={setInspectionDate}
+            />
+          </div>
+          <div className="import-field required">
+            <label htmlFor="import-report-number">报告编号</label>
+            <input
+              id="import-report-number"
+              ref={reportNumberRef}
+              required
+              disabled={busy}
+              value={reportNumber}
+              onChange={(event) => setReportNumber(event.target.value)}
+            />
+          </div>
+        </div>
+
         {fromSourceDb ? (
           <>
             <p className="dialog-note">
@@ -331,31 +358,6 @@ export function ImportWordDialog({
             </div>
           </>
         )}
-
-        <div className="import-field-row">
-          <div className="import-field required">
-            <label htmlFor="import-inspection-date">检查日期</label>
-            <InspectionDatePicker
-              id="import-inspection-date"
-              ref={inspectionDateRef}
-              required
-              disabled={busy}
-              value={inspectionDate}
-              onChange={setInspectionDate}
-            />
-          </div>
-          <div className="import-field required">
-            <label htmlFor="import-report-number">报告编号</label>
-            <input
-              id="import-report-number"
-              ref={reportNumberRef}
-              required
-              disabled={busy}
-              value={reportNumber}
-              onChange={(event) => setReportNumber(event.target.value)}
-            />
-          </div>
-        </div>
 
         <div className="import-field required">
           <label htmlFor="import-project-name">项目名称</label>

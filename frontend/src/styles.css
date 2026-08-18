@@ -5680,9 +5680,29 @@ body {
   min-width: 0;
 }
 
+/* 这个按钮原先没给样式，落到浏览器默认外观上——灰底、方角、字号也不随表单走，
+   在一排统一样式的输入框旁边格外扎眼。按应用里次要按钮的写法补齐。 */
 .import-source-path-row button {
   flex: none;
   white-space: nowrap;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #2456c9;
+  font: inherit;
+  cursor: pointer;
+}
+
+.import-source-path-row button:hover:not(:disabled) {
+  border-color: #2456c9;
+  background: #f5f8ff;
+}
+
+.import-source-path-row button:disabled {
+  color: #8a98aa;
+  background: #f7f9fb;
+  cursor: not-allowed;
 }
 
 /* ---------- 检查日期选择器 ----------
@@ -5721,9 +5741,10 @@ body {
 
 /* 浮层压在同一行的"报告编号"之上，必须抬 z-index；对话框本身已经是定位上下文。 */
 .date-picker-panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
+  /* fixed 而非 absolute：对话框是 overflow:auto 的滚动容器，绝对定位的浮层会
+     计入它的可滚动高度，一展开就冒出滚动条并让整个弹窗重排。坐标由组件实测后
+     写在 style 上。 */
+  position: fixed;
   z-index: 30;
   width: 268px;
   padding: 8px;

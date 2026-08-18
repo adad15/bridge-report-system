@@ -96,6 +96,11 @@ export const InspectionDatePicker = forwardRef<HTMLInputElement, Props>(
       month: selected?.month ?? today.getMonth(),
     }));
     const containerRef = useRef<HTMLDivElement>(null);
+    const controlRef = useRef<HTMLDivElement>(null);
+    // 浮层用 fixed 定位，坐标每次打开时按输入框实测。绝对定位的话，它在
+    // overflow:auto 的对话框里会计入可滚动高度——面板一展开就冒出滚动条，
+    // 整个弹窗跟着重排。fixed 让它彻底脱离那个滚动容器。
+    const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null);
 
     // 每次重新打开都回到已选日期所在的月份，并退回日视图——上次钻到年份面板
     // 停在那里，下次打开会让人不知道自己在看什么。
@@ -106,6 +111,33 @@ export const InspectionDatePicker = forwardRef<HTMLInputElement, Props>(
         year: selected?.year ?? today.getFullYear(),
         month: selected?.month ?? today.getMonth(),
       });
+    }, [open]);
+
+    useEffect(() => {
+      if (!open) { setAnchor(null); return; }
+      const place = () => {
+        const rect = controlRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const panelHeight = containerRef.current
+          ?.querySelector(".date-picker-panel")?.getBoundingClientRect().height ?? 320;
+        // 下方放不下就翻到输入框上面，别顶出视口。
+        const below = rect.bottom + 4;
+        const top = below + panelHeight <= window.innerHeight
+          ? below
+          : Math.max(4, rect.top - panelHeight - 4);
+        setAnchor({ top, left: rect.left });
+      };
+      place();
+      // 面板高度要等它渲染出来才量得到，所以下一帧再摆一次。
+      const raf = requestAnimationFrame(place);
+      window.addEventListener("resize", place);
+      // 捕获阶段才能收到对话框内部的滚动。
+      window.addEventListener("scroll", place, true);
+      return () => {
+        cancelAnimationFrame(raf);
+        window.removeEventListener("resize", place);
+        window.removeEventListener("scroll", place, true);
+      };
     }, [open]);
 
     useEffect(() => {
@@ -149,7 +181,7 @@ export const InspectionDatePicker = forwardRef<HTMLInputElement, Props>(
 
     return (
       <div className="date-picker" ref={containerRef}>
-        <div className="date-picker-control">
+        <div className="date-picker-control" ref={controlRef}>
           <input
             id={id}
             ref={ref}
@@ -176,7 +208,12 @@ export const InspectionDatePicker = forwardRef<HTMLInputElement, Props>(
         </div>
 
         {open ? (
-          <div className="date-picker-panel" role="dialog" aria-label="检查日期选择">
+          <div
+            className="date-picker-panel"
+            role="dialog"
+            aria-label="检查日期选择"
+            style={anchor ? { top: anchor.top, left: anchor.left } : undefined}
+          >
             <div className="date-picker-header">
               <button type="button" aria-label="上一页" onClick={() => step(-1)}>《</button>
               {/* 点标题往上一级：日 → 月 → 年。年视图已经是顶层，不再往上。 */}
