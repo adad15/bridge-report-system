@@ -1,0 +1,443 @@
+《构件绑定改用按需检索》技术文档审查意见
+
+审查对象：2026-08-17-component-binding-on-demand-lookup-design.md
+审查日期：2026-08-18
+审查范围：设计文档、后端 C++ 仓储与路由、前端 API 与绑定工作台、现有测试
+
+一、总体结论
+
+设计方向正确：绑定面板首屏不再下载约 3.4 MB 的完整构件台账，候选与已绑定构件的展示信息由概览直接返回，行内搜索改为服务端按需查询，能够明显改善首屏等待时间。
+
+但当前文档还不能直接进入实现，至少存在以下五个必须先解决的问题：
+
+1. 绑定概览没有返回 inventory_revision_id，前端去掉完整台账后无法调用按版本搜索接口。
+2. 批量替换继续调用 /latest 会读取草稿优先的版本，可能与检测年度锁定的已确认版本不一致。
+3. 当前确认版本解析会调用草稿优先的 get_latest_revision()，已有已确认版本但同时存在草稿时可能错误地返回“台账未确认”。
+4. 当前概览后端已经完整加载了全部台账，只是没有返回给前端；若不改仓储查询，优化只减少网络传输，不会减少后端数据库和内存开销。
+5. 构件台账管理页和绑定页需要的搜索数据范围不同，不能无条件共享完全相同的搜索结果。
+
+建议将原文档状态从“已评审，待实现”改回“待修改，重新评审”。
+
+
+二、必须修改的问题
+
+1. 概览必须返回 inventory_revision_id
+
+问题说明：
+
+文档要求行内搜索调用：
+
+GET /api/component-inventories/{revision_id}/entries?keyword=...
+
+但当前 BindingOverview 和 ComponentBindingOverview 只有 inventory_confirmed、rating_tree 和 groups，没有台账版本 ID。首屏删除 fetchLatestComponentInventory 后，前端无法知道应该搜索哪个台账版本。
+
+需要修改：
+
+（1）C++ BindingOverview 增加：
+
+std::optional<std::string> inventory_revision_id;
+
+（2）概览 JSON 增加：
+
+"inventory_revision_id": "uuid"
+
+未确认时返回 null。
+
+（3）TypeScript ComponentBindingOverview 增加：
+
+inventory_revision_id: string | null;
+
+（4）行内搜索和批量替换必须使用该版本 ID，不能根据 bridgeId 再查询“最新版本”。
+
+
+2. 批量替换不能继续调用 /latest
+
+问题说明：
+
+文档计划在打开批量替换对话框时调用 fetchLatestComponentInventory。程序中的 /latest 并不表示“检测年度当前使用的已确认版本”，其 SQL 排序是：
+
+order by (status='草稿') desc, revision_number desc
+
+因此，只要桥梁存在草稿，/latest 就优先返回草稿。
+
+可能出现以下错误：
+
+（1）检测年度锁定的是已确认版本 R2。
+（2）桥梁后来创建了草稿版本 R3。
+（3）批量替换预览读取 R3。
+（4）真正执行绑定时，后端仍按照 R2 校验。
+（5）前端显示“可以绑定”，后端却拒绝；或者预览中的编号、类别、映射与正式版本不一致。
+
+该问题违反“不改变批量替换业务语义”和“预览结果与改造前逐项一致”的要求。
+
+建议方案：
+
+方案 A：恢复按 revision ID 获取完整台账的端点，仅供懒加载批量替换使用。
+
+方案 B：增加导入记录范围内的准确版本端点，例如：
+
+GET /api/imports/{import_id}/component-bindings/inventory
+
+由后端根据 inspection_years.component_inventory_revision_id 返回该导入实际使用的完整版本。
+
+方案 C：增加服务端批量查询端点，对一批归一化编号执行存在性与歧义判断。
+
+从当前程序改动量看，推荐方案 B。无论采用哪个方案，都不能继续使用桥梁级 /latest。
+
+
+3. 修正确认版本解析逻辑
+
+问题说明：
+
+ImportBindingRepository.cpp 中的 resolve_confirmed_revision() 在年度没有锁定版本时调用 get_latest_revision(bridge_id)，之后才判断返回版本是否为“已确认”。
+
+get_latest_revision() 会优先返回草稿。因此，如果桥梁同时存在一个已确认版本和一个新草稿，绑定概览会取得草稿，再将 inventory_confirmed 设置为 false。
+
+需要修改：
+
+（1）inspection_years.component_inventory_revision_id 有值时：严格读取该版本，并检查桥梁 ID和确认状态。
+
+（2）没有锁定版本时：直接查询该桥最新的已确认版本，不能调用草稿优先的 get_latest_revision()。
+
+（3）概览只需要版本 ID、桥梁 ID和状态时，不应返回整份 InventoryRevision。
+
+建议引入轻量结果：
+
+struct ConfirmedRevisionRef {
+    std::string id;
+    std::string bridge_id;
+};
+
+
+4. 概览不能继续完整加载整份台账
+
+问题说明：
+
+文档称候选 ID是服务端“在同一次查询里算出来的”，可以就地 join。实际程序不是这样：
+
+（1）candidate_component_ids 来自 parsed_result_json。
+（2）overview() 另外调用 get_revision() 或 get_latest_revision()。
+（3）get_revision() 会加载完整台账和映射。
+（4）当前 overview() 只使用 revision.has_value()，然后丢弃完整台账。
+
+如果实现时直接利用这份已经完整加载的 InventoryRevision 填充 bound_component 和 candidate_components，只会减少浏览器下载，后端仍然读取五千多条构件及映射。
+
+建议的数据流：
+
+（1）轻量解析本次导入对应的已确认台账版本 ID。
+（2）从 parsed_result_json 聚合 BindingRow。
+（3）收集所有 bridge_component_id 和 candidate_component_ids。
+（4）对 ID 去重。
+（5）仅在准确 inventory_revision_id 下查询这些 bridge_component_id。
+（6）只读取 entry_id、bridge_component_id、component_number、site_component_type 等必要字段。
+（7）将查询结果填充到 bound_component 和 candidate_components。
+
+设计文档应删除“这些 ID 本来就在同一次查询中”的表述，改成“聚合后按准确版本执行一次定向批量查询”。
+
+
+5. 绑定页搜索必须过滤不可绑定构件
+
+问题说明：
+
+当前绑定面板的 usableEntries() 只保留：
+
+entry.is_active && entry.mappings.some(mapping => mapping.is_active)
+
+但现有 /entries 搜索端点会搜索版本内的全部 entry，包括停用构件和没有有效映射的构件。
+
+构件台账管理页需要看到停用和未映射构件；绑定页则不能让用户选择这些构件。因此，两处可以共享 keyword 的三字段匹配规则，但不能无条件共享完全相同的数据范围。
+
+建议增加查询参数：
+
+GET /api/component-inventories/{revision_id}/entries?keyword=...&binding_eligible=true
+
+绑定模式下，SQL 至少需要满足：
+
+e.is_active
+and exists (
+    select 1
+    from bridge_component_standard_mappings m
+    where m.inventory_entry_id = e.id
+      and m.is_active
+)
+
+不能先由服务端返回前 50 条，再在前端过滤，否则前 50 条可能都是停用数据，后面的有效结果会被截断。
+
+
+三、需要补充的实现设计
+
+6. 批量替换懒加载状态没有定义
+
+当前 BulkReplaceDialog 接收已经加载完成的 entries，并立即调用 buildReplacePreview()。改成打开时加载后，必须增加：
+
+（1）inventoryLoading 状态。
+（2）inventoryError 状态。
+（3）加载完成前禁用查找、替换和应用按钮。
+（4）关闭对话框时取消未完成请求。
+（5）加载失败后的重试入口。
+（6）不能使用空数组表示“尚未加载”。
+
+否则台账尚未返回时，buildReplacePreview() 会把所有编号错误地判断为 not_in_inventory。
+
+缓存规则也必须写清楚：
+
+（1）按照 inventory_revision_id 缓存。
+（2）同一版本重复打开对话框可以复用。
+（3）评定树切换导致台账版本变化时必须失效。
+（4）不能只按照 bridgeId 缓存。
+
+
+7. 搜索结果数量与当前程序不一致
+
+文档写“最多取 50 条”，当前 ComponentBindingWorkspace.tsx 中实际是：
+
+const MAX_SEARCH_RESULTS = 20;
+
+需要明确：
+
+（1）保持现有行为时，绑定页请求 limit=20。
+（2）如果改成 50，这是行为变更，应在设计和测试中明确记录。
+
+
+8. 候选项和搜索结果的合并规则没有定义
+
+当前行为是：
+
+（1）原始候选项始终显示。
+（2）搜索结果追加到候选项后面。
+（3）按照 bridge_component_id 去重。
+（4）候选项显示“候选”前缀。
+
+新设计需要明确：
+
+（1）候选项是否在不匹配当前关键词时仍然显示。
+（2）candidate_components 和服务端搜索结果如何去重。
+（3）limit 是否包含原始候选项。
+（4）搜索失败后保留哪些旧结果。
+（5）清空搜索词时何时清除服务端搜索结果。
+（6）绑定完成后是否清除该行的搜索状态。
+
+建议保持原有语义：候选项始终在前，服务端结果追加，并按 bridge_component_id 去重。
+
+
+9. 展示对象缺失时不能重新计算绑定状态
+
+candidate_component_ids 是业务判断数据，candidate_components 是展示数据。
+
+例如内部存在两个候选 ID，但在准确版本中只查到一个展示对象：
+
+candidate_component_ids.length = 2
+candidate_components.length = 1
+
+此时行仍然应该保持 ambiguous，不能根据 candidate_components 的数量重新变成 unmatched 或单候选。
+
+文档应明确：
+
+（1）行状态继续由内部原始 ID 和现有业务逻辑计算。
+（2）C++ 中的 candidate_component_ids 必须保留。
+（3）JSON 可以只输出查到的 candidate_components。
+（4）bound_component 或候选展示对象为 null、缺失时，只影响显示，不改变行状态。
+
+
+10. 现场名称参与搜索但没有显示
+
+文档要求 keyword 匹配 component_number、site_component_type 和 site_name，但下拉选项只显示编号和类别。
+
+用户按现场名称搜索时，可能无法判断结果为何命中，也难以区分编号和类别相同但现场名称不同的构件。
+
+建议行内搜索结果显示：
+
+编号 / 类别 / 现场名称
+
+概览中的候选对象仍可只保留当前四个字段；搜索端点原本已经返回 site_name。
+
+
+11. keyword 参数改名的影响范围需要补全
+
+当前程序已经实现 number 参数，以下位置需要同步修改：
+
+（1）ComponentInventoryRoutes.cpp：读取 number 改为 keyword，修改参数错误提示和注释。
+（2）ComponentInventoryRepository.cpp：search_entries 参数名和三字段 SQL。
+（3）componentInventoryApi.ts：numberFragment 改为 keyword，URL 参数改为 keyword。
+（4）ComponentInventoryEditor.tsx：调用、标签、占位符和提示文案。
+（5）相关前后端测试。
+（6）2026-08-16-component-inventory-aggregate-api-design.md 中仍然使用 number 的接口说明。
+
+建议在 2026-08-17 文档中明确声明：新文档的 keyword 契约覆盖 2026-08-16 文档中的 number 契约，避免两份设计相互冲突。
+
+
+四、需要修改的程序文件
+
+后端：
+
+1. backend-cpp/include/bridge_report/db/ImportBindingRepository.hpp
+   - 增加构件展示对象结构。
+   - BindingRow 增加 bound_component 和 candidate_components。
+   - 保留内部 candidate_component_ids。
+   - BindingOverview 增加 inventory_revision_id。
+
+2. backend-cpp/src/db/ImportBindingRepository.cpp
+   - 修正确认版本解析。
+   - 概览不再完整加载整份台账。
+   - 收集候选和绑定 ID，并按准确版本定向查询。
+   - 填充展示对象。
+   - 评定树绑定或切换后返回的新概览必须携带新的版本 ID。
+
+3. backend-cpp/src/http/ImportBindingRoutes.cpp
+   - 序列化 inventory_revision_id。
+   - 输出 bound_component 和 candidate_components。
+   - 从 JSON 输出中删除 candidate_component_ids。
+
+4. backend-cpp/src/http/ComponentInventoryRoutes.cpp
+   - number 改为 keyword。
+   - 更新参数校验和错误提示。
+   - 增加绑定可用性过滤参数，或新增绑定专用搜索端点。
+
+5. backend-cpp/src/db/ComponentInventoryRepository.cpp
+   - 搜索 SQL 改为编号、类别、现场名称三字段匹配。
+   - 保留 LIKE 通配符转义。
+   - 增加绑定可用性过滤能力。
+
+6. 批量替换准确版本的数据端点
+   - 恢复按版本读取完整台账，或新增 import-scoped 全量端点，或新增批量编号查询端点。
+
+前端：
+
+1. frontend/src/api/importBindingApi.ts
+   - 修改 BindingRow 类型。
+   - 增加展示对象类型。
+   - ComponentBindingOverview 增加 inventory_revision_id。
+
+2. frontend/src/api/componentInventoryApi.ts
+   - numberFragment 改为 keyword。
+   - 查询参数改为 keyword。
+   - 支持绑定可用性参数。
+   - 增加按准确版本获取批量替换数据的方法（取决于后端最终方案）。
+
+3. frontend/src/review/binding/ComponentBindingWorkspace.tsx
+   - 首屏只请求绑定概览。
+   - 删除 inventory、usableEntries、entries 和 byId。
+   - 删除 RowAction 的 entries 和 byId 参数。
+   - 行内搜索使用 overview.inventory_revision_id。
+   - 增加 250ms 防抖、AbortController、加载和错误状态。
+   - 删除绑定评定树后的全量台账刷新。
+   - 批量替换按照准确版本懒加载台账。
+
+4. frontend/src/review/binding/BulkReplaceDialog.tsx
+   - 支持台账加载中、加载失败和重试。
+   - 加载完成前不能计算正式预览。
+
+5. frontend/src/review/binding/replacePreview.ts
+   - 更新“entries 已经加载在手”的过期注释。
+   - 预览算法可以保持不变。
+
+6. frontend/src/bridges/ComponentInventoryEditor.tsx
+   - 搜索参数改为 keyword。
+   - 更新标签、占位符和结果说明。
+
+
+五、测试清单
+
+后端测试：
+
+1. keyword 能分别匹配 component_number、site_component_type 和 site_name。
+2. 搜索 %、_、反斜杠时不会退化成全表匹配。
+3. keyword 为空或只有空格时返回 400。
+4. binding_eligible 模式不返回停用构件。
+5. binding_eligible 模式不返回没有有效映射的构件。
+6. 概览返回准确的 inventory_revision_id。
+7. 概览返回 bound_component 和 candidate_components。
+8. 概览 JSON 不再输出 candidate_component_ids。
+9. 年度锁定版本优先于桥梁最新版本。
+10. 同时存在已确认版本和新草稿时，概览仍能找到正确的已确认版本。
+11. 概览只查询候选和已绑定 ID，不完整加载整份台账。
+12. 已绑定构件在目标版本中不存在时，bound_component 为 null。
+13. 候选展示对象缺失时，行状态仍然保持 ambiguous。
+14. 批量替换读取检测年度锁定版本，不能读取草稿优先的 /latest。
+
+前端测试：
+
+1. 进入绑定面板只请求绑定概览，不请求 /component-inventories/latest。
+2. 概览中的候选项在用户搜索前即可显示。
+3. 行内输入在 250ms 后调用 keyword 搜索。
+4. 新搜索会取消旧请求，旧响应不能覆盖新响应。
+5. 搜索请求使用 overview.inventory_revision_id。
+6. 搜索失败后保留概览候选项，并显示行内错误。
+7. 搜索结果和候选项按 bridge_component_id 去重。
+8. 绑定评定树后不再刷新完整台账。
+9. 批量替换对话框未打开时不加载台账。
+10. 打开对话框后才加载准确版本的台账。
+11. 台账加载过程中不会把结果判断成 not_in_inventory。
+12. 加载失败时显示错误和重试入口。
+13. 关闭对话框会取消未完成请求。
+14. 同一版本重新打开时可以复用缓存。
+15. 评定树切换导致 inventory_revision_id 改变时，旧缓存失效。
+16. 批量替换预览结果与改造前一致。
+
+必须同步更新的现有测试至少包括：
+
+1. backend-cpp/tests/test_import_binding_routes.cpp
+2. backend-cpp/tests/test_import_binding_repository.cpp
+3. backend-cpp/tests/test_component_inventory_routes.cpp
+4. backend-cpp/tests/test_component_inventory_repository.cpp
+5. frontend/src/api/importBindingApi.test.ts
+6. frontend/src/api/componentInventoryApi.test.ts
+7. frontend/src/review/binding/ComponentBindingWorkspace.test.tsx
+8. frontend/src/review/binding/BulkReplaceDialog.test.tsx
+9. frontend/src/review/binding/replacePreview.test.ts
+10. frontend/src/bridges/ComponentInventoryEditor.test.tsx
+11. frontend/src/review/ReviewWorkspacePage.test.tsx
+
+
+六、建议的最终数据流
+
+1. 打开绑定面板
+   - 前端只调用 fetchComponentBinding(importId)。
+   - 后端解析准确的已确认台账版本 ID。
+   - 后端聚合 BindingRow。
+   - 后端仅查询候选和已绑定构件的展示字段。
+   - 概览返回 inventory_revision_id、bound_component 和 candidate_components。
+
+2. 行内搜索
+   - 前端输入关键词。
+   - 250ms 防抖。
+   - 取消上一请求。
+   - 使用 overview.inventory_revision_id 调用 keyword 搜索。
+   - 服务端只返回可绑定的有效构件。
+   - 前端将搜索结果与原始候选合并、去重。
+
+3. 绑定评定树
+   - 后端完成评定树和目标台账版本切换。
+   - 返回新的绑定概览及新的 inventory_revision_id。
+   - 前端更新概览。
+   - 不再调用桥梁级 /latest。
+   - 如果版本 ID 变化，清除旧批量台账缓存。
+
+4. 批量替换
+   - 用户打开对话框后才开始加载。
+   - 加载本次导入准确锁定的台账版本，不调用 /latest。
+   - 加载完成后再执行 buildReplacePreview()。
+   - 应用时继续由后端执行最终校验。
+
+
+七、最终验收条件
+
+1. 打开绑定面板不再请求 /component-inventories/latest。
+2. 首屏只等待绑定概览，不等待完整台账。
+3. 后端概览不完整加载五千多条台账及映射。
+4. 概览明确返回当前 inventory_revision_id。
+5. 行内搜索始终针对该版本。
+6. 行内搜索不会返回停用或无有效映射构件。
+7. 搜索能匹配编号、构件类别和现场名称。
+8. 绑定评定树后不再额外获取完整台账。
+9. 批量替换只在打开对话框时加载数据。
+10. 批量替换使用检测年度锁定版本，不能使用草稿优先的 /latest。
+11. 批量替换加载失败不会生成错误预览。
+12. 原有绑定、标记缺失、批量替换业务语义保持不变。
+
+
+八、审查结论
+
+该设计的首屏按需化方向可以保留，但必须先补上“准确台账版本 ID 贯穿概览、搜索和批量替换”的数据主线，并修正后端确认版本解析和概览全量加载问题。
+
+如果不修改上述问题，虽然绑定面板首屏会变快，但批量替换可能读取错误的草稿版本，搜索也可能显示不可绑定构件。这些属于正确性问题，优先级高于性能优化。
