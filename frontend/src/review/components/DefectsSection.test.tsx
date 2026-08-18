@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fetchLatestComponentInventory } from "../../api/componentInventoryApi";
+import { fetchInventorySummary, searchInventoryEntries } from "../../api/componentInventoryApi";
 import { ApiError } from "../../api/apiClient";
 import { matchDefectRatingTreeNodes } from "../../api/defectMatchingApi";
 import { fetchApplicableRatingTreeDefects, fetchRatingTreeNode } from "../../api/ratingTreeApi";
@@ -10,7 +10,7 @@ import { DefectsSection } from "./DefectsSection";
 
 vi.mock("../../api/componentInventoryApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/componentInventoryApi")>();
-  return { ...actual, fetchLatestComponentInventory: vi.fn() };
+  return { ...actual, fetchInventorySummary: vi.fn(), searchInventoryEntries: vi.fn() };
 });
 vi.mock("../../api/ratingTreeApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/ratingTreeApi")>();
@@ -27,13 +27,70 @@ vi.mock("../../api/defectMatchingApi", async (importOriginal) => {
 });
 
 const mockedMatchDefects = vi.mocked(matchDefectRatingTreeNodes);
-const mockedFetchInventory = vi.mocked(fetchLatestComponentInventory);
+const mockedFetchSummary = vi.mocked(fetchInventorySummary);
+const mockedSearchEntries = vi.mocked(searchInventoryEntries);
+
+// 台账条目只在搜索命中时才回来；映射随条目一起返回。
+const entry = (overrides: Record<string, unknown> = {}) => ({
+  id: "entry-1",
+  bridge_component_id: "component-1",
+  component_number: "1-1#梁",
+  site_name: "主梁",
+  site_component_type: "主梁",
+  span_or_location: null,
+  is_active: true,
+  deactivated_at: null,
+  deactivation_reason: null,
+  sort_order: 1,
+  remarks: null,
+  is_referenced: false,
+  position: 0,
+  mappings: [{
+    id: "mapping-1",
+    standard_package_id: "package-1",
+    standard_bridge_type_id: "bridge-type-1",
+    standard_component_category_id: "h21.component.beam",
+    structure_part: "superstructure" as const,
+    mapping_source: "template",
+    confirmation_status: "confirmed",
+    is_active: true,
+  }],
+  ...overrides,
+});
+
+// 分组汇总代替整份台账：修订版 id 与 (桥型, 规范类别) 都在这里。
+const summary = () => ({
+  revision: {
+    id: "revision-1", bridge_id: "bridge-1", revision_number: 1, status: "confirmed",
+    baseline_revision_id: null, confirmed_at: null, active_entry_count: 1,
+  },
+  groups: [{
+    site_component_type: "主梁",
+    structure_part: "superstructure" as const,
+    active_count: 1,
+    first_number: "1-1#梁",
+    last_number: "1-1#梁",
+    confirmed_count: 1,
+    pending_count: 0,
+    unmapped_count: 0,
+    standard_package_id: "package-1",
+    standard_component_category_id: "h21.component.beam",
+    standard_bridge_type_id: "bridge-type-1",
+  }],
+  blockers: {
+    total: 0, individual_total: 0,
+    by_code: { inventory_empty: 0, component_mapping_required: 0 }, samples: [],
+  },
+});
 const mockedFetchApplicableNodes = vi.mocked(fetchApplicableRatingTreeDefects);
 const mockedFetchTreeNode = vi.mocked(fetchRatingTreeNode);
 
 describe("DefectsSection", () => {
   beforeEach(() => {
-    mockedFetchInventory.mockReset();
+    mockedFetchSummary.mockReset();
+    mockedFetchSummary.mockResolvedValue(summary());
+    mockedSearchEntries.mockReset();
+    mockedSearchEntries.mockResolvedValue({ total: 1, entries: [entry()] });
     mockedFetchApplicableNodes.mockReset();
     mockedFetchApplicableNodes.mockResolvedValue([]);
     mockedFetchTreeNode.mockReset();
@@ -48,39 +105,27 @@ describe("DefectsSection", () => {
     });
   });
 
+  // 这一段此前会下载整份台账（现网一座桥 5174 条构件、3.6 MB），只为两件事：
+  // 拿修订版 id，以及知道每个构件属于哪个规范类别。两者分组汇总里都有。
+  it("never downloads the whole inventory", async () => {
+    const draft = data();
+    render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={vi.fn()} ratingTree={{ version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" }} allowStructureChanges />);
+
+    await waitFor(() => expect(mockedFetchSummary).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "新增病害" }));
+    // 打开表单也不取台账：构件要搜了才来。
+    expect(mockedSearchEntries).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("搜索构件"), { target: { value: "1-1" } });
+    await waitFor(() => expect(mockedSearchEntries).toHaveBeenCalled());
+    const [, revisionId, keyword, limit, , bindingEligible] = mockedSearchEntries.mock.calls[0];
+    expect(revisionId).toBe("revision-1");
+    expect(keyword).toBe("1-1");
+    expect(limit).toBe(20);
+    expect(bindingEligible).toBe(true);
+  });
+
   it("adds a manual defect from an actual mapped component and allows an empty scale", async () => {
-    mockedFetchInventory.mockResolvedValue({
-      id: "revision-1",
-      bridge_id: "bridge-1",
-      revision_number: 1,
-      status: "confirmed",
-      baseline_revision_id: null,
-      confirmed_at: null,
-      entries: [{
-        id: "entry-1",
-        bridge_component_id: "component-1",
-        component_number: "1-1#梁",
-        site_name: "主梁",
-        site_component_type: "主梁",
-        span_or_location: null,
-        is_active: true,
-        deactivated_at: null,
-        deactivation_reason: null,
-        sort_order: 1,
-        remarks: null,
-        is_referenced: false,
-        mappings: [{
-          id: "mapping-1",
-          standard_package_id: "package-1",
-          standard_bridge_type_id: "bridge-type-1",
-          standard_component_category_id: "h21.component.beam",
-          structure_part: "superstructure",
-          mapping_source: "template",
-          confirmation_status: "confirmed",
-          is_active: true,
-        }],
-      }],
-    });
     mockedFetchApplicableNodes.mockResolvedValue([{
       id: "tree-node-crack",
       node_key: "org.bridge.defect.crack",
@@ -125,6 +170,10 @@ describe("DefectsSection", () => {
 
     render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={dispatch} ratingTree={{ version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" }} allowStructureChanges />);
     fireEvent.click(screen.getByRole("button", { name: "新增病害" }));
+    // 构件按需检索：先搜，再从命中结果里选。此前是把整份台账灌进下拉并默认选中第一条。
+    fireEvent.change(screen.getByLabelText("搜索构件"), { target: { value: "1-1#梁" } });
+    await waitFor(() => expect(screen.getByLabelText("实际构件")).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("实际构件"), { target: { value: "entry-1" } });
     await waitFor(() => expect(screen.getByLabelText("实际构件")).toHaveValue("entry-1"));
     fireEvent.change(screen.getByLabelText("新增病害位置"), { target: { value: "第1跨梁底" } });
     await waitFor(() => expect(screen.getByLabelText("新增病害类型")).toHaveValue(""));
@@ -187,10 +236,6 @@ describe("DefectsSection", () => {
       is_selectable: true,
       is_scoring: true,
     };
-    mockedFetchInventory.mockResolvedValue({
-      id: "revision-1", bridge_id: "bridge-1", revision_number: 1, status: "confirmed",
-      baseline_revision_id: null, confirmed_at: null, entries: [],
-    });
     mockedFetchApplicableNodes.mockResolvedValue([node]);
     mockedFetchTreeNode.mockResolvedValue({
       ...node,
@@ -383,38 +428,6 @@ describe("DefectsSection", () => {
       onSelect: vi.fn(),
       dispatch,
       ratingTree: { version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" },
-      componentInventory: {
-        id: "revision-1",
-        bridge_id: "bridge-1",
-        revision_number: 1,
-        status: "confirmed",
-        baseline_revision_id: null,
-        confirmed_at: null,
-        entries: [{
-          id: "entry-1",
-          bridge_component_id: "component-1",
-          component_number: "2-1#梁",
-          site_name: "主梁",
-          site_component_type: "主梁",
-          span_or_location: null,
-          is_active: true,
-          deactivated_at: null,
-          deactivation_reason: null,
-          sort_order: 1,
-          remarks: null,
-          is_referenced: true,
-          mappings: [{
-            id: "mapping-1",
-            standard_package_id: "package-1",
-            standard_bridge_type_id: "bridge-type-1",
-            standard_component_category_id: "h21.component.beam",
-            structure_part: "superstructure" as const,
-            mapping_source: "template",
-            confirmation_status: "confirmed",
-            is_active: true,
-          }],
-        }],
-      },
     };
     const { rerender } = render(<DefectsSection draft={draft} {...props} />);
     await waitFor(() => expect(screen.getByRole("button", { name: "可批量确认 1" })).toBeInTheDocument());
@@ -672,44 +685,11 @@ describe("DefectsSection", () => {
         source_defect_indicator_number: "5.1.1-8",
       }));
       const dispatch = vi.fn();
-      const componentInventory = {
-        id: "revision-1",
-        bridge_id: "bridge-1",
-        revision_number: 1,
-        status: "confirmed" as const,
-        baseline_revision_id: null,
-        confirmed_at: null,
-        entries: ["component-1", "component-2"].map((componentId, index) => ({
-          id: `entry-${index + 1}`,
-          bridge_component_id: componentId,
-          component_number: `1-${index + 1}#板`,
-          site_name: "桥面板",
-          site_component_type: "桥面板",
-          span_or_location: null,
-          is_active: true,
-          deactivated_at: null,
-          deactivation_reason: null,
-          sort_order: index + 1,
-          remarks: null,
-          is_referenced: true,
-          mappings: [{
-            id: `mapping-${index + 1}`,
-            standard_package_id: "package-1",
-            standard_bridge_type_id: "bridge-type-1",
-            standard_component_category_id: "h21.component.beam",
-            structure_part: "superstructure" as const,
-            mapping_source: "template",
-            confirmation_status: "confirmed",
-            is_active: true,
-          }],
-        })),
-      };
 
       render(
         <DefectsSection
           draft={draft}
           {...matchProps(dispatch)}
-          componentInventory={componentInventory}
         />,
       );
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalled());
@@ -755,45 +735,12 @@ describe("DefectsSection", () => {
         }],
         photo_references: [],
       };
-      const componentInventory = {
-        id: "revision-1",
-        bridge_id: "bridge-1",
-        revision_number: 1,
-        status: "confirmed" as const,
-        baseline_revision_id: null,
-        confirmed_at: null,
-        entries: [{
-          id: "entry-1",
-          bridge_component_id: "component-1",
-          component_number: "2-1#梁",
-          site_name: "主梁",
-          site_component_type: "主梁",
-          span_or_location: null,
-          is_active: true,
-          deactivated_at: null,
-          deactivation_reason: null,
-          sort_order: 1,
-          remarks: null,
-          is_referenced: true,
-          mappings: [{
-            id: "mapping-1",
-            standard_package_id: "package-1",
-            standard_bridge_type_id: "bridge-type-1",
-            standard_component_category_id: "h21.component.beam",
-            structure_part: "superstructure" as const,
-            mapping_source: "template",
-            confirmation_status: "confirmed",
-            is_active: true,
-          }],
-        }],
-      };
       const dispatch = vi.fn();
 
       render(
         <DefectsSection
           draft={draft}
           {...matchProps(dispatch)}
-          componentInventory={componentInventory}
         />,
       );
 

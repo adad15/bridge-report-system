@@ -148,11 +148,6 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
                 body["edit_lock"] = active_lock.has_value()
                     ? edit_lock_info_to_json(*active_lock, current_user.has_value() ? current_user->id : std::string())
                     : Json::Value(Json::nullValue);
-                db::ComponentInventoryRepository inventory_repository(db_client);
-                const auto inventory = inventory_repository.get_latest_revision(detail->bridge_id);
-                body["component_inventory"] = inventory.has_value()
-                    ? inventory::inventory_revision_json(*inventory)
-                    : Json::Value(Json::nullValue);
 
                 respond_json(callback, body);
             } catch (const drogon::orm::DrogonDbException&) {

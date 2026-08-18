@@ -57,7 +57,7 @@ const group: ServerGroupSummary = {
   site_component_type: "主梁", structure_part: "superstructure", active_count: 1,
   first_number: "1-1#", last_number: "1-1#", confirmed_count: 0, pending_count: 1,
   unmapped_count: 0, standard_package_id: "package-1",
-  standard_component_category_id: "girder",
+  standard_component_category_id: "girder", standard_bridge_type_id: "beam",
 };
 
 const summary: InventorySummary = {

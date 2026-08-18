@@ -99,7 +99,6 @@ export interface ReviewResponse {
   rating_tree?: ReviewRatingTree | null;
   reopen: ReviewReopenState | null;
   edit_lock: EditLockSummary | null;
-  component_inventory?: ComponentInventoryRevision | null;
 }
 
 export interface PreflightIssue {

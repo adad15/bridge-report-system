@@ -103,17 +103,7 @@ describe("reviewApi", () => {
   });
 
   it("fetchReview requests GET .../review and returns the parsed body when parsed_result is valid", async () => {
-    const body = reviewResponseBody({
-      component_inventory: {
-        id: "revision-1",
-        bridge_id: "bridge-1",
-        revision_number: 1,
-        status: "已确认",
-        baseline_revision_id: null,
-        confirmed_at: "2026-07-19",
-        entries: [],
-      },
-    });
+    const body = reviewResponseBody({});
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -127,7 +117,6 @@ describe("reviewApi", () => {
     expect(review.parsed_result).toEqual(minimalParsedResult);
     expect(review.statistics.defect_count).toBe(0);
     expect(review.contract_compatibility).toBe("native_4_0");
-    expect(review.component_inventory?.id).toBe("revision-1");
   });
 
   it("fetchReview throws ApiError when parsed_result fails the contract guard", async () => {

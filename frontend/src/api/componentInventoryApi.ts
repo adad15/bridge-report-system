@@ -115,6 +115,9 @@ export interface InventoryGroupSummary {
   // 该组没有任何生效映射时为 null。
   standard_package_id: string | null;
   standard_component_category_id: string | null;
+  // 与类别同出一条生效映射，两者同为 null 或同非 null。
+  // 查评定树适用病害要的是 (桥型, 类别) 这一对，缺了桥型只能靠下载整份台账去翻。
+  standard_bridge_type_id: string | null;
 }
 
 export interface InventoryBlockerSample {

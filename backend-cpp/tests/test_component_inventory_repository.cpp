@@ -538,6 +538,30 @@ Json::Value group_of(const Json::Value& summary, const std::string& type) {
 
 }  // namespace
 
+// 校对页要按 (桥型, 规范类别) 去查评定树上适用的病害节点。类别单独给不够用，
+// 少了桥型，调用方就只能下载整份台账、从任意一条映射里把桥型翻出来。
+TEST_F(ComponentInventoryRepositoryTest, SummaryGroupCarriesTheFullMappingScope) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(1, 1);
+    const auto generated = inventory::generate_component_inventory(input);
+    db::ComponentInventoryRepository repository(client);
+    auto created = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    const auto revision_id = revision_id_of(created);
+
+    const auto summary = repository.load_summary(revision_id);
+    ASSERT_TRUE(summary.has_value());
+    bool checked = false;
+    for (const auto& group : (*summary)["groups"]) {
+        if (group["standard_component_category_id"].isNull()) continue;
+        EXPECT_FALSE(group["standard_bridge_type_id"].isNull())
+            << "有类别就必然有桥型：两者出自同一条生效映射";
+        EXPECT_EQ(group["standard_bridge_type_id"].asString(), input.bridge_type_id);
+        checked = true;
+    }
+    EXPECT_TRUE(checked) << "夹具应当至少生成一个带映射的分组";
+}
+
 TEST_F(ComponentInventoryRepositoryTest, SummaryNumberRangeUsesTraversalOrderNotLexicographic) {
     if (!client) GTEST_SKIP();
     const auto input = girder_input(1, 1);

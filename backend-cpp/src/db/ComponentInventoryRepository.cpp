@@ -365,7 +365,8 @@ std::optional<Json::Value> ComponentInventoryRepository::load_summary_with(
         "bool_or(m.confirmation_status='已确认') as has_confirmed,"
         "(array_agg(m.structure_part order by m.created_at,m.id))[1] as structure_part,"
         "(array_agg(m.standard_package_id::text order by m.created_at,m.id))[1] as package_id,"
-        "(array_agg(m.standard_component_category_id order by m.created_at,m.id))[1] as category_id "
+        "(array_agg(m.standard_component_category_id order by m.created_at,m.id))[1] as category_id,"
+        "(array_agg(m.standard_bridge_type_id order by m.created_at,m.id))[1] as bridge_type_id "
         "from bridge_component_standard_mappings m "
         "join bridge_component_inventory_entries e on e.id=m.inventory_entry_id "
         "where e.inventory_revision_id=$1::uuid and m.is_active "
@@ -376,7 +377,8 @@ std::optional<Json::Value> ComponentInventoryRepository::load_summary_with(
         "numbered as ("
         "select e.id,e.component_number,e.site_component_type,e.sort_order,e.is_active,"
         "em.has_confirmed,em.structure_part as em_part,em.package_id as em_package,"
-        "em.category_id as em_category,em.inventory_entry_id is not null as has_mapping,"
+        "em.category_id as em_category,em.bridge_type_id as em_bridge_type,"
+        "em.inventory_entry_id is not null as has_mapping,"
         + entry_position_window_sql() + " as position "
         "from bridge_component_inventory_entries e "
         "left join entry_mapping em on em.inventory_entry_id=e.id "
@@ -400,6 +402,10 @@ std::optional<Json::Value> ComponentInventoryRepository::load_summary_with(
         "filter (where n.is_active and n.has_mapping))[1] as category_id,"
         "(array_agg(n.em_package order by n.sort_order,n.id) "
         "filter (where n.is_active and n.has_mapping))[1] as package_id,"
+        // 规范类别要配上桥型才能定位评定树节点；少了它，调用方只能靠下载整份台账
+        // 从任意一条映射里把桥型翻出来。
+        "(array_agg(n.em_bridge_type order by n.sort_order,n.id) "
+        "filter (where n.is_active and n.has_mapping))[1] as bridge_type_id,"
         // 三分互斥且覆盖全部启用构件，三者之和等于 active_count。
         "count(*) filter (where n.is_active and n.has_confirmed) as confirmed_count,"
         "count(*) filter (where n.is_active and n.has_mapping and not n.has_confirmed) "
@@ -447,7 +453,8 @@ std::optional<Json::Value> ComponentInventoryRepository::load_summary_with(
         "'active_count',active_count,'first_number',first_number,'last_number',last_number,"
         "'confirmed_count',confirmed_count,'pending_count',pending_count,"
         "'unmapped_count',unmapped_count,'standard_package_id',package_id,"
-        "'standard_component_category_id',category_id) order by ord_so,ord_id) "
+        "'standard_component_category_id',category_id,"
+        "'standard_bridge_type_id',bridge_type_id) order by ord_so,ord_id) "
         "from grouped),'[]'::json),"
         "'blockers',json_build_object("
         // total = 待确认 + individual_total；"其余 N 项"用 individual_total 算，

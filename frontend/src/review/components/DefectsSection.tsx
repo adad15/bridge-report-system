@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import type { AssessmentIssue } from "../../api/assessmentApi";
-import { componentInventoryErrorMessage, fetchLatestComponentInventory, type ComponentInventoryEntry, type ComponentInventoryRevision, type StructurePart as InventoryStructurePart } from "../../api/componentInventoryApi";
+import { componentInventoryErrorMessage, fetchInventorySummary, searchInventoryEntries, type ComponentInventoryEntry, type InventorySummary, type StructurePart as InventoryStructurePart } from "../../api/componentInventoryApi";
 import {
   defectMatchErrorMessage,
   matchDefectRatingTreeNodes,
@@ -50,7 +50,6 @@ interface DefectsSectionProps {
   allowStructureChanges?: boolean;
   /** 上传补充照片要带编辑锁令牌；没有令牌时上传入口自动关掉。 */
   editLockToken?: string | null;
-  componentInventory?: ComponentInventoryRevision | null;
   /**
    * 逐病害可编辑判定（重开校对 warnings_only 态下仅带警告的病害可改）。
    * 不传视为全部可编辑；与 disabled 叠加：disabled=true 时全部不可编辑。
@@ -100,11 +99,16 @@ const EMPTY_MANUAL_DEFECT: ManualDefectFormState = {
 
 // 禁用策略按详情控件处理，不用 fieldset disabled 一揽子禁用；
 // 筛选、翻页、缩略图等只读动作在已确认记录中仍可使用。
-export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, onCloseDetail, dispatch, ratingTree = null, assessmentIssues = EMPTY_ASSESSMENT_ISSUES, disabled = false, allowStructureChanges = false, editLockToken = null, componentInventory = null, isDefectEditable }: DefectsSectionProps) {
+export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, onCloseDetail, dispatch, ratingTree = null, assessmentIssues = EMPTY_ASSESSMENT_ISSUES, disabled = false, allowStructureChanges = false, editLockToken = null, isDefectEditable }: DefectsSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
+  // 搜索命中的构件（选中的那条也留在这里），不再是整份台账。
   const [inventoryEntries, setInventoryEntries] = useState<ComponentInventoryEntry[]>([]);
-  const [loadedInventory, setLoadedInventory] = useState<ComponentInventoryRevision | null>(null);
+  // 首屏只要这份分组汇总：修订版 id 与每个类别的 (桥型, 规范类别) 都在里面，而它不含
+  // 构件明细。此前为了这两样东西要下载整份台账（现网一座桥 3.6 MB / 5174 条构件）。
+  const [inventorySummary, setInventorySummary] = useState<InventorySummary | null>(null);
   const [loadingInventory, setLoadingInventory] = useState(false);
+  const [componentSearch, setComponentSearch] = useState("");
+  const [componentSearching, setComponentSearching] = useState(false);
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState<ManualDefectFormState>(EMPTY_MANUAL_DEFECT);
   const [treeNodesByComponent, setTreeNodesByComponent] =
@@ -164,9 +168,32 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     };
   }, [baseUrl, form.ratingTreeNodeId, ratingTree]);
 
+  // 汇总在首屏就要：每一行的评定树病害选择器都依赖它算出的 (桥型, 规范类别)，
+  // 不只是手动添加表单。它不含构件明细，一座 5174 构件的桥也只有十几行。
   useEffect(() => {
-    const inventory = componentInventory ?? loadedInventory;
-    if (!ratingTree || !inventory) {
+    if (!ratingTree || inventorySummary) return;
+    let cancelled = false;
+    fetchInventorySummary(baseUrl, bridgeId)
+      .then((summary) => { if (!cancelled) setInventorySummary(summary); })
+      .catch(() => { /* 汇总取不到时评定树规则不可用，下面的 treeError 会说明 */ });
+    return () => { cancelled = true; };
+  }, [baseUrl, bridgeId, ratingTree, inventorySummary]);
+
+  // 草稿里出现过的 (构件, 规范类别) 组合。用内容做依赖而不是 draft.defects 的引用——
+  // 后者每次渲染都是新数组，会让下面那个副作用反复重跑并把 treeRulesReady 打回 false。
+  const boundComponentKey = useMemo(
+    () => [...new Set(draft.defects
+      .filter((defect) => defect.bridge_component_id && defect.standard_component_category_id)
+      .map((defect) => `${defect.bridge_component_id}\u0000${defect.standard_component_category_id}`))]
+      .sort().join("|"),
+    [draft.defects],
+  );
+
+  // 每个构件适用哪些评定树病害节点，只取决于它的 (桥型, 规范类别)。分组汇总里就有
+  // 这一对（每个类别一行，本桥 18 行），而每条已绑定病害的 JSON 里也带着
+  // standard_component_category_id——两者一拼就够了，不必为此下载整份台账。
+  useEffect(() => {
+    if (!ratingTree || !inventorySummary) {
       setTreeNodesByComponent(new Map());
       setTreeRulesReady(Boolean(!ratingTree));
       return;
@@ -174,14 +201,13 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     let cancelled = false;
     setTreeRulesReady(false);
     setTreeError("");
-    const activeEntries = inventory.entries.filter((entry) => entry.is_active);
     const scopes = new Map<string, { bridgeTypeId: string; componentCategoryId: string }>();
-    for (const entry of activeEntries) {
-      const mapping = entry.mappings.find((item) => item.is_active);
-      if (!mapping) continue;
-      scopes.set(`${mapping.standard_bridge_type_id}\u0000${mapping.standard_component_category_id}`, {
-        bridgeTypeId: mapping.standard_bridge_type_id,
-        componentCategoryId: mapping.standard_component_category_id,
+    for (const group of inventorySummary.groups) {
+      // 类别与桥型同出一条生效映射，同为 null 或同非 null。
+      if (!group.standard_component_category_id || !group.standard_bridge_type_id) continue;
+      scopes.set(group.standard_component_category_id, {
+        bridgeTypeId: group.standard_bridge_type_id,
+        componentCategoryId: group.standard_component_category_id,
       });
     }
     void Promise.all([...scopes.entries()].map(async ([key, scope]) => [
@@ -195,13 +221,19 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     ] as const))
       .then((scopeResults) => {
         if (cancelled) return;
-        const byScope = new Map(scopeResults);
+        const byCategory = new Map(scopeResults);
         const byComponent = new Map<string, RatingTreeNodeSummary[]>();
-        for (const entry of activeEntries) {
+        // 草稿里已绑定的病害：构件 id 与规范类别都写在病害自己身上。
+        for (const pair of boundComponentKey ? boundComponentKey.split("|") : []) {
+          const [componentId, categoryId] = pair.split("\u0000");
+          byComponent.set(componentId, byCategory.get(categoryId) ?? []);
+        }
+        // 手动添加表单里搜到的构件：它们的映射随搜索结果一起回来了。
+        for (const entry of inventoryEntries) {
           const mapping = entry.mappings.find((item) => item.is_active);
           if (!mapping) continue;
-          const key = `${mapping.standard_bridge_type_id}\u0000${mapping.standard_component_category_id}`;
-          byComponent.set(entry.bridge_component_id, byScope.get(key) ?? []);
+          byComponent.set(entry.bridge_component_id,
+            byCategory.get(mapping.standard_component_category_id) ?? []);
         }
         setTreeNodesByComponent(byComponent);
         setTreeRulesReady(true);
@@ -213,7 +245,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         }
     });
     return () => { cancelled = true; };
-  }, [baseUrl, componentInventory, loadedInventory, ratingTree]);
+  }, [baseUrl, inventorySummary, inventoryEntries, boundComponentKey, ratingTree]);
 
   useEffect(() => {
     if (!ratingTree) {
@@ -512,34 +544,57 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const openAddForm = async () => {
     setShowAddForm(true);
     setFormError("");
-    if (componentInventory) {
-      const usable = componentInventory.entries.filter((entry) => entry.is_active && entry.mappings.some((mapping) => mapping.is_active));
-      setLoadedInventory(componentInventory);
-      setInventoryEntries(usable);
-      setForm((current) => ({ ...current, componentEntryId: current.componentEntryId || usable[0]?.id || "" }));
-      if (usable.length === 0) setFormError("当前构件台账中没有可用于关联病害的有效构件。");
-      return;
-    }
+    setComponentSearch("");
+    setInventoryEntries([]);
+    setForm((current) => ({ ...current, componentEntryId: "" }));
+    if (inventorySummary) return;   // 首屏已取；构件本身由搜索按需取
     setLoadingInventory(true);
     try {
-      const revision = await fetchLatestComponentInventory(baseUrl, bridgeId);
-      setLoadedInventory(revision);
-      const usable = revision.entries.filter((entry) => entry.is_active && entry.mappings.some((mapping) => mapping.is_active));
-      setInventoryEntries(usable);
-      setForm((current) => ({ ...current, componentEntryId: current.componentEntryId || usable[0]?.id || "" }));
-      if (usable.length === 0) setFormError("当前构件台账中没有可用于关联病害的有效构件。");
+      setInventorySummary(await fetchInventorySummary(baseUrl, bridgeId));
     } catch (error) {
-      setInventoryEntries([]);
       setFormError(componentInventoryErrorMessage(error));
     } finally {
       setLoadingInventory(false);
     }
   };
 
+  // 构件选择改成按需检索。原先是把整份台账灌进一个 <select>：现网一座桥 5174 个
+  // <option>，其中前 3300 个全是支座，要选"3#墩盖梁"得在原生下拉里滚过三千多行。
+  useEffect(() => {
+    if (!showAddForm) return;
+    const revisionId = inventorySummary?.revision.id;
+    const term = componentSearch.trim();
+    if (!revisionId || !term) {
+      setInventoryEntries([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      setComponentSearching(true);
+      searchInventoryEntries(baseUrl, revisionId, term, 20, controller.signal, true)
+        .then((response) => {
+          setInventoryEntries(response.entries);
+          setFormError(response.total === 0 ? "没有匹配的构件。" : "");
+        })
+        .catch((error) => {
+          if (controller.signal.aborted) return;   // 主动取消不是错误
+          setInventoryEntries([]);
+          setFormError(componentInventoryErrorMessage(error));
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setComponentSearching(false);
+        });
+    }, 250);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [showAddForm, componentSearch, inventorySummary, baseUrl]);
+
   const submitManualDefect = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const entry = inventoryEntries.find((item) => item.id === form.componentEntryId);
-    const inventory = loadedInventory ?? componentInventory;
+    const inventory = inventorySummary?.revision ?? null;
     const mapping = entry?.mappings.find((item) => item.is_active);
     const treeNode = manualDefectNodes.find((item) => item.id === form.ratingTreeNodeId);
     const location = form.defectLocation.trim();
@@ -626,7 +681,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
       />
       {showAddForm ? (
         <form className="manual-defect-form" onSubmit={submitManualDefect}>
-          <label>实际构件<select aria-label="实际构件" disabled={loadingInventory} required value={form.componentEntryId} onChange={(event) => setForm({ ...form, componentEntryId: event.target.value, ratingTreeNodeId: "" })}><option value="">请选择构件</option>{inventoryEntries.map((entry) => <option key={entry.id} value={entry.id}>{entry.component_number} / {entry.site_component_type}</option>)}</select></label>
+          <label>搜索构件<input aria-label="搜索构件" placeholder="编号、类别或现场名，如 3#墩盖梁" disabled={loadingInventory} value={componentSearch} onChange={(event) => setComponentSearch(event.target.value)} /></label>
+          <label>实际构件<select aria-label="实际构件" disabled={loadingInventory || inventoryEntries.length === 0} required value={form.componentEntryId} onChange={(event) => setForm({ ...form, componentEntryId: event.target.value, ratingTreeNodeId: "" })}><option value="">{componentSearching ? "正在搜索…" : inventoryEntries.length === 0 ? "先在上方搜索构件" : "请选择构件"}</option>{inventoryEntries.map((entry) => <option key={entry.id} value={entry.id}>{entry.component_number} / {entry.site_component_type} / {entry.site_name}</option>)}</select></label>
           <label>构件类别<input aria-label="新增病害构件类别" readOnly value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.site_component_type ?? ""} /></label>
           <label>构件编号<input aria-label="新增病害构件编号" readOnly value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.component_number ?? ""} /></label>
           <label>病害位置<input aria-label="新增病害位置" required value={form.defectLocation} onChange={(event) => setForm({ ...form, defectLocation: event.target.value })} /></label>
@@ -634,7 +690,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
           <label className="manual-defect-form-wide">病害描述<input aria-label="新增病害描述" required value={form.defectDescription} onChange={(event) => setForm({ ...form, defectDescription: event.target.value })} /></label>
           <label>病害标度（可稍后填写）<select aria-label="新增病害标度" disabled={!manualTreeNode?.is_scoring} value={form.defectScale} onChange={(event) => setForm({ ...form, defectScale: event.target.value })}><option value="">{manualTreeNode?.is_scoring ? "请选择标度" : "该节点暂不计分"}</option>{manualTreeNode?.allowed_scales.map((scale) => <option key={scale} value={scale}>{scale} · {manualTreeNode.scale_descriptions[String(scale)]}</option>)}</select></label>
           {formError ? <p className="form-error" role="alert">{formError}</p> : null}
-          <div className="manual-defect-form-actions"><button type="button" onClick={() => { setShowAddForm(false); setFormError(""); }}>取消</button><button type="submit" disabled={loadingInventory || inventoryEntries.length === 0}>添加病害</button></div>
+          <div className="manual-defect-form-actions"><button type="button" onClick={() => { setShowAddForm(false); setFormError(""); }}>取消</button><button type="submit" disabled={loadingInventory || !form.componentEntryId}>添加病害</button></div>
         </form>
       ) : null}
       {/* 原来这里是一个 fieldset：它曾经用 disabled 一揽子关掉整片区域，禁用改成
