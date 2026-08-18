@@ -151,27 +151,24 @@ std::optional<inventory::InventoryRevision> resolve_confirmed_revision(
         bridge_id, locked_revision_id);
 }
 
+// 台账版本在两次请求之间被人换掉了。必须让用户看见这件事：静默改用新版本的话，
+// 他看到的候选来自旧版本，校验却按新版本走，被拒时无从理解发生了什么。
+BindingOutcome revision_changed_outcome() {
+    BindingOutcome outcome{BindingStatus::Conflict};
+    outcome.error_code = "component_inventory_revision_changed";
+    outcome.error_message = "构件台账版本已变化，请刷新后重试。";
+    return outcome;
+}
+
+// 锁定规则同样住在 ComponentInventoryRepository，范围拆分应用与这里共用一份。
 bool attach_revision_to_pending_year(
     const drogon::orm::DbClientPtr& client,
     const std::optional<std::string>& year_id,
     const std::string& bridge_id,
     const std::optional<std::string>& locked_revision_id,
     const std::string& revision_id) {
-    if (locked_revision_id.has_value()) return *locked_revision_id == revision_id;
-    if (!year_id.has_value()) return true;
-    const auto updated = client->execSqlSync(
-        "update inspection_years "
-        "set component_inventory_revision_id=$2::uuid,updated_at=now() "
-        "where id=$1::uuid and bridge_id=$3::uuid and status='待校对' "
-        "and component_inventory_revision_id is null returning id",
-        *year_id, revision_id, bridge_id);
-    if (!updated.empty()) return true;
-    const auto current = client->execSqlSync(
-        "select component_inventory_revision_id::text as revision_id "
-        "from inspection_years where id=$1::uuid and bridge_id=$2::uuid",
-        *year_id, bridge_id);
-    return !current.empty() && !current[0]["revision_id"].isNull()
-        && current[0]["revision_id"].as<std::string>() == revision_id;
+    return ComponentInventoryRepository(client).lock_pending_year_revision(
+        year_id, bridge_id, locked_revision_id, revision_id);
 }
 
 }  // namespace
@@ -209,6 +206,8 @@ BindingOutcome ImportBindingRepository::overview(const std::string& import_id) {
         const bool confirmed = revision.has_value();
         BindingOutcome outcome;
         outcome.overview = aggregate(parsed, confirmed);
+        // 与 inventory_confirmed 严格同生共死：两者不得出现矛盾组合。
+        if (confirmed) outcome.overview->inventory_revision_id = revision->id;
         if (const auto version_id =
                 optional_row_text(rows[0], "rating_tree_version_id");
             version_id.has_value()) {
@@ -273,7 +272,8 @@ void write_binding(
 }  // namespace
 
 BindingOutcome ImportBindingRepository::bind_batch(
-    const std::string& import_id, const std::vector<BindingTarget>& targets) {
+    const std::string& import_id, const std::vector<BindingTarget>& targets,
+    const std::string& expected_revision_id) {
     if (targets.empty()) return {BindingStatus::Invalid};
     for (const auto& target : targets) {
         if (target.part_name.empty() || target.component_number.empty()
@@ -307,7 +307,11 @@ BindingOutcome ImportBindingRepository::bind_batch(
             optional_row_text(rows[0], "inventory_revision_id");
         const auto revision =
             resolve_confirmed_revision(tx, bridge_id, locked_revision_id);
-        if (!revision.has_value() || !attach_revision_to_pending_year(
+        if (!revision.has_value()) { rollback(); return {BindingStatus::Conflict}; }
+        if (revision->id != expected_revision_id) {
+            rollback(); return revision_changed_outcome();
+        }
+        if (!attach_revision_to_pending_year(
             tx, year_id, bridge_id, locked_revision_id, revision->id)) {
             rollback(); return {BindingStatus::Conflict};
         }
@@ -375,7 +379,8 @@ BindingOutcome ImportBindingRepository::bind_batch(
 
 BindingOutcome ImportBindingRepository::bind(
     const std::string& import_id, const std::string& part_name,
-    const std::string& component_number, const std::string& bridge_component_id) {
+    const std::string& component_number, const std::string& bridge_component_id,
+    const std::string& expected_revision_id) {
     if (part_name.empty() || component_number.empty() || bridge_component_id.empty()) {
         return {BindingStatus::Invalid};
     }
@@ -405,7 +410,11 @@ BindingOutcome ImportBindingRepository::bind(
             optional_row_text(rows[0], "inventory_revision_id");
         const auto revision =
             resolve_confirmed_revision(tx, bridge_id, locked_revision_id);
-        if (!revision.has_value() || !attach_revision_to_pending_year(
+        if (!revision.has_value()) { rollback(); return {BindingStatus::Conflict}; }
+        if (revision->id != expected_revision_id) {
+            rollback(); return revision_changed_outcome();
+        }
+        if (!attach_revision_to_pending_year(
             tx, year_id, bridge_id, locked_revision_id, revision->id)) {
             rollback(); return {BindingStatus::Conflict};
         }
@@ -460,7 +469,8 @@ BindingOutcome ImportBindingRepository::bind(
 BindingOutcome ImportBindingRepository::bind_rating_tree(
     const std::string& import_id,
     const std::string& rating_tree_version_id,
-    const std::string& actor_user_id) {
+    const std::string& actor_user_id,
+    const std::string& expected_revision_id) {
     if (import_id.empty() || rating_tree_version_id.empty() ||
         actor_user_id.empty()) {
         return {BindingStatus::Invalid};
@@ -563,6 +573,10 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
         if (!source_revision.has_value()) {
             rollback();
             return {BindingStatus::Conflict};
+        }
+        // 迁移的起点必须是用户看到的那份台账，否则派生出来的新版本基线就不对了。
+        if (source_revision->id != expected_revision_id) {
+            rollback(); return revision_changed_outcome();
         }
 
         const auto target_technical_package_id =
@@ -817,6 +831,7 @@ namespace {
 BindingOutcome mutate_group(
     const drogon::orm::DbClientPtr& client, const std::string& import_id,
     const std::string& part_name, const std::string& component_number,
+    const std::string& expected_revision_id,
     const std::function<void(Json::Value&)>& mutator,
     const std::function<BindingOutcome(const std::string&)>& reload) {
     if (part_name.empty() || component_number.empty()) return {BindingStatus::Invalid};
@@ -843,9 +858,16 @@ BindingOutcome mutate_group(
             optional_row_text(rows[0], "inventory_revision_id");
         const auto revision =
             resolve_confirmed_revision(tx, bridge_id, locked_revision_id);
-        if (revision.has_value() && !attach_revision_to_pending_year(
-            tx, year_id, bridge_id, locked_revision_id, revision->id)) {
-            rollback(); return {BindingStatus::Conflict};
+        // 标记缺失/清除绑定不需要台账内容，台账未确认时照样可用——这里保持原样，
+        // 只在确实解析出版本（也就是下面真会锁定它）时才校验期望版本。
+        if (revision.has_value()) {
+            if (revision->id != expected_revision_id) {
+                rollback(); return revision_changed_outcome();
+            }
+            if (!attach_revision_to_pending_year(
+                tx, year_id, bridge_id, locked_revision_id, revision->id)) {
+                rollback(); return {BindingStatus::Conflict};
+            }
         }
         Json::Value parsed;
         parse_json(rows[0]["parsed"].as<std::string>(), parsed);
@@ -868,8 +890,9 @@ BindingOutcome mutate_group(
 
 BindingOutcome ImportBindingRepository::mark_missing(
     const std::string& import_id, const std::string& part_name,
-    const std::string& component_number) {
+    const std::string& component_number, const std::string& expected_revision_id) {
     return mutate_group(db_client_, import_id, part_name, component_number,
+        expected_revision_id,
         [](Json::Value& defect) {
             defect["component_match_method"] = "missing";
             defect["bridge_component_id"] = Json::Value(Json::nullValue);
@@ -889,8 +912,9 @@ BindingOutcome ImportBindingRepository::mark_missing(
 
 BindingOutcome ImportBindingRepository::clear(
     const std::string& import_id, const std::string& part_name,
-    const std::string& component_number) {
+    const std::string& component_number, const std::string& expected_revision_id) {
     return mutate_group(db_client_, import_id, part_name, component_number,
+        expected_revision_id,
         [](Json::Value& defect) {
             defect["component_match_method"] = Json::Value(Json::nullValue);
             defect["bridge_component_id"] = Json::Value(Json::nullValue);

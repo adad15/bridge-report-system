@@ -177,6 +177,7 @@ function assessmentResponse(revision: number): AssessmentPreviewResponse {
 function missingBindingOverview(): ComponentBindingOverview {
   return {
     inventory_confirmed: true,
+    inventory_revision_id: "rev-1",
     groups: [{
       part_name: "上部承重构件",
       total: 1,

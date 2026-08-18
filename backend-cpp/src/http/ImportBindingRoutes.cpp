@@ -12,6 +12,9 @@ namespace bridge_report::http {
 Json::Value binding_overview_json(const db::BindingOverview& overview) {
     Json::Value value;
     value["inventory_confirmed"] = overview.inventory_confirmed;
+    // 契约不变量：inventory_revision_id 非空 当且仅当 inventory_confirmed 为真。
+    value["inventory_revision_id"] = overview.inventory_revision_id.has_value()
+        ? Json::Value(*overview.inventory_revision_id) : Json::Value(Json::nullValue);
     value["rating_tree"] = Json::Value(Json::nullValue);
     if (overview.rating_tree.has_value()) {
         const auto& tree = *overview.rating_tree;
@@ -162,9 +165,13 @@ void respond_binding(const HttpCallback& callback, const db::BindingOutcome& out
             return;
         case db::BindingStatus::Conflict: {
             // 批量绑定整批不写，必须让用户知道是哪一条挡住的。
+            // 结果自带错误码时优先用它：同一个 Conflict 状态下，"台账版本已变化"要求
+            // 前端刷新概览，跟"类别不符"是两种完全不同的处置。
             auto body = make_error_body(
-                "component_binding_conflict",
-                outcome.rejected_component_number.empty()
+                outcome.error_code.empty()
+                    ? "component_binding_conflict" : outcome.error_code,
+                !outcome.error_message.empty() ? outcome.error_message
+                : outcome.rejected_component_number.empty()
                     ? "台账未确认、导入不在待校对阶段，或所选构件类别与部件名称不符。"
                     : "构件 " + outcome.rejected_component_number
                         + " 的类别与部件名称不符，整批未应用。");
@@ -221,6 +228,23 @@ void respond_rating_tree_binding(
         return;
     }
     respond_binding(callback, outcome);
+}
+
+// 取回请求根节点的 expected_inventory_revision_id。缺失、空串或非 UUID 都是入参错误，
+// 返回 400；那和"版本确实变了"是两回事，不能让前端把它当成需要刷新概览的冲突。
+// 批量绑定同样从根节点取，不逐个 target 重复。
+bool parse_expected_revision(const Json::Value* body, std::string& expected,
+                             const HttpCallback& callback,
+                             const char* error_code = "invalid_component_binding") {
+    if (body == nullptr || !(*body)["expected_inventory_revision_id"].isString()
+        || !is_valid_uuid((*body)["expected_inventory_revision_id"].asString())) {
+        respond_json(callback, make_error_body(
+            error_code, "expected_inventory_revision_id 必须是有效的台账版本 UUID。"),
+            drogon::k400BadRequest);
+        return false;
+    }
+    expected = (*body)["expected_inventory_revision_id"].asString();
+    return true;
 }
 
 // 取回 part_name + component_number（bind 另需 bridge_component_id）。
@@ -280,12 +304,15 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                         drogon::k400BadRequest);
                     return;
                 }
+                std::string expected;
+                if (!parse_expected_revision(body.get(), expected, callback,
+                                             "invalid_rating_tree_binding")) return;
                 respond_rating_tree_binding(
                     callback,
                     db::ImportBindingRepository(db_client).bind_rating_tree(
                         import_id,
                         (*body)["rating_tree_version_id"].asString(),
-                        actor->id));
+                        actor->id, expected));
             } catch (...) {
                 respond_db_unavailable(callback);
             }
@@ -300,10 +327,15 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                 if (!authenticate_request(db_client, request)) {
                     respond_unauthorized(callback); return;
                 }
+                const auto body = request->getJsonObject();
                 std::vector<review::ComponentRangeSplitTarget> targets;
-                if (!parse_split_targets(request->getJsonObject().get(), targets, callback)) return;
+                if (!parse_split_targets(body.get(), targets, callback)) return;
+                std::string expected;
+                if (!parse_expected_revision(body.get(), expected, callback,
+                                             "invalid_component_range_split")) return;
                 respond_split(callback,
-                    db::ComponentRangeSplitRepository(db_client).preview(import_id, targets));
+                    db::ComponentRangeSplitRepository(db_client).preview(
+                        import_id, targets, expected));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
 
@@ -326,9 +358,13 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                         drogon::k400BadRequest);
                     return;
                 }
+                std::string expected;
+                if (!parse_expected_revision(body.get(), expected, callback,
+                                             "invalid_component_range_split")) return;
                 respond_split(callback,
                     db::ComponentRangeSplitRepository(db_client).apply(
-                        import_id, targets, (*body)["impact_token"].asString(), actor->id));
+                        import_id, targets, (*body)["impact_token"].asString(),
+                        actor->id, expected));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
 
@@ -365,8 +401,11 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                                        item["component_number"].asString(),
                                        item["bridge_component_id"].asString()});
                 }
+                std::string expected;
+                if (!parse_expected_revision(body.get(), expected, callback)) return;
                 respond_binding(callback,
-                    db::ImportBindingRepository(db_client).bind_batch(import_id, targets));
+                    db::ImportBindingRepository(db_client).bind_batch(
+                        import_id, targets, expected));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
 
@@ -401,8 +440,11 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                         "invalid_component_binding", "必须选择实际构件。"),
                         drogon::k400BadRequest); return;
                 }
+                std::string expected;
+                if (!parse_expected_revision(body.get(), expected, callback)) return;
                 respond_binding(callback, db::ImportBindingRepository(db_client).bind(
-                    import_id, part_name, number, (*body)["bridge_component_id"].asString()));
+                    import_id, part_name, number,
+                    (*body)["bridge_component_id"].asString(), expected));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
 
@@ -418,8 +460,10 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                 const auto body = request->getJsonObject();
                 std::string part_name, number;
                 if (!parse_target(body.get(), part_name, number, callback)) return;
+                std::string expected;
+                if (!parse_expected_revision(body.get(), expected, callback)) return;
                 respond_binding(callback, db::ImportBindingRepository(db_client).mark_missing(
-                    import_id, part_name, number));
+                    import_id, part_name, number, expected));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
 
@@ -435,8 +479,10 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                 const auto body = request->getJsonObject();
                 std::string part_name, number;
                 if (!parse_target(body.get(), part_name, number, callback)) return;
+                std::string expected;
+                if (!parse_expected_revision(body.get(), expected, callback)) return;
                 respond_binding(callback, db::ImportBindingRepository(db_client).clear(
-                    import_id, part_name, number));
+                    import_id, part_name, number, expected));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
 }

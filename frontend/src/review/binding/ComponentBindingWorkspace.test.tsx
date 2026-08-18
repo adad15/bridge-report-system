@@ -9,8 +9,10 @@ import {
   fetchComponentBinding,
   markComponentMissing,
   previewComponentRangeSplit,
+  INVENTORY_REVISION_CHANGED,
   type ComponentBindingOverview,
 } from "../../api/importBindingApi";
+import { ApiError } from "../../api/apiClient";
 import { fetchRatingTreeVersions } from "../../api/ratingTreeApi";
 import { ComponentBindingWorkspace } from "./ComponentBindingWorkspace";
 
@@ -77,6 +79,7 @@ const inventory = {
 function overview(status: "unmatched" | "bound" | "missing"): ComponentBindingOverview {
   return {
     inventory_confirmed: true,
+    inventory_revision_id: "rev-1",
     groups: [
       {
         part_name: "上部承重构件",
@@ -154,7 +157,8 @@ describe("ComponentBindingWorkspace", () => {
       expect(bindInspectionRatingTree).toHaveBeenCalledWith(
         "http://127.0.0.1:18080",
         "i1",
-        "tree-1"
+        "tree-1",
+        "rev-1"
       )
     );
     expect(await screen.findByText("评定树已绑定。")).toBeInTheDocument();
@@ -191,7 +195,7 @@ describe("ComponentBindingWorkspace", () => {
       part_name: "上部承重构件",
       component_number: "1-1#梁",
       bridge_component_id: "c1",
-    }));
+    }, "rev-1"));
 
     // 绑定后该行从默认视图消失，只剩"全部已处理"提示。
     expect(await screen.findByText("全部构件已处理完毕。")).toBeInTheDocument();
@@ -235,6 +239,43 @@ describe("ComponentBindingWorkspace", () => {
     await userEvent.click(screen.getByLabelText("标记缺失 1-1#梁"));
 
     await waitFor(() => expect(onDraftInvalidated).toHaveBeenCalledTimes(1));
+  });
+
+  // 写操作要声明依据哪个台账版本；漏传的话后端会自己挑一个，用户看到的候选就和
+  // 校验用的台账对不上了。
+  it("sends the overview revision id with every write", async () => {
+    vi.mocked(markComponentMissing).mockResolvedValue(overview("missing"));
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+
+    await userEvent.click(await screen.findByLabelText("标记缺失 1-1#梁"));
+
+    await waitFor(() => expect(markComponentMissing).toHaveBeenCalled());
+    expect(vi.mocked(markComponentMissing).mock.calls[0][3]).toBe("rev-1");
+  });
+
+  // 版本变了只弹一条错误是不够的：候选已经过期，用户会对着旧数据反复重试。
+  it("refreshes the overview when the backend reports the revision changed", async () => {
+    vi.mocked(markComponentMissing).mockRejectedValue(
+      new ApiError(INVENTORY_REVISION_CHANGED, "构件台账版本已变化，请刷新后重试。"),
+    );
+    const refreshed = overview("unmatched");
+    refreshed.inventory_revision_id = "rev-2";
+    vi.mocked(fetchComponentBinding)
+      .mockResolvedValueOnce(overview("unmatched"))
+      .mockResolvedValueOnce(refreshed);
+
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    await userEvent.click(await screen.findByLabelText("标记缺失 1-1#梁"));
+
+    // 概览被重新拉取，并且明确告诉用户发生了什么。
+    await waitFor(() => expect(fetchComponentBinding).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/台账版本已变化/)).toBeInTheDocument();
+
+    // 刷新之后的写操作必须带上新版本。
+    vi.mocked(markComponentMissing).mockResolvedValue(refreshed);
+    await userEvent.click(screen.getByLabelText("标记缺失 1-1#梁"));
+    await waitFor(() => expect(markComponentMissing).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(markComponentMissing).mock.calls[1][3]).toBe("rev-2");
   });
 
   it("opens the split dialog before the preview request finishes and ignores a late result after close", async () => {

@@ -15,6 +15,7 @@ import {
   markComponentMissing,
   previewComponentRangeSplit,
   applyComponentRangeSplit,
+  INVENTORY_REVISION_CHANGED,
   type BindingRow,
   type BindingTarget,
   type ComponentRangeSplitPreview,
@@ -56,6 +57,20 @@ function errorMessage(caught: unknown): string {
     return caught.message;
   }
   return "绑定操作失败，请稍后重试。";
+}
+
+function isRevisionChanged(caught: unknown): boolean {
+  return caught instanceof ApiError && caught.code === INVENTORY_REVISION_CHANGED;
+}
+
+// 契约不变量：inventory_confirmed 为真时 inventory_revision_id 必然非空，而整块绑定 UI
+// 都在 inventory_confirmed 之后。真取到空值说明后端违反了契约，就地抛错比带着 null
+// 发请求、等后端回 400 更容易定位。
+function requireRevisionId(overview: ComponentBindingOverview): string {
+  if (!overview.inventory_revision_id) {
+    throw new Error("构件台账版本缺失，请刷新页面后重试。");
+  }
+  return overview.inventory_revision_id;
 }
 
 interface RowActionProps {
@@ -283,7 +298,8 @@ export function ComponentBindingWorkspace({
     setSplitError(null);
     setSplitPreviewLoading(true);
     try {
-      const preview = await previewComponentRangeSplit(backendBaseUrl, importId, targets);
+      const preview = await previewComponentRangeSplit(
+        backendBaseUrl, importId, targets, requireRevisionId(overview!));
       if (splitPreviewRequest.current === requestId) setSplitPreview(preview);
     } catch (caught) {
       if (splitPreviewRequest.current === requestId) setSplitError(errorMessage(caught));
@@ -339,6 +355,21 @@ export function ComponentBindingWorkspace({
   }, [overview]);
 
   // 单条绑定 / 标记缺失 / 取消绑定共用；三者都会改写后端草稿里的病害构件关联。
+  // 台账版本变了：重新拉概览并说清楚发生了什么。只显示一条错误的话，用户会对着
+  // 一份已经过期的候选反复重试。
+  async function refreshAfterRevisionChange() {
+    try {
+      const next = await fetchComponentBinding(backendBaseUrl, importId);
+      setOverview(next);
+      onOverviewChange?.(next);
+      setSplitPreview(null);
+      splitPreviewRequest.current += 1;
+      setError("构件台账版本已变化，已为你刷新，请确认后重试。");
+    } catch (caught) {
+      setError(errorMessage(caught));
+    }
+  }
+
   async function run(action: () => Promise<ComponentBindingOverview>) {
     setBusy(true);
     try {
@@ -348,7 +379,8 @@ export function ComponentBindingWorkspace({
       onOverviewChange?.(next);
       onDraftInvalidated?.();
     } catch (caught) {
-      setError(errorMessage(caught));
+      if (isRevisionChanged(caught)) await refreshAfterRevisionChange();
+      else setError(errorMessage(caught));
     } finally {
       setBusy(false);
     }
@@ -374,7 +406,8 @@ export function ComponentBindingWorkspace({
       const next = await bindInspectionRatingTree(
         backendBaseUrl,
         importId,
-        selectedRatingTreeId
+        selectedRatingTreeId,
+        requireRevisionId(overview!)
       );
       setOverview(next);
       onOverviewChange?.(next);
@@ -587,7 +620,7 @@ export function ComponentBindingWorkspace({
                       part_name: group.part_name,
                       component_number: row.component_number,
                       bridge_component_id: id,
-                    })
+                    }, requireRevisionId(overview))
                   )
                 }
                 onMarkMissing={() =>
@@ -595,7 +628,7 @@ export function ComponentBindingWorkspace({
                     markComponentMissing(backendBaseUrl, importId, {
                       part_name: group.part_name,
                       component_number: row.component_number,
-                    })
+                    }, requireRevisionId(overview))
                   )
                 }
                 onClear={() =>
@@ -603,7 +636,7 @@ export function ComponentBindingWorkspace({
                     clearComponentBinding(backendBaseUrl, importId, {
                       part_name: group.part_name,
                       component_number: row.component_number,
-                    })
+                    }, requireRevisionId(overview))
                   )
                 }
               />
@@ -622,7 +655,8 @@ export function ComponentBindingWorkspace({
           onApply={async (targets) => {
             setBusy(true);
             try {
-              const next = await bindComponentsBatch(backendBaseUrl, importId, targets);
+              const next = await bindComponentsBatch(
+                backendBaseUrl, importId, targets, requireRevisionId(overview));
               setOverview(next);
               setError(null);
               onOverviewChange?.(next);
@@ -651,7 +685,7 @@ export function ComponentBindingWorkspace({
             setSplitError(null);
             try {
               const applied = await applyComponentRangeSplit(
-                backendBaseUrl, importId, targets, impactToken
+                backendBaseUrl, importId, targets, impactToken, requireRevisionId(overview)
               );
               setOverview(applied.overview);
               onOverviewChange?.(applied.overview);

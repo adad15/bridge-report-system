@@ -12,6 +12,7 @@
 
 namespace {
 
+using bridge_report::db::BindingOutcome;
 using bridge_report::db::BindingOverview;
 using bridge_report::db::BindingRow;
 using bridge_report::db::BindingStatus;
@@ -209,7 +210,7 @@ TEST_F(ImportBindingRepositoryTest, PreviewAndApplySelectedRangeAtomically) {
     bridge_report::db::ComponentRangeSplitRepository repository(client_);
     const std::vector<bridge_report::review::ComponentRangeSplitTarget> targets{
         {"上部承重构件", "1-1#梁~1-25#梁"}};
-    const auto preview = repository.preview(import_id_, targets);
+    const auto preview = repository.preview(import_id_, targets, revision_id_);
     ASSERT_EQ(preview.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
     ASSERT_TRUE(preview.analysis.has_value());
     EXPECT_FALSE(preview.plan.has_value());
@@ -218,7 +219,7 @@ TEST_F(ImportBindingRepositoryTest, PreviewAndApplySelectedRangeAtomically) {
     EXPECT_TRUE(preview.impact_token.starts_with("sha256:"));
 
     const auto applied =
-        repository.apply(import_id_, targets, preview.impact_token, user_id_);
+        repository.apply(import_id_, targets, preview.impact_token, user_id_, revision_id_);
     ASSERT_EQ(applied.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
     ASSERT_TRUE(applied.analysis.has_value());
     ASSERT_TRUE(applied.plan.has_value());
@@ -232,7 +233,7 @@ TEST_F(ImportBindingRepositoryTest, PreviewAndApplySelectedRangeAtomically) {
     EXPECT_EQ(after[0]["actor"].as<std::string>(), user_id_);
 
     const auto replay =
-        repository.apply(import_id_, targets, preview.impact_token, user_id_);
+        repository.apply(import_id_, targets, preview.impact_token, user_id_, revision_id_);
     EXPECT_NE(replay.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
 }
 
@@ -248,6 +249,137 @@ TEST_F(ImportBindingRepositoryTest, OverviewStaysConfirmedWhileADraftExists) {
     EXPECT_TRUE(outcome.overview->inventory_confirmed);
 }
 
+// 前端拿这个 id 当搜索寻址、缓存键和写操作的 expected 版本，缺了整条契约就断了。
+TEST_F(ImportBindingRepositoryTest, OverviewCarriesTheResolvedRevisionId) {
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.overview(import_id_);
+    ASSERT_EQ(outcome.status, BindingStatus::Ok);
+    ASSERT_TRUE(outcome.overview->inventory_revision_id.has_value());
+    EXPECT_EQ(*outcome.overview->inventory_revision_id, revision_id_);
+    // 不变量：有值 当且仅当 inventory_confirmed 为真。
+    EXPECT_EQ(outcome.overview->inventory_confirmed,
+              outcome.overview->inventory_revision_id.has_value());
+}
+
+// 概览是读操作：解析出版本也不许写进年度。否则光是打开面板就把年度锁死了。
+TEST_F(ImportBindingRepositoryTest, OverviewNeverLocksTheYearRevision) {
+    ImportBindingRepository repository(client_);
+    ASSERT_EQ(repository.overview(import_id_).status, BindingStatus::Ok);
+
+    const auto year = client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id "
+        "from inspection_years where id=$1::uuid", year_id_);
+    EXPECT_TRUE(year[0]["revision_id"].isNull());
+}
+
+// 拆分预览同样是读操作。
+TEST_F(ImportBindingRepositoryTest, RangeSplitPreviewNeverLocksTheYearRevision) {
+    make_defects_a_range();
+    bridge_report::db::ComponentRangeSplitRepository repository(client_);
+    const std::vector<bridge_report::review::ComponentRangeSplitTarget> targets{
+        {"上部承重构件", "1-1#梁~1-25#梁"}};
+    ASSERT_EQ(repository.preview(import_id_, targets, revision_id_).status,
+              bridge_report::db::ComponentRangeSplitStatus::Ok);
+
+    const auto year = client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id "
+        "from inspection_years where id=$1::uuid", year_id_);
+    EXPECT_TRUE(year[0]["revision_id"].isNull());
+}
+
+// 每条写路径都必须挡住版本漂移，且用同一个错误码——前端才能一处接住。
+TEST_F(ImportBindingRepositoryTest, WritesRejectAStaleExpectedRevision) {
+    const std::string stale = "11111111-1111-1111-1111-111111111111";
+    ImportBindingRepository repository(client_);
+
+    const auto expect_changed = [](const BindingOutcome& outcome, const char* what) {
+        EXPECT_EQ(outcome.status, BindingStatus::Conflict) << what;
+        EXPECT_EQ(outcome.error_code, "component_inventory_revision_changed") << what;
+    };
+    expect_changed(
+        repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_, stale), "bind");
+    expect_changed(
+        repository.bind_batch(import_id_, {{"上部承重构件", "1-1#梁", component_id_}}, stale),
+        "bind_batch");
+    expect_changed(repository.mark_missing(import_id_, "支座", "2-1#支座", stale), "mark_missing");
+    expect_changed(repository.clear(import_id_, "上部承重构件", "1-1#梁", stale), "clear");
+
+    // 一条都不许写进去。
+    const auto after = repository.overview(import_id_);
+    EXPECT_EQ(find_row(*after.overview, "上部承重构件", "1-1#梁")->status, "unmatched");
+    EXPECT_EQ(find_row(*after.overview, "支座", "2-1#支座")->status, "unmatched");
+}
+
+// 缺陷四：年度未锁版本时，写操作会重新解析并把新版本锁进去，用户毫不知情。
+TEST_F(ImportBindingRepositoryTest, MarkMissingRefusesToSwitchToANewerRevision) {
+    add_revision(2, /*confirmed=*/true);   // 用户看过概览之后，别人确认了 R2
+
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.mark_missing(import_id_, "支座", "2-1#支座", revision_id_);
+    EXPECT_EQ(outcome.status, BindingStatus::Conflict);
+    EXPECT_EQ(outcome.error_code, "component_inventory_revision_changed");
+
+    // 年度不能被悄悄锁到 R2 上。
+    const auto year = client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id "
+        "from inspection_years where id=$1::uuid", year_id_);
+    EXPECT_TRUE(year[0]["revision_id"].isNull());
+}
+
+// 拆分预览与应用走同一个错误码；impact_token 与版本校验各管一段，互不替代。
+TEST_F(ImportBindingRepositoryTest, RangeSplitRejectsAStaleExpectedRevision) {
+    make_defects_a_range();
+    bridge_report::db::ComponentRangeSplitRepository repository(client_);
+    const std::vector<bridge_report::review::ComponentRangeSplitTarget> targets{
+        {"上部承重构件", "1-1#梁~1-25#梁"}};
+
+    const auto good = repository.preview(import_id_, targets, revision_id_);
+    ASSERT_EQ(good.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
+
+    const std::string stale = "11111111-1111-1111-1111-111111111111";
+    const auto preview = repository.preview(import_id_, targets, stale);
+    EXPECT_EQ(preview.status, bridge_report::db::ComponentRangeSplitStatus::Conflict);
+    EXPECT_EQ(preview.error_code, "component_inventory_revision_changed");
+
+    // 令牌是对的，只有版本不对：仍须被版本这道闸门挡住。
+    const auto applied =
+        repository.apply(import_id_, targets, good.impact_token, user_id_, stale);
+    EXPECT_EQ(applied.status, bridge_report::db::ComponentRangeSplitStatus::Conflict);
+    EXPECT_EQ(applied.error_code, "component_inventory_revision_changed");
+}
+
+// 反过来：版本对、令牌过期，必须报令牌那条，不能混成版本变化。
+TEST_F(ImportBindingRepositoryTest, RangeSplitStillReportsStaleTokenSeparately) {
+    make_defects_a_range();
+    bridge_report::db::ComponentRangeSplitRepository repository(client_);
+    const std::vector<bridge_report::review::ComponentRangeSplitTarget> targets{
+        {"上部承重构件", "1-1#梁~1-25#梁"}};
+
+    const auto applied = repository.apply(
+        import_id_, targets, "sha256:deadbeef", user_id_, revision_id_);
+    EXPECT_EQ(applied.status, bridge_report::db::ComponentRangeSplitStatus::Stale);
+    EXPECT_EQ(applied.error_code, "component_range_split_stale");
+}
+
+// 拆分应用是写操作，要跟其他写路径一样把版本锁进年度。
+TEST_F(ImportBindingRepositoryTest, RangeSplitApplyLocksTheYearRevision) {
+    make_defects_a_range();
+    bridge_report::db::ComponentRangeSplitRepository repository(client_);
+    const std::vector<bridge_report::review::ComponentRangeSplitTarget> targets{
+        {"上部承重构件", "1-1#梁~1-25#梁"}};
+    const auto preview = repository.preview(import_id_, targets, revision_id_);
+    ASSERT_EQ(preview.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
+    ASSERT_EQ(repository.apply(import_id_, targets, preview.impact_token, user_id_,
+                               revision_id_).status,
+              bridge_report::db::ComponentRangeSplitStatus::Ok);
+
+    const auto year = client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id "
+        "from inspection_years where id=$1::uuid", year_id_);
+    ASSERT_FALSE(year[0]["revision_id"].isNull());
+    EXPECT_EQ(year[0]["revision_id"].as<std::string>(), revision_id_);
+}
+
 // 同一个草稿优先排序在范围拆分里后果更硬：预览和应用都直接 Conflict，功能整个不可用。
 TEST_F(ImportBindingRepositoryTest, RangeSplitStaysUsableWhileADraftExists) {
     add_revision(2, /*confirmed=*/false);
@@ -256,13 +388,13 @@ TEST_F(ImportBindingRepositoryTest, RangeSplitStaysUsableWhileADraftExists) {
     bridge_report::db::ComponentRangeSplitRepository repository(client_);
     const std::vector<bridge_report::review::ComponentRangeSplitTarget> targets{
         {"上部承重构件", "1-1#梁~1-25#梁"}};
-    const auto preview = repository.preview(import_id_, targets);
+    const auto preview = repository.preview(import_id_, targets, revision_id_);
     ASSERT_EQ(preview.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
     ASSERT_TRUE(preview.analysis.has_value());
     EXPECT_EQ(preview.analysis->totals.bound_count, 3);
 
     const auto applied =
-        repository.apply(import_id_, targets, preview.impact_token, user_id_);
+        repository.apply(import_id_, targets, preview.impact_token, user_id_, revision_id_);
     EXPECT_EQ(applied.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
 }
 
@@ -280,7 +412,7 @@ TEST_F(ImportBindingRepositoryTest, RangeSplitUsesTheRevisionLockedByTheYear) {
     bridge_report::db::ComponentRangeSplitRepository repository(client_);
     const std::vector<bridge_report::review::ComponentRangeSplitTarget> targets{
         {"上部承重构件", "1-1#梁~1-25#梁"}};
-    const auto preview = repository.preview(import_id_, targets);
+    const auto preview = repository.preview(import_id_, targets, revision_id_);
     ASSERT_EQ(preview.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
     ASSERT_TRUE(preview.analysis.has_value());
     EXPECT_EQ(preview.analysis->totals.bound_count, 3);
@@ -288,7 +420,7 @@ TEST_F(ImportBindingRepositoryTest, RangeSplitUsesTheRevisionLockedByTheYear) {
 
 TEST_F(ImportBindingRepositoryTest, BindAttachesAllReferencingDefects) {
     ImportBindingRepository repository(client_);
-    const auto outcome = repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_);
+    const auto outcome = repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_, revision_id_);
     ASSERT_EQ(outcome.status, BindingStatus::Ok) << static_cast<int>(outcome.status);
     const auto* row = find_row(*outcome.overview, "上部承重构件", "1-1#梁");
     ASSERT_NE(row, nullptr);
@@ -320,13 +452,13 @@ TEST_F(ImportBindingRepositoryTest, BindAttachesAllReferencingDefects) {
 TEST_F(ImportBindingRepositoryTest, BindRejectsCategoryMismatch) {
     ImportBindingRepository repository(client_);
     // 把支座行绑到上部承重构件构件 → 类别不符。
-    const auto outcome = repository.bind(import_id_, "支座", "2-1#支座", component_id_);
+    const auto outcome = repository.bind(import_id_, "支座", "2-1#支座", component_id_, revision_id_);
     EXPECT_EQ(outcome.status, BindingStatus::Conflict);
 }
 
 TEST_F(ImportBindingRepositoryTest, MarkMissingAndClearRoundTrip) {
     ImportBindingRepository repository(client_);
-    const auto missing = repository.mark_missing(import_id_, "支座", "2-1#支座");
+    const auto missing = repository.mark_missing(import_id_, "支座", "2-1#支座", revision_id_);
     ASSERT_EQ(missing.status, BindingStatus::Ok);
     EXPECT_EQ(find_row(*missing.overview, "支座", "2-1#支座")->status, "missing");
     const auto after_missing = client_->execSqlSync(
@@ -338,9 +470,9 @@ TEST_F(ImportBindingRepositoryTest, MarkMissingAndClearRoundTrip) {
     EXPECT_EQ(after_missing[0]["count"].as<int>(), 0);
     EXPECT_EQ(after_missing[0]["year_revision_id"].as<std::string>(), revision_id_);
 
-    const auto bound = repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_);
+    const auto bound = repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_, revision_id_);
     ASSERT_EQ(bound.status, BindingStatus::Ok);
-    const auto cleared = repository.clear(import_id_, "上部承重构件", "1-1#梁");
+    const auto cleared = repository.clear(import_id_, "上部承重构件", "1-1#梁", revision_id_);
     ASSERT_EQ(cleared.status, BindingStatus::Ok);
     EXPECT_EQ(find_row(*cleared.overview, "上部承重构件", "1-1#梁")->status, "unmatched");
     const auto stored = client_->execSqlSync(
@@ -355,7 +487,7 @@ TEST_F(ImportBindingRepositoryTest, BindBatchAppliesEveryTarget) {
     ImportBindingRepository repository(client_);
     const auto outcome = repository.bind_batch(import_id_, {
         {"上部承重构件", "1-1#梁", component_id_},
-    });
+    }, revision_id_);
     ASSERT_EQ(outcome.status, BindingStatus::Ok) << static_cast<int>(outcome.status);
     ASSERT_TRUE(outcome.overview.has_value());
     const auto* row = find_row(*outcome.overview, "上部承重构件", "1-1#梁");
@@ -369,7 +501,7 @@ TEST_F(ImportBindingRepositoryTest, BindBatchWritesNothingWhenAnyTargetIsInvalid
     const auto outcome = repository.bind_batch(import_id_, {
         {"上部承重构件", "1-1#梁", component_id_},   // 合法
         {"支座", "2-1#支座", component_id_},          // 类别不符
-    });
+    }, revision_id_);
     EXPECT_EQ(outcome.status, BindingStatus::Conflict);
     EXPECT_EQ(outcome.rejected_component_number, "2-1#支座");
 
@@ -383,14 +515,14 @@ TEST_F(ImportBindingRepositoryTest, BindBatchRejectsUnknownComponentNumber) {
     ImportBindingRepository repository(client_);
     const auto outcome = repository.bind_batch(import_id_, {
         {"上部承重构件", "9-9#不存在", component_id_},
-    });
+    }, revision_id_);
     EXPECT_EQ(outcome.status, BindingStatus::Invalid);
     EXPECT_EQ(outcome.rejected_component_number, "9-9#不存在");
 }
 
 TEST_F(ImportBindingRepositoryTest, BindBatchRejectsEmptyTargets) {
     ImportBindingRepository repository(client_);
-    EXPECT_EQ(repository.bind_batch(import_id_, {}).status, BindingStatus::Invalid);
+    EXPECT_EQ(repository.bind_batch(import_id_, {}, revision_id_).status, BindingStatus::Invalid);
 }
 
 TEST_F(ImportBindingRepositoryTest, BindsPublishedRatingTreeAndDerivesCompatibleInventory) {
@@ -404,7 +536,7 @@ TEST_F(ImportBindingRepositoryTest, BindsPublishedRatingTreeAndDerivesCompatible
 
     ImportBindingRepository repository(client_);
     const auto outcome =
-        repository.bind_rating_tree(import_id_, tree_id, user_id_);
+        repository.bind_rating_tree(import_id_, tree_id, user_id_, revision_id_);
     ASSERT_EQ(outcome.status, BindingStatus::Ok)
         << static_cast<int>(outcome.status);
     ASSERT_TRUE(outcome.overview.has_value());
@@ -434,15 +566,15 @@ TEST_F(ImportBindingRepositoryTest, RejectsWritesOutsidePendingReview) {
     client_->execSqlSync("update import_records set import_status='已确认' where id=$1::uuid", import_id_);
     ImportBindingRepository repository(client_);
     EXPECT_EQ(repository.overview(import_id_).status, BindingStatus::Conflict);
-    EXPECT_EQ(repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_).status,
+    EXPECT_EQ(repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_, revision_id_).status,
               BindingStatus::Conflict);
-    EXPECT_EQ(repository.mark_missing(import_id_, "支座", "2-1#支座").status, BindingStatus::Conflict);
-    EXPECT_EQ(repository.bind_batch(import_id_, {{"上部承重构件", "1-1#梁", component_id_}}).status,
+    EXPECT_EQ(repository.mark_missing(import_id_, "支座", "2-1#支座", revision_id_).status, BindingStatus::Conflict);
+    EXPECT_EQ(repository.bind_batch(import_id_, {{"上部承重构件", "1-1#梁", component_id_}}, revision_id_).status,
               BindingStatus::Conflict);
     EXPECT_EQ(
         repository.bind_rating_tree(
             import_id_, "11111111-1111-1111-1111-111111111111",
-            user_id_).status,
+            user_id_, revision_id_).status,
         BindingStatus::Conflict);
 }
 

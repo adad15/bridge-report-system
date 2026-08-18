@@ -24,6 +24,11 @@ export interface BindingGroup {
 
 export interface ComponentBindingOverview {
   inventory_confirmed: boolean;
+  /**
+   * 本次概览所依据的台账版本。契约不变量：非 null 当且仅当 inventory_confirmed 为真。
+   * 后续搜索寻址、批量缓存键与所有写操作的 expected_inventory_revision_id 都取这里。
+   */
+  inventory_revision_id: string | null;
   rating_tree?: {
     version_id: string;
     tree_name: string;
@@ -106,53 +111,94 @@ export function fetchComponentBinding(baseUrl: string, importId: string) {
   return overviewRequest(bindingUrl(baseUrl, importId));
 }
 
+/**
+ * 后端在事务里比对这个版本；不一致就返回该错误码，不静默改用新版本。
+ * 三条路径（绑定、范围拆分、评定树）用的是同一个码，前端一处接住即可。
+ */
+export const INVENTORY_REVISION_CHANGED = "component_inventory_revision_changed";
+
+/**
+ * 每个写操作都必须声明"本次依据的是哪个台账版本"，所以这是必填参数而不是可选字段——
+ * 可选的话，漏传的调用点会安静地退回到旧的"服务端自己挑一个版本"行为。
+ * 取值一律是 overview.inventory_revision_id。
+ */
 export function bindInspectionRatingTree(
   baseUrl: string,
   importId: string,
-  ratingTreeVersionId: string
+  ratingTreeVersionId: string,
+  expectedInventoryRevisionId: string
 ) {
   return overviewRequest(
     bindingUrl(baseUrl, importId, "/rating-tree"),
-    json("POST", { rating_tree_version_id: ratingTreeVersionId })
+    json("POST", {
+      rating_tree_version_id: ratingTreeVersionId,
+      expected_inventory_revision_id: expectedInventoryRevisionId,
+    })
   );
 }
 
 export function bindComponent(
   baseUrl: string,
   importId: string,
-  input: BindingTarget & { bridge_component_id: string }
+  input: BindingTarget & { bridge_component_id: string },
+  expectedInventoryRevisionId: string
 ) {
-  return overviewRequest(bindingUrl(baseUrl, importId, "/bind"), json("POST", input));
+  return overviewRequest(
+    bindingUrl(baseUrl, importId, "/bind"),
+    json("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId })
+  );
 }
 
 /**
  * 批量绑定（批量替换用）。后端整批原子：任一目标非法则一条都不写，
  * 并在 details.rejected_component_number 指明是哪一条挡住的。
+ * 版本字段放在请求根节点，不逐个 target 重复。
  */
 export function bindComponentsBatch(
   baseUrl: string,
   importId: string,
-  targets: (BindingTarget & { bridge_component_id: string })[]
+  targets: (BindingTarget & { bridge_component_id: string })[],
+  expectedInventoryRevisionId: string
 ) {
-  return overviewRequest(bindingUrl(baseUrl, importId, "/bind-batch"), json("POST", { targets }));
+  return overviewRequest(
+    bindingUrl(baseUrl, importId, "/bind-batch"),
+    json("POST", { targets, expected_inventory_revision_id: expectedInventoryRevisionId })
+  );
 }
 
-export function markComponentMissing(baseUrl: string, importId: string, input: BindingTarget) {
-  return overviewRequest(bindingUrl(baseUrl, importId, "/mark-missing"), json("POST", input));
+export function markComponentMissing(
+  baseUrl: string,
+  importId: string,
+  input: BindingTarget,
+  expectedInventoryRevisionId: string
+) {
+  return overviewRequest(
+    bindingUrl(baseUrl, importId, "/mark-missing"),
+    json("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId })
+  );
 }
 
-export function clearComponentBinding(baseUrl: string, importId: string, input: BindingTarget) {
-  return overviewRequest(bindingUrl(baseUrl, importId, "/clear"), json("POST", input));
+export function clearComponentBinding(
+  baseUrl: string,
+  importId: string,
+  input: BindingTarget,
+  expectedInventoryRevisionId: string
+) {
+  return overviewRequest(
+    bindingUrl(baseUrl, importId, "/clear"),
+    json("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId })
+  );
 }
 
 export function previewComponentRangeSplit(
   baseUrl: string,
   importId: string,
-  targets: BindingTarget[]
+  targets: BindingTarget[],
+  expectedInventoryRevisionId: string
 ) {
   return request<ComponentRangeSplitPreview>(
     bindingUrl(baseUrl, importId, "/split-preview"),
-    json("POST", { targets })
+    json("POST", { targets, expected_inventory_revision_id: expectedInventoryRevisionId })
   );
 }
 
@@ -160,10 +206,15 @@ export function applyComponentRangeSplit(
   baseUrl: string,
   importId: string,
   targets: BindingTarget[],
-  impactToken: string
+  impactToken: string,
+  expectedInventoryRevisionId: string
 ) {
   return request<ComponentRangeSplitApply>(
     bindingUrl(baseUrl, importId, "/split-apply"),
-    json("POST", { targets, impact_token: impactToken })
+    json("POST", {
+      targets,
+      impact_token: impactToken,
+      expected_inventory_revision_id: expectedInventoryRevisionId,
+    })
   );
 }

@@ -80,6 +80,15 @@ public:
         const std::string& bridge_id,
         const std::optional<std::string>& locked_revision_id) const;
 
+    // 把版本锁进待校对年度。写操作专用：读操作绝不能调它，否则光是打开一个对话框
+    // 就会改掉年度状态。年度已锁定时只做一致性确认，不覆盖。
+    // 返回 false 表示年度已经锁在别的版本上，调用方应当整体回滚。
+    bool lock_pending_year_revision(
+        const std::optional<std::string>& year_id,
+        const std::string& bridge_id,
+        const std::optional<std::string>& locked_revision_id,
+        const std::string& revision_id) const;
+
     // 分组汇总。整份结果由一条语句产出，靠单语句快照保证 revision / groups / blockers
     // 三段来自同一时点——拆成多条查询时，默认的 READ COMMITTED 会让每条 SELECT 各取
     // 一个新快照，出现"blocker 报未映射构件但 unmapped_count 全为 0"这类自相矛盾。

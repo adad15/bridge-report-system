@@ -53,19 +53,27 @@ describe("importBindingApi", () => {
       part_name: "上部承重构件",
       component_number: "1-1#梁",
       bridge_component_id: "c1",
-    });
-    await markComponentMissing("http://backend", "i1", { part_name: "支座", component_number: "2-1#支座" });
-    await clearComponentBinding("http://backend", "i1", { part_name: "上部承重构件", component_number: "1-1#梁" });
+    }, "rev-1");
+    await markComponentMissing(
+      "http://backend", "i1", { part_name: "支座", component_number: "2-1#支座" }, "rev-1");
+    await clearComponentBinding(
+      "http://backend", "i1", { part_name: "上部承重构件", component_number: "1-1#梁" }, "rev-1");
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "http://backend/api/import-records/i1/component-binding/bind",
       "http://backend/api/import-records/i1/component-binding/mark-missing",
       "http://backend/api/import-records/i1/component-binding/clear",
     ]);
+    // 每条写请求都必须带上依据的台账版本，漏掉任何一条都会让后端自己挑版本。
+    for (const call of fetchMock.mock.calls) {
+      expect(JSON.parse((call[1] as RequestInit).body as string).expected_inventory_revision_id)
+        .toBe("rev-1");
+    }
     expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({
       part_name: "上部承重构件",
       component_number: "1-1#梁",
       bridge_component_id: "c1",
+      expected_inventory_revision_id: "rev-1",
     });
     expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("POST");
   });
@@ -88,8 +96,8 @@ describe("importBindingApi", () => {
     vi.stubGlobal("fetch", fetchMock);
     const targets = [{ part_name: "上部承重构件", component_number: "1-1#梁~1-25#梁" }];
 
-    await previewComponentRangeSplit("http://backend", "i1", targets);
-    await applyComponentRangeSplit("http://backend", "i1", targets, "sha256:preview");
+    await previewComponentRangeSplit("http://backend", "i1", targets, "rev-1");
+    await applyComponentRangeSplit("http://backend", "i1", targets, "sha256:preview", "rev-1");
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "http://backend/api/import-records/i1/component-binding/split-preview",
@@ -98,6 +106,10 @@ describe("importBindingApi", () => {
     expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({
       targets,
       impact_token: "sha256:preview",
+      expected_inventory_revision_id: "rev-1",
     });
+    // 预览也要带：后端据此判断这次预览依据的台账是不是还有效。
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+      .expected_inventory_revision_id).toBe("rev-1");
   });
 });

@@ -665,6 +665,29 @@ ComponentInventoryRepository::resolve_confirmed_revision(
     return revision;
 }
 
+bool ComponentInventoryRepository::lock_pending_year_revision(
+    const std::optional<std::string>& year_id,
+    const std::string& bridge_id,
+    const std::optional<std::string>& locked_revision_id,
+    const std::string& revision_id) const {
+    if (locked_revision_id.has_value()) return *locked_revision_id == revision_id;
+    if (!year_id.has_value()) return true;
+    const auto updated = db_client_->execSqlSync(
+        "update inspection_years "
+        "set component_inventory_revision_id=$2::uuid,updated_at=now() "
+        "where id=$1::uuid and bridge_id=$3::uuid and status='待校对' "
+        "and component_inventory_revision_id is null returning id",
+        *year_id, revision_id, bridge_id);
+    if (!updated.empty()) return true;
+    // 没更新到：要么并发抢先锁了，要么年度不在待校对。只有抢到的正好是同一个版本才放行。
+    const auto current = db_client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id "
+        "from inspection_years where id=$1::uuid and bridge_id=$2::uuid",
+        *year_id, bridge_id);
+    return !current.empty() && !current[0]["revision_id"].isNull()
+        && current[0]["revision_id"].as<std::string>() == revision_id;
+}
+
 ComponentInventoryOutcome ComponentInventoryRepository::generate_draft(
     const std::string& bridge_id,
     const std::string& user_id,

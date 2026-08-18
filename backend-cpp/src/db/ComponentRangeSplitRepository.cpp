@@ -173,6 +173,14 @@ void log_timing(
              << " total_ms=" << total_ms;
 }
 
+// 与绑定那条路径返回同一个错误码，前端才能用同一套处置逻辑接住三条路径。
+ComponentRangeSplitOutcome revision_changed_split_outcome() {
+    ComponentRangeSplitOutcome outcome{ComponentRangeSplitStatus::Conflict};
+    outcome.error_code = "component_inventory_revision_changed";
+    outcome.error_message = "构件台账版本已变化，请刷新后重试。";
+    return outcome;
+}
+
 }  // namespace
 
 ComponentRangeSplitRepository::ComponentRangeSplitRepository(
@@ -180,7 +188,8 @@ ComponentRangeSplitRepository::ComponentRangeSplitRepository(
 
 ComponentRangeSplitOutcome ComponentRangeSplitRepository::preview(
     const std::string& import_id,
-    const std::vector<review::ComponentRangeSplitTarget>& targets) {
+    const std::vector<review::ComponentRangeSplitTarget>& targets,
+    const std::string& expected_revision_id) {
     const auto total_start = Clock::now();
     long long load_import_ms = 0;
     long long load_inventory_ms = 0;
@@ -212,6 +221,8 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::preview(
                 optional_row_text(rows[0], "inventory_revision_id"));
         load_inventory_ms = elapsed_ms(stage_start);
         if (!revision) return {ComponentRangeSplitStatus::Conflict};
+        // 只校验，不锁定——预览是读操作。
+        if (revision->id != expected_revision_id) return revision_changed_split_outcome();
         stage_start = Clock::now();
         auto outcome = analysis_outcome(parsed, *revision, targets);
         analyze_ms = elapsed_ms(stage_start);
@@ -237,7 +248,8 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::apply(
     const std::string& import_id,
     const std::vector<review::ComponentRangeSplitTarget>& targets,
     const std::string& expected_impact_token,
-    const std::string& user_id) {
+    const std::string& user_id,
+    const std::string& expected_revision_id) {
     const auto total_start = Clock::now();
     long long load_import_ms = 0;
     long long load_inventory_ms = 0;
@@ -251,6 +263,7 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::apply(
         auto stage_start = Clock::now();
         const auto rows = tx->execSqlSync(
             "select ir.bridge_id::text as bridge_id,ir.import_status,"
+            "ir.inspection_year_id::text as inspection_year_id,"
             "iy.component_inventory_revision_id::text as inventory_revision_id,"
             "coalesce(ir.parsed_result_json::text,'{}') as parsed "
             "from import_records ir "
@@ -266,11 +279,22 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::apply(
             tx->rollback(); return {ComponentRangeSplitStatus::Failed};
         }
         stage_start = Clock::now();
+        const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
+        const auto locked_revision_id = optional_row_text(rows[0], "inventory_revision_id");
         const auto revision = ComponentInventoryRepository(tx).resolve_confirmed_revision(
-            rows[0]["bridge_id"].as<std::string>(),
-            optional_row_text(rows[0], "inventory_revision_id"));
+            bridge_id, locked_revision_id);
         load_inventory_ms = elapsed_ms(stage_start);
         if (!revision) { tx->rollback(); return {ComponentRangeSplitStatus::Conflict}; }
+        if (revision->id != expected_revision_id) {
+            tx->rollback(); return revision_changed_split_outcome();
+        }
+        // 应用会把构件绑进病害，所以要跟其他写操作一样把版本锁进年度；否则随后一次
+        // 绑定可能把年度锁到别的版本上，而这批病害已经按当前版本绑好了。
+        if (!ComponentInventoryRepository(tx).lock_pending_year_revision(
+                optional_row_text(rows[0], "inspection_year_id"), bridge_id,
+                locked_revision_id, revision->id)) {
+            tx->rollback(); return {ComponentRangeSplitStatus::Conflict};
+        }
         stage_start = Clock::now();
         auto outcome = analysis_outcome(parsed, *revision, targets);
         analyze_ms = elapsed_ms(stage_start);
