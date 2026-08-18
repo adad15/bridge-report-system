@@ -5684,3 +5684,154 @@ body {
   flex: none;
   white-space: nowrap;
 }
+
+/* ---------- 检查日期选择器 ----------
+   原生 <input type="date"> 只能逐位改数字，翻到几年前要按很久；这里补上
+   日 → 月 → 年三级钻取。输入框仍可手输，照纸质件敲比点日历快。 */
+.date-picker {
+  position: relative;
+  display: grid;
+}
+
+.date-picker-control {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.date-picker-control input {
+  flex: 1;
+  min-width: 0;
+}
+
+.date-picker-toggle {
+  flex: none;
+  width: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #55606c;
+  cursor: pointer;
+}
+
+.date-picker-toggle:hover:not(:disabled) {
+  border-color: #2456c9;
+  color: #2456c9;
+}
+
+/* 浮层压在同一行的"报告编号"之上，必须抬 z-index；对话框本身已经是定位上下文。 */
+.date-picker-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  width: 268px;
+  padding: 8px;
+  border: 1px solid #d9e0e8;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(24, 32, 42, 0.16);
+}
+
+.date-picker-header {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.date-picker-header button {
+  border: 0;
+  background: transparent;
+  color: #2456c9;
+  font: inherit;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.date-picker-header button:disabled {
+  color: #18202a;
+  cursor: default;
+}
+
+.date-picker-title {
+  font-weight: 600;
+}
+
+.date-picker-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  color: #8a98aa;
+  font-size: 12px;
+  text-align: center;
+}
+
+.date-picker-grid {
+  display: grid;
+  gap: 2px;
+}
+
+.date-picker-grid button {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #18202a;
+  font: inherit;
+  cursor: pointer;
+}
+
+.date-picker-grid button:hover {
+  background: #eaf0fd;
+}
+
+/* 选中态用蓝底白字，与其余表单控件的强调色一致。 */
+.date-picker-grid button.is-selected {
+  background: #2456c9;
+  color: #fff;
+}
+
+.date-picker-grid button.is-today {
+  box-shadow: inset 0 0 0 1px #2456c9;
+}
+
+/* 相邻月份的补位日仍可点选——用户想选上月末几天时不必先翻页。 */
+.date-picker-grid button.is-outside {
+  color: #b9c4d0;
+}
+
+.date-picker-days {
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.date-picker-days button {
+  height: 30px;
+}
+
+.date-picker-months,
+.date-picker-years {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.date-picker-months button,
+.date-picker-years button {
+  height: 36px;
+}
+
+.date-picker-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #eef2f7;
+}
+
+.date-picker-footer button {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 14px;
+  background: #fff;
+  color: #2456c9;
+  font: inherit;
+  cursor: pointer;
+}

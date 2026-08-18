@@ -10,6 +10,7 @@ import {
   workspaceErrorMessage,
 } from "../api/workspaceApi";
 import { backendBaseUrl } from "../config";
+import { InspectionDatePicker, isCompleteDate } from "./InspectionDatePicker";
 
 interface Props {
   bridgeName: string;
@@ -125,8 +126,8 @@ export function ImportWordDialog({
         return;
       }
     }
-    if (!inspectionDate) {
-      setError("请选择检查日期。");
+    if (!isCompleteDate(inspectionDate)) {
+      setError("请选择检查日期，格式为 2026-05-18。");
       inspectionDateRef.current?.focus();
       return;
     }
@@ -334,14 +335,13 @@ export function ImportWordDialog({
         <div className="import-field-row">
           <div className="import-field required">
             <label htmlFor="import-inspection-date">检查日期</label>
-            <input
+            <InspectionDatePicker
               id="import-inspection-date"
               ref={inspectionDateRef}
-              type="date"
               required
               disabled={busy}
               value={inspectionDate}
-              onChange={(event) => setInspectionDate(event.target.value)}
+              onChange={setInspectionDate}
             />
           </div>
           <div className="import-field required">
