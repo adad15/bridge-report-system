@@ -5775,7 +5775,27 @@ body {
   cursor: default;
 }
 
+/* 标题是年、月两段各自可点，所以是容器不是按钮。 */
 .date-picker-title {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+}
+
+.date-picker-title button {
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.date-picker-title button:hover {
+  background: #eaf0fd;
+}
+
+/* 年视图已是顶层，标题不可点，用正文色而不是链接蓝。 */
+.date-picker-title span {
+  padding: 4px 6px;
+  color: #18202a;
   font-weight: 600;
 }
 

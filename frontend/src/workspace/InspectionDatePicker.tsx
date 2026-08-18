@@ -174,10 +174,6 @@ export const InspectionDatePicker = forwardRef<HTMLInputElement, Props>(
       setOpen(false);
     }
 
-    const title =
-      view === "day" ? `${cursor.year}年${cursor.month + 1}月`
-      : view === "month" ? `${cursor.year}年`
-      : `${yearPageStart}年 - ${yearPageStart + kYearsPerPage - 1}年`;
 
     return (
       <div className="date-picker" ref={containerRef}>
@@ -216,15 +212,28 @@ export const InspectionDatePicker = forwardRef<HTMLInputElement, Props>(
           >
             <div className="date-picker-header">
               <button type="button" aria-label="上一页" onClick={() => step(-1)}>《</button>
-              {/* 点标题往上一级：日 → 月 → 年。年视图已经是顶层，不再往上。 */}
-              <button
-                type="button"
-                className="date-picker-title"
-                onClick={() => setView(view === "day" ? "month" : "year")}
-                disabled={view === "year"}
-              >
-                {title}
-              </button>
+              {/* 日视图的标题拆成年、月两段，各自直达对应层级。合成一块时改年份要走
+                  四步（标题→月视图、标题→年视图、选年→月视图、再选一次月），
+                  最后那步还强迫用户重选一个本来不想动的月份。 */}
+              <div className="date-picker-title">
+                {view === "day" ? (
+                  <>
+                    <button type="button" onClick={() => setView("year")}>
+                      {cursor.year}年
+                    </button>
+                    <button type="button" onClick={() => setView("month")}>
+                      {cursor.month + 1}月
+                    </button>
+                  </>
+                ) : view === "month" ? (
+                  <button type="button" onClick={() => setView("year")}>
+                    {cursor.year}年
+                  </button>
+                ) : (
+                  // 年视图已是顶层，标题不可点。
+                  <span>{yearPageStart}年 - {yearPageStart + kYearsPerPage - 1}年</span>
+                )}
+              </div>
               <button type="button" aria-label="下一页" onClick={() => step(1)}>》</button>
             </div>
 
@@ -287,8 +296,10 @@ export const InspectionDatePicker = forwardRef<HTMLInputElement, Props>(
                       type="button"
                       className={selected?.year === year ? "is-selected" : ""}
                       onClick={() => {
+                        // 直接回日视图：用户点"2024年"进来就是只想改年份，
+                        // 途经月视图会逼他再选一次月。
                         setCursor((current) => ({ ...current, year }));
-                        setView("month");
+                        setView("day");
                       }}
                     >
                       {year}年

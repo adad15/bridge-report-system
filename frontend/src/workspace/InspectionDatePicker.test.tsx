@@ -22,30 +22,46 @@ const openPanel = async () => {
 };
 
 describe("InspectionDatePicker", () => {
-  // 原生 date 输入只能逐位改数字，翻到几年前要按很久。补的就是这条钻取路径。
-  it("drills up from day to month to year and back down to a date", async () => {
+  // 标题拆成年、月两段，各自直达对应层级；选完都回日视图。合成一块时改年份要走
+  // 四步，最后那步还强迫用户重选一个本来不想动的月份。
+  it("jumps straight to the year panel and returns to the day view", async () => {
     render(<Harness initial="1992-11-06" />);
-    let panel = await openPanel();
+    const panel = await openPanel();
 
-    // 打开停在已选日期所在的月份，不是今天。
-    expect(within(panel).getByRole("button", { name: "1992年11月" })).toBeInTheDocument();
-
-    await userEvent.click(within(panel).getByRole("button", { name: "1992年11月" }));
+    // 打开停在已选日期所在的月份，标题是两段。
     expect(within(panel).getByRole("button", { name: "1992年" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "11月" })).toBeInTheDocument();
 
     await userEvent.click(within(panel).getByRole("button", { name: "1992年" }));
-    // 年份面板以当前年为中心展开 15 格，与截图里的 1985—1999 一致。
+    // 年份面板以当前年为中心展开 15 格，与参考界面的 1985—1999 一致。
     expect(within(panel).getByText("1985年 - 1999年")).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "1985年" })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "1999年" })).toBeInTheDocument();
 
     await userEvent.click(within(panel).getByRole("button", { name: "1990年" }));
-    await userEvent.click(within(panel).getByRole("button", { name: "三月" }));
-    await userEvent.click(within(panel).getByRole("button", { name: "1990-03-12" }));
+    // 直接回日视图，月份原样保留——不必为改年份再选一次月。
+    expect(within(panel).getByRole("button", { name: "1990年" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "11月" })).toBeInTheDocument();
 
-    expect(screen.getByTestId("value")).toHaveTextContent("1990-03-12");
-    // 选到"日"即落定并收起浮层。
+    await userEvent.click(within(panel).getByRole("button", { name: "1990-11-06" }));
+    expect(screen.getByTestId("value")).toHaveTextContent("1990-11-06");
     expect(screen.queryByRole("dialog", { name: "检查日期选择" })).not.toBeInTheDocument();
+  });
+
+  it("jumps straight to the month panel and returns to the day view", async () => {
+    render(<Harness initial="1992-11-06" />);
+    const panel = await openPanel();
+
+    await userEvent.click(within(panel).getByRole("button", { name: "11月" }));
+    expect(within(panel).getByRole("button", { name: "三月" })).toBeInTheDocument();
+
+    await userEvent.click(within(panel).getByRole("button", { name: "三月" }));
+    // 回日视图，年份原样保留。
+    expect(within(panel).getByRole("button", { name: "1992年" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "3月" })).toBeInTheDocument();
+
+    await userEvent.click(within(panel).getByRole("button", { name: "1992-03-12" }));
+    expect(screen.getByTestId("value")).toHaveTextContent("1992-03-12");
   });
 
   it("steps a page at a time per view", async () => {
@@ -54,10 +70,10 @@ describe("InspectionDatePicker", () => {
 
     // 日视图翻一个月
     await userEvent.click(within(panel).getByRole("button", { name: "上一页" }));
-    expect(within(panel).getByRole("button", { name: "1992年10月" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "10月" })).toBeInTheDocument();
 
     // 月视图翻一年
-    await userEvent.click(within(panel).getByRole("button", { name: "1992年10月" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "10月" }));
     await userEvent.click(within(panel).getByRole("button", { name: "下一页" }));
     expect(within(panel).getByRole("button", { name: "1993年" })).toBeInTheDocument();
 
