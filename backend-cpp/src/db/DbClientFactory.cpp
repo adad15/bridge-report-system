@@ -68,16 +68,19 @@ drogon::orm::DbClientPtr create_db_client(const config::PostgresConfig& config, 
     }
 
     // newPgClient 不会立即建立连接；连接失败会在首次查询时才暴露出来。
+    // 测试客户端强制单连接：下面那句 set search_path 只作用于一条连接，连接池有两条时
+    // 查询会轮流落到未设置 search_path 的那条上，跑进 public。两个 schema 表结构相同，
+    // 于是写入不报错，只在跨 schema 的外键上才炸——夹具因此时灵时不灵。
     auto client = drogon::orm::DbClient::newPgClient(
         test_database_url.empty() ? build_pg_connection_string(config) : test_database_url,
-        connection_count);
+        test_schema.empty() ? connection_count : 1);
     // 数据库不可达时 drogon 会无限重连并挂起排队的查询；设置超时让
     // execSqlSync 抛出 TimeoutError（属于 DrogonDbException），调用方才能把
     // 数据库故障转成 503 而不是无限阻塞 IO 线程。
     client->setTimeout(10.0);
     if (!test_schema.empty()) {
         // schema 已通过严格的小写字母/数字/下划线校验，可安全用于标识符。
-        // 集成测试均使用单连接客户端，设置一次 search_path 即覆盖该夹具的全部查询。
+        // 上面已把测试客户端固定成单连接，设置一次即覆盖该夹具的全部查询。
         client->execSqlSync("set search_path to " + test_schema);
     }
     return client;

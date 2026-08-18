@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
+#include <optional>
+#include <string>
 #include <tuple>
 #include <utility>
 
@@ -21,6 +23,13 @@ using Clock = std::chrono::steady_clock;
 long long elapsed_ms(Clock::time_point start) {
     return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start)
         .count();
+}
+
+std::optional<std::string> optional_row_text(
+    const drogon::orm::Row& row, const char* column) {
+    return row[column].isNull()
+        ? std::nullopt
+        : std::optional<std::string>(row[column].as<std::string>());
 }
 
 std::string compact_json(const Json::Value& value) {
@@ -180,9 +189,12 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::preview(
     try {
         auto stage_start = Clock::now();
         const auto rows = db_client_->execSqlSync(
-            "select bridge_id::text as bridge_id,import_status,"
-            "coalesce(parsed_result_json::text,'{}') as parsed "
-            "from import_records where id=$1::uuid", import_id);
+            "select ir.bridge_id::text as bridge_id,ir.import_status,"
+            "iy.component_inventory_revision_id::text as inventory_revision_id,"
+            "coalesce(ir.parsed_result_json::text,'{}') as parsed "
+            "from import_records ir "
+            "left join inspection_years iy on iy.id=ir.inspection_year_id "
+            "where ir.id=$1::uuid", import_id);
         load_import_ms = elapsed_ms(stage_start);
         if (rows.empty()) return {ComponentRangeSplitStatus::NotFound};
         if (rows[0]["import_status"].as<std::string>() != "待校对") {
@@ -193,13 +205,13 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::preview(
             return {ComponentRangeSplitStatus::Failed};
         }
         stage_start = Clock::now();
+        // 必须跟绑定校验用同一个版本：年度锁定的优先，否则取最新已确认版本。
         const auto revision = ComponentInventoryRepository(db_client_)
-            .get_latest_revision(rows[0]["bridge_id"].as<std::string>());
+            .resolve_confirmed_revision(
+                rows[0]["bridge_id"].as<std::string>(),
+                optional_row_text(rows[0], "inventory_revision_id"));
         load_inventory_ms = elapsed_ms(stage_start);
-        if (!revision || !(revision->status == "已确认"
-                           || revision->status == "confirmed")) {
-            return {ComponentRangeSplitStatus::Conflict};
-        }
+        if (!revision) return {ComponentRangeSplitStatus::Conflict};
         stage_start = Clock::now();
         auto outcome = analysis_outcome(parsed, *revision, targets);
         analyze_ms = elapsed_ms(stage_start);
@@ -238,9 +250,12 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::apply(
         tx = db_client_->newTransaction(latch->callback());
         auto stage_start = Clock::now();
         const auto rows = tx->execSqlSync(
-            "select bridge_id::text as bridge_id,import_status,"
-            "coalesce(parsed_result_json::text,'{}') as parsed "
-            "from import_records where id=$1::uuid for update", import_id);
+            "select ir.bridge_id::text as bridge_id,ir.import_status,"
+            "iy.component_inventory_revision_id::text as inventory_revision_id,"
+            "coalesce(ir.parsed_result_json::text,'{}') as parsed "
+            "from import_records ir "
+            "left join inspection_years iy on iy.id=ir.inspection_year_id "
+            "where ir.id=$1::uuid for update of ir", import_id);
         load_import_ms = elapsed_ms(stage_start);
         if (rows.empty()) { tx->rollback(); return {ComponentRangeSplitStatus::NotFound}; }
         if (rows[0]["import_status"].as<std::string>() != "待校对") {
@@ -251,13 +266,11 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::apply(
             tx->rollback(); return {ComponentRangeSplitStatus::Failed};
         }
         stage_start = Clock::now();
-        const auto revision = ComponentInventoryRepository(tx).get_latest_revision(
-            rows[0]["bridge_id"].as<std::string>());
+        const auto revision = ComponentInventoryRepository(tx).resolve_confirmed_revision(
+            rows[0]["bridge_id"].as<std::string>(),
+            optional_row_text(rows[0], "inventory_revision_id"));
         load_inventory_ms = elapsed_ms(stage_start);
-        if (!revision || !(revision->status == "已确认"
-                           || revision->status == "confirmed")) {
-            tx->rollback(); return {ComponentRangeSplitStatus::Conflict};
-        }
+        if (!revision) { tx->rollback(); return {ComponentRangeSplitStatus::Conflict}; }
         stage_start = Clock::now();
         auto outcome = analysis_outcome(parsed, *revision, targets);
         analyze_ms = elapsed_ms(stage_start);

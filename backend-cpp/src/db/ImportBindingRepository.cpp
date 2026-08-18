@@ -142,18 +142,13 @@ std::optional<std::string> optional_row_text(
         : std::optional<std::string>(row[column].as<std::string>());
 }
 
+// 规则本身住在 ComponentInventoryRepository，范围拆分与这里共用同一份。
 std::optional<inventory::InventoryRevision> resolve_confirmed_revision(
     const drogon::orm::DbClientPtr& client,
     const std::string& bridge_id,
     const std::optional<std::string>& locked_revision_id) {
-    const auto revision = locked_revision_id.has_value()
-        ? ComponentInventoryRepository(client).get_revision(*locked_revision_id)
-        : ComponentInventoryRepository(client).get_latest_revision(bridge_id);
-    if (!revision.has_value() || revision->bridge_id != bridge_id
-        || !(revision->status == "已确认" || revision->status == "confirmed")) {
-        return std::nullopt;
-    }
-    return revision;
+    return ComponentInventoryRepository(client).resolve_confirmed_revision(
+        bridge_id, locked_revision_id);
 }
 
 bool attach_revision_to_pending_year(

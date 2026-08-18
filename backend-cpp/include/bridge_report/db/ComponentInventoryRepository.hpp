@@ -68,6 +68,18 @@ public:
     // 优化只做了一半，而且从响应上完全看不出来。
     std::optional<std::string> find_latest_revision_id(const std::string& bridge_id) const;
 
+    // 取该桥最新的"已确认"版本。不能拿 get_latest_revision() 顶替——那条排序草稿优先，
+    // 桥上一有草稿就取到草稿，调用方随后"是否已确认"的判断必然不成立。
+    std::optional<inventory::InventoryRevision> get_latest_confirmed_revision(
+        const std::string& bridge_id) const;
+
+    // 解析某次操作应当使用的已确认台账版本：检测年度锁定的版本优先，年度未锁定时取该桥
+    // 最新的已确认版本。绑定与范围拆分都必须走这里——各自实现一份的话规则迟早漂移，
+    // 范围拆分此前就是这么绕开年度锁定版本、又踩上草稿优先排序的。
+    std::optional<inventory::InventoryRevision> resolve_confirmed_revision(
+        const std::string& bridge_id,
+        const std::optional<std::string>& locked_revision_id) const;
+
     // 分组汇总。整份结果由一条语句产出，靠单语句快照保证 revision / groups / blockers
     // 三段来自同一时点——拆成多条查询时，默认的 READ COMMITTED 会让每条 SELECT 各取
     // 一个新快照，出现"blocker 报未映射构件但 unmapped_count 全为 0"这类自相矛盾。

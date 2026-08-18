@@ -637,6 +637,34 @@ std::optional<inventory::InventoryRevision> ComponentInventoryRepository::get_la
     return get_revision(rows[0]["id"].as<std::string>());
 }
 
+std::optional<inventory::InventoryRevision>
+ComponentInventoryRepository::get_latest_confirmed_revision(
+    const std::string& bridge_id) const {
+    // 与 get_latest_revision() 的差别就是这里：不按"草稿优先"排序，直接把草稿排除在外。
+    const auto rows = db_client_->execSqlSync(
+        "select id::text from bridge_component_inventory_revisions "
+        "where bridge_id=$1::uuid and status in ('已确认','confirmed') "
+        "order by revision_number desc limit 1",
+        bridge_id);
+    if (rows.empty()) return std::nullopt;
+    return get_revision(rows[0]["id"].as<std::string>());
+}
+
+std::optional<inventory::InventoryRevision>
+ComponentInventoryRepository::resolve_confirmed_revision(
+    const std::string& bridge_id,
+    const std::optional<std::string>& locked_revision_id) const {
+    const auto revision = locked_revision_id.has_value()
+        ? get_revision(*locked_revision_id)
+        : get_latest_confirmed_revision(bridge_id);
+    // 锁定版本是外部传进来的，仍要确认它属于本桥且确实已确认。
+    if (!revision.has_value() || revision->bridge_id != bridge_id
+        || !(revision->status == "已确认" || revision->status == "confirmed")) {
+        return std::nullopt;
+    }
+    return revision;
+}
+
 ComponentInventoryOutcome ComponentInventoryRepository::generate_draft(
     const std::string& bridge_id,
     const std::string& user_id,

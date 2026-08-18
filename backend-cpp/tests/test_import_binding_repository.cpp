@@ -131,6 +131,58 @@ protected:
         client_->closeAll();
     }
 
+    // 在本桥另开一个版本。草稿版本用来复现"草稿优先排序"，已确认版本用来验证年度锁定
+    // 版本优先于桥梁最新版本。返回新版本 id。
+    std::string add_revision(int revision_number, bool confirmed) {
+        const auto id = client_->execSqlSync(
+            "insert into bridge_component_inventory_revisions(bridge_id,revision_number,"
+            "baseline_revision_id,created_by_user_id) values($1::uuid,$2,$3::uuid,$4::uuid) "
+            "returning id::text",
+            bridge_id_, revision_number, revision_id_, user_id_)[0]["id"].as<std::string>();
+        // 只放一个与 1-1#梁 无关的构件：谁被选中一目了然——取到这个版本就找不到 1-1#梁。
+        const auto entry_id = client_->execSqlSync(
+            "insert into bridge_component_inventory_entries(inventory_revision_id,"
+            "bridge_component_id,component_number,site_name,site_component_type,sort_order) "
+            "values($1::uuid,$2::uuid,'9-9#梁','空心板','空心板',1) returning id::text",
+            id, component_id_)[0]["id"].as<std::string>();
+        client_->execSqlSync(
+            "insert into bridge_component_standard_mappings(inventory_entry_id,standard_package_id,"
+            "standard_bridge_type_id,standard_component_category_id,structure_part,mapping_source,"
+            "confirmation_status,confirmed_by_user_id,confirmed_at) "
+            "values($1::uuid,$2::uuid,'h21.bridge_type.beam','h21.component.beam.upper_bearing',"
+            "'superstructure','规范模板','已确认',$3::uuid,now())",
+            entry_id, package_id_, user_id_);
+        if (confirmed) {
+            client_->execSqlSync(
+                "update bridge_component_inventory_revisions set status='已确认',"
+                "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
+                id, user_id_);
+        }
+        return id;
+    }
+
+    // 把 1-1#梁 的三条病害改写成区间编号，供范围拆分用例使用。
+    void make_defects_a_range() {
+        const auto stored = client_->execSqlSync(
+            "select parsed_result_json::text as parsed from import_records where id=$1::uuid",
+            import_id_);
+        Json::Value parsed;
+        Json::CharReaderBuilder reader_builder;
+        std::string errors;
+        const auto parsed_text = stored[0]["parsed"].as<std::string>();
+        const std::unique_ptr<Json::CharReader> reader(reader_builder.newCharReader());
+        ASSERT_TRUE(reader->parse(parsed_text.data(),
+                                  parsed_text.data() + parsed_text.size(), &parsed, &errors));
+        for (Json::ArrayIndex i = 0; i < 3; ++i) {
+            parsed["defects"][i]["component_number"] = "1-1#梁~1-25#梁";
+        }
+        Json::StreamWriterBuilder writer;
+        writer["indentation"] = "";
+        client_->execSqlSync(
+            "update import_records set parsed_result_json=$2::jsonb where id=$1::uuid",
+            import_id_, Json::writeString(writer, parsed));
+    }
+
     drogon::orm::DbClientPtr client_;
     std::string user_id_, bridge_id_, year_id_, package_id_, component_id_, revision_id_, import_id_;
 };
@@ -152,26 +204,7 @@ TEST_F(ImportBindingRepositoryTest, OverviewGroupsByPartNameAndCountsReferences)
 }
 
 TEST_F(ImportBindingRepositoryTest, PreviewAndApplySelectedRangeAtomically) {
-    const auto stored = client_->execSqlSync(
-        "select parsed_result_json::text as parsed from import_records where id=$1::uuid",
-        import_id_);
-    Json::Value parsed;
-    Json::CharReaderBuilder reader_builder;
-    std::string errors;
-    const auto parsed_text = stored[0]["parsed"].as<std::string>();
-    const std::unique_ptr<Json::CharReader> reader(reader_builder.newCharReader());
-    ASSERT_TRUE(reader->parse(
-        parsed_text.data(),
-        parsed_text.data() + parsed_text.size(),
-        &parsed, &errors));
-    for (Json::ArrayIndex i = 0; i < 3; ++i) {
-        parsed["defects"][i]["component_number"] = "1-1#梁~1-25#梁";
-    }
-    Json::StreamWriterBuilder writer;
-    writer["indentation"] = "";
-    client_->execSqlSync(
-        "update import_records set parsed_result_json=$2::jsonb where id=$1::uuid",
-        import_id_, Json::writeString(writer, parsed));
+    make_defects_a_range();
 
     bridge_report::db::ComponentRangeSplitRepository repository(client_);
     const std::vector<bridge_report::review::ComponentRangeSplitTarget> targets{
@@ -201,6 +234,56 @@ TEST_F(ImportBindingRepositoryTest, PreviewAndApplySelectedRangeAtomically) {
     const auto replay =
         repository.apply(import_id_, targets, preview.impact_token, user_id_);
     EXPECT_NE(replay.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
+}
+
+// 版本解析一度走 get_latest_revision()，那条排序草稿优先，于是桥上只要有一个草稿就先
+// 取到草稿，随后"是否已确认"的判断必然不成立——绑定面板整块被判成"台账未确认"。
+TEST_F(ImportBindingRepositoryTest, OverviewStaysConfirmedWhileADraftExists) {
+    add_revision(2, /*confirmed=*/false);
+
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.overview(import_id_);
+    ASSERT_EQ(outcome.status, BindingStatus::Ok);
+    ASSERT_TRUE(outcome.overview.has_value());
+    EXPECT_TRUE(outcome.overview->inventory_confirmed);
+}
+
+// 同一个草稿优先排序在范围拆分里后果更硬：预览和应用都直接 Conflict，功能整个不可用。
+TEST_F(ImportBindingRepositoryTest, RangeSplitStaysUsableWhileADraftExists) {
+    add_revision(2, /*confirmed=*/false);
+    make_defects_a_range();
+
+    bridge_report::db::ComponentRangeSplitRepository repository(client_);
+    const std::vector<bridge_report::review::ComponentRangeSplitTarget> targets{
+        {"上部承重构件", "1-1#梁~1-25#梁"}};
+    const auto preview = repository.preview(import_id_, targets);
+    ASSERT_EQ(preview.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
+    ASSERT_TRUE(preview.analysis.has_value());
+    EXPECT_EQ(preview.analysis->totals.bound_count, 3);
+
+    const auto applied =
+        repository.apply(import_id_, targets, preview.impact_token, user_id_);
+    EXPECT_EQ(applied.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
+}
+
+// 范围拆分此前完全不读 inspection_years，径直取桥梁最新版本，于是可能和绑定校验用的
+// 不是同一份台账。这里锁定 R1、另建更新的已确认 R2（只含 9-9#梁）：取错版本就找不到
+// 1-1#梁，bound_count 会掉到 0。
+TEST_F(ImportBindingRepositoryTest, RangeSplitUsesTheRevisionLockedByTheYear) {
+    client_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=$2::uuid "
+        "where id=$1::uuid",
+        year_id_, revision_id_);
+    add_revision(2, /*confirmed=*/true);
+    make_defects_a_range();
+
+    bridge_report::db::ComponentRangeSplitRepository repository(client_);
+    const std::vector<bridge_report::review::ComponentRangeSplitTarget> targets{
+        {"上部承重构件", "1-1#梁~1-25#梁"}};
+    const auto preview = repository.preview(import_id_, targets);
+    ASSERT_EQ(preview.status, bridge_report::db::ComponentRangeSplitStatus::Ok);
+    ASSERT_TRUE(preview.analysis.has_value());
+    EXPECT_EQ(preview.analysis->totals.bound_count, 3);
 }
 
 TEST_F(ImportBindingRepositoryTest, BindAttachesAllReferencingDefects) {
