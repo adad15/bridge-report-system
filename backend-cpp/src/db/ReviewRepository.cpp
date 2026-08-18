@@ -442,7 +442,8 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
         "tsp.package_version as technical_standard_package_version, "
         "rtv.id::text as rating_tree_version_id,rtv.tree_name as rating_tree_name,"
         "rtv.package_version as rating_tree_package_version,"
-        "rtv.tree_content_checksum as rating_tree_content_checksum "
+        "rtv.tree_content_checksum as rating_tree_content_checksum,"
+        "iy.component_inventory_revision_id::text as inspection_year_inventory_revision_id "
         "from import_records ir "
         "join bridges b on b.id = ir.bridge_id "
         "left join inspection_years iy on iy.id = ir.inspection_year_id "
@@ -485,6 +486,8 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
         ? std::nullopt
         : std::make_optional(inspection_year_field.as<int>());
     detail.inspection_year_status = optional_text(row, "inspection_year_status");
+    detail.inspection_year_inventory_revision_id =
+        optional_text(row, "inspection_year_inventory_revision_id");
     const auto version_number_field = row["inspection_year_version_number"];
     detail.inspection_year_version_number = version_number_field.isNull()
         ? std::nullopt

@@ -1,5 +1,6 @@
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <json/value.h>
@@ -211,6 +212,7 @@ TEST(BuildReviewResponseTest, PopulatesInspectionYearObjectWhenPresent) {
     detail.rating_tree_name = "单位桥梁评定树";
     detail.rating_tree_package_version = "2026.1";
     detail.rating_tree_content_checksum = "sha256:tree";
+    detail.inspection_year_inventory_revision_id = "r1111111-1111-1111-1111-111111111111";
     Json::Value parsed_result(Json::objectValue);
     ReviewStatistics statistics{};
 
@@ -229,6 +231,11 @@ TEST(BuildReviewResponseTest, PopulatesInspectionYearObjectWhenPresent) {
     EXPECT_EQ(body["inspection_year"]["status"].asString(), "已确认");
     EXPECT_EQ(body["inspection_year"]["version_number"].asInt(), 1);
     EXPECT_TRUE(body["inspection_year"]["is_current"].asBool());
+    // 年度锁定的台账版本只作服务端内部上下文，不进对外 JSON。这里钉住键集合而不是
+    // 逐个否定，否则日后再往结构体上加内部字段时这条测试拦不住。
+    EXPECT_EQ(body["inspection_year"].getMemberNames(),
+              (std::vector<std::string>{"id", "inspection_year", "is_current",
+                                        "status", "system_number", "version_number"}));
     EXPECT_TRUE(body["has_current_annual_facts"].asBool());
     EXPECT_EQ(body["contract_compatibility"].asString(), "native_1_2");
 

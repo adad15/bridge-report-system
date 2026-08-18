@@ -183,9 +183,15 @@ void register_defect_matching_routes(const drogon::orm::DbClientPtr& db_client) 
                 const auto scope =
                     body == nullptr ? review::DefectMatchScope{} : parse_scope(*body);
 
+                // 年度锁定版本优先，否则该桥最新的**已确认**版本——与绑定写入病害时
+                // 用的是同一条规则。此前走 get_latest_revision()（草稿优先），桥上一有
+                // 草稿就按草稿的映射挑评定树节点，而这些节点随后会被按已确认版本校验的
+                // 保存与入库前检查判为不一致。
                 const auto inventory =
                     db::ComponentInventoryRepository(db_client)
-                        .get_latest_revision(detail->bridge_id);
+                        .resolve_confirmed_revision(
+                            detail->bridge_id,
+                            detail->inspection_year_inventory_revision_id);
                 // 只读计算：不写 parsed_result_json，也不碰病害、照片与拆分关系。
                 // 自动结果由页面落进本地草稿，保存时服务端再按同一规则复核。
                 const auto report = review::match_defect_rating_tree_nodes(

@@ -290,6 +290,36 @@ TEST_F(ReviewRepositoryTest, get_import_record_detail_returns_null_inspection_ye
     EXPECT_FALSE(detail->inspection_year_status.has_value());
     EXPECT_FALSE(detail->inspection_year_version_number.has_value());
     EXPECT_FALSE(detail->inspection_year_is_current.has_value());
+    EXPECT_FALSE(detail->inspection_year_inventory_revision_id.has_value());
+}
+
+// 校对保存、入库前检查与评定树自动匹配都要用"年度锁定优先"那条解析规则，而它的入参
+// 就是这个字段。缺了它，三处只能各自去查一次，或者退回草稿优先的 get_latest_revision()。
+TEST_F(ReviewRepositoryTest, get_import_record_detail_carries_the_year_locked_inventory_revision) {
+    bridge_report::db::ReviewRepository repository(tx_);
+
+    // 年度尚未锁定版本时为空。
+    EXPECT_FALSE(repository.get_import_record_detail(import_record_id_)
+                     ->inspection_year_inventory_revision_id.has_value());
+
+    // 触发器只允许正式年度挂已确认版本，所以先确认再挂。
+    const auto revision_id = tx_->execSqlSync(
+        "insert into bridge_component_inventory_revisions"
+        "(bridge_id,revision_number,created_by_user_id) "
+        "values($1::uuid,1,(select id from users where username='admin')) returning id::text",
+        bridge_id_)[0]["id"].as<std::string>();
+    tx_->execSqlSync(
+        "update bridge_component_inventory_revisions set status='已确认',"
+        "confirmed_by_user_id=(select id from users where username='admin'),confirmed_at=now() "
+        "where id=$1::uuid",
+        revision_id);
+    tx_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
+        inspection_year_id_, revision_id);
+
+    const auto detail = repository.get_import_record_detail(import_record_id_);
+    ASSERT_TRUE(detail->inspection_year_inventory_revision_id.has_value());
+    EXPECT_EQ(*detail->inspection_year_inventory_revision_id, revision_id);
 }
 
 TEST_F(ReviewRepositoryTest, get_import_record_detail_returns_nullopt_for_unknown_id) {
@@ -1104,6 +1134,7 @@ TEST_F(ConfirmAnnualFactsTest, ConfirmPersistsRangeMeasurementEndpoints) {
     EXPECT_TRUE(rows[0]["is_approximate"].as<bool>());
     EXPECT_EQ(rows[0]["raw_text"].as<std::string>(), "约0.5~4.0m");
 }
+
 
 TEST_F(ConfirmAnnualFactsTest, confirm_requires_revision_when_current_facts_exist) {
     const auto current_year_result = client_->execSqlSync(
