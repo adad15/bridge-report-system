@@ -892,6 +892,50 @@ TEST_F(ConfirmAnnualFactsTest, ExplicitRevisionIsValidatedAndCannotOverrideALock
     client_->execSqlSync("delete from bridges where id=$1::uuid", other_bridge);
 }
 
+// 确认事务此前另起一条草稿优先解析喂给评定树校验，桥上一有草稿就按草稿的映射判。
+// preflight 那半本来就用年度锁定版本，两半用的不是同一份台账。
+TEST_F(ConfirmAnnualFactsTest, ConfirmUsesTheConfirmedRevisionWhileADraftExists) {
+    // 派生一个版本号更大的草稿：草稿优先的排序会挑中它。
+    client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,"
+        "baseline_revision_id,created_by_user_id) values($1::uuid,2,$2::uuid,$3::uuid)",
+        bridge_id_, inventory_revision_id_, confirmed_by_user_id_);
+
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    ASSERT_TRUE(repository.save_review_draft(
+        import_record_id_, write_json_compact(build_confirmed_data())));
+    const auto outcome = repository.confirm_annual_facts(
+        import_record_id_, false, "草稿共存时确认", confirmed_by_user_id_);
+
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+    const auto year = client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id from inspection_years "
+        "where id=$1::uuid", placeholder_year_id_);
+    EXPECT_EQ(year[0]["revision_id"].as<std::string>(), inventory_revision_id_)
+        << "确认后年度仍应指向已确认版本，而不是那个草稿";
+}
+
+// 年度尚未锁版本、而桥上有可用的已确认台账时，确认事务在 preflight 之前就把版本锁上。
+// 锁在评定服务之前是不够的——preflight 判出"台账未确认"就直接返回了，根本走不到那里。
+TEST_F(ConfirmAnnualFactsTest, ConfirmLocksTheResolvedRevisionBeforePreflight) {
+    client_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=null where id=$1::uuid",
+        placeholder_year_id_);
+
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    ASSERT_TRUE(repository.save_review_draft(
+        import_record_id_, write_json_compact(build_confirmed_data())));
+    const auto outcome = repository.confirm_annual_facts(
+        import_record_id_, false, "年度未锁版本时确认", confirmed_by_user_id_);
+
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+    const auto year = client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id from inspection_years "
+        "where id=$1::uuid", placeholder_year_id_);
+    ASSERT_FALSE(year[0]["revision_id"].isNull()) << "确认事务应当把解析出的版本锁进年度";
+    EXPECT_EQ(year[0]["revision_id"].as<std::string>(), inventory_revision_id_);
+}
+
 TEST_F(ConfirmAnnualFactsTest, ReadsLatestJsonInsteadOfCallerSnapshot) {
     bridge_report::db::ReviewRepository repository(client_, registry_);
     auto latest = build_confirmed_data();

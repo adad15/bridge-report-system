@@ -794,6 +794,39 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             return failed;
         }
 
+        // 锁顺序 import_records → inspection_years，与绑定和 Word 导入一致。
+        // 上面那句只 for update of ir：年度字段是在**没有年度行锁**的情况下读的，而两条
+        // 导入记录可以关联同一个年度，最后那句写年度又没有版本条件，足以互相覆盖。
+        //
+        // 解析与锁定都必须早于 build_preflight_report()：preflight 一旦判出
+        // "台账未确认"就直接返回，锁在评定服务之前根本走不到。
+        std::optional<std::string> locked_revision_id;
+        if (existing_inspection_year_id.has_value()) {
+            const auto year_row = tx->execSqlSync(
+                "select component_inventory_revision_id::text as inventory_revision_id "
+                "from inspection_years where id=$1::uuid for update",
+                *existing_inspection_year_id);
+            if (!year_row.empty() && !year_row[0]["inventory_revision_id"].isNull()) {
+                locked_revision_id = year_row[0]["inventory_revision_id"].as<std::string>();
+            }
+        }
+        // 仓库对象一律用临时量：它按值持有 DbClientPtr，留成具名变量会让事务活过
+        // tx.reset()，提交回调永远不来。
+        const auto resolved_revision = ComponentInventoryRepository(tx)
+                                           .resolve_confirmed_revision(bridge_id, locked_revision_id);
+        // 年度还没锁版本、而桥上有可用的已确认台账 → 就在本事务里锁上。解析不出版本时
+        // 不锁，preflight 会照旧以"台账未确认"挡住，与改动前一致。
+        if (existing_inspection_year_id.has_value() && !locked_revision_id.has_value()
+            && resolved_revision.has_value()) {
+            if (!ComponentInventoryRepository(tx).lock_pending_year_revision(
+                    existing_inspection_year_id, bridge_id, std::nullopt,
+                    resolved_revision->id)) {
+                return fail(
+                    "component_inventory_revision_changed",
+                    "检测年度的构件台账版本已被其他操作锁定，请刷新后重试。");
+            }
+        }
+
         const auto current = tx->execSqlSync(
             "select exists(select 1 from inspection_years where bridge_id = $1::uuid and inspection_year = $2 "
             "and is_current and status = '已确认') as found", bridge_id, *inspection_year);
@@ -803,19 +836,11 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         context.bridge_system_number = record_row["bridge_number"].as<std::string>();
         context.inspection_year = inspection_year;
         context.has_current_annual_facts = !current.empty() && current[0]["found"].as<bool>();
-        context.component_inventory_revision_id =
-            optional_text(record_row, "inventory_revision_id");
-        if (context.component_inventory_revision_id.has_value()) {
-            const auto inventory = tx->execSqlSync(
-                "select status from bridge_component_inventory_revisions "
-                "where id=$1::uuid and bridge_id=$2::uuid for update",
-                *context.component_inventory_revision_id,
-                bridge_id);
-            context.component_inventory_confirmed = !inventory.empty() &&
-                inventory[0]["status"].as<std::string>() == "已确认";
-        } else {
-            context.component_inventory_confirmed = false;
-        }
+        // 该解析器按定义只返回已确认版本，所以"是否已确认"就是它有没有值；
+        // 不必再单独查一次 status。
+        context.component_inventory_revision_id = resolved_revision.has_value()
+            ? std::optional<std::string>(resolved_revision->id) : std::nullopt;
+        context.component_inventory_confirmed = resolved_revision.has_value();
         const auto preflight = review::build_preflight_report(data, context);
         if (!preflight.can_confirm) {
             auto failed = fail("preflight_failed", "最新草稿未通过入库前检查。");
@@ -835,9 +860,6 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             RatingTreeRepository tree_repository(tx);
             const auto tree =
                 tree_repository.load_published_tree(*rating_tree_version_id);
-            ComponentInventoryRepository inventory_repository(tx);
-            const auto latest_inventory =
-                inventory_repository.get_latest_revision(bridge_id);
             if (!tree.has_value()) {
                 review::PreflightReport report = preflight;
                 report.blocking_errors.push_back({
@@ -856,7 +878,7 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
                     *rating_tree_version_id,
                     *technical_package_id,
                     *tree,
-                    latest_inventory);
+                    resolved_revision);
             if (!tree_validation.ok) {
                 review::PreflightReport report = preflight;
                 for (const auto& issue : tree_validation.issues) {
