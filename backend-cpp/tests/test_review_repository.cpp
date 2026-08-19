@@ -1801,3 +1801,59 @@ TEST_F(ConfirmAnnualFactsTest, RollsBackTheYearRevisionLockWhenPreflightBlocks) 
         << "确认失败时事务内的版本锁定必须一并回滚";
     EXPECT_EQ(year[0]["status"].as<std::string>(), "待校对");
 }
+
+// override 与年度锁定版本**相同**时是正常路径，不能因为"传了 override"就报冲突。
+// ExplicitRevisionIsValidatedAndCannotOverrideALockedYear 只覆盖了"不同"那一半；
+// 少了这一条，把冲突判定写成"只要传了 override 就报错"也照样绿。
+TEST_F(ConfirmAnnualFactsTest, ExplicitRevisionMatchingTheLockedYearIsAccepted) {
+    bridge_report::assessment::AssessmentConfirmationService service(client_, registry_);
+
+    const auto outcome = service.calculate(
+        placeholder_year_id_, build_confirmed_data(),
+        std::optional<std::string>(inventory_revision_id_));
+
+    for (const auto& item : outcome.preview.issues) {
+        EXPECT_NE(item.code, "component_inventory_revision_changed")
+            << "override 与年度锁定版本相同不是冲突：" << item.message;
+        EXPECT_NE(item.code, "assessment_context_incomplete") << item.message;
+    }
+    EXPECT_EQ(outcome.status, bridge_report::assessment::AssessmentConfirmationStatus::Completed);
+}
+
+// override 不是绕过校验的后门：草稿版本与不存在的版本都必须被拒。
+// 前者尤其要紧——待校对年度可以合法地锁在草稿上，若 override 放行草稿，
+// 评定就会按一份还在改的台账算出正式结论。
+TEST_F(ConfirmAnnualFactsTest, ExplicitRevisionRejectsADraftOrUnknownRevision) {
+    client_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=null where id=$1::uuid",
+        placeholder_year_id_);
+    const auto draft_revision = client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,"
+        "baseline_revision_id,created_by_user_id) values($1::uuid,2,$2::uuid,$3::uuid) "
+        "returning id::text as id",
+        bridge_id_, inventory_revision_id_, confirmed_by_user_id_)[0]["id"].as<std::string>();
+    bridge_report::assessment::AssessmentConfirmationService service(client_, registry_);
+
+    const auto with_draft = service.calculate(
+        placeholder_year_id_, build_confirmed_data(),
+        std::optional<std::string>(draft_revision));
+    bool draft_rejected = false;
+    for (const auto& item : with_draft.preview.issues) {
+        if (item.code == "assessment_context_incomplete") draft_rejected = true;
+    }
+    EXPECT_TRUE(draft_rejected) << "草稿台账版本不得作为评定输入";
+
+    const auto with_unknown = service.calculate(
+        placeholder_year_id_, build_confirmed_data(),
+        std::optional<std::string>("00000000-0000-0000-0000-000000000000"));
+    bool unknown_rejected = false;
+    for (const auto& item : with_unknown.preview.issues) {
+        if (item.code == "assessment_context_incomplete") unknown_rejected = true;
+    }
+    EXPECT_TRUE(unknown_rejected) << "不存在的台账版本不得作为评定输入";
+
+    // 两次拒绝都不得顺手把年度锁上。
+    EXPECT_TRUE(client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id from inspection_years "
+        "where id=$1::uuid", placeholder_year_id_)[0]["revision_id"].isNull());
+}

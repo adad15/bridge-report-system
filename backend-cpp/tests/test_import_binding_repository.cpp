@@ -674,7 +674,8 @@ TEST_F(ImportBindingRepositoryTest, RejectsWritesOutsidePendingReview) {
 
 }  // namespace
 
-// 独占编辑是后端边界，不能只靠前端隐藏按钮。这六个写接口改的是
+// 独占编辑是后端边界，不能只靠前端隐藏按钮。这五个仓储写入口（对外六个 HTTP 端点，
+// mark-missing 与 clear 共用 mutate_group）改的是
 // import_records.parsed_result_json——和校对草稿保存写的同一份数据。不校验锁的话，
 // 另一个已登录用户可以在别人持锁时改它，而持锁者随后的整份草稿保存又会把这些
 // 修改静默覆盖掉。
@@ -697,6 +698,20 @@ TEST_F(ImportBindingRepositoryTest, WriteEndpointsRejectAnInvalidEditLock) {
     EXPECT_EQ(repository.clear(import_id_, "上部承重构件", "1-1#梁",
                                revision_id_, foreign).status,
               bridge_report::db::BindingStatus::EditLockInvalid);
+    // 这两个影响最大：绑评定树会改年度的规范组合与台账版本，范围拆分会增删病害
+    // 并复制照片候选。复查发生在加载上下文之后、任何业务校验之前，所以这里传的
+    // 评定树版本与影响令牌是不是真的无关紧要——锁不对就该在那之前挡住。
+    EXPECT_EQ(repository.bind_rating_tree(
+                  import_id_, "00000000-0000-0000-0000-0000000000ff", user_id_,
+                  revision_id_, foreign).status,
+              bridge_report::db::BindingStatus::EditLockInvalid);
+    const std::vector<bridge_report::review::ComponentRangeSplitTarget> split_targets{
+        {"上部承重构件", "1-1#梁"}};
+    EXPECT_EQ(bridge_report::db::ComponentRangeSplitRepository(client_)
+                  .apply(import_id_, split_targets, "sha256:whatever", user_id_,
+                         revision_id_, foreign)
+                  .status,
+              bridge_report::db::ComponentRangeSplitStatus::EditLockInvalid);
 
     // 一条都不许写进去。
     const auto stored = client_->execSqlSync(
