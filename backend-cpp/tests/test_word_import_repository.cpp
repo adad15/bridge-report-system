@@ -456,3 +456,63 @@ TEST_F(WordImportRepositoryTest, RollsBackEverythingWhenTheYearRevisionCannotBeL
     EXPECT_EQ(after[0]["parsed"].as<std::string>().find("defect_0001"), std::string::npos)
         << "解析结果不得落盘";
 }
+
+// 版本冲突之后必须真的能重来一次。这条把冲突分支的三步串起来跑：
+// 抢锁失败 -> 清理本次的解析工作区 -> 转"解析失败" -> 重新 mark_parsing。
+//
+// 单看每一步都有测试，但"能不能重试"是它们串起来才成立的性质：只要有一步顺序错了
+// （比如没转解析失败就收工），记录就会永远卡在"解析中"，用户只能重新上传。
+TEST_F(WordImportRepositoryTest, AVersionRaceLeavesTheImportRetryable) {
+    const auto user_id = client_->execSqlSync(
+        "select id::text from users where username='admin'")[0]["id"].as<std::string>();
+    const auto confirmed_id = client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,created_by_user_id) "
+        "values($1::uuid,1,$2::uuid) returning id::text",
+        bridge_id_, user_id)[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "update bridge_component_inventory_revisions set status='已确认',"
+        "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
+        confirmed_id, user_id);
+    // 年度版本仍为空但年度已不在"待校对"：lock_pending_year_revision 的 UPDATE 命中
+    // 0 行、回读也仍是空，判定抢锁失败——代表任何一种"读到未锁定、下手时锁不上"的交错。
+    client_->execSqlSync(
+        "update inspection_years set status='已确认' where id=$1::uuid", year_id_);
+    // 解析工作区路径挂在来源文件行上，不在导入记录上。
+    client_->execSqlSync(
+        "update import_source_files set active_parse_work_relative_path='work/word-import/00000000-0000-0000-0000-000000000001-abcdef' "
+        "where import_record_id=$1::uuid", import_id_);
+
+    bridge_report::archive::ArchivedPhotoBatch batch;
+    batch.data["contract"]["parser_name"] = "liaoning-word-importer";
+    batch.data["contract"]["parser_version"] = "2.0.0";
+    batch.data["photos"] = Json::Value(Json::arrayValue);
+    Json::Value defect(Json::objectValue);
+    defect["candidate_id"] = "defect_0001";
+    defect["component_name"] = "上部承重构件";
+    defect["component_number"] = "1-1#梁";
+    defect["warnings"] = Json::Value(Json::arrayValue);
+    batch.data["defects"].append(defect);
+
+    bridge_report::db::WordImportRepository repository(client_);
+    const auto outcome = repository.persist_parse_result(import_id_, batch);
+    ASSERT_FALSE(outcome.success);
+    ASSERT_EQ(outcome.error_code, "component_inventory_revision_changed");
+
+    // 路由冲突分支做的两件事：清工作区、转解析失败。绝不调 discard_failed_import。
+    repository.clear_active_parse_work_path(import_id_);
+    repository.mark_parse_failed(import_id_, outcome.error_message, 24);
+
+    const auto after = client_->execSqlSync(
+        "select ir.import_status, sf.active_parse_work_relative_path, sf.status as source_status "
+        "from import_records ir join import_source_files sf on sf.import_record_id=ir.id "
+        "where ir.id=$1::uuid", import_id_);
+    ASSERT_EQ(after.size(), 1u) << "导入记录与来源文件都必须还在，没被删掉";
+    EXPECT_EQ(after[0]["import_status"].as<std::string>(), "解析失败");
+    EXPECT_EQ(after[0]["source_status"].as<std::string>(), "解析失败");
+    EXPECT_TRUE(after[0]["active_parse_work_relative_path"].isNull())
+        << "本次的解析工作区路径必须清掉，否则下次解析会挂在旧目录上";
+
+    // 关键一条：能重新进入解析。mark_parsing() 只接受"已上传"/"解析失败"，
+    // 冲突分支若只是跳过删除、不转状态，这里就会永远失败。
+    EXPECT_TRUE(repository.mark_parsing(import_id_)) << "版本冲突之后必须能重试";
+}

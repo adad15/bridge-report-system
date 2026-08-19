@@ -246,6 +246,13 @@ void remove_obsolete_files(
 
 }  // namespace
 
+PersistFailureDisposition disposition_for_persist_failure(const std::string& error_code) {
+    // 只有并发抢锁这一类可恢复：解析已经成功，照片也归档了，缺的只是年度版本。
+    return error_code == "component_inventory_revision_changed"
+        ? PersistFailureDisposition::retain_for_retry
+        : PersistFailureDisposition::discard;
+}
+
 void register_word_import_routes(
     const drogon::orm::DbClientPtr& db_client,
     const config::AppConfig& config
@@ -376,13 +383,13 @@ void register_word_import_routes(
                             const auto outcome = repository->persist_parse_result(context.import_record_id, batch);
                             if (!outcome.success) {
                                 archive::cleanup_archived_photo_batch(archive_root, batch);
-                                // 台账版本被并发锁走是可恢复的：Word 已经解析成功，只是这一次
-                                // 没抢到年度版本。绝不能走 fail_parse——那条路会删掉导入记录、
+                                // 可恢复的失败绝不能走 fail_parse——那条路会删掉导入记录、
                                 // 原始 Word 与归档，把一次重试变成重新上传。
                                 //
                                 // 也不能只是"不删除"：mark_parsing() 只接受"已上传"/"解析失败"，
                                 // 光跳过删除会把记录卡在"解析中"，从此再也重试不了。
-                                if (outcome.error_code == "component_inventory_revision_changed") {
+                                if (disposition_for_persist_failure(outcome.error_code)
+                                    == PersistFailureDisposition::retain_for_retry) {
                                     finish_staging(repository, context.import_record_id, staging_root);
                                     mark_parse_failed_safely(
                                         repository, context.import_record_id,

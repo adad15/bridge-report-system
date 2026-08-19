@@ -152,3 +152,28 @@ TEST(WordImportRoutesTest, StillRequiresTheBusinessChoicesForASourceImport) {
         std::invalid_argument
     );
 }
+
+// 这条判断决定一次落库失败会不会删掉用户的原始 Word 与已归档照片，是全项目唯一
+// 不可逆的清理路径。它原本是路由 lambda 里的一个 if，没有任何测试。
+TEST(WordImportRoutesTest, OnlyARevisionRaceIsRetainedForRetry) {
+    using bridge_report::http::PersistFailureDisposition;
+    using bridge_report::http::disposition_for_persist_failure;
+
+    // 唯一可恢复的一类：解析已成功、照片已归档，只是没抢到年度台账版本。
+    EXPECT_EQ(disposition_for_persist_failure("component_inventory_revision_changed"),
+              PersistFailureDisposition::retain_for_retry);
+
+    // 其余全部按原有流程清理。逐个列出来而不是只测一两个：漏判成 retain_for_retry
+    // 会把该删的垃圾留在库里，漏判成 discard 会删掉用户重新上传才能拿回的文件。
+    for (const auto* code : {
+             "import_record_deleted",
+             "import_record_wrong_status",
+             "db_write_failed",
+             "db_commit_failed",
+             "contract_validation_failed",
+             "",
+         }) {
+        EXPECT_EQ(disposition_for_persist_failure(code), PersistFailureDisposition::discard)
+            << "错误码 " << code << " 不该被当成可重试";
+    }
+}
