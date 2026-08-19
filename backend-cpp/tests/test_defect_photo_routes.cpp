@@ -306,3 +306,44 @@ TEST_F(DefectPhotoWriteTest, ReportsAMissingPhotoInsteadOfSilentlySucceeding) {
 }
 
 }  // namespace
+
+// 编辑锁必须在写事务内复查。路由入口那道 require_active_edit_lock 是事务外的：
+// 锁 2 分钟过期一次、还能被管理员随时强制收回，而这两个接口都会改写
+// parsed_result_json。检查通过之后到照片真正落库之间锁失效时，写入必须被挡下。
+TEST_F(DefectPhotoWriteTest, RefusesToInsertWhenTheEditLockIsNoLongerValid) {
+    const UploadedPhotoNaming naming{"manual_photo_0001", "补-1"};
+    const auto file = archive_one(naming);
+    const auto candidate = build_uploaded_photo_candidate(
+        naming, "defect_0001", "IMG_2031.jpg", "补拍", file.storage_relative_path.generic_string());
+    // 从未签发过的令牌：代表锁已过期、被强制收回，或本来就属于别人。
+    const bridge_report::db::EditLockCredentials stale{
+        "00000000-0000-0000-0000-000000000001",
+        "00000000-0000-0000-0000-000000000002", "never-issued-token"};
+
+    const auto written = insert_uploaded_photo(client_, detail_, file, naming, candidate, stale);
+
+    EXPECT_FALSE(written.success);
+    EXPECT_EQ(written.error_code, "edit_lock_invalid");
+    // 草稿必须原封不动：夹具里本来就一张照片。
+    EXPECT_EQ(stored_draft()["photos"].size(), 1u);
+    EXPECT_EQ(client_->execSqlSync(
+        "select count(*) as n from import_record_files where import_record_id=$1::uuid",
+        import_id_)[0]["n"].as<int>(), 0);
+}
+
+TEST_F(DefectPhotoWriteTest, RefusesToDeleteWhenTheEditLockIsNoLongerValid) {
+    const UploadedPhotoNaming naming{"manual_photo_0001", "补-1"};
+    const auto file = archive_one(naming);
+    const auto candidate = build_uploaded_photo_candidate(
+        naming, "defect_0001", "IMG_2031.jpg", "补拍", file.storage_relative_path.generic_string());
+    ASSERT_TRUE(insert_uploaded_photo(client_, detail_, file, naming, candidate).success);
+    const bridge_report::db::EditLockCredentials stale{
+        "00000000-0000-0000-0000-000000000001",
+        "00000000-0000-0000-0000-000000000002", "never-issued-token"};
+
+    const auto removed = delete_uploaded_photo(client_, import_id_, "manual_photo_0001", stale);
+
+    EXPECT_FALSE(removed.success);
+    EXPECT_EQ(removed.error_code, "edit_lock_invalid");
+    EXPECT_EQ(stored_draft()["photos"].size(), 2u) << "锁失效时照片不得被删";
+}

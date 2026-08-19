@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include <drogon/orm/DbClient.h>
@@ -7,6 +8,7 @@
 
 #include "bridge_report/archive/ExtractedPhotoArchive.hpp"
 #include "bridge_report/config/AppConfig.hpp"
+#include "bridge_report/db/EditLockRepository.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
 
 namespace bridge_report::http {
@@ -61,7 +63,11 @@ UploadedPhotoWriteOutcome insert_uploaded_photo(
     const review::ImportRecordDetail& detail,
     const archive::ArchivedPhotoFile& file,
     const UploadedPhotoNaming& naming,
-    const Json::Value& candidate
+    const Json::Value& candidate,
+    // 编辑锁凭证：在写事务内、锁住 import_records 之后复查一次。路由入口那道检查是
+    // 事务外的，从它通过到照片落库之间锁可能过期或被管理员收回。传 nullopt 跳过校验
+    // （测试夹具用），生产路由一律传。失效时返回 edit_lock_invalid。
+    const std::optional<db::EditLockCredentials>& edit_lock = std::nullopt
 );
 
 /// 删除结果：成功时带回归档路径与摘要，供调用方删除归档文件。
@@ -82,7 +88,8 @@ struct UploadedPhotoDeleteOutcome {
 UploadedPhotoDeleteOutcome delete_uploaded_photo(
     const drogon::orm::DbClientPtr& db_client,
     const std::string& import_record_id,
-    const std::string& photo_candidate_id
+    const std::string& photo_candidate_id,
+    const std::optional<db::EditLockCredentials>& edit_lock = std::nullopt
 );
 
 void register_defect_photo_routes(

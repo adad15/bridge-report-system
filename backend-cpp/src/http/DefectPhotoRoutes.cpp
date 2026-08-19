@@ -10,6 +10,7 @@
 #include <drogon/drogon.h>
 #include <trantor/utils/Logger.h>
 
+#include "bridge_report/auth/PasswordHash.hpp"
 #include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
@@ -78,6 +79,24 @@ std::optional<Json::Value> lock_editable_draft(
     if (locked.empty()) return std::nullopt;
     if (locked[0]["import_status"].as<std::string>() != "待校对") return std::nullopt;
     return parse_parsed_result_json(locked[0]["parsed_result_json"].as<std::string>());
+}
+
+/// 在写事务内复查编辑锁。路由入口那道 require_active_edit_lock 是**事务外**的检查：
+/// 从它通过到照片真正落库之间，锁可能过期（2 分钟心跳）或被管理员强制收回，
+/// 而这两个接口都会改写 parsed_result_json。与保存草稿、绑定写接口同一套做法。
+bool edit_lock_still_active(
+    const std::shared_ptr<drogon::orm::Transaction>& tx,
+    const std::string& import_record_id,
+    const std::optional<db::EditLockCredentials>& edit_lock
+) {
+    if (!edit_lock.has_value()) return true;
+    const auto rows = tx->execSqlSync(
+        "select exists(select 1 from import_record_edit_locks "
+        "where import_record_id=$1::uuid and user_id=$2::uuid and user_session_id=$3::uuid "
+        "and lock_token_hash=$4 and expires_at>now()) as active",
+        import_record_id, edit_lock->user_id, edit_lock->session_id,
+        auth::sha256_hex(edit_lock->lock_token));
+    return !rows.empty() && rows[0]["active"].as<bool>();
 }
 
 }  // namespace
@@ -156,7 +175,8 @@ UploadedPhotoWriteOutcome insert_uploaded_photo(
     const review::ImportRecordDetail& detail,
     const archive::ArchivedPhotoFile& file,
     const UploadedPhotoNaming& naming,
-    const Json::Value& candidate
+    const Json::Value& candidate,
+    const std::optional<db::EditLockCredentials>& edit_lock
 ) {
     UploadedPhotoWriteOutcome outcome;
     std::shared_ptr<drogon::orm::Transaction> tx;
@@ -168,6 +188,12 @@ UploadedPhotoWriteOutcome insert_uploaded_photo(
             tx->rollback();
             outcome.error_code = "import_record_not_editable";
             outcome.error_message = "导入记录当前不可编辑。";
+            return outcome;
+        }
+        if (!edit_lock_still_active(tx, detail.id, edit_lock)) {
+            tx->rollback();
+            outcome.error_code = "edit_lock_invalid";
+            outcome.error_message = "编辑锁已失效，照片未新增，请刷新页面。";
             return outcome;
         }
         if (!draft_has_defect_candidate(*draft, review::string_member_or_empty(candidate, "linked_defect_candidate_id"))) {
@@ -229,7 +255,8 @@ UploadedPhotoWriteOutcome insert_uploaded_photo(
 UploadedPhotoDeleteOutcome delete_uploaded_photo(
     const drogon::orm::DbClientPtr& db_client,
     const std::string& import_record_id,
-    const std::string& photo_candidate_id
+    const std::string& photo_candidate_id,
+    const std::optional<db::EditLockCredentials>& edit_lock
 ) {
     UploadedPhotoDeleteOutcome outcome;
     std::shared_ptr<drogon::orm::Transaction> tx;
@@ -241,6 +268,12 @@ UploadedPhotoDeleteOutcome delete_uploaded_photo(
             tx->rollback();
             outcome.error_code = "import_record_not_editable";
             outcome.error_message = "导入记录当前不可编辑。";
+            return outcome;
+        }
+        if (!edit_lock_still_active(tx, import_record_id, edit_lock)) {
+            tx->rollback();
+            outcome.error_code = "edit_lock_invalid";
+            outcome.error_message = "编辑锁已失效，照片未删除，请刷新页面。";
             return outcome;
         }
         const auto removed = take_photo_candidate(*draft, photo_candidate_id);
@@ -412,7 +445,9 @@ void handle_upload(
         naming, defect_candidate_id, input.original_file_name,
         parser.getParameter<std::string>("caption"),
         archived.storage_relative_path.generic_string());
-    const auto written = insert_uploaded_photo(db_client, *detail, archived, naming, candidate);
+    const auto written = insert_uploaded_photo(
+        db_client, *detail, archived, naming, candidate,
+        edit_lock_from_request(request, *user));
     if (!written.success) {
         // 库没写成就把刚落盘的文件收掉，不留看不见也删不掉的孤儿。
         if (archived.created_by_batch) {
@@ -425,6 +460,11 @@ void handle_upload(
         }
         if (written.error_code == "import_record_not_editable") {
             respond_not_editable(callback, "导入记录当前不处于待校对，无法新增照片。");
+            return;
+        }
+        if (written.error_code == "edit_lock_invalid") {
+            respond_json(callback, make_error_body(written.error_code, written.error_message),
+                         drogon::k409Conflict);
             return;
         }
         if (written.error_code == "photo_candidate_conflict") {
@@ -465,14 +505,18 @@ void handle_delete(
     if (!require_active_edit_lock(db_client, request, import_record_id, *user, callback)) return;
     if (!import_record_accepts_new_photos(*detail, callback)) return;
 
-    const auto removed = delete_uploaded_photo(db_client, import_record_id, photo_candidate_id);
+    const auto removed = delete_uploaded_photo(
+        db_client, import_record_id, photo_candidate_id,
+        edit_lock_from_request(request, *user));
     if (!removed.success) {
         if (removed.error_code == "photo_candidate_not_found") {
             respond_json(callback, make_error_body(removed.error_code, removed.error_message),
                          drogon::k404NotFound);
             return;
         }
-        if (removed.error_code == "photo_not_deletable" || removed.error_code == "import_record_not_editable") {
+        if (removed.error_code == "photo_not_deletable"
+            || removed.error_code == "import_record_not_editable"
+            || removed.error_code == "edit_lock_invalid") {
             respond_json(callback, make_error_body(removed.error_code, removed.error_message),
                          drogon::k409Conflict);
             return;
