@@ -2,7 +2,8 @@
 
 - 日期：2026-08-18（当日三轮评审后修订）
 - 状态：**全部实施完毕**（`434b21e` ④、`3b8c43b` ⑤⑥、`c2be8d1` ② 与评定服务版本
-  上下文、`7f89294` ③、`fc7d055` ① 批次三、`24199f5` 批次四清理）
+  上下文、`7f89294` ③、`fc7d055` ① 批次三、`24199f5` 批次四清理、`80272ab` 补回
+  `3b8c43b` 漏掉的年度行锁与两条回滚测试）。**剩余缺口见文末"未覆盖的测试"。**
 - 相关模块：校对保存、入库前检查、年度确认、评定树自动匹配、Word 导入、系统评定
 - 前序：`2026-08-17-component-binding-on-demand-lookup-design.md`（缺陷一修的是同源问题的另外两处）
 - 评审记录：`…-design-review.txt`、`…-design-rereview.txt`、`…-design-third-review.txt`
@@ -540,3 +541,37 @@ struct SaveReviewDraftOutcome {
 - 不改 `find_latest_revision_id()` 的草稿优先排序：台账管理页依赖它。
 - 不引入新的版本解析规则；本轮是把各处接到既有规则上，不是设计新契约。
 - 不给 review 接口新增对外字段。
+
+## 未覆盖的测试
+
+代码全部落地，以下测试清单条目至今没写，留给后续：
+
+**Word 导入的路由层冲突分支**（`WordImportRoutes.cpp` 那 18 行）：版本冲突不进
+`discard_failed_import_safely()`、不删原始 Word、转成"解析失败"以便下次 `mark_parsing()`
+重入、清理本次照片批次与 staging 目录。仓储那半已由
+`RollsBackEverythingWhenTheYearRevisionCannotBeLocked` 覆盖；路由那半需要 HTTP 级夹具——
+`test_word_import_routes.cpp` 现在只测纯函数，不碰数据库。这是删除用户文件的路径，
+补测试的优先级不低。
+
+**年度确认事务的并发**：两条导入记录共享同一年度时不互相覆盖年度版本；最终 UPDATE
+不覆盖并发锁定的不同版本。要开两个连接交错执行，现有夹具都是单连接
+（`create_db_client(config, 1)`）。
+
+**评定服务**：override 与年度锁定版本**相同**时正常算出；override 是草稿或不存在时
+上下文构建失败（"属于别的桥"已由 `ExplicitRevisionIsValidatedAndCannotOverrideALockedYear`
+覆盖）。
+
+**`database_commit_failed`**：保存草稿与 `confirm_annual_facts` 的这条分支都没有可靠
+的注入点，两处均未覆盖。
+
+### 单连接测试客户端的一个陷阱
+
+验证"确认失败时版本锁定一并回滚"时试过一个变异：把 `lock_pending_year_revision()`
+改到 `db_client_` 上跑（而不是事务里），预期锁定会活过回滚。**测试仍然通过**——那次
+UPDATE 明明匹配到了行（否则会报 `component_inventory_revision_changed` 而不是
+`preflight_failed`），年度却仍是 null，只可能是它跟着事务一起回滚了。测试客户端只有
+一条连接，drogon 把 `db_client_` 上的查询排到了事务那条连接上执行。
+
+结论：**这套夹具无法区分"在事务里"和"在事务外"**，靠它来证伪"是不是同一个事务"的
+变异会得到假绿。要证伪这类性质，得让失败路径显式提交（本轮用的就是这个），或者换
+多连接夹具。
