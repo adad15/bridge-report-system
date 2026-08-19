@@ -1765,3 +1765,39 @@ TEST_F(SaveReviewDraftTest, RollsBackTheYearLockWhenALaterStepFails) {
     EXPECT_EQ(stored_parsed_result_json().find("11111111-1111-4111-8111-111111111111"),
               std::string::npos);
 }
+
+// ConfirmLocksTheResolvedRevisionBeforePreflight 的失败面：版本锁定发生在
+// build_preflight_report() 之前，所以 preflight 挡回去时那次锁定必须一起回滚。
+// 否则一次失败的确认会给年度留下一个它自己并没有确认过的台账版本，
+// 而后续按"年度锁定优先"解析的每一处都会认这个版本。
+TEST_F(ConfirmAnnualFactsTest, RollsBackTheYearRevisionLockWhenPreflightBlocks) {
+    client_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=null where id=$1::uuid",
+        placeholder_year_id_);
+
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto data = build_confirmed_data();
+    // 病害已校对、契约合法，但没绑实际构件：preflight 的 check_component_inventory_links
+    // 会以 defect_component_match_required 阻断。挑这个而不是"未校对"，是因为后者挂在
+    // **契约校验**上，而契约校验发生在版本锁定之前，测不到要守的那段。
+    data["defects"][0]["bridge_component_id"] = Json::Value();
+    data["defects"][0]["standard_component_category_id"] = Json::Value();
+    data["defects"][0]["resolved_structure_part"] = Json::Value();
+    data["defects"][0]["component_inventory_revision_id"] = Json::Value();
+    ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
+
+    const auto outcome = repository.confirm_annual_facts(
+        import_record_id_, false, "preflight 应当挡下", confirmed_by_user_id_);
+
+    ASSERT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "preflight_failed");
+    // 必须是入库前检查挡的，不能是契约校验——后者发生在版本锁定**之前**，
+    // 那样这条测试就绕开了它要守的那段。
+    EXPECT_EQ(outcome.error_message, "最新草稿未通过入库前检查。");
+    const auto year = client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id, status "
+        "from inspection_years where id=$1::uuid", placeholder_year_id_);
+    EXPECT_TRUE(year[0]["revision_id"].isNull())
+        << "确认失败时事务内的版本锁定必须一并回滚";
+    EXPECT_EQ(year[0]["status"].as<std::string>(), "待校对");
+}

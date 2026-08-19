@@ -397,3 +397,62 @@ TEST_F(WordImportRepositoryTest, NonCurrentAnnualWordCannotBeLoadedForParsing) {
 }
 
 }  // namespace
+
+// 抢不到年度版本时必须整体回滚。这条路径的全部价值就在于"出错时别毁数据"：
+// 解析已经成功、照片已经归档，只是没抢到版本；此时若继续提交，病害会按一个版本
+// 落盘而年度指向另一个版本。路由那半（不走 discard_failed_import_safely、改判
+// 解析失败以便重试）在 WordImportRoutes 里，需要 HTTP 级夹具，尚未覆盖。
+TEST_F(WordImportRepositoryTest, RollsBackEverythingWhenTheYearRevisionCannotBeLocked) {
+    const auto user_id = client_->execSqlSync(
+        "select id::text from users where username='admin'")[0]["id"].as<std::string>();
+    const auto confirmed_id = client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,created_by_user_id) "
+        "values($1::uuid,1,$2::uuid) returning id::text",
+        bridge_id_, user_id)[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "update bridge_component_inventory_revisions set status='已确认',"
+        "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
+        confirmed_id, user_id);
+    // 年度版本仍为空（所以会走锁定分支），但年度已不在"待校对"——
+    // lock_pending_year_revision 的 UPDATE 带 status='待校对' 谓词，命中 0 行，
+    // 回读又发现仍是空，只能判定抢锁失败。这代表任何一种"读到未锁定、下手时锁不上"
+    // 的交错，包括共享同一年度的另一条导入记录抢先一步。
+    client_->execSqlSync(
+        "update inspection_years set status='已确认' where id=$1::uuid", year_id_);
+
+    bridge_report::archive::ArchivedPhotoBatch batch;
+    batch.data["contract"]["parser_name"] = "liaoning-word-importer";
+    batch.data["contract"]["parser_version"] = "2.0.0";
+    batch.data["photos"] = Json::Value(Json::arrayValue);
+    Json::Value defect(Json::objectValue);
+    defect["candidate_id"] = "defect_0001";
+    defect["component_name"] = "上部承重构件";
+    defect["component_number"] = "1-1#梁";
+    defect["warnings"] = Json::Value(Json::arrayValue);
+    batch.data["defects"].append(defect);
+
+    bridge_report::db::WordImportRepository repository(client_);
+    const auto outcome = repository.persist_parse_result(import_id_, batch);
+
+    ASSERT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "component_inventory_revision_changed");
+    // 专用错误码，路由据此把这次失败排除在删除路径之外；混进通用失败码会让
+    // 一次可重试的冲突变成"导入记录、原始 Word 与归档一起被删"。
+    EXPECT_NE(outcome.error_code, "db_write_failed");
+
+    const auto after = client_->execSqlSync(
+        "select ir.import_status, ir.parsed_result_json::text as parsed, "
+        "iy.component_inventory_revision_id::text as year_revision_id, "
+        "(select count(*) from import_record_files f where f.import_record_id=ir.id "
+        " and f.file_role='附件') as attachment_count "
+        "from import_records ir join inspection_years iy on iy.id=ir.inspection_year_id "
+        "where ir.id=$1::uuid", import_id_);
+    ASSERT_EQ(after.size(), 1u);
+    EXPECT_EQ(after[0]["import_status"].as<std::string>(), "解析中")
+        << "回滚后状态不该被改写；转成解析失败是路由的事，以便下次 mark_parsing 能重入";
+    EXPECT_TRUE(after[0]["year_revision_id"].isNull()) << "抢锁失败不得留下半截锁定";
+    EXPECT_EQ(after[0]["attachment_count"].as<long long>(), 0)
+        << "照片关系必须随事务一起回滚";
+    EXPECT_EQ(after[0]["parsed"].as<std::string>().find("defect_0001"), std::string::npos)
+        << "解析结果不得落盘";
+}

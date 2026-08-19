@@ -330,7 +330,7 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
         if (has_year) {
             const auto year_row = tx->execSqlSync(
                 "select component_inventory_revision_id::text as inventory_revision_id "
-                "from inspection_years where id=$1::uuid",  // TEMP: 去掉行锁试探
+                "from inspection_years where id=$1::uuid for update",
                 year_id);
             if (!year_row.empty() && !year_row[0]["inventory_revision_id"].isNull()) {
                 locked_revision_id =
