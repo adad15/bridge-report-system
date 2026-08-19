@@ -1,0 +1,2825 @@
+{
+  "mappings": [
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "ce3a2d6d-a453-4799-9128-76e2fb5ef38c",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-13",
+      "target_node_id": "org.bridge.defect.5_1_1_13"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "9911f80e-d826-4095-8e54-39af3c13e63c",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-14",
+      "target_node_id": "org.bridge.defect.5_1_1_14"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.5_1_1_1"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.5_1_1_2"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.5_1_1_3"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-4",
+      "target_node_id": "org.bridge.defect.5_1_1_4"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-5",
+      "target_node_id": "org.bridge.defect.5_1_1_5"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-6",
+      "target_node_id": "org.bridge.defect.5_1_1_6"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-7",
+      "target_node_id": "org.bridge.defect.5_1_1_7"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "4e880e29-aed8-457a-bcd8-b22e2d8449d8",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-8",
+      "target_node_id": "org.bridge.defect.5_1_1_8"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "e5c4cc60-ccae-4ddb-91de-e76dfb6c7123",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-9",
+      "target_node_id": "org.bridge.defect.5_1_1_9"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "7430418e-ad8b-4b66-a010-ad268b4956b8",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-10",
+      "target_node_id": "org.bridge.defect.5_1_1_10"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "dc87a997-abb2-471d-9f23-b192bb08d9df",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-11",
+      "target_node_id": "org.bridge.defect.5_1_1_11"
+    },
+    {
+      "source_group_id": "48d11bc3-702e-44ae-8153-d1a6210b4733",
+      "source_indicator_id": "4f2cfb4a-5027-4a2f-9ba5-ef631ecf7e5e",
+      "source_group_number": "5.1.1",
+      "source_indicator_number": "5.1.1-12",
+      "target_node_id": "org.bridge.defect.5_1_1_12"
+    },
+    {
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "da2fcbd4-9dd6-40e2-94ba-1d82d8d31390",
+      "source_group_number": "5.2.1",
+      "source_indicator_number": "5.2.1-9",
+      "target_node_id": "org.bridge.defect.5_2_1_9"
+    },
+    {
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "0233eeca-a51e-4f99-aaf0-9fd744a264e2",
+      "source_group_number": "5.2.1",
+      "source_indicator_number": "5.2.1-1",
+      "target_node_id": "org.bridge.defect.5_2_1_1"
+    },
+    {
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "da70a903-bf0a-4764-9a25-45fe15eb3e6a",
+      "source_group_number": "5.2.1",
+      "source_indicator_number": "5.2.1-2",
+      "target_node_id": "org.bridge.defect.5_2_1_2"
+    },
+    {
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "f33b9c1b-614f-4c21-8372-5a307a135472",
+      "source_group_number": "5.2.1",
+      "source_indicator_number": "5.2.1-3",
+      "target_node_id": "org.bridge.defect.5_2_1_3"
+    },
+    {
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "cb5f6e74-9e8f-422f-b3e2-a48af089a831",
+      "source_group_number": "5.2.1",
+      "source_indicator_number": "5.2.1-4",
+      "target_node_id": "org.bridge.defect.5_2_1_4"
+    },
+    {
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "7da50a55-c19f-46b4-a118-20542c63df7a",
+      "source_group_number": "5.2.1",
+      "source_indicator_number": "5.2.1-5",
+      "target_node_id": "org.bridge.defect.5_2_1_5"
+    },
+    {
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "8006dc38-cb70-4aab-b983-42347aa1cb2b",
+      "source_group_number": "5.2.1",
+      "source_indicator_number": "5.2.1-6",
+      "target_node_id": "org.bridge.defect.5_2_1_6"
+    },
+    {
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "2dc6f651-3bd9-4441-a170-199e2241ae4a",
+      "source_group_number": "5.2.1",
+      "source_indicator_number": "5.2.1-7",
+      "target_node_id": "org.bridge.defect.5_2_1_7"
+    },
+    {
+      "source_group_id": "15aaa7bc-6112-452f-ae15-e2744c415652",
+      "source_indicator_id": "ab732c09-c1c2-4d02-87f6-bc3979de98a8",
+      "source_group_number": "5.2.1",
+      "source_indicator_number": "5.2.1-8",
+      "target_node_id": "org.bridge.defect.5_2_1_8"
+    },
+    {
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "a644016f-25bd-4b44-b779-3487ff6deea6",
+      "source_group_number": "5.3.1",
+      "source_indicator_number": "5.3.1-7",
+      "target_node_id": "org.bridge.defect.5_3_1_7"
+    },
+    {
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "7f5e9f5c-8058-4d31-ae50-70da1845c725",
+      "source_group_number": "5.3.1",
+      "source_indicator_number": "5.3.1-1",
+      "target_node_id": "org.bridge.defect.5_3_1_1"
+    },
+    {
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "e29d1dd6-63a8-40ac-9413-0cea967c5330",
+      "source_group_number": "5.3.1",
+      "source_indicator_number": "5.3.1-2",
+      "target_node_id": "org.bridge.defect.5_3_1_2"
+    },
+    {
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "c394ce27-de96-4c2e-ae98-f2f83108c4a1",
+      "source_group_number": "5.3.1",
+      "source_indicator_number": "5.3.1-3",
+      "target_node_id": "org.bridge.defect.5_3_1_3"
+    },
+    {
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "ecd85cf2-0685-45f2-a7ea-1d85b0e1a1e3",
+      "source_group_number": "5.3.1",
+      "source_indicator_number": "5.3.1-4",
+      "target_node_id": "org.bridge.defect.5_3_1_4"
+    },
+    {
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "0f3f314e-f40b-42dc-86fe-c1c6c3279f53",
+      "source_group_number": "5.3.1",
+      "source_indicator_number": "5.3.1-5",
+      "target_node_id": "org.bridge.defect.5_3_1_5"
+    },
+    {
+      "source_group_id": "d1903930-64f2-4dc8-953a-25fc7c11fead",
+      "source_indicator_id": "28e1374e-69eb-49a9-aa97-16974a452ac9",
+      "source_group_number": "5.3.1",
+      "source_indicator_number": "5.3.1-6",
+      "target_node_id": "org.bridge.defect.5_3_1_6"
+    },
+    {
+      "source_group_id": "7715a8f0-77b4-4434-ab31-02e9405cb7f8",
+      "source_indicator_id": "07b61a4d-2c8b-4828-b341-f79a3742f3d5",
+      "source_group_number": "5.3.2",
+      "source_indicator_number": "5.3.2-4",
+      "target_node_id": "org.bridge.defect.5_3_2_4"
+    },
+    {
+      "source_group_id": "7715a8f0-77b4-4434-ab31-02e9405cb7f8",
+      "source_indicator_id": "66b0c8c1-33ac-42c0-8da7-5fd7dd31a05c",
+      "source_group_number": "5.3.2",
+      "source_indicator_number": "5.3.2-1",
+      "target_node_id": "org.bridge.defect.5_3_2_1"
+    },
+    {
+      "source_group_id": "7715a8f0-77b4-4434-ab31-02e9405cb7f8",
+      "source_indicator_id": "f56ea564-14f0-4c3b-8032-31fb25bf7657",
+      "source_group_number": "5.3.2",
+      "source_indicator_number": "5.3.2-2",
+      "target_node_id": "org.bridge.defect.5_3_2_2"
+    },
+    {
+      "source_group_id": "7715a8f0-77b4-4434-ab31-02e9405cb7f8",
+      "source_indicator_id": "f7852027-82e8-49df-bb1e-f7155683be4d",
+      "source_group_number": "5.3.2",
+      "source_indicator_number": "5.3.2-3",
+      "target_node_id": "org.bridge.defect.5_3_2_3"
+    },
+    {
+      "source_group_id": "ba582266-6f8a-47d4-ba6b-49e8c0969788",
+      "source_indicator_id": "eb875da2-5710-4338-8800-275109b03327",
+      "source_group_number": "5.3.3",
+      "source_indicator_number": "5.3.3-4",
+      "target_node_id": "org.bridge.defect.5_3_3_4"
+    },
+    {
+      "source_group_id": "ba582266-6f8a-47d4-ba6b-49e8c0969788",
+      "source_indicator_id": "75962585-f36f-4c72-8543-6c66459ece32",
+      "source_group_number": "5.3.3",
+      "source_indicator_number": "5.3.3-1",
+      "target_node_id": "org.bridge.defect.5_3_3_1"
+    },
+    {
+      "source_group_id": "ba582266-6f8a-47d4-ba6b-49e8c0969788",
+      "source_indicator_id": "aac71c75-dcf2-4d80-9247-4ed318dd8326",
+      "source_group_number": "5.3.3",
+      "source_indicator_number": "5.3.3-2",
+      "target_node_id": "org.bridge.defect.5_3_3_2"
+    },
+    {
+      "source_group_id": "ba582266-6f8a-47d4-ba6b-49e8c0969788",
+      "source_indicator_id": "aa0d2db8-375b-4009-87b6-0221b534140d",
+      "source_group_number": "5.3.3",
+      "source_indicator_number": "5.3.3-3",
+      "target_node_id": "org.bridge.defect.5_3_3_3"
+    },
+    {
+      "source_group_id": "b3e4b1c6-ee4f-4033-8801-05e9df3b1976",
+      "source_indicator_id": "d08cfb05-97ba-4b9d-ac65-bade7938ca75",
+      "source_group_number": "5.3.4",
+      "source_indicator_number": "5.3.4-4",
+      "target_node_id": "org.bridge.defect.5_3_4_4"
+    },
+    {
+      "source_group_id": "b3e4b1c6-ee4f-4033-8801-05e9df3b1976",
+      "source_indicator_id": "5652f521-12f5-4d25-a050-b8e973ddcc80",
+      "source_group_number": "5.3.4",
+      "source_indicator_number": "5.3.4-1",
+      "target_node_id": "org.bridge.defect.5_3_4_1"
+    },
+    {
+      "source_group_id": "b3e4b1c6-ee4f-4033-8801-05e9df3b1976",
+      "source_indicator_id": "5d44587e-4ef6-47d4-81c0-10ace11a8bed",
+      "source_group_number": "5.3.4",
+      "source_indicator_number": "5.3.4-2",
+      "target_node_id": "org.bridge.defect.5_3_4_2"
+    },
+    {
+      "source_group_id": "b3e4b1c6-ee4f-4033-8801-05e9df3b1976",
+      "source_indicator_id": "dba886c8-b6ca-4228-bb70-7a9cc5199366",
+      "source_group_number": "5.3.4",
+      "source_indicator_number": "5.3.4-3",
+      "target_node_id": "org.bridge.defect.5_3_4_3"
+    },
+    {
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "2548b480-0232-4a24-a66e-f2890ddc2dfd",
+      "source_group_number": "6.1.1",
+      "source_indicator_number": "6.1.1-8",
+      "target_node_id": "org.bridge.defect.6_1_1_8"
+    },
+    {
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "45ae453a-62a3-41aa-98a8-08062e144827",
+      "source_group_number": "6.1.1",
+      "source_indicator_number": "6.1.1-1",
+      "target_node_id": "org.bridge.defect.6_1_1_1"
+    },
+    {
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "4c447755-6dd8-4e9b-aa7d-36edab762689",
+      "source_group_number": "6.1.1",
+      "source_indicator_number": "6.1.1-2",
+      "target_node_id": "org.bridge.defect.6_1_1_2"
+    },
+    {
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "cd2e40a3-04da-44e0-893e-fd974939358a",
+      "source_group_number": "6.1.1",
+      "source_indicator_number": "6.1.1-3",
+      "target_node_id": "org.bridge.defect.6_1_1_3"
+    },
+    {
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "a0cf48d2-e52c-4c96-9c94-f2855c98e6d6",
+      "source_group_number": "6.1.1",
+      "source_indicator_number": "6.1.1-4",
+      "target_node_id": "org.bridge.defect.6_1_1_4"
+    },
+    {
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "a8ec1da1-f587-4c48-89c9-e43e3427e84d",
+      "source_group_number": "6.1.1",
+      "source_indicator_number": "6.1.1-5",
+      "target_node_id": "org.bridge.defect.6_1_1_5"
+    },
+    {
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "c1894ac8-a6fd-4ce1-9b7a-871216b3e375",
+      "source_group_number": "6.1.1",
+      "source_indicator_number": "6.1.1-6",
+      "target_node_id": "org.bridge.defect.6_1_1_6"
+    },
+    {
+      "source_group_id": "8ecc6695-0f08-4a32-8802-91b135c53efd",
+      "source_indicator_id": "4e93882c-a6c3-4c02-8ad5-554eee93173f",
+      "source_group_number": "6.1.1",
+      "source_indicator_number": "6.1.1-7",
+      "target_node_id": "org.bridge.defect.6_1_1_7"
+    },
+    {
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "7811f4d9-0280-4cbc-bfaa-4e248084e969",
+      "source_group_number": "6.1.2",
+      "source_indicator_number": "6.1.2-8",
+      "target_node_id": "org.bridge.defect.6_1_2_8"
+    },
+    {
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "7a143604-99be-4103-a115-ad160e75c514",
+      "source_group_number": "6.1.2",
+      "source_indicator_number": "6.1.2-1",
+      "target_node_id": "org.bridge.defect.6_1_2_1"
+    },
+    {
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "bdeef944-3f07-473c-aa98-87a6a713fab4",
+      "source_group_number": "6.1.2",
+      "source_indicator_number": "6.1.2-2",
+      "target_node_id": "org.bridge.defect.6_1_2_2"
+    },
+    {
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "a403a2b1-7bd1-441d-9081-515081aafcaf",
+      "source_group_number": "6.1.2",
+      "source_indicator_number": "6.1.2-3",
+      "target_node_id": "org.bridge.defect.6_1_2_3"
+    },
+    {
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "0efbcc9d-3360-4e1f-8311-e08507b1ed66",
+      "source_group_number": "6.1.2",
+      "source_indicator_number": "6.1.2-4",
+      "target_node_id": "org.bridge.defect.6_1_2_4"
+    },
+    {
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "ec692c16-8973-43f3-aa95-00a47834f445",
+      "source_group_number": "6.1.2",
+      "source_indicator_number": "6.1.2-5",
+      "target_node_id": "org.bridge.defect.6_1_2_5"
+    },
+    {
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "8b0d62b7-620e-43c6-81cc-9be68444636f",
+      "source_group_number": "6.1.2",
+      "source_indicator_number": "6.1.2-6",
+      "target_node_id": "org.bridge.defect.6_1_2_6"
+    },
+    {
+      "source_group_id": "46ff7f51-b618-497f-9d30-11090ee8ecda",
+      "source_indicator_id": "dac90965-e3f2-4559-bf5b-86f18bf28fc8",
+      "source_group_number": "6.1.2",
+      "source_indicator_number": "6.1.2-7",
+      "target_node_id": "org.bridge.defect.6_1_2_7"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_1"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_2"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_3"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-4",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_4"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-5",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_5"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-6",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_6"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-7",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_7"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "4e880e29-aed8-457a-bcd8-b22e2d8449d8",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-8",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_8"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "e5c4cc60-ccae-4ddb-91de-e76dfb6c7123",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-9",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_9"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "7430418e-ad8b-4b66-a010-ad268b4956b8",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-10",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_10"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "dc87a997-abb2-471d-9f23-b192bb08d9df",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-11",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_11"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "4f2cfb4a-5027-4a2f-9ba5-ef631ecf7e5e",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-12",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_12"
+    },
+    {
+      "source_group_id": "930917ea-b41a-449e-9150-acbaff077f93",
+      "source_indicator_id": "b146158a-d5c7-4e08-b3d5-b9c79a987e13",
+      "source_group_number": "6.1.3",
+      "source_indicator_number": "5.1.1-13",
+      "target_node_id": "org.bridge.defect.6_1_3__5_1_1_13"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "c15d98a2-1eee-4c8d-b879-f825931e3b72",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "6.2.1-6",
+      "target_node_id": "org.bridge.defect.6_2_1_6"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "5eeff87e-6415-4364-a600-8d5d94279dbe",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "6.2.1-1",
+      "target_node_id": "org.bridge.defect.6_2_1_1"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "f030f70a-205c-49e0-ba8f-3012ad33d56f",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "6.2.1-2",
+      "target_node_id": "org.bridge.defect.6_2_1_2"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "35a4a72f-b4ec-4577-afb6-da2a2f06bdf8",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "9.2.1-10",
+      "target_node_id": "org.bridge.defect.6_2_1__9_2_1_10"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "e2a41565-4c8e-4d38-b7c5-75b5c0631a8b",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "6.2.1-4",
+      "target_node_id": "org.bridge.defect.6_2_1_4"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "5b7e4fcb-b89a-47f0-a1b3-6438d73e68b9",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "6.2.1-5",
+      "target_node_id": "org.bridge.defect.6_2_1_5"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_2_1__5_1_1_1"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_2_1__5_1_1_2"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_2_1__5_1_1_3"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "5.1.1-4",
+      "target_node_id": "org.bridge.defect.6_2_1__5_1_1_4"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "5.1.1-5",
+      "target_node_id": "org.bridge.defect.6_2_1__5_1_1_5"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "5.1.1-6",
+      "target_node_id": "org.bridge.defect.6_2_1__5_1_1_6"
+    },
+    {
+      "source_group_id": "304922fc-0b96-4d33-939e-cc971a0c1b4d",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "source_group_number": "6.2.1",
+      "source_indicator_number": "5.1.1-7",
+      "target_node_id": "org.bridge.defect.6_2_1__5_1_1_7"
+    },
+    {
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "24906d73-f4e8-4b3b-93e2-c3f9abd5e218",
+      "source_group_number": "6.2.2",
+      "source_indicator_number": "6.2.2-9",
+      "target_node_id": "org.bridge.defect.6_2_2_9"
+    },
+    {
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "aeefc5ab-1bc8-4b10-92c2-b09d8683f481",
+      "source_group_number": "6.2.2",
+      "source_indicator_number": "6.2.2-1",
+      "target_node_id": "org.bridge.defect.6_2_2_1"
+    },
+    {
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "1087ed5b-7b29-475e-9276-3c820d18a5be",
+      "source_group_number": "6.2.2",
+      "source_indicator_number": "6.2.2-2",
+      "target_node_id": "org.bridge.defect.6_2_2_2"
+    },
+    {
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "c5e8bda9-c92d-4b75-8b80-16f35fdf0036",
+      "source_group_number": "6.2.2",
+      "source_indicator_number": "6.2.2-3",
+      "target_node_id": "org.bridge.defect.6_2_2_3"
+    },
+    {
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "d3f00498-bee7-41cb-b224-a5379859ebc4",
+      "source_group_number": "6.2.2",
+      "source_indicator_number": "6.2.2-4",
+      "target_node_id": "org.bridge.defect.6_2_2_4"
+    },
+    {
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "7188c6dd-7bb2-4505-a69d-8d0f02c6a071",
+      "source_group_number": "6.2.2",
+      "source_indicator_number": "6.2.2-5",
+      "target_node_id": "org.bridge.defect.6_2_2_5"
+    },
+    {
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "32c69b68-76cd-4513-a576-d2b262bede6a",
+      "source_group_number": "6.2.2",
+      "source_indicator_number": "6.2.2-6",
+      "target_node_id": "org.bridge.defect.6_2_2_6"
+    },
+    {
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "dc4e2abc-4867-4285-93c2-95edae76c569",
+      "source_group_number": "6.2.2",
+      "source_indicator_number": "6.2.2-7",
+      "target_node_id": "org.bridge.defect.6_2_2_7"
+    },
+    {
+      "source_group_id": "70545788-6d60-4b63-a8d1-93cefab657d7",
+      "source_indicator_id": "b8267c91-9858-4c3b-952b-390f9fcc28a0",
+      "source_group_number": "6.2.2",
+      "source_indicator_number": "6.2.2-8",
+      "target_node_id": "org.bridge.defect.6_2_2_8"
+    },
+    {
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "3087fb47-96b1-408a-a6cc-e25fcf180ecf",
+      "source_group_number": "6.2.3",
+      "source_indicator_number": "6.2.3-4",
+      "target_node_id": "org.bridge.defect.6_2_3_4"
+    },
+    {
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "7aae11e1-2bd6-481b-8bd5-4ad3027b285a",
+      "source_group_number": "6.2.3",
+      "source_indicator_number": "6.2.3-1",
+      "target_node_id": "org.bridge.defect.6_2_3_1"
+    },
+    {
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "07b624f2-cddc-46e3-b8e0-c934efcdf35f",
+      "source_group_number": "6.2.3",
+      "source_indicator_number": "6.2.3-2",
+      "target_node_id": "org.bridge.defect.6_2_3_2"
+    },
+    {
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "5bf87a01-ff44-4d5d-a7ea-b5e2bd155df3",
+      "source_group_number": "6.2.3",
+      "source_indicator_number": "6.2.3-3",
+      "target_node_id": "org.bridge.defect.6_2_3_3"
+    },
+    {
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "5b7e4fcb-b89a-47f0-a1b3-6438d73e68b9",
+      "source_group_number": "6.2.3",
+      "source_indicator_number": "6.2.1-5",
+      "target_node_id": "org.bridge.defect.6_2_3__6_2_1_5"
+    },
+    {
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.2.3",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_2_3__5_1_1_1"
+    },
+    {
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.2.3",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_2_3__5_1_1_2"
+    },
+    {
+      "source_group_id": "36a108bc-adae-454c-98d3-4547df90d354",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.2.3",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_2_3__5_1_1_3"
+    },
+    {
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "49c97c40-9116-4109-8609-87560c54d7b4",
+      "source_group_number": "6.2.5",
+      "source_indicator_number": "6.2.5-1",
+      "target_node_id": "org.bridge.defect.6_2_5_1"
+    },
+    {
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "5d4a72db-1903-488b-bbed-6f0a693c1b2c",
+      "source_group_number": "6.2.5",
+      "source_indicator_number": "6.2.5-2",
+      "target_node_id": "org.bridge.defect.6_2_5_2"
+    },
+    {
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "b2fc2b08-ec34-4af9-a821-18ac2747434d",
+      "source_group_number": "6.2.5",
+      "source_indicator_number": "6.2.5-3",
+      "target_node_id": "org.bridge.defect.6_2_5_3"
+    },
+    {
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "fa7ebca7-fbbc-4112-bc6e-507b959f1b4c",
+      "source_group_number": "6.2.5",
+      "source_indicator_number": "6.2.5-4",
+      "target_node_id": "org.bridge.defect.6_2_5_4"
+    },
+    {
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "5b7e4fcb-b89a-47f0-a1b3-6438d73e68b9",
+      "source_group_number": "6.2.5",
+      "source_indicator_number": "6.2.1-5",
+      "target_node_id": "org.bridge.defect.6_2_5__6_2_1_5"
+    },
+    {
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.2.5",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_2_5__5_1_1_1"
+    },
+    {
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.2.5",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_2_5__5_1_1_2"
+    },
+    {
+      "source_group_id": "408104d6-00e9-44e5-a90a-9955fc06a187",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.2.5",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_2_5__5_1_1_3"
+    },
+    {
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "e78dc074-12b9-426c-8789-9660159a8899",
+      "source_group_number": "6.2.6",
+      "source_indicator_number": "6.2.6-1",
+      "target_node_id": "org.bridge.defect.6_2_6_1"
+    },
+    {
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "868d2b26-64a0-4e15-b91f-dc0b6ef8e1a8",
+      "source_group_number": "6.2.6",
+      "source_indicator_number": "6.2.6-2",
+      "target_node_id": "org.bridge.defect.6_2_6_2"
+    },
+    {
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "8d7fd22a-6ada-47e8-b89f-6d7baaef3540",
+      "source_group_number": "6.2.6",
+      "source_indicator_number": "6.2.6-3",
+      "target_node_id": "org.bridge.defect.6_2_6_3"
+    },
+    {
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "f6ee5853-96a0-42d8-bbb7-1f78429fd977",
+      "source_group_number": "6.2.6",
+      "source_indicator_number": "6.2.6-4",
+      "target_node_id": "org.bridge.defect.6_2_6_4"
+    },
+    {
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.2.6",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_2_6__5_1_1_1"
+    },
+    {
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.2.6",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_2_6__5_1_1_2"
+    },
+    {
+      "source_group_id": "1ab5cf31-d23c-4035-839a-d59fc7b98480",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.2.6",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_2_6__5_1_1_3"
+    },
+    {
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "cc29d484-52ff-4421-80e1-07921af07110",
+      "source_group_number": "6.2.7",
+      "source_indicator_number": "6.2.7-1",
+      "target_node_id": "org.bridge.defect.6_2_7_1"
+    },
+    {
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "aa1e1b4e-2ef8-45ef-bde0-a6e4aded15b4",
+      "source_group_number": "6.2.7",
+      "source_indicator_number": "6.2.7-2",
+      "target_node_id": "org.bridge.defect.6_2_7_2"
+    },
+    {
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "b6909bcb-3765-4a2d-8b0e-11d7073b92a9",
+      "source_group_number": "6.2.7",
+      "source_indicator_number": "6.2.7-3",
+      "target_node_id": "org.bridge.defect.6_2_7_3"
+    },
+    {
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "06c003ed-b714-40b4-82a5-575630cc55fd",
+      "source_group_number": "6.2.7",
+      "source_indicator_number": "6.2.7-4",
+      "target_node_id": "org.bridge.defect.6_2_7_4"
+    },
+    {
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "b2fc2b08-ec34-4af9-a821-18ac2747434d",
+      "source_group_number": "6.2.7",
+      "source_indicator_number": "6.2.5-3",
+      "target_node_id": "org.bridge.defect.6_2_7__6_2_5_3"
+    },
+    {
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "5b7e4fcb-b89a-47f0-a1b3-6438d73e68b9",
+      "source_group_number": "6.2.7",
+      "source_indicator_number": "6.2.1-5",
+      "target_node_id": "org.bridge.defect.6_2_7__6_2_1_5"
+    },
+    {
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.2.7",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_2_7__5_1_1_1"
+    },
+    {
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.2.7",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_2_7__5_1_1_2"
+    },
+    {
+      "source_group_id": "31157644-0325-49c4-8939-1939c246ceba",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.2.7",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_2_7__5_1_1_3"
+    },
+    {
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "b8ddc8fc-70ef-441f-94a5-39acbff0cc45",
+      "source_group_number": "6.2.8",
+      "source_indicator_number": "6.2.8-1",
+      "target_node_id": "org.bridge.defect.6_2_8_1"
+    },
+    {
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "1f67125d-d4ab-43b9-baf0-44cc70e3c822",
+      "source_group_number": "6.2.8",
+      "source_indicator_number": "6.2.8-2",
+      "target_node_id": "org.bridge.defect.6_2_8_2"
+    },
+    {
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "e78dc074-12b9-426c-8789-9660159a8899",
+      "source_group_number": "6.2.8",
+      "source_indicator_number": "6.2.6-1",
+      "target_node_id": "org.bridge.defect.6_2_8__6_2_6_1"
+    },
+    {
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.2.8",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_2_8__5_1_1_1"
+    },
+    {
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.2.8",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_2_8__5_1_1_2"
+    },
+    {
+      "source_group_id": "ee0d8fd8-f15e-4d5a-b2d0-3097a32055e0",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.2.8",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_2_8__5_1_1_3"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_1"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_2"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_3"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "c97678b0-48e4-4025-a582-586380c8aa97",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-4",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_4"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-5",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_5"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-6",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_6"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-7",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_7"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "4e880e29-aed8-457a-bcd8-b22e2d8449d8",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-8",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_8"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "e5c4cc60-ccae-4ddb-91de-e76dfb6c7123",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-9",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_9"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "7430418e-ad8b-4b66-a010-ad268b4956b8",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-10",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_10"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "dc87a997-abb2-471d-9f23-b192bb08d9df",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-11",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_11"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "4f2cfb4a-5027-4a2f-9ba5-ef631ecf7e5e",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-12",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_12"
+    },
+    {
+      "source_group_id": "99524249-ed4a-4c78-a46e-e6bd3424e7fc",
+      "source_indicator_id": "b146158a-d5c7-4e08-b3d5-b9c79a987e13",
+      "source_group_number": "6.2.9",
+      "source_indicator_number": "5.1.1-13",
+      "target_node_id": "org.bridge.defect.6_2_9__5_1_1_13"
+    },
+    {
+      "source_group_id": "55dd6b83-ce6e-40e4-98ce-4b105a7d1027",
+      "source_indicator_id": "e1a858d1-c176-4cf9-90b8-d71e3f2c871b",
+      "source_group_number": "6.3",
+      "source_indicator_number": "10.1.1-5",
+      "target_node_id": "org.bridge.defect.6_3__10_1_1_5"
+    },
+    {
+      "source_group_id": "55dd6b83-ce6e-40e4-98ce-4b105a7d1027",
+      "source_indicator_id": "a0440c5a-759d-40a7-ac71-198ff0774029",
+      "source_group_number": "6.3",
+      "source_indicator_number": "10.1.2-2",
+      "target_node_id": "org.bridge.defect.6_3__10_1_2_2"
+    },
+    {
+      "source_group_id": "55dd6b83-ce6e-40e4-98ce-4b105a7d1027",
+      "source_indicator_id": "1067d9a8-e895-4adb-8f09-22218edddc96",
+      "source_group_number": "6.3",
+      "source_indicator_number": "10.5.1-1",
+      "target_node_id": "org.bridge.defect.6_3__10_5_1_1"
+    },
+    {
+      "source_group_id": "55dd6b83-ce6e-40e4-98ce-4b105a7d1027",
+      "source_indicator_id": "8945e12c-de98-4c72-a712-1c724003af6b",
+      "source_group_number": "6.3",
+      "source_indicator_number": "10.5.1-3",
+      "target_node_id": "org.bridge.defect.6_3__10_5_1_3"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "4776971b-90f6-4171-bc4d-4e2a3e378ded",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "6.3.1-9",
+      "target_node_id": "org.bridge.defect.6_3_1_9"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "975cb630-7b32-4532-b7bc-eba2b4a7405c",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "6.3.1-1",
+      "target_node_id": "org.bridge.defect.6_3_1_1"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "33e31c4a-1f9d-45f4-8057-da30696fd821",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "6.3.1-2",
+      "target_node_id": "org.bridge.defect.6_3_1_2"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "b080ff6a-4a3a-4ff3-b9b2-41ee245b4ae0",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "6.3.1-3",
+      "target_node_id": "org.bridge.defect.6_3_1_3"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "7619bfa9-8627-43a9-8c2b-fc98d52fb077",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "6.3.1-4",
+      "target_node_id": "org.bridge.defect.6_3_1_4"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "b6c3cdfe-d410-4782-aecc-dd8fc30c45b5",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "6.3.1-5",
+      "target_node_id": "org.bridge.defect.6_3_1_5"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "fe663c69-50ac-4817-8755-0b09572ef05f",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "6.3.1-6",
+      "target_node_id": "org.bridge.defect.6_3_1_6"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "77d2fece-24ca-491f-98cf-0050b5af1969",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "6.3.1-7",
+      "target_node_id": "org.bridge.defect.6_3_1_7"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "d0b5d0c1-3e3a-4dc9-9060-89590934ebe9",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "6.3.1-8",
+      "target_node_id": "org.bridge.defect.6_3_1_8"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_3_1__5_1_1_1"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_3_1__5_1_1_2"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_3_1__5_1_1_3"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "5.1.1-4",
+      "target_node_id": "org.bridge.defect.6_3_1__5_1_1_4"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "5.1.1-5",
+      "target_node_id": "org.bridge.defect.6_3_1__5_1_1_5"
+    },
+    {
+      "source_group_id": "1a5d68fe-ecee-4e12-a94a-ce58669df19c",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "source_group_number": "6.3.1",
+      "source_indicator_number": "5.1.1-6",
+      "target_node_id": "org.bridge.defect.6_3_1__5_1_1_6"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "f64f74fc-544b-4c40-8074-34fa1f623f8b",
+      "source_group_number": "6.3.2",
+      "source_indicator_number": "6.3.2-2",
+      "target_node_id": "org.bridge.defect.6_3_2_2"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "5ee08dc2-e31a-468c-a900-9f4a8211f5cd",
+      "source_group_number": "6.3.2",
+      "source_indicator_number": "6.3.2-1",
+      "target_node_id": "org.bridge.defect.6_3_2_1"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "975cb630-7b32-4532-b7bc-eba2b4a7405c",
+      "source_group_number": "6.3.2",
+      "source_indicator_number": "6.3.1-1",
+      "target_node_id": "org.bridge.defect.6_3_2__6_3_1_1"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "33e31c4a-1f9d-45f4-8057-da30696fd821",
+      "source_group_number": "6.3.2",
+      "source_indicator_number": "6.3.1-2",
+      "target_node_id": "org.bridge.defect.6_3_2__6_3_1_2"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "7619bfa9-8627-43a9-8c2b-fc98d52fb077",
+      "source_group_number": "6.3.2",
+      "source_indicator_number": "6.3.1-4",
+      "target_node_id": "org.bridge.defect.6_3_2__6_3_1_4"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "b6c3cdfe-d410-4782-aecc-dd8fc30c45b5",
+      "source_group_number": "6.3.2",
+      "source_indicator_number": "6.3.1-5",
+      "target_node_id": "org.bridge.defect.6_3_2__6_3_1_5"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "fe663c69-50ac-4817-8755-0b09572ef05f",
+      "source_group_number": "6.3.2",
+      "source_indicator_number": "6.3.1-6",
+      "target_node_id": "org.bridge.defect.6_3_2__6_3_1_6"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.3.2",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_3_2__5_1_1_1"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.3.2",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_3_2__5_1_1_2"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.3.2",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_3_2__5_1_1_3"
+    },
+    {
+      "source_group_id": "99677edd-2412-4d84-82b5-09a431faccce",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "source_group_number": "6.3.2",
+      "source_indicator_number": "5.1.1-5",
+      "target_node_id": "org.bridge.defect.6_3_2__5_1_1_5"
+    },
+    {
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "286b53e6-9186-47a0-9062-7787feb5f11f",
+      "source_group_number": "6.3.3",
+      "source_indicator_number": "6.3.3-8",
+      "target_node_id": "org.bridge.defect.6_3_3_8"
+    },
+    {
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "c0aa47d6-93aa-418f-ad08-05619fd02d20",
+      "source_group_number": "6.3.3",
+      "source_indicator_number": "6.3.3-2",
+      "target_node_id": "org.bridge.defect.6_3_3_2"
+    },
+    {
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "2b9c977b-0cc6-42ee-834e-bab948e341f6",
+      "source_group_number": "6.3.3",
+      "source_indicator_number": "6.3.3-3",
+      "target_node_id": "org.bridge.defect.6_3_3_3"
+    },
+    {
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "dabaa125-0cfb-4921-9e39-619a1b009366",
+      "source_group_number": "6.3.3",
+      "source_indicator_number": "6.3.3-4",
+      "target_node_id": "org.bridge.defect.6_3_3_4"
+    },
+    {
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "73a24e3c-5ab6-4eb5-964a-e43eda318a3d",
+      "source_group_number": "6.3.3",
+      "source_indicator_number": "6.3.3-6",
+      "target_node_id": "org.bridge.defect.6_3_3_6"
+    },
+    {
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "09e15da3-d00f-4956-b182-5532af14f364",
+      "source_group_number": "6.3.3",
+      "source_indicator_number": "6.3.3-7",
+      "target_node_id": "org.bridge.defect.6_3_3_7"
+    },
+    {
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.3.3",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_3_3__5_1_1_1"
+    },
+    {
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.3.3",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_3_3__5_1_1_2"
+    },
+    {
+      "source_group_id": "f9a832e5-0886-4fad-a4cc-bf45b09c0fc5",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.3.3",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_3_3__5_1_1_3"
+    },
+    {
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "7630f80f-5243-45cf-9d9f-01cf5318dc15",
+      "source_group_number": "6.3.4",
+      "source_indicator_number": "6.3.4-7",
+      "target_node_id": "org.bridge.defect.6_3_4_7"
+    },
+    {
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "56db13f7-b308-4cef-820e-66a5ca10cfd5",
+      "source_group_number": "6.3.4",
+      "source_indicator_number": "6.3.4-1",
+      "target_node_id": "org.bridge.defect.6_3_4_1"
+    },
+    {
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "ac5de0a8-988b-4554-a43e-eefecf95047e",
+      "source_group_number": "6.3.4",
+      "source_indicator_number": "6.3.4-2",
+      "target_node_id": "org.bridge.defect.6_3_4_2"
+    },
+    {
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "f6ced803-ebfc-4e31-ae14-5a1edaa6bcc3",
+      "source_group_number": "6.3.4",
+      "source_indicator_number": "6.3.4-3",
+      "target_node_id": "org.bridge.defect.6_3_4_3"
+    },
+    {
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "b2baa0d4-c368-4267-b9b8-b4fadd93e6d0",
+      "source_group_number": "6.3.4",
+      "source_indicator_number": "6.3.4-4",
+      "target_node_id": "org.bridge.defect.6_3_4_4"
+    },
+    {
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "f273bed6-5b14-4a73-8c67-5864e728ec10",
+      "source_group_number": "6.3.4",
+      "source_indicator_number": "6.3.4-5",
+      "target_node_id": "org.bridge.defect.6_3_4_5"
+    },
+    {
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "c805f8c3-3143-44a5-a1f1-52700e24fb8e",
+      "source_group_number": "6.3.4",
+      "source_indicator_number": "6.3.4-6",
+      "target_node_id": "org.bridge.defect.6_3_4_6"
+    },
+    {
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.3.4",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_3_4__5_1_1_1"
+    },
+    {
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.3.4",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_3_4__5_1_1_2"
+    },
+    {
+      "source_group_id": "9174c4c3-c372-4098-989b-f623fe4e9289",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.3.4",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_3_4__5_1_1_3"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_1"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_2"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_3"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-4",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_4"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-5",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_5"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-6",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_6"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-7",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_7"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "4e880e29-aed8-457a-bcd8-b22e2d8449d8",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-8",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_8"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "e5c4cc60-ccae-4ddb-91de-e76dfb6c7123",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-9",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_9"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "7430418e-ad8b-4b66-a010-ad268b4956b8",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-10",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_10"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "dc87a997-abb2-471d-9f23-b192bb08d9df",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-11",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_11"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "4f2cfb4a-5027-4a2f-9ba5-ef631ecf7e5e",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-12",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_12"
+    },
+    {
+      "source_group_id": "5d4b816b-c72c-491b-b9a0-130154c609e4",
+      "source_indicator_id": "b146158a-d5c7-4e08-b3d5-b9c79a987e13",
+      "source_group_number": "6.3.5",
+      "source_indicator_number": "5.1.1-13",
+      "target_node_id": "org.bridge.defect.6_3_5__5_1_1_13"
+    },
+    {
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "82156c03-edc1-492c-9b12-30cb5d68fa51",
+      "source_group_number": "6.4.1",
+      "source_indicator_number": "5.2.1-9",
+      "target_node_id": "org.bridge.defect.6_4_1__5_2_1_9"
+    },
+    {
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "0233eeca-a51e-4f99-aaf0-9fd744a264e2",
+      "source_group_number": "6.4.1",
+      "source_indicator_number": "5.2.1-1",
+      "target_node_id": "org.bridge.defect.6_4_1__5_2_1_1"
+    },
+    {
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "da70a903-bf0a-4764-9a25-45fe15eb3e6a",
+      "source_group_number": "6.4.1",
+      "source_indicator_number": "5.2.1-2",
+      "target_node_id": "org.bridge.defect.6_4_1__5_2_1_2"
+    },
+    {
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "f33b9c1b-614f-4c21-8372-5a307a135472",
+      "source_group_number": "6.4.1",
+      "source_indicator_number": "5.2.1-3",
+      "target_node_id": "org.bridge.defect.6_4_1__5_2_1_3"
+    },
+    {
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "cb5f6e74-9e8f-422f-b3e2-a48af089a831",
+      "source_group_number": "6.4.1",
+      "source_indicator_number": "5.2.1-4",
+      "target_node_id": "org.bridge.defect.6_4_1__5_2_1_4"
+    },
+    {
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "7da50a55-c19f-46b4-a118-20542c63df7a",
+      "source_group_number": "6.4.1",
+      "source_indicator_number": "5.2.1-5",
+      "target_node_id": "org.bridge.defect.6_4_1__5_2_1_5"
+    },
+    {
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "8006dc38-cb70-4aab-b983-42347aa1cb2b",
+      "source_group_number": "6.4.1",
+      "source_indicator_number": "5.2.1-6",
+      "target_node_id": "org.bridge.defect.6_4_1__5_2_1_6"
+    },
+    {
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "2dc6f651-3bd9-4441-a170-199e2241ae4a",
+      "source_group_number": "6.4.1",
+      "source_indicator_number": "5.2.1-7",
+      "target_node_id": "org.bridge.defect.6_4_1__5_2_1_7"
+    },
+    {
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "ab732c09-c1c2-4d02-87f6-bc3979de98a8",
+      "source_group_number": "6.4.1",
+      "source_indicator_number": "5.2.1-8",
+      "target_node_id": "org.bridge.defect.6_4_1__5_2_1_8"
+    },
+    {
+      "source_group_id": "5818fd75-19b2-4516-8bb8-da70d0b734cf",
+      "source_indicator_id": "8b818d8b-78f3-4a04-8efd-91f608d85f9f",
+      "source_group_number": "6.4.1",
+      "source_indicator_number": "6.4-1",
+      "target_node_id": "org.bridge.defect.6_4_1__6_4_1"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_1"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_2"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_3"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-4",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_4"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-5",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_5"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-6",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_6"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "f8c8a901-40e7-42e1-89a9-42dda6d7caa1",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-7",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_7"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "4e880e29-aed8-457a-bcd8-b22e2d8449d8",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-8",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_8"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "e5c4cc60-ccae-4ddb-91de-e76dfb6c7123",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-9",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_9"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "7430418e-ad8b-4b66-a010-ad268b4956b8",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-10",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_10"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "dc87a997-abb2-471d-9f23-b192bb08d9df",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-11",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_11"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "4f2cfb4a-5027-4a2f-9ba5-ef631ecf7e5e",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-12",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_12"
+    },
+    {
+      "source_group_id": "9a9f0c60-2ac8-4702-97f4-53da1c5795a7",
+      "source_indicator_id": "b146158a-d5c7-4e08-b3d5-b9c79a987e13",
+      "source_group_number": "6.4.2",
+      "source_indicator_number": "5.1.1-13",
+      "target_node_id": "org.bridge.defect.6_4_2__5_1_1_13"
+    },
+    {
+      "source_group_id": "a2e93514-d304-46cb-b94d-7e02f793d292",
+      "source_indicator_id": "b3a9caa7-2ce7-4d83-842c-b15aaf6f1ed2",
+      "source_group_number": "7.1.1",
+      "source_indicator_number": "7.1.1-1",
+      "target_node_id": "org.bridge.defect.7_1_1_1"
+    },
+    {
+      "source_group_id": "a2e93514-d304-46cb-b94d-7e02f793d292",
+      "source_indicator_id": "8966d1e4-ded2-429a-8878-911b5c7ce7ae",
+      "source_group_number": "7.1.1",
+      "source_indicator_number": "7.1.1-2",
+      "target_node_id": "org.bridge.defect.7_1_1_2"
+    },
+    {
+      "source_group_id": "a2e93514-d304-46cb-b94d-7e02f793d292",
+      "source_indicator_id": "95aa0b4c-ce72-481f-93ed-2e6b918f78f3",
+      "source_group_number": "7.1.1",
+      "source_indicator_number": "7.1.1-3",
+      "target_node_id": "org.bridge.defect.7_1_1_3"
+    },
+    {
+      "source_group_id": "a2e93514-d304-46cb-b94d-7e02f793d292",
+      "source_indicator_id": "b18bfb29-e5f5-464c-a3ee-275268121ad4",
+      "source_group_number": "7.1.1",
+      "source_indicator_number": "7.1.1-4",
+      "target_node_id": "org.bridge.defect.7_1_1_4"
+    },
+    {
+      "source_group_id": "a2e93514-d304-46cb-b94d-7e02f793d292",
+      "source_indicator_id": "f5f9c0a4-c697-467c-b0f9-fd4b61fc9444",
+      "source_group_number": "7.1.1",
+      "source_indicator_number": "7.1.1-5",
+      "target_node_id": "org.bridge.defect.7_1_1_5"
+    },
+    {
+      "source_group_id": "5ecf3fc7-9e9a-491d-bc7b-18bcd4a692d8",
+      "source_indicator_id": "ec4a588f-51c6-42ff-9277-f0ad2ee4065a",
+      "source_group_number": "7.2.1",
+      "source_indicator_number": "7.2.1-1",
+      "target_node_id": "org.bridge.defect.7_2_1_1"
+    },
+    {
+      "source_group_id": "5ecf3fc7-9e9a-491d-bc7b-18bcd4a692d8",
+      "source_indicator_id": "736c8afc-96a2-4040-b6e7-4198d09ec1a0",
+      "source_group_number": "7.2.1",
+      "source_indicator_number": "7.2.1-2",
+      "target_node_id": "org.bridge.defect.7_2_1_2"
+    },
+    {
+      "source_group_id": "5ecf3fc7-9e9a-491d-bc7b-18bcd4a692d8",
+      "source_indicator_id": "30027b3a-6e2a-40c0-9990-44ac76a39462",
+      "source_group_number": "7.2.1",
+      "source_indicator_number": "7.2.1-3",
+      "target_node_id": "org.bridge.defect.7_2_1_3"
+    },
+    {
+      "source_group_id": "5ecf3fc7-9e9a-491d-bc7b-18bcd4a692d8",
+      "source_indicator_id": "20ca0373-7407-42d5-bb3d-f4bca065986f",
+      "source_group_number": "7.2.1",
+      "source_indicator_number": "7.2.1-4",
+      "target_node_id": "org.bridge.defect.7_2_1_4"
+    },
+    {
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "2db90ba5-0da7-4866-9284-aae7f80c659a",
+      "source_group_number": "7.3.1",
+      "source_indicator_number": "7.3.1-1",
+      "target_node_id": "org.bridge.defect.7_3_1_1"
+    },
+    {
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "084980d1-f9a3-4039-87b4-78258904239d",
+      "source_group_number": "7.3.1",
+      "source_indicator_number": "7.3.1-2",
+      "target_node_id": "org.bridge.defect.7_3_1_2"
+    },
+    {
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "7ec05479-e55e-4fb0-8f81-466492bae3c4",
+      "source_group_number": "7.3.1",
+      "source_indicator_number": "7.3.1-3",
+      "target_node_id": "org.bridge.defect.7_3_1_3"
+    },
+    {
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "114d6ca9-f09c-43d4-8cce-937f05d8975f",
+      "source_group_number": "7.3.1",
+      "source_indicator_number": "7.3.1-4",
+      "target_node_id": "org.bridge.defect.7_3_1_4"
+    },
+    {
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "a1549b8b-ea9b-4502-8ae0-dac751c6a4dc",
+      "source_group_number": "7.3.1",
+      "source_indicator_number": "7.3.1-5",
+      "target_node_id": "org.bridge.defect.7_3_1_5"
+    },
+    {
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "759a4924-619e-49fa-9ca5-4737a492da0a",
+      "source_group_number": "7.3.1",
+      "source_indicator_number": "7.3.1-6",
+      "target_node_id": "org.bridge.defect.7_3_1_6"
+    },
+    {
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "616519c1-23b3-496e-9d54-dd00173fc75f",
+      "source_group_number": "7.3.1",
+      "source_indicator_number": "7.3.1-7",
+      "target_node_id": "org.bridge.defect.7_3_1_7"
+    },
+    {
+      "source_group_id": "8ed5418e-2133-40b1-b033-858c78d41146",
+      "source_indicator_id": "1fe2d6e7-e46b-47e5-a952-8d91d336b7af",
+      "source_group_number": "7.3.1",
+      "source_indicator_number": "7.3.1-8",
+      "target_node_id": "org.bridge.defect.7_3_1_8"
+    },
+    {
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "9006a44d-46e0-4f2b-92d4-85e2a995cdc5",
+      "source_group_number": "7.4.1",
+      "source_indicator_number": "7.4.1-1",
+      "target_node_id": "org.bridge.defect.7_4_1_1"
+    },
+    {
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "3793c812-9174-4423-898c-735cfbce6f60",
+      "source_group_number": "7.4.1",
+      "source_indicator_number": "7.4.1-2",
+      "target_node_id": "org.bridge.defect.7_4_1_2"
+    },
+    {
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "1c68f1c7-3b21-4aad-ab19-9e205d0fe64c",
+      "source_group_number": "7.4.1",
+      "source_indicator_number": "7.4.1-3",
+      "target_node_id": "org.bridge.defect.7_4_1_3"
+    },
+    {
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "53f63040-badb-4bff-8120-034f3701e7f0",
+      "source_group_number": "7.4.1",
+      "source_indicator_number": "7.4.1-4",
+      "target_node_id": "org.bridge.defect.7_4_1_4"
+    },
+    {
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "4cbb7438-0f8c-4307-bba1-16ece3470116",
+      "source_group_number": "7.4.1",
+      "source_indicator_number": "5.1.1-1",
+      "target_node_id": "org.bridge.defect.7_4_1__5_1_1_1"
+    },
+    {
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "2110a188-b9ee-4235-a4c7-55d1727fc9e2",
+      "source_group_number": "7.4.1",
+      "source_indicator_number": "5.1.1-2",
+      "target_node_id": "org.bridge.defect.7_4_1__5_1_1_2"
+    },
+    {
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "0617c802-05e2-4686-a01c-62e32b776e1f",
+      "source_group_number": "7.4.1",
+      "source_indicator_number": "5.1.1-3",
+      "target_node_id": "org.bridge.defect.7_4_1__5_1_1_3"
+    },
+    {
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "753969e8-85d6-459d-bfe1-795f5b0ed4d5",
+      "source_group_number": "7.4.1",
+      "source_indicator_number": "5.1.1-4",
+      "target_node_id": "org.bridge.defect.7_4_1__5_1_1_4"
+    },
+    {
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "0f2086d9-8424-482c-b690-c9d4d92675b1",
+      "source_group_number": "7.4.1",
+      "source_indicator_number": "5.1.1-5",
+      "target_node_id": "org.bridge.defect.7_4_1__5_1_1_5"
+    },
+    {
+      "source_group_id": "b165279e-5eee-4279-9359-db1249a6aace",
+      "source_indicator_id": "e02c96b6-cef0-4155-8989-ebda52055c41",
+      "source_group_number": "7.4.1",
+      "source_indicator_number": "5.1.1-6",
+      "target_node_id": "org.bridge.defect.7_4_1__5_1_1_6"
+    },
+    {
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "dce9cab5-892b-4e08-a495-1aa34c6f673a",
+      "source_group_number": "7.4.2",
+      "source_indicator_number": "7.4.2-1",
+      "target_node_id": "org.bridge.defect.7_4_2_1"
+    },
+    {
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "caca7c76-2450-4118-9c8d-76791046015d",
+      "source_group_number": "7.4.2",
+      "source_indicator_number": "7.4.2-2",
+      "target_node_id": "org.bridge.defect.7_4_2_2"
+    },
+    {
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "42f7422b-5f2e-45c7-9733-1fdd3903b2a0",
+      "source_group_number": "7.4.2",
+      "source_indicator_number": "7.4.2-3",
+      "target_node_id": "org.bridge.defect.7_4_2_3"
+    },
+    {
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "355a3b03-bd48-4561-aad1-7f7bfe5a1c27",
+      "source_group_number": "7.4.2",
+      "source_indicator_number": "7.4.2-4",
+      "target_node_id": "org.bridge.defect.7_4_2_4"
+    },
+    {
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "0233eeca-a51e-4f99-aaf0-9fd744a264e2",
+      "source_group_number": "7.4.2",
+      "source_indicator_number": "5.2.1-1",
+      "target_node_id": "org.bridge.defect.7_4_2__5_2_1_1"
+    },
+    {
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "f33b9c1b-614f-4c21-8372-5a307a135472",
+      "source_group_number": "7.4.2",
+      "source_indicator_number": "5.2.1-3",
+      "target_node_id": "org.bridge.defect.7_4_2__5_2_1_3"
+    },
+    {
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "cb5f6e74-9e8f-422f-b3e2-a48af089a831",
+      "source_group_number": "7.4.2",
+      "source_indicator_number": "5.2.1-4",
+      "target_node_id": "org.bridge.defect.7_4_2__5_2_1_4"
+    },
+    {
+      "source_group_id": "5734ad34-011b-4fb9-bc33-a6cd36487341",
+      "source_indicator_id": "ab732c09-c1c2-4d02-87f6-bc3979de98a8",
+      "source_group_number": "7.4.2",
+      "source_indicator_number": "5.2.1-8",
+      "target_node_id": "org.bridge.defect.7_4_2__5_2_1_8"
+    },
+    {
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "e6a67dce-06cb-4468-b4dc-bd86cedf79f1",
+      "source_group_number": "7.4.3",
+      "source_indicator_number": "7.4.3-1",
+      "target_node_id": "org.bridge.defect.7_4_3_1"
+    },
+    {
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "c32ad419-cf61-40db-b827-e8c093321b90",
+      "source_group_number": "7.4.3",
+      "source_indicator_number": "7.4.3-2",
+      "target_node_id": "org.bridge.defect.7_4_3_2"
+    },
+    {
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "57bcedee-50bc-4f37-9f28-f884c1959887",
+      "source_group_number": "7.4.3",
+      "source_indicator_number": "7.4.3-3",
+      "target_node_id": "org.bridge.defect.7_4_3_3"
+    },
+    {
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "22feb2b5-cd7f-4236-a111-538900400ae4",
+      "source_group_number": "7.4.3",
+      "source_indicator_number": "7.4.3-4",
+      "target_node_id": "org.bridge.defect.7_4_3_4"
+    },
+    {
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "0233eeca-a51e-4f99-aaf0-9fd744a264e2",
+      "source_group_number": "7.4.3",
+      "source_indicator_number": "5.2.1-1",
+      "target_node_id": "org.bridge.defect.7_4_3__5_2_1_1"
+    },
+    {
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "f33b9c1b-614f-4c21-8372-5a307a135472",
+      "source_group_number": "7.4.3",
+      "source_indicator_number": "5.2.1-3",
+      "target_node_id": "org.bridge.defect.7_4_3__5_2_1_3"
+    },
+    {
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "cb5f6e74-9e8f-422f-b3e2-a48af089a831",
+      "source_group_number": "7.4.3",
+      "source_indicator_number": "5.2.1-4",
+      "target_node_id": "org.bridge.defect.7_4_3__5_2_1_4"
+    },
+    {
+      "source_group_id": "d2d94ad7-c3bd-4aac-a9c1-db1b984fcfe3",
+      "source_indicator_id": "ab732c09-c1c2-4d02-87f6-bc3979de98a8",
+      "source_group_number": "7.4.3",
+      "source_indicator_number": "5.2.1-8",
+      "target_node_id": "org.bridge.defect.7_4_3__5_2_1_8"
+    },
+    {
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "00daf836-3429-4fe2-979e-ef68f8a7a4dd",
+      "source_group_number": "7.5.1",
+      "source_indicator_number": "7.5.1-1",
+      "target_node_id": "org.bridge.defect.7_5_1_1"
+    },
+    {
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "0cd5cbd1-3ca8-4e5d-ba6f-709822c8a7fe",
+      "source_group_number": "7.5.1",
+      "source_indicator_number": "7.5.1-2",
+      "target_node_id": "org.bridge.defect.7_5_1_2"
+    },
+    {
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "8791f766-da21-4909-a981-a92ce2ba9414",
+      "source_group_number": "7.5.1",
+      "source_indicator_number": "7.5.1-3",
+      "target_node_id": "org.bridge.defect.7_5_1_3"
+    },
+    {
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "e2e16e76-fdd7-4d08-aa73-30cd007b0cb6",
+      "source_group_number": "7.5.1",
+      "source_indicator_number": "7.5.1-4",
+      "target_node_id": "org.bridge.defect.7_5_1_4"
+    },
+    {
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "70e45ad2-97c1-4956-8629-f7a22475275a",
+      "source_group_number": "7.5.1",
+      "source_indicator_number": "7.5.1-5",
+      "target_node_id": "org.bridge.defect.7_5_1_5"
+    },
+    {
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "544a7d09-3929-4115-a6dc-c264eaedcf13",
+      "source_group_number": "7.5.1",
+      "source_indicator_number": "7.5.1-6",
+      "target_node_id": "org.bridge.defect.7_5_1_6"
+    },
+    {
+      "source_group_id": "7a5548d0-917f-484f-af83-595eb437dd49",
+      "source_indicator_id": "a23aa04f-ef57-4c4f-8f23-46bf973edb41",
+      "source_group_number": "7.5.1",
+      "source_indicator_number": "7.5.1-7",
+      "target_node_id": "org.bridge.defect.7_5_1_7"
+    },
+    {
+      "source_group_id": "08d72514-56bf-429f-8445-9b280e442143",
+      "source_indicator_id": "d4d14da0-41e3-4cd4-9009-9bd0d7a9c669",
+      "source_group_number": "7.6.1",
+      "source_indicator_number": "7.6.1-1",
+      "target_node_id": "org.bridge.defect.7_6_1_1"
+    },
+    {
+      "source_group_id": "08d72514-56bf-429f-8445-9b280e442143",
+      "source_indicator_id": "6466f02b-d53b-4631-9d7e-9e94d5faa659",
+      "source_group_number": "7.6.1",
+      "source_indicator_number": "7.6.1-2",
+      "target_node_id": "org.bridge.defect.7_6_1_2"
+    },
+    {
+      "source_group_id": "08d72514-56bf-429f-8445-9b280e442143",
+      "source_indicator_id": "6e8affac-731b-44ba-b0fb-0b5a1358106c",
+      "source_group_number": "7.6.1",
+      "source_indicator_number": "7.6.1-3",
+      "target_node_id": "org.bridge.defect.7_6_1_3"
+    },
+    {
+      "source_group_id": "f10a4e4f-4b9f-478b-ae58-9c59452b64d9",
+      "source_indicator_id": "feb760e6-a0c8-423e-92ca-edf282a26dde",
+      "source_group_number": "7.7.1",
+      "source_indicator_number": "7.7.1-1",
+      "target_node_id": "org.bridge.defect.7_7_1_1"
+    },
+    {
+      "source_group_id": "f10a4e4f-4b9f-478b-ae58-9c59452b64d9",
+      "source_indicator_id": "24118ff8-55ac-4dd9-a6c1-fb0978614673",
+      "source_group_number": "7.7.1",
+      "source_indicator_number": "7.7.1-2",
+      "target_node_id": "org.bridge.defect.7_7_1_2"
+    },
+    {
+      "source_group_id": "f10a4e4f-4b9f-478b-ae58-9c59452b64d9",
+      "source_indicator_id": "a182b0ed-c081-4e25-a911-e17c75bdb646",
+      "source_group_number": "7.7.1",
+      "source_indicator_number": "7.7.1-3",
+      "target_node_id": "org.bridge.defect.7_7_1_3"
+    },
+    {
+      "source_group_id": "f10a4e4f-4b9f-478b-ae58-9c59452b64d9",
+      "source_indicator_id": "14242b54-2c00-41da-a600-48dd7cf017be",
+      "source_group_number": "7.7.1",
+      "source_indicator_number": "7.7.1-4",
+      "target_node_id": "org.bridge.defect.7_7_1_4"
+    },
+    {
+      "source_group_id": "f10a4e4f-4b9f-478b-ae58-9c59452b64d9",
+      "source_indicator_id": "fad20456-39e0-47e6-a272-17e170087bc6",
+      "source_group_number": "7.7.1",
+      "source_indicator_number": "7.7.1-5",
+      "target_node_id": "org.bridge.defect.7_7_1_5"
+    },
+    {
+      "source_group_id": "d48d11aa-1ce8-44d5-8d40-e7dd983f263f",
+      "source_indicator_id": "17a67be2-003c-4e35-92f2-631f5cc465fd",
+      "source_group_number": "7.8.1",
+      "source_indicator_number": "7.8.1-1",
+      "target_node_id": "org.bridge.defect.7_8_1_1"
+    },
+    {
+      "source_group_id": "d48d11aa-1ce8-44d5-8d40-e7dd983f263f",
+      "source_indicator_id": "e817adc3-e033-4e1f-8ae2-1b810c8195a6",
+      "source_group_number": "7.8.1",
+      "source_indicator_number": "7.8.1-2",
+      "target_node_id": "org.bridge.defect.7_8_1_2"
+    },
+    {
+      "source_group_id": "d48d11aa-1ce8-44d5-8d40-e7dd983f263f",
+      "source_indicator_id": "aa0a3490-4ef1-401b-9323-8deb5f4425d9",
+      "source_group_number": "7.8.1",
+      "source_indicator_number": "7.8.1-3",
+      "target_node_id": "org.bridge.defect.7_8_1_3"
+    },
+    {
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "75059dfd-3143-4f14-8501-b960fdce4b68",
+      "source_group_number": "8.1.1",
+      "source_indicator_number": "8.1.1-1",
+      "target_node_id": "org.bridge.defect.8_1_1_1"
+    },
+    {
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "5a7ade74-94d0-4ca8-ae21-eac5bc4e84ed",
+      "source_group_number": "8.1.1",
+      "source_indicator_number": "8.1.1-2",
+      "target_node_id": "org.bridge.defect.8_1_1_2"
+    },
+    {
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "ea24b3f1-c51f-4249-b20c-0a976a22f0d3",
+      "source_group_number": "8.1.1",
+      "source_indicator_number": "8.1.1-3",
+      "target_node_id": "org.bridge.defect.8_1_1_3"
+    },
+    {
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "2e9a31de-a29f-404a-be5c-ace5c8dfdf46",
+      "source_group_number": "8.1.1",
+      "source_indicator_number": "8.1.1-4",
+      "target_node_id": "org.bridge.defect.8_1_1_4"
+    },
+    {
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "8fd41a0c-9ecf-4cd5-8c19-9c07045631a9",
+      "source_group_number": "8.1.1",
+      "source_indicator_number": "8.1.1-5",
+      "target_node_id": "org.bridge.defect.8_1_1_5"
+    },
+    {
+      "source_group_id": "cfb5d01e-dc97-4981-b752-6d7f2684d90b",
+      "source_indicator_id": "c84beeb5-5b63-45ea-9bf7-fee5feba81fd",
+      "source_group_number": "8.1.1",
+      "source_indicator_number": "8.1.1-6",
+      "target_node_id": "org.bridge.defect.8_1_1_6"
+    },
+    {
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "dcef9afb-7709-4969-a63a-1aa93a0c0b61",
+      "source_group_number": "8.2.1",
+      "source_indicator_number": "8.2.1-1",
+      "target_node_id": "org.bridge.defect.8_2_1_1"
+    },
+    {
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "41610de8-5667-4946-8e68-426cb7eec4e1",
+      "source_group_number": "8.2.1",
+      "source_indicator_number": "8.2.1-2",
+      "target_node_id": "org.bridge.defect.8_2_1_2"
+    },
+    {
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "4a5d4fc8-932b-4d78-8e85-2d6ac56be268",
+      "source_group_number": "8.2.1",
+      "source_indicator_number": "8.2.1-3",
+      "target_node_id": "org.bridge.defect.8_2_1_3"
+    },
+    {
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "ec068d64-9435-4d2e-abe4-0bf4d4882cab",
+      "source_group_number": "8.2.1",
+      "source_indicator_number": "8.2.1-4",
+      "target_node_id": "org.bridge.defect.8_2_1_4"
+    },
+    {
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "6bb1a661-6c4b-42b1-be0f-b00dd1e63977",
+      "source_group_number": "8.2.1",
+      "source_indicator_number": "8.2.1-5",
+      "target_node_id": "org.bridge.defect.8_2_1_5"
+    },
+    {
+      "source_group_id": "5af35a3b-f087-4a78-ac6c-5f42ebf6f02d",
+      "source_indicator_id": "2da3fb0f-2e79-47d0-aec5-3904c407d237",
+      "source_group_number": "8.2.1",
+      "source_indicator_number": "8.2.1-6",
+      "target_node_id": "org.bridge.defect.8_2_1_6"
+    },
+    {
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "f49c54c2-bb0d-484b-ac87-e2d69e05869f",
+      "source_group_number": "8.4.1",
+      "source_indicator_number": "8.4.1-1",
+      "target_node_id": "org.bridge.defect.8_4_1_1"
+    },
+    {
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "36add40b-65c6-40d4-aeb7-1731d7bf23cd",
+      "source_group_number": "8.4.1",
+      "source_indicator_number": "8.4.1-2",
+      "target_node_id": "org.bridge.defect.8_4_1_2"
+    },
+    {
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "92db2226-3c9a-46ba-8410-db8401b88cb1",
+      "source_group_number": "8.4.1",
+      "source_indicator_number": "8.4.1-3",
+      "target_node_id": "org.bridge.defect.8_4_1_3"
+    },
+    {
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "2e506985-666d-485e-acdf-c3883f5cd1d7",
+      "source_group_number": "8.4.1",
+      "source_indicator_number": "8.4.1-4",
+      "target_node_id": "org.bridge.defect.8_4_1_4"
+    },
+    {
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "0cd5cbd1-3ca8-4e5d-ba6f-709822c8a7fe",
+      "source_group_number": "8.4.1",
+      "source_indicator_number": "7.5.1-2",
+      "target_node_id": "org.bridge.defect.8_4_1__7_5_1_2"
+    },
+    {
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "8791f766-da21-4909-a981-a92ce2ba9414",
+      "source_group_number": "8.4.1",
+      "source_indicator_number": "7.5.1-3",
+      "target_node_id": "org.bridge.defect.8_4_1__7_5_1_3"
+    },
+    {
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "e2e16e76-fdd7-4d08-aa73-30cd007b0cb6",
+      "source_group_number": "8.4.1",
+      "source_indicator_number": "7.5.1-4",
+      "target_node_id": "org.bridge.defect.8_4_1__7_5_1_4"
+    },
+    {
+      "source_group_id": "2953742f-f270-4629-8502-453f928cc4a8",
+      "source_indicator_id": "a23aa04f-ef57-4c4f-8f23-46bf973edb41",
+      "source_group_number": "8.4.1",
+      "source_indicator_number": "7.5.1-7",
+      "target_node_id": "org.bridge.defect.8_4_1__7_5_1_7"
+    },
+    {
+      "source_group_id": "14529eeb-f082-48ff-a276-d47bd4e2b27d",
+      "source_indicator_id": "47108af0-baa5-4ebe-afd3-d3d3c40da55c",
+      "source_group_number": "8.5.1",
+      "source_indicator_number": "8.5.1-1",
+      "target_node_id": "org.bridge.defect.8_5_1_1"
+    },
+    {
+      "source_group_id": "14529eeb-f082-48ff-a276-d47bd4e2b27d",
+      "source_indicator_id": "811afe88-2f0e-4c02-8848-d54de9718b16",
+      "source_group_number": "8.5.1",
+      "source_indicator_number": "8.5.1-2",
+      "target_node_id": "org.bridge.defect.8_5_1_2"
+    },
+    {
+      "source_group_id": "14529eeb-f082-48ff-a276-d47bd4e2b27d",
+      "source_indicator_id": "eba6b4b2-7ac5-4483-bcd0-4d8ef9e6a86a",
+      "source_group_number": "8.5.1",
+      "source_indicator_number": "8.5.1-3",
+      "target_node_id": "org.bridge.defect.8_5_1_3"
+    },
+    {
+      "source_group_id": "14529eeb-f082-48ff-a276-d47bd4e2b27d",
+      "source_indicator_id": "0785790a-bb19-431c-acb0-14f4108b17b1",
+      "source_group_number": "8.5.1",
+      "source_indicator_number": "8.5.1-4",
+      "target_node_id": "org.bridge.defect.8_5_1_4"
+    },
+    {
+      "source_group_id": "0a7c24b8-6d70-43bf-9c0d-d315268ab061",
+      "source_indicator_id": "607ca2a8-a4c5-4936-8e9d-ad130eab9e6a",
+      "source_group_number": "8.6.1",
+      "source_indicator_number": "8.6.1",
+      "target_node_id": "org.bridge.defect.8_6_1"
+    },
+    {
+      "source_group_id": "92ef89d2-8854-4a10-b0b1-60bd1d669849",
+      "source_indicator_id": "b53e9e87-032a-43d1-b83f-db1a203959ad",
+      "source_group_number": "8.7.1",
+      "source_indicator_number": "8.7.1",
+      "target_node_id": "org.bridge.defect.8_7_1"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "1cc0b372-94dc-4993-86b9-33bc044b6b64",
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-10",
+      "target_node_id": "org.bridge.defect.9_1_1_10"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "9ea464b6-60aa-4a78-9355-48cc86bba877",
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-11",
+      "target_node_id": "org.bridge.defect.9_1_1_11"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "7cb25139-fd1f-48ed-9ee6-32ba5a7d9580",
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-1",
+      "target_node_id": "org.bridge.defect.9_1_1_1"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "4d762e27-6450-4d56-ab9b-9e3eccdd2bee",
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-2",
+      "target_node_id": "org.bridge.defect.9_1_1_2"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "5d3ecd4d-6f76-41d2-829a-79efe102ef9a",
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-3",
+      "target_node_id": "org.bridge.defect.9_1_1_3"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "0d775ac4-5590-49c4-b26f-438b8001fdfa",
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-4",
+      "target_node_id": "org.bridge.defect.9_1_1_4"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "c53de155-5213-4009-84f4-ceb3437641a8",
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-5",
+      "target_node_id": "org.bridge.defect.9_1_1_5"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "13c0a08d-4d99-491d-bd8a-560d9d7d59ef",
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-6",
+      "target_node_id": "org.bridge.defect.9_1_1_6"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "06590b54-d65c-4b95-be91-dbb908078e1e",
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-7",
+      "target_node_id": "org.bridge.defect.9_1_1_7"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "033e4374-c582-439e-a362-cd23826cfb21",
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-8",
+      "target_node_id": "org.bridge.defect.9_1_1_8"
+    },
+    {
+      "source_group_id": "0d515ef0-3919-45a3-9459-6db1293d5d08",
+      "source_indicator_id": "20e86571-a67c-46fa-aced-5d5fa55b56b2",
+      "source_group_number": "9.1.1",
+      "source_indicator_number": "9.1.1-9",
+      "target_node_id": "org.bridge.defect.9_1_1_9"
+    },
+    {
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "7cb25139-fd1f-48ed-9ee6-32ba5a7d9580",
+      "source_group_number": "9.1.2",
+      "source_indicator_number": "9.1.1-1",
+      "target_node_id": "org.bridge.defect.9_1_2__9_1_1_1"
+    },
+    {
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "4d762e27-6450-4d56-ab9b-9e3eccdd2bee",
+      "source_group_number": "9.1.2",
+      "source_indicator_number": "9.1.1-2",
+      "target_node_id": "org.bridge.defect.9_1_2__9_1_1_2"
+    },
+    {
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "5d3ecd4d-6f76-41d2-829a-79efe102ef9a",
+      "source_group_number": "9.1.2",
+      "source_indicator_number": "9.1.1-3",
+      "target_node_id": "org.bridge.defect.9_1_2__9_1_1_3"
+    },
+    {
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "0d775ac4-5590-49c4-b26f-438b8001fdfa",
+      "source_group_number": "9.1.2",
+      "source_indicator_number": "9.1.1-4",
+      "target_node_id": "org.bridge.defect.9_1_2__9_1_1_4"
+    },
+    {
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "c53de155-5213-4009-84f4-ceb3437641a8",
+      "source_group_number": "9.1.2",
+      "source_indicator_number": "9.1.1-5",
+      "target_node_id": "org.bridge.defect.9_1_2__9_1_1_5"
+    },
+    {
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "3ab76433-6786-492d-aacf-d3f655c5f592",
+      "source_group_number": "9.1.2",
+      "source_indicator_number": "9.1.2-2",
+      "target_node_id": "org.bridge.defect.9_1_2_2"
+    },
+    {
+      "source_group_id": "d493927d-e0a5-4fca-b21b-74a12ee68e72",
+      "source_indicator_id": "63cd142a-2363-4697-81f8-e425a4073949",
+      "source_group_number": "9.1.2",
+      "source_indicator_number": "9.1.2-1",
+      "target_node_id": "org.bridge.defect.9_1_2_1"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "27b5c8e1-1a55-4a81-b037-7c87b17afef3",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-10",
+      "target_node_id": "org.bridge.defect.9_2_1_10"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "9d0cb667-901b-4708-8544-eb519b1d4c39",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-11",
+      "target_node_id": "org.bridge.defect.9_2_1_11"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "abb2b08f-c0ff-486e-8331-582eb70c69da",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-1",
+      "target_node_id": "org.bridge.defect.9_2_1_1"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "7ced5965-9371-4f39-b7ae-3823d8e3873d",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-2",
+      "target_node_id": "org.bridge.defect.9_2_1_2"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "b3785069-a78b-41c7-8785-e9acb3e8d19f",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-3",
+      "target_node_id": "org.bridge.defect.9_2_1_3"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "b6775216-be8f-4b88-9de4-e7fc93d0c2df",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-4",
+      "target_node_id": "org.bridge.defect.9_2_1_4"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "a829557e-ea81-4f43-9f3a-f7c2668b6990",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-5",
+      "target_node_id": "org.bridge.defect.9_2_1_5"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "c0126c45-7914-43e2-a46b-41cb0e9fadca",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-6",
+      "target_node_id": "org.bridge.defect.9_2_1_6"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "2a43a6cf-5baa-4ab7-8100-0c80d0efeb23",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-7",
+      "target_node_id": "org.bridge.defect.9_2_1_7"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "37f309ef-ef92-4443-a61f-8041bbf4f25f",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-8",
+      "target_node_id": "org.bridge.defect.9_2_1_8"
+    },
+    {
+      "source_group_id": "83002dbd-955c-4f2e-b40c-8f58274ad4ef",
+      "source_indicator_id": "d74715da-5299-40e9-a8af-5636e0f6d714",
+      "source_group_number": "9.2.1",
+      "source_indicator_number": "9.2.1-9",
+      "target_node_id": "org.bridge.defect.9_2_1_9"
+    },
+    {
+      "source_group_id": "11a54dd2-f98d-4b63-b255-58030580d70e",
+      "source_indicator_id": "4af62c2c-062e-49a5-ba8a-43515c9644f7",
+      "source_group_number": "9.2.2",
+      "source_indicator_number": "9.2.2-4",
+      "target_node_id": "org.bridge.defect.9_2_2_4"
+    },
+    {
+      "source_group_id": "11a54dd2-f98d-4b63-b255-58030580d70e",
+      "source_indicator_id": "d2f9d20c-5f02-4a8b-bcfd-bb9244bcf552",
+      "source_group_number": "9.2.2",
+      "source_indicator_number": "9.2.2-1",
+      "target_node_id": "org.bridge.defect.9_2_2_1"
+    },
+    {
+      "source_group_id": "11a54dd2-f98d-4b63-b255-58030580d70e",
+      "source_indicator_id": "0594b528-aecc-41f3-bc49-3871e287d784",
+      "source_group_number": "9.2.2",
+      "source_indicator_number": "9.2.2-2",
+      "target_node_id": "org.bridge.defect.9_2_2_2"
+    },
+    {
+      "source_group_id": "11a54dd2-f98d-4b63-b255-58030580d70e",
+      "source_indicator_id": "8eccd2d6-b6c9-45cb-8d5b-593c9871af70",
+      "source_group_number": "9.2.2",
+      "source_indicator_number": "9.2.2-3",
+      "target_node_id": "org.bridge.defect.9_2_2_3"
+    },
+    {
+      "source_group_id": "11a54dd2-f98d-4b63-b255-58030580d70e",
+      "source_indicator_id": "7ced5965-9371-4f39-b7ae-3823d8e3873d",
+      "source_group_number": "9.2.2",
+      "source_indicator_number": "9.2.1-2",
+      "target_node_id": "org.bridge.defect.9_2_2__9_2_1_2"
+    },
+    {
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "78210fcb-3ba4-498a-8bd8-bbc2814a5faa",
+      "source_group_number": "9.3.2",
+      "source_indicator_number": "9.3.2-8",
+      "target_node_id": "org.bridge.defect.9_3_2_8"
+    },
+    {
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "ad5cc83d-3776-44d4-915f-ba2a76fb8ebe",
+      "source_group_number": "9.3.2",
+      "source_indicator_number": "9.3.2-1",
+      "target_node_id": "org.bridge.defect.9_3_2_1"
+    },
+    {
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "877ffba4-83d2-4879-bac7-70e3cf88b47a",
+      "source_group_number": "9.3.2",
+      "source_indicator_number": "9.3.2-2",
+      "target_node_id": "org.bridge.defect.9_3_2_2"
+    },
+    {
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "0943f9af-db9b-42b1-8a84-33f0f91e618a",
+      "source_group_number": "9.3.2",
+      "source_indicator_number": "9.3.2-3",
+      "target_node_id": "org.bridge.defect.9_3_2_3"
+    },
+    {
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "d797e0ad-77ae-44a6-bab0-77b0a4e1205e",
+      "source_group_number": "9.3.2",
+      "source_indicator_number": "9.3.2-4",
+      "target_node_id": "org.bridge.defect.9_3_2_4"
+    },
+    {
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "ad28e67b-e144-4569-9643-8ea7a2587dce",
+      "source_group_number": "9.3.2",
+      "source_indicator_number": "9.3.2-5",
+      "target_node_id": "org.bridge.defect.9_3_2_5"
+    },
+    {
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "664949a9-95ab-468d-8b18-4dbaf18aca70",
+      "source_group_number": "9.3.2",
+      "source_indicator_number": "9.3.2-6",
+      "target_node_id": "org.bridge.defect.9_3_2_6"
+    },
+    {
+      "source_group_id": "2ef21e07-1c5b-40df-af8b-89748f92b6ad",
+      "source_indicator_id": "3231236e-be08-4bfb-87ad-98a87fb97811",
+      "source_group_number": "9.3.2",
+      "source_indicator_number": "9.3.2-7",
+      "target_node_id": "org.bridge.defect.9_3_2_7"
+    },
+    {
+      "source_group_id": "5e63284c-5883-4a6d-9f14-8a31968720af",
+      "source_indicator_id": "30022783-2077-42df-b686-02c8f0b97ed0",
+      "source_group_number": "9.4.1",
+      "source_indicator_number": "9.4.1-5",
+      "target_node_id": "org.bridge.defect.9_4_1_5"
+    },
+    {
+      "source_group_id": "5e63284c-5883-4a6d-9f14-8a31968720af",
+      "source_indicator_id": "1d87961d-1863-4fce-92e4-bdadcbe5bcc6",
+      "source_group_number": "9.4.1",
+      "source_indicator_number": "9.4.1-1",
+      "target_node_id": "org.bridge.defect.9_4_1_1"
+    },
+    {
+      "source_group_id": "5e63284c-5883-4a6d-9f14-8a31968720af",
+      "source_indicator_id": "d23ec476-6944-4b4d-9db0-d1d7de415884",
+      "source_group_number": "9.4.1",
+      "source_indicator_number": "9.4.1-2",
+      "target_node_id": "org.bridge.defect.9_4_1_2"
+    },
+    {
+      "source_group_id": "5e63284c-5883-4a6d-9f14-8a31968720af",
+      "source_indicator_id": "66008d87-0241-477a-96c0-775f57bdbeaf",
+      "source_group_number": "9.4.1",
+      "source_indicator_number": "9.4.1-3",
+      "target_node_id": "org.bridge.defect.9_4_1_3"
+    },
+    {
+      "source_group_id": "5e63284c-5883-4a6d-9f14-8a31968720af",
+      "source_indicator_id": "df9def73-8a16-433c-a06f-bf9ddbd062d7",
+      "source_group_number": "9.4.1",
+      "source_indicator_number": "9.4.1-4",
+      "target_node_id": "org.bridge.defect.9_4_1_4"
+    },
+    {
+      "source_group_id": "9a83d0e4-4e8c-486e-9f4f-51708029bdc5",
+      "source_indicator_id": "7c5cb180-0d46-4cfe-aea0-31c69e1dd151",
+      "source_group_number": "9.5.1",
+      "source_indicator_number": "9.5.1-3",
+      "target_node_id": "org.bridge.defect.9_5_1_3"
+    },
+    {
+      "source_group_id": "9a83d0e4-4e8c-486e-9f4f-51708029bdc5",
+      "source_indicator_id": "161e7aec-a8c1-4963-bfb0-11d88b015e38",
+      "source_group_number": "9.5.1",
+      "source_indicator_number": "9.5.1-1",
+      "target_node_id": "org.bridge.defect.9_5_1_1"
+    },
+    {
+      "source_group_id": "9a83d0e4-4e8c-486e-9f4f-51708029bdc5",
+      "source_indicator_id": "f3042c98-676a-439d-a60d-4f1a51c20d51",
+      "source_group_number": "9.5.1",
+      "source_indicator_number": "9.5.1-2",
+      "target_node_id": "org.bridge.defect.9_5_1_2"
+    },
+    {
+      "source_group_id": "ec71dd0c-d225-4bea-8410-9e826a2be608",
+      "source_indicator_id": "8302b6c5-0b88-452d-9965-6d8fe4b5d099",
+      "source_group_number": "9.6.1",
+      "source_indicator_number": "9.6.1-4",
+      "target_node_id": "org.bridge.defect.9_6_1_4"
+    },
+    {
+      "source_group_id": "ec71dd0c-d225-4bea-8410-9e826a2be608",
+      "source_indicator_id": "d57ce73f-1578-4152-9beb-3f4853dff9d7",
+      "source_group_number": "9.6.1",
+      "source_indicator_number": "9.6.1-1",
+      "target_node_id": "org.bridge.defect.9_6_1_1"
+    },
+    {
+      "source_group_id": "ec71dd0c-d225-4bea-8410-9e826a2be608",
+      "source_indicator_id": "2ab085b2-8cf6-4b35-807a-920d419678f8",
+      "source_group_number": "9.6.1",
+      "source_indicator_number": "9.6.1-2",
+      "target_node_id": "org.bridge.defect.9_6_1_2"
+    },
+    {
+      "source_group_id": "ec71dd0c-d225-4bea-8410-9e826a2be608",
+      "source_indicator_id": "79628bc3-1873-4869-87ae-9154e65b7d6c",
+      "source_group_number": "9.6.1",
+      "source_indicator_number": "9.6.1-3",
+      "target_node_id": "org.bridge.defect.9_6_1_3"
+    },
+    {
+      "source_group_id": "5839fb7d-2a27-43cc-9498-79a30d53dae4",
+      "source_indicator_id": "1cd40ac6-8b0a-4ecc-878d-5d409131eef9",
+      "source_group_number": "9.6.2",
+      "source_indicator_number": "9.6.2-3",
+      "target_node_id": "org.bridge.defect.9_6_2_3"
+    },
+    {
+      "source_group_id": "5839fb7d-2a27-43cc-9498-79a30d53dae4",
+      "source_indicator_id": "ca1f04a3-f47a-4270-87c1-7da30f06f63f",
+      "source_group_number": "9.6.2",
+      "source_indicator_number": "9.6.2-1",
+      "target_node_id": "org.bridge.defect.9_6_2_1"
+    },
+    {
+      "source_group_id": "5839fb7d-2a27-43cc-9498-79a30d53dae4",
+      "source_indicator_id": "1a95ea57-fef9-45a0-93a7-a3d58010cbc3",
+      "source_group_number": "9.6.2",
+      "source_indicator_number": "9.6.2-2",
+      "target_node_id": "org.bridge.defect.9_6_2_2"
+    },
+    {
+      "source_group_id": "75781860-144b-4584-b3d6-9617ab878131",
+      "source_indicator_id": "76c78305-62ca-41d9-b13a-f3c9da209d97",
+      "source_group_number": "10.1.1",
+      "source_indicator_number": "10.1.1-1",
+      "target_node_id": "org.bridge.defect.10_1_1_1"
+    },
+    {
+      "source_group_id": "75781860-144b-4584-b3d6-9617ab878131",
+      "source_indicator_id": "13553543-ebd2-4dd3-9b6e-983afbd1758f",
+      "source_group_number": "10.1.1",
+      "source_indicator_number": "10.1.1-2",
+      "target_node_id": "org.bridge.defect.10_1_1_2"
+    },
+    {
+      "source_group_id": "75781860-144b-4584-b3d6-9617ab878131",
+      "source_indicator_id": "afb10bf9-75ad-4d9c-b1e0-ba5430d2b37a",
+      "source_group_number": "10.1.1",
+      "source_indicator_number": "10.1.1-3",
+      "target_node_id": "org.bridge.defect.10_1_1_3"
+    },
+    {
+      "source_group_id": "75781860-144b-4584-b3d6-9617ab878131",
+      "source_indicator_id": "4b07cca5-6aad-4785-b4d6-36c2fcee4fb9",
+      "source_group_number": "10.1.1",
+      "source_indicator_number": "10.1.1-4",
+      "target_node_id": "org.bridge.defect.10_1_1_4"
+    },
+    {
+      "source_group_id": "75781860-144b-4584-b3d6-9617ab878131",
+      "source_indicator_id": "f998058b-453b-4148-9ac8-4de1d69038cd",
+      "source_group_number": "10.1.1",
+      "source_indicator_number": "10.1.1-5",
+      "target_node_id": "org.bridge.defect.10_1_1_5"
+    },
+    {
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "1fd95fb5-56dc-4d36-bdec-8f4b2e2b2a35",
+      "source_group_number": "10.1.2",
+      "source_indicator_number": "10.1.2-1",
+      "target_node_id": "org.bridge.defect.10_1_2_1"
+    },
+    {
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "a0440c5a-759d-40a7-ac71-198ff0774029",
+      "source_group_number": "10.1.2",
+      "source_indicator_number": "10.1.2-2",
+      "target_node_id": "org.bridge.defect.10_1_2_2"
+    },
+    {
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "92dd28b9-ddc7-42a5-97f4-4d553710e973",
+      "source_group_number": "10.1.2",
+      "source_indicator_number": "10.1.2-3",
+      "target_node_id": "org.bridge.defect.10_1_2_3"
+    },
+    {
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "21fa54d5-2796-46d6-a092-f927fb39f95f",
+      "source_group_number": "10.1.2",
+      "source_indicator_number": "10.1.2-4",
+      "target_node_id": "org.bridge.defect.10_1_2_4"
+    },
+    {
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "9e5bf5d7-f988-4f1e-aad0-46bce9518868",
+      "source_group_number": "10.1.2",
+      "source_indicator_number": "10.1.2-5",
+      "target_node_id": "org.bridge.defect.10_1_2_5"
+    },
+    {
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "9000416e-9cf0-4711-8bec-229705385d10",
+      "source_group_number": "10.1.2",
+      "source_indicator_number": "10.1.2-8",
+      "target_node_id": "org.bridge.defect.10_1_2_8"
+    },
+    {
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "0aafc728-3d59-4bf5-8f35-23503582923f",
+      "source_group_number": "10.1.2",
+      "source_indicator_number": "10.1.2-6",
+      "target_node_id": "org.bridge.defect.10_1_2_6"
+    },
+    {
+      "source_group_id": "b0b43884-543e-4f23-87d0-52c92d0b0b4a",
+      "source_indicator_id": "9cf69692-5715-432b-a57a-375550e73242",
+      "source_group_number": "10.1.2",
+      "source_indicator_number": "10.1.2-7",
+      "target_node_id": "org.bridge.defect.10_1_2_7"
+    },
+    {
+      "source_group_id": "f519a6fd-6351-4881-98ac-d65e07dd252b",
+      "source_indicator_id": "4faba831-17d3-4606-9251-091d2d01b660",
+      "source_group_number": "10.2.1",
+      "source_indicator_number": "10.2.1-5",
+      "target_node_id": "org.bridge.defect.10_2_1_5"
+    },
+    {
+      "source_group_id": "f519a6fd-6351-4881-98ac-d65e07dd252b",
+      "source_indicator_id": "3c20cac8-8a47-4be5-8a38-c9cc2c07201a",
+      "source_group_number": "10.2.1",
+      "source_indicator_number": "10.2.1-1",
+      "target_node_id": "org.bridge.defect.10_2_1_1"
+    },
+    {
+      "source_group_id": "f519a6fd-6351-4881-98ac-d65e07dd252b",
+      "source_indicator_id": "a101e856-959c-4a6c-bf50-43329d6249a3",
+      "source_group_number": "10.2.1",
+      "source_indicator_number": "10.2.1-2",
+      "target_node_id": "org.bridge.defect.10_2_1_2"
+    },
+    {
+      "source_group_id": "f519a6fd-6351-4881-98ac-d65e07dd252b",
+      "source_indicator_id": "d208c865-3350-48d0-b0c0-4ddbaa4fbcbc",
+      "source_group_number": "10.2.1",
+      "source_indicator_number": "10.2.1-3",
+      "target_node_id": "org.bridge.defect.10_2_1_3"
+    },
+    {
+      "source_group_id": "f519a6fd-6351-4881-98ac-d65e07dd252b",
+      "source_indicator_id": "0207811a-2438-4238-a2fc-fd8065d7e315",
+      "source_group_number": "10.2.1",
+      "source_indicator_number": "10.2.1-4",
+      "target_node_id": "org.bridge.defect.10_2_1_4"
+    },
+    {
+      "source_group_id": "3dde21bf-0b02-42bb-8b6f-e48f1f45efc0",
+      "source_indicator_id": "97786e20-1306-4a68-98bd-268187f132a7",
+      "source_group_number": "10.3.1",
+      "source_indicator_number": "10.3.1-1",
+      "target_node_id": "org.bridge.defect.10_3_1_1"
+    },
+    {
+      "source_group_id": "3dde21bf-0b02-42bb-8b6f-e48f1f45efc0",
+      "source_indicator_id": "0773bd71-c0d0-4621-906b-bb066596454f",
+      "source_group_number": "10.3.1",
+      "source_indicator_number": "10.3.1-3",
+      "target_node_id": "org.bridge.defect.10_3_1_3"
+    },
+    {
+      "source_group_id": "3dde21bf-0b02-42bb-8b6f-e48f1f45efc0",
+      "source_indicator_id": "4dac02ae-8f68-4c5c-869c-80ca7fe8acd1",
+      "source_group_number": "10.3.1",
+      "source_indicator_number": "10.3.1-2",
+      "target_node_id": "org.bridge.defect.10_3_1_2"
+    },
+    {
+      "source_group_id": "ff33d523-fb3b-47f5-be80-b73d5acdad5e",
+      "source_indicator_id": "5f7150ba-851c-445a-86ba-153c3dfb8e16",
+      "source_group_number": "10.4.1",
+      "source_indicator_number": "10.4.2-3",
+      "target_node_id": "org.bridge.defect.10_4_1__10_4_2_3"
+    },
+    {
+      "source_group_id": "ff33d523-fb3b-47f5-be80-b73d5acdad5e",
+      "source_indicator_id": "961c1e97-4426-4159-95b6-2bbe9e0b37a1",
+      "source_group_number": "10.4.1",
+      "source_indicator_number": "10.4.1-1",
+      "target_node_id": "org.bridge.defect.10_4_1_1"
+    },
+    {
+      "source_group_id": "ff33d523-fb3b-47f5-be80-b73d5acdad5e",
+      "source_indicator_id": "23a1f8da-ced8-49e1-9f4b-2482ce1cc81e",
+      "source_group_number": "10.4.1",
+      "source_indicator_number": "10.4.1-2",
+      "target_node_id": "org.bridge.defect.10_4_1_2"
+    },
+    {
+      "source_group_id": "53843dda-e4dc-4e6f-8aad-6d9dbdbbac4e",
+      "source_indicator_id": "1067d9a8-e895-4adb-8f09-22218edddc96",
+      "source_group_number": "10.5.1",
+      "source_indicator_number": "10.5.1-1",
+      "target_node_id": "org.bridge.defect.10_5_1_1"
+    },
+    {
+      "source_group_id": "4a4c622b-0abd-4558-b984-83d9d97399e9",
+      "source_indicator_id": "f1a273a6-88ce-4952-8a57-df0301984fdd",
+      "source_group_number": "10.5.2",
+      "source_indicator_number": "10.5.1-2",
+      "target_node_id": "org.bridge.defect.10_5_2__10_5_1_2"
+    },
+    {
+      "source_group_id": "f0ff904d-65f3-42cc-a2de-fa6d7f3d8cd8",
+      "source_indicator_id": "9fee88c2-890b-4b78-9416-d35e530f72bc",
+      "source_group_number": "10.6.1",
+      "source_indicator_number": "10.6.1-4",
+      "target_node_id": "org.bridge.defect.10_6_1_4"
+    },
+    {
+      "source_group_id": "f0ff904d-65f3-42cc-a2de-fa6d7f3d8cd8",
+      "source_indicator_id": "2ee1629f-297b-45e8-bba7-d05175290d47",
+      "source_group_number": "10.6.1",
+      "source_indicator_number": "10.6.1-1",
+      "target_node_id": "org.bridge.defect.10_6_1_1"
+    },
+    {
+      "source_group_id": "f0ff904d-65f3-42cc-a2de-fa6d7f3d8cd8",
+      "source_indicator_id": "ee3debc3-a645-4f03-a2ba-96dc7f1cc1b4",
+      "source_group_number": "10.6.1",
+      "source_indicator_number": "10.6.1-2",
+      "target_node_id": "org.bridge.defect.10_6_1_2"
+    },
+    {
+      "source_group_id": "f0ff904d-65f3-42cc-a2de-fa6d7f3d8cd8",
+      "source_indicator_id": "d1d54e68-feaa-4974-85ec-72a1524d0f82",
+      "source_group_number": "10.6.1",
+      "source_indicator_number": "10.6.1-3",
+      "target_node_id": "org.bridge.defect.10_6_1_3"
+    }
+  ]
+}

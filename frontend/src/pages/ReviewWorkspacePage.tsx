@@ -619,6 +619,10 @@ function ReviewWorkspaceLoaded({
         setConfirmDialogOpen(false);
         setSaveMessage({ kind: "error", text: "入库前检查未通过，请查看下方检查结果后重新处理。" });
       } else {
+        // 系统错误发生在确认事务阶段时，旧的预检结果虽然曾经通过，但已经不能表达
+        // 当前操作是否可以继续。清掉绿色成功提示并重新锁住确认按钮，要求用户在
+        // 故障处理后重新执行入库前检查，避免红色失败与绿色通过同时出现。
+        setPreflight(null);
         setSaveMessage({
           kind: "error",
           text: caught instanceof ApiError ? caught.message : "确认入库失败。",

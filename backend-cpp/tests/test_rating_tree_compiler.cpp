@@ -352,16 +352,16 @@ TEST(RatingTreeCompilerIntegrationTest, CompilesThePublishedOrganizationBridgeTr
     EXPECT_FALSE(result.tree->version.tree_content_checksum.empty());
 }
 
-TEST(RatingTreeCompilerIntegrationTest, Version202CompilesTheCurrentSourceTree) {
+TEST(RatingTreeCompilerIntegrationTest, Version203CompilesTheCurrentSourceTree) {
     const auto root = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT);
     bridge_report::standards::StandardPackageLoader standard_loader;
     const auto h21 = standard_loader.load(
-        root / "standards/technical-condition/jtg-t-h21-2011/1.0.3");
+        root / "standards/technical-condition/jtg-t-h21-2011/1.0.4");
     const auto maintenance = standard_loader.load(
         root / "standards/maintenance/jtg-5120-2021/1.0.0");
     const auto extension =
         bridge_report::rating_tree::RatingTreePackageLoader().load(
-            root / "standards/rating-tree/organization-bridge/2.0.2");
+            root / "standards/rating-tree/organization-bridge/2.0.3");
     ASSERT_TRUE(h21.ok());
     ASSERT_TRUE(maintenance.ok());
     ASSERT_TRUE(extension.ok());

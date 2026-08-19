@@ -20,7 +20,7 @@ export function DefectThreadCard({ thread, componentType, onRebind }: DefectThre
     >
       <header className="archive-thread-head">
         <strong>{thread.defect_type}</strong>
-        <span>标准位置：{thread.defect_location ?? "未记录"}</span>
+        <span>标准位置：{thread.defect_location || "未记录"}</span>
         <span className="archive-thread-span">
           {thread.first_seen_year !== null && thread.latest_seen_year !== null
             ? `${thread.first_seen_year} - ${thread.latest_seen_year}`

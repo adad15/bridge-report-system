@@ -31,6 +31,11 @@ std::filesystem::path h21_package_root_v103() {
            "standards/technical-condition/jtg-t-h21-2011/1.0.3";
 }
 
+std::filesystem::path h21_package_root_v104() {
+    return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
+           "standards/technical-condition/jtg-t-h21-2011/1.0.4";
+}
+
 const Json::Value& document(const StandardPackage& package, const std::string& name) {
     const auto found = package.documents.find(name);
     if (found == package.documents.end()) {
@@ -460,6 +465,23 @@ TEST(JtgH21PackageTest, Version103CorrectsAllDescriptionsAndScaleRanges) {
         (*expansion_joint_anchorage)["scale_descriptions"]["4"].asString().find(
             "混凝土大面积破损；面积＞20%"),
         std::string::npos);
+}
+
+TEST(JtgH21PackageTest, Version104PublishesRiverbedAsGeneratable) {
+    StandardPackageLoader loader;
+    const auto checksum = loader.calculate_checksum(h21_package_root_v104());
+    ASSERT_TRUE(checksum.ok());
+    const auto manifest = read_json(h21_package_root_v104() / "manifest.json");
+    EXPECT_EQ(*checksum.checksum, manifest["content_checksum"].asString());
+
+    const auto result = loader.load(h21_package_root_v104());
+    ASSERT_TRUE(result.ok());
+    EXPECT_EQ(result.package->manifest.package_version, "1.0.4");
+    const auto riverbed = result.package->definitions.find("h21.component.lower.riverbed");
+    ASSERT_NE(riverbed, result.package->definitions.end());
+    EXPECT_TRUE(riverbed->second.payload["generatable"].asBool());
+    EXPECT_EQ(riverbed->second.payload["structure_part"].asString(), "substructure");
+    EXPECT_EQ(riverbed->second.payload["bridge_type_ids"].size(), 6u);
 }
 
 TEST(JtgH21PackageTest, AllProfilesReferenceBridgeAndScoringLevels) {

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AssessmentPreviewResponse } from "../../api/assessmentApi";
@@ -65,19 +65,33 @@ function category(
   };
 }
 
+function rowOf(label: string): HTMLElement {
+  const row = screen.getByText(label).closest("tr");
+  if (!row) throw new Error(`找不到 ${label} 所在的表格行`);
+  return row;
+}
+
 describe("AssessmentSection", () => {
   it("shows system standard identity, calculated results and trace", () => {
     render(<AssessmentSection phase="ready" response={successfulResponse()} error={null} onRetry={vi.fn()} onSelectIssue={vi.fn()} />);
     expect(screen.getByText(/JTG\/T H21—2011/)).toBeInTheDocument();
     expect(screen.getByText(/规则包 1.0.1/)).toBeInTheDocument();
     expect(screen.getByText("87.25")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "部件类别评分" })).toBeInTheDocument();
-    expect(screen.getByText("上部承重构件")).toBeInTheDocument();
     expect(screen.getByText("桥墩")).toBeInTheDocument();
     expect(screen.getByText("桥面铺装")).toBeInTheDocument();
-    expect(screen.getByText("81.54")).toBeInTheDocument();
-    expect(screen.getByText("0.7000")).toBeInTheDocument();
-    expect(screen.getByText("25")).toBeInTheDocument();
+    // 分部行是那一组的合计行，单类别分部下合计与类别本身同值，断言要落到具体行上。
+    const superstructureRow = rowOf("上部结构");
+    expect(within(superstructureRow).getByText("85.50")).toBeInTheDocument();
+    expect(within(superstructureRow).getByText("0.4000")).toBeInTheDocument();
+    const bearingRow = rowOf("上部承重构件");
+    expect(within(bearingRow).getByText("81.54")).toBeInTheDocument();
+    expect(within(bearingRow).getByText("0.7000")).toBeInTheDocument();
+    expect(within(bearingRow).getByText("25")).toBeInTheDocument();
+    expect(within(bearingRow).getByText("2 类")).toBeInTheDocument();
+    expect(within(rowOf("桥面系")).getByText("3 类")).toBeInTheDocument();
+    // 得分条按分数取宽度，等级决定填色档位。
+    expect(bearingRow.querySelector(".assessment-score-bar-fill")).toHaveStyle({ width: "81.54%" });
+    expect(bearingRow.querySelector(".assessment-score-bar-fill")).toHaveClass("assessment-score-bar-fill-2");
     expect(screen.getByText(/4.1.1/)).toBeInTheDocument();
     expect(screen.queryByText(/Word 评分/)).not.toBeInTheDocument();
   });

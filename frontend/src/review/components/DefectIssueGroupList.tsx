@@ -100,7 +100,7 @@ export function DefectIssueGroupList({
                   onClick={() => onOpenDefect(row.candidateId)}
                 >
                   {row.defect.component_number ?? row.defect.component_name}
-                  <span>{row.defect.defect_location || "未填写位置"}</span>
+                  <span>{row.defect.defect_location || "未记录位置"}</span>
                 </button>
               ))}
             </div>

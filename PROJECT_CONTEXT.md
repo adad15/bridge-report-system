@@ -1,6 +1,6 @@
 # PROJECT_CONTEXT
 
-更新时间：2026-08-10
+更新时间：2026-08-14
 
 ## 项目一句话
 
@@ -16,12 +16,13 @@
 - `docs/superpowers/specs/modules/01-tech-stack-and-project-skeleton.md`
 - `docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md`
 - `docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md`
+- `docs/superpowers/specs/2026-08-14-riverbed-inventory-generation-design.md`
 
 推荐首条提示：
 
 ```text
 继续 bridge-report-system 项目。仓库路径：D:\vs2022 code\bridge-report-system。
-当前应该在分支 codex/06-5-interaction-redesign。
+当前应该在分支 codex/06-6-interaction-redesign。
 模块 01～06.5 已完成；下一步先由用户决定是否开始模块 07，不要自动进入模块 07 编码。
 请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/modules/06-5-bridge-centric-interaction-redesign.md、docs/superpowers/specs/2026-07-16-import-record-deletion-and-review-navigation-design.md、docs/superpowers/plans/2026-07-17-import-record-deletion-and-review-navigation-implementation-plan.md，以及模块 05、06 规格。模块 07 未完成需求确认前不要大规模编码。
 ```
@@ -33,13 +34,14 @@
 - 模块 2 设计文档提交号：`52ee0ab docs: add module 02 schema and archive design`。
 - 模块 3 `03-bridge-annual-inspection-data-contract` 已完成实施并推送到 GitHub。
 - 模块 3 最初建立了 `BridgeAnnualInspectionData` 跨端契约；当前运行时已统一升级为 4.0，仅保留导入和校对候选，删除 Word 扣分、导入评分、人工二选一状态以及照片级 `match_status` / `review_status`，Python/C++/TypeScript 均严格拒绝旧版本。
-- 当前分支为 `codex/06-5-interaction-redesign`。
+- 当前分支为 `codex/06-6-interaction-redesign`。
 - 模块 4 `04-word-importer-prototype` 已完成并推送到 GitHub：支持 `.docx`、`rule_profile="辽宁国省干线"`、第二章三张病害检查表、病害照片抽取匹配和模块 3 契约输出；评分表解析现已删除。
 - 绕阳河二号桥真实软件报告基线为：病害候选 25 条、病害照片候选 31 条、临时图片 36 个、可归档照片 31 张；Word 中原有评分不再进入导入 JSON。
 - 模块 5 `05-review-workspace` 已完成实施：后端确认入库事务（C++）与前端校对工作台（React）已落地，读取 `import_records.parsed_result_json`，按 warning/error 分组人工校对，保存草稿，五个操作按钮（保存草稿/批量确认普通候选/入库前检查/确认年度事实入库/取消导入）全部接后端，修订版确认弹窗和确认后只读态已实现。已完成端到端手工验收：编辑保存、批量确认、入库前检查解锁确认、首次确认入库写入四张事实表、同桥同年二次导入的修订版确认路径（含 409 拒绝校验）、取消导入均通过。
 - 模块 5 已推送到 GitHub；分支 `feature/05-review-workspace` 与远端同步，提交 `52b9772` 为模块 05 当前末端。
 - 模块 6 `06-component-defect-archive` 的病害档案、线索建议和绑定/重绑事务继续保留；其中早期 Word 评分解析、三端重复评分公式和评分差异校对已经由系统自主评定架构取代。
 - 现行评定架构将 JTG/T H21—2011 与 JTG 5120—2021 分为独立、版本化规范包；桥梁锁定项目规范组合和已确认构件台账，H21 evaluator 负责试算与正式评定，正式运行保存输入摘要、包校验和、台账版本、各级结果和结构化轨迹。
+- 2026-08-14 发布 H21 1.0.4 与单位桥梁评定树 2.0.3：河床正式设为 `generatable=true`，可在全部六种适用桥型中作为默认不勾选的全桥级单一台账条目生成；评分权重、指标、扣分与等级边界未变。产品目录的 `manually_selectable` 临时例外已经删除，taxonomy 重新成为生成准入唯一真值。新建桥梁默认选择最新可用技术状况包，存在历史版本时下拉项显示版本号。
 - 用户创建桥梁时录入构件数量，系统生成实际构件编号并允许修改；病害必须填写构件类别、构件编号、病害位置、病害类型和病害描述，正式确认前必须关联最新已确认台账中的实际构件。结构部位不在校对页面显示。
 - 合同 1.2 和模块 6 早期评分方案仅保留在历史规格/迁移记录中；运行时代码、当前样例和数据库最终态均以 4.0 与系统评分为准。
 - 2026-08-10 已取消照片级确认状态：照片候选只保存编号、关联病害、归档文件、来源、置信度和警告；病害组确认是照片关系的唯一确认动作。正式入库时，与确认病害关联且归档完整的照片写入 `defect_photos`，未关联照片跳过并保留提示；数据库 `defect_photos.match_status` 已由迁移 025 删除。
@@ -306,9 +308,9 @@
 
 推荐下一步：
 
-1. 完成 Task 18 旧评分链路清理的全量自动回归、真实 Word 回归和模块 06.5 界面验收。
+1. 完成分支 `codex/06-6-interaction-redesign` 的全量自动回归与界面验收；河床版本化发布的针对性回归已纳入该分支。
 2. 用户明确同意后再进入模块 07 `07-defect-comparison-engine`：基于已整理的病害线索与相邻年度观测生成对比候选，人工确认后写入 `defect_comparisons`。
-3. 模块 07 设计时注意：模块 06 的绑定事务已在数据库层拦截"重新绑定被人工已确认对比引用的观测"，撤销对比结论的入口应由模块 07 提供。
+3. 模块 07 设计时注意：模块 06 的绑定事务已在数据库层拦截“重新绑定被人工已确认对比引用的观测”，撤销对比结论的入口应由模块 07 提供。
 
 ## 设计文档
 

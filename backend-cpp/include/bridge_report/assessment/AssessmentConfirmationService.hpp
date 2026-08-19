@@ -24,6 +24,11 @@ AssessmentConfirmationCalculation calculate_assessment_confirmation(
     const AssessmentContextSnapshot& context,
     const Json::Value& draft);
 
+// assessment_rule_traces.target_type 使用数据库约束定义的中文枚举。
+// 所有评定步骤（包括不进入评分的评定树过滤记录）必须通过这里映射，
+// 避免在持久化 SQL 中混入英文内部标识。
+std::string assessment_trace_target_type(const std::string& step);
+
 struct AssessmentConfirmationWritten {
     std::string assessment_run_id;
     int component_results{0};

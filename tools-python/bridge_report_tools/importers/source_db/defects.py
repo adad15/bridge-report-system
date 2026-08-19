@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from bridge_report_tools.importers.source_db.reader import ComponentNode, SourceDefect
+from bridge_report_tools.importers.measurements import normalize_unit, parse_measurements
 
 #: 来源软件的尺寸列名 → 契约里的维度名。两边用词一致，保持原样便于对账。
 DIMENSION_TYPES = {
@@ -78,9 +79,32 @@ def _component_name(
     return component.name, warnings
 
 
-def _measurements(defect: SourceDefect) -> list[dict[str, Any]]:
-    """尺寸在来源库里已经拆成数值列与单位列，直接搬，不回头解析文字。"""
-    measurements = []
+def _same_measurement(
+    source: dict[str, Any], parsed: dict[str, Any],
+) -> bool:
+    """判断来源结构化值与描述文本中的值是否表达同一个尺寸。"""
+    if source["value_type"] != parsed["value_type"]:
+        return False
+    if normalize_unit(source["unit"]) != normalize_unit(parsed["unit"]):
+        return False
+    if source["value_type"] == "single":
+        return source["value"] == parsed["value"]
+    return (
+        source["minimum_value"] == parsed["minimum_value"]
+        and source["maximum_value"] == parsed["maximum_value"]
+    )
+
+
+def _dimension_key(dimension_type: str) -> str:
+    """合并时把来源列“面积”和描述解析出的“总面积”视为同一维度。"""
+    return "面积" if dimension_type == "总面积" else dimension_type
+
+
+def _measurements(
+    defect: SourceDefect, candidate_id: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """优先搬来源结构化列，再用病害描述补齐缺失的尺寸维度。"""
+    measurements: list[dict[str, Any]] = []
     for column, dimension_type in DIMENSION_TYPES.items():
         if column not in defect.dimensions:
             continue
@@ -99,7 +123,41 @@ def _measurements(defect: SourceDefect) -> list[dict[str, Any]]:
             "is_approximate": False,
             "source_text": f"{raw}{unit}",
         })
-    return measurements
+
+    parsed_measurements, parse_warnings = parse_measurements(
+        defect.description or None, candidate_id)
+    warnings = [warning.model_dump() for warning in parse_warnings]
+
+    source_by_dimension = {
+        _dimension_key(measurement["dimension_type"]): measurement
+        for measurement in measurements
+    }
+    conflicted_dimensions: set[str] = set()
+    for parsed_model in parsed_measurements:
+        parsed = parsed_model.model_dump()
+        dimension_type = parsed["dimension_type"]
+        dimension_key = _dimension_key(dimension_type)
+        source = source_by_dimension.get(dimension_key)
+        if source is None:
+            measurements.append(parsed)
+            continue
+        if (
+            _same_measurement(source, parsed)
+            or dimension_key in conflicted_dimensions
+        ):
+            continue
+        conflicted_dimensions.add(dimension_key)
+        warnings.append({
+            "code": "source_measurement_conflict",
+            "message": (
+                f"来源结构化{dimension_type}与病害描述中的尺寸表达不一致，"
+                "已保留来源结构化值，请人工复核。"
+            ),
+            "severity": "warning",
+            "target_candidate_id": candidate_id,
+        })
+
+    return measurements, warnings
 
 
 def build_defect_candidates(
@@ -136,6 +194,8 @@ def build_defect_candidates(
         indicator_number, _ = indicator_codes.get(defect.judge_index_id, ("", ""))
 
         candidate_id = f"source_defect_{position:04d}"
+        measurements, measurement_warnings = _measurements(defect, candidate_id)
+        warnings.extend(measurement_warnings)
         links[defect.id] = DefectLink(candidate_id, defect.tree_id)
         candidates.append({
             "candidate_id": candidate_id,
@@ -145,7 +205,7 @@ def build_defect_candidates(
             "defect_location": defect.position,
             "defect_description": defect.description,
             "defect_scale": defect.degree,
-            "measurements": _measurements(defect),
+            "measurements": measurements,
             "measurement_text": defect.description or None,
             "source_defect_group_id": defect.judge_tree_id or None,
             "source_defect_group_number": group_number or None,

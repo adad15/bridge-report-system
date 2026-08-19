@@ -232,7 +232,7 @@ std::string insert_defect_observation(
         "values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, "
         "        $5, $6, $7, $8::jsonb, "
         "        $9, $10, $11, $12, "
-        "        $13, nullif($14,'')::uuid, nullif($15,''), $16, $17, $18, "
+        "        nullif($13,''), nullif($14,'')::uuid, nullif($15,''), $16, $17, $18, "
         "        $19, $20) "
         "returning id",
         inspection_year_id,

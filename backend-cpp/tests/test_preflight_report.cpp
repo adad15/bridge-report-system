@@ -91,12 +91,13 @@ TEST(PreflightReportTest, MissingRequiredComponentNumberBlocks) {
     EXPECT_TRUE(has_code(report.blocking_errors, "defect_missing_required_field"));
 }
 
-TEST(PreflightReportTest, InvalidScaleBlocks) {
+TEST(PreflightReportTest, ScaleValidationIsDeferredToRatingTreeRules) {
     auto data = fixture();
     settle(data);
     data["defects"][0]["defect_scale"] = Json::Value(Json::nullValue);
     const auto report = bridge_report::review::build_preflight_report(data, context());
-    EXPECT_TRUE(has_code(report.blocking_errors, "defect_scale_required"));
+    EXPECT_TRUE(report.can_confirm);
+    EXPECT_FALSE(has_code(report.blocking_errors, "defect_scale_required"));
 }
 
 TEST(PreflightReportTest, ActualComponentAssociationMustUseLatestRevision) {
@@ -204,7 +205,7 @@ TEST(PreflightReportTest, InvalidContractShortCircuitsDependentChecks) {
 }
 
 TEST(PreflightReportTest, EachRequiredDefectBusinessFieldIsChecked) {
-    for (const auto* field : {"component_name", "component_number", "defect_location", "defect_type", "defect_description"}) {
+    for (const auto* field : {"component_name", "component_number", "defect_type", "defect_description"}) {
         auto data = fixture();
         settle(data);
         data["defects"][0][field] = "";
@@ -214,6 +215,21 @@ TEST(PreflightReportTest, EachRequiredDefectBusinessFieldIsChecked) {
             has_code(report.blocking_errors, "defect_missing_required_field") ||
             has_code(report.blocking_errors, "contract_validation_failed")) << field;
     }
+}
+
+TEST(PreflightReportTest, MissingDefectLocationWarnsWithoutBlocking) {
+    auto data = fixture();
+    settle(data);
+    data["defects"][0]["defect_location"] = "";
+
+    const auto report = bridge_report::review::build_preflight_report(data, context());
+
+    EXPECT_TRUE(report.can_confirm);
+    EXPECT_FALSE(has_code(report.blocking_errors, "defect_missing_required_field"));
+    EXPECT_TRUE(has_code(report.warnings, "defect_location_missing"));
+    ASSERT_FALSE(report.warnings.empty());
+    EXPECT_EQ(report.warnings[0].target_candidate_id,
+              data["defects"][0]["candidate_id"].asString());
 }
 
 TEST(PreflightReportTest, UnconfirmedInventoryBlocksEverySettledDefect) {

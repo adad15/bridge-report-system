@@ -1,5 +1,7 @@
 # 全桥型构件台账标准编号 + 向导重写 + 旧路径退休 实施计划
 
+> **2026-08-14 后续变更：** 河床已通过 H21 1.0.4 正式开放生成，并由评定树 2.0.3 锁定；不再使用产品目录例外。当前规则见 `docs/superpowers/specs/2026-08-14-riverbed-inventory-generation-design.md`。本计划其余内容保留为历史实施记录。
+
 > **For agentic workers:** 逐任务实施；每步 `- [ ]` 勾选。先写失败测试 → 跑到失败 → 最小实现 → 跑到通过 → 提交。
 
 **Goal:** 把构件台账"选规范/桥型 → 填孔数 → 逐部件勾选/填数量 → 自动生成标准编号"的新流程，从只覆盖梁式桥**扩到 H21 全部 6 种桥型**；下部结构/桥面系/支座部件在桥型间共享，各桥型的上部结构（拱圈/拱片/拱肋/斜拉索/主缆/索塔…）按《规则》的 9 种形状先拟**临时编号形状**（标 `provisional`，后续用真实报告校准）；前端向导按此统一重写；六桥型全覆盖后**彻底退休旧 `groups`/`NumberingMode` 路径**。
@@ -37,6 +39,7 @@
 | lower.wing_wall | 翼墙 | lower.wing_or_ear_wall | `{ab}#台{side}侧{name}` | — | 否 |
 | lower.cone_slope | 锥坡 | lower.cone_or_protection_slope | `{ab}#台{side}侧{name}` | — | 否 |
 | lower.protection_slope | 护坡 | lower.cone_or_protection_slope | `{ab}#台{name}` | — | 否 |
+| lower.riverbed | 河床 | lower.riverbed | `{name}` | —（整桥单一条目） | 否 |
 | lower.regulation | 调治构造物 | lower.regulation_structure | `{c1}#{name}` | 数量 | prov |
 
 ### C. 共享 · 桥面系（deck_system；全桥型一致）

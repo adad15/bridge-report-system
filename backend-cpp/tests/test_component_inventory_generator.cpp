@@ -30,6 +30,22 @@ TEST(ComponentInventoryGeneratorTest, GeneratesFromPartCatalog) {
     EXPECT_EQ(result.entries[65].component_number, "1#跨桥面铺装");
 }
 
+TEST(ComponentInventoryGeneratorTest, GeneratesOneWholeBridgeRiverbed) {
+    inventory::GenerateInventoryInput input;
+    input.span_count = 33;
+    input.part_selections.push_back({"lower.riverbed", "河床", {}});
+
+    const auto result = inventory::generate_component_inventory(input);
+    ASSERT_TRUE(result.ok()) << result.error_message;
+    ASSERT_EQ(result.entries.size(), 1u);
+    EXPECT_EQ(result.entries[0].component_number, "河床");
+    EXPECT_EQ(result.entries[0].site_name, "河床");
+    EXPECT_EQ(result.entries[0].site_component_type, "河床");
+    EXPECT_EQ(result.entries[0].standard_component_category_id,
+              "h21.component.lower.riverbed");
+    EXPECT_EQ(result.entries[0].structure_part, "substructure");
+}
+
 // 翼墙几何上是 2 台 × 2 侧 = 4 个，但真实桥常缺其中几处，用户去掉的不生成。
 TEST(ComponentInventoryGeneratorTest, DropsExcludedInstances) {
     inventory::GenerateInventoryInput input;

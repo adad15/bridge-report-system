@@ -391,5 +391,194 @@ describe("ComponentBindingWorkspace", () => {
     expect(screen.queryByRole("dialog", { name: "拆分构件范围" })).not.toBeInTheDocument();
   });
 
+  it("selects and clears every split-eligible row in one component group", async () => {
+    const splitOverview = overview("unmatched");
+    splitOverview.groups[0] = {
+      ...splitOverview.groups[0],
+      total: 3,
+      unmatched: 3,
+      rows: [
+        {
+          ...splitOverview.groups[0].rows[0],
+          component_number: "1-1#梁~1-5#梁",
+          split_eligible: true,
+          split_expanded_count: 5,
+        },
+        {
+          ...splitOverview.groups[0].rows[0],
+          component_number: "2-1#梁~2-5#梁",
+          split_eligible: true,
+          split_expanded_count: 5,
+        },
+        {
+          ...splitOverview.groups[0].rows[0],
+          component_number: "3-1#梁",
+          split_eligible: false,
+          split_expanded_count: null,
+        },
+      ],
+    };
+    splitOverview.groups.push({
+      ...splitOverview.groups[0],
+      part_name: "下部结构",
+      total: 1,
+      unmatched: 1,
+      rows: [{
+        ...splitOverview.groups[0].rows[0],
+        component_number: "4-1#墩~4-5#墩",
+      }],
+    });
+    vi.mocked(fetchComponentBinding).mockResolvedValue(splitOverview);
+
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
+
+    const selectGroup = await screen.findByLabelText("全选 上部承重构件 待拆分构件");
+    await userEvent.click(selectGroup);
+
+    expect(screen.getByLabelText("选择拆分 1-1#梁~1-5#梁")).toBeChecked();
+    expect(screen.getByLabelText("选择拆分 2-1#梁~2-5#梁")).toBeChecked();
+    expect(screen.queryByLabelText("选择拆分 3-1#梁")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("选择拆分 4-1#墩~4-5#墩")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /拆分构件/ })).toHaveTextContent("2");
+    expect(screen.getByText("取消全选 2")).toBeInTheDocument();
+
+    await userEvent.click(selectGroup);
+    expect(screen.getByLabelText("选择拆分 1-1#梁~1-5#梁")).not.toBeChecked();
+    expect(screen.getByLabelText("选择拆分 2-1#梁~2-5#梁")).not.toBeChecked();
+    expect(screen.getByRole("button", { name: /拆分构件/ })).toBeDisabled();
+  });
+
+  it("shows a partial group selection and completes it from the group checkbox", async () => {
+    const splitOverview = overview("unmatched");
+    splitOverview.groups[0] = {
+      ...splitOverview.groups[0],
+      total: 2,
+      unmatched: 2,
+      rows: [
+        {
+          ...splitOverview.groups[0].rows[0],
+          component_number: "1-1#梁~1-5#梁",
+          split_eligible: true,
+          split_expanded_count: 5,
+        },
+        {
+          ...splitOverview.groups[0].rows[0],
+          component_number: "2-1#梁~2-5#梁",
+          split_eligible: true,
+          split_expanded_count: 5,
+        },
+      ],
+    };
+    vi.mocked(fetchComponentBinding).mockResolvedValue(splitOverview);
+
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
+    await userEvent.click(await screen.findByLabelText("选择拆分 1-1#梁~1-5#梁"));
+
+    const selectGroup = screen.getByLabelText("全选 上部承重构件 待拆分构件");
+    expect(selectGroup).toBePartiallyChecked();
+
+    await userEvent.click(selectGroup);
+    expect(screen.getByLabelText("选择拆分 1-1#梁~1-5#梁")).toBeChecked();
+    expect(screen.getByLabelText("选择拆分 2-1#梁~2-5#梁")).toBeChecked();
+  });
+
+
+
+  // 分组全选一键就能顶破 2000 条那个整批上限，而超限时连预览都出不来。后端已经在
+  // details 里点名是哪个目标卡住的，前端不带出来的话用户只能逐行取消勾选去试。
+  it("names the target that blew the split limit", async () => {
+    const splitOverview = overview("unmatched");
+    splitOverview.groups[0] = {
+      ...splitOverview.groups[0],
+      total: 1,
+      unmatched: 1,
+      rows: [{
+        ...splitOverview.groups[0].rows[0],
+        component_number: "2-1#梁~2-5#梁",
+        split_eligible: true,
+        split_expanded_count: 5,
+      }],
+    };
+    vi.mocked(fetchComponentBinding).mockResolvedValue(splitOverview);
+    vi.mocked(previewComponentRangeSplit).mockRejectedValue(
+      new ApiError(
+        "component_range_split_result_limit_exceeded",
+        "本次拆分生成的病害数量超过上限。",
+        { details: { part_name: "上部承重构件", component_number: "2-1#梁~2-5#梁" } }
+      )
+    );
+
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
+    await userEvent.click(await screen.findByLabelText("选择拆分 2-1#梁~2-5#梁"));
+    await userEvent.click(screen.getByRole("button", { name: /拆分构件/ }));
+
+    expect(
+      await screen.findByText(/超过上限.*上部承重构件 · 2-1#梁~2-5#梁/)
+    ).toBeInTheDocument();
+  });
+
+  // 行数说明不了规模：一行 "~5" 带 3 条病害就是 15 条。全选之前得看得见这个数。
+  it("projects how many defects the selection will produce", async () => {
+    const splitOverview = overview("unmatched");
+    splitOverview.groups[0] = {
+      ...splitOverview.groups[0],
+      total: 2,
+      unmatched: 2,
+      rows: [
+        {
+          ...splitOverview.groups[0].rows[0],
+          component_number: "1-1#梁~1-5#梁",
+          defect_count: 3,
+          split_eligible: true,
+          split_expanded_count: 5,
+        },
+        {
+          ...splitOverview.groups[0].rows[0],
+          component_number: "2-1#梁~2-5#梁",
+          defect_count: 2,
+          split_eligible: true,
+          split_expanded_count: 5,
+        },
+      ],
+    };
+    vi.mocked(fetchComponentBinding).mockResolvedValue(splitOverview);
+
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
+
+    // 分组旁边给的是"全选会生成多少"：3×5 + 2×5 = 25。
+    expect(await screen.findByText("约 25 条")).toBeInTheDocument();
+
+    // 已勾选的累计数跟着走：只选第一行就是 15。
+    await userEvent.click(screen.getByLabelText("选择拆分 1-1#梁~1-5#梁"));
+    const splitButton = screen.getByRole("button", { name: /拆分构件/ });
+    await waitFor(() => expect(splitButton).toHaveTextContent("约 15 条"));
+  });
+
+  // 六个绑定写接口现在都要求编辑锁。没有编辑权还让人勾满一屏、点下去才报错，
+  // 是把后端的硬边界藏起来。
+  it("disables every write control and says why without an edit lock", async () => {
+    const splitOverview = overview("unmatched");
+    splitOverview.groups[0] = {
+      ...splitOverview.groups[0],
+      rows: [{
+        ...splitOverview.groups[0].rows[0],
+        component_number: "1-1#梁~1-5#梁",
+        split_eligible: true,
+        split_expanded_count: 5,
+      }],
+    };
+    vi.mocked(fetchComponentBinding).mockResolvedValue(splitOverview);
+
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken={null} />);
+
+    expect(
+      await screen.findByText("当前页面没有编辑权，绑定与拆分均不可用；取得编辑权后即可操作。")
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("选择拆分 1-1#梁~1-5#梁")).toBeDisabled();
+    expect(screen.getByLabelText("全选 上部承重构件 待拆分构件")).toBeDisabled();
+    expect(screen.getByLabelText("为 1-1#梁~1-5#梁 选择实际构件")).toBeDisabled();
+    // 概览本身是只读的，没有编辑权照样要能看。
+    expect(screen.getByText("上部承重构件")).toBeInTheDocument();
+  });
 
 });

@@ -1,0 +1,386 @@
+《已确认台账版本解析的一致性》技术文档复审意见
+
+复审对象：2026-08-18-confirmed-inventory-resolution-consistency-design.md
+复审日期：2026-08-18
+初审记录：2026-08-18-confirmed-inventory-resolution-consistency-design-review.txt
+复审范围：修订后的设计文档、评定服务上下文、Word 导入失败路径、年度确认事务和校对草稿事务
+
+
+一、总体结论
+
+修订后的文档已经解决了初审提出的大部分问题：
+
+1. 正确认识到 Word 构件匹配和评定树匹配必须共享同一个完整台账版本。
+2. 要求检查年度版本锁定 UPDATE 的结果。
+3. 识别并设计了校对草稿“解析—校验—写入”的事务一致性方案。
+4. 修正了年度确认查询已经包含 inventory_revision_id 的事实描述。
+5. 修正了 DefectMatchingRoutes 实际执行的是评定树节点匹配，而不是为病害选择构件。
+6. 修正了 get_latest_revision() 迁移后没有生产调用者的结论。
+7. 补充了历史锁定版本、错误锁定版本、并发和死代码测试。
+
+结合当前代码继续检查后，仍有三个实施前必须补充的关键问题：
+
+1. 入库前检查和年度确认还依赖 AssessmentConfirmationService，而该服务会重新从 inspection_years 读取版本；只修改文档列出的六个 get_latest_revision() 调用点仍然不能让未锁定年度通过评定。
+2. Word 导入如果在锁定年度版本时回滚，当前 HTTP 失败路径会把它当作普通解析失败并删除整条导入记录及相关文件。
+3. 保存校对草稿的事务方案没有明确：年度未锁定时，成功保存后是否把解析出的版本锁入检测年度；同时当前 bool 返回值无法传递版本冲突等具体原因。
+
+建议补齐后再进入实施阶段。
+
+
+二、阻塞问题
+
+1. 入库前检查仍会被 AssessmentConfirmationService 判定失败
+
+修订文档设计的入库前检查流程是：
+
+1. 使用统一规则解析完整已确认台账。
+2. 用解析结果构建 PreflightContext。
+3. 年度未锁定时也可以使用最新已确认版本。
+
+这可以修复 build_preflight_report() 的台账版本判断，但 preflight 通过后，路由还会调用：
+
+assessment_service.calculate(
+    *detail->inspection_year_id,
+    parsed_result);
+
+AssessmentConfirmationService::calculate() 不接受刚解析出来的版本，而是重新从数据库读取：
+
+iy.component_inventory_revision_id
+
+并通过 join bridge_component_inventory_revisions 要求该字段非空且有效。
+
+如果检测年度尚未锁定版本：
+
+1. 统一解析器得到最新已确认版本 R2。
+2. build_preflight_report() 可以通过。
+3. AssessmentConfirmationService 重新读取 inspection_years。
+4. component_inventory_revision_id 仍然为 null。
+5. 服务返回 assessment_context_incomplete。
+6. 入库前检查仍然不能通过。
+
+因此，修改 ImportConfirmRoutes.cpp:71 的 get_latest_revision() 并不足以修复整条入库前检查链路。
+
+建议为只读评定预览增加显式版本上下文，例如：
+
+AssessmentConfirmationOutcome calculate(
+    const std::string& inspection_year_id,
+    const Json::Value& draft,
+    const std::string& resolved_inventory_revision_id) const;
+
+或者抽取：
+
+AssessmentContextSnapshot load_context(
+    const std::string& inspection_year_id,
+    const std::optional<std::string>& inventory_revision_override) const;
+
+规则：
+
+1. 没有 override 时继续读取年度锁定版本。
+2. 有 override 时校验该版本属于同一桥梁且已确认。
+3. 使用 override 构建评定上下文。
+4. 只读预检不得把 override 写入 inspection_years。
+
+需要测试：
+
+1. 年度未锁定但桥梁存在已确认台账时，系统评定使用解析出的版本。
+2. 只读预检结束后 inspection_years.component_inventory_revision_id 仍为 null。
+3. 显式版本属于其他桥梁、是草稿或不存在时，评定上下文失败。
+
+
+2. 年度确认事务必须在调用评定服务前处理年度版本
+
+年度确认事务同样调用：
+
+AssessmentConfirmationService::calculate(
+    existing_inspection_year_id,
+    data);
+
+当前评定服务直接从 inspection_years 读取版本。如果年度字段为 null，即使确认事务已经通过统一解析器得到 R2，评定服务仍然看不到该版本。
+
+正式确认属于写事务，可以选择：
+
+方案 A：在调用 AssessmentConfirmationService 前，使用 lock_pending_year_revision() 把解析出的版本写入待校对年度。
+
+1. 锁定发生在同一个事务中。
+2. 后续评定服务可以读取到该版本。
+3. 如果评定或确认失败，锁定随事务一起回滚。
+
+方案 B：让评定服务接受显式版本 override，最终确认年度时再原子写入。
+
+推荐方案 A，因为年度确认本身就是最终写事务。
+
+还必须处理 inspection_years 行的并发。
+
+当前事务只对 import_records 行执行 for update。两个不同导入记录可以关联到同一个检测年度，因此锁住一个 import 记录不能阻止另一个导入修改年度。
+
+当前最终 UPDATE 是：
+
+update inspection_years
+set component_inventory_revision_id=$4
+where id=$1
+
+它会无条件覆盖年度版本。
+
+可能出现：
+
+1. 导入 A 解析出 R2。
+2. 导入 B 先把同一年度锁到 R3并提交。
+3. 导入 A 最终 UPDATE 又把年度覆盖为 R2。
+
+建议：
+
+1. 事务开始后单独 SELECT 关联 inspection_years 行 FOR UPDATE。
+2. 在年度行锁内读取 component_inventory_revision_id。
+3. 已锁定时严格使用该版本。
+4. 未锁定时解析并调用 lock_pending_year_revision()。
+5. 最终确认 UPDATE 不得覆盖不同的并发锁定版本。
+
+需要两个不同 import_records 共享同一 inspection_year 的并发测试。
+
+
+3. Word 导入锁定冲突会进入“删除失败导入”路径
+
+修订文档规定：
+
+lock_pending_year_revision() 返回 false 时整体回滚。
+
+数据库一致性上正确，但当前 HTTP 处理会把 persist_parse_result() 的任何失败都交给：
+
+fail_parse(...)
+
+fail_parse() 随后调用：
+
+discard_failed_import_safely(...)
+
+discard_failed_import() 接受状态为“解析中”的记录，并删除导入记录和相关文件。
+
+因此，一个可恢复的并发版本冲突可能导致：
+
+1. Python Word 解析已经成功。
+2. 照片已经完成归档准备。
+3. 只是年度被其他事务先锁定到另一个版本。
+4. persist_parse_result() 回滚。
+5. 路由把它当作普通解析失败。
+6. 整条导入记录、临时源文件和相关归档被删除。
+
+这不是合理的版本冲突处理。
+
+建议优先调整 Word 持久化顺序：
+
+1. 锁定 import_records。
+2. 如果有关联年度，立即锁定对应 inspection_years 行。
+3. 读取年度当前锁定版本。
+4. 年度未锁定时解析最新已确认版本，并立即锁定该版本。
+5. 获得稳定版本后，再执行构件匹配和评定树匹配。
+6. 两次匹配共享同一个完整版本。
+7. 最后写 parsed_result_json 和照片关系。
+
+这样可以在开始匹配前稳定版本，通常不会在匹配结束后才发现冲突。
+
+如果仍可能产生版本冲突，需要使用专用错误码：
+
+component_inventory_revision_changed
+
+WordImportRoutes 遇到该错误时不得调用 discard_failed_import_safely()。可以采用：
+
+1. 在事务中按当前已锁版本重新执行匹配；或
+2. 将导入标记为可重试的“解析失败”，保留原始 Word、导入记录和必要文件。
+
+不能把可恢复的版本冲突当成不可恢复的解析错误直接删除。
+
+需要测试：
+
+1. 年度版本冲突不会删除导入记录。
+2. 原始 Word 文件仍可用于重试。
+3. 冲突不会进入通用 discard_failed_import_safely() 路径。
+4. 真正的契约解析失败仍按原流程清理。
+
+
+三、保存校对草稿事务还需明确
+
+4. 成功保存时是否锁定年度版本
+
+修订文档推荐把解析、校验和保存放入同一个事务，这是正确的。但还没有说明：
+
+如果 inspection_years.component_inventory_revision_id 当前为 null，草稿按照解析出的 R2校验成功后，是否把 R2 锁入检测年度？
+
+如果只锁行、不写入版本：
+
+1. 草稿按照 R2完成校验并保存。
+2. 事务提交后年度仍未锁定。
+3. 其他人确认了 R3。
+4. 下一次加载或保存时统一规则变成 R3。
+5. 刚刚保存的草稿立即变成旧版本数据。
+
+这种方案只保证“保存瞬间自洽”，不能保证保存后的草稿与年度上下文稳定一致。
+
+建议明确：
+
+1. 成功保存包含构件绑定或依赖构件映射的评定树关联的草稿时，在同一事务中调用 lock_pending_year_revision()。
+2. 年度已锁定时严格使用已有版本。
+3. 年度未锁定时锁定本次解析出的确认版本。
+4. 版本锁定失败返回409。
+5. 保存或后续校验失败时，年度锁定与草稿写入一起回滚。
+
+如果产品明确不希望保存草稿产生版本锁定副作用，文档必须承认保存后的草稿可能因后续确认新版本而失效，并定义刷新、提示和重新绑定体验。
+
+结合绑定和 Word 导入都会在写入版本化病害数据时锁定年度，推荐保存草稿遵循同一规则。
+
+
+5. 方案 A 需要结构化保存结果
+
+当前接口是：
+
+bool save_review_draft(...)
+
+只能区分成功与失败。路由会把失败统一映射成：
+
+409 import_record_not_editable
+
+但新事务内部至少会出现：
+
+1. 导入记录不存在。
+2. 导入状态变化。
+3. 编辑锁失效。
+4. 台账版本变化。
+5. 构件关联校验失败。
+6. 评定树关联校验失败。
+7. 数据库提交失败。
+
+文档已经要求版本变化显示整体提示，但没有规定仓储如何把具体原因传递给路由。
+
+建议改为结构化结果：
+
+struct SaveReviewDraftOutcome {
+    bool success{false};
+    std::string error_code;
+    std::string error_message;
+    review::DraftValidationResult validation;
+};
+
+至少支持：
+
+component_inventory_revision_changed
+defect_component_assignment_invalid
+rating_tree_assignment_invalid
+edit_lock_invalid
+import_record_not_editable
+database_commit_failed
+
+HTTP 映射建议：
+
+1. component_inventory_revision_changed → 409。
+2. edit_lock_invalid → 409或423，保持项目现有约定。
+3. import_record_not_editable → 409。
+4. 病害内容和关联校验失败 → 400，并返回逐项 details。
+5. database_commit_failed → 503。
+
+版本变化只显示一条整体提示；真正的单病害关联错误仍保留逐项问题。
+
+
+四、文档中仍有少量不一致
+
+6. 背景仍把年度确认描述成整体使用错误版本
+
+文档背景仍写：
+
+“保存校对草稿、入库前检查、年度确认拿这个 id 去跟 get_latest_revision() 的结果比。”
+
+但修订说明已经正确指出：
+
+1. 年度确认的 preflight 上下文使用年度锁定版本。
+2. 只有评定树确认校验另行读取了草稿优先版本。
+
+建议改为：
+
+“保存草稿与入库前检查整体使用了错误版本；年度确认的 preflight 使用锁定版本，但评定树确认校验另行读取了草稿优先版本。”
+
+避免同一文档前后矛盾。
+
+
+7. 开发库数据属于瞬时事实
+
+文档写“开发库里1座有台账的桥、0个草稿”。该数据会随开发环境变化，不是设计成立的依据。
+
+建议删除，或者改成：
+
+“2026-08-18对本地开发数据库抽样时暂未发现草稿版本；该结果只说明缺陷尚未在该样本中触发。”
+
+最好附上查询日期和查询方式，不把它作为长期有效事实。
+
+
+五、建议补充的测试
+
+AssessmentConfirmationService：
+
+1. 年度未锁定时，入库前评定预览使用显式解析版本。
+2. 只读预检不会写入年度版本。
+3. 显式版本必须属于同一桥梁且处于已确认状态。
+4. 年度已锁定时优先使用锁定版本。
+
+年度确认事务：
+
+1. 调用评定服务前，事务内已经锁定解析出的版本，或者向服务传入同一版本。
+2. 两个不同导入记录共享同一年度时，不会互相覆盖年度版本。
+3. 最终 UPDATE 不覆盖不同的并发锁定版本。
+4. 评定失败时，事务内临时版本锁定一起回滚。
+
+Word 导入：
+
+1. 开始匹配前已经稳定年度版本。
+2. 构件匹配和评定树匹配使用同一个完整版本。
+3. 版本冲突不会删除导入记录和原始 Word。
+4. 版本冲突可重试。
+5. 真正解析失败仍走原有清理流程。
+
+校对草稿保存：
+
+1. 成功保存后，按最终设计决定是否锁定年度版本。
+2. 事务失败时，版本锁定和草稿写入一起回滚。
+3. 保存期间版本变化返回 component_inventory_revision_changed。
+4. SaveReviewDraftOutcome 能区分版本冲突、校验失败、编辑锁失效和状态变化。
+5. 版本冲突只显示整体提示。
+6. 单病害数据错误仍返回逐项 details。
+
+
+六、推荐的修订后实施顺序
+
+批次一：评定服务上下文
+
+1. 为 AssessmentConfirmationService 增加显式 inventory revision 上下文能力。
+2. 只读预检使用 override，不写年度。
+3. 正式确认事务在年度锁内处理版本。
+
+批次二：Word 导入事务顺序
+
+1. 先锁 import 和 year。
+2. 解析并稳定版本。
+3. 构件与评定树匹配共享同一对象。
+4. 区分可恢复版本冲突和不可恢复解析失败。
+
+批次三：校对草稿事务
+
+1. 定义 SaveReviewDraftOutcome。
+2. 将版本解析、关联校验、版本锁定和草稿 UPDATE 放进同一事务。
+3. 路由根据结构化错误映射 HTTP 状态和提示。
+
+批次四：其余六处替换与清理
+
+1. 完成确认链路和自动匹配改造。
+2. 删除 get_latest_revision() 和 get_latest_confirmed_revision()。
+3. 更新 latest 相关命名和提示。
+4. 完成历史版本及并发测试。
+
+
+七、复审结论
+
+修订后的设计已经从“六处替换调用”提升为较完整的一致性改造，但还需要覆盖两个隐藏的数据源：AssessmentConfirmationService 对年度版本的重新查询，以及 WordImportRoutes 对所有持久化失败执行删除的通用处理。
+
+进入实现前必须明确：
+
+1. ②③如何让评定服务使用同一个解析版本。
+2. Word 版本冲突如何保留导入记录并支持重试。
+3. 保存草稿成功时是否锁定年度版本。
+4. 保存事务如何通过结构化结果返回具体错误。
+
+这些问题解决后，版本解析、评定、保存和正式确认才能真正形成闭环。

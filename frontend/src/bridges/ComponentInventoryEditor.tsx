@@ -37,7 +37,7 @@ import {
   type StandardCatalog,
 } from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
-import { BridgeInventoryWizard } from "./BridgeInventoryWizard";
+import { InventoryPlanPanel } from "./InventoryPlanPanel";
 import { structurePartLabel, structurePartOrder } from "./structureParts";
 
 interface MappingDraft {
@@ -621,7 +621,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       <section className="workspace-card component-inventory-panel">
         <h1>实际构件台账</h1>
         <p>这座桥还没有构件台账。填写数量后，系统会生成每一个实际构件编号。</p>
-        <BridgeInventoryWizard onPlanChange={setPlan} />
+        <InventoryPlanPanel onPlanChange={setPlan} />
         {error ? <p className="error-text" role="alert">{error}</p> : null}
         <div className="inventory-panel-actions">
           <button type="button" disabled={busy || !plan} onClick={() => void generate()}>
@@ -671,6 +671,8 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
           />
         </label>
         {/* 提示语和搜索框是一件事，拆成两条横带只会让卡片显得散。搜索时让位给结果计数。 */}
+        {/* 搜"支座"会得到"匹配 3300 个，显示前 50 个"，不点破的话用户会以为这座桥
+            只有 50 个支座。整组浏览要走分组表，那里能完整分页。 */}
         {searchTerm ? null : (
           <p className="inventory-entry-hint">按编号、构件类别或现场名称搜索；结果只显示前若干条，要完整查看整组构件请在分组核对表中点击“查看构件”，在弹窗中分页浏览并编辑。</p>
         )}

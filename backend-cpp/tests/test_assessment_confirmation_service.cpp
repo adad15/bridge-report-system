@@ -64,6 +64,17 @@ Json::Value draft_with_forged_word_rating(
 
 }  // namespace
 
+TEST(AssessmentConfirmationServiceTest, TraceTargetTypesMatchDatabaseEnum) {
+    EXPECT_EQ(assessment::assessment_trace_target_type("defect_deduction"), "病害");
+    EXPECT_EQ(assessment::assessment_trace_target_type("rating_tree_filter"), "病害");
+    EXPECT_EQ(assessment::assessment_trace_target_type("component_score"), "构件");
+    EXPECT_EQ(assessment::assessment_trace_target_type("component_category_score"), "部件");
+    EXPECT_EQ(assessment::assessment_trace_target_type("structure_part_score"), "结构");
+    EXPECT_EQ(assessment::assessment_trace_target_type("grade"), "等级");
+    EXPECT_EQ(assessment::assessment_trace_target_type("control"), "控制");
+    EXPECT_EQ(assessment::assessment_trace_target_type("overall_score"), "全桥");
+}
+
 TEST(AssessmentConfirmationServiceTest, FormalCalculationIgnoresImportedRatings) {
     const auto package = bridge_report::tests::h21::load_package();
     const standards::H21Evaluator evaluator(package);

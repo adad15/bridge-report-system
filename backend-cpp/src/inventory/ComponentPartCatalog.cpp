@@ -75,6 +75,10 @@ const std::vector<CatalogPart>& component_parts() {
          "{ab}#台{side}侧{name}", {}, false, true},
         {"lower.protection_slope", "护坡", "h21.component.lower.cone_or_protection_slope", "substructure",
          "{ab}#台{name}", {}, false, true},
+        // 河床在 H21 中是独立评定类别，但不是按孔、墩或数量批量展开的构件；
+        // 用户勾选时只生成一个全桥级“河床”条目。
+        {"lower.riverbed", "河床", "h21.component.lower.riverbed", "substructure",
+         "{name}", {}},
         {"lower.regulation", "调治构造物", "h21.component.lower.regulation_structure", "substructure",
          "{c1}#{name}", {{"regulation_count", "数量"}}, true},
 

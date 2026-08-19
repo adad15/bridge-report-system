@@ -76,7 +76,7 @@ export function ObservationYearRow({ observation, onRebind }: ObservationYearRow
         <div className="archive-observation-detail">
           <p>
             <strong>年度实际位置：</strong>
-            {observation.defect_location ?? "未记录"}
+            {observation.defect_location || "未记录"}
           </p>
           <p>
             <strong>病害描述：</strong>

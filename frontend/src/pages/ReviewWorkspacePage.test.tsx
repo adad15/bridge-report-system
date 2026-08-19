@@ -4,10 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   acquireEditLock,
+  confirmImport,
   fetchReview,
   heartbeatEditLock,
   releaseEditLock,
+  runPreflight,
   type EditLockSummary,
+  type PreflightResponse,
   type ReviewResponse,
 } from "../api/reviewApi";
 import { previewAssessment, type AssessmentPreviewResponse } from "../api/assessmentApi";
@@ -46,9 +49,11 @@ vi.mock("../api/reviewApi", async (importOriginal) => {
   return {
     ...original,
     acquireEditLock: vi.fn(),
+    confirmImport: vi.fn(),
     fetchReview: vi.fn(),
     heartbeatEditLock: vi.fn(),
     releaseEditLock: vi.fn(),
+    runPreflight: vi.fn(),
   };
 });
 
@@ -249,6 +254,37 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     const notice = screen.getByText("你正在编辑此导入记录。").closest(".review-edit-lock-banner");
     expect(notice?.parentElement).toHaveClass("review-workspace-notices");
     expect(notice?.parentElement?.nextElementSibling).toHaveClass("review-body");
+  });
+
+  it("clears a stale successful preflight message when confirmation fails", async () => {
+    const passedPreflight: PreflightResponse = {
+      can_confirm: true,
+      requires_revision_confirmation: false,
+      blocking_errors: [],
+      warnings: [],
+    };
+    vi.mocked(runPreflight).mockResolvedValue(passedPreflight);
+    vi.mocked(confirmImport).mockRejectedValue(
+      new ApiError("database_error", "评定审计记录写入失败。"),
+    );
+    await renderEditableReview();
+
+    fireEvent.click(screen.getByRole("button", { name: "入库前检查" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByText("检查通过，可以确认入库。")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "确认年度事实入库" }));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("评定审计记录写入失败。")).toBeInTheDocument();
+    expect(screen.queryByText("检查通过，可以确认入库。")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "确认年度事实入库" })).toBeDisabled();
   });
 
   it("retries once after a reload gives the previous page time to release its lock", async () => {

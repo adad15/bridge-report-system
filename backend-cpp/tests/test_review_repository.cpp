@@ -1262,6 +1262,24 @@ TEST_F(ConfirmAnnualFactsTest, ConfirmPersistsRangeMeasurementEndpoints) {
     EXPECT_EQ(rows[0]["raw_text"].as<std::string>(), "约0.5~4.0m");
 }
 
+TEST_F(ConfirmAnnualFactsTest, ConfirmStoresBlankDefectLocationAsNull) {
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto data = build_confirmed_data();
+    data["defects"][0]["defect_location"] = "";
+    ASSERT_TRUE(repository.save_review_draft(
+        import_record_id_, write_json_compact(data)));
+
+    const auto outcome = repository.confirm_annual_facts(
+        import_record_id_, false, "允许来源未记录位置", confirmed_by_user_id_);
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+
+    const auto rows = client_->execSqlSync(
+        "select defect_location from defect_observations "
+        "where source_import_record_id = $1::uuid",
+        import_record_id_);
+    ASSERT_EQ(rows.size(), 1u);
+    EXPECT_TRUE(rows[0]["defect_location"].isNull());
+}
 
 TEST_F(ConfirmAnnualFactsTest, confirm_requires_revision_when_current_facts_exist) {
     const auto current_year_result = client_->execSqlSync(

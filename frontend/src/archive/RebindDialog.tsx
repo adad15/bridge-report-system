@@ -50,7 +50,7 @@ export function RebindDialog({ observation, threads, onClose, onSuccess }: Rebin
       <div className="modal-panel" onClick={(event) => event.stopPropagation()}>
         <h3>重新绑定病害线索</h3>
         <p>
-          {observation.inspection_year} 年｜{observation.defect_type}｜{observation.defect_location ?? "未记录"}
+          {observation.inspection_year} 年｜{observation.defect_type}｜{observation.defect_location || "未记录"}
         </p>
         <label className="archive-rebind-select">
           目标线索
@@ -62,7 +62,7 @@ export function RebindDialog({ observation, threads, onClose, onSuccess }: Rebin
             <option value="">（解绑，保持未绑定）</option>
             {threads.map((thread) => (
               <option key={thread.id} value={thread.id}>
-                {thread.defect_type}｜{thread.defect_location ?? "未记录"}
+                {thread.defect_type}｜{thread.defect_location || "未记录"}
               </option>
             ))}
           </select>

@@ -357,7 +357,10 @@ def build_package_documents(
                 "id": "source.h21.official",
                 "source_type": "technical_condition",
                 "title": "JTG/T H21—2011《公路桥梁技术状况评定标准》",
-                "reference": "standards/technical-condition/jtg-t-h21-2011/1.0.3",
+                "reference": (
+                    "standards/technical-condition/jtg-t-h21-2011/"
+                    f"{Path(h21_path).name}"
+                ),
             },
             {
                 "id": "source.jtg5120.official",
@@ -391,7 +394,7 @@ def write_package(
     h21_path: str | Path,
     output_dir: str | Path,
     *,
-    package_version: str = "2.0.2",
+    package_version: str = "2.0.3",
     scoring_overrides_path: str | Path | None = None,
 ) -> None:
     output = Path(output_dir)
@@ -419,7 +422,7 @@ def check_package(
     h21_path: str | Path,
     output_dir: str | Path,
     *,
-    package_version: str = "2.0.2",
+    package_version: str = "2.0.3",
     scoring_overrides_path: str | Path | None = None,
 ) -> bool:
     output = Path(output_dir)
@@ -450,14 +453,14 @@ def main() -> None:
     parser.add_argument(
         "--h21-path",
         type=Path,
-        default=repository / "standards/technical-condition/jtg-t-h21-2011/1.0.3",
+        default=repository / "standards/technical-condition/jtg-t-h21-2011/1.0.4",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=repository / "standards/rating-tree/organization-bridge/2.0.2",
+        default=repository / "standards/rating-tree/organization-bridge/2.0.3",
     )
-    parser.add_argument("--package-version", default="2.0.2")
+    parser.add_argument("--package-version", default="2.0.3")
     parser.add_argument(
         "--scoring-overrides",
         type=Path,

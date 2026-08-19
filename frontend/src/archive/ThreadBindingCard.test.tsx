@@ -82,6 +82,20 @@ describe("ThreadBindingCard", () => {
     });
   });
 
+  it("labels an empty observation location as unrecorded", async () => {
+    stubFetchQueue([{ body: { suggestions: [] } }]);
+
+    render(
+      <ThreadBindingCard
+        observation={makeObservation({ defect_location: "" })}
+        onResolved={vi.fn()}
+        onDismiss={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("位置：未记录")).toBeInTheDocument();
+  });
+
   it("surfaces the mapped message for a stale concurrency token", async () => {
     stubFetchQueue([
       { body: { suggestions: [suggestion] } },

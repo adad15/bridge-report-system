@@ -100,8 +100,8 @@ feat(import): read inspection data from the source offline database
       **评定树不能改成"给水损一个自己的 H21 编号"**：编译器强制要求参与评分的节点
       引用的 H21 指标必须真实存在（`rating_tree_h21_indicator_missing`），而 H21 的
       5.1.1 只有 12 项；且水损的标度与扣分表正是从碳化那条指标取的，改了就没标度可选。
-- [ ] 实现尺寸组装：数量/长度/宽度/高度/面积一 + 各自单位列 → `measurements`，
-      **不得 import `importers/measurements.py`**（设计 §3）。
+- [ ] 实现尺寸组装：数量/长度/宽度/高度/面积一 + 各自单位列 → `measurements`；
+      来源结构化列优先，并用 `importers/measurements.py` 从病害描述补齐缺失维度。
 - [ ] 位置由 `pos` / `posStake` / `posPart1..5` 组装。
 - [ ] 范围写法的构件编号原样保留，拆分交给 C++ 现有 `ComponentRangeParser`。
 
@@ -264,7 +264,8 @@ feat(import): let import records choose their data source
   原因单一且已查实：检测员把范围值写进了自由文本（`渗水泛碱,L=15至20m`、
   `长度范围：0.5~4.0m`），来源软件的结构化尺寸列只填得了单值，所以留空；
   Word 的正则反而能从文字里抠出这个范围。**数据没丢**——`defect_description`
-  原样带着那句话。设计 §3 明令新模块不得 import `measurements.py`，故不在此处补解析。
+  原样带着那句话。后续已在来源结构化列优先的前提下，用 `measurements.py` 从描述补齐
+  缺失维度；同维度冲突时保留来源结构化值并提示人工复核。
 
 固化为 `tools-python/tests/importers/source_db/test_baigu_regression.py`：
 设了 `BRIDGE_REPORT_SOURCE_DB_SNAPSHOT` 才跑（17 passed），没设则整体跳过。

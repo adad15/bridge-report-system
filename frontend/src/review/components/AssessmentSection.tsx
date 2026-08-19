@@ -1,4 +1,4 @@
-import type { AssessmentIssue, AssessmentPreviewResponse } from "../../api/assessmentApi";
+import type { AssessmentCategoryResult, AssessmentIssue, AssessmentPreviewResponse } from "../../api/assessmentApi";
 import type { AssessmentPhase } from "../assessmentState";
 
 const PART_LABELS: Record<string, string> = {
@@ -46,12 +46,58 @@ const BEAM_CATEGORY_LABELS: Record<string, string> = {
   "h21.component.deck.lighting_signs": "照明、标志",
 };
 
+/* 桥型原本直接显示 h21.bridge_type.beam 这个内部 ID。名称取自规则包 bridge-types.json 的
+   官方名（3.2.2 表3.2.2），照本文件 BEAM_CATEGORY_LABELS 的既有做法在前端映射；
+   评定结果里没有回传名称，为一个标签走一遍 C++ 后端不值当。未收录的 ID 仍原样显示。 */
+const BRIDGE_TYPE_LABELS: Record<string, string> = {
+  "h21.bridge_type.beam": "梁式桥",
+  "h21.bridge_type.arch_slab_rib_box_double": "板拱、肋拱、箱形拱及双曲拱桥",
+  "h21.bridge_type.arch_rigid_frame_truss": "刚架拱及桁架拱桥",
+  "h21.bridge_type.arch_steel_concrete_composite": "钢—混凝土组合拱桥",
+  "h21.bridge_type.suspension": "悬索桥",
+  "h21.bridge_type.cable_stayed": "斜拉桥",
+};
+
 function categoryOrder(componentTypeId: string): number {
   return CATEGORY_ORDER.get(componentTypeId) ?? Number.MAX_SAFE_INTEGER;
 }
 
 function categoryLabel(componentTypeId: string, packageName?: string): string {
   return BEAM_CATEGORY_LABELS[componentTypeId] ?? packageName ?? componentTypeId;
+}
+
+function sortedCategories(categories: AssessmentCategoryResult[]): AssessmentCategoryResult[] {
+  return [...categories].sort((left, right) =>
+    categoryOrder(left.component_type_id) - categoryOrder(right.component_type_id) ||
+    categoryLabel(left.component_type_id, left.component_type_name).localeCompare(
+      categoryLabel(right.component_type_id, right.component_type_name),
+      "zh-CN",
+    ),
+  );
+}
+
+function componentCount(categories: AssessmentCategoryResult[]): number {
+  return categories.reduce((total, category) => total + category.components.length, 0);
+}
+
+/* 等级是这个分区唯一的结论性字段，纯文本时 4 类和 1 类视觉权重相同，得逐行读才知道哪里出了问题。
+   配色沿用工作台已有的 .review-chip-* 语义色（绿 / 蓝 / 黄），4—5 类往橙红延伸。 */
+function GradeChip({ grade }: { grade: number }) {
+  return <span className={`assessment-grade assessment-grade-${grade}`}>{grade} 类</span>;
+}
+
+/* 得分条是分数的图形复述，作用是吸收表格的富余宽度：其余各列全部定宽，剩下多少都归这一列，
+   于是表格能铺满内容区而数字列不会被重新拉散。填色随等级走，51.11 和 100.00 的差距才一眼看得出。 */
+function ScoreBar({ score, grade }: { score: number; grade: number }) {
+  const ratio = Math.min(100, Math.max(0, score));
+  return (
+    <span className="assessment-score-bar">
+      <span
+        className={`assessment-score-bar-fill assessment-score-bar-fill-${grade}`}
+        style={{ width: `${ratio}%` }}
+      />
+    </span>
+  );
 }
 
 interface AssessmentSectionProps {
@@ -64,17 +110,6 @@ interface AssessmentSectionProps {
 
 export function AssessmentSection({ phase, response, error, onRetry, onSelectIssue }: AssessmentSectionProps) {
   const result = response?.result ?? null;
-  const categoryRows = result?.structure_parts.flatMap((part) =>
-    [...part.categories]
-      .sort((left, right) =>
-        categoryOrder(left.component_type_id) - categoryOrder(right.component_type_id) ||
-        categoryLabel(left.component_type_id, left.component_type_name).localeCompare(
-          categoryLabel(right.component_type_id, right.component_type_name),
-          "zh-CN",
-        ),
-      )
-      .map((category) => ({ ...category, structure_part: part.structure_part })),
-  ) ?? [];
   return (
     <section className="status-panel assessment-section">
       <div className="assessment-heading">
@@ -108,42 +143,68 @@ export function AssessmentSection({ phase, response, error, onRetry, onSelectIss
 
       {result ? (
         <>
-          <div className="assessment-score-grid">
-            <article><span>全桥评分</span><strong>{result.overall_score.toFixed(2)}</strong></article>
-            <article><span>系统等级</span><strong>{result.final_grade} 类</strong></article>
-            <article><span>桥型</span><strong>{result.bridge_type_id}</strong></article>
+          <div className="assessment-score-summary">
+            <div className="assessment-score-primary">
+              <span>全桥评分</span>
+              <strong>{result.overall_score.toFixed(2)}</strong>
+            </div>
+            <div className="assessment-score-grade">
+              <span>系统等级</span>
+              <GradeChip grade={result.final_grade} />
+            </div>
+            <div className="assessment-score-bridge-type">
+              <span>桥型</span>
+              <strong>{BRIDGE_TYPE_LABELS[result.bridge_type_id] ?? result.bridge_type_id}</strong>
+              {BRIDGE_TYPE_LABELS[result.bridge_type_id] ? <code>{result.bridge_type_id}</code> : null}
+            </div>
+            {/* 表里只有各分部的小计，全桥总数别处没有。 */}
+            <div className="assessment-score-total">
+              <span>参评构件数</span>
+              <strong>
+                {result.structure_parts
+                  .reduce((total, part) => total + componentCount(part.categories), 0)
+                  .toLocaleString("zh-CN")}
+              </strong>
+            </div>
           </div>
+          {/* 分部与部件类别原本是两张全宽表，第一列把三个分部名重复了十几次；并成一张分组表后
+              分部行既是组标题也是那一组的合计行，重复列和纯渲染序号列一起消失。 */}
           <div className="table-scroll">
             <table className="data-table assessment-result-table">
-              <thead><tr><th>结构分部</th><th>分数</th><th>等级</th><th>权重</th></tr></thead>
-              <tbody>{result.structure_parts.map((part) => (
-                <tr key={part.structure_part}><td>{PART_LABELS[part.structure_part] ?? part.structure_part}</td><td>{part.score.toFixed(2)}</td><td>{part.grade} 类</td><td>{part.overall_weight.toFixed(4)}</td></tr>
-              ))}</tbody>
+              <thead>
+                <tr>
+                  <th>结构分部 / 部件类别</th>
+                  <th className="numeric-cell">分数</th>
+                  <th className="assessment-score-bar-head" />
+                  <th>等级</th>
+                  <th className="numeric-cell">权重</th>
+                  <th className="numeric-cell">构件数</th>
+                </tr>
+              </thead>
+              {result.structure_parts.map((part) => (
+                <tbody key={part.structure_part}>
+                  <tr className="assessment-part-row">
+                    <th scope="rowgroup">{PART_LABELS[part.structure_part] ?? part.structure_part}</th>
+                    <td className="numeric-cell">{part.score.toFixed(2)}</td>
+                    <td className="assessment-score-bar-cell"><ScoreBar score={part.score} grade={part.grade} /></td>
+                    <td><GradeChip grade={part.grade} /></td>
+                    <td className="numeric-cell assessment-muted-cell">{part.overall_weight.toFixed(4)}</td>
+                    <td className="numeric-cell assessment-muted-cell">{componentCount(part.categories)}</td>
+                  </tr>
+                  {sortedCategories(part.categories).map((category) => (
+                    <tr key={category.component_type_id}>
+                      <td className="assessment-category-cell">{categoryLabel(category.component_type_id, category.component_type_name)}</td>
+                      <td className="numeric-cell">{category.score.toFixed(2)}</td>
+                      <td className="assessment-score-bar-cell"><ScoreBar score={category.score} grade={category.grade} /></td>
+                      <td><GradeChip grade={category.grade} /></td>
+                      <td className="numeric-cell assessment-muted-cell">{category.effective_weight.toFixed(4)}</td>
+                      <td className="numeric-cell">{category.components.length}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              ))}
             </table>
           </div>
-          {categoryRows.length ? (
-            <div className="assessment-category-results">
-              <h3>部件类别评分</h3>
-              <div className="table-scroll">
-                <table className="data-table assessment-category-table">
-                  <thead>
-                    <tr><th>结构分部</th><th>序号</th><th>部件类别</th><th>分数</th><th>等级</th><th>分部内权重</th><th>构件数</th></tr>
-                  </thead>
-                  <tbody>{categoryRows.map((category, index) => (
-                    <tr key={category.component_type_id}>
-                      <td>{PART_LABELS[category.structure_part] ?? category.structure_part}</td>
-                      <td>{index + 1}</td>
-                      <td>{categoryLabel(category.component_type_id, category.component_type_name)}</td>
-                      <td>{category.score.toFixed(2)}</td>
-                      <td>{category.grade} 类</td>
-                      <td>{category.effective_weight.toFixed(4)}</td>
-                      <td>{category.components.length}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            </div>
-          ) : null}
           {result.triggered_controls.length ? <div className="assessment-controls"><h3>单项控制</h3>{result.triggered_controls.map((control) => <p key={control.control_id}>{control.label}（{control.source_reference}）</p>)}</div> : null}
           <details className="assessment-trace"><summary>计算轨迹（{result.trace.length} 步）</summary><ol>{result.trace.map((trace, index) => <li key={`${trace.rule_id}-${index}`}><code>{trace.rule_id}</code>{trace.source_reference ? ` · ${trace.source_reference}` : ""}</li>)}</ol></details>
           <p className="assessment-explanation">{result.explanation}</p>

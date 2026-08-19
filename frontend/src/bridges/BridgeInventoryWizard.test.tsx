@@ -1,39 +1,15 @@
+import { useState } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchPartCatalog } from "../api/componentInventoryApi";
-import { fetchStandardCatalog, fetchStandardPackages } from "../api/standardsApi";
-import { BridgeInventoryWizard } from "./BridgeInventoryWizard";
-
-vi.mock("../api/standardsApi", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../api/standardsApi")>();
-  return { ...original, fetchStandardCatalog: vi.fn(), fetchStandardPackages: vi.fn() };
-});
+import { BridgeInventoryWizard, emptyInventorySelection } from "./BridgeInventoryWizard";
 
 vi.mock("../api/componentInventoryApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../api/componentInventoryApi")>();
   return { ...original, fetchPartCatalog: vi.fn() };
 });
-
-const packageSummary = {
-  id: "package-1", family: "technical_condition" as const, standard_id: "H21",
-  standard_code: "JTG/T H21—2011", standard_name: "公路桥梁技术状况评定标准",
-  official_edition: "2011", package_version: "1.0.0", contract_version: 1,
-  algorithm_id: "h21", effective_date: "2011-09-01", content_checksum: "sha256:test",
-  is_enabled: true, sync_status: "正常" as const, sync_error_code: null, sync_error_message: null,
-};
-
-const catalog = {
-  package: packageSummary,
-  bridge_types: [
-    { id: "h21.bridge_type.beam", code: "beam", name: "梁式桥" },
-    { id: "h21.bridge_type.cable_stayed", code: "cable_stayed", name: "斜拉桥" },
-  ],
-  component_categories: [],
-  inventory_templates: [],
-  defect_catalogs: [], maintenance_levels: [], inspection_types: [], periodic_inspection_requirements: [],
-};
 
 const beamParts = [
   {
@@ -51,16 +27,6 @@ const beamParts = [
     count_inputs: [{ key: "joints_per_span", label: "每孔湿接缝条数", hint: "" }],
   },
   {
-    part_key: "beam.diaphragm", default_name: "横隔梁", structure_part: "superstructure" as const,
-    standard_component_category_id: "h21.component.beam.upper_general",
-    standard_component_category_name: "上部一般构件",
-    number_template: "{span}-{c1}-{c2}#{name}", provisional: false, instance_selectable: false,
-    count_inputs: [
-      { key: "gaps", label: "每孔梁间数", hint: "" },
-      { key: "beams", label: "每梁间道数", hint: "" },
-    ],
-  },
-  {
     part_key: "bearing.support", default_name: "支座", structure_part: "superstructure" as const,
     standard_component_category_id: "h21.component.bearing",
     standard_component_category_name: "支座",
@@ -74,6 +40,13 @@ const beamParts = [
     standard_component_category_id: "h21.component.lower.wing_or_ear_wall",
     standard_component_category_name: "翼墙、耳墙",
     number_template: "{ab}#台{side}侧{name}", provisional: false, instance_selectable: true,
+    count_inputs: [],
+  },
+  {
+    part_key: "lower.riverbed", default_name: "河床", structure_part: "substructure" as const,
+    standard_component_category_id: "h21.component.lower.riverbed",
+    standard_component_category_name: "河床",
+    number_template: "{name}", provisional: false, instance_selectable: false,
     count_inputs: [],
   },
   {
@@ -94,54 +67,69 @@ const cableParts = [
   },
 ];
 
+// 勾选状态住在弹窗里，测试里用这个壳子代替它持有。
+function Harness({
+  bridgeTypeId = "h21.bridge_type.beam",
+  spanCount = 5,
+  onPlanChange = () => {},
+}: {
+  bridgeTypeId?: string;
+  spanCount?: number;
+  onPlanChange?: Parameters<typeof BridgeInventoryWizard>[0]["onPlanChange"];
+}) {
+  const [selection, setSelection] = useState(emptyInventorySelection);
+  return (
+    <BridgeInventoryWizard
+      packageId="package-1"
+      bridgeTypeId={bridgeTypeId}
+      spanCount={spanCount}
+      selection={selection}
+      onSelectionChange={setSelection}
+      onPlanChange={onPlanChange}
+    />
+  );
+}
+
 describe("BridgeInventoryWizard", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(fetchStandardPackages).mockResolvedValue([packageSummary]);
-    vi.mocked(fetchStandardCatalog).mockResolvedValue(catalog);
     vi.mocked(fetchPartCatalog).mockImplementation(async (_base, _pkg, bridgeTypeId) =>
       bridgeTypeId === "h21.bridge_type.cable_stayed" ? cableParts : beamParts);
   });
 
-  it("explains that the template source does not bind future scoring standards", async () => {
-    render(<BridgeInventoryWizard onPlanChange={vi.fn()} />);
-    expect(await screen.findByText(/不会绑定或限制以后检测项目采用的评分规范/)).toBeInTheDocument();
-  });
-
-  it("nests parts under 结构分部 then 部件类别 headings", async () => {
-    render(<BridgeInventoryWizard onPlanChange={vi.fn()} />);
-    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "h21.bridge_type.beam");
+  it("groups parts by 结构分部 only and keeps the category inline", async () => {
+    render(<Harness />);
     expect(await screen.findByRole("heading", { name: "上部结构" })).toBeInTheDocument();
-    // 部件类别表头：承重在前、一般在后；一般类别下含湿接缝 + 横隔梁两个部件。
-    expect(screen.getByRole("heading", { name: "上部承重构件" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "上部一般构件" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "下部结构" })).toBeInTheDocument();
+    // 类别不再是标题，只是行内一段灰字。
+    expect(screen.queryByRole("heading", { name: "上部承重构件" })).not.toBeInTheDocument();
+    expect(screen.getByText("上部承重构件")).toBeInTheDocument();
     expect(screen.getByLabelText("启用 湿接缝")).toBeInTheDocument();
-    expect(screen.getByLabelText("启用 横隔梁")).toBeInTheDocument();
   });
 
-  it("emits part_selections for enabled parts with counts and previews numbers", async () => {
+  it("emits part_selections with counts and previews the first number", async () => {
     const onPlanChange = vi.fn();
-    render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
-    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "h21.bridge_type.beam");
-    await userEvent.type(screen.getByLabelText("跨数"), "5");
+    render(<Harness onPlanChange={onPlanChange} />);
 
     await userEvent.click(await screen.findByLabelText("启用 梁"));
     await userEvent.type(screen.getByLabelText("梁 每孔梁片数"), "13");
 
-    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(expect.objectContaining({
-      standard_package_id: "package-1",
-      bridge_type_id: "h21.bridge_type.beam",
-      span_count: 5,
-      part_selections: [{ part_key: "beam.girder", site_name: "梁", counts: [13] }],
-    })));
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        standard_package_id: "package-1",
+        bridge_type_id: "h21.bridge_type.beam",
+        span_count: 5,
+        part_selections: [{ part_key: "beam.girder", site_name: "梁", counts: [13] }],
+      }),
+      expect.objectContaining({ total: 65, partCount: 1, missing: [] })
+    ));
+    expect(screen.getByText("共 65 个")).toBeInTheDocument();
     expect(screen.getByText(/1-1#梁/)).toBeInTheDocument();
   });
 
   it("marks provisional parts and flows a rename into the generated number", async () => {
     const onPlanChange = vi.fn();
-    render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
-    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "h21.bridge_type.cable_stayed");
-    await userEvent.type(screen.getByLabelText("跨数"), "3");
+    render(<Harness bridgeTypeId="h21.bridge_type.cable_stayed" spanCount={3} onPlanChange={onPlanChange} />);
 
     await userEvent.click(await screen.findByLabelText("启用 索塔"));
     expect(screen.getByText("临时编号（待校准）")).toBeInTheDocument();
@@ -151,43 +139,42 @@ describe("BridgeInventoryWizard", () => {
     await userEvent.type(nameInput, "桥塔");
     await userEvent.type(screen.getByLabelText("索塔 索塔数量"), "2");
 
-    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(expect.objectContaining({
-      bridge_type_id: "h21.bridge_type.cable_stayed",
-      part_selections: [{ part_key: "cs.tower", site_name: "桥塔", counts: [2] }],
-    })));
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        bridge_type_id: "h21.bridge_type.cable_stayed",
+        part_selections: [{ part_key: "cs.tower", site_name: "桥塔", counts: [2] }],
+      }),
+      expect.objectContaining({ total: 2 })
+    ));
     expect(screen.getByText(/1#桥塔/)).toBeInTheDocument();
   });
 
-  it("clears selections and reloads parts when the bridge type changes", async () => {
+  it("counts big parts without expanding every number", async () => {
     const onPlanChange = vi.fn();
-    render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
-    const bridgeType = await screen.findByLabelText("桥型");
-    await userEvent.selectOptions(bridgeType, "h21.bridge_type.beam");
-    await userEvent.type(screen.getByLabelText("跨数"), "5");
-    await userEvent.click(await screen.findByLabelText("启用 梁"));
+    render(<Harness spanCount={33} onPlanChange={onPlanChange} />);
 
-    await userEvent.selectOptions(bridgeType, "h21.bridge_type.cable_stayed");
-    expect(screen.queryByLabelText("启用 梁")).not.toBeInTheDocument();
-    expect(await screen.findByLabelText("启用 索塔")).toBeInTheDocument();
-    expect(screen.getByLabelText("跨数")).toHaveValue(null);
-    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(null));
+    await userEvent.click(await screen.findByLabelText("启用 支座"));
+    await userEvent.type(screen.getByLabelText("支座 每孔每墩支座数"), "50");
+
+    // 33 孔 × 2 支承 × 每墩 50 个。旧版要展开 3300 条才知道这个数。
+    expect(await screen.findByText("共 3300 个")).toBeInTheDocument();
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ total: 3300 })
+    ));
   });
 
   it("shows the disambiguating hint on the bearing count", async () => {
-    render(<BridgeInventoryWizard onPlanChange={vi.fn()} />);
-    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "h21.bridge_type.beam");
-    await userEvent.type(screen.getByLabelText("跨数"), "2");
+    render(<Harness spanCount={2} />);
     await userEvent.click(await screen.findByLabelText("启用 支座"));
     // 一个墩上落着相邻两孔的支座，标签与提示都必须说清只数一个孔的。
     expect(screen.getByLabelText("支座 每孔每墩支座数")).toBeInTheDocument();
-    expect(screen.getByText(/只数一个孔落在这个墩上的支座/)).toBeInTheDocument();
+    expect(screen.getByTitle(/只数一个孔落在这个墩上的支座/)).toBeInTheDocument();
   });
 
   it("lets the user drop wing wall positions the bridge does not have", async () => {
     const onPlanChange = vi.fn();
-    render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
-    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "h21.bridge_type.beam");
-    await userEvent.type(screen.getByLabelText("跨数"), "2");
+    render(<Harness spanCount={2} onPlanChange={onPlanChange} />);
     await userEvent.click(await screen.findByLabelText("启用 翼墙"));
 
     // 几何上 2 台 × 2 侧 = 4 个，逐个可勾选。
@@ -195,23 +182,61 @@ describe("BridgeInventoryWizard", () => {
       expect(screen.getByLabelText(number)).toBeChecked();
 
     await userEvent.click(screen.getByLabelText("0#台右侧翼墙"));
-    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(expect.objectContaining({
-      part_selections: [
-        { part_key: "lower.wing_wall", site_name: "翼墙", counts: [],
-          excluded_numbers: ["0#台右侧翼墙"] },
-      ],
-    })));
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        part_selections: [
+          { part_key: "lower.wing_wall", site_name: "翼墙", counts: [],
+            excluded_numbers: ["0#台右侧翼墙"] },
+        ],
+      }),
+      expect.objectContaining({ total: 3 })
+    ));
     expect(screen.getByText("共 3 个")).toBeInTheDocument();
   });
 
-  it("emits null until at least one enabled part has complete counts", async () => {
+  it("adds riverbed as one whole-bridge substructure entry", async () => {
     const onPlanChange = vi.fn();
-    render(<BridgeInventoryWizard onPlanChange={onPlanChange} />);
-    await userEvent.selectOptions(await screen.findByLabelText("桥型"), "h21.bridge_type.beam");
-    await userEvent.type(screen.getByLabelText("跨数"), "5");
+    render(<Harness spanCount={33} onPlanChange={onPlanChange} />);
+
+    await userEvent.click(await screen.findByLabelText("启用 河床"));
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        part_selections: [{ part_key: "lower.riverbed", site_name: "河床", counts: [] }],
+      }),
+      expect.objectContaining({ total: 1, partCount: 1, missing: [] })
+    ));
+    expect(screen.getByText("共 1 个")).toBeInTheDocument();
+    expect(screen.getByText(/河床…/)).toBeInTheDocument();
+  });
+
+  it("names the parts still missing a count instead of silently invalidating the plan", async () => {
+    const onPlanChange = vi.fn();
+    render(<Harness onPlanChange={onPlanChange} />);
     await userEvent.click(await screen.findByLabelText("启用 梁"));
 
-    // 数量维未填 → 计划无效。
-    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(null));
+    // 数量维未填 → 计划无效，但底部要说得出是哪个部件卡着。
+    await waitFor(() => expect(onPlanChange).toHaveBeenLastCalledWith(
+      null,
+      expect.objectContaining({ partCount: 1, missing: ["梁"] })
+    ));
+    expect(screen.getByText("请填数量")).toBeInTheDocument();
+  });
+
+  it("filters the list by part or category name", async () => {
+    render(<Harness />);
+    expect(await screen.findByLabelText("启用 梁")).toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText("筛选部件"), "支座");
+    expect(screen.getByLabelText("启用 支座")).toBeInTheDocument();
+    expect(screen.queryByLabelText("启用 梁")).not.toBeInTheDocument();
+  });
+
+  it("reloads the part catalog when the bridge type changes", async () => {
+    const { rerender } = render(<Harness />);
+    expect(await screen.findByLabelText("启用 梁")).toBeInTheDocument();
+
+    rerender(<Harness bridgeTypeId="h21.bridge_type.cable_stayed" />);
+    expect(await screen.findByLabelText("启用 索塔")).toBeInTheDocument();
+    expect(screen.queryByLabelText("启用 梁")).not.toBeInTheDocument();
   });
 });

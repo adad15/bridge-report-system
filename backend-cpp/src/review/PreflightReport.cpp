@@ -97,7 +97,7 @@ void check_defect_missing_required_field(const Json::Value& data, std::vector<Pr
             continue;
         }
         static const char* required_fields[] = {
-            "component_name", "component_number", "defect_location", "defect_type", "defect_description"
+            "component_name", "component_number", "defect_type", "defect_description"
         };
         for (const char* field : required_fields) {
             if (is_blank_string_field(defect, field)) {
@@ -106,14 +106,29 @@ void check_defect_missing_required_field(const Json::Value& data, std::vector<Pr
                 break;  // 每个病害最多一条阻断，字段名已在 message 中说明。
             }
         }
-        const bool scale_valid = defect.isMember("defect_scale")
-            && defect["defect_scale"].isIntegral()
-            && defect["defect_scale"].asInt64() > 0;
-        if (!scale_valid) {
-            add_issue(blocking, "defect_scale_required",
-                      "已确认病害 " + candidate_id_of(defect) + " 必须填写有效的病害标度。",
-                      candidate_id_of(defect));
+        // 标度是否必填取决于评定树节点的 is_scoring。通用预检没有评定树上下文，
+        // 不能把非评分节点也一律拦下；评分节点的空值与越界值由后续
+        // validate_defect_rating_tree_for_confirmation 精确校验。
+    }
+}
+
+// 病害详细位置在来源资料中允许缺失。位置为空不妨碍保存年度事实，但会降低
+// 后续跨年病害线索匹配的精度，所以保留为可审计的非阻断警告。
+void check_defect_location_missing(const Json::Value& data, std::vector<PreflightIssue>& warnings) {
+    if (!data["defects"].isArray()) {
+        return;
+    }
+    for (const auto& defect : data["defects"]) {
+        if (!is_review_settled(review_status_of(defect)) ||
+            !is_blank_string_field(defect, "defect_location")) {
+            continue;
         }
+        add_issue(
+            warnings,
+            "defect_location_missing",
+            "病害 " + candidate_id_of(defect) +
+                " 未记录详细位置，仍可入库；后续跨年病害匹配精度可能降低。",
+            candidate_id_of(defect));
     }
 }
 
@@ -399,6 +414,7 @@ PreflightReport build_preflight_report(const Json::Value& data, const PreflightC
     check_photo_link_unresolved(data, report.blocking_errors);
     check_defect_photo_groups(data, report.blocking_errors);
     check_photo_archives(data, report.blocking_errors);
+    check_defect_location_missing(data, report.warnings);
     check_defect_without_photo(data, report.warnings);
     check_unreferenced_photo_ignored(data, report.warnings);
     check_measurement_unstructured_kept(data, report.warnings);

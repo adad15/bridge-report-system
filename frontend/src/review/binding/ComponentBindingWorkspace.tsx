@@ -44,12 +44,26 @@ const STATUS_LABELS: Record<string, string> = {
 
 type BindingFilter = "pending" | "bound" | "missing" | "all";
 
+/**
+ * 范围拆分的错误里，后端会在 details 带回卡住整批的那个目标（部件 + 编号）。
+ * 只报一句"本次拆分生成的病害数量超过上限。"的话，用户看不到是哪一行顶破了上限，
+ * 而拆分是整批判定、超限时连预览都出不来，只能一个个取消勾选去试。
+ */
+function rejectedTargetHint(details: unknown): string {
+  if (typeof details !== "object" || details === null) return "";
+  const target = details as { part_name?: unknown; component_number?: unknown };
+  if (typeof target.part_name !== "string" || typeof target.component_number !== "string") {
+    return "";
+  }
+  return `（问题出在「${target.part_name} · ${target.component_number}」）`;
+}
+
 function errorMessage(caught: unknown): string {
   if (caught instanceof ApiError) {
     if (caught.code === "component_binding_conflict") {
       return "台账未确认、导入不在待校对阶段，或所选构件与该部件类别不符。";
     }
-    return caught.message;
+    return caught.message + rejectedTargetHint(caught.details);
   }
   return "绑定操作失败，请稍后重试。";
 }
@@ -66,6 +80,59 @@ function requireRevisionId(overview: ComponentBindingOverview): string {
     throw new Error("构件台账版本缺失，请刷新页面后重试。");
   }
   return overview.inventory_revision_id;
+}
+
+function splitTargetKey(partName: string, componentNumber: string): string {
+  return `${partName}\n${componentNumber}`;
+}
+
+function GroupSplitSelector({
+  partName,
+  eligibleRows,
+  selection,
+  busy,
+  onChange,
+}: {
+  partName: string;
+  eligibleRows: BindingRow[];
+  selection: Map<string, BindingTarget>;
+  busy: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  const checkbox = useRef<HTMLInputElement>(null);
+  const selectedCount = eligibleRows.filter((row) =>
+    selection.has(splitTargetKey(partName, row.component_number))
+  ).length;
+  const allSelected = eligibleRows.length > 0 && selectedCount === eligibleRows.length;
+  // 行数说明不了规模：一行 "1-1#梁~1-25#梁" 带 3 条病害，展开就是 75 条。
+  // 拆分有 2000 条的整批上限，一键全选很容易越界，所以把预计条数摆在按钮旁边。
+  const projectedDefects = eligibleRows.reduce(
+    (sum, row) => sum + row.defect_count * (row.split_expanded_count ?? 0),
+    0
+  );
+
+  useEffect(() => {
+    if (checkbox.current) {
+      checkbox.current.indeterminate = selectedCount > 0 && !allSelected;
+    }
+  }, [selectedCount, allSelected]);
+
+  return (
+    <label className="binding-group-split-select">
+      <input
+        ref={checkbox}
+        type="checkbox"
+        aria-label={`全选 ${partName} 待拆分构件`}
+        checked={allSelected}
+        disabled={busy}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span>{allSelected ? "取消全选" : "全选待拆分"} {eligibleRows.length}</span>
+      {projectedDefects > 0 ? (
+        <span className="binding-split-projection">约 {projectedDefects} 条</span>
+      ) : null}
+    </label>
+  );
 }
 
 /**
@@ -385,6 +452,20 @@ export function ComponentBindingWorkspace({
     [overview]
   );
 
+  // 已勾选目标的累计规模。2000 条那个上限是整批算的，跨分组勾选时更需要一个总数：
+  // 没有它，用户只能在预览失败时才发现越界，而那时连预览都出不来。
+  const splitProjection = useMemo(() => {
+    let defects = 0;
+    for (const group of overview?.groups ?? []) {
+      for (const row of group.rows) {
+        if (!row.split_eligible) continue;
+        if (!splitSelection.has(splitTargetKey(group.part_name, row.component_number))) continue;
+        defects += row.defect_count * (row.split_expanded_count ?? 0);
+      }
+    }
+    return defects;
+  }, [overview, splitSelection]);
+
   // 筛选后为空的分组不占位——否则整屏都是空标题。
   const visibleGroups = useMemo(() => {
     const groups = overview?.groups ?? [];
@@ -404,7 +485,7 @@ export function ComponentBindingWorkspace({
     const eligible = new Set<string>();
     for (const group of overview?.groups ?? []) {
       for (const row of group.rows) {
-        if (row.split_eligible) eligible.add(`${group.part_name}\n${row.component_number}`);
+        if (row.split_eligible) eligible.add(splitTargetKey(group.part_name, row.component_number));
       }
     }
     setSplitSelection((current) => {
@@ -468,6 +549,12 @@ export function ComponentBindingWorkspace({
     if (lockToken === null) throw new Error("当前页面没有编辑权，无法修改绑定。");
     return lockToken;
   }
+
+  // 六个绑定写接口现在都要求编辑锁，没有编辑权时点什么都会被后端拒。与其让用户
+  // 勾满一屏、点下去才收到报错，不如直接禁用——概览本身是只读的，照常可看。
+  // 页脚那两个"进入校对/稍后再绑"是导航，不受影响，仍只看 busy。
+  const canEdit = lockToken !== null;
+  const writeDisabled = busy || !canEdit;
 
   async function run(action: () => Promise<ComponentBindingOverview>) {
     setBusy(true);
@@ -540,7 +627,7 @@ export function ComponentBindingWorkspace({
             <button
               type="button"
               className="binding-split-selected"
-              disabled={busy || splitSelection.size === 0}
+              disabled={writeDisabled || splitSelection.size === 0}
               title={splitSelection.size === 0 ? "先勾选待拆分的构件行" : undefined}
               onClick={() => {
                 const targets = [...splitSelection.values()];
@@ -551,6 +638,9 @@ export function ComponentBindingWorkspace({
               拆分构件
               {splitSelection.size > 0 ? (
                 <span className="binding-split-count">{splitSelection.size}</span>
+              ) : null}
+              {splitProjection > 0 ? (
+                <span className="binding-split-projection">约 {splitProjection} 条</span>
               ) : null}
             </button>
           ) : null}
@@ -600,7 +690,7 @@ export function ComponentBindingWorkspace({
           <select
             aria-label="选择年度评定树"
             value={selectedRatingTreeId}
-            disabled={busy || ratingTrees.length === 0}
+            disabled={writeDisabled || ratingTrees.length === 0}
             onChange={(event) => {
               setSelectedRatingTreeId(event.target.value);
               setRatingTreeMessage(null);
@@ -624,7 +714,7 @@ export function ComponentBindingWorkspace({
           type="button"
           className="binding-rating-tree-action"
           disabled={
-            busy ||
+            writeDisabled ||
             !selectedRatingTreeId ||
             selectedRatingTreeId === overview.rating_tree?.version_id
           }
@@ -642,6 +732,12 @@ export function ComponentBindingWorkspace({
         <p className="error-text" role="alert">{ratingTreeError}</p>
       ) : null}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
+      {/* 控件已经按 canEdit 全部禁用了，但灰掉不解释等于让人猜。 */}
+      {!canEdit ? (
+        <p className="warning-text">
+          当前页面没有编辑权，绑定与拆分均不可用；取得编辑权后即可操作。
+        </p>
+      ) : null}
       {!overview.inventory_confirmed ? (
         <p className="error-text" role="alert">
           该桥构件台账尚未确认，请先建立并确认台账后再进行构件绑定。
@@ -666,17 +762,45 @@ export function ComponentBindingWorkspace({
               {group.ambiguous > 0 ? ` · 歧义 ${group.ambiguous}` : ""}
               {group.missing > 0 ? ` · 缺失 ${group.missing}` : ""}
             </span>
-            {/* 写法差异按部件成规律，故批量替换逐组进行；无待处理行时无从替换。 */}
-            {group.unmatched + group.ambiguous > 0 ? (
-              <button
-                type="button"
-                className="binding-bulk-replace"
-                disabled={busy}
-                onClick={() => { setReplaceError(null); setReplaceGroup(group.part_name); }}
-              >
-                批量替换
-              </button>
-            ) : null}
+            <div className="binding-group-actions">
+              {group.rows.some((row) => row.split_eligible) ? (
+                <GroupSplitSelector
+                  partName={group.part_name}
+                  eligibleRows={group.rows.filter((row) => row.split_eligible)}
+                  selection={splitSelection}
+                  busy={writeDisabled}
+                  onChange={(checked) => {
+                    const eligibleRows = group.rows.filter((row) => row.split_eligible);
+                    setSplitSelection((current) => {
+                      const next = new Map(current);
+                      for (const row of eligibleRows) {
+                        const key = splitTargetKey(group.part_name, row.component_number);
+                        if (checked) {
+                          next.set(key, {
+                            part_name: group.part_name,
+                            component_number: row.component_number,
+                          });
+                        } else {
+                          next.delete(key);
+                        }
+                      }
+                      return next;
+                    });
+                  }}
+                />
+              ) : null}
+              {/* 写法差异按部件成规律，故批量替换逐组进行；无待处理行时无从替换。 */}
+              {group.unmatched + group.ambiguous > 0 ? (
+                <button
+                  type="button"
+                  className="binding-bulk-replace"
+                  disabled={writeDisabled}
+                  onClick={() => { setReplaceError(null); setReplaceGroup(group.part_name); }}
+                >
+                  批量替换
+                </button>
+              ) : null}
+            </div>
           </div>
           {group.rows.map((row) => (
             <div className="binding-row" key={row.component_number}>
@@ -685,10 +809,10 @@ export function ComponentBindingWorkspace({
                   type="checkbox"
                   className="binding-row-split-checkbox"
                   aria-label={`选择拆分 ${row.component_number}`}
-                  checked={splitSelection.has(`${group.part_name}\n${row.component_number}`)}
-                  disabled={busy}
+                  checked={splitSelection.has(splitTargetKey(group.part_name, row.component_number))}
+                  disabled={writeDisabled}
                   onChange={(event) => {
-                    const key = `${group.part_name}\n${row.component_number}`;
+                    const key = splitTargetKey(group.part_name, row.component_number);
                     setSplitSelection((current) => {
                       const next = new Map(current);
                       if (event.target.checked) {
@@ -710,7 +834,7 @@ export function ComponentBindingWorkspace({
               <RowAction
                 row={row}
                 revisionId={requireRevisionId(overview)}
-                busy={busy}
+                busy={writeDisabled}
                 onBind={(id) =>
                   run(() =>
                     bindComponent(backendBaseUrl, importId, {

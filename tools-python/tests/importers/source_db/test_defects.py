@@ -99,15 +99,91 @@ def test_keeps_a_blank_defect_type() -> None:
 
 def test_builds_measurements_from_the_split_columns() -> None:
     candidate = build([defect(dimensions={
-        "长度": ("11", "m"), "宽度": ("3", "mm"), "数量": ("1", "条")})])[0]
+        "长度": ("11", "m"), "宽度": ("3", "mm"), "数量": ("1", "条")},
+        description="裂缝")])[0]
 
     kinds = {m["dimension_type"]: m for m in candidate["measurements"]}
     assert kinds["长度"]["value"] == 11.0
     assert kinds["长度"]["unit"] == "m"
     assert kinds["宽度"]["value"] == 3.0
     assert kinds["数量"]["unit"] == "条"
-    # 尺寸已经是拆好的结构化数据，不能再回头去解析文字。
     assert all(m["value_type"] == "single" for m in candidate["measurements"])
+
+
+def test_deduplicates_source_area_and_description_total_area() -> None:
+    candidate = build([defect(
+        dimensions={"面积一": ("2.5", "㎡")},
+        description="受渗水侵蚀，总面积：2.5㎡",
+    )])[0]
+
+    assert len(candidate["measurements"]) == 1
+    assert candidate["measurements"][0]["dimension_type"] == "面积"
+    assert candidate["measurements"][0]["source_text"] == "2.5㎡"
+
+
+def test_supplements_missing_range_measurements_from_description() -> None:
+    candidate = build([defect(
+        dimensions={},
+        description="多条纵、横向裂缝，长度范围：0.5~4.0m，宽度范围：0.5~1.0cm",
+    )])[0]
+
+    assert candidate["measurements"] == [
+        {
+            "dimension_type": "长度", "value_type": "range", "value": None,
+            "minimum_value": 0.5, "maximum_value": 4.0, "unit": "m",
+            "is_approximate": False, "source_text": "长度范围：0.5~4.0m",
+        },
+        {
+            "dimension_type": "宽度", "value_type": "range", "value": None,
+            "minimum_value": 0.5, "maximum_value": 1.0, "unit": "cm",
+            "is_approximate": False, "source_text": "宽度范围：0.5~1.0cm",
+        },
+    ]
+    assert not any(
+        warning["code"] == "measurement_parse_low_confidence"
+        for warning in candidate["warnings"])
+
+
+def test_source_columns_win_while_description_supplements_other_dimensions() -> None:
+    candidate = build([defect(
+        dimensions={"长度": ("3", "m")},
+        description="裂缝长度：3.0m，宽度范围：0.5~1.0cm",
+    )])[0]
+
+    assert [(item["dimension_type"], item["value_type"])
+            for item in candidate["measurements"]] == [
+        ("长度", "single"), ("宽度", "range")]
+    assert candidate["measurements"][0]["source_text"] == "3m"
+    assert not any(
+        warning["code"] == "source_measurement_conflict"
+        for warning in candidate["warnings"])
+
+
+def test_keeps_multiple_description_measurements_when_source_dimension_is_missing() -> None:
+    candidate = build([defect(
+        dimensions={},
+        description="两条裂缝，长度：0.5m，长度：1.0m",
+    )])[0]
+
+    lengths = [
+        item for item in candidate["measurements"]
+        if item["dimension_type"] == "长度"
+    ]
+    assert [item["value"] for item in lengths] == [0.5, 1.0]
+
+
+def test_warns_when_source_column_conflicts_with_description() -> None:
+    candidate = build([defect(
+        dimensions={"长度": ("3", "m")},
+        description="裂缝长度范围：2~4m",
+    )])[0]
+
+    assert len(candidate["measurements"]) == 1
+    assert candidate["measurements"][0]["value"] == 3.0
+    assert any(
+        warning["code"] == "source_measurement_conflict"
+        and warning["target_candidate_id"] == candidate["candidate_id"]
+        for warning in candidate["warnings"])
 
 
 def test_carries_the_scale_the_inspector_recorded() -> None:

@@ -1,5 +1,7 @@
 # 构件台账标准化编号引擎 实施计划
 
+> **2026-08-14 后续变更：** 河床以全桥级 `{name}` 模板加入产品目录；生成准入仍严格要求所选 taxonomy `generatable=true`，由 H21 1.0.4 提供。详见 `docs/superpowers/specs/2026-08-14-riverbed-inventory-generation-design.md`。
+
 > **For agentic workers:** 逐任务实施；每步用 `- [ ]` 勾选。先写失败测试 → 跑到失败 → 最小实现 → 跑到通过 → 提交。
 
 **Goal:** 把构件台账生成的"3 种编号方式 + 前后缀"替换为"按《构件编号规则》逐部件模板生成"的后端编号引擎，梁式桥全部部件按文档形式自动生成标准编号。

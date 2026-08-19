@@ -1,0 +1,519 @@
+《构件绑定改用按需检索》技术文档第三轮复审意见
+
+复审对象：2026-08-17-component-binding-on-demand-lookup-design.md
+复审日期：2026-08-18
+前次记录：
+1. 2026-08-17-component-binding-on-demand-lookup-design-review.txt
+2. 2026-08-17-component-binding-on-demand-lookup-design-rereview.txt
+复审范围：第三次修订后的设计文档、绑定工作台全部操作、后端版本解析、搜索仓储与错误传递
+
+
+一、总体结论
+
+第三次修订已经较完整地解决了上一轮提出的四个阻塞问题：
+
+1. 批量替换精简响应补回 is_active，并定义了独立的精简输入类型。
+2. 引入 expected_revision_id，明确版本变化时返回冲突而不是静默切换版本。
+3. 将确认版本解析拆分为轻量引用解析和完整版本加载两个层次。
+4. 批量取数和概览候选补充了“启用且存在生效映射”的过滤条件。
+
+此外，文档已经补充了统一展示对象、候选顺序、错误契约、候选前缀、搜索名额语义、评定树切换和非阻塞辅助请求等内容，整体设计已经接近可实施。
+
+结合现有程序继续检查后，仍有四个优先级较高的问题：
+
+1. ComponentRangeSplitRepository 仍然绕过新的版本一致性主线，继续使用草稿优先的 get_latest_revision()。
+2. expected_revision_id 没有覆盖所有会锁定或改变版本的写操作。
+3. 批量取数是 GET 请求，不能在读取过程中写入并锁定检测年度版本。
+4. 当前 load_entry_page() 的 SQL 拼接方式不能直接承载文档中的 binding_eligible 条件。
+
+建议解决上述四项后，将文档状态改为“复审通过，待实施”。
+
+
+二、必须优先修改的问题
+
+1. 构件范围拆分没有纳入版本一致性改造
+
+绑定工作台除单条绑定、批量绑定、标记缺失和清除绑定外，还包含：
+
+1. split-preview
+2. split-apply
+
+这两个接口由 ComponentRangeSplitRepository 实现。当前代码仍然直接调用：
+
+ComponentInventoryRepository(...).get_latest_revision(bridge_id)
+
+预览和应用都没有读取 inspection_years.component_inventory_revision_id，也没有使用 overview.inventory_revision_id。
+
+由于 get_latest_revision() 使用草稿优先排序，因此会出现：
+
+1. 桥梁存在已确认版本 R2。
+2. 后续派生草稿 R3。
+3. 构件范围拆分预览调用 get_latest_revision()，取得 R3。
+4. 因 R3 是草稿，预览返回冲突；或者预览使用的版本与绑定面板当前版本不一致。
+
+现有 impact_token 只能发现“拆分预览与应用之间的数据发生变化”，不能解决预览一开始就选择了错误台账版本的问题。
+
+建议将范围拆分纳入统一版本契约。
+
+拆分预览请求：
+
+POST /api/import-records/{import_id}/component-binding/split-preview
+
+{
+  "expected_inventory_revision_id": "...",
+  "targets": []
+}
+
+拆分应用请求：
+
+POST /api/import-records/{import_id}/component-binding/split-apply
+
+{
+  "expected_inventory_revision_id": "...",
+  "targets": [],
+  "impact_token": "..."
+}
+
+后端处理要求：
+
+1. 查询导入记录关联的 inspection_years。
+2. 年度锁定版本优先。
+3. 年度未锁定时，校验预期版本仍是最新已确认版本。
+4. 拆分预览只校验，不写入检测年度版本。
+5. 拆分应用在事务中重新校验，并在未锁定时锁定预期版本。
+6. 版本不一致返回 409 component_inventory_revision_changed。
+7. impact_token 继续保留，负责检测 parsed_result_json、拆分目标和分析结果变化。
+
+需要修改：
+
+1. backend-cpp/src/db/ComponentRangeSplitRepository.cpp
+2. backend-cpp/include/bridge_report/db/ComponentRangeSplitRepository.hpp
+3. backend-cpp/src/http/ImportBindingRoutes.cpp
+4. frontend/src/api/importBindingApi.ts
+5. frontend/src/review/binding/ComponentBindingWorkspace.tsx
+6. 对应前后端测试
+
+
+2. expected_inventory_revision_id 没有覆盖全部写操作
+
+当前文档只明确要求行内绑定和批量绑定的请求体携带预期版本。但现有绑定工作台还会执行：
+
+1. mark-missing
+2. clear
+3. split-preview
+4. split-apply
+5. rating-tree
+
+其中 mark-missing 和 clear 共用 mutate_group()。该函数也会调用 attach_revision_to_pending_year()，所以它们同样可能在年度未锁定时静默选择新版本。
+
+可能出现：
+
+1. 用户打开面板时看到的是 R2。
+2. 其他用户确认了 R3。
+3. 用户点击“标记缺失”。
+4. mutate_group() 重新解析版本并选择 R3。
+5. R3 被写入 inspection_years.component_inventory_revision_id。
+6. 操作完成后概览突然切换到 R3。
+
+评定树绑定虽然会主动选择或迁移目标台账版本，但也必须校验操作开始时的源台账版本仍然是用户看到的版本。
+
+建议所有操作统一携带 expected_inventory_revision_id：
+
+1. 单条绑定：需要。
+2. 批量绑定：需要。
+3. 标记缺失：需要。
+4. 清除绑定：需要。
+5. 拆分预览：需要，只校验。
+6. 拆分应用：需要，校验后可锁定。
+7. 绑定或切换评定树：需要，用于校验源版本。
+8. 批量替换取数：需要，只校验。
+
+如果某个接口明确不需要预期版本，文档必须说明理由，并保证该接口不会调用 attach_revision_to_pending_year() 或静默切换版本。
+
+建议补充明确请求示例。
+
+单条绑定：
+
+{
+  "part_name": "梁",
+  "component_number": "1-1#梁",
+  "bridge_component_id": "...",
+  "expected_inventory_revision_id": "..."
+}
+
+批量绑定：
+
+{
+  "expected_inventory_revision_id": "...",
+  "targets": [ ... ]
+}
+
+标记缺失和清除绑定：
+
+{
+  "part_name": "梁",
+  "component_number": "1-1#梁",
+  "expected_inventory_revision_id": "..."
+}
+
+评定树绑定：
+
+{
+  "rating_tree_version_id": "...",
+  "expected_inventory_revision_id": "..."
+}
+
+
+3. GET 批量取数端点不能产生锁定版本的副作用
+
+批量替换取数端点设计为：
+
+GET /api/import-records/{import_id}/component-binding/inventory?expected_revision_id={id}
+
+文档中的统一版本规则又要求：
+
+“年度未锁定时，确认预期版本仍有效，然后锁定它。”
+
+如果将该规则直接用于 GET 端点，用户只是打开批量替换对话框，就会写入：
+
+inspection_years.component_inventory_revision_id
+
+这会造成以下问题：
+
+1. GET 请求产生数据库写入副作用。
+2. 浏览器、代理或客户端重试可能重复触发状态变化。
+3. 页面预取、刷新或用户只是查看预览也会锁定检测年度版本。
+4. 读取端点的事务和幂等语义不清晰。
+
+建议将版本校验分为读取与写入两类。
+
+读取操作：
+
+1. 获取概览。
+2. 行内搜索。
+3. 批量替换取数。
+4. 拆分预览。
+
+读取操作只执行：
+
+1. 检查 expected_inventory_revision_id 是否与年度锁定版本一致；
+2. 年度未锁定时，检查它是否仍是最新已确认版本；
+3. 不写入 inspection_years.component_inventory_revision_id；
+4. 不一致时返回 409 component_inventory_revision_changed。
+
+写操作：
+
+1. 单条绑定。
+2. 批量绑定。
+3. 标记缺失。
+4. 清除绑定。
+5. 拆分应用。
+6. 评定树绑定或切换。
+
+写操作在事务中：
+
+1. 校验预期版本。
+2. 年度未锁定时锁定该版本。
+3. 执行业务写入。
+4. 整个过程保持原子性。
+
+如果产品明确要求“打开批量替换对话框即锁定年度版本”，就不应使用 GET，而应改成显式的 POST。但从当前业务看没有必要，正式应用时重新校验即可。
+
+
+4. 当前 load_entry_page() 不能直接使用文档中的 binding_eligible SQL
+
+当前 ComponentInventoryRepository::load_entry_page() 接收一个 scope_predicate，并将它同时拼接到两段 SQL：
+
+1. count 查询：表别名为 e。
+2. page 查询：外层别名为 p。
+
+文档给出的过滤条件是：
+
+e.is_active
+and exists (
+  select 1
+  from bridge_component_standard_mappings m
+  where m.inventory_entry_id = e.id
+    and m.is_active
+)
+
+该条件可以用于 count 查询，但原样拼到 page 查询时，外层没有别名 e，只有 p，SQL 会报错。
+
+另外，搜索响应中的 total 也必须基于 binding_eligible 过滤后的数据集，否则会出现：
+
+1. total 显示匹配 100 条；
+2. entries 实际只返回 20 条可用构件；
+3. 台账页和绑定页显示数量不一致。
+
+因此不能只把当前编号匹配 predicate 机械地替换成“三字段 OR + exists”。
+
+建议重构仓储查询接口，例如：
+
+struct EntryQuery {
+  std::string keyword;
+  bool binding_eligible{false};
+};
+
+EntryLookup load_entry_page(
+    const std::string& revision_id,
+    const EntryQuery& query,
+    std::int64_t offset,
+    std::int64_t limit);
+
+实现可采用以下任一方案：
+
+方案 A：分别生成 count 查询和 page 查询的谓词，正确使用 e 与 p 别名。
+
+方案 B：在公共 CTE 中预先计算 has_active_mapping，然后 count 和 page 都对同一 CTE 过滤。
+
+无论采用哪种方案，都必须保证：
+
+1. 关键词匹配规则一致。
+2. binding_eligible 过滤一致。
+3. total 与 entries 使用同一数据范围。
+4. 过滤发生在 limit 之前。
+
+
+三、需要进一步补充的接口细节
+
+5. 概览候选的 entry_id 与搜索结果的 id 不一致
+
+文档定义概览展示对象：
+
+interface BindingComponentSummary {
+  entry_id: string;
+  bridge_component_id: string;
+  component_number: string;
+  site_component_type: string;
+  site_name: string;
+}
+
+但当前搜索接口返回的 ComponentInventoryEntry 使用：
+
+interface ComponentInventoryEntry {
+  id: string;
+  bridge_component_id: string;
+  ...
+}
+
+候选对象和搜索结果会被合并到同一个下拉列表。如果直接混合两种类型：
+
+1. 概览候选使用 entry_id。
+2. 搜索结果使用 id。
+3. option key 可能得到 undefined。
+4. React 可能出现重复 key 或列表复用错误。
+
+建议增加统一的前端选项模型：
+
+interface BindingComponentOption {
+  entryId: string;
+  bridgeComponentId: string;
+  componentNumber: string;
+  siteComponentType: string;
+  siteName: string;
+  candidate: boolean;
+}
+
+转换规则：
+
+1. candidate_components.entry_id 映射为 entryId。
+2. 搜索结果 entry.id 映射为 entryId。
+3. 候选与搜索结果的合并、去重、排序和渲染只处理 BindingComponentOption。
+
+另一种更简单的办法是将概览字段也命名为 id，与现有 ComponentInventoryEntry 保持一致。
+
+
+6. 预期版本字段名称不统一
+
+文档中同时使用：
+
+1. expected_revision_id
+2. expected_inventory_revision_id
+
+虽然可以在不同接口使用不同名称，但容易造成前后端实现、测试夹具和错误提示不一致。
+
+建议统一为：
+
+expected_inventory_revision_id
+
+批量取数端点改成：
+
+GET /api/import-records/{import_id}/component-binding/inventory?expected_inventory_revision_id={id}
+
+所有 POST 请求体也使用 expected_inventory_revision_id。
+
+批量绑定请求中，该字段应位于请求根节点，而不是重复放在每个 target 中。
+
+
+7. component_inventory_revision_changed 缺少仓储到路由的传递方式
+
+当前 BindingOutcome 只有：
+
+1. BindingStatus status。
+2. optional<BindingOverview> overview。
+3. rejected_component_number。
+
+respond_binding() 会把所有 BindingStatus::Conflict 统一映射为：
+
+component_binding_conflict
+
+因此，即使仓储层检测到预期版本不一致，也没有渠道让前端收到：
+
+component_inventory_revision_changed
+
+建议二选一。
+
+方案 A：增加明确状态：
+
+enum class BindingStatus {
+  ...,
+  RevisionChanged
+};
+
+方案 B：在 BindingOutcome 中增加：
+
+std::string error_code;
+std::string error_message;
+
+路由优先使用结果携带的错误码和消息。
+
+范围拆分使用 ComponentRangeSplitOutcome，评定树绑定也有独立的响应映射，需要保证三条路径都能统一返回 component_inventory_revision_changed。
+
+只有错误码真正贯通，前端才能可靠执行：
+
+1. 重新获取概览。
+2. 清除行内搜索结果。
+3. 取消在途请求。
+4. 清除批量缓存。
+5. 显示“台账版本已变化，已为你刷新”。
+
+
+8. 预期版本参数缺失或非法的错误没有定义
+
+文档定义了“版本不一致”的 409，但没有定义以下输入错误：
+
+1. 参数缺失。
+2. 空字符串。
+3. 非 UUID。
+4. null。
+5. 字段放错请求层级。
+
+这些情况不属于版本冲突，应返回400，而不是 component_inventory_revision_changed。
+
+建议规定：
+
+expected_inventory_revision_id 缺失或格式非法
+→ 400 invalid_component_binding
+
+批量取数端点也可以使用更具体的错误码：
+
+400 invalid_component_binding_inventory_request
+
+前端 API 测试需要覆盖 UUID 编码、查询参数名称和请求体字段位置。
+
+
+9. 对确认版本解析调用者的描述不完全准确
+
+文档写现有 resolve_confirmed_revision() 的四个写路径都需要完整 InventoryRevision 做 validate_target()。
+
+实际情况是：
+
+1. bind 和 bind_batch 需要完整版本执行 validate_target()。
+2. bind_rating_tree 需要完整版本执行映射兼容性判断和迁移。
+3. mark_missing 和 clear 共用 mutate_group()，只使用 revision->id 完成版本锁定，不需要完整 entries 和 mappings。
+
+因此轻量版本引用解析还可以用于：
+
+1. overview。
+2. 批量替换取数。
+3. mark_missing。
+4. clear。
+
+建议将文档描述改为：
+
+“确认版本调用者分为两类：只需要版本引用的读取或轻量写路径，以及需要完整台账执行目标校验或映射迁移的路径。”
+
+这样实现时可以避免 mark_missing 和 clear 继续无意义地加载整份台账。
+
+
+四、建议补充的测试
+
+后端测试：
+
+1. 范围拆分预览不再调用草稿优先的 get_latest_revision()。
+2. 范围拆分预览使用 expected_inventory_revision_id 指定的准确版本。
+3. 范围拆分应用在版本变化时返回 component_inventory_revision_changed。
+4. impact_token 与版本校验分别生效。
+5. mark-missing 携带并校验预期版本。
+6. clear 携带并校验预期版本。
+7. rating-tree 校验源台账预期版本。
+8. 批量取数 GET 不写入 inspection_years.component_inventory_revision_id。
+9. 只有正式写操作才会锁定检测年度版本。
+10. expected_inventory_revision_id 缺失或非法时返回400。
+11. BindingOutcome 能将版本变化映射为独立错误码。
+12. ComponentRangeSplitOutcome 能映射相同的版本变化错误码。
+13. binding_eligible 的 count 与 entries 使用相同过滤范围。
+14. 过滤在 count 和 page 查询中使用正确的 SQL 别名。
+15. 过滤发生在 limit 之前。
+
+前端测试：
+
+1. markComponentMissing 携带 expected_inventory_revision_id。
+2. clearComponentBinding 携带 expected_inventory_revision_id。
+3. previewComponentRangeSplit 携带 expected_inventory_revision_id。
+4. applyComponentRangeSplit 携带 expected_inventory_revision_id。
+5. bindInspectionRatingTree 携带 expected_inventory_revision_id。
+6. component_inventory_revision_changed 会刷新概览并清除搜索和缓存。
+7. 批量取数版本不一致时不生成预览。
+8. 候选 entry_id 和搜索结果 id 被转换为统一的 option key。
+9. option key 稳定、唯一且不为 undefined。
+10. expected_inventory_revision_id 使用统一参数名称。
+11. 批量绑定的预期版本字段位于请求根节点。
+
+
+五、推荐的最终版本一致性规则
+
+1. 概览
+   - 解析有效版本引用。
+   - 不锁定版本。
+   - 返回 inventory_revision_id。
+
+2. 行内搜索
+   - 使用概览版本 ID 查询不可变的准确版本。
+   - 不锁定版本。
+
+3. 批量替换取数
+   - 携带 expected_inventory_revision_id。
+   - 后端只校验，不锁定。
+   - 响应版本与概览不一致时不生成预览。
+
+4. 拆分预览
+   - 携带 expected_inventory_revision_id。
+   - 后端只校验，不锁定。
+   - impact_token 包含准确版本和分析内容。
+
+5. 正式写操作
+   - 全部携带 expected_inventory_revision_id。
+   - 后端事务中校验版本。
+   - 年度未锁定时锁定预期版本。
+   - 执行业务写入。
+   - 版本不一致返回409，不静默切换。
+
+6. 评定树切换
+   - 校验当前源版本。
+   - 按目标规范选择或迁移目标版本。
+   - 返回包含新 inventory_revision_id 的完整概览。
+
+
+六、第三轮复审结论
+
+前两轮提出的主要架构问题已经基本得到解决。这一版最大的剩余遗漏是范围拆分流程仍然绕过新的版本主线，以及读取操作和写操作的版本锁定边界没有完全区分。
+
+进入实施前建议完成以下四项：
+
+1. 将 ComponentRangeSplitRepository 纳入 expected_inventory_revision_id 契约，删除其中对草稿优先 get_latest_revision() 的依赖。
+2. 让所有会锁定或改变版本的写操作携带并校验预期版本。
+3. 明确 GET 批量取数和拆分预览只校验版本，不写入锁定版本。
+4. 重构 load_entry_page() 的过滤条件生成方式，保证 count、entries、binding_eligible 和 limit 的数据范围一致。
+
+上述问题解决后，文档基本可以进入实施阶段。

@@ -345,6 +345,14 @@ review_status
 review_note
 ```
 
+`defect_location` 允许为空，表示来源资料未记录详细位置。空位置不阻断年度事实入库，
+但入库前检查必须产生 `defect_location_missing` 警告；正式事实表以 SQL `NULL` 保存，
+档案界面显示“未记录”。构件编号仍然必填，不得用构件编号伪造病害详细位置。
+
+`defect_scale` 是否必填由当前评定树节点决定：`is_scoring=true` 时必须属于节点的
+`allowed_scales`；`is_scoring=false` 时允许为空。通用入库预检不得脱离评定树上下文
+要求所有病害填写标度。
+
 第一版只让用户编辑 `measurement_text`，系统根据尺寸原文重新结构化 `measurements[]`。用户不直接编辑每个结构化尺寸对象。
 
 第一版只读：

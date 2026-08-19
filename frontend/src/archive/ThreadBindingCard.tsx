@@ -109,7 +109,7 @@ export function ThreadBindingCard({ observation, onResolved, onDismiss }: Thread
           {observation.component.structure_part}｜{observation.component.component_type}
         </span>
         <span>{observation.defect_type}</span>
-        <span>位置：{observation.defect_location ?? "未记录"}</span>
+        <span>位置：{observation.defect_location || "未记录"}</span>
         <span>标度 {observation.scale ?? "-"}</span>
       </header>
       {observation.measurements.length > 0 ? (
@@ -140,7 +140,7 @@ export function ThreadBindingCard({ observation, onResolved, onDismiss }: Thread
             {suggestions.map((suggestion) => (
               <li key={suggestion.id}>
                 <span>
-                  <strong>{suggestion.defect_type}</strong>｜标准位置：{suggestion.defect_location ?? "未记录"}
+                  <strong>{suggestion.defect_type}</strong>｜标准位置：{suggestion.defect_location || "未记录"}
                   {matchBasisBadges(suggestion).map((badge) => (
                     <em key={badge} className="archive-match-badge">
                       {badge}

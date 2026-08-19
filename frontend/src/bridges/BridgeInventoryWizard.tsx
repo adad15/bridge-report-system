@@ -7,19 +7,11 @@ import {
   type GenerateComponentInventoryInput,
   type PartSelection,
 } from "../api/componentInventoryApi";
-import {
-  fetchStandardCatalog,
-  fetchStandardPackages,
-  standardsErrorMessage,
-  type StandardCatalog,
-} from "../api/standardsApi";
-import { readCached, standardCatalogsCacheKey, writeCached } from "../api/resourceCache";
 import { backendBaseUrl } from "../config";
-import { expandTemplate } from "./inventoryNumbering";
+import { countTemplate, expandTemplate, firstNumber } from "./inventoryNumbering";
 import { structurePartLabel, structurePartOrder } from "./structureParts";
 
-
-function validSpanCount(raw: string): boolean {
+export function validSpanCount(raw: string): boolean {
   const value = Number(raw);
   return raw !== "" && Number.isInteger(value) && value >= 0 && value <= 1000;
 }
@@ -35,63 +27,59 @@ function parseCounts(raw: string[]): number[] | null {
   return parsed;
 }
 
-export function BridgeInventoryWizard({
-  onPlanChange,
-}: {
-  onPlanChange: (plan: GenerateComponentInventoryInput | null) => void;
-}) {
-  const [catalogs, setCatalogs] = useState<StandardCatalog[]>([]);
-  const [packageId, setPackageId] = useState("");
-  const [bridgeTypeId, setBridgeTypeId] = useState("");
-  const [spanCount, setSpanCount] = useState("");
-  const [parts, setParts] = useState<CatalogPart[]>([]);
-  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
-  const [names, setNames] = useState<Record<string, string>>({});
-  const [counts, setCounts] = useState<Record<string, string[]>>({});
+// 勾选状态由弹窗持有而不是向导自己。向导在第一步时是卸载的，状态留在这里，
+// 按"上一步"回去改个桩号才不会把已经勾好的二十个部件一起清掉。
+export interface InventorySelection {
+  enabled: Record<string, boolean>;
+  names: Record<string, string>;
+  counts: Record<string, string[]>;
   // 逐实例复选记的是展开顺序里的下标，不是编号：改现场名或改跨数后编号会变，
   // 下标仍指向同一个位置（如"0#台左侧"），用户的取舍不会丢。
-  const [excludedIndexes, setExcludedIndexes] = useState<Record<string, number[]>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  excludedIndexes: Record<string, number[]>;
+}
+
+export const emptyInventorySelection: InventorySelection = {
+  enabled: {},
+  names: {},
+  counts: {},
+  excludedIndexes: {},
+};
+
+// 报给弹窗底部常驻的那行状态：能生成多少、还差哪几个部件没填完。
+export interface InventorySummary {
+  total: number;
+  partCount: number;
+  missing: string[];
+}
+
+export const emptyInventorySummary: InventorySummary = { total: 0, partCount: 0, missing: [] };
+
+// 单个部件生成量过千就标出来：支座是"孔 × 2 支承 × 每墩个数"，
+// 数量维填错一位就是几千条，后端到 50000 才拦，中间这段只能靠这里提醒。
+const LARGE_PART_TOTAL = 1000;
+
+export function BridgeInventoryWizard({
+  packageId,
+  bridgeTypeId,
+  spanCount,
+  selection,
+  onSelectionChange,
+  onPlanChange,
+}: {
+  packageId: string;
+  bridgeTypeId: string;
+  spanCount: number;
+  selection: InventorySelection;
+  onSelectionChange: (next: InventorySelection) => void;
+  onPlanChange: (plan: GenerateComponentInventoryInput | null, summary: InventorySummary) => void;
+}) {
+  const [parts, setParts] = useState<CatalogPart[]>([]);
   const [partsError, setPartsError] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
+  const [onlySelected, setOnlySelected] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    // 规范目录是全局参考数据，与台账用同一份缓存，避免每次打开向导重拉。
-    const cached = readCached<StandardCatalog[]>(standardCatalogsCacheKey);
-    if (cached) {
-      setCatalogs(cached);
-      if (cached.length === 1) setPackageId(cached[0].package.id);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
-    fetchStandardPackages(backendBaseUrl)
-      .then(async (packages) => {
-        const available = packages.filter(
-          (item) => item.family === "technical_condition" && item.is_enabled && item.sync_status === "正常"
-        );
-        const loaded = await Promise.all(available.map((item) => fetchStandardCatalog(backendBaseUrl, item.id)));
-        writeCached(standardCatalogsCacheKey, loaded);
-        if (cancelled) return;
-        setCatalogs(loaded);
-        if (loaded.length === 1) setPackageId(loaded[0].package.id);
-        setError(null);
-      })
-      .catch((caught) => {
-        if (!cancelled) setError(standardsErrorMessage(caught));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { enabled, names, counts, excludedIndexes } = selection;
 
-  const catalog = catalogs.find((item) => item.package.id === packageId) ?? null;
-
-  // 选定规范包 + 桥型后拉取该桥型可用部件目录。
   useEffect(() => {
     if (!packageId || !bridgeTypeId) {
       setParts([]);
@@ -116,50 +104,62 @@ export function BridgeInventoryWizard({
   }, [packageId, bridgeTypeId]);
 
   const partName = (part: CatalogPart) => names[part.part_key] ?? part.default_name;
-  const partCounts = (part: CatalogPart) =>
-    counts[part.part_key] ?? part.count_inputs.map(() => "");
+  const partCounts = (part: CatalogPart) => counts[part.part_key] ?? part.count_inputs.map(() => "");
+  const resolvedName = (part: CatalogPart) => partName(part).trim() || part.default_name;
 
-  // 该部件按当前跨数/数量展开出的全部编号；跨数或数量不合法时为空。
+  // 逐实例可选的部件（翼墙/锥坡/护坡）几何上只有 2~4 个位置，展开开销可以忽略；
+  // 其余部件一律只算基数，不展开。
   const partNumbers = (part: CatalogPart) => {
-    if (!validSpanCount(spanCount)) return [];
     const parsed = parseCounts(partCounts(part));
     if (parsed === null) return [];
-    return expandTemplate(
-      part.number_template,
-      partName(part).trim() || part.default_name,
-      parsed,
-      Number(spanCount)
-    );
+    return expandTemplate(part.number_template, resolvedName(part), parsed, spanCount);
+  };
+
+  const partTotal = (part: CatalogPart): number | null => {
+    const parsed = parseCounts(partCounts(part));
+    if (parsed === null) return null;
+    if (part.instance_selectable) {
+      const numbers = partNumbers(part);
+      return numbers.length - (excludedIndexes[part.part_key] ?? []).length;
+    }
+    return countTemplate(part.number_template, resolvedName(part), parsed, spanCount);
   };
 
   const derived = useMemo(() => {
-    const spanValid = validSpanCount(spanCount);
-    const span = spanValid ? Number(spanCount) : 0;
     const selections: PartSelection[] = [];
-    let valid = spanValid;
+    const missing: string[] = [];
+    let total = 0;
+    let partCount = 0;
     for (const part of parts) {
       if (!enabled[part.part_key]) continue;
+      partCount += 1;
       const name = partName(part).trim();
       const parsed = parseCounts(partCounts(part));
       if (!name || parsed === null) {
-        valid = false;
+        missing.push(part.default_name);
         continue;
       }
-      const selection: PartSelection = { part_key: part.part_key, site_name: name, counts: parsed };
+      const entry: PartSelection = { part_key: part.part_key, site_name: name, counts: parsed };
       if (part.instance_selectable) {
         const numbers = partNumbers(part);
         const dropped = excludedIndexes[part.part_key] ?? [];
         // 下标转成编号再回传，后端按自己展开的结果校验，前后端不一致会明确报错。
-        selection.excluded_numbers = dropped
+        entry.excluded_numbers = dropped
           .map((index) => numbers[index]?.number)
           .filter((number): number is string => !!number);
         // 全部去掉等于这个部件不存在，不必生成。
-        if (selection.excluded_numbers.length === numbers.length) continue;
+        if (entry.excluded_numbers.length === numbers.length) {
+          partCount -= 1;
+          continue;
+        }
+        total += numbers.length - entry.excluded_numbers.length;
+      } else {
+        total += countTemplate(part.number_template, name, parsed, spanCount);
       }
-      selections.push(selection);
+      selections.push(entry);
     }
-    if (selections.length === 0) valid = false;
-    return { selections, valid, span };
+    const valid = missing.length === 0 && selections.length > 0;
+    return { selections, valid, total, partCount, missing };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parts, enabled, names, counts, spanCount, excludedIndexes]);
 
@@ -169,93 +169,68 @@ export function BridgeInventoryWizard({
         ? {
             standard_package_id: packageId,
             bridge_type_id: bridgeTypeId,
-            span_count: derived.span,
+            span_count: spanCount,
             part_selections: derived.selections,
           }
-        : null
+        : null,
+      { total: derived.total, partCount: derived.partCount, missing: derived.missing }
     );
-  }, [derived, onPlanChange, packageId, bridgeTypeId]);
+  }, [derived, onPlanChange, packageId, bridgeTypeId, spanCount]);
 
-  function resetForPackage(nextPackageId: string) {
-    setPackageId(nextPackageId);
-    setBridgeTypeId("");
-    setSpanCount("");
-    setEnabled({});
-    setNames({});
-    setCounts({});
-    setExcludedIndexes({});
-  }
-
-  function resetForBridgeType(nextBridgeTypeId: string) {
-    setBridgeTypeId(nextBridgeTypeId);
-    setSpanCount("");
-    setEnabled({});
-    setNames({});
-    setCounts({});
-    setExcludedIndexes({});
-  }
-
-  function toggleInstance(part: CatalogPart, index: number, on: boolean) {
-    setExcludedIndexes((current) => {
-      const dropped = current[part.part_key] ?? [];
-      const next = on
-        ? dropped.filter((item) => item !== index)
-        : dropped.includes(index)
-          ? dropped
-          : [...dropped, index];
-      return { ...current, [part.part_key]: next };
-    });
+  function update(patch: Partial<InventorySelection>) {
+    onSelectionChange({ ...selection, ...patch });
   }
 
   function toggle(part: CatalogPart, on: boolean) {
-    setEnabled((current) => ({ ...current, [part.part_key]: on }));
+    update({ enabled: { ...enabled, [part.part_key]: on } });
   }
 
   function setName(part: CatalogPart, value: string) {
-    setNames((current) => ({ ...current, [part.part_key]: value }));
+    update({ names: { ...names, [part.part_key]: value } });
   }
 
   function setCount(part: CatalogPart, index: number, value: string) {
-    setCounts((current) => {
-      const existing = current[part.part_key] ?? part.count_inputs.map(() => "");
-      const next = existing.slice();
-      next[index] = value;
-      return { ...current, [part.part_key]: next };
-    });
+    const existing = counts[part.part_key] ?? part.count_inputs.map(() => "");
+    const next = existing.slice();
+    next[index] = value;
+    update({ counts: { ...counts, [part.part_key]: next } });
   }
 
-  // 三层结构：结构分部 → 部件类别（16 个规范类别）→ 部件（细分），均按目录顺序。
-  const groups = useMemo(
-    () =>
-      structurePartOrder
-        .map((key) => {
-          const sectionParts = parts.filter((part) => part.structure_part === key);
-          const order: string[] = [];
-          const byCategory = new Map<string, { name: string; parts: CatalogPart[] }>();
-          for (const part of sectionParts) {
-            const categoryId = part.standard_component_category_id;
-            let bucket = byCategory.get(categoryId);
-            if (!bucket) {
-              bucket = { name: part.standard_component_category_name, parts: [] };
-              byCategory.set(categoryId, bucket);
-              order.push(categoryId);
-            }
-            bucket.parts.push(part);
-          }
-          return { key, categories: order.map((id) => ({ id, ...byCategory.get(id)! })) };
-        })
-        .filter((group) => group.categories.length > 0),
-    [parts]
-  );
+  function toggleInstance(part: CatalogPart, index: number, on: boolean) {
+    const dropped = excludedIndexes[part.part_key] ?? [];
+    const next = on
+      ? dropped.filter((item) => item !== index)
+      : dropped.includes(index)
+        ? dropped
+        : [...dropped, index];
+    update({ excludedIndexes: { ...excludedIndexes, [part.part_key]: next } });
+  }
 
-  // 展开出的位置逐个可勾选：真实桥常缺其中几处（如只有一侧有翼墙）。
+  // 回车在数量框里是录入时的本能动作，而向导整体是一个 form——不拦就直接触发创建。
+  function blockEnter(event: { key: string; preventDefault: () => void }) {
+    if (event.key === "Enter") event.preventDefault();
+  }
+
+  const needle = filter.trim().toLocaleLowerCase();
+  const visible = parts.filter((part) => {
+    if (onlySelected && !enabled[part.part_key]) return false;
+    if (!needle) return true;
+    return [part.default_name, part.standard_component_category_name]
+      .some((value) => value.toLocaleLowerCase().includes(needle));
+  });
+
+  // 只按结构分部分组。部件类别（16 个规范类别）降成行内灰字：20 个部件配 12 个类别标题，
+  // 标题比内容还占地方。
+  const groups = structurePartOrder
+    .map((key) => ({ key, parts: visible.filter((part) => part.structure_part === key) }))
+    .filter((group) => group.parts.length > 0);
+
   function renderInstances(part: CatalogPart) {
     const numbers = partNumbers(part);
     if (numbers.length === 0) return null;
     const dropped = excludedIndexes[part.part_key] ?? [];
     return (
-      <fieldset className="inventory-instance-list">
-        <legend>桥上实际有哪些（去掉没有的）</legend>
+      <span className="inventory-instance-list" role="group" aria-label={`${part.default_name} 位置`}>
         {numbers.map((item, index) => (
           <label className="inventory-instance-option" key={item.number}>
             <input
@@ -267,149 +242,140 @@ export function BridgeInventoryWizard({
             <span>{item.number}</span>
           </label>
         ))}
-        <p className="inventory-part-preview">
-          共 {numbers.length - dropped.length} 个
-        </p>
-      </fieldset>
+      </span>
     );
   }
 
-  function renderPreview(part: CatalogPart) {
-    const numbers = partNumbers(part);
-    if (numbers.length === 0) return null;
-    const shown = numbers.slice(0, 6).map((item) => item.number);
+  function renderCounts(part: CatalogPart) {
+    return part.count_inputs.map((countInput, index) => (
+      <label className="inventory-count-field" key={countInput.key}>
+        <span className="inventory-count-label">
+          {countInput.label}
+          {countInput.hint ? (
+            <abbr className="inventory-count-hint" title={countInput.hint}>
+              ⓘ
+            </abbr>
+          ) : null}
+        </span>
+        <input
+          aria-label={`${part.default_name} ${countInput.label}`}
+          type="number"
+          min={0}
+          max={10000}
+          step={1}
+          value={partCounts(part)[index] ?? ""}
+          onChange={(event) => setCount(part, index, event.target.value)}
+          onKeyDown={blockEnter}
+        />
+      </label>
+    ));
+  }
+
+  function renderOutput(part: CatalogPart, total: number | null) {
+    if (total === null) {
+      return (
+        <span className="inventory-part-output">
+          <span className="inventory-part-missing">请填数量</span>
+        </span>
+      );
+    }
+    const parsed = parseCounts(partCounts(part)) ?? [];
+    const sample = part.instance_selectable
+      ? null
+      : firstNumber(part.number_template, resolvedName(part), parsed, spanCount);
     return (
-      <p className="inventory-part-preview">
-        共 {numbers.length} 个：{shown.join("、")}
-        {numbers.length > shown.length ? "…" : ""}
-      </p>
+      <span className="inventory-part-output">
+        <span className="inventory-part-total">共 {total} 个</span>
+        {sample ? <span className="inventory-part-sample">{sample}…</span> : null}
+      </span>
     );
   }
+
+  function renderRow(part: CatalogPart) {
+    const on = !!enabled[part.part_key];
+    const total = on ? partTotal(part) : null;
+    const large = total !== null && total >= LARGE_PART_TOTAL;
+    return (
+      <div
+        className={`inventory-part-row${on ? " is-on" : ""}${large ? " is-large" : ""}`}
+        key={part.part_key}
+      >
+        {/* 定宽的头一格：勾没勾都占同样宽度，后面的类别、数量、生成数才对得成列。 */}
+        <div className="inventory-part-head">
+          <label className="inventory-part-toggle">
+            <input
+              type="checkbox"
+              aria-label={`启用 ${part.default_name}`}
+              checked={on}
+              onChange={(event) => toggle(part, event.target.checked)}
+            />
+            {on ? null : <span className="inventory-part-name">{part.default_name}</span>}
+          </label>
+          {on ? (
+            <input
+              className="inventory-part-rename"
+              aria-label={`${part.default_name} 名称`}
+              value={partName(part)}
+              onChange={(event) => setName(part, event.target.value)}
+              onKeyDown={blockEnter}
+            />
+          ) : null}
+        </div>
+        <span className="inventory-part-category">{part.standard_component_category_name}</span>
+        {part.provisional ? (
+          <span className="inventory-provisional-badge">临时编号（待校准）</span>
+        ) : null}
+        {on ? (part.instance_selectable ? renderInstances(part) : renderCounts(part)) : null}
+        {on ? renderOutput(part, total) : null}
+      </div>
+    );
+  }
+
+  const chosen = parts.filter((part) => enabled[part.part_key]).length;
 
   return (
     <section className="inventory-wizard" aria-labelledby="inventory-wizard-title">
-      <div className="inventory-section-heading">
-        <div>
-          <p className="section-kicker">初始构件台账</p>
-          <h3 id="inventory-wizard-title">按规范生成实际构件</h3>
-        </div>
-        <span className="inventory-status-badge">可稍后修改编号</span>
+      <div className="inventory-part-toolbar">
+        <h3 id="inventory-wizard-title">勾选桥上有的部件</h3>
+        <input
+          className="inventory-part-filter"
+          aria-label="筛选部件"
+          placeholder="筛选部件"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          onKeyDown={blockEnter}
+        />
+        <label className="inventory-only-selected">
+          <input
+            type="checkbox"
+            checked={onlySelected}
+            onChange={(event) => setOnlySelected(event.target.checked)}
+          />
+          只看已选
+        </label>
+        <span className="inventory-chosen-count">
+          已选 {chosen} / {parts.length}
+        </span>
       </div>
-      <p className="inventory-standard-notice">
-        这里选择的规范只用于生成初始构件台账，不会绑定或限制以后检测项目采用的评分规范。
-      </p>
-      {loading ? <p>正在加载规范…</p> : null}
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
-      {!loading && !error && catalogs.length === 0 ? <p>当前没有可用的技术评定规范包。</p> : null}
-      {catalogs.length > 0 ? (
-        <div className="inventory-wizard-grid">
-          <label>
-            初始台账规范来源
-            <select value={packageId} onChange={(event) => resetForPackage(event.target.value)}>
-              <option value="">请选择规范</option>
-              {catalogs.map((item) => (
-                <option key={item.package.id} value={item.package.id}>
-                  {item.package.standard_code} · {item.package.standard_name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            桥型
-            <select
-              value={bridgeTypeId}
-              disabled={!catalog}
-              onChange={(event) => resetForBridgeType(event.target.value)}
-            >
-              <option value="">请选择桥型</option>
-              {catalog?.bridge_types.map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
-            </select>
-          </label>
-        </div>
+      {partsError ? (
+        <p className="error-text" role="alert">
+          {partsError}
+        </p>
       ) : null}
-      {partsError ? <p className="error-text" role="alert">{partsError}</p> : null}
-      {bridgeTypeId ? (
-        <div className="inventory-quantity-card">
-          <label>
-            跨数
-            <input
-              aria-label="跨数"
-              type="number"
-              min={0}
-              max={1000}
-              step={1}
-              value={spanCount}
-              onChange={(event) => setSpanCount(event.target.value)}
-            />
-          </label>
-        </div>
-      ) : null}
-      {bridgeTypeId && parts.length > 0 ? (
-        <div className="inventory-part-list">
-          <h4>勾选桥上有的部件并填数量</h4>
-          {groups.map((group) => (
-            <div className="inventory-part-group" key={group.key}>
-              <h4 className="inventory-structure-heading">{structurePartLabel(group.key)}</h4>
-              {group.categories.map((category) => (
-                <div className="inventory-category-group" key={category.id}>
-                  <h5 className="inventory-category-heading">{category.name}</h5>
-                  {category.parts.map((part) => {
-                    const on = !!enabled[part.part_key];
-                    return (
-                      <div className="inventory-part-card" key={part.part_key}>
-                        <label className="inventory-part-enable">
-                          <input
-                            type="checkbox"
-                            aria-label={`启用 ${part.default_name}`}
-                            checked={on}
-                            onChange={(event) => toggle(part, event.target.checked)}
-                          />
-                          <strong>{part.default_name}</strong>
-                          {part.provisional ? (
-                            <span className="inventory-provisional-badge">临时编号（待校准）</span>
-                          ) : null}
-                        </label>
-                        {on ? (
-                          <div className="inventory-part-body">
-                            <label>
-                              现场名称
-                              <input
-                                aria-label={`${part.default_name} 名称`}
-                                value={partName(part)}
-                                onChange={(event) => setName(part, event.target.value)}
-                              />
-                            </label>
-                            {part.count_inputs.map((countInput, index) => (
-                              <label key={countInput.key}>
-                                {countInput.label}
-                                <input
-                                  aria-label={`${part.default_name} ${countInput.label}`}
-                                  type="number"
-                                  min={0}
-                                  max={10000}
-                                  step={1}
-                                  value={partCounts(part)[index] ?? ""}
-                                  onChange={(event) => setCount(part, index, event.target.value)}
-                                />
-                                {countInput.hint ? (
-                                  <span className="inventory-count-hint">{countInput.hint}</span>
-                                ) : null}
-                              </label>
-                            ))}
-                            {part.instance_selectable ? renderInstances(part) : renderPreview(part)}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+      {parts.length > 0 && groups.length === 0 ? <p>没有匹配的部件。</p> : null}
+      <div className="inventory-part-list">
+        {groups.map((group) => (
+          <div className="inventory-part-group" key={group.key}>
+            <div className="inventory-structure-heading">
+              <h4>{structurePartLabel(group.key)}</h4>
+              <span className="inventory-structure-count">
+                {group.parts.filter((part) => enabled[part.part_key]).length} / {group.parts.length}
+              </span>
             </div>
-          ))}
-        </div>
-      ) : null}
+            {group.parts.map((part) => renderRow(part))}
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

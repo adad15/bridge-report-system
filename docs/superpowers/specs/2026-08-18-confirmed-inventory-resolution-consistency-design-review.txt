@@ -1,0 +1,403 @@
+《已确认台账版本解析的一致性》技术文档评审意见
+
+评审对象：2026-08-18-confirmed-inventory-resolution-consistency-design.md
+评审日期：2026-08-18
+评审范围：确认版本解析器、校对保存、入库前检查、年度确认、评定树自动匹配、Word 导入及现有测试
+
+
+一、总体结论
+
+文档识别的核心问题真实存在：绑定链路写入的是“检测年度锁定版本优先，否则最新已确认版本”，但校对保存、入库前检查、年度确认、评定树自动匹配和 Word 导入中的六个调用点仍然使用草稿优先的 get_latest_revision()。桥梁一旦派生草稿，写入方与校验方就可能使用不同版本。
+
+文档列出的六个直接调用点与当前代码基本吻合，统一使用 resolve_confirmed_revision_ref() / resolve_confirmed_revision() 的方向也是正确的。
+
+但当前修正方案还不能简单按“六处替换函数调用”实施，至少存在以下两个阻塞问题：
+
+1. Word 导入中的构件匹配和评定树匹配会分别解析版本，即使都改用正确解析器，一次事务中仍可能使用两个不同的已确认版本；年度锁定 UPDATE 还没有检查是否成功。
+2. 保存校对草稿的版本解析、关联校验和最终 UPDATE 不在同一个事务或乐观校验条件内，仍然存在校验后版本变化的 TOCTOU 竞态。
+
+此外，文档对年度确认查询、评定树自动匹配行为、get_latest_revision() 的管理页依赖以及用户提示有几处事实描述不准确。
+
+建议修改后再进入实施阶段。
+
+
+二、阻塞问题
+
+1. Word 导入仍可能在一次事务中使用两个不同版本
+
+当前 Word 导入的执行顺序是：
+
+1. match_imported_defects() 解析一次构件台账版本。
+2. match_imported_defect_rating_tree_nodes() 再次查询检测年度并解析版本。
+3. 两次匹配完成后，才把 confirmed_revision_id 写入检测年度。
+
+即使把两处 get_latest_revision() 都替换成 resolve_confirmed_revision()，仍然不能保证它们取得同一个版本。
+
+PostgreSQL 默认 READ COMMITTED 隔离级别下，每条语句都可能看到新的已提交数据。可能出现：
+
+1. 构件匹配解析到已确认版本 R2。
+2. 其他事务确认了 R3。
+3. 评定树匹配再次解析，得到 R3。
+4. 年度最后被锁到 R2。
+5. 构件关联基于 R2，评定树关联却基于 R3。
+
+因此，⑤和⑥不能只是分别替换调用。
+
+建议：
+
+1. persist_parse_result() 在事务中只解析一次确认版本。
+2. 将同一个 InventoryRevision 或同一个 revision ID 同时传给构件匹配和评定树匹配。
+3. match_imported_defect_rating_tree_nodes_unguarded() 不再自行解析版本。
+4. 构件字段、评定树字段和年度锁定都使用同一个解析结果。
+
+推荐形态：
+
+const auto revision =
+    inventories.resolve_confirmed_revision(bridge_id, locked_revision_id);
+
+auto matched_data =
+    match_imported_defects(..., revision, ...);
+
+match_imported_defect_rating_tree_nodes(
+    ..., revision, matched_data);
+
+如果需要避免复制完整对象，可以在事务作用域内持有 optional<InventoryRevision> 并以 const 引用传递。
+
+
+2. Word 导入锁定年度版本时没有检查更新结果
+
+当前代码使用条件 UPDATE：
+
+update inspection_years
+set component_inventory_revision_id=$2
+where ...
+  and component_inventory_revision_id is null
+
+但没有 RETURNING，也没有检查受影响行数。
+
+可能发生：
+
+1. Word 导入解析出 R2。
+2. 另一个事务先把年度锁到 R3。
+3. 当前 UPDATE 因 component_inventory_revision_id is null 条件更新0行。
+4. 代码没有发现失败，继续提交。
+5. 病害数据写着 R2，检测年度锁定的是 R3。
+
+建议直接复用 ComponentInventoryRepository::lock_pending_year_revision() 并检查返回值。
+
+返回 false 时必须：
+
+1. 整体回滚；或
+2. 重新读取年度锁定版本，重新执行全部构件及评定树匹配。
+
+不能继续保存混合版本的数据。
+
+还应考虑在读取关联年度时锁定 inspection_years 行，而不是只执行 for update of ir。当前 import_records 行锁并不能阻止其他事务先锁定年度版本。
+
+
+3. 保存校对草稿仍存在校验后版本变化的 TOCTOU
+
+当前保存流程是：
+
+1. get_import_record_detail() 读取检测年度和锁定版本。
+2. 路由层单独解析确认版本。
+3. 路由层执行构件关联校验和评定树关联校验。
+4. 调用 save_review_draft()。
+5. save_review_draft() 只检查导入状态和编辑锁，不检查台账版本。
+
+给 ImportRecordDetail 增加 component_inventory_revision_id，只能让普通情况下的版本选择正确，不能保证校验与保存使用同一版本。
+
+可能出现：
+
+1. 检测年度最初未锁定，路由解析 R2并通过校验。
+2. 另一个操作把年度锁到 R3。
+3. save_review_draft() 仍然成功。
+4. 保存进去的病害数据仍基于 R2。
+
+建议二选一：
+
+方案 A：将版本解析、构件校验、评定树校验和草稿保存放入同一个仓储事务，并在事务内锁定 import_records 和关联 inspection_years。
+
+方案 B：给 save_review_draft() 增加预期台账版本参数，在最终 UPDATE 中加入版本一致性条件。不一致时返回独立的冲突结果，不能只返回普通的 import_record_not_editable。
+
+入库前预检查是只读提示，最终还有确认事务复核，所以短暂过期可以由事务内确认兜底；但保存草稿本身就是写操作，必须保证关联校验与最终写入之间的一致性。
+
+
+三、文档中的事实或实现映射不准确
+
+4. 年度确认事务查询已经选出了锁定版本
+
+文档称 ReviewRepository.cpp 的事务查询已经 left join inspection_years，只需“补选一列”。
+
+实际查询已经包含：
+
+iy.component_inventory_revision_id::text as inventory_revision_id
+
+后面也已经读取：
+
+context.component_inventory_revision_id =
+    optional_text(record_row, "inventory_revision_id");
+
+因此年度确认路径真正需要修改的是：
+
+1. 删除当前手工 status 查询和草稿优先的 get_latest_revision()。
+2. 使用查询中已经存在的 inventory_revision_id 调用统一解析器。
+3. 将同一个完整 InventoryRevision 同时用于 PreflightContext 和评定树确认校验。
+
+不需要再修改事务查询增加该字段。
+
+
+5. 入库前检查和年度确认不只是需要 RevisionRef
+
+文档强调②③可以通过 ref.has_value() 判断已确认状态，这部分正确。但两条路径后续都会调用：
+
+validate_defect_rating_tree_for_confirmation(...)
+
+该函数需要遍历构件及规范映射，因此仍需要完整 InventoryRevision。
+
+建议②③只解析一次完整版本：
+
+const auto inventory =
+    repository.resolve_confirmed_revision(
+        bridge_id,
+        locked_revision_id);
+
+然后使用：
+
+component_inventory_revision_id =
+    inventory ? optional<string>(inventory->id) : nullopt;
+
+component_inventory_confirmed = inventory.has_value();
+
+并将同一个 inventory 传给评定树验证。
+
+如果先调用 resolve_confirmed_revision_ref()，随后又调用完整解析函数，会增加一次查询；在非事务场景下还可能看到不同快照。
+
+六处调用实际需要的数据如下：
+
+1. 保存校对草稿：完整版本。
+2. 入库前检查：完整版本。
+3. 年度确认事务：完整版本。
+4. 评定树自动匹配：完整版本。
+5. Word 构件匹配：完整版本。
+6. Word 评定树匹配：与⑤共享同一个完整版本。
+
+“只需要版本 ID 时使用 ref”的原则本身可以保留，但本次六处大部分并不适合只使用 ref。
+
+
+6. DefectMatchingRoutes 不是为病害选择构件
+
+文档把④描述为“病害自动匹配”，并称它会“匹配到草稿里的构件”。
+
+实际调用的是：
+
+match_defect_rating_tree_nodes(...)
+
+它不会为病害选择新的 bridge_component_id。它读取病害已经绑定的构件 ID，再从台账中查该构件的规范映射，用于匹配评定树节点。
+
+因此草稿优先的真实后果是：
+
+1. 可能使用草稿中的新映射选择错误的规范类别。
+2. 可能产生基于草稿映射的错误评定树节点。
+3. 已确认版本中有效的构件，在草稿中被停用或改映射后，可能被错误判断为无法匹配。
+
+建议将④改名为“病害评定树自动匹配”。
+
+测试应断言返回的评定树节点和规范映射来自已确认版本，而不是只断言构件属于已确认版本。
+
+
+四、get_latest_revision() 的保留理由不成立
+
+7. 台账管理页并没有调用 get_latest_revision()
+
+文档称台账管理页需要查看草稿，因此 get_latest_revision() 需要保留，并且六处修改后全仓只剩台账管理页一个调用者。
+
+实际台账管理页的汇总路由使用的是：
+
+find_latest_revision_id()
+
+然后按 ID 加载汇总。它没有调用 get_latest_revision()。
+
+当前生产代码对 get_latest_revision() 的直接调用正好就是文档列出的六处。六处迁移完成后，它不会剩下台账管理页一个调用者，而是没有生产调用者。
+
+建议修改为：
+
+1. 台账管理页继续使用草稿优先的 find_latest_revision_id()。
+2. 六处迁移完成后删除 get_latest_revision()。
+3. 如果暂时保留，明确它已无生产调用者，而不是声称管理页依赖它。
+
+get_latest_confirmed_revision() 当前同样没有调用者，也可一并评估是否删除，避免多个相近 API 继续造成误用。
+
+原文验收条件“get_latest_revision() 的调用方只剩台账管理页一处”需要改成：
+
+“生产代码不再调用 get_latest_revision()；台账管理页的草稿优先行为继续由 find_latest_revision_id() 保证。”
+
+
+五、语义命名和用户提示需要同步修改
+
+8. “latest”不再符合锁定版本优先语义
+
+统一规则是：
+
+1. 检测年度锁定版本优先。
+2. 年度未锁定时才取最新已确认版本。
+
+因此，当年度锁定历史版本 R1，而桥梁已经存在更新的已确认版本 R2时，正确行为是继续使用 R1。
+
+以下命名和提示会变得不准确：
+
+1. latest_revision
+2. latest_inventory
+3. “病害关联的实际构件不属于当前桥梁最新台账。”
+4. “桥梁最新构件台账尚未确认。”
+
+建议修改：
+
+1. latest_revision → resolved_revision 或 confirmed_revision。
+2. latest_inventory → resolved_inventory。
+3. “当前桥梁最新台账” → “本检测年度使用的已确认构件台账”。
+4. “桥梁最新构件台账尚未确认” → “本检测年度没有可用的已确认构件台账”。
+
+因此，文档验收条件“没有已确认版本时提示逐字不变”不建议保留。应要求阻塞行为和错误码不变，但允许修正误导性的“最新”表述。
+
+
+六、ImportRecordDetail 字段的接口边界
+
+9. 需要明确新增字段是否对前端输出
+
+给 ImportRecordDetail 增加：
+
+optional<string> component_inventory_revision_id;
+
+方向正确，保存校对草稿、入库前检查和评定树自动匹配都可以复用。
+
+但 ImportRecordDetail 也用于构建 review API 响应。当前 build_review_response() 不会自动序列化新字段。
+
+文档应明确采用哪一种方案：
+
+方案 A：字段仅作为服务端内部上下文，不新增前端 JSON 契约。
+
+方案 B：将字段输出为 inspection_year.component_inventory_revision_id，并同步更新前端类型。
+
+按照本次目标，推荐方案 A：保持内部字段，不改变 review API 响应。
+
+需要同步修改和测试：
+
+1. get_import_record_detail() 的 SELECT 增加 iy.component_inventory_revision_id。
+2. ImportRecordDetail 增加 optional 字段。
+3. 将数据库列赋值到结构体。
+4. 有关联年度时返回锁定版本 ID。
+5. 无关联年度或年度未锁定时返回 nullopt。
+6. 确认 build_review_response() 不会意外改变外部 JSON 契约。
+
+
+七、并发和数据快照问题
+
+10. ImportRecordDetail 与后续版本解析不是同一快照
+
+保存校对草稿、入库前检查和评定树自动匹配会先调用 get_import_record_detail()，随后再调用版本解析器。
+
+如果第一次查询读到年度尚未锁定，而在第二次查询前其他事务锁定了另一个版本，调用方仍会把旧的 nullopt 传给解析器，并按“最新已确认版本”回退，而不是使用刚刚锁定的版本。
+
+因此，仅给 ImportRecordDetail 增加字段不能提供严格的原子快照。
+
+建议：
+
+1. 对保存校对草稿这样的写操作，在同一个事务中重新读取并锁定检测年度。
+2. 入库前预检查允许短暂过期，但最终确认事务必须重新读取并校验。
+3. 评定树自动匹配是只读结果，后续保存必须再次按照当前年度版本校验。
+4. 如果需要严格读取一致性，可新增按 import/year 在单条 SQL 中解析有效版本的仓储方法，而不是先返回可过期的 locked_revision_id 再解析。
+
+
+八、测试清单补充
+
+文档目前主要覆盖“一个已确认版本加一个草稿”。还需要以下测试。
+
+版本选择：
+
+1. 年度锁定 R1，桥梁另有已确认 R2和草稿 R3，六处都必须使用 R1。
+2. 年度未锁定，存在已确认 R1、已确认 R2和草稿 R3，必须使用 R2。
+3. 年度锁定版本属于其他桥梁时解析失败。
+4. 年度锁定版本是草稿时解析失败。
+5. 年度锁定版本不存在时解析失败。
+6. 桥梁没有已确认版本时继续阻塞。
+
+Word 导入：
+
+1. 构件匹配与评定树匹配使用同一个 revision ID。
+2. 年度锁定 UPDATE 更新0行时不得继续提交。
+3. 并发操作先把年度锁到另一版本时，Word 导入回滚或重新匹配。
+4. 病害上的 component_inventory_revision_id 与年度锁定版本相同。
+5. 评定树匹配使用的规范映射来自同一版本。
+
+校对保存：
+
+1. 桥梁存在草稿时，保存基于已确认版本的病害成功。
+2. 年度锁定历史 R1时，不使用更新的已确认 R2。
+3. 校验完成后年度版本发生变化时，不得保存旧版本数据。
+4. 版本冲突返回明确的409，而不是普通编辑状态错误。
+
+确认与自动匹配：
+
+1. 入库前检查与事务内确认使用相同解析规则。
+2. 评定树自动匹配返回的节点来自已确认或年度锁定版本映射。
+3. 草稿中的停用、改号或改映射不会影响已锁定年度。
+
+死代码与管理页：
+
+1. 六处迁移后，生产代码不再调用 get_latest_revision()。
+2. find_latest_revision_id() 仍保持草稿优先。
+3. 台账管理页仍能看到草稿版本。
+
+
+九、建议的最终实施方式
+
+批次一：解析 API与模型
+
+1. ImportRecordDetail 增加内部 component_inventory_revision_id 字段。
+2. get_import_record_detail() 补查询和赋值。
+3. 明确不改变 review API JSON。
+4. 删除或标记废弃 get_latest_revision()。
+
+批次二：Word 导入原子改造
+
+1. 在 persist_parse_result() 中解析一次完整确认版本。
+2. 构件匹配和评定树匹配共享同一对象。
+3. 使用 lock_pending_year_revision() 并检查结果。
+4. 版本冲突时回滚或完整重试。
+
+批次三：校对保存、预检查和自动匹配
+
+1. 保存草稿建立版本校验与写入的事务或乐观一致性条件。
+2. 入库前检查使用完整 resolved inventory。
+3. 评定树自动匹配使用同一规则。
+4. 更新 latest 相关变量名和提示。
+
+批次四：年度确认事务
+
+1. 复用查询中已有的 inventory_revision_id。
+2. 解析一次完整版本。
+3. 同一个版本用于 PreflightContext 和评定树确认校验。
+4. 保持事务内最终复核。
+
+批次五：清理与回归
+
+1. 删除无调用者的 get_latest_revision()。
+2. 评估删除无调用者的 get_latest_confirmed_revision()。
+3. 确认台账管理页继续使用 find_latest_revision_id()。
+4. 完成历史锁定版本和并发测试。
+
+
+十、评审结论
+
+文档发现的问题和统一解析方向正确，但实施不能简化为六处函数替换。
+
+进入实现前至少需要补充：
+
+1. Word 导入只解析一次版本，并检查年度锁定是否成功。
+2. 校对草稿的版本校验和保存建立原子性或乐观并发校验。
+3. 修正文档对年度确认查询、评定树自动匹配和 get_latest_revision() 管理页依赖的事实描述。
+4. 更新 latest 相关变量和用户提示。
+5. 补充锁定历史版本、错误锁定版本及并发场景测试。
+
+完成后，该方案才能真正保证“同一份数据的写入、校验和自动匹配使用同一个已确认台账版本”。

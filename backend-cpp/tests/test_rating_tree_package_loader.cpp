@@ -24,9 +24,9 @@ std::filesystem::path organization_package_root_v103() {
         "standards/rating-tree/organization-bridge/1.0.3";
 }
 
-std::filesystem::path organization_package_root_v202() {
+std::filesystem::path organization_package_root_v203() {
     return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-        "standards/rating-tree/organization-bridge/2.0.2";
+        "standards/rating-tree/organization-bridge/2.0.3";
 }
 
 void write_json(const std::filesystem::path& path, const Json::Value& value) {
@@ -465,13 +465,13 @@ TEST(RatingTreePackageLoaderIntegrationTest, Version103ShipsTheControlledRulePac
     }
 }
 
-TEST(RatingTreePackageLoaderIntegrationTest, Version202LoadsTheCurrentSourceTree) {
+TEST(RatingTreePackageLoaderIntegrationTest, Version203LoadsTheCurrentSourceTree) {
     const auto result = bridge_report::rating_tree::RatingTreePackageLoader().load(
-        organization_package_root_v202());
+        organization_package_root_v203());
 
     ASSERT_TRUE(result.ok())
         << (result.issues.empty() ? "" : result.issues.front().message);
-    EXPECT_EQ(result.package->manifest.package_version, "2.0.2");
+    EXPECT_EQ(result.package->manifest.package_version, "2.0.3");
     EXPECT_EQ(result.package->nodes.size(), 500u);
     EXPECT_EQ(result.package->source_mappings.size(), 403u);
     EXPECT_TRUE(result.package->aliases.empty());
@@ -497,6 +497,9 @@ TEST(RatingTreePackageLoaderIntegrationTest, Version202LoadsTheCurrentSourceTree
     EXPECT_EQ(result.package->nodes.at("org.bridge.defect.9_1_1_9").sort_order, 90);
     EXPECT_EQ(result.package->nodes.at("org.bridge.defect.9_1_1_10").sort_order, 100);
     EXPECT_EQ(result.package->nodes.at("org.bridge.defect.9_1_1_11").sort_order, 110);
+    EXPECT_EQ(
+        result.package->sources.at("source.h21.official").reference,
+        "standards/technical-condition/jtg-t-h21-2011/1.0.4");
     for (const auto& [id, _] : result.package->nodes) {
         EXPECT_FALSE(id.starts_with("org.bridge.group.11"));
         EXPECT_FALSE(id.starts_with("org.bridge.group.12"));

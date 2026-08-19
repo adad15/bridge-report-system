@@ -9,7 +9,7 @@ from bridge_report_tools.rating_tree.package_generator import (
 
 REPOSITORY = Path(__file__).resolve().parents[3]
 SOURCE = REPOSITORY / "standards/source-material/datacheck-bridge-tree"
-H21 = REPOSITORY / "standards/technical-condition/jtg-t-h21-2011/1.0.3"
+H21 = REPOSITORY / "standards/technical-condition/jtg-t-h21-2011/1.0.4"
 
 
 def test_checksum_matches_the_existing_cpp_verified_package():
@@ -23,6 +23,8 @@ def test_generates_all_403_source_relations_without_text_rules():
     documents = build_package_documents(SOURCE, H21)
 
     assert len(documents["source-index-map.json"]["mappings"]) == 403
+    assert documents["sources.json"]["sources"][0]["reference"] == \
+        "standards/technical-condition/jtg-t-h21-2011/1.0.4"
     assert set(documents) == {
         "tree.json", "source-index-map.json", "corrections.json", "sources.json"}
     numbers = {

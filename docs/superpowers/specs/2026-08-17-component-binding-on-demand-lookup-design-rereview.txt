@@ -1,0 +1,433 @@
+《构件绑定改用按需检索》技术文档复审意见
+
+复审对象：2026-08-17-component-binding-on-demand-lookup-design.md
+复审日期：2026-08-18
+前次评审：2026-08-17-component-binding-on-demand-lookup-design-review.txt
+复审范围：修订后的设计文档、后端 C++ 仓储与路由、前端 API 与绑定工作台、现有测试
+
+
+一、总体结论
+
+修订后的设计已经解决了第一次评审中的大部分核心问题，主要包括：
+
+1. 补充了 inventory_revision_id，建立了概览、搜索、批量替换之间的版本主线。
+2. 批量替换不再读取草稿优先的桥梁级 /latest。
+3. 明确概览不能继续完整加载五千多条构件及映射。
+4. 增加了 binding_eligible 过滤，区分台账管理页和绑定页的搜索范围。
+5. 补充了批量替换的加载、失败、重试、取消和缓存设计。
+6. 明确搜索上限保持 MAX_SEARCH_RESULTS = 20。
+7. 补充了候选与搜索结果的合并规则、现场名称显示和测试清单。
+
+整体方案已经接近可实现，但仍有四个实现前必须解决的阻塞问题：
+
+1. 批量替换精简响应与 buildReplacePreview 的实际输入类型不兼容。
+2. 检测年度未锁定版本时，概览、搜索、批量替换和正式绑定仍可能发生跨请求版本漂移。
+3. 现有 resolve_confirmed_revision() 被多个写操作使用，不能直接改成轻量引用返回值。
+4. 批量替换端点和概览候选查询没有完整保留“启用且存在生效映射”的原有过滤语义。
+
+建议解决上述四项后再将文档状态改为“复审通过，待实现”。
+
+
+二、必须修改的问题
+
+1. 批量替换的精简响应与 buildReplacePreview 不兼容
+
+文档设计的批量替换响应条目只有：
+
+{
+  "bridge_component_id": "...",
+  "component_number": "..."
+}
+
+但当前 buildReplacePreview() 的签名是：
+
+buildReplacePreview(
+  rows: BindingRow[],
+  entries: ComponentInventoryEntry[],
+  find: string,
+  replace: string
+)
+
+并且会执行：
+
+if (!entry.is_active) continue;
+
+如果直接传入文档中的精简对象，entry.is_active 为 undefined，!undefined 为 true，所有构件都会被跳过，批量替换预览最终会把所有目标判断为 not_in_inventory。
+
+需要二选一：
+
+方案 A：精简响应增加 is_active: true，并将 buildReplacePreview 的输入类型改为最小类型。
+
+方案 B：后端保证只返回可用构件，buildReplacePreview 改为接受只含 bridge_component_id 和 component_number 的类型，并删除 is_active 判断。
+
+推荐定义独立类型：
+
+interface BindingReplaceInventoryEntry {
+  bridge_component_id: string;
+  component_number: string;
+  is_active: boolean;
+}
+
+这样可以继续保留当前“不处理停用构件”的防御性判断，同时不需要伪装成完整的 ComponentInventoryEntry。
+
+文档中“buildReplacePreview 算法不变”应改为：
+
+“批量替换的归一化、存在性和歧义判定语义不变；输入类型需要适配精简响应。”
+
+现有 replacePreview.test.ts 中“停用构件不参与预览”的测试必须保留，或者将对应保证迁移为批量取数端点的后端测试。
+
+
+2. 年度未锁定版本时仍然存在跨请求版本漂移
+
+文档要求以下三处针对同一个版本：
+
+1. 概览填充展示对象。
+2. 行内搜索。
+3. 批量替换取数。
+
+但当 inspection_years.component_inventory_revision_id 为 null 时，当前方案仍不能保证版本稳定。
+
+可能出现以下时序：
+
+1. 概览请求解析出最新已确认版本 R2，但没有把 R2 锁定到检测年度。
+2. 行内搜索按照 overview.inventory_revision_id 使用 R2。
+3. 其他用户确认了新版本 R3。
+4. 批量替换端点重新按 import 解析版本，得到 R3。
+5. 正式绑定操作再次解析版本，并可能把 R3 写入检测年度。
+6. 用户看到的候选和搜索结果来自 R2，批量预览和绑定校验却来自 R3。
+
+现有绑定写操作确实是在事务中调用 attach_revision_to_pending_year()，说明进入绑定面板时检测年度不一定已经锁定版本。
+
+建议增加乐观版本校验：
+
+1. 行内绑定、批量绑定和批量替换取数都携带概览返回的 inventory_revision_id。
+2. 后端事务中检查：
+   - 检测年度已有锁定版本时，必须等于请求中的预期版本；
+   - 检测年度未锁定时，确认预期版本仍是有效的最新已确认版本，然后锁定该版本；
+   - 版本不一致时不继续操作，返回 409。
+3. 增加错误码：
+
+component_inventory_revision_changed
+
+4. 前端收到该错误后重新加载绑定概览，并提示用户台账版本已经变化。
+
+批量替换取数端点可以改为：
+
+GET /api/import-records/{import_id}/component-binding/inventory?expected_revision_id={revision_id}
+
+前端不是在“选择版本”，而是在声明当前操作所依据的概览版本。
+
+仅在批量端点响应中返回 inventory_revision_id 并不足以解决该问题，因为响应到达时已经可能与当前概览版本不同。前端至少还要比较响应版本与 overview.inventory_revision_id；更可靠的做法是由后端直接执行预期版本校验。
+
+
+3. 不能直接修改现有 resolve_confirmed_revision() 的返回类型
+
+修订文档要求 resolve_confirmed_revision() 不再返回完整 InventoryRevision，而只返回：
+
+struct ConfirmedRevisionRef {
+  std::string id;
+  std::string bridge_id;
+};
+
+但当前 resolve_confirmed_revision() 不只被 overview() 使用，还被以下写操作使用：
+
+1. 批量绑定。
+2. 单条绑定。
+3. 构件范围拆分。
+4. 清除绑定、标记缺失等操作。
+
+这些调用者后面需要完整 InventoryRevision 执行 validate_target()、读取映射或完成规范兼容性校验。
+
+如果直接修改原函数返回类型，会导致多个绑定流程无法编译，或者迫使各个调用者重复实现完整台账加载逻辑。
+
+建议拆成两个层次：
+
+std::optional<ConfirmedRevisionRef>
+resolve_confirmed_revision_ref(...);
+
+std::optional<inventory::InventoryRevision>
+load_confirmed_revision(...);
+
+职责如下：
+
+1. resolve_confirmed_revision_ref()
+   - 只解析准确版本 ID和桥梁 ID。
+   - 锁定版本优先；未锁定时查询最新已确认版本。
+   - 供概览和批量替换取数端点使用。
+
+2. load_confirmed_revision()
+   - 先调用 resolve_confirmed_revision_ref()。
+   - 再按准确版本 ID 加载完整 InventoryRevision。
+   - 供需要 validate_target() 和完整映射的写操作使用。
+
+两个函数必须共享同一套版本解析规则，不能分别实现两套“锁定版本优先，否则最新已确认”的 SQL。
+
+
+4. 批量替换端点没有完整复现原来的可用构件范围
+
+当前 ComponentBindingWorkspace 传给 BulkReplaceDialog 的 entries 来自 usableEntries()，其过滤条件是：
+
+entry.is_active && entry.mappings.some(mapping => mapping.is_active)
+
+修订文档中的新端点只要求返回启用构件，没有要求构件必须存在生效映射。
+
+如果一个构件启用但没有生效映射：
+
+1. 批量预览可能把它判断为唯一命中，显示 will_bind。
+2. 用户点击应用。
+3. 后端 validate_target() 找不到有效映射。
+4. 整批操作返回冲突。
+
+这会导致批量替换预览与改造前不一致。
+
+新端点必须复现原 usableEntries() 的过滤语义，只返回：
+
+e.is_active
+and exists (
+  select 1
+  from bridge_component_standard_mappings m
+  where m.inventory_entry_id = e.id
+    and m.is_active
+)
+
+响应中不需要返回映射字段，但必须在 SQL 中执行映射存在性过滤。
+
+后端测试也应从“只含启用构件”改成：
+
+“只含启用且至少存在一个生效映射的构件。”
+
+
+三、需要进一步明确的问题
+
+5. binding_eligible 不能保证构件对当前行真正可绑定
+
+文档把以下条件称为“可绑定”：
+
+1. 构件启用。
+2. 至少存在一个生效映射。
+
+但正式绑定时，validate_target() 还会检查报告 part_name 与构件规范类别是否兼容。
+
+因此，binding_eligible=true 返回的构件仍可能在用户选择后被后端以“类别与部件名称不符”拒绝。
+
+需要明确采用哪一种语义：
+
+方案 A：保持现有业务语义。
+
+binding_eligible 表示“台账层面可供绑定选择”，不保证适配当前行。文档中“只返回可绑定构件”的绝对表述应改为“只返回启用且有生效映射的构件”。
+
+方案 B：真正保证搜索结果都能绑定。
+
+搜索请求需要额外携带 part_name，后端按照与 validate_target() 相同的规则执行类别兼容性过滤。
+
+本轮目标明确“不改变绑定业务语义”，因此推荐方案 A。
+
+
+6. 概览中的候选对象也需要过滤不可选择构件
+
+修订文档的概览流程只写了“按 ID 定向查询”，没有规定过滤启用状态和生效映射。
+
+candidate_components 会直接作为绑定下拉选项。如果候选 ID 对应的是停用构件或没有生效映射的构件，用户仍然可以点击，随后正式绑定失败。
+
+当前旧实现通过 usableEntries() 构建 byId，这些不可用候选不会出现在下拉列表中。新设计需要保持该行为。
+
+建议规定：
+
+1. candidate_components 只填充启用且至少存在一个生效映射的构件。
+2. 缺失、停用或无生效映射的候选只保留在内部 candidate_component_ids 中，不输出为可选择对象。
+3. 行状态仍由内部 candidate_component_ids 计算，不因展示对象减少而改变。
+4. bound_component 可以单独决定是否显示停用构件用于历史说明。
+5. 如果要求完全保持现有显示语义，bound_component 也使用 usableEntries() 对应的过滤条件，不满足时返回 null。
+
+
+7. “绑定评定树不改台账”的描述不准确
+
+文档背景仍写着：
+
+“绑评定树不改台账，那次纯属白花。”
+
+但当前评定树绑定流程可能选择或迁移目标台账版本，并执行：
+
+update inspection_years
+set standard_profile_id=...,
+    component_inventory_revision_id=...
+
+因此评定树切换确实可能改变检测年度当前使用的台账版本。
+
+额外调用 /latest 仍然应该删除，但正确理由是：
+
+“评定树绑定可能切换台账版本，但操作响应已经返回按照新版本生成的完整绑定概览，概览包含新的 inventory_revision_id 和展示对象，所以前端不需要再调用桥梁级 /latest。”
+
+
+8. “进入面板只发一次请求”的测试表述不准确
+
+ComponentBindingWorkspace 除了获取绑定概览，还会非阻塞地调用 fetchRatingTreeVersions()。
+
+所以“进入面板只发一次请求”按字面理解不成立。
+
+建议改成：
+
+“进入面板只发一次构件绑定首屏数据请求；评定树版本列表可以非阻塞加载，但不得请求完整构件台账。”
+
+测试应分别断言：
+
+1. fetchComponentBinding 调用 1 次。
+2. fetchLatestComponentInventory 调用 0 次。
+3. fetchRatingTreeVersions 允许调用 1 次，且不阻塞绑定概览渲染。
+
+
+9. 新批量取数端点缺少错误契约
+
+文档只定义了成功响应，没有定义以下情况：
+
+1. 未登录。
+2. import_id 格式非法。
+3. 导入记录不存在。
+4. 导入记录不是“待校对”。
+5. 没有可用的已确认台账。
+6. expected_revision_id 与当前版本不一致。
+7. 数据库异常。
+
+建议补充：
+
+1. 未登录：401。
+2. import ID 非法或不存在：404。
+3. 导入记录不是“待校对”：409。
+4. 没有可用的已确认台账：409。
+5. 预期版本不一致：409 component_inventory_revision_changed。
+6. 数据库异常：503。
+7. 前端主动取消请求：静默处理，不显示加载失败。
+
+可以使用或增加以下错误码：
+
+component_binding_conflict
+component_inventory_revision_changed
+component_binding_inventory_unavailable
+
+
+10. 展示对象类型和候选顺序需要明确
+
+建议在接口契约中定义统一类型：
+
+interface BindingComponentSummary {
+  entry_id: string;
+  bridge_component_id: string;
+  component_number: string;
+  site_component_type: string;
+  site_name: string;
+}
+
+BindingRow 中使用：
+
+bound_component: BindingComponentSummary | null;
+candidate_components: BindingComponentSummary[];
+
+定向 SQL 返回的顺序不一定与原 candidate_component_ids 一致。如果直接按照数据库返回顺序填充，候选显示顺序可能变化，相关测试也可能不稳定。
+
+建议回填方式：
+
+1. 将定向查询结果建立为 bridge_component_id 到 BindingComponentSummary 的 Map。
+2. 按原 candidate_component_ids 的顺序遍历。
+3. 从 Map 中取出对应对象生成 candidate_components。
+4. 查不到的对象跳过，但不改变原行状态。
+
+
+11. inventory_confirmed 与 inventory_revision_id 的关系需要声明为接口不变量
+
+建议明确：
+
+inventory_confirmed == true  当且仅当 inventory_revision_id != null
+
+inventory_confirmed == false 当且仅当 inventory_revision_id == null
+
+前端仍可使用 inventory_confirmed 控制整块 UI，但搜索、缓存和写操作必须使用 inventory_revision_id。
+
+测试需要覆盖两个字段不出现矛盾组合。
+
+
+四、需要补充或调整的测试
+
+后端：
+
+1. 批量取数端点不返回停用构件。
+2. 批量取数端点不返回没有生效映射的构件。
+3. 批量取数端点返回精简 DTO，并与前端输入类型一致。
+4. 年度未锁定且最新已确认版本发生变化时，expected_revision_id 校验返回 409。
+5. 年度已锁定时，请求中的预期版本不一致返回 409。
+6. 行内绑定和批量绑定按照预期版本执行，不静默切换版本。
+7. binding_eligible 的语义如果不包含类别兼容性，需要用例明确它只过滤启用状态和生效映射。
+8. candidate_components 不包含停用或无生效映射构件。
+9. 候选展示对象缺失时仍保留原有 ambiguous 状态。
+10. candidate_components 的顺序与 candidate_component_ids 一致。
+11. inventory_confirmed 与 inventory_revision_id 始终满足接口不变量。
+12. 新批量端点的 401、404、409、503 错误映射。
+
+前端：
+
+1. 精简批量条目不会被 buildReplacePreview 全部跳过。
+2. 批量数据响应的版本与当前概览不一致时，不生成预览。
+3. component_inventory_revision_changed 会触发概览刷新和明确提示。
+4. 写操作携带当前 overview.inventory_revision_id。
+5. 进入面板时 fetchComponentBinding 为 1 次、fetchLatestComponentInventory 为 0 次。
+6. fetchRatingTreeVersions 可以非阻塞调用，不纳入“只发一次绑定数据请求”的断言。
+7. 批量取数取消请求时不显示错误。
+8. candidate_components 中不可用对象不会作为选项出现。
+
+需要重点检查和更新的文件：
+
+1. backend-cpp/include/bridge_report/db/ImportBindingRepository.hpp
+2. backend-cpp/src/db/ImportBindingRepository.cpp
+3. backend-cpp/src/http/ImportBindingRoutes.cpp
+4. backend-cpp/tests/test_import_binding_repository.cpp
+5. backend-cpp/tests/test_import_binding_routes.cpp
+6. frontend/src/api/importBindingApi.ts
+7. frontend/src/api/importBindingApi.test.ts
+8. frontend/src/review/binding/ComponentBindingWorkspace.tsx
+9. frontend/src/review/binding/ComponentBindingWorkspace.test.tsx
+10. frontend/src/review/binding/BulkReplaceDialog.tsx
+11. frontend/src/review/binding/BulkReplaceDialog.test.tsx
+12. frontend/src/review/binding/replacePreview.ts
+13. frontend/src/review/binding/replacePreview.test.ts
+
+
+五、建议的版本一致性数据流
+
+1. 获取概览
+   - 后端解析准确的确认版本引用。
+   - 返回 inventory_revision_id。
+   - 不完整加载台账。
+
+2. 行内搜索
+   - 前端使用 overview.inventory_revision_id 查询对应版本。
+   - 只返回启用且存在生效映射的结果。
+
+3. 单条或批量绑定
+   - 请求携带 expected_inventory_revision_id。
+   - 后端事务中校验锁定版本或最新已确认版本。
+   - 版本不一致返回 409，不静默改用新版本。
+
+4. 批量替换取数
+   - 打开对话框后请求精简台账。
+   - 请求携带 expected_revision_id。
+   - 后端按 import 校验预期版本。
+   - 只返回启用且存在生效映射的精简条目。
+   - 前端确认响应版本仍等于当前概览版本后才生成预览。
+
+5. 评定树切换
+   - 后端返回按照新版本生成的概览。
+   - 前端比较新旧 inventory_revision_id。
+   - 版本变化时取消旧搜索、清除搜索结果、清除批量台账缓存。
+
+
+六、复审结论
+
+本次修订已经解决第一次评审中的主要架构问题，版本 ID 主线、按需查询、批量替换准确版本和后端定向查询的方向均正确。
+
+在进入实现前仍应完成以下四项：
+
+1. 修正精简批量 DTO 与 buildReplacePreview 的类型和 is_active 冲突。
+2. 使用 expected_revision_id 解决年度未锁定时的跨请求版本漂移。
+3. 将确认版本解析拆分为轻量引用解析和完整版本加载两个层次。
+4. 让批量取数及概览候选完整保留“启用且存在生效映射”的过滤语义。
+
+完成后，其余问题主要属于接口精确性、错误处理和测试覆盖，可在实现计划中逐项落地。

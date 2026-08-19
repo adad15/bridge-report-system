@@ -1,0 +1,313 @@
+《已确认台账版本解析的一致性》技术文档第三次复审意见
+
+复审对象：2026-08-18-confirmed-inventory-resolution-consistency-design.md
+复审日期：2026-08-18
+复审范围：修订后的年度确认顺序、评定服务显式版本接口、Word 导入事务及重试状态、校对草稿事务和错误契约
+
+
+一、总体结论
+
+本版已经吸收了上一轮复审提出的大部分问题，包括：
+
+1. 识别 AssessmentConfirmationService 是隐藏的第七个版本数据源。
+2. 认识到年度确认必须处理 inspection_years 的并发锁定。
+3. 要求 Word 构件匹配和评定树匹配共享同一个完整 InventoryRevision。
+4. 将 Word 版本冲突从通用删除失败导入路径中分离。
+5. 明确保存含版本化病害数据的校对草稿时需要锁定年度版本。
+6. 将 save_review_draft() 的 bool 返回值改为结构化结果。
+
+结合当前代码继续核对后，仍有四个阻塞问题和四个需要补充的实现约束。当前文档暂不建议直接进入编码。
+
+
+二、阻塞问题
+
+1. 年度确认锁定版本的时机仍然太晚
+
+文档规定：
+
+“③（写事务）：调评定服务之前先把版本锁进年度。”
+
+但当前确认事务在调用评定服务之前还会执行一次 preflight：
+
+1. ReviewRepository.cpp:803-804 从 record_row 读取 inventory_revision_id。
+2. 年度未锁定时该值为 null。
+3. ReviewRepository.cpp:813-815 将 component_inventory_confirmed 设为 false。
+4. ReviewRepository.cpp:816 调用 build_preflight_report()。
+5. PreflightReport.cpp:139-147 会因为没有已确认台账版本而产生阻塞项。
+6. 事务在 ReviewRepository.cpp:817-820 直接返回，根本不会到达评定服务。
+7. ReviewRepository.cpp:873-884 还会再次以缺少 component_inventory_revision_id 为由阻塞。
+
+因此，“调用评定服务前锁版本”仍然不够。年度未锁定时，确认事务会先被 preflight 挡住。
+
+正确顺序应明确改成：
+
+1. 锁 import_records 行并读取 inspection_year_id。
+2. 锁关联的 inspection_years 行。
+3. 在年度行锁内读取当前 component_inventory_revision_id。
+4. 未锁定时解析最新已确认版本，并立即锁入年度。
+5. 使用锁定后的同一版本构建 PreflightContext。
+6. 使用同一个完整 InventoryRevision 做评定树确认校验。
+7. 使用同一版本执行 AssessmentConfirmationService。
+8. 最后写年度和正式事实。
+
+也就是说，版本解析和锁定必须发生在 build_preflight_report() 之前，而不只是发生在 AssessmentConfirmationService 之前。
+
+
+2. 评定服务的 override 接口没有形成完整的可调用契约
+
+文档写“给它一个显式版本上下文（二选一，推荐前者）”，但只列出了：
+
+AssessmentContextSnapshot load_context(
+    const std::string& inspection_year_id,
+    const std::optional<std::string>& inventory_revision_override) const;
+
+这里有三个问题：
+
+1. 文档写“二选一”，实际只给出了一个方案。
+2. 当前 ImportConfirmRoutes 和 ReviewRepository 调用的是：
+
+   AssessmentConfirmationService::calculate(
+       inspection_year_id,
+       draft);
+
+3. 单独增加 load_context() 并不能让 calculate() 使用调用方提供的版本。如果 calculate() 仍然自行重读 inspection_years，原问题依旧存在。
+
+需要定义完整接口，建议直接改为：
+
+AssessmentConfirmationOutcome calculate(
+    const std::string& inspection_year_id,
+    const Json::Value& draft,
+    const std::optional<std::string>& inventory_revision_override = std::nullopt) const;
+
+也可以让 calculate() 接受已经加载完成的 AssessmentContextSnapshot，但必须说明 evaluator、StandardPackage 和上下文如何一起传入，不能只增加一个没有被 calculate() 消费的 load_context()。
+
+
+3. override 与年度锁定版本的优先级前后矛盾
+
+文档“评定服务需要的能力”规定：
+
+1. 有 override 时校验它属于同一桥梁且状态为已确认。
+2. 使用 override 构建评定上下文。
+
+但测试章节又规定：
+
+“年度已锁定时优先用锁定版本，override 不得覆盖它。”
+
+两处规则不一致。需要明确为：
+
+1. 年度未锁定、未传 override：上下文不完整。
+2. 年度未锁定、传入合法 override：使用 override，只读预检不得写年度。
+3. 年度已锁定、未传 override：使用年度锁定版本。
+4. 年度已锁定、override 与锁定版本相同：正常使用。
+5. 年度已锁定、override 与锁定版本不同：返回 component_inventory_revision_changed。
+6. 不允许用 override 静默覆盖年度锁定版本，也不建议静默忽略一个冲突的 override。
+
+
+4. Word 导入没有定义“桥上不存在已确认台账”时的行为
+
+文档的新事务顺序要求：
+
+1. 锁 import_records。
+2. 锁 inspection_years。
+3. 解析最新已确认版本并锁定。
+4. 两次匹配共享该 InventoryRevision。
+
+但是没有说明 resolve_confirmed_revision() 返回 nullopt 时怎么办。
+
+当前 WordImportRepository.cpp:64-79 的行为是降级而不是阻断：
+
+1. 清空 component_match_candidate_ids。
+2. 将 component_inventory_revision_id 置空。
+3. 添加 defect_component_match_required 警告。
+4. 继续保存解析结果并进入待校对。
+
+如果实施时把“没有已确认版本”当作 component_inventory_revision_changed 或解析失败，会把当前允许导入后人工补齐台账的流程改成导入失败，属于行为回归。
+
+文档应明确三种分支：
+
+1. 年度已锁定到非法版本（其他桥梁、草稿、已不存在）——失败并返回版本或年度上下文错误。
+2. 年度未锁定且桥上存在已确认版本——锁定该版本，两次匹配共用同一个 InventoryRevision。
+3. 年度未锁定且桥上没有已确认版本——不锁年度，两次匹配共享 nullopt，保留当前警告降级行为，解析结果仍进入待校对。
+
+
+三、需要补充的实现约束
+
+5. “不删除导入记录”不足以保证 Word 导入可重试
+
+文档要求版本冲突时不调用 discard_failed_import_safely()，保留导入记录与原始 Word，并标成可重试。
+
+但当前状态机是：
+
+1. mark_parsing() 将 import_records 改为“解析中”。
+2. import_source_files 同时改为“解析中”。
+3. mark_parsing() 只允许“已上传”或“解析失败”的记录重新进入解析。
+
+因此，如果版本冲突时只是跳过 discard_failed_import_safely()，记录会一直停在“解析中”，仍然不能重试。
+
+专用冲突分支至少需要完成：
+
+1. 清理本次尚未提交的新照片批次。
+2. 清理 staging 目录。
+3. 清空 active_parse_work_relative_path。
+4. 将 import_records 和 import_source_files 转为“解析失败”或新增的“等待重试”状态。
+5. 保留原始 Word。
+6. HTTP 返回 409 component_inventory_revision_changed。
+7. 确保后续 mark_parsing() 可以重新进入解析。
+
+现有 WordImportRepository::mark_parse_failed() 已经可以把“解析中”恢复成“解析失败”，可以复用，但文档应明确该分支不能先执行删除。
+
+
+6. 年度行锁的具体顺序表述不准确
+
+文档写：
+
+“事务开始后立刻 select ... from inspection_years where id=$1 for update。”
+
+但事务开始时调用方只有 import_record_id，还需要先从 import_records 中取得 inspection_year_id。
+
+建议明确为以下顺序：
+
+1. SELECT import_records ... FOR UPDATE，只锁并读取导入记录。
+2. 从已经锁定的导入记录取得 inspection_year_id。
+3. SELECT inspection_years ... FOR UPDATE，同时读取年度状态、版本和规范组合。
+4. 后续全部使用年度行锁内读取的数据。
+
+统一锁顺序为：
+
+import_records -> inspection_years
+
+该顺序也与现有绑定事务的主要顺序一致。不要继续使用“联查 inspection_years 字段，但只 FOR UPDATE OF ir”的方式，因为那样年度字段仍是在没有年度行锁的情况下读取的。
+
+
+7. SaveReviewDraftOutcome 的错误码与现有代码不一致
+
+文档错误码表使用：
+
+rating_tree_assignment_invalid
+
+实际 normalize_defect_rating_tree_associations() 返回的是：
+
+defect_rating_tree_assignment_invalid
+
+对应 DraftValidation.cpp:311。
+
+应统一使用实际代码中的 defect_rating_tree_assignment_invalid，或者明确同时修改现有错误码及前端处理，避免路由映射不到。
+
+另外，文档只列出了：
+
+database_commit_failed
+
+但事务失败还包括 SQL 执行阶段异常。现有 ReviewRepository::confirm_annual_facts() 明确区分：
+
+1. db_write_failed：SQL 执行、约束或其他事务内异常。
+2. database_commit_failed：提交回调失败。
+
+SaveReviewDraftOutcome 也应至少支持这两个错误码。
+
+文档把 database_commit_failed 映射为 HTTP 503，而当前正式确认接口映射为 HTTP 500。如果这里要改为 503，需要说明这是有意调整，并补充接口测试；否则应沿用现有约定。
+
+
+8. “整体版本变化”和“单条数据错误”缺少判定规则
+
+文档要求：
+
+1. 整体版本变化只返回一次 409 component_inventory_revision_changed。
+2. 单病害数据错误返回 400 和逐项 details。
+
+但没有定义以下情况如何分类：
+
+1. 所有已绑定病害都带 R1，而年度当前使用 R2。
+2. 一部分病害带 R1，另一部分病害带 R2。
+3. 版本 ID 正确，但构件已经停用。
+4. 版本 ID 正确，但规范类别或结构部位被客户端篡改。
+5. 病害带的版本属于其他桥梁。
+
+当前 DraftValidation.cpp:194-196 会把版本不一致全部变成逐项问题。要实现文档承诺的整体提示，仓储事务必须先进行整体版本判断，再执行逐项关联校验。
+
+建议明确：
+
+1. 请求中全部版本化病害一致地引用同一个旧版本，而服务端年度/解析版本已经变化——409 component_inventory_revision_changed。
+2. 请求内部混用多个版本——400，视为草稿数据非法并返回逐项问题。
+3. 版本相同但构件、类别、结构部位不匹配——400，返回逐项 details。
+4. 年度锁定版本自身非法——返回年度上下文或版本错误，不要伪装成单病害错误。
+
+
+四、校对草稿事务范围还应写清楚
+
+文档要求把“解析、校验、年度锁定、草稿 UPDATE”放入同一个仓储事务，这个方向正确，但实施清单应明确事务内重新读取哪些数据。
+
+当前 ReviewRoutes 在调用 save_review_draft() 之前已经读取并使用：
+
+1. ImportRecordDetail。
+2. stored_draft。
+3. inspection_year 的评定树和规范包。
+4. 构件台账。
+5. 重开校对范围。
+6. 病害证据。
+7. 草稿增删审计基线。
+
+如果新仓储事务只把台账解析和 UPDATE 搬进去，而仍使用事务外读取的 stored_draft、评定树或年度上下文，仍可能出现旧快照校验后覆盖新数据的问题。
+
+至少应保证以下内容在 import_records 和 inspection_years 行锁内重新读取并使用：
+
+1. import_status、编辑锁和当前 parsed_result_json。
+2. inspection_year_id、年度状态和锁定台账版本。
+3. standard_profile_id、rating_tree_version_id 和 technical package。
+4. 当前已发布评定树。
+5. 统一解析出的完整 InventoryRevision。
+6. 依赖 stored_draft 的证据校验、评定树规范化、重开范围校验和审计基线。
+
+这样才能保证“读取—规范化—校验—锁版本—写草稿”真正属于同一个一致性边界。
+
+
+五、建议补充的测试
+
+年度确认：
+
+1. 年度未锁定且桥上存在已确认台账时，在 build_preflight_report() 前完成版本锁定。
+2. preflight、评定树校验和 AssessmentConfirmationService 使用同一个 revision id。
+3. 两条导入记录共享同一年度时，锁顺序统一为 import_records -> inspection_years。
+4. 评定失败时，年度版本锁定随事务回滚。
+
+评定服务：
+
+1. 年度未锁定时允许合法 override。
+2. 只读预检使用 override 后不修改 inspection_years。
+3. 年度已锁定且 override 相同时成功。
+4. 年度已锁定且 override 不同时返回 component_inventory_revision_changed。
+5. override 属于其他桥梁、草稿或不存在时失败。
+
+Word 导入：
+
+1. 年度未锁定且有已确认版本时，两次匹配共用并锁定同一个版本。
+2. 年度未锁定且没有已确认版本时，继续保存解析结果并产生待人工处理警告。
+3. 非法锁定版本不会被当成普通契约解析失败。
+4. 版本冲突后 import_records 和来源文件不滞留在“解析中”。
+5. 版本冲突保留原始 Word，下一次 mark_parsing() 可以成功。
+6. 冲突分支清理本次照片批次和 staging 目录。
+7. 真正的契约解析失败仍按原流程删除或清理。
+
+校对草稿：
+
+1. 整体版本变化返回单个 409。
+2. 请求内部混用版本返回 400 和逐项问题。
+3. 同版本下的构件或映射错误返回 400 和逐项 details。
+4. 事务内重新读取 stored_draft、年度版本、规范组合和评定树。
+5. db_write_failed 与 database_commit_failed 可以被分别返回和映射。
+6. defect_rating_tree_assignment_invalid 使用与现有代码一致的错误码。
+
+
+六、第三次复审结论
+
+本版已经把问题从“六处替换调用”扩展成包含评定、年度版本、Word 导入和校对保存的完整一致性改造，整体方向正确。
+
+进入实现前仍必须修正：
+
+1. 年度确认在 preflight 前解析并锁定版本。
+2. 补全 AssessmentConfirmationService 真正可调用的显式版本接口。
+3. 统一 override 与年度锁定版本的优先级。
+4. 保留 Word 无已确认台账时的降级行为。
+5. 定义版本冲突后的状态恢复和重试流程。
+6. 统一事务锁顺序、错误码和整体版本冲突判定。
+
+上述内容补齐后，文档才具备直接进入实施的条件。

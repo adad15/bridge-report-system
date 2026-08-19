@@ -9,6 +9,17 @@
 #include "bridge_report/db/RatingTreeRepository.hpp"
 
 namespace bridge_report::assessment {
+
+std::string assessment_trace_target_type(const std::string& step) {
+    if (step == "defect_deduction" || step == "rating_tree_filter") return "病害";
+    if (step == "component_score") return "构件";
+    if (step == "component_category_score") return "部件";
+    if (step == "structure_part_score") return "结构";
+    if (step == "grade") return "等级";
+    if (step == "control") return "控制";
+    return "全桥";
+}
+
 namespace {
 
 std::string compact_json(const Json::Value& value) {
@@ -34,16 +45,6 @@ std::string chinese_structure_part(standards::StructurePart part) {
         case standards::StructurePart::deck_system: return "桥面系";
     }
     return "其他";
-}
-
-std::string trace_target_type(const std::string& step) {
-    if (step == "defect_deduction") return "病害";
-    if (step == "component_score") return "构件";
-    if (step == "component_category_score") return "部件";
-    if (step == "structure_part_score") return "结构";
-    if (step == "grade") return "等级";
-    if (step == "control") return "控制";
-    return "全桥";
 }
 
 Json::Value component_json(const standards::ComponentAssessmentResult& component) {
@@ -447,7 +448,7 @@ AssessmentConfirmationWritten AssessmentConfirmationService::persist(
         ++sequence;
         auto rule_id = trace.rule_id;
         auto trace_stage = trace.step;
-        auto target_type = trace_target_type(trace.step);
+        auto target_type = assessment_trace_target_type(trace.step);
         auto target_key = trace.entity_id.empty()
             ? std::string("overall")
             : trace.entity_id;
@@ -474,9 +475,10 @@ AssessmentConfirmationWritten AssessmentConfirmationService::persist(
                 "sequence_number,rule_id,trace_stage,target_type,target_key,"
                 "input_json,output_json) "
                 "values($1::uuid,$2,'rating_tree_non_scoring',"
-                "'rating_tree_filter','defect',$3,$4::jsonb,$5::jsonb)",
+                "'rating_tree_filter',$3,$4,$5::jsonb,$6::jsonb)",
                 written.assessment_run_id,
                 sequence,
+                assessment_trace_target_type("rating_tree_filter"),
                 skip["candidate_id"].asString(),
                 compact_json(skip),
                 compact_json(skip));

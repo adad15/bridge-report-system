@@ -122,6 +122,50 @@ TEST(ComponentInventoryRoutesTest, SerializesPartCatalogForBridgeType) {
     EXPECT_TRUE(has_girder);
 }
 
+TEST(ComponentInventoryRoutesTest, RequiresGeneratableRiverbedWithoutAnyCatalogException) {
+    bridge_report::standards::StandardPackage package;
+
+    bridge_report::standards::StandardDefinition riverbed;
+    riverbed.id = "h21.component.lower.riverbed";
+    riverbed.source_file = "component-taxonomy.json";
+    riverbed.payload["bridge_type_ids"].append("h21.bridge_type.beam");
+    riverbed.payload["structure_part"] = "substructure";
+    riverbed.payload["name"] = "河床";
+    riverbed.payload["generatable"] = true;
+    package.definitions.emplace(riverbed.id, riverbed);
+
+    const Json::Value catalog = http::serialize_part_catalog(package, "h21.bridge_type.beam");
+    ASSERT_EQ(catalog.size(), 1u);
+    EXPECT_EQ(catalog[0]["part_key"].asString(), "lower.riverbed");
+    EXPECT_EQ(catalog[0]["default_name"].asString(), "河床");
+    EXPECT_EQ(catalog[0]["number_template"].asString(), "{name}");
+
+    inventory::GenerateInventoryInput input;
+    input.bridge_type_id = "h21.bridge_type.beam";
+    input.span_count = 33;
+    input.part_selections.push_back({"lower.riverbed", "河床", {}});
+    std::string code, message;
+    EXPECT_TRUE(http::validate_inventory_generation_standard(input, package, code, message))
+        << message;
+
+    package.definitions.at(riverbed.id).payload["generatable"] = false;
+    EXPECT_TRUE(http::serialize_part_catalog(package, "h21.bridge_type.beam").empty());
+    EXPECT_FALSE(http::validate_inventory_generation_standard(input, package, code, message));
+    EXPECT_EQ(code, "inventory_component_category_not_supported");
+
+    // 其他目录项仍必须服从同一个 generatable 标志，不存在产品目录特例。
+    bridge_report::standards::StandardDefinition girder;
+    girder.id = "h21.component.beam.upper_bearing";
+    girder.source_file = "component-taxonomy.json";
+    girder.payload["bridge_type_ids"].append("h21.bridge_type.beam");
+    girder.payload["structure_part"] = "superstructure";
+    girder.payload["generatable"] = false;
+    package.definitions.emplace(girder.id, girder);
+    input.part_selections = {{"beam.girder", "梁", {13}}};
+    EXPECT_FALSE(http::validate_inventory_generation_standard(input, package, code, message));
+    EXPECT_EQ(code, "inventory_component_category_not_supported");
+}
+
 // 分页参数的边界。放过非法值的代价不对称：number= 空串会退化成 like '%%'，
 // 一次命中全表——正是这次聚合要消灭的那种响应。
 TEST(ComponentInventoryRoutesTest, TrimsQueryValuesSoBlankIsTreatedAsMissing) {

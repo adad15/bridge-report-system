@@ -2596,8 +2596,169 @@ body {
   color: var(--muted-text, #52606d);
 }
 
+/* ── 添加桥梁向导 ───────────────────────────────────────────────────────
+   三段式：头和尾钉住，只有中段滚。部件清单二十行起步，操作按钮跟着内容走的话，
+   勾完得一路滚回底部才能点创建。高度不写死，第一步就该是矮的。 */
 .create-bridge-wizard-dialog {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0;
   width: min(980px, calc(100vw - 2rem));
+  max-height: calc(100vh - 40px);
+  padding: 0;
+  overflow: hidden;
+}
+
+.wizard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 20px;
+  border-bottom: 1px solid #e6ebf1;
+}
+
+.wizard-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.wizard-steps {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #8b97a6;
+  font-size: 13px;
+}
+
+/* 每个 li 自己也是一条 flex 行。外层的 align-items:center 对齐的是盒子：
+   第二个 li 多一条连接线就比第一个高，居中之后两段文字的基线会错开。
+   li 内部自己居中，两个盒子高度一致，才真在一行上。 */
+.wizard-steps li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* 两步之间的连接线用伪元素，不额外塞空元素进列表。 */
+.wizard-steps li + li::before {
+  content: "";
+  flex: none;
+  width: 26px;
+  height: 1px;
+  margin-right: 4px;
+  background: #cfd8e3;
+}
+
+.wizard-steps .is-current {
+  color: #2456c9;
+  font-weight: 600;
+}
+
+.wizard-step-dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #e2e8f1;
+  color: #6b7887;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.wizard-steps .is-current .wizard-step-dot {
+  background: #2456c9;
+  color: #fff;
+}
+
+.wizard-body {
+  min-height: 200px;
+  padding: 16px 20px 18px;
+  overflow: auto;
+}
+
+.wizard-foot {
+  padding: 11px 20px;
+  border-top: 1px solid #e6ebf1;
+  background: #f8fafc;
+}
+
+.wizard-foot .error-text {
+  margin: 0 0 8px;
+}
+
+.wizard-foot-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.wizard-status {
+  margin: 0;
+  color: #5b7891;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wizard-foot .dialog-actions {
+  margin: 0 0 0 auto;
+}
+
+/* 第一步 8 个字段，内容全是 S320、K109+747 这类短串：两列排四行是浪费，
+   三列排三行正好，弹窗矮一半。 */
+.create-bridge-wizard-dialog .bridge-form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.create-bridge-wizard-dialog .span-2 {
+  grid-column: span 2;
+}
+
+.create-bridge-wizard-dialog .field-label {
+  color: #48586a;
+  font-size: 13px;
+}
+
+/* 星号用伪元素而非文本节点，免得混进 label 的可访问名。 */
+.create-bridge-wizard-dialog .is-required .field-label::after {
+  content: " *";
+  color: #c53434;
+}
+
+/* 弹窗默认的 9px padding 会把输入框撑到 42px，而项目其他控件的基线是 32~36px。 */
+.create-bridge-wizard-dialog input,
+.create-bridge-wizard-dialog select {
+  height: 36px;
+  padding: 0 11px;
+}
+
+.wizard-standard-note {
+  margin: 12px 0 0;
+  padding-top: 11px;
+  border-top: 1px dashed #dbe2ea;
+  color: #5b7891;
+  font-size: 12.5px;
+}
+
+.wizard-standard-note b {
+  color: #33445a;
+  font-weight: 600;
+}
+
+.dialog-actions .primary-button:not(:disabled):hover {
+  border-color: #1d47a8;
+  background: #1d47a8;
+}
+
+.dialog-actions .primary-button:disabled {
+  border-color: #b9c6df;
+  background: #b9c6df;
+  cursor: not-allowed;
 }
 
 .inventory-wizard,
@@ -2704,7 +2865,6 @@ body {
   white-space: nowrap;
 }
 
-.inventory-wizard-grid,
 .inventory-group-fields,
 .inventory-add-form {
   display: grid;
@@ -2712,7 +2872,9 @@ body {
   gap: 0.8rem;
 }
 
-.inventory-wizard label,
+/* 这条曾经也覆盖 .inventory-wizard label。它的特异性（0-1-1）压得过单个类，
+   于是把向导里 display:flex 的勾选行整块打回单列网格，勾选框被顶到部件名上方
+   居中——截图里那个"复选框飘在梁上面"就是它。向导现在自带排版，不再共用。 */
 .inventory-add-form label {
   display: grid;
   gap: 0.35rem;
@@ -2723,8 +2885,6 @@ body {
 /* 注意 .component-inventory-table 那条限定到了 td 的直接子元素：原先写成后代选择器，
    把操作列里的"停用原因"也一起撑成 100% 宽——它待在一个 flex-wrap 容器里，独占整行
    之后就把保存挤到上一行、停用挤到下一行，每行三层、行高 123px。 */
-.inventory-wizard input,
-.inventory-wizard select,
 .inventory-add-form input,
 .inventory-mapping-editor select,
 .component-inventory-table td > input {
@@ -2955,15 +3115,6 @@ body {
   }
 }
 
-.inventory-quantity-card {
-  display: grid;
-  gap: 0.8rem;
-  padding: 0.9rem;
-  border: 1px solid #dce3ea;
-  border-radius: 9px;
-  background: #fbfcfe;
-}
-
 .inventory-number-preview {
   padding: 0.9rem;
   border-radius: 9px;
@@ -2975,58 +3126,207 @@ body {
   overflow-wrap: anywhere;
 }
 
-.inventory-part-list {
-  display: grid;
-  gap: 1rem;
+/* ── 构件台账步骤：一个部件一行 ─────────────────────────────────────────
+   梁式桥在 H21 下是 20 个部件、12 个类别、3 个分部。类别当标题时，标题比内容
+   还占地方，所以降成行内灰字，只留三个分部标题。未勾选的行只显示名称，勾上
+   才就地展开数量与生成数——不再是每个部件一张卡。 */
+.inventory-part-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid #e9eef4;
+  border-radius: 8px;
+  background: #f8fafc;
 }
 
+/* 在弹窗里它横贯整宽并吸顶：二十行滚起来时，筛选框和"已选 N/M"要一直在。
+   面板里（补台账那条路径）不吸顶，就是一条普通工具条。 */
+.wizard-body .inventory-part-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: -16px -20px 0;
+  padding: 9px 20px;
+  border: 0;
+  border-bottom: 1px solid #e9eef4;
+  border-radius: 0;
+}
+
+.inventory-plan-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.inventory-plan-fields label {
+  display: grid;
+  gap: 5px;
+}
+
+.inventory-plan-fields .field-label {
+  color: #48586a;
+  font-size: 13px;
+}
+
+.inventory-plan-fields input,
+.inventory-plan-fields select {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid #c9d2dc;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.inventory-plan-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.inventory-part-toolbar h3 {
+  margin: 0;
+  color: #33445a;
+  font-size: 14px;
+}
+
+.inventory-wizard .inventory-part-filter {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.inventory-part-toolbar .inventory-only-selected {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #5b7891;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.inventory-chosen-count {
+  color: #5b7891;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+/* 复选框不能吃到文本框那套 100% 宽 / 36px 高。 */
+.inventory-wizard input[type="checkbox"] {
+  width: auto;
+  height: auto;
+  flex: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inventory-part-list,
 .inventory-part-group {
   display: grid;
-  gap: 0.8rem;
+  gap: 0;
 }
 
 .inventory-structure-heading {
-  margin: 0.6rem 0 0;
-  padding-bottom: 0.3rem;
-  border-bottom: 2px solid #dce3ea;
-  color: #2f3d4a;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 14px 0 3px;
 }
 
-.inventory-category-group {
-  display: grid;
-  gap: 0.5rem;
-  padding-left: 0.6rem;
-  border-left: 3px solid #e3eaf1;
+.inventory-structure-heading h4 {
+  margin: 0;
+  color: #33445a;
+  font-size: 13px;
 }
 
-.inventory-category-heading {
-  margin: 0.2rem 0 0;
-  color: #3a4b5c;
+.inventory-structure-count {
+  color: #8592a3;
+  font-size: 12px;
 }
 
-.inventory-part-group h5 {
-  margin: 0.4rem 0 0;
-  color: #5a6b7b;
-}
-
-.inventory-part-card {
-  display: grid;
-  gap: 0.6rem;
-  padding: 0.8rem 0.9rem;
-  border: 1px solid #dce3ea;
-  border-radius: 9px;
-  background: #fbfcfe;
-}
-
-.inventory-part-enable {
+/* 这些行内选择器一律带两个类。弹窗里 .workspace-dialog label{display:grid} 的
+   特异性是 0-1-1，单个类压不过它——压不过的下场就是勾选框自己占一行。 */
+.inventory-part-list .inventory-part-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-weight: 600;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  min-height: 36px;
+  padding: 3px 8px;
+  border-bottom: 1px solid #eef2f6;
+  font-size: 13.5px;
 }
 
-.inventory-part-enable input {
+.inventory-part-list .inventory-part-row:hover {
+  background: #f9fbfd;
+}
+
+.inventory-part-list .inventory-part-row.is-large {
+  background: #fffaf0;
+}
+
+/* 头一格定宽：勾没勾都占同样宽度，后面几列才对得齐。未勾时整格是可点的标签，
+   点部件名就能勾上；勾上后名字换成可改的输入框。 */
+.inventory-part-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  width: 8.5rem;
+}
+
+.inventory-part-list .inventory-part-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #56626f;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.inventory-part-row:not(.is-on) .inventory-part-toggle {
+  flex: 1;
+  min-width: 0;
+}
+
+.inventory-wizard .inventory-part-rename {
+  flex: 1;
+  min-width: 0;
   width: auto;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.inventory-part-category {
+  flex: none;
+  width: 7rem;
+  color: #97a2b0;
+  font-size: 11.5px;
+}
+
+.inventory-part-list .inventory-count-field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #6b7887;
+  font-size: 12px;
+}
+
+.inventory-wizard .inventory-count-field input {
+  width: 4rem;
+  height: 28px;
+  padding: 0 7px;
+  text-align: center;
+  font-size: 13px;
 }
 
 .inventory-provisional-badge {
@@ -3038,19 +3338,35 @@ body {
   font-weight: 500;
 }
 
-.inventory-part-body {
-  display: grid;
-  gap: 0.6rem;
-  padding-left: 1.6rem;
+/* 生成数右对齐成一列，扫一眼就知道哪个部件撑爆了。 */
+.inventory-part-output {
+  margin-left: auto;
+  padding-left: 12px;
+  color: #5b7891;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.inventory-part-preview {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-radius: 8px;
-  background: #f5f7fa;
-  color: #405061;
-  overflow-wrap: anywhere;
+.inventory-part-total {
+  color: #33445a;
+  font-weight: 600;
+}
+
+.inventory-part-row.is-large .inventory-part-total {
+  color: #96601a;
+}
+
+.inventory-part-sample {
+  margin-left: 6px;
+  color: #93a0af;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+}
+
+.inventory-part-missing {
+  color: #b4531a;
+  font-weight: 600;
 }
 
 .inventory-structure-row th {
@@ -3062,39 +3378,33 @@ body {
   text-align: left;
 }
 
+/* 口径说明（"只数一个孔落在这个墩上的支座"）挂成 title，行内不再多占一行。 */
 .inventory-count-hint {
-  display: block;
-  margin-top: 0.25rem;
-  color: #5a6b7b;
-  font-size: 0.8rem;
-  font-weight: 400;
-  line-height: 1.45;
+  border: 0;
+  margin-left: 3px;
+  color: #9aa5b2;
+  text-decoration: none;
+  cursor: help;
 }
 
+/* 翼墙/锥坡/护坡几何上只有 2~4 个位置，排成一排可点的编号片。 */
 .inventory-instance-list {
-  display: grid;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #dbe3ec;
-  border-radius: 8px;
-}
-
-.inventory-instance-list legend {
-  padding: 0 0.35rem;
-  color: #5a6b7b;
-  font-size: 0.8rem;
-}
-
-.inventory-instance-option {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.inventory-instance-option input {
-  width: auto;
+.inventory-part-list .inventory-instance-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   margin: 0;
+  padding: 2px 9px;
+  border: 1px solid #c9d5e2;
+  border-radius: 999px;
+  color: #445468;
+  font-size: 11.5px;
+  cursor: pointer;
 }
 
 /* 构件绑定动辄数百行，排版目标是"能快速扫"：各列固定位置对齐、行紧凑、
@@ -3181,7 +3491,6 @@ body {
 }
 
 .binding-bulk-replace {
-  margin-left: auto;
   font: inherit;
   font-size: 0.85rem;
   padding: 0.25rem 0.65rem;
@@ -3308,6 +3617,34 @@ body {
   font-size: 0.85rem;
 }
 
+.binding-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-left: auto;
+}
+
+.binding-group-split-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #33475b;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.binding-group-split-select input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
+
+.binding-group-split-select:has(input:disabled) {
+  color: #97a2ae;
+  cursor: not-allowed;
+}
+
 /* 四列定位：编号 | 引用 | 状态 | 操作。原来用 flex + margin-left:auto 把操作顶到
    最右，宽屏上中间会空出一大片，行首行尾相距过远难以对应。 */
 .binding-row {
@@ -3363,6 +3700,18 @@ body {
   font-size: 0.78rem;
   line-height: 1.15rem;
   text-align: center;
+}
+
+/* 预计生成条数：拆分有 2000 条的整批上限，行数看不出规模，故与计数徽标并排显示。
+   放在按钮里时借按钮的前景色，放在分组标题里时是次要信息，统一压低一档。 */
+.binding-split-projection {
+  font-size: 0.78rem;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.binding-group-split-select .binding-split-projection {
+  color: #6b7a8c;
 }
 
 .range-split-dialog {
@@ -3770,10 +4119,19 @@ body {
     flex-direction: column;
   }
 
-  .inventory-wizard-grid,
   .inventory-group-fields,
   .inventory-add-form {
     grid-template-columns: 1fr;
+  }
+
+  /* 窄屏下三列字段网格和参数网格都收成一列。 */
+  .create-bridge-wizard-dialog .bridge-form-grid,
+  .inventory-plan-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .create-bridge-wizard-dialog .span-2 {
+    grid-column: auto;
   }
 }
 .assessment-section {
@@ -3813,49 +4171,187 @@ body {
   white-space: nowrap;
 }
 
-.assessment-score-grid {
+/* 与表格同宽，右边缘对齐到"构件数"列。全宽横条不能只在两头钉两个小项——中间会空出
+   一千多像素；改成四格等分，多宽都由这四格自己分掉，全桥评分仍靠字号取得主次。 */
+.assessment-score-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.assessment-score-grid article {
-  display: grid;
-  gap: 6px;
-  padding: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid #dbe3ec;
   border-radius: 8px;
   background: #f8fafc;
+  overflow: hidden;
 }
 
-.assessment-score-grid span {
+.assessment-score-summary > div {
+  padding: 12px 16px;
+  border-left: 1px solid #e7ecf2;
+}
+
+.assessment-score-summary > div:first-child {
+  border-left: 0;
+}
+
+/* 只挑每格的第一个 span 当小标题——不限定 :first-child 的话，等级色块本身也是 span，
+   会被这里的 display:block 和灰字压成一条灰色横杠。 */
+.assessment-score-summary > div > span:first-child {
+  display: block;
+  margin-bottom: 4px;
   color: #64748b;
   font-size: 13px;
 }
 
-.assessment-score-grid strong {
-  font-size: 24px;
+.assessment-score-primary strong {
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
 }
 
-.assessment-category-results {
-  display: grid;
-  gap: 8px;
-}
-
-.assessment-category-results h3 {
-  margin: 0;
+.assessment-score-bridge-type strong,
+.assessment-score-total strong {
   font-size: 15px;
+  font-weight: 600;
 }
 
-.assessment-category-table th,
-.assessment-category-table td {
+.assessment-score-total strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 规则包 ID 留着做溯源，但降到脚注级别，不再当主值。 */
+.assessment-score-bridge-type code {
+  display: block;
+  margin-top: 2px;
+  color: #7c8794;
+  font-size: 11px;
+}
+
+.assessment-grade {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
-.assessment-category-table th:nth-child(3),
-.assessment-category-table td:nth-child(3) {
-  width: 36%;
-  white-space: normal;
+.assessment-grade-1 {
+  background: #e3f4e3;
+  color: #2c7a2c;
+}
+
+.assessment-grade-2 {
+  background: #eaf0fd;
+  color: #2456c9;
+}
+
+.assessment-grade-3 {
+  background: #fbf1d6;
+  color: #8a6d1c;
+}
+
+.assessment-grade-4 {
+  background: #fbe6dc;
+  color: #a3521f;
+}
+
+.assessment-grade-5 {
+  background: #f8e1e1;
+  color: #a43333;
+}
+
+/* table-layout:fixed 才能让"定宽的列就是定宽"：名称和四个数字列各自钉住，第 3 列（得分条）
+   不给宽度，于是内容区多出来的宽度全被它吃掉，数字列不会重新被拉散。 */
+.assessment-result-table {
+  table-layout: fixed;
+  min-width: 880px;
+}
+
+.assessment-result-table thead th:nth-child(1) {
+  width: 320px;
+}
+
+.assessment-result-table thead th:nth-child(2) {
+  width: 88px;
+}
+
+.assessment-result-table thead th:nth-child(4) {
+  width: 96px;
+}
+
+.assessment-result-table thead th:nth-child(5) {
+  width: 104px;
+}
+
+.assessment-result-table thead th:nth-child(6) {
+  width: 96px;
+}
+
+.assessment-score-bar-cell {
+  padding-right: 20px;
+}
+
+.assessment-score-bar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  /* 半透明底槽——分部行底下是渐变，实色底槽会在那里露出一截色差。 */
+  background: rgba(24, 32, 42, 0.08);
+}
+
+.assessment-score-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.assessment-score-bar-fill-1 {
+  background: #2c7a2c;
+}
+
+.assessment-score-bar-fill-2 {
+  background: #2456c9;
+}
+
+.assessment-score-bar-fill-3 {
+  background: #8a6d1c;
+}
+
+.assessment-score-bar-fill-4 {
+  background: #a3521f;
+}
+
+.assessment-score-bar-fill-5 {
+  background: #a43333;
+}
+
+.assessment-result-table .assessment-muted-cell {
+  color: #55606c;
+}
+
+.assessment-result-table td.assessment-category-cell {
+  padding-left: 28px;
+}
+
+/* 分部行要一眼认出来，光加底色撑不住：底色 + 行首色条 + 加大字号 + 组间实线，四件事一起。
+   渐变必须挂在 tr 上——挂 td 的话横向渐变会在每个单元格里各自重来一遍，5 列 5 段接缝。
+   底色不用蓝而用"白蓝渐变 + 蓝色条"，是因为 #eaf0fd 在本项目里已经是选中行的意思
+   （见 .data-table-row-selected），蓝底占了这里，表格以后就没颜色做行选中了。 */
+.assessment-result-table .assessment-part-row {
+  background: linear-gradient(90deg, #d9e6fb 0%, #f2f7fe 55%, #ffffff 100%);
+}
+
+.assessment-result-table .assessment-part-row > th,
+.assessment-result-table .assessment-part-row > td {
+  padding: 10px;
+  background: transparent;
+  border-top: 1px solid #cfdaea;
+  border-bottom: 1px solid #cfdaea;
+  /* .data-table 基准就是 14px，分部行得比类别行大一档才拉开层级。 */
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.assessment-result-table .assessment-part-row > :first-child {
+  border-left: 3px solid #2456c9;
 }
 
 .assessment-issues {
@@ -3903,8 +4399,17 @@ body {
     flex-direction: column;
   }
 
-  .assessment-score-grid {
+  .assessment-score-summary {
     grid-template-columns: 1fr;
+  }
+
+  .assessment-score-summary > div {
+    border-left: 0;
+    border-top: 1px solid #e7ecf2;
+  }
+
+  .assessment-score-summary > div:first-child {
+    border-top: 0;
   }
 }
 
@@ -3981,6 +4486,9 @@ body {
 /* 这片区域此前没有任何按钮规则，七个控件全在吃浏览器默认样式：高度 18~37px 不等，
    outset/inset 立体边框，直角，还都是 Arial 而非页面字体。统一成一套：
    同高 32px、同字号、同圆角，只用配色区分主次。 */
+/* "重新试算"在同一套工作台里、位置也和上面这些一样在分区标题右侧，跟着同一套规格走，
+   否则两个分区的标题行一个是页面按钮、一个是浏览器默认按钮。 */
+.assessment-heading-actions button,
 .defect-review-toolbar-actions button,
 .defect-review-summary button,
 .defect-review-filters .defect-review-search,
@@ -4002,6 +4510,7 @@ body {
   padding: 0 10px;
 }
 
+.assessment-heading-actions button:not(:disabled):hover,
 .defect-review-toolbar-actions button:not(:disabled):hover,
 .defect-review-summary button:not(.active):not(:disabled):hover,
 .defect-review-filters button:not(.review-action-primary):not(:disabled):hover {
@@ -4012,6 +4521,7 @@ body {
 .defect-review-filters select:focus-visible,
 .defect-review-summary button:focus-visible,
 .defect-review-toolbar-actions button:focus-visible,
+.assessment-heading-actions button:focus-visible,
 .defect-review-filters button:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 1px;

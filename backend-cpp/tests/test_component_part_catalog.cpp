@@ -20,11 +20,25 @@ TEST(PartCatalogTest, KeepsBeamPartsWithStableKeys) {
 
 TEST(PartCatalogTest, CoversEveryBridgeTypeSuperstructureAndSharedGap) {
     const auto& parts = nt::component_parts();
-    // 各桥型上部代表部件 + 补漏的调治构造物 + 共享支座都在目录中。
-    for (const char* key : {"bearing.support", "lower.regulation", "arch.main_ring",
+    // 各桥型上部代表部件 + 河床/调治构造物 + 共享支座都在目录中。
+    for (const char* key : {"bearing.support", "lower.riverbed", "lower.regulation", "arch.main_ring",
                             "arch.segment", "carch.rib", "cs.tower", "cs.cable",
                             "sp.main_cable", "sp.anchorage"})
         EXPECT_NE(nt::find_part(parts, key), nullptr) << key;
+}
+
+TEST(PartCatalogTest, RiverbedIsOneExplicitlySelectedWholeBridgeEntry) {
+    const auto* riverbed = nt::find_part(nt::component_parts(), "lower.riverbed");
+    ASSERT_NE(riverbed, nullptr);
+    EXPECT_EQ(riverbed->default_name, "河床");
+    EXPECT_EQ(riverbed->standard_component_category_id, "h21.component.lower.riverbed");
+    EXPECT_EQ(riverbed->structure_part, "substructure");
+    EXPECT_EQ(riverbed->number_template, "{name}");
+
+    const auto out =
+        nt::expand(riverbed->number_template_with("河床", {}), nt::NumberingContext{33});
+    ASSERT_EQ(out.size(), 1u);
+    EXPECT_EQ(out.front().number, "河床");
 }
 
 TEST(PartCatalogTest, GirderGeneratesDocForms) {
