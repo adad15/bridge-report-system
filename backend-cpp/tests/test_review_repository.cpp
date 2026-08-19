@@ -15,6 +15,7 @@
 #include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/db/EditLockRepository.hpp"
 #include "bridge_report/db/RatingTreeRepository.hpp"
+#include "bridge_report/assessment/AssessmentConfirmationService.hpp"
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/db/StandardRepository.hpp"
 #include "bridge_report/rating_tree/RatingTreeCompiler.hpp"
@@ -808,6 +809,88 @@ protected:
 };
 
 }  // 匿名命名空间
+
+// 评定服务自己重读年度版本，而且是内连接：年度没锁版本就取不到上下文行，直接
+// assessment_context_incomplete。所以只把六处解析改对并不闭环——入库前检查还得能把
+// 解析出的版本显式递进来，且**不能**为此去写年度。
+TEST_F(ConfirmAnnualFactsTest, ReadOnlyPreflightAcceptsAnExplicitRevisionWithoutLockingTheYear) {
+    // 让年度回到"未锁定版本"的状态。
+    client_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=null where id=$1::uuid",
+        placeholder_year_id_);
+
+    bridge_report::assessment::AssessmentConfirmationService service(client_, registry_);
+    const auto without_override =
+        service.calculate(placeholder_year_id_, build_confirmed_data());
+    bool incomplete = false;
+    for (const auto& item : without_override.preview.issues) {
+        if (item.code == "assessment_context_incomplete") incomplete = true;
+    }
+    EXPECT_TRUE(incomplete) << "年度未锁版本且不给 override 时，维持原有的上下文不完整";
+
+    const auto with_override = service.calculate(
+        placeholder_year_id_, build_confirmed_data(),
+        std::optional<std::string>(inventory_revision_id_));
+    for (const auto& item : with_override.preview.issues) {
+        EXPECT_NE(item.code, "assessment_context_incomplete")
+            << "给了合法版本就该能构建上下文：" << item.message;
+    }
+
+    // 只读预检绝不能顺手把版本锁进年度。
+    const auto year = client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id "
+        "from inspection_years where id=$1::uuid", placeholder_year_id_);
+    EXPECT_TRUE(year[0]["revision_id"].isNull()) << "预检写了年度版本";
+}
+
+// override 不是绕过校验的后门，也不允许静默盖过年度已锁定的版本。
+TEST_F(ConfirmAnnualFactsTest, ExplicitRevisionIsValidatedAndCannotOverrideALockedYear) {
+    bridge_report::assessment::AssessmentConfirmationService service(client_, registry_);
+
+    // 年度锁着 inventory_revision_id_，此时给一个不同的版本 → 明确报版本变化。
+    const auto other_revision = client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,"
+        "created_by_user_id) values($1::uuid,2,$2::uuid) returning id::text as id",
+        bridge_id_, confirmed_by_user_id_)[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "update bridge_component_inventory_revisions set status='已确认',"
+        "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
+        other_revision, confirmed_by_user_id_);
+
+    const auto conflicting = service.calculate(
+        placeholder_year_id_, build_confirmed_data(), std::optional<std::string>(other_revision));
+    bool reported_change = false;
+    for (const auto& item : conflicting.preview.issues) {
+        if (item.code == "component_inventory_revision_changed") reported_change = true;
+    }
+    EXPECT_TRUE(reported_change)
+        << "年度锁定版本与 override 不一致时必须报出来，不能静默取其一";
+
+    // 属于别的桥的版本不可用。
+    const auto other_bridge = client_->execSqlSync(
+        "insert into bridges(bridge_name) values('评定override测试桥') returning id::text as id"
+        )[0]["id"].as<std::string>();
+    const auto foreign_revision = client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,"
+        "created_by_user_id) values($1::uuid,1,$2::uuid) returning id::text as id",
+        other_bridge, confirmed_by_user_id_)[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "update bridge_component_inventory_revisions set status='已确认',"
+        "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
+        foreign_revision, confirmed_by_user_id_);
+
+    const auto foreign = service.calculate(
+        placeholder_year_id_, build_confirmed_data(), std::optional<std::string>(foreign_revision));
+    bool rejected = false;
+    for (const auto& item : foreign.preview.issues) {
+        if (item.code == "assessment_context_incomplete") rejected = true;
+    }
+    EXPECT_TRUE(rejected) << "别的桥的台账版本不得被接受";
+
+    client_->execSqlSync("delete from bridge_component_inventory_revisions where id=$1::uuid",
+                         foreign_revision);
+    client_->execSqlSync("delete from bridges where id=$1::uuid", other_bridge);
+}
 
 TEST_F(ConfirmAnnualFactsTest, ReadsLatestJsonInsteadOfCallerSnapshot) {
     bridge_report::db::ReviewRepository repository(client_, registry_);

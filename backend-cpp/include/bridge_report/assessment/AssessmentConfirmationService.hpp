@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -49,9 +50,17 @@ public:
         drogon::orm::DbClientPtr transaction,
         std::shared_ptr<const standards::StandardRegistry> registry);
 
+    // inventory_revision_override：调用方已经按"年度锁定优先、否则最新已确认"解析出的
+    // 台账版本。不传则维持原状——读年度锁定的版本，年度没锁就判上下文不完整。
+    //
+    // 只读预检需要它：年度未锁定时，光靠年度字段这里必然返回
+    // assessment_context_incomplete，而预检本身不该为了算一个结果就去写年度。
+    // 传入时必须属于同一桥梁且状态为已确认；与年度已锁定的版本不一致时返回
+    // component_inventory_revision_changed，既不静默改用它，也不静默忽略它。
     AssessmentConfirmationOutcome calculate(
         const std::string& inspection_year_id,
-        const Json::Value& draft) const;
+        const Json::Value& draft,
+        const std::optional<std::string>& inventory_revision_override = std::nullopt) const;
 
     AssessmentConfirmationWritten persist(
         const AssessmentPreview& preview,

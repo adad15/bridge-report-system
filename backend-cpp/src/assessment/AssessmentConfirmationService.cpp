@@ -110,7 +110,8 @@ AssessmentConfirmationService::AssessmentConfirmationService(
 
 AssessmentConfirmationOutcome AssessmentConfirmationService::calculate(
     const std::string& inspection_year_id,
-    const Json::Value& draft) const {
+    const Json::Value& draft,
+    const std::optional<std::string>& inventory_revision_override) const {
     AssessmentConfirmationOutcome outcome;
     if (registry_ == nullptr) {
         outcome.preview.issues.push_back(issue(
@@ -119,9 +120,47 @@ AssessmentConfirmationOutcome AssessmentConfirmationService::calculate(
         return outcome;
     }
 
+    // override 单独校验，不混进下面那条大查询：那条用内连接，任何不满足都只会塌成
+    // "上下文不完整"，分不出"年度没锁版本"与"给的版本不合法"。
+    if (inventory_revision_override.has_value()) {
+        const auto guard = transaction_->execSqlSync(
+            "select iy.component_inventory_revision_id::text as locked_revision_id,"
+            "exists(select 1 from bridge_component_inventory_revisions r "
+            "where r.id=$2::uuid and r.bridge_id=iy.bridge_id "
+            "and r.status in ('已确认','confirmed')) as override_usable "
+            "from inspection_years iy where iy.id=$1::uuid",
+            inspection_year_id, *inventory_revision_override);
+        if (guard.empty()) {
+            outcome.preview.issues.push_back(issue(
+                "assessment_context_incomplete", "检测年度不存在。",
+                "inspection_year", inspection_year_id, "id"));
+            return outcome;
+        }
+        if (!guard[0]["override_usable"].as<bool>()) {
+            outcome.preview.issues.push_back(issue(
+                "assessment_context_incomplete",
+                "指定的构件台账版本不属于本桥梁或尚未确认。",
+                "inspection_year", inspection_year_id,
+                "component_inventory_revision_id"));
+            return outcome;
+        }
+        // 年度已经锁了别的版本：既不能静默改用 override，也不能静默忽略它。
+        if (!guard[0]["locked_revision_id"].isNull()
+            && guard[0]["locked_revision_id"].as<std::string>()
+                   != *inventory_revision_override) {
+            outcome.preview.issues.push_back(issue(
+                "component_inventory_revision_changed",
+                "检测年度锁定的构件台账版本与本次请求依据的版本不一致。",
+                "inspection_year", inspection_year_id,
+                "component_inventory_revision_id"));
+            return outcome;
+        }
+    }
+
     const auto context_rows = transaction_->execSqlSync(
         "select iy.id::text as inspection_year_id,iy.standard_profile_id::text as profile_id,"
-        "iy.component_inventory_revision_id::text as inventory_revision_id,"
+        "coalesce(nullif($2,'')::uuid,iy.component_inventory_revision_id)::text "
+        "as inventory_revision_id,"
         "p.technical_condition_package_id::text as package_id,"
         "p.rating_tree_version_id::text as rating_tree_version_id,"
         "rtv.tree_content_checksum as rating_tree_content_checksum,"
@@ -134,9 +173,10 @@ AssessmentConfirmationOutcome AssessmentConfirmationService::calculate(
         "and rtv.status='published' "
         "join standard_packages sp on sp.id=p.technical_condition_package_id "
         "join bridge_component_inventory_revisions r "
-        "on r.id=iy.component_inventory_revision_id and r.bridge_id=iy.bridge_id "
+        "on r.id=coalesce(nullif($2,'')::uuid,iy.component_inventory_revision_id) "
+        "and r.bridge_id=iy.bridge_id "
         "where iy.id=$1::uuid limit 1 for update of iy,p,sp,r",
-        inspection_year_id);
+        inspection_year_id, inventory_revision_override.value_or(std::string()));
     if (context_rows.empty()) {
         outcome.preview.issues.push_back(issue(
             "assessment_context_incomplete",

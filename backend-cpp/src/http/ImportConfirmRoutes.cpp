@@ -67,17 +67,20 @@ void register_preflight_confirm_route(
                 const bool has_current_annual_facts = effective_year.has_value()
                     && repository.has_current_annual_facts(detail->bridge_id, *effective_year);
 
-                db::ComponentInventoryRepository inventory_repository(db_client);
-                const auto inventory = inventory_repository.get_latest_revision(detail->bridge_id);
+                // 年度锁定优先，否则该桥最新的**已确认**版本——与绑定写入病害时同一条
+                // 规则。此前走 get_latest_revision()（草稿优先），桥上一有草稿就判成
+                // "台账尚未确认"，入库前检查整个过不去。
+                const auto inventory =
+                    db::ComponentInventoryRepository(db_client).resolve_confirmed_revision(
+                        detail->bridge_id, detail->inspection_year_inventory_revision_id);
+                // 该解析器按定义只返回已确认版本，所以"是否已确认"就是它有没有值。
                 const auto context = review::build_preflight_context(
                     *detail,
                     effective_year,
                     has_current_annual_facts,
                     inventory.has_value()
                         ? std::optional<std::string>(inventory->id) : std::nullopt,
-                    inventory.has_value()
-                        ? std::optional<bool>(inventory->status == "已确认")
-                        : std::optional<bool>(false));
+                    std::optional<bool>(inventory.has_value()));
                 auto report = review::build_preflight_report(parsed_result, context);
                 if (report.can_confirm) {
                     if (!detail->rating_tree_version_id.has_value() ||
@@ -121,8 +124,13 @@ void register_preflight_confirm_route(
                 if (report.can_confirm && detail->inspection_year_id.has_value()) {
                     assessment::AssessmentConfirmationService assessment_service(
                         db_client, registry);
+                    // 只读预检：把解析出的版本作为 override 传进去，服务据此构建评定
+                    // 上下文，但**不写年度**。它自己那条上下文查询用的是内连接，年度没锁
+                    // 版本时无行可取，六处解析全部改对也照样过不去。
                     const auto assessment = assessment_service.calculate(
-                        *detail->inspection_year_id, parsed_result);
+                        *detail->inspection_year_id, parsed_result,
+                        inventory.has_value()
+                            ? std::optional<std::string>(inventory->id) : std::nullopt);
                     if (assessment.status != assessment::AssessmentConfirmationStatus::Completed) {
                         for (const auto& item : assessment.preview.issues) {
                             report.blocking_errors.push_back(
