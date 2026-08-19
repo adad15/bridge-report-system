@@ -1,10 +1,10 @@
 # 已确认台账版本解析的一致性
 
-- 日期：2026-08-18（当日两轮评审后修订）
-- 状态：已按复审修订，待复审确认
+- 日期：2026-08-18（当日三轮评审后修订）
+- 状态：已按第三轮复审修订；④ 已实施（`434b21e`），其余待实施
 - 相关模块：校对保存、入库前检查、年度确认、评定树自动匹配、Word 导入、系统评定
 - 前序：`2026-08-17-component-binding-on-demand-lookup-design.md`（缺陷一修的是同源问题的另外两处）
-- 评审记录：`…-design-review.txt`（初审）、`…-design-rereview.txt`（复审）
+- 评审记录：`…-design-review.txt`、`…-design-rereview.txt`、`…-design-third-review.txt`
 
 ## 背景
 
@@ -38,6 +38,24 @@ order by (status='草稿') desc, revision_number desc limit 1
 
 初稿还把 ③ 说成"在确认事务内重复一遍同样的解析"——那条事务的 preflight 上下文**已经
 用年度锁定版本**，只有评定树校验另起了一条草稿优先解析。③ 只坏了一半。
+
+**三稿的错误与遗漏**（第三轮复审指出，已核实）：
+
+- **锁定时机定错了位置**。三稿写"调评定服务之前锁版本"，但确认事务 `:816` 先建
+  preflight、`:817-821` 直接返回，`:873-884` 再挡一次——**两处都在评定服务（`:886`）
+  之前**。版本解析与锁定必须提到 `build_preflight_report()` **之前**。
+- **评定服务接口没写完整**。三稿写"（二选一，推荐前者）"却只给了一个签名；而且只加
+  `load_context()` 并不能让 `calculate()` 用上调用方给的版本。
+- **override 优先级前后矛盾**：能力一节说"有 override 就用 override"，测试一节又说
+  "年度已锁定时 override 不得覆盖"。
+- **错误码写错**：实际是 `defect_rating_tree_assignment_invalid`（`DraftValidation.cpp:311`），
+  不是 `rating_tree_assignment_invalid`；现有约定 `database_commit_failed` 与
+  `db_write_failed` **都映射 HTTP 500**（`ImportConfirmRoutes.cpp:209-217`），三稿写 503
+  等于悄悄改约定。
+- **漏了两个分支**：Word 导入"桥上没有已确认台账"时现在是降级而非阻断；版本冲突后光
+  不删除还不够重试。
+- **锁顺序表述不准**：事务开始时只有 `import_record_id`，得先锁 `import_records` 才拿得到
+  年度 id。
 
 **二稿的关键遗漏**（复审指出，已核实）：
 
@@ -131,24 +149,38 @@ where iy.id = $1::uuid limit 1 for update of iy,p,sp,r
 已确认版本"：
 
 - **②（只读预检）**：给评定服务传显式版本，只算不写；
-- **③（写事务）**：调评定服务**之前**先把版本锁进年度。
+- **③（写事务）**：把版本解析与锁定提到 **`build_preflight_report()` 之前**——不是
+  "调评定服务之前"。确认事务 `:816` 先建 preflight、`:817-821` 就直接返回了，
+  `:873-884` 还会再以"缺 `component_inventory_revision_id`"为由挡一次，根本走不到
+  评定服务。
 
 ### 评定服务需要的能力
 
-给它一个显式版本上下文（二选一，推荐前者）：
+改的必须是 `calculate()` 本身——只加一个 `load_context()` 而 `calculate()` 仍自行重读
+`inspection_years`，原问题原样还在：
 
 ```cpp
-AssessmentContextSnapshot load_context(
+AssessmentConfirmationOutcome calculate(
     const std::string& inspection_year_id,
-    const std::optional<std::string>& inventory_revision_override) const;
+    const Json::Value& draft,
+    const std::optional<std::string>& inventory_revision_override = std::nullopt) const;
 ```
 
-规则：
+（若改成让 `calculate()` 接收已加载好的 `AssessmentContextSnapshot`，必须一并说明
+evaluator 与 `StandardPackage` 怎么随之传入，不能留一个没人消费的 `load_context()`。）
 
-1. 无 override 时维持现状，读年度锁定版本；
-2. 有 override 时**必须校验**它属于同一桥梁且状态为已确认——override 不是绕过校验的后门；
-3. 用 override 构建评定上下文；
-4. **只读预检不得把 override 写进 `inspection_years`。**
+**override 与年度锁定版本的优先级**（三稿此处自相矛盾，这里定死）：
+
+| 年度是否已锁定 | override | 行为 |
+| --- | --- | --- |
+| 未锁定 | 未传 | 上下文不完整，维持现状 |
+| 未锁定 | 传入且合法 | 用 override；**只读预检不得写年度** |
+| 已锁定 | 未传 | 用年度锁定版本 |
+| 已锁定 | 与锁定版本相同 | 正常使用 |
+| 已锁定 | 与锁定版本**不同** | 返回 `component_inventory_revision_changed` |
+
+override 不得静默覆盖年度锁定版本，也不得静默忽略一个冲突的 override。传入 override 时
+**必须校验**它属于同一桥梁且状态为已确认——它不是绕过校验的后门。
 
 ## 阻塞项一：Word 导入一次事务里解析两次
 
@@ -171,6 +203,17 @@ AssessmentContextSnapshot load_context(
 这样绝大多数冲突在匹配之前就暴露，而不是做完全部匹配才发现。
 `match_imported_defect_rating_tree_nodes_unguarded()` 不再自行解析版本。
 
+**三个分支必须分清**，其中第三个是现有行为，不能改掉：
+
+| 情形 | 处置 |
+| --- | --- |
+| 年度锁定到非法版本（别的桥 / 草稿 / 已不存在） | 失败，返回版本或年度上下文错误 |
+| 年度未锁定，桥上有已确认版本 | 锁定该版本，两次匹配共用同一个 `InventoryRevision` |
+| 年度未锁定，桥上**没有**已确认版本 | **不锁年度，两次匹配共享 `nullopt`，保留现有降级**：清空候选、置空版本 id、加 `defect_component_match_required` 警告，解析结果照常进待校对 |
+
+第三行是 `WordImportRepository.cpp:68-79` 今天的行为。把它改成"导入失败"是行为回归——
+现在允许先导入、之后再人工补台账。
+
 ## 阻塞项二：Word 版本冲突会被当成解析失败删掉
 
 `WordImportRoutes.cpp:376-383` 把 `persist_parse_result()` 的**任何**失败交给 `fail_parse`，
@@ -183,8 +226,19 @@ AssessmentContextSnapshot load_context(
 
 1. 按阻塞项一的新顺序，冲突通常在匹配前就暴露，代价小；
 2. 仍可能冲突时用专用错误码 `component_inventory_revision_changed`；
-3. **`WordImportRoutes` 遇到该错误码不得调用 `discard_failed_import_safely()`**，
-   而是保留导入记录与原始 Word，标成可重试，或在事务内按当前已锁版本重做匹配。
+3. **`WordImportRoutes` 遇到该错误码不得调用 `discard_failed_import_safely()`**。
+
+**但"不删除"本身不足以可重试**：`mark_parsing()` 只接受 `('已上传','解析失败')`
+（`WordImportRepository.cpp:265`），跳过删除会把记录**卡在"解析中"**，永远重试不了。
+冲突分支至少要做完：
+
+1. 清理本次尚未提交的照片批次与 staging 目录；
+2. 清空 `active_parse_work_relative_path`；
+3. 把 `import_records` 与 `import_source_files` 转成"解析失败"——现成的
+   `mark_parse_failed()` 正好做这件事，且**必须在不执行删除的前提下调用**；
+4. 保留原始 Word；
+5. HTTP 返回 409 `component_inventory_revision_changed`；
+6. 确认之后 `mark_parsing()` 能重新进入解析。
 
 真正的契约解析失败仍走原有清理流程——这条不能一起改掉。
 
@@ -205,8 +259,17 @@ AssessmentContextSnapshot load_context(
 **无条件覆盖**（该 UPDATE 只有 `where id=$1`，没有版本条件）。而 `import_records.inspection_year_id`
 **没有唯一约束**，两条导入记录可以关联同一个年度，这个并发是真实可达的。
 
-**修正**：把年度行锁提到读之前（事务开始后立刻 `select ... from inspection_years where id=$1 for update`），
-而不是新增第二把锁——两处加锁且顺序不一致会引入死锁风险。锁内读到的版本贯穿整个事务。
+**修正**：把年度行锁提到读之前，而不是新增第二把锁——两处加锁且顺序不一致会引入死锁
+风险。事务开始时只有 `import_record_id`，所以顺序是：
+
+1. `select ... from import_records ... for update`，锁并读导入记录；
+2. 从中取 `inspection_year_id`；
+3. `select ... from inspection_years ... for update`，同时读年度状态、锁定版本与规范组合；
+4. 之后全部使用**年度行锁内**读到的数据。
+
+**统一锁顺序 `import_records → inspection_years`**，与现有绑定事务一致。不要再用
+"联查 `inspection_years` 字段但只 `for update of ir`"的写法——那样年度字段仍是在没有
+年度行锁的情况下读的。
 
 ## 阻塞项四：保存校对草稿的事务与返回值
 
@@ -217,6 +280,16 @@ AssessmentContextSnapshot load_context(
 
 **方案 A（推荐）：把解析、校验、写入放进同一个仓储事务**，事务内锁 `import_records` 与
 关联的 `inspection_years`。不改对外契约，纯服务端改动。
+
+**事务内必须重新读取**下列内容——只把台账解析与 UPDATE 搬进去、却仍用事务外读到的数据，
+旧快照照样能覆盖新数据：
+
+1. `import_status`、编辑锁、当前 `parsed_result_json`；
+2. `inspection_year_id`、年度状态、锁定台账版本；
+3. `standard_profile_id`、`rating_tree_version_id`、技术规范包；
+4. 当前已发布的评定树；
+5. 统一解析出的完整 `InventoryRevision`；
+6. 依赖 `stored_draft` 的证据校验、评定树规范化、重开范围校验与审计基线。
 
 （方案 B 是给 `save_review_draft()` 加预期版本参数并在 UPDATE 里加版本条件。不推荐：这里
 **用户并没有在选版本**，他只是在存自己的校对结果，服务端自洽即可，不必新增一个前端必须
@@ -260,11 +333,25 @@ struct SaveReviewDraftOutcome {
 | `component_inventory_revision_changed` | 409（整体提示一次，不逐条） |
 | `edit_lock_invalid` | 按项目现有约定 |
 | `import_record_not_editable` | 409 |
-| `defect_component_assignment_invalid` / `rating_tree_assignment_invalid` | 400，带逐项 details |
-| `database_commit_failed` | 503 |
+| `defect_component_assignment_invalid` / `defect_rating_tree_assignment_invalid` | 400，带逐项 details |
+| `db_write_failed`（事务内 SQL/约束异常） | 500 |
+| `database_commit_failed`（提交回调失败） | 500 |
+
+后两个错误码**沿用 `confirm_annual_facts()` 的现有约定**（`ReviewRepository.cpp:1103`、
+`:1110-1112`，路由映射见 `ImportConfirmRoutes.cpp:209-217`），两者都是 500 而不是 503，
+且必须能分别返回——三稿只列了 `database_commit_failed` 且写成 503，是把现有约定改掉了。
+评定树关联的错误码带 `defect_` 前缀（`DraftValidation.cpp:311`）。
 
 **版本变化只报一条整体提示**（"本检测年度使用的台账版本已变化，请刷新后重试"），而不是逐条
-"请重新选择"——病害自己带着版本 id，服务端分得清"版本整体变了"与"这一条绑错了"。
+"请重新选择"。要兑现这句承诺，仓储必须**先做整请求级的版本判定，再做逐项关联校验**——
+`DraftValidation.cpp:194-196` 现在把版本不一致**全部**变成逐项问题。判定规则：
+
+| 情形 | 处置 |
+| --- | --- |
+| 全部版本化病害一致地引用同一个旧版本，而服务端解析出的是新版本 | 409 `component_inventory_revision_changed`，整体一条 |
+| 请求内部**混用**多个版本 | 400，视为草稿数据非法，返回逐项问题 |
+| 版本相同，但构件已停用 / 类别或结构部位对不上 | 400，逐项 details |
+| 年度锁定版本自身非法（别的桥 / 草稿 / 不存在） | 返回年度上下文或版本错误，**不要伪装成单病害错误** |
 
 ## 修正方案
 
@@ -353,11 +440,16 @@ struct SaveReviewDraftOutcome {
 - 年度未锁定但桥上有已确认台账时，只读预检用显式版本算出结果；
 - 只读预检结束后 `inspection_years.component_inventory_revision_id` **仍为 null**；
 - 显式版本属于别的桥、是草稿、或不存在时，上下文构建失败；
-- 年度已锁定时优先用锁定版本，override 不得覆盖它。
+- 年度已锁定且 override **相同** → 正常算出结果；
+- 年度已锁定且 override **不同** → 返回 `component_inventory_revision_changed`
+  （既不静默用锁定版本，也不静默用 override）。
 
 **年度确认事务**
 
-- 调评定服务前版本已在年度行锁内锁定（或以同一版本传入）；
+- **年度未锁定且桥上有已确认台账时，版本在 `build_preflight_report()` 之前就已锁定**——
+  锁在评定服务之前是不够的，preflight 会先把事务挡回去；
+- preflight、评定树校验与评定服务用的是**同一个** revision id；
+- 锁顺序为 `import_records → inspection_years`；
 - 两条导入记录共享同一年度时不会互相覆盖年度版本；
 - 最终 UPDATE 不覆盖并发锁定的不同版本；
 - 评定或确认失败时，事务内的版本锁定一并回滚。
@@ -368,6 +460,11 @@ struct SaveReviewDraftOutcome {
 - 年度锁定更新 0 行时不得继续提交；
 - **版本冲突不删除导入记录与原始 Word，且可重试**；
 - 版本冲突不进入 `discard_failed_import_safely()`；
+- **年度未锁定且桥上没有已确认版本 → 解析结果照常入库并带 `defect_component_match_required`
+  警告**（现有降级行为不得变成导入失败）；
+- 版本冲突后 `import_records` 与来源文件**不滞留在"解析中"**，下一次 `mark_parsing()`
+  能成功；冲突分支清理本次照片批次与 staging 目录；
+- 年度锁定到非法版本时不被当成普通契约解析失败；
 - 真正的解析失败仍按原流程清理。
 
 **校对草稿保存**
@@ -378,6 +475,11 @@ struct SaveReviewDraftOutcome {
 - 校验完成后版本变化 → 不写入旧版本数据，返回 `component_inventory_revision_changed`；
 - `SaveReviewDraftOutcome` 能区分版本冲突、校验失败、编辑锁失效与状态变化；
 - 版本冲突只报整体提示；单病害数据错误仍返回逐项 details；
+- **请求内部混用多个版本 → 400 逐项问题**，不是整体 409；
+- 版本相同但构件已停用 / 类别或结构部位对不上 → 400 逐项 details；
+- `db_write_failed` 与 `database_commit_failed` 能**分别**返回并各自映射（都为 500）；
+- 评定树关联的错误码用 `defect_rating_tree_assignment_invalid`，与现有代码一致；
+- 事务内重新读取 `stored_draft`、年度版本、规范组合与已发布评定树；
 - 事务失败时版本锁定与草稿写入一起回滚。
 
 **死代码与管理页**
