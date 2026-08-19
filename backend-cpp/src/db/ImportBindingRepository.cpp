@@ -159,6 +159,28 @@ std::optional<std::string> optional_row_text(
         : std::optional<std::string>(row[column].as<std::string>());
 }
 
+// 在年度行锁内重读该年度锁定的台账版本。
+//
+// 上面那句联查只 for update of ir：年度字段是在**没有年度行锁**的情况下读的。两条
+// 导入记录可以关联同一个年度，而 bind_rating_tree 会无条件改写年度的台账版本，于是
+// 记录 A 可能按 R1 写完全部病害构件关联，同时记录 B 把年度切到了 R2——草稿里的版本
+// 与年度上下文就此不一致，下次保存校对草稿会整体报"台账版本已变化"。
+//
+// 锁顺序固定 import_records -> inspection_years，与保存草稿、年度确认和 Word 导入一致；
+// 反过来加锁会和年度删除、整桥删除那条路径形成死锁。
+//
+// 只读路径不调这个：打开一次对话框就把年度行锁住，是任何人都不会预期的副作用。
+std::optional<std::string> lock_year_and_read_revision(
+    const TransactionPtr& tx, const std::optional<std::string>& year_id) {
+    if (!year_id.has_value()) return std::nullopt;
+    const auto rows = tx->execSqlSync(
+        "select component_inventory_revision_id::text as inventory_revision_id "
+        "from inspection_years where id=$1::uuid for update",
+        *year_id);
+    if (rows.empty()) return std::nullopt;
+    return optional_row_text(rows[0], "inventory_revision_id");
+}
+
 // 只要版本 id 的路径走这条：概览、标记缺失/清除、评定树绑定都不需要构件内容，
 // 为拿一个 id 去装配五千多条构件是纯粹的浪费。
 std::optional<ComponentInventoryRepository::ConfirmedRevisionRef> resolve_confirmed_revision_ref(
@@ -419,8 +441,7 @@ BindingOutcome ImportBindingRepository::bind_batch(
         }
         const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
         const auto year_id = optional_row_text(rows[0], "inspection_year_id");
-        const auto locked_revision_id =
-            optional_row_text(rows[0], "inventory_revision_id");
+        const auto locked_revision_id = lock_year_and_read_revision(tx, year_id);
         const auto revision =
             resolve_confirmed_revision(tx, bridge_id, locked_revision_id);
         if (!revision.has_value()) { rollback(); return {BindingStatus::Conflict}; }
@@ -526,8 +547,7 @@ BindingOutcome ImportBindingRepository::bind(
         }
         const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
         const auto year_id = optional_row_text(rows[0], "inspection_year_id");
-        const auto locked_revision_id =
-            optional_row_text(rows[0], "inventory_revision_id");
+        const auto locked_revision_id = lock_year_and_read_revision(tx, year_id);
         const auto revision =
             resolve_confirmed_revision(tx, bridge_id, locked_revision_id);
         if (!revision.has_value()) { rollback(); return {BindingStatus::Conflict}; }
@@ -983,8 +1003,7 @@ BindingOutcome mutate_group(
         }
         const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
         const auto year_id = optional_row_text(rows[0], "inspection_year_id");
-        const auto locked_revision_id =
-            optional_row_text(rows[0], "inventory_revision_id");
+        const auto locked_revision_id = lock_year_and_read_revision(tx, year_id);
         const auto revision =
             resolve_confirmed_revision_ref(tx, bridge_id, locked_revision_id);
         // 标记缺失/清除绑定不需要台账内容，台账未确认时照样可用——这里保持原样，

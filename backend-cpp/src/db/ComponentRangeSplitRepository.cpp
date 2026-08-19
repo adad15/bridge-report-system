@@ -297,7 +297,19 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::apply(
         }
         stage_start = Clock::now();
         const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
-        const auto locked_revision_id = optional_row_text(rows[0], "inventory_revision_id");
+        const auto year_id = optional_row_text(rows[0], "inspection_year_id");
+        // 锁顺序 import_records -> inspection_years：联查那一份是在没有年度行锁的
+        // 情况下读的，而两条导入记录可以共享同一个年度。写路径必须在年度行锁内重读。
+        std::optional<std::string> locked_revision_id;
+        if (year_id.has_value()) {
+            const auto year_row = tx->execSqlSync(
+                "select component_inventory_revision_id::text as inventory_revision_id "
+                "from inspection_years where id=$1::uuid for update",
+                *year_id);
+            if (!year_row.empty()) {
+                locked_revision_id = optional_row_text(year_row[0], "inventory_revision_id");
+            }
+        }
         const auto revision = ComponentInventoryRepository(tx).resolve_confirmed_revision(
             bridge_id, locked_revision_id);
         load_inventory_ms = elapsed_ms(stage_start);
@@ -308,7 +320,7 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::apply(
         // 应用会把构件绑进病害，所以要跟其他写操作一样把版本锁进年度；否则随后一次
         // 绑定可能把年度锁到别的版本上，而这批病害已经按当前版本绑好了。
         if (!ComponentInventoryRepository(tx).lock_pending_year_revision(
-                optional_row_text(rows[0], "inspection_year_id"), bridge_id,
+                year_id, bridge_id,
                 locked_revision_id, revision->id)) {
             tx->rollback(); return {ComponentRangeSplitStatus::Conflict};
         }

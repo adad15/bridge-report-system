@@ -739,3 +739,101 @@ TEST_F(ImportBindingRepositoryTest, OmittingTheCredentialsSkipsTheCheck) {
                               revision_id_).status,
               bridge_report::db::BindingStatus::Ok);
 }
+
+// 年度切到新版本后，按旧版本提交的写操作必须被 expected_inventory_revision_id 挡下，
+// 按新版本提交则放行且病害带上新版本。
+//
+// 注意这条**不**覆盖年度行锁：把 for update 去掉它照样绿——没有交错时，联查读到的和
+// 行锁内读到的是同一个值。行锁由下面那条 WriteBlocksWhileAnotherTransactionHoldsTheYearRow 钉。
+TEST_F(ImportBindingRepositoryTest, WritesUseTheRevisionCurrentlyLockedOnTheYear) {
+    // 桥上再确认一个版本，并把年度切过去——模拟另一条共享该年度的导入记录刚重绑评定树。
+    const auto newer_revision = client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,"
+        "baseline_revision_id,created_by_user_id) values($1::uuid,2,$2::uuid,$3::uuid) "
+        "returning id::text",
+        bridge_id_, revision_id_, user_id_)[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "insert into bridge_component_inventory_entries(inventory_revision_id,"
+        "bridge_component_id,component_number,site_name,site_component_type,sort_order) "
+        "select $1::uuid,bridge_component_id,component_number,site_name,site_component_type,"
+        "sort_order from bridge_component_inventory_entries where inventory_revision_id=$2::uuid",
+        newer_revision, revision_id_);
+    client_->execSqlSync(
+        "insert into bridge_component_standard_mappings(inventory_entry_id,standard_package_id,"
+        "standard_bridge_type_id,standard_component_category_id,structure_part,mapping_source,"
+        "confirmation_status,confirmed_by_user_id,confirmed_at) "
+        "select e.id,m.standard_package_id,m.standard_bridge_type_id,"
+        "m.standard_component_category_id,m.structure_part,m.mapping_source,"
+        "m.confirmation_status,m.confirmed_by_user_id,m.confirmed_at "
+        "from bridge_component_standard_mappings m "
+        "join bridge_component_inventory_entries o on o.id=m.inventory_entry_id "
+        "  and o.inventory_revision_id=$2::uuid "
+        "join bridge_component_inventory_entries e on e.inventory_revision_id=$1::uuid "
+        "  and e.bridge_component_id=o.bridge_component_id",
+        newer_revision, revision_id_);
+    client_->execSqlSync(
+        "update bridge_component_inventory_revisions set status='已确认',"
+        "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
+        newer_revision, user_id_);
+    client_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
+        year_id_, newer_revision);
+
+    bridge_report::db::ImportBindingRepository repository(client_);
+
+    // 按旧版本提交：写事务在年度行锁内解析出的是 newer_revision，与期望不符 -> 拒绝。
+    const auto stale = repository.bind(
+        import_id_, "上部承重构件", "1-1#梁", component_id_, revision_id_);
+    EXPECT_EQ(stale.status, bridge_report::db::BindingStatus::Conflict);
+    EXPECT_EQ(stale.error_code, "component_inventory_revision_changed");
+
+    // 按年度当前锁定的版本提交：放行，并且病害带的就是这个版本。
+    const auto fresh = repository.bind(
+        import_id_, "上部承重构件", "1-1#梁", component_id_, newer_revision);
+    ASSERT_EQ(fresh.status, bridge_report::db::BindingStatus::Ok)
+        << fresh.error_code << ": " << fresh.error_message;
+    const auto stored = client_->execSqlSync(
+        "select parsed_result_json#>>'{defects,0,component_inventory_revision_id}' as revision_id "
+        "from import_records where id=$1::uuid",
+        import_id_)[0]["revision_id"].as<std::string>();
+    EXPECT_EQ(stored, newer_revision);
+}
+
+// 写路径必须在**年度行锁内**读锁定的台账版本。这条直接钉行锁本身：
+// 另一条连接握着该年度行的 FOR UPDATE 时，写事务必须被挡在那里。
+//
+// 判据靠 statement_timeout 做成确定的，不依赖时序运气：
+//   - 有行锁：bind 卡在 select ... for update 上 -> 语句超时 -> Failed；
+//   - 无行锁：联查不加锁，年度已锁定版本时 lock_pending_year_revision 又直接短路
+//     不写库，于是整条 bind 一路通到底 -> Ok。
+// 两个结果泾渭分明，把行锁去掉这条必红。
+TEST_F(ImportBindingRepositoryTest, WriteBlocksWhileAnotherTransactionHoldsTheYearRow) {
+    // 年度先锁定到夹具那个已确认版本，让 lock_pending_year_revision 走"已锁定"短路，
+    // 排除掉"其实是被那句 UPDATE 挡住的"这种解释。
+    client_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
+        year_id_, revision_id_);
+
+    // 写仓储用独占一条连接的客户端：连接池只有 1 条时 SET 才会落在后续事务用的
+    // 那条连接上。
+    auto writer_client = bridge_report::db::create_db_client(
+        bridge_report::config::PostgresConfig{}, 1);
+    writer_client->execSqlSync("set statement_timeout = '1500'");
+
+    auto blocker = client_->newTransaction();
+    blocker->execSqlSync(
+        "select id from inspection_years where id=$1::uuid for update", year_id_);
+
+    const auto outcome = bridge_report::db::ImportBindingRepository(writer_client).bind(
+        import_id_, "上部承重构件", "1-1#梁", component_id_, revision_id_);
+
+    blocker->rollback();
+    writer_client->closeAll();
+
+    EXPECT_EQ(outcome.status, bridge_report::db::BindingStatus::Failed)
+        << "别人握着年度行锁时，写事务必须被挡住而不是照常写下去";
+    const auto stored = client_->execSqlSync(
+        "select parsed_result_json::text as parsed from import_records where id=$1::uuid",
+        import_id_)[0]["parsed"].as<std::string>();
+    EXPECT_EQ(stored.find(component_id_), std::string::npos) << "被挡住时不得有任何写入";
+}
