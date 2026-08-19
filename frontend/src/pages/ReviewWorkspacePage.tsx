@@ -855,6 +855,7 @@ function ReviewWorkspaceLoaded({
             <ComponentBindingWorkspace
               importId={importRecordId}
               bridgeId={response.bridge.id}
+              lockToken={lockToken}
               onRatingTreeChange={onReload}
               onDraftInvalidated={() => setDraftStaleFromBinding(true)}
               onOverviewChange={(overview) => {

@@ -6,6 +6,7 @@
 
 #include <drogon/orm/DbClient.h>
 
+#include "bridge_report/db/EditLockRepository.hpp"
 #include "bridge_report/review/ConfirmPlan.hpp"
 #include "bridge_report/review/DraftValidation.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
@@ -25,12 +26,6 @@ struct ConfirmWrittenCounts {
     int assessment_part_results{0};
     int assessment_control_results{0};
     int assessment_rule_traces{0};
-};
-
-struct EditLockCredentials {
-    std::string user_id;
-    std::string session_id;
-    std::string lock_token;
 };
 
 /**

@@ -7,6 +7,7 @@
 
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
+#include "bridge_report/db/EditLockRepository.hpp"
 #include "bridge_report/db/ImportBindingRepository.hpp"
 #include "bridge_report/db/ComponentRangeSplitRepository.hpp"
 
@@ -672,3 +673,69 @@ TEST_F(ImportBindingRepositoryTest, RejectsWritesOutsidePendingReview) {
 }
 
 }  // namespace
+
+// 独占编辑是后端边界，不能只靠前端隐藏按钮。这六个写接口改的是
+// import_records.parsed_result_json——和校对草稿保存写的同一份数据。不校验锁的话，
+// 另一个已登录用户可以在别人持锁时改它，而持锁者随后的整份草稿保存又会把这些
+// 修改静默覆盖掉。
+TEST_F(ImportBindingRepositoryTest, WriteEndpointsRejectAnInvalidEditLock) {
+    bridge_report::db::ImportBindingRepository repository(client_);
+    // 从未签发过的令牌：代表另一个用户/会话，或锁已过期、已被管理员强制收回。
+    const bridge_report::db::EditLockCredentials foreign{
+        user_id_, user_id_, "never-issued-token"};
+
+    EXPECT_EQ(repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_,
+                              revision_id_, foreign).status,
+              bridge_report::db::BindingStatus::EditLockInvalid);
+    EXPECT_EQ(repository.bind_batch(
+                  import_id_, {{"上部承重构件", "1-1#梁", component_id_}},
+                  revision_id_, foreign).status,
+              bridge_report::db::BindingStatus::EditLockInvalid);
+    EXPECT_EQ(repository.mark_missing(import_id_, "上部承重构件", "1-1#梁",
+                                      revision_id_, foreign).status,
+              bridge_report::db::BindingStatus::EditLockInvalid);
+    EXPECT_EQ(repository.clear(import_id_, "上部承重构件", "1-1#梁",
+                               revision_id_, foreign).status,
+              bridge_report::db::BindingStatus::EditLockInvalid);
+
+    // 一条都不许写进去。
+    const auto stored = client_->execSqlSync(
+        "select parsed_result_json::text as parsed from import_records where id=$1::uuid",
+        import_id_)[0]["parsed"].as<std::string>();
+    EXPECT_EQ(stored.find(component_id_), std::string::npos)
+        << "编辑锁校验失败时不得写入任何绑定";
+}
+
+// 持有有效锁时照常放行——加的是边界，不是把功能关掉。
+TEST_F(ImportBindingRepositoryTest, WriteEndpointsAcceptTheActiveEditLock) {
+    // 编辑锁行外键指向 user_sessions，得先有一个真实会话。
+    const auto session_id = client_->execSqlSync(
+        "insert into user_sessions(user_id,token_hash,expires_at) "
+        "values($1::uuid,'binding-lock-session',now()+interval '1 hour') returning id::text",
+        user_id_)[0]["id"].as<std::string>();
+    bridge_report::db::EditLockRepository locks(client_);
+    const auto owner = bridge_report::db::AuthUser{
+        user_id_, session_id, "admin", "管理员", "admin"};
+    const auto acquired = locks.acquire(import_id_, owner);
+    ASSERT_TRUE(acquired.acquired);
+
+    bridge_report::db::ImportBindingRepository repository(client_);
+    const bridge_report::db::EditLockCredentials held{
+        user_id_, session_id, acquired.lock_token};
+    const auto outcome = repository.bind(
+        import_id_, "上部承重构件", "1-1#梁", component_id_, revision_id_, held);
+
+    EXPECT_EQ(outcome.status, bridge_report::db::BindingStatus::Ok)
+        << "持锁用户必须能正常绑定";
+    client_->execSqlSync(
+        "delete from import_record_edit_locks where import_record_id=$1::uuid", import_id_);
+    client_->execSqlSync("delete from user_sessions where id=$1::uuid", session_id);
+}
+
+// 不传凭证时跳过校验：测试夹具与既有调用点靠这条保持可用，生产路由一律传。
+TEST_F(ImportBindingRepositoryTest, OmittingTheCredentialsSkipsTheCheck) {
+    bridge_report::db::ImportBindingRepository repository(client_);
+    EXPECT_EQ(repository.bind(import_id_, "上部承重构件", "1-1#梁", component_id_,
+                              revision_id_).status,
+              bridge_report::db::BindingStatus::Ok);
+}

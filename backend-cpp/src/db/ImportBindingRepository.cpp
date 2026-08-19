@@ -11,6 +11,7 @@
 
 #include <json/json.h>
 
+#include "bridge_report/auth/PasswordHash.hpp"
 #include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/inventory/ComponentCategoryLexicon.hpp"
@@ -22,6 +23,22 @@ namespace bridge_report::db {
 namespace {
 
 using TransactionPtr = std::shared_ptr<drogon::orm::Transaction>;
+
+// 在写事务内复查编辑锁。路由层已经拦过一道，但那是**事务外**的检查：从那一刻到
+// 真正写入之间，锁可能过期或被管理员强制收回。与 save_review_draft /
+// confirm_annual_facts 同一套做法。传 nullopt 表示调用方不校验锁（测试夹具用）。
+bool edit_lock_still_active(
+    const TransactionPtr& tx, const std::string& import_id,
+    const std::optional<EditLockCredentials>& edit_lock) {
+    if (!edit_lock.has_value()) return true;
+    const auto rows = tx->execSqlSync(
+        "select exists(select 1 from import_record_edit_locks "
+        "where import_record_id=$1::uuid and user_id=$2::uuid and user_session_id=$3::uuid "
+        "and lock_token_hash=$4 and expires_at>now()) as active",
+        import_id, edit_lock->user_id, edit_lock->session_id,
+        auth::sha256_hex(edit_lock->lock_token));
+    return !rows.empty() && rows[0]["active"].as<bool>();
+}
 
 std::string compact_json(const Json::Value& value) {
     Json::StreamWriterBuilder builder;
@@ -368,7 +385,8 @@ void write_binding(
 
 BindingOutcome ImportBindingRepository::bind_batch(
     const std::string& import_id, const std::vector<BindingTarget>& targets,
-    const std::string& expected_revision_id) {
+    const std::string& expected_revision_id,
+    const std::optional<EditLockCredentials>& edit_lock) {
     if (targets.empty()) return {BindingStatus::Invalid};
     for (const auto& target : targets) {
         if (target.part_name.empty() || target.component_number.empty()
@@ -395,6 +413,9 @@ BindingOutcome ImportBindingRepository::bind_batch(
         if (rows.empty()) { rollback(); return {BindingStatus::NotFound}; }
         if (rows[0]["import_status"].as<std::string>() != "待校对") {
             rollback(); return {BindingStatus::Conflict};
+        }
+        if (!edit_lock_still_active(tx, import_id, edit_lock)) {
+            rollback(); return {BindingStatus::EditLockInvalid};
         }
         const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
         const auto year_id = optional_row_text(rows[0], "inspection_year_id");
@@ -475,7 +496,8 @@ BindingOutcome ImportBindingRepository::bind_batch(
 BindingOutcome ImportBindingRepository::bind(
     const std::string& import_id, const std::string& part_name,
     const std::string& component_number, const std::string& bridge_component_id,
-    const std::string& expected_revision_id) {
+    const std::string& expected_revision_id,
+    const std::optional<EditLockCredentials>& edit_lock) {
     if (part_name.empty() || component_number.empty() || bridge_component_id.empty()) {
         return {BindingStatus::Invalid};
     }
@@ -498,6 +520,9 @@ BindingOutcome ImportBindingRepository::bind(
         if (rows.empty()) { rollback(); return {BindingStatus::NotFound}; }
         if (rows[0]["import_status"].as<std::string>() != "待校对") {
             rollback(); return {BindingStatus::Conflict};
+        }
+        if (!edit_lock_still_active(tx, import_id, edit_lock)) {
+            rollback(); return {BindingStatus::EditLockInvalid};
         }
         const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
         const auto year_id = optional_row_text(rows[0], "inspection_year_id");
@@ -565,7 +590,8 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
     const std::string& import_id,
     const std::string& rating_tree_version_id,
     const std::string& actor_user_id,
-    const std::string& expected_revision_id) {
+    const std::string& expected_revision_id,
+    const std::optional<EditLockCredentials>& edit_lock) {
     if (import_id.empty() || rating_tree_version_id.empty() ||
         actor_user_id.empty()) {
         return {BindingStatus::Invalid};
@@ -597,6 +623,10 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
         if (context.empty()) {
             rollback();
             return {BindingStatus::NotFound};
+        }
+        if (!edit_lock_still_active(tx, import_id, edit_lock)) {
+            rollback();
+            return {BindingStatus::EditLockInvalid};
         }
         const auto year_id =
             optional_row_text(context[0], "inspection_year_id");
@@ -927,6 +957,7 @@ BindingOutcome mutate_group(
     const drogon::orm::DbClientPtr& client, const std::string& import_id,
     const std::string& part_name, const std::string& component_number,
     const std::string& expected_revision_id,
+    const std::optional<EditLockCredentials>& edit_lock,
     const std::function<void(Json::Value&)>& mutator,
     const std::function<BindingOutcome(const std::string&)>& reload) {
     if (part_name.empty() || component_number.empty()) return {BindingStatus::Invalid};
@@ -946,6 +977,9 @@ BindingOutcome mutate_group(
         if (rows.empty()) { rollback(); return {BindingStatus::NotFound}; }
         if (rows[0]["import_status"].as<std::string>() != "待校对") {
             rollback(); return {BindingStatus::Conflict};
+        }
+        if (!edit_lock_still_active(tx, import_id, edit_lock)) {
+            rollback(); return {BindingStatus::EditLockInvalid};
         }
         const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
         const auto year_id = optional_row_text(rows[0], "inspection_year_id");
@@ -985,9 +1019,10 @@ BindingOutcome mutate_group(
 
 BindingOutcome ImportBindingRepository::mark_missing(
     const std::string& import_id, const std::string& part_name,
-    const std::string& component_number, const std::string& expected_revision_id) {
+    const std::string& component_number, const std::string& expected_revision_id,
+    const std::optional<EditLockCredentials>& edit_lock) {
     return mutate_group(db_client_, import_id, part_name, component_number,
-        expected_revision_id,
+        expected_revision_id, edit_lock,
         [](Json::Value& defect) {
             defect["component_match_method"] = "missing";
             defect["bridge_component_id"] = Json::Value(Json::nullValue);
@@ -1007,9 +1042,10 @@ BindingOutcome ImportBindingRepository::mark_missing(
 
 BindingOutcome ImportBindingRepository::clear(
     const std::string& import_id, const std::string& part_name,
-    const std::string& component_number, const std::string& expected_revision_id) {
+    const std::string& component_number, const std::string& expected_revision_id,
+    const std::optional<EditLockCredentials>& edit_lock) {
     return mutate_group(db_client_, import_id, part_name, component_number,
-        expected_revision_id,
+        expected_revision_id, edit_lock,
         [](Json::Value& defect) {
             defect["component_match_method"] = Json::Value(Json::nullValue);
             defect["bridge_component_id"] = Json::Value(Json::nullValue);

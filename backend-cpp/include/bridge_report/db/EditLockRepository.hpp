@@ -9,6 +9,14 @@
 
 namespace bridge_report::db {
 
+// 一次写请求携带的编辑锁凭证。写仓储在事务内用它复查锁是否仍然有效：
+// 路由层那道检查发生在事务外，从检查到真正写入之间锁可能过期或被管理员强制收回。
+struct EditLockCredentials {
+    std::string user_id;
+    std::string session_id;
+    std::string lock_token;
+};
+
 struct EditLockInfo {
     std::string import_record_id;
     std::string user_id;

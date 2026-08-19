@@ -5,6 +5,7 @@
 #include "bridge_report/db/ImportBindingRepository.hpp"
 #include "bridge_report/db/ComponentRangeSplitRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
+#include "bridge_report/http/EditLockRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
 
 namespace bridge_report::http {
@@ -118,6 +119,12 @@ void respond_split(const HttpCallback& callback,
         respond_import_record_not_found(callback);
         return;
     }
+    if (outcome.status == db::ComponentRangeSplitStatus::EditLockInvalid) {
+        respond_json(callback, make_error_body(
+            "edit_lock_invalid", "编辑锁已失效，本次拆分未写入，请刷新页面。"),
+            drogon::k409Conflict);
+        return;
+    }
     const auto code = !outcome.error_code.empty() ? outcome.error_code
         : outcome.status == db::ComponentRangeSplitStatus::Stale
             ? "component_range_split_stale"
@@ -180,6 +187,13 @@ void respond_binding(const HttpCallback& callback, const db::BindingOutcome& out
         }
         case db::BindingStatus::NotFound:
             respond_import_record_not_found(callback);
+            return;
+        case db::BindingStatus::EditLockInvalid:
+            // 路由入口已经查过一次；能走到这里说明锁是在事务开始之后失效的
+            // （过期或被管理员强制收回）。与保存草稿、确认入库同一个错误码。
+            respond_json(callback, make_error_body(
+                "edit_lock_invalid", "编辑锁已失效，本次修改未写入，请刷新页面。"),
+                drogon::k409Conflict);
             return;
         case db::BindingStatus::Conflict: {
             // 批量绑定整批不写，必须让用户知道是哪一条挡住的。
@@ -312,6 +326,8 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                     respond_unauthorized(callback);
                     return;
                 }
+                if (!require_active_edit_lock(
+                        db_client, request, import_id, *actor, callback)) return;
                 const auto body = request->getJsonObject();
                 if (body == nullptr ||
                     !(*body)["rating_tree_version_id"].isString() ||
@@ -331,7 +347,8 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                     db::ImportBindingRepository(db_client).bind_rating_tree(
                         import_id,
                         (*body)["rating_tree_version_id"].asString(),
-                        actor->id, expected));
+                        actor->id, expected,
+                        edit_lock_from_request(request, *actor)));
             } catch (...) {
                 respond_db_unavailable(callback);
             }
@@ -420,6 +437,8 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
             try {
                 const auto actor = authenticate_request(db_client, request);
                 if (!actor) { respond_unauthorized(callback); return; }
+                if (!require_active_edit_lock(
+                        db_client, request, import_id, *actor, callback)) return;
                 const auto body = request->getJsonObject();
                 std::vector<review::ComponentRangeSplitTarget> targets;
                 if (!parse_split_targets(body.get(), targets, callback)) return;
@@ -437,7 +456,8 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                 respond_split(callback,
                     db::ComponentRangeSplitRepository(db_client).apply(
                         import_id, targets, (*body)["impact_token"].asString(),
-                        actor->id, expected));
+                        actor->id, expected,
+                        edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
 
@@ -448,9 +468,10 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                     const std::string& import_id) {
             if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
             try {
-                if (!authenticate_request(db_client, request).has_value()) {
-                    respond_unauthorized(callback); return;
-                }
+                const auto actor = authenticate_request(db_client, request);
+                if (!actor.has_value()) { respond_unauthorized(callback); return; }
+                if (!require_active_edit_lock(
+                        db_client, request, import_id, *actor, callback)) return;
                 const auto body = request->getJsonObject();
                 if (body == nullptr || !(*body)["targets"].isArray()
                     || (*body)["targets"].empty()) {
@@ -478,7 +499,8 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                 if (!parse_expected_revision(body.get(), expected, callback)) return;
                 respond_binding(callback,
                     db::ImportBindingRepository(db_client).bind_batch(
-                        import_id, targets, expected));
+                        import_id, targets, expected,
+                        edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
 
@@ -501,9 +523,10 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                     const std::string& import_id) {
             if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
             try {
-                if (!authenticate_request(db_client, request).has_value()) {
-                    respond_unauthorized(callback); return;
-                }
+                const auto actor = authenticate_request(db_client, request);
+                if (!actor.has_value()) { respond_unauthorized(callback); return; }
+                if (!require_active_edit_lock(
+                        db_client, request, import_id, *actor, callback)) return;
                 const auto body = request->getJsonObject();
                 std::string part_name, number;
                 if (!parse_target(body.get(), part_name, number, callback)) return;
@@ -517,7 +540,8 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                 if (!parse_expected_revision(body.get(), expected, callback)) return;
                 respond_binding(callback, db::ImportBindingRepository(db_client).bind(
                     import_id, part_name, number,
-                    (*body)["bridge_component_id"].asString(), expected));
+                    (*body)["bridge_component_id"].asString(), expected,
+                    edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
 
@@ -527,16 +551,18 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                     const std::string& import_id) {
             if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
             try {
-                if (!authenticate_request(db_client, request).has_value()) {
-                    respond_unauthorized(callback); return;
-                }
+                const auto actor = authenticate_request(db_client, request);
+                if (!actor.has_value()) { respond_unauthorized(callback); return; }
+                if (!require_active_edit_lock(
+                        db_client, request, import_id, *actor, callback)) return;
                 const auto body = request->getJsonObject();
                 std::string part_name, number;
                 if (!parse_target(body.get(), part_name, number, callback)) return;
                 std::string expected;
                 if (!parse_expected_revision(body.get(), expected, callback)) return;
                 respond_binding(callback, db::ImportBindingRepository(db_client).mark_missing(
-                    import_id, part_name, number, expected));
+                    import_id, part_name, number, expected,
+                    edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
 
@@ -546,16 +572,18 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                     const std::string& import_id) {
             if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
             try {
-                if (!authenticate_request(db_client, request).has_value()) {
-                    respond_unauthorized(callback); return;
-                }
+                const auto actor = authenticate_request(db_client, request);
+                if (!actor.has_value()) { respond_unauthorized(callback); return; }
+                if (!require_active_edit_lock(
+                        db_client, request, import_id, *actor, callback)) return;
                 const auto body = request->getJsonObject();
                 std::string part_name, number;
                 if (!parse_target(body.get(), part_name, number, callback)) return;
                 std::string expected;
                 if (!parse_expected_revision(body.get(), expected, callback)) return;
                 respond_binding(callback, db::ImportBindingRepository(db_client).clear(
-                    import_id, part_name, number, expected));
+                    import_id, part_name, number, expected,
+                    edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
 }

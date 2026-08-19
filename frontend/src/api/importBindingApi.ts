@@ -114,6 +114,20 @@ const json = (method: string, body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
+/**
+ * 写操作的请求体 + 编辑锁令牌。后端六个绑定写接口都要求持锁：它们改的是
+ * import_records.parsed_result_json，与校对草稿保存写的是同一份数据，
+ * 不持锁写进去的修改会被持锁者的整份保存覆盖掉。
+ *
+ * lockToken 是必填参数而不是可选字段——可选的话，漏传的调用点会安静地拿到 409，
+ * 而不是在编译期被拦下。
+ */
+const lockedJson = (method: string, body: unknown, lockToken: string): RequestInit => ({
+  method,
+  headers: { "Content-Type": "application/json", "X-Edit-Lock-Token": lockToken },
+  body: JSON.stringify(body),
+});
+
 async function overviewRequest(url: string, init?: RequestInit): Promise<ComponentBindingOverview> {
   return (await request<{ overview: ComponentBindingOverview }>(url, init)).overview;
 }
@@ -141,14 +155,15 @@ export function bindInspectionRatingTree(
   baseUrl: string,
   importId: string,
   ratingTreeVersionId: string,
-  expectedInventoryRevisionId: string
+  expectedInventoryRevisionId: string,
+  lockToken: string
 ) {
   return overviewRequest(
     bindingUrl(baseUrl, importId, "/rating-tree"),
-    json("POST", {
+    lockedJson("POST", {
       rating_tree_version_id: ratingTreeVersionId,
       expected_inventory_revision_id: expectedInventoryRevisionId,
-    })
+    }, lockToken)
   );
 }
 
@@ -156,11 +171,12 @@ export function bindComponent(
   baseUrl: string,
   importId: string,
   input: BindingTarget & { bridge_component_id: string },
-  expectedInventoryRevisionId: string
+  expectedInventoryRevisionId: string,
+  lockToken: string
 ) {
   return overviewRequest(
     bindingUrl(baseUrl, importId, "/bind"),
-    json("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId })
+    lockedJson("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId }, lockToken)
   );
 }
 
@@ -173,11 +189,12 @@ export function bindComponentsBatch(
   baseUrl: string,
   importId: string,
   targets: (BindingTarget & { bridge_component_id: string })[],
-  expectedInventoryRevisionId: string
+  expectedInventoryRevisionId: string,
+  lockToken: string
 ) {
   return overviewRequest(
     bindingUrl(baseUrl, importId, "/bind-batch"),
-    json("POST", { targets, expected_inventory_revision_id: expectedInventoryRevisionId })
+    lockedJson("POST", { targets, expected_inventory_revision_id: expectedInventoryRevisionId }, lockToken)
   );
 }
 
@@ -185,11 +202,12 @@ export function markComponentMissing(
   baseUrl: string,
   importId: string,
   input: BindingTarget,
-  expectedInventoryRevisionId: string
+  expectedInventoryRevisionId: string,
+  lockToken: string
 ) {
   return overviewRequest(
     bindingUrl(baseUrl, importId, "/mark-missing"),
-    json("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId })
+    lockedJson("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId }, lockToken)
   );
 }
 
@@ -197,11 +215,12 @@ export function clearComponentBinding(
   baseUrl: string,
   importId: string,
   input: BindingTarget,
-  expectedInventoryRevisionId: string
+  expectedInventoryRevisionId: string,
+  lockToken: string
 ) {
   return overviewRequest(
     bindingUrl(baseUrl, importId, "/clear"),
-    json("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId })
+    lockedJson("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId }, lockToken)
   );
 }
 
@@ -253,14 +272,15 @@ export function applyComponentRangeSplit(
   importId: string,
   targets: BindingTarget[],
   impactToken: string,
-  expectedInventoryRevisionId: string
+  expectedInventoryRevisionId: string,
+  lockToken: string
 ) {
   return request<ComponentRangeSplitApply>(
     bindingUrl(baseUrl, importId, "/split-apply"),
-    json("POST", {
+    lockedJson("POST", {
       targets,
       impact_token: impactToken,
       expected_inventory_revision_id: expectedInventoryRevisionId,
-    })
+    }, lockToken)
   );
 }

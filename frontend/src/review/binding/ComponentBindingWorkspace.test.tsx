@@ -140,7 +140,7 @@ describe("ComponentBindingWorkspace", () => {
   });
 
   it("renders grouped rows with reference counts", async () => {
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
     expect(await screen.findByText("上部承重构件")).toBeInTheDocument();
     expect(screen.getByText("引用 3 条")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "待处理 1" })).toBeInTheDocument();
@@ -157,7 +157,7 @@ describe("ComponentBindingWorkspace", () => {
         maintenance_package_version: "1.0.0",
       },
     });
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
 
     const button = await screen.findByRole("button", { name: "绑定评定树" });
     // 评定树版本列表是独立于构件行的另一个请求（故意不阻塞首屏），按钮出现时
@@ -172,7 +172,8 @@ describe("ComponentBindingWorkspace", () => {
         "http://127.0.0.1:18080",
         "i1",
         "tree-1",
-        "rev-1"
+        "rev-1",
+        "lock-1"
       )
     );
     expect(await screen.findByText("评定树已绑定。")).toBeInTheDocument();
@@ -183,7 +184,7 @@ describe("ComponentBindingWorkspace", () => {
   // 混在"已处理"里看不见。
   it("filters missing rows on their own", async () => {
     vi.mocked(fetchComponentBinding).mockResolvedValue(overview("missing"));
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
 
     // 默认只看待处理，已标记缺失的行不在其中。
     expect(await screen.findByText("全部构件已处理完毕。")).toBeInTheDocument();
@@ -200,7 +201,7 @@ describe("ComponentBindingWorkspace", () => {
   // 已处理的行占绝大多数，默认收起才能让待处理的凸显出来；要看时再展开。
   it("hides a row once it is bound and reveals it on demand", async () => {
     vi.mocked(bindComponent).mockResolvedValue(overview("bound"));
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
 
     await userEvent.selectOptions(
       await screen.findByLabelText("为 1-1#梁 选择实际构件"), "c1");
@@ -209,7 +210,7 @@ describe("ComponentBindingWorkspace", () => {
       part_name: "上部承重构件",
       component_number: "1-1#梁",
       bridge_component_id: "c1",
-    }, "rev-1"));
+    }, "rev-1", "lock-1"));
 
     // 绑定后该行从默认视图消失，只剩"全部已处理"提示。
     expect(await screen.findByText("全部构件已处理完毕。")).toBeInTheDocument();
@@ -222,7 +223,7 @@ describe("ComponentBindingWorkspace", () => {
   it("marks a row missing and enables entering review when all resolved", async () => {
     vi.mocked(markComponentMissing).mockResolvedValue(overview("missing"));
     const onEnterReview = vi.fn();
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" onEnterReview={onEnterReview} />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" onEnterReview={onEnterReview} />);
 
     await userEvent.click(await screen.findByLabelText("标记缺失 1-1#梁"));
 
@@ -241,7 +242,7 @@ describe("ComponentBindingWorkspace", () => {
     render(
       <ComponentBindingWorkspace
         importId="i1"
-        bridgeId="bridge-1"
+        bridgeId="bridge-1" lockToken="lock-1"
         onDraftInvalidated={onDraftInvalidated}
       />,
     );
@@ -258,7 +259,7 @@ describe("ComponentBindingWorkspace", () => {
   // 首屏只等概览。此前并排拉一份完整台账（约 3.4 MB），两个都回来才渲染。
   // 评定树版本列表是另一个非阻塞请求，所以不能笼统断言"只发一次请求"。
   it("loads only the overview on first paint", async () => {
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
     expect(await screen.findByText("上部承重构件")).toBeInTheDocument();
 
     expect(fetchComponentBinding).toHaveBeenCalledTimes(1);
@@ -267,7 +268,7 @@ describe("ComponentBindingWorkspace", () => {
 
   // 概览自带候选的展示信息，搜索之前就该看得见。
   it("shows overview candidates before any search", async () => {
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
     const select = await screen.findByLabelText("为 1-1#梁 选择实际构件");
 
     expect(within(select).getByRole("option", { name: /候选 · 1-1#梁/ })).toBeInTheDocument();
@@ -284,7 +285,7 @@ describe("ComponentBindingWorkspace", () => {
         sort_order: 2, remarks: null, is_referenced: false, mappings: [], position: 1,
       }],
     });
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
     await userEvent.type(await screen.findByLabelText("搜索实际构件 1-1#梁"), "9-9");
 
     await waitFor(() => expect(searchInventoryEntries).toHaveBeenCalled());
@@ -307,7 +308,7 @@ describe("ComponentBindingWorkspace", () => {
   // 搜索失败不该把概览带来的候选也一起清掉。
   it("keeps candidates when the search request fails", async () => {
     vi.mocked(searchInventoryEntries).mockRejectedValue(new Error("boom"));
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
     await userEvent.type(await screen.findByLabelText("搜索实际构件 1-1#梁"), "9-9");
 
     await waitFor(() => expect(searchInventoryEntries).toHaveBeenCalled());
@@ -319,7 +320,7 @@ describe("ComponentBindingWorkspace", () => {
   // 校验用的台账对不上了。
   it("sends the overview revision id with every write", async () => {
     vi.mocked(markComponentMissing).mockResolvedValue(overview("missing"));
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
 
     await userEvent.click(await screen.findByLabelText("标记缺失 1-1#梁"));
 
@@ -338,7 +339,7 @@ describe("ComponentBindingWorkspace", () => {
       .mockResolvedValueOnce(overview("unmatched"))
       .mockResolvedValueOnce(refreshed);
 
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
     await userEvent.click(await screen.findByLabelText("标记缺失 1-1#梁"));
 
     // 概览被重新拉取，并且明确告诉用户发生了什么。
@@ -364,7 +365,7 @@ describe("ComponentBindingWorkspace", () => {
       resolvePreview = resolve;
     }));
 
-    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" />);
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
     await userEvent.click(await screen.findByLabelText("选择拆分 1-1#梁~1-25#梁"));
     await userEvent.click(screen.getByRole("button", { name: /拆分构件/ }));
 

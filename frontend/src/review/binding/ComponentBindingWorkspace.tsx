@@ -226,6 +226,7 @@ function RowAction({ row, revisionId, busy, onBind, onMarkMissing, onClear }: Ro
 export function ComponentBindingWorkspace({
   importId,
   bridgeId,
+  lockToken,
   onEnterReview,
   onOverviewChange,
   onRatingTreeChange,
@@ -233,6 +234,15 @@ export function ComponentBindingWorkspace({
 }: {
   importId: string;
   bridgeId: string;
+  /**
+   * 编辑锁令牌，未持有编辑权时为 null。后端六个绑定写接口现在都要求持锁——
+   * 它们改的是 import_records.parsed_result_json，与校对草稿保存写的是同一份数据，
+   * 不持锁写进去的修改会被持锁者的整份保存覆盖掉。
+   *
+   * 概览是只读的，没有编辑权照样能看，所以这里允许为 null；写操作由
+   * requireLockToken() 在下手前挡住，与校对页保存草稿同一处置。
+   */
+  lockToken: string | null;
   onEnterReview?: () => void;
   // 每次拿到新的概览（首次加载与每次绑定操作后）都上报，供校对页侧栏同步待处理计数。
   onOverviewChange?: (overview: ComponentBindingOverview) => void;
@@ -453,6 +463,12 @@ export function ComponentBindingWorkspace({
     }
   }
 
+  // 写操作前取令牌；没有编辑权时抛出，由各自的 catch 转成行内提示。
+  function requireLockToken(): string {
+    if (lockToken === null) throw new Error("当前页面没有编辑权，无法修改绑定。");
+    return lockToken;
+  }
+
   async function run(action: () => Promise<ComponentBindingOverview>) {
     setBusy(true);
     try {
@@ -490,7 +506,8 @@ export function ComponentBindingWorkspace({
         backendBaseUrl,
         importId,
         selectedRatingTreeId,
-        requireRevisionId(overview!)
+        requireRevisionId(overview!),
+        requireLockToken()
       );
       setOverview(next);
       onOverviewChange?.(next);
@@ -700,7 +717,7 @@ export function ComponentBindingWorkspace({
                       part_name: group.part_name,
                       component_number: row.component_number,
                       bridge_component_id: id,
-                    }, requireRevisionId(overview))
+                    }, requireRevisionId(overview), requireLockToken())
                   )
                 }
                 onMarkMissing={() =>
@@ -708,7 +725,7 @@ export function ComponentBindingWorkspace({
                     markComponentMissing(backendBaseUrl, importId, {
                       part_name: group.part_name,
                       component_number: row.component_number,
-                    }, requireRevisionId(overview))
+                    }, requireRevisionId(overview), requireLockToken())
                   )
                 }
                 onClear={() =>
@@ -716,7 +733,7 @@ export function ComponentBindingWorkspace({
                     clearComponentBinding(backendBaseUrl, importId, {
                       part_name: group.part_name,
                       component_number: row.component_number,
-                    }, requireRevisionId(overview))
+                    }, requireRevisionId(overview), requireLockToken())
                   )
                 }
               />
@@ -747,7 +764,7 @@ export function ComponentBindingWorkspace({
             setBusy(true);
             try {
               const next = await bindComponentsBatch(
-                backendBaseUrl, importId, targets, requireRevisionId(overview));
+                backendBaseUrl, importId, targets, requireRevisionId(overview), requireLockToken());
               setOverview(next);
               setError(null);
               onOverviewChange?.(next);
@@ -776,7 +793,8 @@ export function ComponentBindingWorkspace({
             setSplitError(null);
             try {
               const applied = await applyComponentRangeSplit(
-                backendBaseUrl, importId, targets, impactToken, requireRevisionId(overview)
+                backendBaseUrl, importId, targets, impactToken, requireRevisionId(overview),
+                requireLockToken()
               );
               setOverview(applied.overview);
               onOverviewChange?.(applied.overview);

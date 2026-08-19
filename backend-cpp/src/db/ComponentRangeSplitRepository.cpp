@@ -1,5 +1,7 @@
 #include "bridge_report/db/ComponentRangeSplitRepository.hpp"
 
+#include "bridge_report/auth/PasswordHash.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <memory>
@@ -249,7 +251,8 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::apply(
     const std::vector<review::ComponentRangeSplitTarget>& targets,
     const std::string& expected_impact_token,
     const std::string& user_id,
-    const std::string& expected_revision_id) {
+    const std::string& expected_revision_id,
+    const std::optional<EditLockCredentials>& edit_lock) {
     const auto total_start = Clock::now();
     long long load_import_ms = 0;
     long long load_inventory_ms = 0;
@@ -273,6 +276,20 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::apply(
         if (rows.empty()) { tx->rollback(); return {ComponentRangeSplitStatus::NotFound}; }
         if (rows[0]["import_status"].as<std::string>() != "待校对") {
             tx->rollback(); return {ComponentRangeSplitStatus::Conflict};
+        }
+        // 与绑定写接口同一套：路由外层拦一道，这里在写事务内复查。
+        if (edit_lock.has_value()) {
+            const auto active = tx->execSqlSync(
+                "select exists(select 1 from import_record_edit_locks "
+                "where import_record_id=$1::uuid and user_id=$2::uuid "
+                "and user_session_id=$3::uuid and lock_token_hash=$4 "
+                "and expires_at>now()) as active",
+                import_id, edit_lock->user_id, edit_lock->session_id,
+                auth::sha256_hex(edit_lock->lock_token));
+            if (active.empty() || !active[0]["active"].as<bool>()) {
+                tx->rollback();
+                return {ComponentRangeSplitStatus::EditLockInvalid};
+            }
         }
         Json::Value parsed;
         if (!parse_json(rows[0]["parsed"].as<std::string>(), parsed)) {

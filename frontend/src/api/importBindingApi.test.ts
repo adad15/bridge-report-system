@@ -53,11 +53,11 @@ describe("importBindingApi", () => {
       part_name: "上部承重构件",
       component_number: "1-1#梁",
       bridge_component_id: "c1",
-    }, "rev-1");
+    }, "rev-1", "lock-1");
     await markComponentMissing(
-      "http://backend", "i1", { part_name: "支座", component_number: "2-1#支座" }, "rev-1");
+      "http://backend", "i1", { part_name: "支座", component_number: "2-1#支座" }, "rev-1", "lock-1");
     await clearComponentBinding(
-      "http://backend", "i1", { part_name: "上部承重构件", component_number: "1-1#梁" }, "rev-1");
+      "http://backend", "i1", { part_name: "上部承重构件", component_number: "1-1#梁" }, "rev-1", "lock-1");
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "http://backend/api/import-records/i1/component-binding/bind",
@@ -97,7 +97,7 @@ describe("importBindingApi", () => {
     const targets = [{ part_name: "上部承重构件", component_number: "1-1#梁~1-25#梁" }];
 
     await previewComponentRangeSplit("http://backend", "i1", targets, "rev-1");
-    await applyComponentRangeSplit("http://backend", "i1", targets, "sha256:preview", "rev-1");
+    await applyComponentRangeSplit("http://backend", "i1", targets, "sha256:preview", "rev-1", "lock-1");
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "http://backend/api/import-records/i1/component-binding/split-preview",

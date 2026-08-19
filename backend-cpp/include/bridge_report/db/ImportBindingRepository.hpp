@@ -7,6 +7,7 @@
 #include <drogon/orm/DbClient.h>
 
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
+#include "bridge_report/db/EditLockRepository.hpp"
 
 namespace bridge_report::db {
 
@@ -70,6 +71,7 @@ struct BindingOverview {
 
 enum class BindingStatus {
     Ok,
+    EditLockInvalid,  // 编辑锁在写事务内已失效（过期或被管理员强制收回）
     NotFound,     // 导入记录不存在
     Conflict,     // 非"待校对"相 / 台账未确认 / 所选构件类别与部件名称不符
     Invalid,      // 入参无效
@@ -117,20 +119,29 @@ public:
     // 事务内解析出的版本与它不符即返回 component_inventory_revision_changed，
     // 不静默改用新版本——否则用户看到的候选来自旧版本，校验却按新版本进行。
     // 年度尚未锁定版本时，校验通过后才把它锁下来。
+    //
+    // edit_lock 是独占编辑边界的后端那一半：这些接口写的是同一份 parsed_result_json，
+    // 不校验锁的话，另一个已登录用户可以在别人持锁时改它，而持锁者的整份草稿保存
+    // 又会把这些修改覆盖掉。路由层先拦一道拿到具体的锁失效原因，仓储在事务内复查——
+    // 事务外那次检查到真正写入之间，锁可能过期或被管理员强制收回。
     [[nodiscard]] BindingOutcome bind(
         const std::string& import_id, const std::string& part_name,
         const std::string& component_number, const std::string& bridge_component_id,
-        const std::string& expected_revision_id);
+        const std::string& expected_revision_id,
+        const std::optional<EditLockCredentials>& edit_lock = std::nullopt);
     // 批量绑定（供绑定界面的"批量替换"）：单次读改写，任一目标非法则整批不写。
     [[nodiscard]] BindingOutcome bind_batch(
         const std::string& import_id, const std::vector<BindingTarget>& targets,
-        const std::string& expected_revision_id);
+        const std::string& expected_revision_id,
+        const std::optional<EditLockCredentials>& edit_lock = std::nullopt);
     [[nodiscard]] BindingOutcome mark_missing(
         const std::string& import_id, const std::string& part_name,
-        const std::string& component_number, const std::string& expected_revision_id);
+        const std::string& component_number, const std::string& expected_revision_id,
+        const std::optional<EditLockCredentials>& edit_lock = std::nullopt);
     [[nodiscard]] BindingOutcome clear(
         const std::string& import_id, const std::string& part_name,
-        const std::string& component_number, const std::string& expected_revision_id);
+        const std::string& component_number, const std::string& expected_revision_id,
+        const std::optional<EditLockCredentials>& edit_lock = std::nullopt);
     // 为本次导入所属的待校对年度绑定评定树。目标 H21 包不同时从已确认
     // 台账派生新修订，旧规范组合和旧台账不原地覆盖。
     // expected_revision_id 校验的是**源**版本：迁移的起点必须是用户看到的那份台账。
@@ -138,7 +149,8 @@ public:
         const std::string& import_id,
         const std::string& rating_tree_version_id,
         const std::string& actor_user_id,
-        const std::string& expected_revision_id);
+        const std::string& expected_revision_id,
+        const std::optional<EditLockCredentials>& edit_lock = std::nullopt);
 
 private:
     drogon::orm::DbClientPtr db_client_;
