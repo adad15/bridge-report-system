@@ -1,7 +1,7 @@
 # 已确认台账版本解析的一致性
 
 - 日期：2026-08-18（当日三轮评审后修订）
-- 状态：已按第三轮复审修订；④ 已实施（`434b21e`），其余待实施
+- 状态：已按第三轮复审修订；④ 与 ⑤⑥ 已实施（`434b21e`、`bd0a9d3`），①②③ 待实施
 - 相关模块：校对保存、入库前检查、年度确认、评定树自动匹配、Word 导入、系统评定
 - 前序：`2026-08-17-component-binding-on-demand-lookup-design.md`（缺陷一修的是同源问题的另外两处）
 - 评审记录：`…-design-review.txt`、`…-design-rereview.txt`、`…-design-third-review.txt`
@@ -207,12 +207,15 @@ override 不得静默覆盖年度锁定版本，也不得静默忽略一个冲�
 
 | 情形 | 处置 |
 | --- | --- |
-| 年度锁定到非法版本（别的桥 / 草稿 / 已不存在） | 失败，返回版本或年度上下文错误 |
 | 年度未锁定，桥上有已确认版本 | 锁定该版本，两次匹配共用同一个 `InventoryRevision` |
-| 年度未锁定，桥上**没有**已确认版本 | **不锁年度，两次匹配共享 `nullopt`，保留现有降级**：清空候选、置空版本 id、加 `defect_component_match_required` 警告，解析结果照常进待校对 |
+| 解析不出可用的已确认版本（桥上没有，**或年度锁着草稿**） | **不锁年度，两次匹配共享 `nullopt`，保留现有降级**：清空候选、置空版本 id、加 `defect_component_match_required` 警告，解析结果照常进待校对 |
+| `lock_pending_year_revision()` 返回 false（并发抢锁） | 唯一的硬失败：回滚并返回 `component_inventory_revision_changed` |
 
-第三行是 `WordImportRepository.cpp:68-79` 今天的行为。把它改成"导入失败"是行为回归——
-现在允许先导入、之后再人工补台账。
+**实施时订正了本文档原先的三分支表**：原表把"年度锁定到非法版本"单列为失败。但
+`validate_inspection_year_inventory_revision()`（`011:366-371`）只在年度状态为
+已确认/已被修订/已归档时才要求版本已确认——**待校对年度可以合法地锁在草稿上**。
+把这种情况判成失败会让这类年度的导入直接挂掉，而今天它是降级的。因此两种"解析不出"
+合并到同一分支，只有并发抢锁才失败。
 
 ## 阻塞项二：Word 版本冲突会被当成解析失败删掉
 
@@ -241,6 +244,16 @@ override 不得静默覆盖年度锁定版本，也不得静默忽略一个冲�
 6. 确认之后 `mark_parsing()` 能重新进入解析。
 
 真正的契约解析失败仍走原有清理流程——这条不能一起改掉。
+
+### 实施笔记：仓库对象不能留在外层作用域
+
+`ComponentInventoryRepository` 的构造函数**按值收下 `DbClientPtr` 并一直持有**。在
+`persist_parse_result()` 里留一个具名变量（`ComponentInventoryRepository inventories(tx);`）
+会让事务的 shared_ptr 活过 `tx.reset()`，提交回调永远不来，30 秒后以 `db_commit_failed`
+超时——而且报出来的是"提交失败"，看不出真正原因。一律用临时量：
+`ComponentInventoryRepository(tx).resolve_confirmed_revision(...)`。
+
+①③ 改事务时会遇到同一个坑。
 
 ## 阻塞项三：确认事务的加锁顺序，不是缺锁
 
