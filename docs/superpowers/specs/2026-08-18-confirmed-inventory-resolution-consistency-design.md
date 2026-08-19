@@ -1,9 +1,8 @@
 # 已确认台账版本解析的一致性
 
 - 日期：2026-08-18（当日三轮评审后修订）
-- 状态：**六处全部已实施**（`434b21e` ④、`3b8c43b` ⑤⑥、`c2be8d1` ② 与评定服务版本
-  上下文、`7f89294` ③、`fc7d055` ①）。批次四的清理（删除 `get_latest_revision()` 与
-  `get_latest_confirmed_revision()`、`latest_*` 改名）尚未做
+- 状态：**全部实施完毕**（`434b21e` ④、`3b8c43b` ⑤⑥、`c2be8d1` ② 与评定服务版本
+  上下文、`7f89294` ③、`fc7d055` ① 批次三、`24199f5` 批次四清理）
 - 相关模块：校对保存、入库前检查、年度确认、评定树自动匹配、Word 导入、系统评定
 - 前序：`2026-08-17-component-binding-on-demand-lookup-design.md`（缺陷一修的是同源问题的另外两处）
 - 评审记录：`…-design-review.txt`、`…-design-rereview.txt`、`…-design-third-review.txt`
@@ -446,9 +445,15 @@ struct SaveReviewDraftOutcome {
 `save_review_draft()` 的低层 bool 重载保留为测试夹具播种入口——它可以在事务客户端上
 调用，而结构化版本必须自己 `newTransaction()`。
 
-**批次四：其余替换与清理**
-④ 与确认链路剩余部分的替换；删除 `get_latest_revision()` 与 `get_latest_confirmed_revision()`；
-改 `latest_*` 命名与两条提示；补齐历史锁定版本与并发测试。
+**批次四：其余替换与清理 —— 已实施（`24199f5`）**
+两个解析 API 删除时确认为零调用者；`find_latest_revision_id()` 的草稿优先排序保持不变，
+并在头文件里写明"要判断是否已确认的调用方不得用它"。`latest_revision` 形参与 preflight
+的"桥梁最新构件台账"提示改为 `resolved_*` / "本检测年度使用的构件台账"，阻塞行为与错误码
+不变。补齐了版本解析规则本身的直接测试与 `lock_pending_year_revision()` 的抢锁测试——
+此前六处只有各自的集成测试，共用的规则一条直接测试都没有。
+
+仍留在代码里的 `get_latest_revision()` 字样都是过去时的历史注释（"此前走…（草稿优先），
+桥上一有草稿就…"），说明的是当时为什么错，保留。
 
 ## 测试
 
