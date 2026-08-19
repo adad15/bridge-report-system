@@ -1,9 +1,9 @@
 # 已确认台账版本解析的一致性
 
 - 日期：2026-08-18（当日三轮评审后修订）
-- 状态：已按第三轮复审修订。**②③④⑤⑥ 已实施**（`434b21e` ④、`3b8c43b` ⑤⑥、
-  `c2be8d1` ② 与评定服务版本上下文、`7f89294` ③）；**① 保存校对草稿待实施**
-  （需 `SaveReviewDraftOutcome` 与解析—校验—写入的事务一致性，见"阻塞项四"）
+- 状态：**六处全部已实施**（`434b21e` ④、`3b8c43b` ⑤⑥、`c2be8d1` ② 与评定服务版本
+  上下文、`7f89294` ③、`fc7d055` ①）。批次四的清理（删除 `get_latest_revision()` 与
+  `get_latest_confirmed_revision()`、`latest_*` 改名）尚未做
 - 相关模块：校对保存、入库前检查、年度确认、评定树自动匹配、Word 导入、系统评定
 - 前序：`2026-08-17-component-binding-on-demand-lookup-design.md`（缺陷一修的是同源问题的另外两处）
 - 评审记录：`…-design-review.txt`、`…-design-rereview.txt`、`…-design-third-review.txt`
@@ -427,9 +427,24 @@ struct SaveReviewDraftOutcome {
 先锁 import 与 year、稳定版本、两处匹配共用同一对象、锁定失败即回滚；并把版本冲突从
 "删除失败导入"路径里摘出来，改成可重试。
 
-**批次三：校对草稿事务（①）**
+**批次三：校对草稿事务（①）—— 已实施（`fc7d055`）**
 定义 `SaveReviewDraftOutcome`；把解析、校验、年度锁定、草稿 UPDATE 放进同一事务；
 路由按结构化错误映射 HTTP 与提示。
+
+实施时相对本文档的两点订正：
+
+- **补了一个错误码 `component_inventory_unavailable`（409）**。判定表第四行要求"年度锁定
+  版本自身非法"返回年度上下文错误、不要伪装成单病害错误，但没给码名。这一分支是真实
+  可达的：`validate_inspection_year_inventory_revision()`（`011:366-371`）允许待校对年度
+  合法地锁在草稿版本上，此时 `resolve_confirmed_revision()` 返回空。复用
+  `component_inventory_revision_changed`（"请刷新后重试"）会误导——刷新解决不了。
+  草稿不含构件绑定时不受影响，照常保存。
+- **年度版本锁定放在构件关联校验通过之后、评定树规范化之前**，而不是全部校验之后。
+  版本在关联校验通过时就已定下，锁在这里上，后续任何一步失败都随事务一起回滚；
+  放到最后则"保存或后续校验失败时锁定一并回滚"这条无从验证。
+
+`save_review_draft()` 的低层 bool 重载保留为测试夹具播种入口——它可以在事务客户端上
+调用，而结构化版本必须自己 `newTransaction()`。
 
 **批次四：其余替换与清理**
 ④ 与确认链路剩余部分的替换；删除 `get_latest_revision()` 与 `get_latest_confirmed_revision()`；
