@@ -148,6 +148,11 @@ protected:
 
     void TearDown() override {
         if (client_ == nullptr) return;
+        // import_source_files.import_record_id 是 on delete set null：先删导入记录的话，
+        // 来源文件行会变成孤儿永远留在测试库里。必须先删它。
+        client_->execSqlSync(
+            "delete from import_source_files sf using import_records ir "
+            "where sf.import_record_id = ir.id and ir.bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from import_records where bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from archived_files where bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from defect_observations where bridge_id = $1::uuid", bridge_id_);

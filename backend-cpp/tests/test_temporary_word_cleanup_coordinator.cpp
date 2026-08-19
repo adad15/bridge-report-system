@@ -31,6 +31,12 @@ protected:
 
     void TearDown() override {
         if (!client_) return;
+        // 必须先删来源文件行：import_source_files.import_record_id 是 on delete set null，
+        // 先删导入记录的话这些行会变成孤儿永远留在库里，日后到期又被别的测试的
+        // 全局计数认领，表现为毫不相干的测试偶发失败。
+        client_->execSqlSync(
+            "delete from import_source_files sf using import_records ir "
+            "where sf.import_record_id = ir.id and ir.bridge_id = $1::uuid", bridge_id_);
         client_->execSqlSync("delete from import_records where bridge_id=$1::uuid", bridge_id_);
         client_->execSqlSync("delete from inspection_years where id=$1::uuid", year_id_);
         client_->execSqlSync("delete from bridges where id=$1::uuid", bridge_id_);
@@ -72,8 +78,10 @@ TEST_F(TemporaryWordCleanupCoordinatorTest, DeletesPendingAndExpiredButRetainsUn
 
     const auto summary = coordinator.process_pending();
 
-    EXPECT_EQ(summary.claimed, 2);
-    EXPECT_EQ(summary.completed, 2);
+    // 认领是全局的，不能断言绝对值——库里任何一行别的可清理数据都会把它顶掉。
+    // 真正的判据是下面那三行各自的终态。
+    EXPECT_GE(summary.claimed, 2);
+    EXPECT_EQ(summary.completed, summary.claimed) << "认领了就必须处理完";
     EXPECT_EQ(client_->execSqlSync("select status from import_source_files where id=$1::uuid", pending)[0]["status"].as<std::string>(), "已删除");
     EXPECT_EQ(client_->execSqlSync("select status from import_source_files where id=$1::uuid", expired)[0]["status"].as<std::string>(), "已过期");
     EXPECT_EQ(client_->execSqlSync("select status from import_source_files where id=$1::uuid", retained)[0]["status"].as<std::string>(), "解析失败");
@@ -89,7 +97,7 @@ TEST_F(TemporaryWordCleanupCoordinatorTest, RecoversStaleParsingAndTreatsMissing
 
     const auto summary = coordinator.process_pending();
 
-    EXPECT_EQ(summary.recovered_parses, 1);
+    EXPECT_GE(summary.recovered_parses, 1);  // 同样是全局计数，见上。
     EXPECT_EQ(client_->execSqlSync("select status from import_source_files where id=$1::uuid", stale)[0]["status"].as<std::string>(), "解析失败");
     EXPECT_EQ(client_->execSqlSync("select status from import_source_files where id=$1::uuid", missing)[0]["status"].as<std::string>(), "已删除");
 }
