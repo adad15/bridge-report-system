@@ -39,8 +39,11 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
     if (bridge.empty()) return std::nullopt;
 
     if (lock_rows) {
-        client->execSqlSync("select id from inspection_years where bridge_id=$1::uuid for update", bridge_id);
+        // 全系统统一的行锁顺序：import_records -> inspection_years。写路径（保存校对
+        // 草稿、年度确认、构件绑定、Word 导入）全部按这个顺序加锁，删除路径反着来的话
+        // 两边就能凑成循环等待，PostgreSQL 中止其中一个，表现为偶发的保存或删除失败。
         client->execSqlSync("select id from import_records where bridge_id=$1::uuid for update", bridge_id);
+        client->execSqlSync("select id from inspection_years where bridge_id=$1::uuid for update", bridge_id);
         client->execSqlSync("select id from bridge_components where bridge_id=$1::uuid for update", bridge_id);
         client->execSqlSync(
             "select id from bridge_component_generation_batches where bridge_id=$1::uuid for update",

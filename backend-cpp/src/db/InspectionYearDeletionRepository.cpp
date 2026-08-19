@@ -28,13 +28,12 @@ std::optional<deletion::InspectionYearDeletionPlan> build_plan(
     const std::string& selected_inspection_year_id,
     bool lock_rows
 ) {
+    // 先不加锁读出范围（桥梁 + 年份）。入口只有一个年度 id，而全系统统一的行锁顺序是
+    // import_records -> inspection_years：不先知道范围就没法先锁 import_records。
+    // 这次读只用来定范围，下面所有权威数据都在持锁的语句里重取。
     const auto selected = client->execSqlSync(
-        lock_rows
-            ? "select iy.bridge_id::text as bridge_id, iy.inspection_year, b.system_number, b.bridge_name "
-              "from inspection_years iy join bridges b on b.id=iy.bridge_id "
-              "where iy.id=$1::uuid for update of iy"
-            : "select iy.bridge_id::text as bridge_id, iy.inspection_year, b.system_number, b.bridge_name "
-              "from inspection_years iy join bridges b on b.id=iy.bridge_id where iy.id=$1::uuid",
+        "select iy.bridge_id::text as bridge_id, iy.inspection_year, b.system_number, b.bridge_name "
+        "from inspection_years iy join bridges b on b.id=iy.bridge_id where iy.id=$1::uuid",
         selected_inspection_year_id
     );
     if (selected.empty()) return std::nullopt;
@@ -44,6 +43,17 @@ std::optional<deletion::InspectionYearDeletionPlan> build_plan(
     plan.inspection_year = selected[0]["inspection_year"].as<int>();
     plan.bridge_system_number = selected[0]["system_number"].as<std::string>();
     plan.bridge_name = selected[0]["bridge_name"].as<std::string>();
+
+    // 统一锁顺序的关键一步：inspection_years 之前先把本年度下的导入记录锁掉。
+    // 写路径全部按 import_records -> inspection_years 加锁，这里反着来就能与它们
+    // 凑成循环等待。下面那句取导入记录的语句会再锁一次，已持有的行锁是无操作。
+    if (lock_rows) {
+        client->execSqlSync(
+            "select ir.id from import_records ir "
+            "join inspection_years iy on iy.id=ir.inspection_year_id "
+            "where iy.bridge_id=$1::uuid and iy.inspection_year=$2 order by ir.id for update of ir",
+            plan.bridge_id, plan.inspection_year);
+    }
 
     const auto versions = client->execSqlSync(
         lock_rows
