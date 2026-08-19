@@ -178,8 +178,8 @@ EditableTarget ensure_editable_target(
     }
 
     // 按 baseline 找草稿是不够的：桥上已有基于 R2 的草稿时，拿 R1 进来会找不到匹配，
-    // 于是又建一条以 R1 为 baseline 的草稿，一桥两条分支，而 get_latest_revision()
-    // 只挑得中其中一条。这里改成先看"有没有草稿"，baseline 不符直接判 superseded。
+    // 于是又建一条以 R1 为 baseline 的草稿，一桥两条分支，而草稿优先的"最新版本"
+    // 排序只挑得中其中一条。这里改成先看"有没有草稿"，baseline 不符直接判 superseded。
     auto draft = tx->execSqlSync(
         "select id::text,baseline_revision_id::text from bridge_component_inventory_revisions "
         "where bridge_id=$1::uuid and status='草稿' limit 1 for update",
@@ -334,7 +334,7 @@ std::optional<inventory::InventoryRevision> ComponentInventoryRepository::get_re
 
 std::optional<std::string> ComponentInventoryRepository::find_latest_revision_id(
     const std::string& bridge_id) const {
-    // 排序与 get_latest_revision() 一致：草稿优先于已确认，与 revision_number 无关。
+    // 草稿优先于已确认；同类之间按 revision_number 倒序。管理页依赖这条排序看见草稿。
     const auto rows = db_client_->execSqlSync(
         "select id::text from bridge_component_inventory_revisions where bridge_id=$1::uuid "
         "order by (status='草稿') desc,revision_number desc limit 1",
@@ -765,29 +765,6 @@ ComponentInventoryRepository::load_bindable_replace_entries(
                            row["component_number"].as<std::string>(), true});
     }
     return entries;
-}
-
-std::optional<inventory::InventoryRevision> ComponentInventoryRepository::get_latest_revision(
-    const std::string& bridge_id) const {
-    const auto rows = db_client_->execSqlSync(
-        "select id::text from bridge_component_inventory_revisions where bridge_id=$1::uuid "
-        "order by (status='草稿') desc,revision_number desc limit 1",
-        bridge_id);
-    if (rows.empty()) return std::nullopt;
-    return get_revision(rows[0]["id"].as<std::string>());
-}
-
-std::optional<inventory::InventoryRevision>
-ComponentInventoryRepository::get_latest_confirmed_revision(
-    const std::string& bridge_id) const {
-    // 与 get_latest_revision() 的差别就是这里：不按"草稿优先"排序，直接把草稿排除在外。
-    const auto rows = db_client_->execSqlSync(
-        "select id::text from bridge_component_inventory_revisions "
-        "where bridge_id=$1::uuid and status in ('已确认','confirmed') "
-        "order by revision_number desc limit 1",
-        bridge_id);
-    if (rows.empty()) return std::nullopt;
-    return get_revision(rows[0]["id"].as<std::string>());
 }
 
 std::optional<ComponentInventoryRepository::ConfirmedRevisionRef>

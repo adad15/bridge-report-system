@@ -105,7 +105,7 @@ struct ImportRecordDetail {
     std::optional<std::string> rating_tree_content_checksum;
     // 该年度锁定的构件台账版本。仅作服务端内部上下文，**不进对外 JSON**：
     // 校对保存、入库前检查与评定树自动匹配都要拿它当"年度锁定优先"那条解析规则的入参，
-    // 否则只能各自去查一次，或者退回草稿优先的 get_latest_revision()。
+    // 否则只能各自去查一次，或者退回草稿优先的"桥梁最新版本"，那条一见草稿就取草稿。
     std::optional<std::string> inspection_year_inventory_revision_id;
 
     // 重开校对审计（迁移 004）：reopened_at 非空即处于重开态；

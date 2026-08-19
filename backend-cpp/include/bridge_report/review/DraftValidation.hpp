@@ -73,7 +73,7 @@ enum class DraftInventoryRevisionConsistency {
 /** 校验病害中的实际构件 ID、规范类别和内部结构部位均来自本检测年度使用的构件台账。 */
 [[nodiscard]] DraftValidationResult validate_defect_component_associations(
     const Json::Value& body,
-    const std::optional<inventory::InventoryRevision>& latest_revision
+    const std::optional<inventory::InventoryRevision>& resolved_revision
 );
 
 /**
@@ -86,7 +86,7 @@ enum class DraftInventoryRevisionConsistency {
     const std::string& rating_tree_version_id,
     const std::string& technical_standard_package_id,
     const rating_tree::EffectiveRatingTree& tree,
-    const std::optional<inventory::InventoryRevision>& latest_revision
+    const std::optional<inventory::InventoryRevision>& resolved_revision
 );
 
 /** 正式确认前校验每条已处理病害的树节点、构件适用范围和合法标度。 */
@@ -95,7 +95,7 @@ enum class DraftInventoryRevisionConsistency {
     const std::string& rating_tree_version_id,
     const std::string& technical_standard_package_id,
     const rating_tree::EffectiveRatingTree& tree,
-    const std::optional<inventory::InventoryRevision>& latest_revision
+    const std::optional<inventory::InventoryRevision>& resolved_revision
 );
 
 /** 已存在病害的 Word 来源和范围拆分来源由服务端锁定，任何重开范围都不得改写。 */

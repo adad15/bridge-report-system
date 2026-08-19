@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 
@@ -1113,4 +1114,198 @@ TEST(ComponentInventorySummaryDumpTest, DumpsSummaryForParityScript) {
     file << Json::writeString(builder, *summary);
     file.close();
     client->closeAll();
+}
+
+// ---------------------------------------------------------------------------
+// 版本解析规则（六处共用）：检测年度锁定的版本优先，年度未锁定时取该桥最新的
+// 已确认版本。绑定写病害、保存校对草稿、入库前检查、年度确认、评定树自动匹配和
+// Word 导入全部走这一条；各自实现一份的话规则迟早漂移。
+// ---------------------------------------------------------------------------
+class ConfirmedRevisionResolutionTest : public ComponentInventoryRepositoryTest {
+protected:
+    // 直接建版本行，不走生成/确认流程：这里要验的是解析规则本身，
+    // 夹具越薄越不容易把别的业务规则牵扯进来。
+    std::string add_revision(int revision_number, bool confirmed,
+                             const std::string& owner_bridge_id = std::string()) const {
+        const auto& target_bridge = owner_bridge_id.empty() ? bridge_id : owner_bridge_id;
+        const auto id = client->execSqlSync(
+            "insert into bridge_component_inventory_revisions"
+            "(bridge_id,revision_number,created_by_user_id) values($1::uuid,$2,$3::uuid) "
+            "returning id::text as id",
+            target_bridge, revision_number, user_id)[0]["id"].as<std::string>();
+        if (confirmed) {
+            client->execSqlSync(
+                "update bridge_component_inventory_revisions set status='已确认',"
+                "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
+                id, user_id);
+        }
+        return id;
+    }
+
+    std::string add_pending_year(int inspection_year = 2026) const {
+        return client->execSqlSync(
+            "insert into inspection_years(bridge_id,inspection_year,status,version_number,is_current) "
+            "values($1::uuid,$2,'待校对',1,false) returning id::text as id",
+            bridge_id, inspection_year)[0]["id"].as<std::string>();
+    }
+
+    std::optional<std::string> year_revision(const std::string& year_id) const {
+        const auto rows = client->execSqlSync(
+            "select component_inventory_revision_id::text as id from inspection_years "
+            "where id=$1::uuid",
+            year_id);
+        if (rows.empty() || rows[0]["id"].isNull()) return std::nullopt;
+        return rows[0]["id"].as<std::string>();
+    }
+};
+
+TEST_F(ConfirmedRevisionResolutionTest, PrefersTheYearLockedRevisionOverNewerOnes) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    const auto r1 = add_revision(1, /*confirmed=*/true);
+    add_revision(2, /*confirmed=*/true);
+    add_revision(3, /*confirmed=*/false);
+    db::ComponentInventoryRepository repository(client);
+
+    // 年度锁着 R1，桥上另有更新的已确认 R2 与草稿 R3 -> 必须仍用 R1。
+    // 历史年度的病害描述的就是 R1 那份台账，跟着最新版本走等于篡改历史。
+    const auto ref = repository.resolve_confirmed_revision_ref(bridge_id, r1);
+    ASSERT_TRUE(ref.has_value());
+    EXPECT_EQ(ref->id, r1);
+    EXPECT_EQ(ref->bridge_id, bridge_id);
+
+    // 完整装配那条必须给出同一个版本：两者共用同一套规则。
+    const auto full = repository.resolve_confirmed_revision(bridge_id, r1);
+    ASSERT_TRUE(full.has_value());
+    EXPECT_EQ(full->id, r1);
+}
+
+TEST_F(ConfirmedRevisionResolutionTest, FallsBackToTheLatestConfirmedWhenTheYearIsUnlocked) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    add_revision(1, /*confirmed=*/true);
+    const auto r2 = add_revision(2, /*confirmed=*/true);
+    add_revision(3, /*confirmed=*/false);
+    db::ComponentInventoryRepository repository(client);
+
+    // 年度未锁定：取编号最大的**已确认**版本 R2，而不是编号更大的草稿 R3。
+    const auto ref = repository.resolve_confirmed_revision_ref(bridge_id, std::nullopt);
+    ASSERT_TRUE(ref.has_value());
+    EXPECT_EQ(ref->id, r2);
+}
+
+TEST_F(ConfirmedRevisionResolutionTest, RejectsALockedRevisionThatIsStillADraft) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    add_revision(1, /*confirmed=*/true);
+    const auto draft = add_revision(2, /*confirmed=*/false);
+    db::ComponentInventoryRepository repository(client);
+
+    // 待校对年度可以合法地锁在草稿上（011 的触发器只对已确认/已被修订/已归档年度
+    // 要求已确认版本）。解析器不能因此退回"最新已确认"——那样年度锁定就形同虚设。
+    EXPECT_FALSE(repository.resolve_confirmed_revision_ref(bridge_id, draft).has_value());
+    EXPECT_FALSE(repository.resolve_confirmed_revision(bridge_id, draft).has_value());
+}
+
+TEST_F(ConfirmedRevisionResolutionTest, RejectsALockedRevisionFromAnotherBridge) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    add_revision(1, /*confirmed=*/true);
+    const auto other_bridge = client->execSqlSync(
+        "insert into bridges(bridge_name) values('构件台账解析测试的另一座桥') "
+        "returning id::text as id")[0]["id"].as<std::string>();
+    const auto foreign_revision = add_revision(1, /*confirmed=*/true, other_bridge);
+    db::ComponentInventoryRepository repository(client);
+
+    EXPECT_FALSE(
+        repository.resolve_confirmed_revision_ref(bridge_id, foreign_revision).has_value());
+
+    client->execSqlSync("delete from bridges where id=$1::uuid", other_bridge);
+}
+
+TEST_F(ConfirmedRevisionResolutionTest, RejectsALockedRevisionThatNoLongerExists) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    add_revision(1, /*confirmed=*/true);
+    db::ComponentInventoryRepository repository(client);
+
+    EXPECT_FALSE(repository
+                     .resolve_confirmed_revision_ref(
+                         bridge_id, std::string("00000000-0000-0000-0000-000000000000"))
+                     .has_value());
+}
+
+TEST_F(ConfirmedRevisionResolutionTest, ReturnsNothingWhenTheBridgeHasNoConfirmedRevision) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    add_revision(1, /*confirmed=*/false);
+    db::ComponentInventoryRepository repository(client);
+
+    // "桥上没有已确认版本"与"取到草稿"归进同一分支（都返回空）之后，入库前检查与
+    // 年度确认仍必须照旧阻塞——调用方判的是 has_value()，两者行为一致。
+    EXPECT_FALSE(repository.resolve_confirmed_revision_ref(bridge_id, std::nullopt).has_value());
+}
+
+// ---------------------------------------------------------------------------
+// 年度版本锁定：写操作专用。年度已锁定时只做一致性确认，绝不覆盖。
+// ---------------------------------------------------------------------------
+
+TEST_F(ConfirmedRevisionResolutionTest, LocksAPendingYearThatHasNoRevisionYet) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    const auto r1 = add_revision(1, /*confirmed=*/true);
+    const auto year_id = add_pending_year();
+    db::ComponentInventoryRepository repository(client);
+
+    EXPECT_TRUE(repository.lock_pending_year_revision(year_id, bridge_id, std::nullopt, r1));
+    EXPECT_EQ(year_revision(year_id).value_or(""), r1);
+}
+
+TEST_F(ConfirmedRevisionResolutionTest, ConfirmsWithoutOverwritingAnAlreadyLockedYear) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    const auto r1 = add_revision(1, /*confirmed=*/true);
+    const auto r2 = add_revision(2, /*confirmed=*/true);
+    const auto year_id = add_pending_year();
+    client->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
+        year_id, r1);
+    db::ComponentInventoryRepository repository(client);
+
+    // 调用方已读到锁定版本 R1：同版本放行，不同版本拒绝，两种情况都不写年度。
+    EXPECT_TRUE(repository.lock_pending_year_revision(year_id, bridge_id, r1, r1));
+    EXPECT_FALSE(repository.lock_pending_year_revision(year_id, bridge_id, r1, r2));
+    EXPECT_EQ(year_revision(year_id).value_or(""), r1);
+}
+
+TEST_F(ConfirmedRevisionResolutionTest, DetectsAConcurrentLockToADifferentRevision) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    const auto r1 = add_revision(1, /*confirmed=*/true);
+    const auto r2 = add_revision(2, /*confirmed=*/true);
+    const auto year_id = add_pending_year();
+    db::ComponentInventoryRepository repository(client);
+
+    // 并发场景：调用方读到年度未锁定（传 nullopt），但在它下手之前别人锁到了 R2。
+    // 带 "component_inventory_revision_id is null" 谓词的 UPDATE 命中 0 行，
+    // 回读发现锁的是别的版本 -> 必须返回 false，让调用方整体回滚。
+    client->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
+        year_id, r2);
+
+    EXPECT_FALSE(repository.lock_pending_year_revision(year_id, bridge_id, std::nullopt, r1));
+    EXPECT_EQ(year_revision(year_id).value_or(""), r2) << "抢锁失败不得覆盖别人锁定的版本";
+    // 抢到的正好是同一个版本时放行：这不是冲突，本次要写的就是它。
+    EXPECT_TRUE(repository.lock_pending_year_revision(year_id, bridge_id, std::nullopt, r2));
+}
+
+TEST_F(ConfirmedRevisionResolutionTest, SucceedsWithoutAYearWhenTheRecordIsUnmounted) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    const auto r1 = add_revision(1, /*confirmed=*/true);
+    db::ComponentInventoryRepository repository(client);
+
+    // 导入记录没挂年度时无处可锁，不该因此失败。
+    EXPECT_TRUE(repository.lock_pending_year_revision(std::nullopt, bridge_id, std::nullopt, r1));
+}
+
+// 台账管理页依赖草稿优先的排序才能看见自己刚派生的草稿；解析器改造不得波及它。
+TEST_F(ConfirmedRevisionResolutionTest, ManagementLookupStillPrefersTheDraft) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    add_revision(1, /*confirmed=*/true);
+    add_revision(2, /*confirmed=*/true);
+    const auto draft = add_revision(3, /*confirmed=*/false);
+    db::ComponentInventoryRepository repository(client);
+
+    EXPECT_EQ(repository.find_latest_revision_id(bridge_id).value_or(""), draft);
 }

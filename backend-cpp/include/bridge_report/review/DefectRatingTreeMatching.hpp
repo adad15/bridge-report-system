@@ -68,7 +68,7 @@ struct DefectMatchScope {
     const std::string& rating_tree_version_id,
     const std::string& technical_standard_package_id,
     const rating_tree::EffectiveRatingTree& tree,
-    const std::optional<inventory::InventoryRevision>& latest_revision,
+    const std::optional<inventory::InventoryRevision>& resolved_revision,
     const DefectMatchScope& scope,
     bool apply);
 
@@ -77,7 +77,7 @@ struct DefectMatchScope {
 build_defect_match_input(
     const Json::Value& defect,
     const std::string& technical_standard_package_id,
-    const std::optional<inventory::InventoryRevision>& latest_revision,
+    const std::optional<inventory::InventoryRevision>& resolved_revision,
     std::string& reason_code,
     std::string& reason_message);
 

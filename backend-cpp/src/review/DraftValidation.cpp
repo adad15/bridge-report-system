@@ -196,7 +196,7 @@ DraftInventoryRevisionConsistency classify_draft_inventory_revision(
 
 DraftValidationResult validate_defect_component_associations(
     const Json::Value& body,
-    const std::optional<inventory::InventoryRevision>& latest_revision) {
+    const std::optional<inventory::InventoryRevision>& resolved_revision) {
     DraftValidationResult result;
     result.code = "defect_component_assignment_invalid";
     result.message = "病害关联的实际构件不属于本检测年度使用的构件台账，或规范映射已变化。";
@@ -221,12 +221,12 @@ DraftValidationResult validate_defect_component_associations(
             }
             continue;
         }
-        if (!latest_revision.has_value() || revision_id != latest_revision->id) {
+        if (!resolved_revision.has_value() || revision_id != resolved_revision->id) {
             result.issues.push_back({path, "关联所依据的构件台账版本与本检测年度使用的版本不一致。"});
             continue;
         }
         const inventory::InventoryEntry* matched_entry = nullptr;
-        for (const auto& entry : latest_revision->entries) {
+        for (const auto& entry : resolved_revision->entries) {
             if (entry.is_active && entry.bridge_component_id == component_id) {
                 matched_entry = &entry;
                 break;
@@ -268,10 +268,10 @@ struct DefectRatingTreeScope {
 std::optional<DefectRatingTreeScope> rating_tree_scope_for_defect(
     const Json::Value& defect,
     const std::string& technical_standard_package_id,
-    const std::optional<inventory::InventoryRevision>& latest_revision) {
-    if (!latest_revision.has_value()) return std::nullopt;
+    const std::optional<inventory::InventoryRevision>& resolved_revision) {
+    if (!resolved_revision.has_value()) return std::nullopt;
     const auto component_id = string_member_or_empty(defect, "bridge_component_id");
-    for (const auto& entry : latest_revision->entries) {
+    for (const auto& entry : resolved_revision->entries) {
         if (!entry.is_active || entry.bridge_component_id != component_id) continue;
         for (const auto& mapping : entry.mappings) {
             if (mapping.is_active &&
@@ -336,7 +336,7 @@ DraftValidationResult normalize_defect_rating_tree_associations(
     const std::string& rating_tree_version_id,
     const std::string& technical_standard_package_id,
     const rating_tree::EffectiveRatingTree& tree,
-    const std::optional<inventory::InventoryRevision>& latest_revision) {
+    const std::optional<inventory::InventoryRevision>& resolved_revision) {
     DraftValidationResult result;
     result.code = "defect_rating_tree_assignment_invalid";
     result.message = "病害选择的评定树节点不属于本年度，或不适用于当前实际构件。";
@@ -364,7 +364,7 @@ DraftValidationResult normalize_defect_rating_tree_associations(
             string_member_or_empty(defect, "rating_tree_match_method");
         const bool component_unchanged = same_component(stored_defect, defect);
         const auto scope = rating_tree_scope_for_defect(
-            defect, technical_standard_package_id, latest_revision);
+            defect, technical_standard_package_id, resolved_revision);
 
         if (submitted_node.empty() || !component_unchanged) {
             clear_derived_rating_tree_fields(defect, rating_tree_version_id);
@@ -439,7 +439,7 @@ DraftValidationResult normalize_defect_rating_tree_associations(
             rating_tree_version_id,
             technical_standard_package_id,
             tree,
-            latest_revision,
+            resolved_revision,
             auto_scope,
             true);
     }
@@ -456,7 +456,7 @@ DraftValidationResult validate_defect_rating_tree_for_confirmation(
     const std::string& rating_tree_version_id,
     const std::string& technical_standard_package_id,
     const rating_tree::EffectiveRatingTree& tree,
-    const std::optional<inventory::InventoryRevision>& latest_revision) {
+    const std::optional<inventory::InventoryRevision>& resolved_revision) {
     DraftValidationResult result;
     result.code = "defect_rating_tree_invalid";
     result.message = "病害的评定树节点、构件适用范围或标度不满足正式入库要求。";
@@ -477,7 +477,7 @@ DraftValidationResult validate_defect_rating_tree_for_confirmation(
         const auto path =
             "defects[" + std::to_string(index) + "].rating_tree_node_id";
         const auto scope = rating_tree_scope_for_defect(
-            defect, technical_standard_package_id, latest_revision);
+            defect, technical_standard_package_id, resolved_revision);
         const auto node_id =
             string_member_or_empty(defect, "rating_tree_node_id");
         const auto version_id =

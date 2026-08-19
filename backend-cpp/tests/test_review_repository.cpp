@@ -295,7 +295,7 @@ TEST_F(ReviewRepositoryTest, get_import_record_detail_returns_null_inspection_ye
 }
 
 // 校对保存、入库前检查与评定树自动匹配都要用"年度锁定优先"那条解析规则，而它的入参
-// 就是这个字段。缺了它，三处只能各自去查一次，或者退回草稿优先的 get_latest_revision()。
+// 就是这个字段。缺了它，三处只能各自去查一次，或者退回草稿优先的"桥梁最新版本"。
 TEST_F(ReviewRepositoryTest, get_import_record_detail_carries_the_year_locked_inventory_revision) {
     bridge_report::db::ReviewRepository repository(tx_);
 
@@ -1545,7 +1545,7 @@ protected:
 }  // 匿名命名空间
 
 // 缺陷本体：桥上一有台账草稿，草稿优先的解析就取到草稿版本，每条已绑定病害都被判成
-// “台账已变化”，整份校对草稿存不了盘。改回 get_latest_revision() 这条必红。
+// “台账已变化”，整份校对草稿存不了盘。把解析换回草稿优先的排序，这条必红。
 TEST_F(SaveReviewDraftTest, SavesBoundDefectsWhileTheBridgeHasADraftRevision) {
     add_draft_revision();
     bridge_report::db::ReviewRepository repository(client_, registry_);

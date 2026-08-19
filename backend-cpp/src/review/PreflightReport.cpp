@@ -127,7 +127,7 @@ void check_component_inventory_links(
         add_issue(
             blocking,
             "component_inventory_unconfirmed",
-            "桥梁最新构件台账尚未确认，不能正式确认年度病害事实。");
+            "本检测年度没有可用的已确认构件台账，不能正式确认年度病害事实。");
         return;
     }
     if (!data["defects"].isArray()) return;

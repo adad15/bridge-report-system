@@ -67,7 +67,7 @@ bool defect_is_protected_from_auto_match(const Json::Value& defect) {
 std::optional<rating_tree::RatingTreeMatchInput> build_defect_match_input(
     const Json::Value& defect,
     const std::string& technical_standard_package_id,
-    const std::optional<inventory::InventoryRevision>& latest_revision,
+    const std::optional<inventory::InventoryRevision>& resolved_revision,
     std::string& reason_code,
     std::string& reason_message) {
     const auto component_id = string_member_or_empty(defect, "bridge_component_id");
@@ -76,12 +76,12 @@ std::optional<rating_tree::RatingTreeMatchInput> build_defect_match_input(
         reason_message = "该病害尚未绑定实际构件，无法确定适用的评定树病害范围。";
         return std::nullopt;
     }
-    if (!latest_revision.has_value()) {
+    if (!resolved_revision.has_value()) {
         reason_code = rating_tree::kReasonComponentCategoryUnmapped;
         reason_message = "当前桥梁没有已确认的构件台账，无法解析规范构件类别。";
         return std::nullopt;
     }
-    for (const auto& entry : latest_revision->entries) {
+    for (const auto& entry : resolved_revision->entries) {
         if (!entry.is_active || entry.bridge_component_id != component_id) continue;
         for (const auto& mapping : entry.mappings) {
             if (mapping.is_active && mapping.confirmation_status == "已确认" &&
@@ -117,7 +117,7 @@ DefectMatchReport match_defect_rating_tree_nodes(
     const std::string& rating_tree_version_id,
     const std::string& technical_standard_package_id,
     const rating_tree::EffectiveRatingTree& tree,
-    const std::optional<inventory::InventoryRevision>& latest_revision,
+    const std::optional<inventory::InventoryRevision>& resolved_revision,
     const DefectMatchScope& scope,
     const bool apply) {
     DefectMatchReport report;
@@ -154,7 +154,7 @@ DefectMatchReport match_defect_rating_tree_nodes(
         const auto input = build_defect_match_input(
             defect,
             technical_standard_package_id,
-            latest_revision,
+            resolved_revision,
             reason_code,
             reason_message);
         if (!input.has_value()) {

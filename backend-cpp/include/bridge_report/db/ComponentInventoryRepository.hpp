@@ -60,18 +60,15 @@ public:
     explicit ComponentInventoryRepository(drogon::orm::DbClientPtr db_client);
 
     std::optional<inventory::InventoryRevision> get_revision(const std::string& revision_id) const;
-    std::optional<inventory::InventoryRevision> get_latest_revision(const std::string& bridge_id) const;
 
-    // 只解析出最新修订版的 id，不装配构件与映射。
-    // 汇总端点必须走这条，不能用 get_latest_revision()——后者内部调 get_revision()，
-    // 会把全部构件连同映射装配一遍；复用它的话响应体虽小，后端仍完整跑一次全量装配，
-    // 优化只做了一半，而且从响应上完全看不出来。
+    // 只解析出最新修订版的 id，不装配构件与映射。台账管理页专用：这里的"最新"是
+    // **草稿优先**，管理页必须能看见自己刚派生的草稿。任何要判断"是否已确认"的
+    // 调用方都不能用它，走下面的 resolve_confirmed_revision*()。
+    //
+    // 汇总端点必须走这条而不是先取整份修订版：get_revision() 会把全部构件连同映射
+    // 装配一遍；复用它的话响应体虽小，后端仍完整跑一次全量装配，优化只做了一半，
+    // 而且从响应上完全看不出来。
     std::optional<std::string> find_latest_revision_id(const std::string& bridge_id) const;
-
-    // 取该桥最新的"已确认"版本。不能拿 get_latest_revision() 顶替——那条排序草稿优先，
-    // 桥上一有草稿就取到草稿，调用方随后"是否已确认"的判断必然不成立。
-    std::optional<inventory::InventoryRevision> get_latest_confirmed_revision(
-        const std::string& bridge_id) const;
 
     // 版本解析的结果引用：只有 id 与所属桥梁，不含构件。
     struct ConfirmedRevisionRef {

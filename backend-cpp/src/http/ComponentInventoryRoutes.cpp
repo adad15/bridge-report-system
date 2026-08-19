@@ -433,8 +433,8 @@ void register_component_inventory_routes(
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Get});
 
-    // 只解析出最新修订版的 id 再转调按 id 那条，绝不走 get_latest_revision()——
-    // 它内部会装配全部构件与映射，复用它等于响应体小了而后端一点没省。
+    // 只解析出最新修订版的 id 再转调按 id 那条，绝不先取整份修订版——
+    // 那样会装配全部构件与映射，等于响应体小了而后端一点没省。
     drogon::app().registerHandler(
         latest_summary_path,
         [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
