@@ -5,6 +5,7 @@
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/db/RatingTreeRepository.hpp"
+#include "bridge_report/review/ContractCompatibility.hpp"
 #include "bridge_report/review/DraftValidation.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
 
@@ -592,6 +593,260 @@ bool ReviewRepository::save_review_draft(
             "where id = $1::uuid and import_status = '待校对' returning id",
             import_record_id, parsed_json_text, defect_change_audit_json);
     return !result.empty();
+}
+
+namespace {
+
+// 存量 parsed_result_json 的宽松解析：与路由层 parse_parsed_result_json 同语义。
+// 解析不了时退回空对象而不是抛异常——存量脏数据不该表现成“数据库写入失败”。
+Json::Value parse_stored_draft(const std::string& text) {
+    Json::CharReaderBuilder builder;
+    Json::Value root;
+    std::string errors;
+    std::istringstream stream(text);
+    if (!Json::parseFromStream(builder, stream, &root, &errors)) {
+        return Json::Value(Json::objectValue);
+    }
+    return root;
+}
+
+}  // 匿名命名空间
+
+SaveReviewDraftOutcome ReviewRepository::save_review_draft(const SaveReviewDraftInput& input) {
+    // 与 confirm_annual_facts 同一套事务骨架：db_client_ 必须是裸 DbClient。
+    std::shared_ptr<drogon::orm::Transaction> tx;
+    const auto latch = std::make_shared<CommitLatch>();
+
+    const auto fail = [&](std::string code, std::string message) -> SaveReviewDraftOutcome {
+        if (tx != nullptr) {
+            try { tx->rollback(); }
+            catch (...) {
+            }
+        }
+        SaveReviewDraftOutcome failed;
+        failed.success = false;
+        failed.error_code = std::move(code);
+        failed.error_message = std::move(message);
+        return failed;
+    };
+    // 校验类失败：error_code 与 validation.code 保持一致，逐项问题原样带出。
+    const auto fail_validation = [&](review::DraftValidationResult validation) -> SaveReviewDraftOutcome {
+        auto failed = fail(validation.code, validation.message);
+        failed.validation = std::move(validation);
+        return failed;
+    };
+
+    try {
+        tx = db_client_->newTransaction(latch->callback());
+
+        // 步骤 1：锁住并重新读取导入记录。状态、编辑锁与存量草稿都必须取自本事务，
+        // 否则路由加载之后到写入之前的并发改动会被旧快照覆盖。
+        const auto record_result = tx->execSqlSync(
+            "select import_status, bridge_id::text as bridge_id, "
+            "inspection_year_id::text as inspection_year_id, "
+            "parsed_result_json::text as parsed_result_json, "
+            "reopened_at::text as reopened_at, reopen_scope "
+            "from import_records where id = $1::uuid for update",
+            input.import_record_id);
+        if (record_result.empty()) {
+            return fail("import_record_not_found", "导入记录不存在。");
+        }
+        const auto& record_row = record_result[0];
+        const auto import_status = record_row["import_status"].as<std::string>();
+        if (import_status != "待校对") {
+            return fail(
+                "import_record_not_editable",
+                "导入记录当前状态为「" + import_status + "」，不是待校对，无法保存草稿。");
+        }
+        if (input.edit_lock.has_value()) {
+            const auto lock_result = tx->execSqlSync(
+                "select exists(select 1 from import_record_edit_locks "
+                "where import_record_id = $1::uuid and user_id = $2::uuid and user_session_id = $3::uuid "
+                "and lock_token_hash = $4 and expires_at > now()) as active",
+                input.import_record_id, input.edit_lock->user_id, input.edit_lock->session_id,
+                auth::sha256_hex(input.edit_lock->lock_token));
+            if (lock_result.empty() || !lock_result[0]["active"].as<bool>()) {
+                return fail("edit_lock_invalid", "编辑锁已失效，草稿未保存。");
+            }
+        }
+        const auto bridge_id = record_row["bridge_id"].as<std::string>();
+        const auto inspection_year_id = optional_text(record_row, "inspection_year_id");
+        const auto reopened_at = optional_text(record_row, "reopened_at");
+        const auto reopen_scope = optional_text(record_row, "reopen_scope");
+
+        // 步骤 2：锁顺序 import_records -> inspection_years，与绑定、Word 导入和确认事务一致。
+        // 年度锁定版本、规范组合与评定树版本全部在年度行锁内读取。
+        std::optional<std::string> locked_revision_id;
+        std::optional<std::string> rating_tree_version_id;
+        std::optional<std::string> technical_package_id;
+        if (inspection_year_id.has_value()) {
+            const auto year_row = tx->execSqlSync(
+                "select iy.component_inventory_revision_id::text as inventory_revision_id, "
+                "psp.rating_tree_version_id::text as rating_tree_version_id, "
+                "psp.technical_condition_package_id::text as technical_package_id "
+                "from inspection_years iy "
+                "left join project_standard_profiles psp on psp.id = iy.standard_profile_id "
+                "where iy.id = $1::uuid for update of iy",
+                *inspection_year_id);
+            if (!year_row.empty()) {
+                locked_revision_id = optional_text(year_row[0], "inventory_revision_id");
+                rating_tree_version_id = optional_text(year_row[0], "rating_tree_version_id");
+                technical_package_id = optional_text(year_row[0], "technical_package_id");
+            }
+        }
+
+        const auto stored_draft = parse_stored_draft(
+            record_row["parsed_result_json"].as<std::string>());
+        // 存量草稿仍是旧版合同时拒绝保存，不能靠客户端伪造 4.0 请求绕过重新解析。
+        if (review::stored_contract_requires_reparse(stored_draft)) {
+            return fail(
+                "contract_version_outdated",
+                "该导入记录的候选数据仍是旧版合同，请删除测试导入并重新解析为 4.0。");
+        }
+        const auto evidence_validation =
+            review::validate_imported_defect_evidence(stored_draft, input.draft);
+        if (!evidence_validation.ok) {
+            return fail_validation(evidence_validation);
+        }
+
+        Json::Value draft_to_save = input.draft;
+
+        // 步骤 3：台账版本解析——年度锁定优先，否则该桥最新已确认，与绑定写入病害时
+        // 同一条规则。仓库对象一律用临时量：它按值持有 DbClientPtr，留成具名变量会让
+        // 事务活过 tx.reset()，提交回调永远不来。
+        const auto resolved_inventory = ComponentInventoryRepository(tx)
+                                            .resolve_confirmed_revision(bridge_id, locked_revision_id);
+        const auto resolved_revision_id = resolved_inventory.has_value()
+            ? std::optional<std::string>(resolved_inventory->id) : std::nullopt;
+        // 整请求级判定必须先于逐项校验：整份草稿一致地落后于服务端解析出的版本时，
+        // 该整体提示一次让用户刷新，而不是给出一串“请重新选择”——重新绑定写回的
+        // 仍是同一个版本，逐条重选解决不了。
+        const auto consistency =
+            review::classify_draft_inventory_revision(draft_to_save, resolved_revision_id);
+        if (consistency == review::DraftInventoryRevisionConsistency::unresolved) {
+            return fail(
+                "component_inventory_unavailable",
+                "本检测年度没有可用的已确认构件台账，无法保存已绑定构件的病害。");
+        }
+        if (consistency == review::DraftInventoryRevisionConsistency::all_stale) {
+            return fail(
+                "component_inventory_revision_changed",
+                "本检测年度使用的构件台账版本已变化，请刷新后重试。");
+        }
+        const auto association_validation =
+            review::validate_defect_component_associations(draft_to_save, resolved_inventory);
+        if (!association_validation.ok) {
+            return fail_validation(association_validation);
+        }
+
+        // 版本在这里就定下来了，因此锁也在这里上：草稿写的是版本化数据，与绑定和
+        // Word 导入同类，同样要把版本锁进年度。否则草稿按 R1 存下、年度仍未锁定，
+        // 别人确认 R2 之后下次加载会解析成 R2，刚存的绑定立刻变成旧版本数据。
+        // 年度已锁定时 lock_pending_year_revision() 只做一致性确认，不覆盖。
+        // 后面任何一步失败，这次锁定都随事务一起回滚。
+        if (consistency != review::DraftInventoryRevisionConsistency::no_bindings &&
+            resolved_revision_id.has_value()) {
+            if (!ComponentInventoryRepository(tx).lock_pending_year_revision(
+                    inspection_year_id, bridge_id, locked_revision_id, *resolved_revision_id)) {
+                return fail(
+                    "component_inventory_revision_changed",
+                    "本检测年度的构件台账版本已被其他操作锁定，请刷新后重试。");
+            }
+        }
+
+        // 步骤 4：评定树规范化。年度锁定的树版本与技术规范包同样取自年度行锁内。
+        if (!rating_tree_version_id.has_value() || !technical_package_id.has_value()) {
+            return fail("rating_tree_required", "本年度尚未锁定评定树，不能保存病害校对结果。");
+        }
+        const auto rating_tree = RatingTreeRepository(tx).load_published_tree(*rating_tree_version_id);
+        if (!rating_tree.has_value()) {
+            return fail("rating_tree_unavailable", "本年度锁定的评定树不可用。");
+        }
+        const auto rating_tree_validation = review::normalize_defect_rating_tree_associations(
+            draft_to_save, stored_draft, *rating_tree_version_id, *technical_package_id,
+            *rating_tree, resolved_inventory);
+        if (!rating_tree_validation.ok) {
+            return fail_validation(rating_tree_validation);
+        }
+
+        for (auto& defect : draft_to_save["defects"]) {
+            const bool manual = defect["component_match_method"].isString() &&
+                defect["component_match_method"].asString() == "manual" &&
+                defect["bridge_component_id"].isString() &&
+                !defect["bridge_component_id"].asString().empty();
+            defect["component_match_confirmed_by"] = manual
+                ? Json::Value(input.actor_username)
+                : Json::Value(Json::nullValue);
+        }
+
+        // 步骤 5：重开态的范围与角色校验（后端兜底，不依赖前端按钮显隐）：
+        //   full 重开由管理员发起，其草稿保存同样只认管理员；
+        //   warnings_only 重开允许任何登录用户，但只能改带警告的病害候选。
+        if (reopened_at.has_value()) {
+            if (reopen_scope.value_or("") == "full" && !input.actor_is_admin) {
+                return fail("forbidden", "full 重开态的草稿保存仅限管理员。");
+            }
+            if (reopen_scope.value_or("") == "warnings_only") {
+                const auto scope_validation = review::validate_warnings_only_scope(
+                    stored_draft, input.draft, &draft_to_save);
+                if (!scope_validation.ok) {
+                    return fail_validation(scope_validation);
+                }
+            }
+        }
+
+        const auto audit_event = review::build_defect_change_audit_event(
+            stored_draft, draft_to_save, input.actor_username);
+        const auto audit_json = audit_event.isNull()
+            ? std::string() : write_compact_json(audit_event);
+
+        // 步骤 6：写入。状态与编辑锁谓词保留在 UPDATE 里，与事务开头的显式检查一起
+        // 兜住“检查通过后锁在同一事务外被撤销”这类窄竞态。
+        const auto updated = input.edit_lock.has_value()
+            ? tx->execSqlSync(
+                "update import_records "
+                "set parsed_result_json = $2::jsonb, "
+                "validation_result_json = case when $6::text = '' then validation_result_json else "
+                "jsonb_set(coalesce(validation_result_json, '{}'::jsonb), '{draft_audit_events}', "
+                "coalesce(validation_result_json->'draft_audit_events', '[]'::jsonb) "
+                "|| jsonb_build_array($6::jsonb || jsonb_build_object('saved_at', now())), true) end, "
+                "updated_at = now() "
+                "where id = $1::uuid and import_status = '待校对' "
+                "and exists(select 1 from import_record_edit_locks l "
+                "  where l.import_record_id = import_records.id and l.user_id = $3::uuid "
+                "  and l.user_session_id = $4::uuid and l.lock_token_hash = $5 and l.expires_at > now()) "
+                "returning id",
+                input.import_record_id, write_compact_json(draft_to_save),
+                input.edit_lock->user_id, input.edit_lock->session_id,
+                auth::sha256_hex(input.edit_lock->lock_token), audit_json)
+            : tx->execSqlSync(
+                "update import_records "
+                "set parsed_result_json = $2::jsonb, "
+                "validation_result_json = case when $3::text = '' then validation_result_json else "
+                "jsonb_set(coalesce(validation_result_json, '{}'::jsonb), '{draft_audit_events}', "
+                "coalesce(validation_result_json->'draft_audit_events', '[]'::jsonb) "
+                "|| jsonb_build_array($3::jsonb || jsonb_build_object('saved_at', now())), true) end, "
+                "updated_at = now() "
+                "where id = $1::uuid and import_status = '待校对' returning id",
+                input.import_record_id, write_compact_json(draft_to_save), audit_json);
+        if (updated.empty()) {
+            return fail("import_record_not_editable", "导入记录状态已变化，无法保存草稿。");
+        }
+
+        SaveReviewDraftOutcome outcome;
+        tx.reset();
+        if (!latch->wait()) {
+            outcome.error_code = "database_commit_failed";
+            outcome.error_message = "数据库提交失败。";
+            return outcome;
+        }
+        outcome.success = true;
+        return outcome;
+    } catch (const drogon::orm::DrogonDbException& exception) {
+        return fail("db_write_failed", exception.base().what());
+    } catch (const std::exception& exception) {
+        return fail("db_write_failed", exception.what());
+    }
 }
 
 bool ReviewRepository::cancel_import_record(

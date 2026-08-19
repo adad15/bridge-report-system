@@ -164,12 +164,42 @@ DraftValidationResult validate_review_draft(
     return result;
 }
 
+DraftInventoryRevisionConsistency classify_draft_inventory_revision(
+    const Json::Value& body,
+    const std::optional<std::string>& resolved_revision_id) {
+    if (!body["defects"].isArray()) return DraftInventoryRevisionConsistency::no_bindings;
+
+    bool has_binding = false;
+    bool has_blank_revision = false;
+    std::set<std::string> referenced_revision_ids;
+    for (const auto& defect : body["defects"]) {
+        if (string_member_or_empty(defect, "bridge_component_id").empty()) continue;
+        has_binding = true;
+        const auto revision_id = string_member_or_empty(defect, "component_inventory_revision_id");
+        if (revision_id.empty()) has_blank_revision = true;
+        else referenced_revision_ids.insert(revision_id);
+    }
+
+    if (!has_binding) return DraftInventoryRevisionConsistency::no_bindings;
+    // 有绑定病害却解析不出可用版本：年度锁在草稿版本、锁到别的桥，或桥上根本没有
+    // 已确认台账。这是年度上下文的问题，不该伪装成每一条病害各自的数据错误。
+    if (!resolved_revision_id.has_value()) return DraftInventoryRevisionConsistency::unresolved;
+    // 缺版本 id 的绑定病害同样算"不一致"：整份草稿并非一致地落后于某一个版本，
+    // 交给逐项校验去指出具体是哪几条。
+    if (has_blank_revision || referenced_revision_ids.size() > 1) {
+        return DraftInventoryRevisionConsistency::mixed;
+    }
+    return *referenced_revision_ids.begin() == *resolved_revision_id
+        ? DraftInventoryRevisionConsistency::matches
+        : DraftInventoryRevisionConsistency::all_stale;
+}
+
 DraftValidationResult validate_defect_component_associations(
     const Json::Value& body,
     const std::optional<inventory::InventoryRevision>& latest_revision) {
     DraftValidationResult result;
     result.code = "defect_component_assignment_invalid";
-    result.message = "病害关联的实际构件不属于当前桥梁最新台账，或规范映射已变化。";
+    result.message = "病害关联的实际构件不属于本检测年度使用的构件台账，或规范映射已变化。";
     if (!body["defects"].isArray()) {
         result.ok = true;
         result.code.clear();
@@ -192,7 +222,7 @@ DraftValidationResult validate_defect_component_associations(
             continue;
         }
         if (!latest_revision.has_value() || revision_id != latest_revision->id) {
-            result.issues.push_back({path, "关联所依据的构件台账已变化，请重新选择。"});
+            result.issues.push_back({path, "关联所依据的构件台账版本与本检测年度使用的版本不一致。"});
             continue;
         }
         const inventory::InventoryEntry* matched_entry = nullptr;
@@ -203,7 +233,7 @@ DraftValidationResult validate_defect_component_associations(
             }
         }
         if (matched_entry == nullptr) {
-            result.issues.push_back({path, "实际构件不属于当前桥梁最新台账。"});
+            result.issues.push_back({path, "实际构件不属于本检测年度使用的构件台账。"});
             continue;
         }
         bool mapping_matches = false;
@@ -216,7 +246,7 @@ DraftValidationResult validate_defect_component_associations(
             }
         }
         if (!mapping_matches) {
-            result.issues.push_back({path, "实际构件的规范类别或内部结构部位与最新映射不一致。"});
+            result.issues.push_back({path, "实际构件的规范类别或内部结构部位与该台账版本的映射不一致。"});
         }
     }
 

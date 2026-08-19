@@ -11,8 +11,6 @@
 #include <json/json.h>
 
 #include "bridge_report/db/ReviewRepository.hpp"
-#include "bridge_report/db/RatingTreeRepository.hpp"
-#include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/EditLockRepository.hpp"
 #include "bridge_report/archive/ArchivePaths.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
@@ -22,7 +20,6 @@
 #include "bridge_report/review/DraftValidation.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
 #include "bridge_report/review/ReviewStatistics.hpp"
-#include "bridge_report/inventory/ComponentInventoryModels.hpp"
 
 namespace bridge_report::http {
 
@@ -191,8 +188,49 @@ drogon::HttpStatusCode draft_validation_status_code(const std::string& code) {
     return drogon::k400BadRequest;
 }
 
+// 仓储层结果到 HTTP 响应的映射。校验类失败带逐项 details（400）；版本冲突、状态与
+// 编辑锁冲突是业务拒绝（409）；写入与提交异常是服务端故障（500，沿用确认链路的约定，
+// db_write_failed 与 database_commit_failed 都是 500 而不是 503）。
+void respond_save_review_draft_failure(
+    const HttpCallback& callback,
+    const db::SaveReviewDraftOutcome& outcome
+) {
+    if (!outcome.validation.code.empty()) {
+        respond_json(
+            callback,
+            make_draft_validation_error_body(outcome.validation),
+            draft_validation_status_code(outcome.validation.code)
+        );
+        return;
+    }
+    if (outcome.error_code == "import_record_not_found") {
+        respond_import_record_not_found(callback);
+        return;
+    }
+    if (outcome.error_code == "forbidden") {
+        respond_forbidden(callback);
+        return;
+    }
+    if (outcome.error_code == "db_write_failed" || outcome.error_code == "database_commit_failed") {
+        respond_json(
+            callback,
+            make_error_body(
+                outcome.error_code,
+                outcome.error_message.empty() ? "草稿保存失败。" : outcome.error_message),
+            drogon::k500InternalServerError
+        );
+        return;
+    }
+    respond_json(
+        callback,
+        make_error_body(outcome.error_code, outcome.error_message),
+        drogon::k409Conflict
+    );
+}
+
 // PUT /api/import-records/{import_record_id}/review-draft：保存校对草稿。
-// 校验顺序：uuid 合法 -> 请求体是合法 JSON -> 记录存在 -> validate_review_draft -> 保存。
+// 路由只做请求层面的把关（uuid、JSON、登录、编辑锁、请求体契约）；存量草稿、年度
+// 锁定台账版本、规范组合与评定树都必须与写入同处一个事务，因此整体交给仓储。
 void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client) {
     drogon::app().registerHandler(
         "/api/import-records/{import_record_id}/review-draft",
@@ -229,6 +267,8 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                     return;
                 }
 
+                // 请求体自身的契约校验（含导入记录编号一致性）。状态在仓储事务里会重新
+                // 判一次，这里的早退只是省掉一次开事务。
                 const auto validation =
                     review::validate_review_draft(*body_json, detail->system_number, detail->import_status);
                 if (!validation.ok) {
@@ -240,135 +280,16 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                     return;
                 }
 
-                const auto stored_draft =
-                    parse_parsed_result_json(detail->parsed_result_json);
-                // 存量草稿仍是旧版合同时拒绝保存，不能靠客户端伪造 4.0 请求绕过重新解析。
-                if (review::stored_contract_requires_reparse(stored_draft)) {
-                    respond_json(
-                        callback,
-                        make_error_body(
-                            "contract_version_outdated",
-                            "该导入记录的候选数据仍是旧版合同，请删除测试导入并重新解析为 4.0。"
-                        ),
-                        drogon::k409Conflict
-                    );
-                    return;
-                }
-                const auto evidence_validation =
-                    review::validate_imported_defect_evidence(
-                        stored_draft, *body_json);
-                if (!evidence_validation.ok) {
-                    respond_json(
-                        callback,
-                        make_draft_validation_error_body(evidence_validation),
-                        drogon::k400BadRequest);
-                    return;
-                }
-
-                Json::Value draft_to_save = *body_json;
-
-                db::ComponentInventoryRepository inventory_repository(db_client);
-                const auto latest_inventory = inventory_repository.get_latest_revision(detail->bridge_id);
-                const auto association_validation =
-                    review::validate_defect_component_associations(draft_to_save, latest_inventory);
-                if (!association_validation.ok) {
-                    respond_json(
-                        callback,
-                        make_draft_validation_error_body(association_validation),
-                        drogon::k400BadRequest);
-                    return;
-                }
-
-                if (!detail->rating_tree_version_id.has_value() ||
-                    !detail->technical_standard_package_id.has_value()) {
-                    respond_json(
-                        callback,
-                        make_error_body(
-                            "rating_tree_required",
-                            "本年度尚未锁定评定树，不能保存病害校对结果。"),
-                        drogon::k409Conflict);
-                    return;
-                }
-                db::RatingTreeRepository rating_tree_repository(db_client);
-                const auto rating_tree = rating_tree_repository.load_published_tree(
-                    *detail->rating_tree_version_id);
-                if (!rating_tree.has_value()) {
-                    respond_json(
-                        callback,
-                        make_error_body(
-                            "rating_tree_unavailable",
-                            "本年度锁定的评定树不可用。"),
-                        drogon::k409Conflict);
-                    return;
-                }
-                const auto rating_tree_validation =
-                    review::normalize_defect_rating_tree_associations(
-                        draft_to_save,
-                        stored_draft,
-                        *detail->rating_tree_version_id,
-                        *detail->technical_standard_package_id,
-                        *rating_tree,
-                        latest_inventory);
-                if (!rating_tree_validation.ok) {
-                    respond_json(
-                        callback,
-                        make_draft_validation_error_body(
-                            rating_tree_validation),
-                        drogon::k400BadRequest);
-                    return;
-                }
-
-                for (auto& defect : draft_to_save["defects"]) {
-                    const bool manual = defect["component_match_method"].isString() &&
-                        defect["component_match_method"].asString() == "manual" &&
-                        defect["bridge_component_id"].isString() &&
-                        !defect["bridge_component_id"].asString().empty();
-                    defect["component_match_confirmed_by"] = manual
-                        ? Json::Value(user->username)
-                        : Json::Value(Json::nullValue);
-                }
-
-                // 重开态的范围与角色校验（后端兜底，不依赖前端按钮显隐）：
-                //   full 重开由管理员发起，其草稿保存同样只认管理员；
-                //   warnings_only 重开允许任何登录用户，但只能改带警告的病害候选。
-                if (detail->reopened_at.has_value()) {
-                    if (detail->reopen_scope.value_or("") == "full" && !user->is_admin()) {
-                        respond_forbidden(callback);
-                        return;
-                    }
-                    if (detail->reopen_scope.value_or("") == "warnings_only") {
-                        const auto scope_validation = review::validate_warnings_only_scope(
-                            stored_draft, *body_json, &draft_to_save);
-                        if (!scope_validation.ok) {
-                            respond_json(
-                                callback,
-                                make_draft_validation_error_body(scope_validation),
-                                drogon::k400BadRequest
-                            );
-                            return;
-                        }
-                    }
-                }
-
-                // jsonb 列不保留输入格式，紧凑序列化即可，避免 toStyledString 的缩进开销。
-                Json::StreamWriterBuilder writer_builder;
-                writer_builder["indentation"] = "";
-                const auto audit_event = review::build_defect_change_audit_event(
-                    stored_draft, draft_to_save, user->username);
-                const auto audit_json = audit_event.isNull()
-                    ? std::string()
-                    : Json::writeString(writer_builder, audit_event);
-                const db::EditLockCredentials edit_lock{
+                db::SaveReviewDraftInput input;
+                input.import_record_id = import_record_id;
+                input.draft = *body_json;
+                input.actor_username = user->username;
+                input.actor_is_admin = user->is_admin();
+                input.edit_lock = db::EditLockCredentials{
                     user->id, user->session_id, edit_lock_token_from_request(request)};
-                const bool saved = repository.save_review_draft(
-                    import_record_id, Json::writeString(writer_builder, draft_to_save), edit_lock, audit_json);
-                if (!saved) {
-                    // UPDATE 带状态谓词未命中：记录状态在加载后被并发改变（已取消/已确认），拒绝写入。
-                    respond_json(
-                        callback,
-                        make_error_body("import_record_not_editable", "导入记录状态已变化，无法保存草稿。"),
-                        drogon::k409Conflict
-                    );
+                const auto outcome = repository.save_review_draft(input);
+                if (!outcome.success) {
+                    respond_save_review_draft_failure(callback, outcome);
                     return;
                 }
 

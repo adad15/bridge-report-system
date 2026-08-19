@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -334,4 +335,103 @@ TEST(DraftValidationTest, RatingTreeConfirmationValidatesScaleAndAllowsNonScorin
             rating_tree_fixture(),
             inventory_fixture());
     EXPECT_TRUE(result.ok) << result.message;
+}
+
+// ---------------------------------------------------------------------------
+// 整请求级台账版本判定：先判整份草稿，再做逐项校验。
+// 少了这一层，整份草稿一致地落后于新版本时会退化成一串"请重新选择"，
+// 而重新绑定写回的仍是同一个版本，用户没有出路。
+// ---------------------------------------------------------------------------
+
+namespace {
+
+using bridge_report::review::DraftInventoryRevisionConsistency;
+using bridge_report::review::classify_draft_inventory_revision;
+
+// 把第 index 条病害改成绑定到某个构件的某个台账版本。
+void bind_defect(Json::Value& data, Json::ArrayIndex index,
+                 const std::string& component_id, const std::string& revision_id) {
+    data["defects"][index]["bridge_component_id"] = component_id;
+    data["defects"][index]["standard_component_category_id"] = "main_girder";
+    data["defects"][index]["resolved_structure_part"] = "上部结构";
+    data["defects"][index]["component_inventory_revision_id"] = revision_id;
+}
+
+// 保证夹具里至少有两条病害，供"混用版本"这类场景使用。
+Json::Value fixture_with_two_defects() {
+    auto data = fixture();
+    while (data["defects"].size() < 2) {
+        auto clone = data["defects"][0];
+        clone["candidate_id"] = "defect_clone_" + std::to_string(data["defects"].size());
+        data["defects"].append(clone);
+    }
+    return data;
+}
+
+}  // namespace
+
+TEST(DraftInventoryRevisionTest, NoBindingsWhenNoDefectCarriesAComponent) {
+    auto data = fixture_with_two_defects();
+    for (auto& defect : data["defects"]) {
+        defect["bridge_component_id"] = Json::Value();
+        defect["component_inventory_revision_id"] = Json::Value();
+    }
+
+    EXPECT_EQ(classify_draft_inventory_revision(data, std::string("revision-1")),
+              DraftInventoryRevisionConsistency::no_bindings);
+    // 解析不出版本也一样：没有绑定就没有版本问题，草稿照常可以保存。
+    EXPECT_EQ(classify_draft_inventory_revision(data, std::nullopt),
+              DraftInventoryRevisionConsistency::no_bindings);
+}
+
+TEST(DraftInventoryRevisionTest, MatchesWhenEveryBoundDefectUsesTheResolvedRevision) {
+    auto data = fixture_with_two_defects();
+    bind_defect(data, 0, "component-1", "revision-1");
+    bind_defect(data, 1, "component-2", "revision-1");
+
+    EXPECT_EQ(classify_draft_inventory_revision(data, std::string("revision-1")),
+              DraftInventoryRevisionConsistency::matches);
+}
+
+TEST(DraftInventoryRevisionTest, AllStaleWhenEveryBoundDefectAgreesOnAnOlderRevision) {
+    auto data = fixture_with_two_defects();
+    bind_defect(data, 0, "component-1", "revision-1");
+    bind_defect(data, 1, "component-2", "revision-1");
+
+    // 服务端解析出 revision-2：整份草稿一致地落后一个版本 -> 整体报一次，不逐条。
+    EXPECT_EQ(classify_draft_inventory_revision(data, std::string("revision-2")),
+              DraftInventoryRevisionConsistency::all_stale);
+}
+
+TEST(DraftInventoryRevisionTest, MixedWhenTheRequestItselfSpansSeveralRevisions) {
+    auto data = fixture_with_two_defects();
+    bind_defect(data, 0, "component-1", "revision-1");
+    bind_defect(data, 1, "component-2", "revision-2");
+
+    // 请求内部就不自洽，属于草稿数据非法，交给逐项校验指出是哪几条。
+    EXPECT_EQ(classify_draft_inventory_revision(data, std::string("revision-2")),
+              DraftInventoryRevisionConsistency::mixed);
+    EXPECT_EQ(classify_draft_inventory_revision(data, std::string("revision-1")),
+              DraftInventoryRevisionConsistency::mixed);
+}
+
+TEST(DraftInventoryRevisionTest, MixedWhenABoundDefectCarriesNoRevisionAtAll) {
+    auto data = fixture_with_two_defects();
+    bind_defect(data, 0, "component-1", "revision-1");
+    bind_defect(data, 1, "component-2", "revision-1");
+    data["defects"][1]["component_inventory_revision_id"] = Json::Value();
+
+    EXPECT_EQ(classify_draft_inventory_revision(data, std::string("revision-1")),
+              DraftInventoryRevisionConsistency::mixed);
+}
+
+TEST(DraftInventoryRevisionTest, UnresolvedWhenBindingsExistButNoRevisionResolves) {
+    auto data = fixture_with_two_defects();
+    bind_defect(data, 0, "component-1", "revision-1");
+    bind_defect(data, 1, "component-2", "revision-1");
+
+    // 年度锁在草稿版本、锁到别的桥，或桥上没有已确认台账时解析结果为空。
+    // 这是年度上下文的问题，不该伪装成每条病害各自的数据错误。
+    EXPECT_EQ(classify_draft_inventory_revision(data, std::nullopt),
+              DraftInventoryRevisionConsistency::unresolved);
 }

@@ -48,7 +48,29 @@ struct DraftValidationResult {
     const std::string& record_import_status
 );
 
-/** 校验病害中的实际构件 ID、规范类别和内部结构部位均来自当前桥梁最新台账。 */
+/**
+ * @brief 整请求级的台账版本判定：草稿里的绑定病害引用的版本与服务端解析出的版本是否一致。
+ *
+ * 逐项校验会把每一条版本不符的病害都变成一条 issue；整份草稿的版本统一落后时，
+ * 那是"服务端解析出的版本变了"，该整体提示一次并让用户刷新，而不是让用户逐条
+ * 重新选择——重新选择写回的仍是同一个版本，解决不了。故先做本判定再做逐项校验。
+ *
+ * 只统计带 bridge_component_id 的病害；未绑定构件的病害不参与版本判定。
+ */
+enum class DraftInventoryRevisionConsistency {
+    no_bindings,   ///< 没有任何绑定了构件的病害；不涉及版本，也不该锁定年度版本。
+    matches,       ///< 全部绑定病害都引用服务端解析出的版本。
+    all_stale,     ///< 全部绑定病害一致地引用同一个别的版本 -> 整体一次版本冲突。
+    mixed,         ///< 请求内部混用多个版本（含缺版本 id）-> 草稿数据非法，走逐项校验。
+    unresolved,    ///< 有绑定病害，但服务端解析不出可用的已确认版本 -> 年度上下文错误。
+};
+
+[[nodiscard]] DraftInventoryRevisionConsistency classify_draft_inventory_revision(
+    const Json::Value& body,
+    const std::optional<std::string>& resolved_revision_id
+);
+
+/** 校验病害中的实际构件 ID、规范类别和内部结构部位均来自本检测年度使用的构件台账。 */
 [[nodiscard]] DraftValidationResult validate_defect_component_associations(
     const Json::Value& body,
     const std::optional<inventory::InventoryRevision>& latest_revision

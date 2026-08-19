@@ -1449,3 +1449,319 @@ TEST_F(ConfirmAnnualFactsTest, confirm_rolls_back_on_failure) {
     ASSERT_EQ(record_row.size(), 1u);
     EXPECT_EQ(record_row[0]["import_status"].as<std::string>(), "待校对");
 }
+
+namespace {
+
+// 保存校对草稿的事务化写入。复用 ConfirmAnnualFactsTest 的夹具：一座桥、已确认台账
+// R1、锁定 R1 的待校对年度、已发布评定树、待校对导入记录，以及一份已绑定构件的草稿。
+class SaveReviewDraftTest : public ConfirmAnnualFactsTest {
+protected:
+    bridge_report::db::SaveReviewDraftInput make_input(const Json::Value& draft) const {
+        bridge_report::db::SaveReviewDraftInput input;
+        input.import_record_id = import_record_id_;
+        input.draft = draft;
+        input.actor_username = "校对员";
+        input.actor_is_admin = false;
+        return input;
+    }
+
+    // 在桥上派生一条草稿台账版本（编号递增，status 默认即为“草稿”）。
+    // 生产里改一个构件编号、加一条构件、设一次映射都会产生这样一行。
+    std::string add_draft_revision() const {
+        const auto rows = client_->execSqlSync(
+            "insert into bridge_component_inventory_revisions"
+            "(bridge_id,revision_number,baseline_revision_id,created_by_user_id) "
+            "select $1::uuid,coalesce(max(revision_number),0)+1,$2::uuid,$3::uuid "
+            "from bridge_component_inventory_revisions where bridge_id=$1::uuid "
+            "returning id::text as id",
+            bridge_id_, inventory_revision_id_, confirmed_by_user_id_);
+        return rows[0]["id"].as<std::string>();
+    }
+
+    // 在桥上再确认一个更新的台账版本（复制 R1 的条目与映射，保证构件仍可解析）。
+    std::string add_confirmed_revision(
+        const std::string& deactivate_component_id = std::string()) const {
+        const auto id = add_draft_revision();
+        client_->execSqlSync(
+            "insert into bridge_component_inventory_entries"
+            "(inventory_revision_id,bridge_component_id,generation_batch_id,component_number,"
+            "site_name,site_component_type,span_or_location,is_active,sort_order,remarks) "
+            "select $1::uuid,bridge_component_id,generation_batch_id,component_number,site_name,"
+            "site_component_type,span_or_location,is_active,sort_order,remarks "
+            "from bridge_component_inventory_entries where inventory_revision_id=$2::uuid",
+            id, inventory_revision_id_);
+        client_->execSqlSync(
+            "insert into bridge_component_standard_mappings(inventory_entry_id,standard_package_id,"
+            "standard_bridge_type_id,standard_component_category_id,structure_part,mapping_source,"
+            "confirmation_status,confirmed_by_user_id,confirmed_at) "
+            "select new_entry.id,m.standard_package_id,m.standard_bridge_type_id,"
+            "m.standard_component_category_id,m.structure_part,m.mapping_source,"
+            "m.confirmation_status,m.confirmed_by_user_id,m.confirmed_at "
+            "from bridge_component_standard_mappings m "
+            "join bridge_component_inventory_entries old_entry on old_entry.id=m.inventory_entry_id "
+            "  and old_entry.inventory_revision_id=$2::uuid "
+            "join bridge_component_inventory_entries new_entry "
+            "  on new_entry.inventory_revision_id=$1::uuid "
+            "  and new_entry.bridge_component_id=old_entry.bridge_component_id",
+            id, inventory_revision_id_);
+        if (!deactivate_component_id.empty()) {
+            // 必须趁版本还是草稿时改：已确认版本的条目由触发器保护为不可变。
+            client_->execSqlSync(
+                "update bridge_component_inventory_entries set is_active=false,"
+                "deactivated_at=now(),deactivation_reason='测试停用' "
+                "where inventory_revision_id=$1::uuid and bridge_component_id=$2::uuid",
+                id, deactivate_component_id);
+        }
+        client_->execSqlSync(
+            "update bridge_component_inventory_revisions set status='已确认',"
+            "confirmed_by_user_id=$2::uuid,confirmed_at=now(),confirmation_note='测试确认' "
+            "where id=$1::uuid",
+            id, confirmed_by_user_id_);
+        return id;
+    }
+
+    void unlock_year_revision() const {
+        client_->execSqlSync(
+            "update inspection_years set component_inventory_revision_id=null where id=$1::uuid",
+            placeholder_year_id_);
+    }
+
+    std::optional<std::string> year_locked_revision_id() const {
+        const auto rows = client_->execSqlSync(
+            "select component_inventory_revision_id::text as id from inspection_years "
+            "where id=$1::uuid",
+            placeholder_year_id_);
+        if (rows.empty() || rows[0]["id"].isNull()) return std::nullopt;
+        return rows[0]["id"].as<std::string>();
+    }
+
+    std::string stored_parsed_result_json() const {
+        return client_->execSqlSync(
+            "select parsed_result_json::text as json from import_records where id=$1::uuid",
+            import_record_id_)[0]["json"].as<std::string>();
+    }
+};
+
+}  // 匿名命名空间
+
+// 缺陷本体：桥上一有台账草稿，草稿优先的解析就取到草稿版本，每条已绑定病害都被判成
+// “台账已变化”，整份校对草稿存不了盘。改回 get_latest_revision() 这条必红。
+TEST_F(SaveReviewDraftTest, SavesBoundDefectsWhileTheBridgeHasADraftRevision) {
+    add_draft_revision();
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto data = build_confirmed_data();
+    data["defects"][0]["defect_description"] = "校对期改了一句描述";
+
+    const auto outcome = repository.save_review_draft(make_input(data));
+
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+    EXPECT_TRUE(outcome.validation.issues.empty());
+    EXPECT_NE(stored_parsed_result_json().find("校对期改了一句描述"), std::string::npos);
+}
+
+// 年度锁定优先：桥上后来又确认了 R2，但本年度锁的是 R1，就必须继续按 R1 校验。
+TEST_F(SaveReviewDraftTest, KeepsTheYearLockedRevisionEvenWhenANewerConfirmedOneExists) {
+    const auto newer_revision_id = add_confirmed_revision();
+    ASSERT_NE(newer_revision_id, inventory_revision_id_);
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+
+    const auto outcome = repository.save_review_draft(make_input(build_confirmed_data()));
+
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+    EXPECT_EQ(year_locked_revision_id().value_or(""), inventory_revision_id_);
+}
+
+// 含构件绑定的草稿保存成功后要锁定年度版本，否则草稿按 R1 存下、年度仍未锁定，
+// 别人确认 R2 之后下次加载就解析成 R2，刚存的绑定立刻变成旧版本数据。
+TEST_F(SaveReviewDraftTest, LocksTheResolvedRevisionIntoTheYearWhenTheDraftBindsComponents) {
+    unlock_year_revision();
+    ASSERT_FALSE(year_locked_revision_id().has_value());
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+
+    const auto outcome = repository.save_review_draft(make_input(build_confirmed_data()));
+
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+    EXPECT_EQ(year_locked_revision_id().value_or(""), inventory_revision_id_);
+}
+
+// 纯文本编辑没有理由给年度定版本。
+TEST_F(SaveReviewDraftTest, LeavesTheYearUnlockedWhenTheDraftBindsNoComponent) {
+    unlock_year_revision();
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto data = build_confirmed_data();
+    for (auto& defect : data["defects"]) {
+        defect["bridge_component_id"] = Json::Value();
+        defect["standard_component_category_id"] = Json::Value();
+        defect["resolved_structure_part"] = Json::Value();
+        defect["component_inventory_revision_id"] = Json::Value();
+    }
+
+    const auto outcome = repository.save_review_draft(make_input(data));
+
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+    EXPECT_FALSE(year_locked_revision_id().has_value());
+}
+
+// 整份草稿一致地引用旧版本 -> 整体一条 409，不逐条“请重新选择”。
+TEST_F(SaveReviewDraftTest, ReportsAStaleRevisionOnceForTheWholeRequest) {
+    unlock_year_revision();
+    const auto newer_revision_id = add_confirmed_revision();
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto data = build_confirmed_data();  // 病害仍写着 R1，服务端将解析出 R2
+
+    const auto outcome = repository.save_review_draft(make_input(data));
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "component_inventory_revision_changed");
+    EXPECT_TRUE(outcome.validation.issues.empty()) << "版本冲突不该退化成逐项问题";
+    EXPECT_FALSE(outcome.error_message.empty());
+    // 失败即整体回滚：草稿没写、年度也没被锁上。
+    EXPECT_FALSE(year_locked_revision_id().has_value());
+    EXPECT_EQ(stored_parsed_result_json().find("校对期改了一句描述"), std::string::npos);
+    (void)newer_revision_id;
+}
+
+// 请求内部混用多个版本属于草稿数据非法，仍旧逐项返回。
+TEST_F(SaveReviewDraftTest, ReportsPerDefectIssuesWhenTheRequestMixesRevisions) {
+    const auto other_revision_id = add_confirmed_revision();
+    client_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
+        placeholder_year_id_, inventory_revision_id_);
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto data = build_confirmed_data();
+    auto mixed = data["defects"][0];
+    mixed["candidate_id"] = "defect_mixed_revision";
+    mixed["component_inventory_revision_id"] = other_revision_id;
+    data["defects"].append(mixed);
+
+    const auto outcome = repository.save_review_draft(make_input(data));
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "defect_component_assignment_invalid");
+    EXPECT_EQ(outcome.validation.code, "defect_component_assignment_invalid");
+    ASSERT_FALSE(outcome.validation.issues.empty()) << "混用版本必须给出逐项 details";
+}
+
+// 版本对得上、但构件在该版本里已停用 -> 逐项 details，不是整体版本冲突。
+TEST_F(SaveReviewDraftTest, ReportsPerDefectIssuesWhenTheComponentIsDeactivated) {
+    auto data = build_confirmed_data();
+    const auto component_id = data["defects"][0]["bridge_component_id"].asString();
+    const auto revision_with_deactivated = add_confirmed_revision(component_id);
+    client_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
+        placeholder_year_id_, revision_with_deactivated);
+    for (auto& defect : data["defects"]) {
+        if (!defect["bridge_component_id"].isString()) continue;
+        if (defect["bridge_component_id"].asString().empty()) continue;
+        defect["component_inventory_revision_id"] = revision_with_deactivated;
+    }
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+
+    const auto outcome = repository.save_review_draft(make_input(data));
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "defect_component_assignment_invalid");
+    ASSERT_FALSE(outcome.validation.issues.empty());
+}
+
+// 版本对得上、但提交的规范类别与该版本的映射对不上 -> 同样是逐项 details。
+TEST_F(SaveReviewDraftTest, ReportsPerDefectIssuesWhenTheCategoryDoesNotMatchTheMapping) {
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto data = build_confirmed_data();
+    data["defects"][0]["standard_component_category_id"] = "h21.component.deck_pavement";
+
+    const auto outcome = repository.save_review_draft(make_input(data));
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "defect_component_assignment_invalid");
+    ASSERT_FALSE(outcome.validation.issues.empty());
+}
+
+// 年度锁在草稿版本上（待校对年度允许这么锁）：解析不出可用的已确认版本。
+// 这是年度上下文错误，不能伪装成每条病害各自的数据错误。
+TEST_F(SaveReviewDraftTest, ReportsAContextErrorWhenTheYearIsLockedToADraftRevision) {
+    const auto draft_revision_id = add_draft_revision();
+    client_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
+        placeholder_year_id_, draft_revision_id);
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+
+    const auto outcome = repository.save_review_draft(make_input(build_confirmed_data()));
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "component_inventory_unavailable");
+    EXPECT_TRUE(outcome.validation.issues.empty());
+}
+
+// 编辑锁失效与状态变化必须能与版本冲突、校验失败分辨开——改造前它们全被压成
+// 同一个 409 import_record_not_editable。
+TEST_F(SaveReviewDraftTest, DistinguishesAnInvalidEditLockFromOtherFailures) {
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto input = make_input(build_confirmed_data());
+    input.edit_lock = bridge_report::db::EditLockCredentials{
+        confirmed_by_user_id_, confirmed_by_user_id_, "never-issued-token"};
+
+    const auto outcome = repository.save_review_draft(input);
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "edit_lock_invalid");
+    EXPECT_TRUE(outcome.validation.issues.empty());
+}
+
+TEST_F(SaveReviewDraftTest, DistinguishesANonEditableImportRecord) {
+    client_->execSqlSync(
+        "update import_records set import_status='已取消' where id=$1::uuid", import_record_id_);
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+
+    const auto outcome = repository.save_review_draft(make_input(build_confirmed_data()));
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "import_record_not_editable");
+}
+
+// 规范组合与评定树在事务内重新读取，路由不再传任何一项进来。
+TEST_F(SaveReviewDraftTest, ReadsTheStandardProfileInsideTheTransaction) {
+    client_->execSqlSync(
+        "update inspection_years set standard_profile_id=null where id=$1::uuid",
+        placeholder_year_id_);
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+
+    const auto outcome = repository.save_review_draft(make_input(build_confirmed_data()));
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "rating_tree_required");
+}
+
+// 事务内抛出的数据库异常统一落到 db_write_failed（500），与提交回调失败的
+// database_commit_failed 分开返回。
+TEST_F(SaveReviewDraftTest, ReportsDbWriteFailedWhenTheStatementThrows) {
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto input = make_input(build_confirmed_data());
+    input.import_record_id = "not-a-uuid";
+
+    const auto outcome = repository.save_review_draft(input);
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "db_write_failed");
+    EXPECT_FALSE(outcome.error_message.empty());
+}
+
+// 年度锁定发生在构件关联校验通过之后、写入之前。评定树校验在它之后失败时，
+// 这次锁定必须随事务一起回滚，不能留下"版本锁死了、草稿却没存"的年度。
+TEST_F(SaveReviewDraftTest, RollsBackTheYearLockWhenALaterStepFails) {
+    unlock_year_revision();
+    ASSERT_FALSE(year_locked_revision_id().has_value());
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto data = build_confirmed_data();
+    // 构件关联合法（锁定会真的执行），但节点不在本年度的评定树里。
+    data["defects"][0]["rating_tree_node_id"] = "11111111-1111-4111-8111-111111111111";
+    data["defects"][0]["rating_tree_match_method"] = "manual";
+
+    const auto outcome = repository.save_review_draft(make_input(data));
+
+    ASSERT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "defect_rating_tree_assignment_invalid");
+    EXPECT_FALSE(year_locked_revision_id().has_value()) << "后续步骤失败时年度锁定必须一起回滚";
+    EXPECT_EQ(stored_parsed_result_json().find("11111111-1111-4111-8111-111111111111"),
+              std::string::npos);
+}
