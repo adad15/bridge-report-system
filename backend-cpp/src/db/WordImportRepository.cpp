@@ -53,18 +53,15 @@ void append_match_warning(
     defect["warnings"].append(std::move(warning));
 }
 
+// 版本由调用方在年度行锁内解析好一次后传进来：构件匹配与评定树匹配必须用同一份台账，
+// 各自解析的话，READ COMMITTED 下两次查询可以落在不同快照上。
 Json::Value match_imported_defects(
     const std::shared_ptr<drogon::orm::Transaction>& tx,
     const std::string& bridge_id,
-    const std::optional<std::string>& locked_revision_id,
-    const Json::Value& source,
-    std::optional<std::string>& confirmed_revision_id) {
+    const std::optional<inventory::InventoryRevision>& revision,
+    const Json::Value& source) {
     Json::Value matched = source;
 
-    ComponentInventoryRepository inventories(tx);
-    const auto revision = locked_revision_id.has_value()
-        ? inventories.get_revision(*locked_revision_id)
-        : inventories.get_latest_revision(bridge_id);
     if (!revision.has_value() || revision->bridge_id != bridge_id) {
         for (auto& defect : matched["defects"]) {
             defect["component_match_candidate_ids"] = Json::Value(Json::arrayValue);
@@ -78,10 +75,6 @@ Json::Value match_imported_defects(
         }
         return matched;
     }
-    if (revision->status == "已确认" || revision->status == "confirmed") {
-        confirmed_revision_id = revision->id;
-    }
-
     std::vector<inventory::ConfirmedComponentAlias> aliases;
     const auto alias_rows = tx->execSqlSync(
         "select ca.bridge_component_id::text,ca.alias_text from component_aliases ca "
@@ -140,13 +133,13 @@ Json::Value match_imported_defects(
 void match_imported_defect_rating_tree_nodes_unguarded(
     const std::shared_ptr<drogon::orm::Transaction>& tx,
     const std::string& inspection_year_id,
+    const std::optional<inventory::InventoryRevision>& revision,
     Json::Value& data) {
     if (inspection_year_id.empty() || !data["defects"].isArray()) return;
     const auto profile = tx->execSqlSync(
         "select psp.rating_tree_version_id::text as rating_tree_version_id,"
         "psp.technical_condition_package_id::text as technical_package_id,"
-        "iy.bridge_id::text as bridge_id,"
-        "iy.component_inventory_revision_id::text as inventory_revision_id "
+        "iy.bridge_id::text as bridge_id "
         "from inspection_years iy "
         "join project_standard_profiles psp on psp.id=iy.standard_profile_id "
         "where iy.id=$1::uuid",
@@ -159,11 +152,6 @@ void match_imported_defect_rating_tree_nodes_unguarded(
         profile[0]["rating_tree_version_id"].as<std::string>();
     const auto tree = RatingTreeRepository(tx).load_published_tree(tree_version_id);
     if (!tree.has_value()) return;
-    ComponentInventoryRepository inventories(tx);
-    const auto revision = profile[0]["inventory_revision_id"].isNull()
-        ? inventories.get_latest_revision(profile[0]["bridge_id"].as<std::string>())
-        : inventories.get_revision(
-              profile[0]["inventory_revision_id"].as<std::string>());
     (void)review::match_defect_rating_tree_nodes(
         data,
         tree_version_id,
@@ -180,12 +168,13 @@ void match_imported_defect_rating_tree_nodes_unguarded(
 void match_imported_defect_rating_tree_nodes(
     const std::shared_ptr<drogon::orm::Transaction>& tx,
     const std::string& inspection_year_id,
+    const std::optional<inventory::InventoryRevision>& revision,
     Json::Value& data) {
     const Json::Value unmatched = data;
     try {
         tx->execSqlSync("savepoint import_rating_tree_match");
         match_imported_defect_rating_tree_nodes_unguarded(
-            tx, inspection_year_id, data);
+            tx, inspection_year_id, revision, data);
         tx->execSqlSync("release savepoint import_rating_tree_match");
     } catch (const std::exception& error) {
         data = unmatched;
@@ -295,11 +284,8 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
         tx = db_client_->newTransaction(latch->callback());
         const auto locked = tx->execSqlSync(
             "select ir.bridge_id::text as bridge_id, "
-            "ir.inspection_year_id::text as inspection_year_id,ir.import_status,"
-            "iy.component_inventory_revision_id::text as inventory_revision_id "
-            "from import_records ir "
-            "left join inspection_years iy on iy.id=ir.inspection_year_id "
-            "where ir.id = $1::uuid for update of ir", import_record_id);
+            "ir.inspection_year_id::text as inspection_year_id,ir.import_status "
+            "from import_records ir where ir.id = $1::uuid for update", import_record_id);
         if (locked.empty()) {
             tx->rollback();
             outcome.error_code = "import_record_deleted";
@@ -336,28 +322,51 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
         const auto bridge_id = locked[0]["bridge_id"].as<std::string>();
         const bool has_year = !locked[0]["inspection_year_id"].isNull();
         const auto year_id = has_year ? locked[0]["inspection_year_id"].as<std::string>() : std::string();
-        const auto locked_revision_id = locked[0]["inventory_revision_id"].isNull()
-            ? std::optional<std::string>()
-            : std::optional<std::string>(
-                locked[0]["inventory_revision_id"].as<std::string>());
-        std::optional<std::string> confirmed_revision_id;
-        auto matched_data = match_imported_defects(
-            tx, bridge_id, locked_revision_id, batch.data, confirmed_revision_id);
+
+        // 锁顺序固定为 import_records → inspection_years，与绑定事务一致。
+        // 年度锁定版本必须在**年度行锁内**读：上面那句只 for update of ir，锁住导入记录
+        // 拦不住别人改年度，而两条导入记录可以关联同一个年度。
+        std::optional<std::string> locked_revision_id;
+        if (has_year) {
+            const auto year_row = tx->execSqlSync(
+                "select component_inventory_revision_id::text as inventory_revision_id "
+                "from inspection_years where id=$1::uuid",  // TEMP: 去掉行锁试探
+                year_id);
+            if (!year_row.empty() && !year_row[0]["inventory_revision_id"].isNull()) {
+                locked_revision_id =
+                    year_row[0]["inventory_revision_id"].as<std::string>();
+            }
+        }
+
+        // 只解析一次，构件匹配与评定树匹配共用。此前两者各解析一次，READ COMMITTED 下
+        // 同一事务里的两次查询可以落在不同快照，于是构件按 R2、评定树按 R3。
+        //
+        // 仓库对象一律用临时量：它的构造函数按值收下 DbClientPtr 并一直持有，留一个具名
+        // 变量在外层作用域，就会让事务的 shared_ptr 活过下面的 tx.reset()，提交回调
+        // 永远不来，最后以 db_commit_failed 超时收场。
+        const auto revision = ComponentInventoryRepository(tx)
+                                  .resolve_confirmed_revision(bridge_id, locked_revision_id);
+
+        // 年度未锁定而解析出了已确认版本 → 立刻锁上，之后的匹配才有稳定依据。
+        // 解析不出版本（桥上没有已确认台账，或年度锁着草稿）不算失败：保持既有降级，
+        // 两处匹配共享 nullopt，病害带 defect_component_match_required 警告照常入库。
+        if (has_year && !locked_revision_id.has_value() && revision.has_value()) {
+            if (!ComponentInventoryRepository(tx).lock_pending_year_revision(
+                    year_id, bridge_id, std::nullopt, revision->id)) {
+                tx->rollback();
+                outcome.error_code = "component_inventory_revision_changed";
+                outcome.error_message =
+                    "检测年度的构件台账版本已被其他操作锁定，请重试导入。";
+                return outcome;
+            }
+        }
+
+        auto matched_data =
+            match_imported_defects(tx, bridge_id, revision, batch.data);
         // 导入完成即尝试一次评定树匹配：构件已唯一命中的病害立刻拿到自动结果，
         // 依赖尚未补齐的仍然停在待处理，等构件/评定树绑定完成后再触发。
         if (has_year) {
-            match_imported_defect_rating_tree_nodes(tx, year_id, matched_data);
-        }
-        // 解析匹配和年度评定必须锁定同一台账版本。仅补齐待校对年度的空关联，
-        // 已经锁定的历史版本绝不被“最新版本”覆盖。
-        if (has_year && !locked_revision_id.has_value()
-            && confirmed_revision_id.has_value()) {
-            tx->execSqlSync(
-                "update inspection_years "
-                "set component_inventory_revision_id=$2::uuid,updated_at=now() "
-                "where id=$1::uuid and bridge_id=$3::uuid and status='待校对' "
-                "and component_inventory_revision_id is null",
-                year_id, *confirmed_revision_id, bridge_id);
+            match_imported_defect_rating_tree_nodes(tx, year_id, revision, matched_data);
         }
         for (const auto& file : batch.files) {
             const auto inserted = tx->execSqlSync(

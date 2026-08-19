@@ -176,6 +176,91 @@ TEST_F(WordImportRepositoryTest, PersistsExactDefectMatchAgainstConfirmedInvento
 
 }
 
+// 桥上同时有已确认版本和草稿时，导入必须按已确认版本匹配。此前构件匹配走
+// get_latest_revision()（草稿优先），评定树匹配又另查一次年度、再解析一次——
+// 两处不但可能都取到草稿，还可能彼此取到不同版本。
+TEST_F(WordImportRepositoryTest, MatchesAgainstTheConfirmedRevisionWhileADraftExists) {
+    const auto user_id = client_->execSqlSync(
+        "select id::text from users where username='admin'")[0]["id"].as<std::string>();
+    const auto component_id = client_->execSqlSync(
+        "insert into bridge_components(bridge_id,structure_part,component_type,business_component_code,"
+        "normalized_component_key,current_status,creation_source) values($1::uuid,'上部结构','主梁',"
+        "'1-1#','word-draft-1','已确认','人工录入') returning id::text",
+        bridge_id_)[0]["id"].as<std::string>();
+    const auto confirmed_id = client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,created_by_user_id) "
+        "values($1::uuid,1,$2::uuid) returning id::text",
+        bridge_id_, user_id)[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "insert into bridge_component_inventory_entries(inventory_revision_id,bridge_component_id,"
+        "component_number,site_name,site_component_type,sort_order) "
+        "values($1::uuid,$2::uuid,'1-1#梁','空心板','空心板',1)",
+        confirmed_id, component_id);
+    client_->execSqlSync(
+        "update bridge_component_inventory_revisions set status='已确认',"
+        "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
+        confirmed_id, user_id);
+    // 草稿版本号更大；草稿优先的排序会挑中它，而它里面没有 1-1#梁。
+    client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,"
+        "baseline_revision_id,created_by_user_id) values($1::uuid,2,$2::uuid,$3::uuid)",
+        bridge_id_, confirmed_id, user_id);
+
+    bridge_report::archive::ArchivedPhotoBatch batch;
+    batch.data["contract"]["parser_name"] = "liaoning-word-importer";
+    batch.data["contract"]["parser_version"] = "2.0.0";
+    batch.data["photos"] = Json::Value(Json::arrayValue);
+    Json::Value defect(Json::objectValue);
+    defect["candidate_id"] = "defect_0001";
+    defect["component_name"] = "上部承重构件";
+    defect["component_number"] = "1-1#梁";
+    defect["warnings"] = Json::Value(Json::arrayValue);
+    batch.data["defects"].append(defect);
+
+    bridge_report::db::WordImportRepository repository(client_);
+    const auto outcome = repository.persist_parse_result(import_id_, batch);
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+
+    const auto stored = client_->execSqlSync(
+        "select parsed_result_json#>>'{defects,0,component_inventory_revision_id}' as revision_id,"
+        "iy.component_inventory_revision_id::text as year_revision_id "
+        "from import_records ir join inspection_years iy on iy.id=ir.inspection_year_id "
+        "where ir.id=$1::uuid", import_id_);
+    // 病害带的版本、年度锁定的版本，都必须是已确认那个。
+    EXPECT_EQ(stored[0]["revision_id"].as<std::string>(), confirmed_id);
+    EXPECT_EQ(stored[0]["year_revision_id"].as<std::string>(), confirmed_id);
+}
+
+// 桥上根本没有已确认台账时是**降级**而不是失败：解析结果照常入库、带上待人工处理的
+// 警告。把这条改成导入失败是行为回归——现在允许先导入、之后再补台账。
+TEST_F(WordImportRepositoryTest, KeepsDegradingWhenTheBridgeHasNoConfirmedInventory) {
+    bridge_report::archive::ArchivedPhotoBatch batch;
+    batch.data["contract"]["parser_name"] = "liaoning-word-importer";
+    batch.data["contract"]["parser_version"] = "2.0.0";
+    batch.data["photos"] = Json::Value(Json::arrayValue);
+    Json::Value defect(Json::objectValue);
+    defect["candidate_id"] = "defect_0001";
+    defect["component_name"] = "上部承重构件";
+    defect["component_number"] = "1-1#梁";
+    defect["warnings"] = Json::Value(Json::arrayValue);
+    batch.data["defects"].append(defect);
+
+    bridge_report::db::WordImportRepository repository(client_);
+    const auto outcome = repository.persist_parse_result(import_id_, batch);
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+
+    const auto stored = client_->execSqlSync(
+        "select parsed_result_json#>>'{defects,0,component_inventory_revision_id}' as revision_id,"
+        "parsed_result_json#>>'{defects,0,warnings,0,code}' as warning_code,"
+        "iy.component_inventory_revision_id::text as year_revision_id "
+        "from import_records ir join inspection_years iy on iy.id=ir.inspection_year_id "
+        "where ir.id=$1::uuid", import_id_);
+    EXPECT_TRUE(stored[0]["revision_id"].isNull());
+    EXPECT_EQ(stored[0]["warning_code"].as<std::string>(), "defect_component_match_required");
+    // 没有可锁的版本，年度也不该被锁上。
+    EXPECT_TRUE(stored[0]["year_revision_id"].isNull());
+}
+
 TEST_F(WordImportRepositoryTest, LoadsTemporaryCurrentAnnualWordContext) {
     bridge_report::db::WordImportRepository repository(client_);
     client_->execSqlSync("update import_records set import_status='已上传' where id=$1::uuid", import_id_);
