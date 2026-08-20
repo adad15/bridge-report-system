@@ -2025,3 +2025,74 @@ TEST_F(ConfirmAnnualFactsTest, ASecondConfirmOnTheSameYearAdoptsTheSettledRevisi
         << "必须采用先手落定的 R1，而不是自己解析出的 R2";
     EXPECT_NE(year[0]["revision_id"].as<std::string>(), newer_revision);
 }
+
+// database_commit_failed 是一条真实但极难触发的分支：所有语句都成功了，事务却在
+// COMMIT 那一刻失败。CommitLatch 自己有单元测试，但"真实的提交失败能不能流到这个
+// 错误码"从来没验过——中间隔着 drogon 的提交回调。
+//
+// 造法是延迟约束触发器：CONSTRAINT TRIGGER ... DEFERRABLE INITIALLY DEFERRED 在
+// COMMIT 时才执行，在里面 raise，COMMIT 就会失败，而此前每一句都是成功的。这是能
+// 精确制造"语句全成、提交失败"的少数手段之一。
+TEST_F(SaveReviewDraftTest, ReportsDatabaseCommitFailedWhenTheCommitItselfFails) {
+    client_->execSqlSync(
+        "create or replace function bridge_report_test_fail_commit() returns trigger as $$ "
+        "begin raise exception 'forced commit failure'; end; $$ language plpgsql");
+    client_->execSqlSync(
+        "create constraint trigger trg_bridge_report_test_fail_commit "
+        "after update on import_records deferrable initially deferred "
+        "for each row execute function bridge_report_test_fail_commit()");
+
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto data = build_confirmed_data();
+    // 夹具在 SetUp 里已经把同一份数据写进库了，得带一个独有标记才能验证"没落盘"。
+    data["defects"][0]["defect_description"] = "提交失败不得落盘的标记";
+    const auto outcome = repository.save_review_draft(make_input(data));
+
+    // 先拆掉触发器再断言：断言失败会抛，留着它会污染后面所有用到 import_records 的测试。
+    client_->execSqlSync("drop trigger trg_bridge_report_test_fail_commit on import_records");
+    client_->execSqlSync("drop function bridge_report_test_fail_commit()");
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "database_commit_failed")
+        << "提交阶段失败必须与语句阶段的 db_write_failed 分开报，"
+           "两者的排查方向完全不同；实际拿到：" << outcome.error_message;
+    EXPECT_TRUE(outcome.validation.issues.empty());
+
+    // 提交失败等于什么都没发生：草稿不得落盘。
+    EXPECT_EQ(stored_parsed_result_json().find("提交失败不得落盘的标记"), std::string::npos);
+}
+
+// 与上一条同一手法，守的是正式入库那条路。confirm_annual_facts 一次事务写进
+// defect_observations / condition_ratings / assessment_* 等多张事实表，提交失败若被
+// 当成成功，用户会看到"入库成功"而库里什么都没有——比草稿保存的后果重得多。
+TEST_F(ConfirmAnnualFactsTest, ReportsDatabaseCommitFailedWhenTheCommitItselfFails) {
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    ASSERT_TRUE(repository.save_review_draft(
+        import_record_id_, write_json_compact(build_confirmed_data())));
+    client_->execSqlSync(
+        "create or replace function bridge_report_test_fail_confirm_commit() returns trigger as $$ "
+        "begin raise exception 'forced commit failure'; end; $$ language plpgsql");
+    client_->execSqlSync(
+        "create constraint trigger trg_bridge_report_test_fail_confirm_commit "
+        "after update on inspection_years deferrable initially deferred "
+        "for each row execute function bridge_report_test_fail_confirm_commit()");
+
+    const auto outcome = repository.confirm_annual_facts(
+        import_record_id_, false, "提交阶段失败", confirmed_by_user_id_);
+
+    client_->execSqlSync(
+        "drop trigger trg_bridge_report_test_fail_confirm_commit on inspection_years");
+    client_->execSqlSync("drop function bridge_report_test_fail_confirm_commit()");
+
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "database_commit_failed")
+        << "实际拿到：" << outcome.error_message;
+
+    // 提交失败等于什么都没发生：事实表为空，导入记录仍待校对。
+    EXPECT_TRUE(client_->execSqlSync(
+        "select 1 from defect_observations where source_import_record_id=$1::uuid",
+        import_record_id_).empty());
+    EXPECT_EQ(client_->execSqlSync(
+        "select import_status from import_records where id=$1::uuid",
+        import_record_id_)[0]["import_status"].as<std::string>(), "待校对");
+}
