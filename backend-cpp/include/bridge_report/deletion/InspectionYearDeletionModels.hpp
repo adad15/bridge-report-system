@@ -20,6 +20,11 @@ struct DeletionCounts {
     int shared_files_retained{0};
     int defect_threads_affected{0};
     int defect_comparisons{0};
+    // 评定运行：assessment_runs.inspection_year_id 是 on delete restrict，不先删它
+    // 就删不掉年度。拆成两个计数是因为两者的处置完全不同——"正式+成功"的评定由
+    // protect_completed_formal_assessment_run 保护为不可删，有它在就整单拒绝。
+    int assessment_runs{0};
+    int formal_assessment_runs{0};
 
     Json::Value to_json() const;
 };
@@ -48,6 +53,7 @@ struct InspectionYearDeletionPlan {
     std::vector<std::string> import_record_ids;
     std::vector<std::string> defect_observation_ids;
     std::vector<std::string> condition_rating_ids;
+    std::vector<std::string> assessment_run_ids;
     std::vector<std::string> defect_thread_ids;
     std::vector<std::string> defect_comparison_ids;
     std::vector<std::string> archived_file_ids_to_delete;
@@ -72,6 +78,8 @@ enum class DeleteInspectionYearStatus {
     NotFound,
     Locked,
     ImpactChanged,
+    /// 该年度存在已完成的正式评定。正式评定是不可变的业务记录，不能被删除顺手抹掉。
+    FormalAssessmentPresent,
     Failed,
 };
 

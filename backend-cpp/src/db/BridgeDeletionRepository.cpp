@@ -1,5 +1,7 @@
 #include "bridge_report/db/BridgeDeletionRepository.hpp"
 
+#include <trantor/utils/Logger.h>
+
 #include <memory>
 #include <utility>
 
@@ -114,6 +116,27 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
     plan.counts.condition_ratings = counts["ratings"].as<int>();
     plan.counts.defect_comparisons = counts["comparisons"].as<int>();
 
+    // assessment_runs.inspection_year_id 是 on delete restrict：不先删它就删不掉年度，
+    // 而删年度是整桥删除的必经一步。这段此前完全缺失，任何做过评定（哪怕只是试算）的
+    // 桥都删不掉，异常又被 catch (...) 吞掉，只剩一句"删除失败，数据库已回滚"。
+    const auto runs = client->execSqlSync(
+        lock_rows
+            ? "select r.id::text as id, (r.run_kind='正式' and r.result_status='成功') as immutable "
+              "from assessment_runs r join inspection_years y on y.id=r.inspection_year_id "
+              "where y.bridge_id=$1::uuid order by r.id for update of r"
+            : "select r.id::text as id, (r.run_kind='正式' and r.result_status='成功') as immutable "
+              "from assessment_runs r join inspection_years y on y.id=r.inspection_year_id "
+              "where y.bridge_id=$1::uuid order by r.id",
+        bridge_id);
+    for (const auto& row : runs) {
+        if (row["immutable"].as<bool>()) {
+            plan.counts.formal_assessment_runs += 1;
+        } else {
+            plan.assessment_run_ids.push_back(row["id"].as<std::string>());
+            plan.counts.assessment_runs += 1;
+        }
+    }
+
     const auto temporary_sources = client->execSqlSync(
         lock_rows
             ? "select sf.id::text as id,sf.storage_relative_path,sf.updated_at::text as updated_at "
@@ -145,7 +168,8 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
         "union all select 'component-mapping:'||m.id::text||':'||m.updated_at::text from bridge_component_standard_mappings m join bridge_component_inventory_entries e on e.id=m.inventory_entry_id join bridge_component_inventory_revisions r on r.id=e.inventory_revision_id where r.bridge_id=$1::uuid "
         "union all select 'thread:'||id::text||':'||updated_at::text from defect_threads where bridge_id=$1::uuid "
         "union all select 'observation:'||id::text||':'||updated_at::text from defect_observations where bridge_id=$1::uuid "
-        "union all select 'comparison:'||id::text||':'||updated_at::text from defect_comparisons where bridge_id=$1::uuid"
+        "union all select 'comparison:'||id::text||':'||updated_at::text from defect_comparisons where bridge_id=$1::uuid "
+        "union all select 'run:'||r.id::text||':'||r.updated_at::text from assessment_runs r join inspection_years y on y.id=r.inspection_year_id where y.bridge_id=$1::uuid"
         ") x order by item",
         bridge_id
     );
@@ -251,6 +275,13 @@ deletion::DeleteBridgeOutcome BridgeDeletionRepository::delete_bridge(
         if (plan->impact_token() != expected_impact_token) {
             rollback(); outcome.status = deletion::DeleteBridgeStatus::ImpactChanged; return outcome;
         }
+        // 正式评定是不可变的业务记录，不能被整桥删除顺手抹掉。在这里明确拒绝，
+        // 而不是让用户点下去撞 protect_completed_formal_assessment_run。
+        if (plan->counts.formal_assessment_runs > 0) {
+            rollback();
+            outcome.status = deletion::DeleteBridgeStatus::FormalAssessmentPresent;
+            return outcome;
+        }
         const auto audit = tx->execSqlSync(
             "insert into bridge_deletion_audits(batch_id,bridge_id,bridge_system_number_snapshot,"
             "bridge_name_snapshot,route_number_snapshot,route_name_snapshot,station_mark_snapshot,status_snapshot,"
@@ -280,6 +311,10 @@ deletion::DeleteBridgeOutcome BridgeDeletionRepository::delete_bridge(
             "from import_records ir where sf.import_record_id=ir.id and ir.bridge_id=$1::uuid "
             "and sf.status not in ('已删除','已过期')", bridge_id);
         tx->execSqlSync("delete from import_records where bridge_id=$1::uuid", bridge_id);
+        // 必须早于删除年度：结果表由 on delete cascade 跟着走。
+        for (const auto& run_id : plan->assessment_run_ids) {
+            tx->execSqlSync("delete from assessment_runs where id=$1::uuid", run_id);
+        }
         tx->execSqlSync(
             "update inspection_years set revision_source_inspection_id=null where revision_source_inspection_id in "
             "(select id from inspection_years where bridge_id=$1::uuid)", bridge_id);
@@ -296,8 +331,15 @@ deletion::DeleteBridgeOutcome BridgeDeletionRepository::delete_bridge(
         outcome.status = deletion::DeleteBridgeStatus::Deleted;
         outcome.deletion_audit_id = audit_id;
         return outcome;
+    } catch (const std::exception& error) {
+        // 原来是 catch (...) 且一个字都不记，用户只看到"删除失败，数据库已回滚"，
+        // 排查只能靠在库里手工重放整条删除序列。真实异常必须留下来。
+        rollback();
+        LOG_ERROR << "bridge deletion failed bridge=" << bridge_id << " detail=" << error.what();
+        return {deletion::DeleteBridgeStatus::Failed};
     } catch (...) {
         rollback();
+        LOG_ERROR << "bridge deletion failed bridge=" << bridge_id << " detail=<non-standard exception>";
         return {deletion::DeleteBridgeStatus::Failed};
     }
 }

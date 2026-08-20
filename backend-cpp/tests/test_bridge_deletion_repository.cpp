@@ -183,3 +183,48 @@ TEST(BridgeDeletionRepositoryTest, DeletionLocksImportRecordsBeforeTheYear) {
     client->execSqlSync("delete from bridges where id=$1::uuid", bridge_id);
     client->closeAll();
 }
+
+// 与年度删除同一个洞：整桥删除也从没删过 assessment_runs，而
+// assessment_runs.inspection_year_id 是 on delete restrict，删年度是整桥删除的必经一步。
+// 任何做过评定（哪怕只是试算）的桥都删不掉——线上就是这么卡住的。
+TEST(BridgeDeletionRepositoryTest, DeletesTheBridgesDisposableAssessmentRuns) {
+    if (std::getenv("BRIDGE_REPORT_TEST_DATABASE_URL") == nullptr) GTEST_SKIP();
+    const auto client = bridge_report::db::create_db_client(bridge_report::config::PostgresConfig{}, 1);
+    const auto bridge_id = client->execSqlSync(
+        "insert into bridges(bridge_name) values('整桥删除评定测试') returning id::text as id")
+        [0]["id"].as<std::string>();
+    const auto user_id = client->execSqlSync(
+        "select id::text as id from users where username='admin'")[0]["id"].as<std::string>();
+    const auto year_id = client->execSqlSync(
+        "insert into inspection_years(bridge_id,inspection_year,status) "
+        "values($1::uuid,2032,'待校对') returning id::text as id", bridge_id)[0]["id"].as<std::string>();
+    const auto run_id = client->execSqlSync(
+        "insert into assessment_runs(inspection_year_id,run_kind,result_status,input_summary_json,"
+        "input_checksum,rule_package_summary_json,rule_package_checksum,result_summary_json,"
+        "created_by_user_id) values($1::uuid,'试算','成功','{\"source\":\"bridge-delete-test\"}'::jsonb,"
+        "$2,'{\"package\":\"bridge-delete-test\"}'::jsonb,$3,'{\"score\":80}'::jsonb,$4::uuid) "
+        "returning id::text as id",
+        year_id, "sha256:" + std::string(64, '5'), "sha256:" + std::string(64, '6'), user_id)
+        [0]["id"].as<std::string>();
+
+    bridge_report::db::BridgeDeletionRepository repository(client);
+    const auto preview = repository.preview(bridge_id);
+    ASSERT_TRUE(preview.has_value());
+    EXPECT_EQ(preview->counts.assessment_runs, 1) << "影响清单必须把评定运行算进去";
+    EXPECT_EQ(preview->counts.formal_assessment_runs, 0);
+
+    bridge_report::deletion::DeletionActorSnapshot actor;
+    actor.user_id = user_id;
+    actor.username = "admin";
+    actor.display_name = "管理员";
+    const auto batch_id = client->execSqlSync(
+        "select gen_random_uuid()::text as id")[0]["id"].as<std::string>();
+    const auto outcome = repository.delete_bridge(
+        bridge_id, preview->impact_token(), "评定运行清理", actor, batch_id);
+
+    EXPECT_EQ(outcome.status, bridge_report::deletion::DeleteBridgeStatus::Deleted);
+    EXPECT_TRUE(client->execSqlSync("select 1 from bridges where id=$1::uuid", bridge_id).empty());
+    EXPECT_TRUE(client->execSqlSync(
+        "select 1 from assessment_runs where id=$1::uuid", run_id).empty());
+    client->closeAll();
+}

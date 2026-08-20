@@ -207,3 +207,129 @@ TEST_F(InspectionYearDeletionRepositoryTest, DeletionLocksImportRecordsBeforeThe
         << "删除路径在拿到 import_records 之前就锁了 inspection_years，"
            "与所有写路径的顺序相反，两者可凑成死锁";
 }
+
+namespace {
+
+// 造一条评定运行。run_kind='试算' 的可删；'正式'+'成功' 由
+// protect_completed_formal_assessment_run 保护为不可删。
+std::string insert_assessment_run(
+    const drogon::orm::DbClientPtr& client,
+    const std::string& inspection_year_id,
+    const std::string& user_id,
+    const std::string& run_kind,
+    const std::string& result_status
+) {
+    // 三个 *_summary_json 都有"必须是非空对象"的检查约束；"正式+成功"另有
+    // confirmation_check 要求确认人与确认时间齐全。
+    const bool immutable = run_kind == "正式" && result_status == "成功";
+    return client->execSqlSync(
+        "insert into assessment_runs(inspection_year_id,run_kind,result_status,input_summary_json,"
+        "input_checksum,rule_package_summary_json,rule_package_checksum,result_summary_json,"
+        "created_by_user_id,formal_revision_number,confirmed_by_user_id,confirmed_at) "
+        "values($1::uuid,$2,$3,'{\"source\":\"deletion-test\"}'::jsonb,$4,"
+        "'{\"package\":\"deletion-test\"}'::jsonb,$5,'{\"score\":80}'::jsonb,$6::uuid,"
+        "case when $7 then 1 else null end,"
+        "case when $7 then $6::uuid else null end,"
+        "case when $7 then now() else null end) "
+        "returning id::text as id",
+        inspection_year_id, run_kind, result_status,
+        "sha256:" + std::string(64, '1'), "sha256:" + std::string(64, '2'), user_id, immutable
+    )[0]["id"].as<std::string>();
+}
+
+}  // namespace
+
+// assessment_runs.inspection_year_id 是 on delete restrict：不先删它就删不掉年度。
+// 这段此前完全缺失，任何做过评定（哪怕只是试算）的年度都删不掉——而两条删除路径的
+// 测试夹具从来不建评定运行，所以测试一直全绿。百股大桥就是被这个卡住的。
+TEST_F(InspectionYearDeletionRepositoryTest, DeletesTheYearsDisposableAssessmentRuns) {
+    const auto run_id = insert_assessment_run(client_, year_v1_, user_id_, "试算", "成功");
+
+    bridge_report::db::InspectionYearDeletionRepository repository(client_);
+    const auto preview = repository.preview(year_v1_);
+    ASSERT_TRUE(preview.has_value());
+    EXPECT_EQ(preview->counts.assessment_runs, 1) << "影响清单必须把评定运行算进去";
+    EXPECT_EQ(preview->counts.formal_assessment_runs, 0);
+
+    const auto outcome = repository.delete_year(
+        year_v1_, preview->impact_token(), "永久删除 2026", "评定运行清理", actor());
+
+    ASSERT_EQ(outcome.status, bridge_report::deletion::DeleteInspectionYearStatus::Deleted);
+    EXPECT_TRUE(client_->execSqlSync(
+        "select 1 from assessment_runs where id=$1::uuid", run_id).empty());
+}
+
+// 正式评定是不可变的业务记录，不能被年度删除顺手抹掉。必须在预检就判出来并明确拒绝，
+// 而不是让用户点下去撞保护触发器、拿一句看不懂的"删除失败"。
+TEST_F(InspectionYearDeletionRepositoryTest, RefusesToDeleteAYearWithACompletedFormalAssessment) {
+    // "正式"评定按 assessment_runs_kind_context_check 必须带齐规范上下文与台账版本。
+    const auto make_package = [&](const char* tag, const char* family) {
+        return client_->execSqlSync(
+            "insert into standard_packages(standard_family,standard_id,standard_code,standard_name,"
+            "official_edition,package_version,contract_version,algorithm_id,effective_date,content_checksum) "
+            "values($1,$2||'-'||gen_random_uuid()::text,$2,'删除测试规范','2026','1.0.0',1,$2,"
+            "'2026-01-01','sha256:'||repeat('d',64)) returning id::text as id",
+            family, tag)[0]["id"].as<std::string>();
+    };
+    const auto technical_package = make_package("DEL-TECH", "technical_condition");
+    const auto maintenance_package = make_package("DEL-MAINT", "maintenance");
+    const auto profile_id = client_->execSqlSync(
+        "insert into project_standard_profiles(technical_condition_package_id,maintenance_package_id,"
+        "created_by_user_id,change_reason) values($1::uuid,$2::uuid,$3::uuid,'删除测试') "
+        "returning id::text as id",
+        technical_package, maintenance_package, user_id_)[0]["id"].as<std::string>();
+    const auto revision_id = client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,created_by_user_id) "
+        "values($1::uuid,1,$2::uuid) returning id::text as id",
+        bridge_id_, user_id_)[0]["id"].as<std::string>();
+    // validate_assessment_run_context() 还要求台账版本已确认。
+    client_->execSqlSync(
+        "update bridge_component_inventory_revisions set status='已确认',"
+        "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
+        revision_id, user_id_);
+
+    const auto run_id = client_->execSqlSync(
+        "insert into assessment_runs(inspection_year_id,run_kind,result_status,input_summary_json,"
+        "input_checksum,rule_package_summary_json,rule_package_checksum,result_summary_json,"
+        "created_by_user_id,formal_revision_number,technical_condition_package_id,standard_profile_id,"
+        "component_inventory_revision_id,is_current,confirmed_by_user_id,confirmed_at) "
+        "values($1::uuid,'正式','成功','{\"source\":\"deletion-test\"}'::jsonb,$2,"
+        "'{\"package\":\"deletion-test\"}'::jsonb,$3,'{\"score\":80}'::jsonb,$4::uuid,1,"
+        "$5::uuid,$6::uuid,$7::uuid,true,$4::uuid,now()) returning id::text as id",
+        year_v1_, "sha256:" + std::string(64, '3'),
+        // validate_assessment_run_context() 要求它等于锁定规范包的 content_checksum。
+        "sha256:" + std::string(64, 'd'),
+        user_id_, technical_package, profile_id, revision_id)[0]["id"].as<std::string>();
+
+    bridge_report::db::InspectionYearDeletionRepository repository(client_);
+    const auto preview = repository.preview(year_v1_);
+    ASSERT_TRUE(preview.has_value());
+    EXPECT_EQ(preview->counts.formal_assessment_runs, 1);
+    EXPECT_EQ(preview->counts.assessment_runs, 0) << "不可删的那条不该算进可删计数";
+
+    const auto outcome = repository.delete_year(
+        year_v1_, preview->impact_token(), "永久删除 2026", "不该成功", actor());
+
+    EXPECT_EQ(outcome.status,
+              bridge_report::deletion::DeleteInspectionYearStatus::FormalAssessmentPresent);
+    EXPECT_FALSE(client_->execSqlSync(
+        "select 1 from assessment_runs where id=$1::uuid", run_id).empty())
+        << "拒绝之后正式评定必须原样还在";
+    EXPECT_FALSE(client_->execSqlSync(
+        "select 1 from inspection_years where id=$1::uuid", year_v1_).empty())
+        << "年度也必须原样还在";
+
+    // 本条自建的规范组合/规范包不在夹具的清理范围内；project_standard_profiles
+    // 对 users 是 on delete restrict，留着会让 TearDown 删不掉测试用户。
+    client_->execSqlSync(
+        "alter table assessment_runs disable trigger trg_assessment_runs_completed_formal_immutable");
+    client_->execSqlSync("delete from assessment_runs where id=$1::uuid", run_id);
+    client_->execSqlSync(
+        "alter table assessment_runs enable trigger trg_assessment_runs_completed_formal_immutable");
+    client_->execSqlSync("delete from project_standard_profiles where id=$1::uuid", profile_id);
+    client_->execSqlSync("delete from standard_packages where id=$1::uuid", technical_package);
+    client_->execSqlSync("delete from standard_packages where id=$1::uuid", maintenance_package);
+    // 夹具的 TearDown 先删用户，任何 on delete restrict 引用它的行都会把删除挡住。
+    client_->execSqlSync(
+        "delete from bridge_component_inventory_revisions where id=$1::uuid", revision_id);
+}

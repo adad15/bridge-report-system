@@ -116,6 +116,15 @@ void register_inspection_year_deletion_routes(
                         respond_json(callback, error, drogon::k409Conflict);
                         return;
                     }
+                    case deletion::DeleteInspectionYearStatus::FormalAssessmentPresent: {
+                        auto error = make_error_body("inspection_year_formal_assessment_present",
+                            "该年度存在已完成的正式评定，不能删除。正式评定是不可变的业务记录，"
+                            "如确需删除请先处理该评定。");
+                        if (outcome.current_plan.has_value())
+                            error["current_impact"] = outcome.current_plan->to_public_json();
+                        respond_json(callback, error, drogon::k409Conflict);
+                        return;
+                    }
                     case deletion::DeleteInspectionYearStatus::Failed:
                         respond_db_unavailable(callback);
                         return;

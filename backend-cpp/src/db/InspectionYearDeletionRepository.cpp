@@ -1,5 +1,7 @@
 #include "bridge_report/db/InspectionYearDeletionRepository.hpp"
 
+#include <trantor/utils/Logger.h>
+
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -184,6 +186,35 @@ std::optional<deletion::InspectionYearDeletionPlan> build_plan(
     plan.counts.defect_measurements = detail_counts[0]["measurements"].as<int>();
     plan.counts.defect_photos = detail_counts[0]["photos"].as<int>();
 
+    // assessment_runs.inspection_year_id 是 on delete restrict：不先删它就删不掉年度。
+    // 这段此前完全缺失，任何做过评定（哪怕只是试算）的年度都删不掉，而 catch (...)
+    // 把真实异常吞了，用户只看到一句"删除失败，数据库已回滚"。
+    //
+    // "正式+成功"的评定由 protect_completed_formal_assessment_run 保护为不可删，
+    // 单独计数：有它在就整单拒绝，而不是让用户点下去撞触发器。
+    const auto runs = client->execSqlSync(
+        lock_rows
+            ? "select r.id::text as id, r.updated_at::text as updated_at, "
+              "(r.run_kind='正式' and r.result_status='成功') as immutable from assessment_runs r "
+              "join inspection_years iy on iy.id=r.inspection_year_id "
+              "where iy.bridge_id=$1::uuid and iy.inspection_year=$2 order by r.id for update of r"
+            : "select r.id::text as id, r.updated_at::text as updated_at, "
+              "(r.run_kind='正式' and r.result_status='成功') as immutable from assessment_runs r "
+              "join inspection_years iy on iy.id=r.inspection_year_id "
+              "where iy.bridge_id=$1::uuid and iy.inspection_year=$2 order by r.id",
+        plan.bridge_id, plan.inspection_year
+    );
+    for (const auto& row : runs) {
+        const auto id = row["id"].as<std::string>();
+        if (row["immutable"].as<bool>()) {
+            plan.counts.formal_assessment_runs += 1;
+        } else {
+            plan.assessment_run_ids.push_back(id);
+            plan.counts.assessment_runs += 1;
+        }
+        plan.fingerprint_items.push_back("run:" + id + ":" + row["updated_at"].as<std::string>());
+    }
+
     const auto ratings = client->execSqlSync(
         lock_rows
             ? "select r.id::text as id, r.updated_at::text as updated_at from condition_ratings r "
@@ -347,6 +378,14 @@ deletion::DeleteInspectionYearOutcome InspectionYearDeletionRepository::delete_y
             outcome.status = deletion::DeleteInspectionYearStatus::ImpactChanged;
             return outcome;
         }
+        // 正式评定是不可变的业务记录，能被年度删除顺手抹掉的话，
+        // protect_completed_formal_assessment_run 那个保护触发器就形同虚设。
+        // 在这里明确拒绝，而不是让用户点下去撞触发器、拿一句看不懂的"删除失败"。
+        if (plan->counts.formal_assessment_runs > 0) {
+            rollback();
+            outcome.status = deletion::DeleteInspectionYearStatus::FormalAssessmentPresent;
+            return outcome;
+        }
 
         const auto audit_rows = tx->execSqlSync(
             "insert into inspection_year_deletion_audits "
@@ -391,6 +430,11 @@ deletion::DeleteInspectionYearOutcome InspectionYearDeletionRepository::delete_y
             "and iy.bridge_id=$1::uuid and iy.inspection_year=$2",
             plan->bridge_id, plan->inspection_year
         );
+        // 必须早于删除年度：assessment_runs.inspection_year_id 是 on delete restrict。
+        // 结果表（assessment_component_results 等）由 on delete cascade 跟着走。
+        for (const auto& run_id : plan->assessment_run_ids) {
+            tx->execSqlSync("delete from assessment_runs where id=$1::uuid", run_id);
+        }
         tx->execSqlSync(
             "update inspection_years set revision_source_inspection_id=null "
             "where revision_source_inspection_id in "
@@ -422,8 +466,11 @@ deletion::DeleteInspectionYearOutcome InspectionYearDeletionRepository::delete_y
         outcome.status = deletion::DeleteInspectionYearStatus::Deleted;
         outcome.deletion_audit_id = audit_id;
         return outcome;
-    } catch (const std::exception&) {
+    } catch (const std::exception& error) {
+        // 同 BridgeDeletionRepository：异常吞掉之后排查只能靠手工重放删除序列。
         rollback();
+        LOG_ERROR << "inspection year deletion failed year=" << inspection_year_id
+                  << " detail=" << error.what();
         deletion::DeleteInspectionYearOutcome outcome;
         outcome.status = deletion::DeleteInspectionYearStatus::Failed;
         return outcome;

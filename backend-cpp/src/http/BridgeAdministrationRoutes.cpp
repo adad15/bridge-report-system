@@ -235,7 +235,12 @@ void register_bridge_administration_routes(
                     case deletion::DeleteBridgeStatus::Locked: result["status"] = "locked"; result["message"] = "该桥梁有导入记录正在编辑。"; break;
                     case deletion::DeleteBridgeStatus::ImpactChanged: result["status"] = "impact_changed"; result["message"] = "删除影响范围已经变化，请重新预览。"; break;
                     case deletion::DeleteBridgeStatus::NotFound: result["status"] = "not_found"; result["message"] = "桥梁已经不存在。"; break;
-                    case deletion::DeleteBridgeStatus::Failed: result["status"] = "failed"; result["message"] = "该桥梁删除失败，数据库已回滚。"; break;
+                    case deletion::DeleteBridgeStatus::FormalAssessmentPresent:
+                        result["status"] = "formal_assessment_present";
+                        result["message"] = "该桥梁存在已完成的正式评定，不能删除。"
+                            "正式评定是不可变的业务记录，如确需删除请先处理该评定。";
+                        break;
+                    case deletion::DeleteBridgeStatus::Failed: result["status"] = "failed"; result["message"] = "该桥梁删除失败，数据库已回滚（详细原因见服务端日志）。"; break;
                 }
                 response["results"].append(std::move(result));
             }

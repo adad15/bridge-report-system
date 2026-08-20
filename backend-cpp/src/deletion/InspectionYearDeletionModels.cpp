@@ -50,6 +50,8 @@ Json::Value DeletionCounts::to_json() const {
     json["shared_files_retained"] = shared_files_retained;
     json["defect_threads_affected"] = defect_threads_affected;
     json["defect_comparisons"] = defect_comparisons;
+    json["assessment_runs"] = assessment_runs;
+    json["formal_assessment_runs"] = formal_assessment_runs;
     return json;
 }
 

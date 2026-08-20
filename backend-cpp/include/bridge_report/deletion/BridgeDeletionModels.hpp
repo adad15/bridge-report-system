@@ -27,6 +27,9 @@ struct BridgeDeletionCounts {
     int defect_photos{0};
     int condition_ratings{0};
     int defect_comparisons{0};
+    // 见 InspectionYearDeletionModels.hpp 里同名字段的说明。
+    int assessment_runs{0};
+    int formal_assessment_runs{0};
     int archived_files_to_delete{0};
     int temporary_source_files_to_delete{0};
     int shared_files_retained{0};
@@ -50,6 +53,7 @@ struct BridgeDeletionPlan {
     std::vector<std::string> archived_file_relative_paths_to_delete;
     std::vector<std::string> temporary_source_file_ids_to_delete;
     std::vector<std::string> temporary_source_relative_paths_to_delete;
+    std::vector<std::string> assessment_run_ids;
     std::vector<std::string> fingerprint_items;
 
     std::string impact_token() const;
@@ -58,7 +62,15 @@ struct BridgeDeletionPlan {
 
 std::string bridge_deletion_confirmation_text(std::vector<std::string> system_numbers);
 
-enum class DeleteBridgeStatus { Deleted, NotFound, Locked, ImpactChanged, Failed };
+enum class DeleteBridgeStatus {
+    Deleted,
+    NotFound,
+    Locked,
+    ImpactChanged,
+    /// 该桥存在已完成的正式评定，见 DeleteInspectionYearStatus 同名值。
+    FormalAssessmentPresent,
+    Failed,
+};
 
 struct DeleteBridgeOutcome {
     DeleteBridgeStatus status{DeleteBridgeStatus::Failed};
