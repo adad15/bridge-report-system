@@ -4657,6 +4657,12 @@ body {
 
 .defect-issue-group {
   display: grid;
+  /* 不写列定义时是一条 auto 轨道，而 auto 按 max-content 撑开：下面那行
+     "选择框 + 应用按钮"的 max-content 是**最长那条选项**的宽度加按钮宽度，
+     评定树选项一长就超过卡片宽度，按钮被顶出卡片、压到相邻卡片上。
+     卡片自身的 min-width:0 管不住轨道，必须把轨道钉成可收缩的 1fr——
+     之后选择框的 flex:1/min-width:0 才真正起作用。 */
+  grid-template-columns: minmax(0, 1fr);
   gap: 9px;
   min-width: 0;
   padding: 12px;
