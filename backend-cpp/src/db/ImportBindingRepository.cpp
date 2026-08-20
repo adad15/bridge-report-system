@@ -421,22 +421,10 @@ namespace {
 const inventory::InventoryMapping* validate_target(
     const inventory::InventoryRevision& revision, const std::string& part_name,
     const std::string& bridge_component_id) {
-    const inventory::InventoryMapping* mapping = nullptr;
-    for (const auto& entry : revision.entries) {
-        if (!entry.is_active || entry.bridge_component_id != bridge_component_id) continue;
-        for (const auto& candidate : entry.mappings) {
-            if (candidate.is_active) { mapping = &candidate; break; }
-        }
-        break;
-    }
-    if (mapping == nullptr) return nullptr;
-    const auto categories = inventory::resolve_component_categories(part_name);
-    if (!categories.empty()
-        && std::find(categories.begin(), categories.end(),
-                     mapping->standard_component_category_id) == categories.end()) {
-        return nullptr;
-    }
-    return mapping;
+    // 规则本体住在 inventory 层，"两侧"多构件绑定与这里共用同一份。
+    const auto resolved = inventory::resolve_bindable_component(
+        revision, part_name, bridge_component_id);
+    return resolved.has_value() ? resolved->mapping : nullptr;
 }
 
 void write_binding(

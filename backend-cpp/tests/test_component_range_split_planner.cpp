@@ -11,7 +11,9 @@ using bridge_report::inventory::InventoryMapping;
 using bridge_report::inventory::InventoryRevision;
 using bridge_report::review::ComponentRangeSplitPlanStatus;
 using bridge_report::review::ComponentRangeSplitTarget;
+using bridge_report::review::analyze_component_multi_bind;
 using bridge_report::review::analyze_component_range_splits;
+using bridge_report::review::materialize_component_range_splits;
 using bridge_report::review::plan_component_range_splits;
 
 InventoryEntry entry(std::string id, std::string number) {
@@ -159,5 +161,180 @@ TEST(ComponentRangeSplitPlannerTest, RejectsBoundSourceAndResultLimit) {
         {ComponentRangeSplitTarget{"上部承重构件", "1-1#梁~1-3#梁"}}, 500, 8);
     EXPECT_EQ(limited.status, ComponentRangeSplitPlanStatus::ResultLimitExceeded);
 }
+
+
+// ---------- "两侧"多构件绑定 ----------
+
+namespace two_sided {
+
+InventoryEntry railing(std::string id, std::string number) {
+    InventoryMapping mapping;
+    mapping.id = "mapping-" + id;
+    mapping.standard_component_category_id = "h21.component.deck.railing";
+    mapping.structure_part = "deck_system";
+    InventoryEntry value;
+    value.id = "entry-" + id;
+    value.bridge_component_id = std::move(id);
+    value.component_number = std::move(number);
+    value.site_name = "栏杆";
+    value.site_component_type = "栏杆";
+    value.mappings.push_back(std::move(mapping));
+    return value;
+}
+
+InventoryRevision inventory() {
+    return revision({railing("c-left", "左侧栏杆"), railing("c-right", "右侧栏杆"),
+                     entry("c-girder", "1-1#梁")});
+}
+
+// 百股大桥那条：报告编号"两侧护栏"，标度 3，总面积 80 ㎡，带一张照片。
+Json::Value document() {
+    Json::Value defect_value(Json::objectValue);
+    defect_value["candidate_id"] = "r0";
+    defect_value["component_name"] = "栏杆、护栏";
+    defect_value["component_number"] = "两侧护栏";
+    defect_value["defect_description"] = "基座破损露筋";
+    defect_value["defect_scale"] = 3;
+    defect_value["review_status"] = "已修改";
+    defect_value["group_review_status"] = "已确认";
+    defect_value["warnings"] = Json::Value(Json::arrayValue);
+    Json::Value measurement(Json::objectValue);
+    measurement["value"] = 80.0;
+    measurement["value_type"] = "总面积";
+    defect_value["measurements"] = Json::Value(Json::arrayValue);
+    defect_value["measurements"].append(measurement);
+
+    Json::Value photo(Json::objectValue);
+    photo["candidate_id"] = "p0";
+    photo["linked_defect_candidate_id"] = "r0";
+    photo["warnings"] = Json::Value(Json::arrayValue);
+
+    Json::Value value(Json::objectValue);
+    value["defects"] = Json::Value(Json::arrayValue);
+    value["defects"].append(defect_value);
+    value["photos"] = Json::Value(Json::arrayValue);
+    value["photos"].append(photo);
+    return value;
+}
+
+ComponentRangeSplitTarget target() { return {"栏杆、护栏", "两侧护栏"}; }
+
+TEST(ComponentMultiBindTest, BuildsOneMatchPerChosenComponent) {
+    const auto analysis = analyze_component_multi_bind(
+        document(), inventory(), target(), {"c-left", "c-right"});
+    ASSERT_EQ(analysis.status, ComponentRangeSplitPlanStatus::Ok) << analysis.error_message;
+    ASSERT_EQ(analysis.work_items.size(), 1u);
+    const auto& work = analysis.work_items.front();
+    ASSERT_EQ(work.matches.size(), 2u);
+    // 编号取台账真实编号，不是报告里的"两侧护栏"——"护栏 vs 栏杆"用词不一致
+    // 正是在这里消解的。
+    EXPECT_EQ(work.matches[0].component_number, "左侧栏杆");
+    EXPECT_EQ(work.matches[0].bridge_component_id, "c-left");
+    EXPECT_EQ(work.matches[0].standard_component_category_id, "h21.component.deck.railing");
+    EXPECT_EQ(work.matches[0].resolved_structure_part, "桥面系");
+    // 构件是人选的，来源必须记成 manual，与既有单条绑定一致。
+    EXPECT_EQ(work.matches[0].match_method, "manual");
+    // 顺序即所选顺序，不得重排。
+    EXPECT_EQ(work.matches[1].component_number, "右侧栏杆");
+    EXPECT_EQ(work.matches[1].bridge_component_id, "c-right");
+    EXPECT_EQ(analysis.totals.result_defect_count, 2);
+    EXPECT_EQ(analysis.totals.bound_count, 2);
+    EXPECT_EQ(analysis.totals.unmatched_count, 0);
+}
+
+TEST(ComponentMultiBindTest, MaterializesTwoBoundDefects) {
+    const auto source = document();
+    const auto analysis = analyze_component_multi_bind(
+        source, inventory(), target(), {"c-left", "c-right"});
+    ASSERT_EQ(analysis.status, ComponentRangeSplitPlanStatus::Ok);
+    const auto plan = materialize_component_range_splits(source, analysis);
+    ASSERT_EQ(plan.status, ComponentRangeSplitPlanStatus::Ok);
+
+    const auto& defects = plan.result_json["defects"];
+    ASSERT_EQ(defects.size(), 2u);
+    for (Json::ArrayIndex i = 0; i < 2; ++i) {
+        EXPECT_EQ(defects[i]["review_status"].asString(), "待确认");
+        EXPECT_EQ(defects[i]["component_match_method"].asString(), "manual");
+        // 标度与病害量原样复制：评分只取标度，量值留给人核（沿用范围拆分的既有约定）。
+        EXPECT_EQ(defects[i]["defect_scale"].asInt(), 3);
+        ASSERT_EQ(defects[i]["measurements"].size(), 1u);
+        EXPECT_DOUBLE_EQ(defects[i]["measurements"][0]["value"].asDouble(), 80.0);
+        // 溯源必须指回那条"两侧护栏"，否则出了问题查不到它从哪来。
+        EXPECT_EQ(defects[i]["range_split_origin"]["source_candidate_id"].asString(), "r0");
+        EXPECT_EQ(defects[i]["range_split_origin"]["source_component_number"].asString(),
+                  "两侧护栏");
+        EXPECT_EQ(defects[i]["range_split_origin"]["split_count"].asInt(), 2);
+    }
+    EXPECT_EQ(defects[0]["component_number"].asString(), "左侧栏杆");
+    EXPECT_EQ(defects[0]["bridge_component_id"].asString(), "c-left");
+    EXPECT_EQ(defects[1]["component_number"].asString(), "右侧栏杆");
+    EXPECT_EQ(defects[1]["bridge_component_id"].asString(), "c-right");
+}
+
+TEST(ComponentMultiBindTest, CopiesPhotosToEachSide) {
+    const auto source = document();
+    const auto analysis = analyze_component_multi_bind(
+        source, inventory(), target(), {"c-left", "c-right"});
+    ASSERT_EQ(analysis.status, ComponentRangeSplitPlanStatus::Ok);
+    const auto plan = materialize_component_range_splits(source, analysis);
+
+    const auto& photos = plan.result_json["photos"];
+    ASSERT_EQ(photos.size(), 2u);
+    std::set<std::string> linked;
+    for (const auto& photo : photos) {
+        linked.insert(photo["linked_defect_candidate_id"].asString());
+    }
+    // 两张照片各自指向新候选，不能还指着已经不存在的源候选。
+    EXPECT_EQ(linked.count("r0"), 0u);
+    EXPECT_EQ(linked.size(), 2u);
+    for (const auto& defect : plan.result_json["defects"]) {
+        EXPECT_EQ(linked.count(defect["candidate_id"].asString()), 1u);
+    }
+}
+
+TEST(ComponentMultiBindTest, RejectsAlreadyResolvedRows) {
+    auto source = document();
+    source["defects"][0]["bridge_component_id"] = "c-left";
+    const auto analysis = analyze_component_multi_bind(
+        source, inventory(), target(), {"c-left", "c-right"});
+    EXPECT_EQ(analysis.status, ComponentRangeSplitPlanStatus::IneligibleTarget);
+}
+
+TEST(ComponentMultiBindTest, RejectsAComponentOutsideTheInventory) {
+    const auto analysis = analyze_component_multi_bind(
+        document(), inventory(), target(), {"c-left", "c-nonexistent"});
+    EXPECT_EQ(analysis.status, ComponentRangeSplitPlanStatus::InvalidTarget);
+}
+
+// 类别不符：梁不能绑到"栏杆、护栏"上。与单条绑定同一条规则。
+TEST(ComponentMultiBindTest, RejectsAComponentOfAnotherPart) {
+    const auto analysis = analyze_component_multi_bind(
+        document(), inventory(), target(), {"c-left", "c-girder"});
+    EXPECT_EQ(analysis.status, ComponentRangeSplitPlanStatus::InvalidTarget);
+}
+
+TEST(ComponentMultiBindTest, RequiresAtLeastTwoComponents) {
+    EXPECT_EQ(analyze_component_multi_bind(document(), inventory(), target(), {}).status,
+              ComponentRangeSplitPlanStatus::InvalidTarget);
+    EXPECT_EQ(
+        analyze_component_multi_bind(document(), inventory(), target(), {"c-left"}).status,
+        ComponentRangeSplitPlanStatus::InvalidTarget);
+}
+
+// 同一个构件选两次会让它吃到两份同样的扣分，必须拒绝。
+TEST(ComponentMultiBindTest, RejectsDuplicateComponents) {
+    const auto analysis = analyze_component_multi_bind(
+        document(), inventory(), target(), {"c-left", "c-left"});
+    EXPECT_EQ(analysis.status, ComponentRangeSplitPlanStatus::InvalidTarget);
+}
+
+TEST(ComponentMultiBindTest, RejectsWhenTheTargetRowIsGone) {
+    const auto analysis = analyze_component_multi_bind(
+        document(), inventory(), {"栏杆、护栏", "不存在的编号"}, {"c-left", "c-right"});
+    EXPECT_EQ(analysis.status, ComponentRangeSplitPlanStatus::InvalidTarget);
+    EXPECT_EQ(analysis.error_code, "component_multi_bind_target_not_found");
+}
+
+}  // namespace two_sided
 
 }  // namespace

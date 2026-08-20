@@ -45,6 +45,24 @@ struct ComponentMatchResult {
  */
 [[nodiscard]] std::vector<const InventoryEntry*> usable_inventory_entries(
     const InventoryRevision& revision);
+
+// 一个可绑定的实际构件：条目 + 它的生效映射。
+struct BindableComponent {
+    const InventoryEntry* entry{nullptr};
+    const InventoryMapping* mapping{nullptr};
+};
+
+/**
+ * @brief 报告部件名称 + 实际构件 id → 该构件的条目与生效映射。
+ *
+ * 构件须启用且有生效映射，且其类别与部件名称的对照相符；任一不满足返回 nullopt。
+ * 单条绑定、批量绑定与"两侧"多构件绑定共用这一条规则——各写一份的话，三处对
+ * "这个构件能不能绑到这个部件上"的答案迟早分叉。
+ */
+[[nodiscard]] std::optional<BindableComponent> resolve_bindable_component(
+    const InventoryRevision& revision,
+    const std::string& part_name,
+    const std::string& bridge_component_id);
 [[nodiscard]] std::string normalize_component_number(const std::string& value);
 
 /**

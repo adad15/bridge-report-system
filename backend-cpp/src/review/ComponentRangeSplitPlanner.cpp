@@ -264,6 +264,118 @@ ComponentRangeSplitAnalysis analyze_component_range_splits(
     return analysis;
 }
 
+ComponentRangeSplitAnalysis analyze_component_multi_bind(
+    const Json::Value& current,
+    const inventory::InventoryRevision& revision,
+    const ComponentRangeSplitTarget& target,
+    const std::vector<std::string>& bridge_component_ids
+) {
+    ComponentRangeSplitAnalysis analysis;
+    analysis.inventory_revision_id = revision.id;
+    const auto reject = [&](ComponentRangeSplitPlanStatus status, const char* code,
+                            const char* message) -> ComponentRangeSplitAnalysis& {
+        analysis.status = status;
+        analysis.error_code = code;
+        analysis.error_message = message;
+        analysis.rejected_target = target;
+        return analysis;
+    };
+
+    if (!current["defects"].isArray()) {
+        return reject(ComponentRangeSplitPlanStatus::InvalidTarget,
+                      "component_multi_bind_invalid_target", "草稿里没有病害。");
+    }
+    // 至少两个构件：只选一个的话既有的单条绑定就够了，不该把病害拆开。
+    if (bridge_component_ids.size() < 2) {
+        return reject(ComponentRangeSplitPlanStatus::InvalidTarget,
+                      "component_multi_bind_needs_two_components", "至少选择两个实际构件。");
+    }
+    // 同一个构件选两次会让它吃到两份同样的扣分，构件分被凭空压低。
+    std::set<std::string> seen;
+    for (const auto& id : bridge_component_ids) {
+        if (!seen.insert(id).second) {
+            return reject(ComponentRangeSplitPlanStatus::InvalidTarget,
+                          "component_multi_bind_duplicate_component",
+                          "同一个构件不能选择多次。");
+        }
+    }
+
+    ComponentRangeSplitWorkItem work;
+    work.summary.target = target;
+    work.summary.expanded_component_count = static_cast<int>(bridge_component_ids.size());
+
+    // 构件是人选的，逐个按"能否绑到这个部件上"校验——与单条绑定同一条规则。
+    // 顺序保持所选顺序：界面上的"两侧"选项按左、右给，产出的两条也该是左、右。
+    for (const auto& id : bridge_component_ids) {
+        const auto resolved =
+            inventory::resolve_bindable_component(revision, target.part_name, id);
+        if (!resolved.has_value()) {
+            return reject(ComponentRangeSplitPlanStatus::InvalidTarget,
+                          "component_multi_bind_invalid_component",
+                          "所选构件不属于该部件，或已不可绑定。");
+        }
+        ComponentRangeSplitMatch match;
+        // 编号取台账真实编号，不是报告里的那个记号。报告写"两侧护栏"、台账是
+        // "左侧栏杆"这种用词差异，正是在这里消解的。
+        match.component_number = resolved->entry->component_number;
+        match.bridge_component_id = resolved->entry->bridge_component_id;
+        match.standard_component_category_id =
+            resolved->mapping->standard_component_category_id;
+        match.resolved_structure_part =
+            resolved_structure_part(resolved->mapping->structure_part);
+        match.match_method = "manual";
+        work.matches.push_back(std::move(match));
+    }
+
+    std::unordered_map<std::string, int> photo_counts;
+    if (current["photos"].isArray()) {
+        for (const auto& photo : current["photos"]) {
+            ++photo_counts[string_member(photo, "linked_defect_candidate_id")];
+        }
+    }
+
+    // 行的口径与范围拆分一致：部件名称 + 归一化编号。
+    const auto normalized_target =
+        inventory::normalize_component_number(target.component_number);
+    int source_photo_count = 0;
+    for (const auto& defect : current["defects"]) {
+        if (string_member(defect, "component_name") != target.part_name
+            || inventory::normalize_component_number(
+                   string_member(defect, "component_number")) != normalized_target) {
+            continue;
+        }
+        if (is_ineligible(defect)) {
+            return reject(ComponentRangeSplitPlanStatus::IneligibleTarget,
+                          "component_multi_bind_ineligible",
+                          "已绑定或已标记缺失的构件需先清除处理结果。");
+        }
+        const auto source_id = string_member(defect, "candidate_id");
+        work.source_candidate_ids.push_back(source_id);
+        source_photo_count += photo_counts[source_id];
+    }
+    if (work.source_candidate_ids.empty()) {
+        return reject(ComponentRangeSplitPlanStatus::InvalidTarget,
+                      "component_multi_bind_target_not_found", "所选构件行已不存在。");
+    }
+
+    work.summary.source_defect_count = static_cast<int>(work.source_candidate_ids.size());
+    work.summary.result_defect_count =
+        work.summary.source_defect_count * work.summary.expanded_component_count;
+    work.summary.result_photo_count =
+        source_photo_count * work.summary.expanded_component_count;
+    // 每一条都直接落到选定构件上，没有未匹配或歧义的余地。
+    work.summary.bound_count = work.summary.result_defect_count;
+
+    analysis.totals.selected_range_count = 1;
+    analysis.totals.source_defect_count = work.summary.source_defect_count;
+    analysis.totals.result_defect_count = work.summary.result_defect_count;
+    analysis.totals.result_photo_count = work.summary.result_photo_count;
+    analysis.totals.bound_count = work.summary.bound_count;
+    analysis.items.push_back(work.summary);
+    analysis.work_items.push_back(std::move(work));
+    return analysis;
+}
+
 ComponentRangeSplitPlan materialize_component_range_splits(
     const Json::Value& current,
     const ComponentRangeSplitAnalysis& analysis) {

@@ -87,6 +87,23 @@ struct ComponentRangeSplitAnalysis {
     std::size_t max_range_count = 500,
     std::size_t max_result_defects = 2000);
 
+/**
+ * @brief 把一行病害拆到人工选定的多个实际构件上（界面上的"两侧"绑定）。
+ *
+ * 产出与 analyze_component_range_splits 同型的 analysis，区别只在 matches 的来源：
+ * 那边来自编号范围展开，这边来自人工在下拉里选定的构件。因此可以原样交给
+ * materialize_component_range_splits——拆分溯源、照片复制、待确认状态、警告改写
+ * 全部复用，拆分逻辑一行不必新写。
+ *
+ * 选定的构件须属于该台账版本、启用、有生效映射，且类别与 target.part_name 的
+ * 对照相符；至少两个且不得重复。任一不满足则整批拒绝。
+ */
+[[nodiscard]] ComponentRangeSplitAnalysis analyze_component_multi_bind(
+    const Json::Value& current,
+    const inventory::InventoryRevision& revision,
+    const ComponentRangeSplitTarget& target,
+    const std::vector<std::string>& bridge_component_ids);
+
 [[nodiscard]] ComponentRangeSplitPlan materialize_component_range_splits(
     const Json::Value& current,
     const ComponentRangeSplitAnalysis& analysis);

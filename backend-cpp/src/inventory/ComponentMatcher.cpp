@@ -111,6 +111,34 @@ std::string normalize_component_number(const std::string& value) {
     return normalized;
 }
 
+std::optional<BindableComponent> resolve_bindable_component(
+    const InventoryRevision& revision,
+    const std::string& part_name,
+    const std::string& bridge_component_id
+) {
+    // 取**第一个**启用且 id 相符的条目；它若没有生效映射就到此为止，不再往后找
+    // 同 id 的其它条目——同一版本内 bridge_component_id 本就唯一。
+    const InventoryEntry* entry = nullptr;
+    for (const auto& candidate : revision.entries) {
+        if (candidate.is_active && candidate.bridge_component_id == bridge_component_id) {
+            entry = &candidate;
+            break;
+        }
+    }
+    if (entry == nullptr) return std::nullopt;
+    const auto* mapping = active_inventory_mapping(*entry);
+    if (mapping == nullptr) return std::nullopt;
+
+    // 部件名称解析不出类别时不设限：未知部件名交由上层判断，不在这里一刀切。
+    const auto categories = resolve_component_categories(part_name);
+    if (!categories.empty()
+        && std::find(categories.begin(), categories.end(),
+                     mapping->standard_component_category_id) == categories.end()) {
+        return std::nullopt;
+    }
+    return BindableComponent{entry, mapping};
+}
+
 ComponentMatchResult match_defect_component(
     const DefectComponentText& defect,
     const InventoryRevision& revision,
