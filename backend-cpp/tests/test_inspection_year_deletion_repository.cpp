@@ -1,6 +1,9 @@
+#include <chrono>
 #include <cstdlib>
 #include <string>
+#include <thread>
 
+#include <drogon/orm/Exception.h>
 #include <gtest/gtest.h>
 
 #include "bridge_report/config/AppConfig.hpp"
@@ -140,3 +143,67 @@ TEST_F(InspectionYearDeletionRepositoryTest, ActiveEditLockBlocksAndChangedImpac
 }
 
 }  // namespace
+
+// 全系统统一的行锁顺序是 import_records -> inspection_years：所有写路径（保存校对
+// 草稿、年度确认、构件绑定、Word 导入）都按这个顺序加锁。删除路径反着来的话两边能凑成
+// 循环等待，PostgreSQL 中止其中一个，表现为偶发的保存或删除失败。
+//
+// 顺序本身只在交错的中间态可观测，所以这条真的把删除跑在另一个线程里，趁它被挡住时
+// 从第三条连接探一下年度行**此刻**在不在它手上：
+//   - 顺序正确：它卡在 import_records 上，还没碰年度行 -> NOWAIT 探测拿得到锁；
+//   - 顺序反了：它先锁了年度行、再卡在 import_records 上 -> NOWAIT 报 55P03。
+// 判据是"锁得到/锁不到"，不是等多久，所以不赌时序。
+TEST_F(InspectionYearDeletionRepositoryTest, DeletionLocksImportRecordsBeforeTheYear) {
+    bridge_report::db::InspectionYearDeletionRepository repository(client_);
+    const auto preview = repository.preview(year_v1_);
+    ASSERT_TRUE(preview.has_value());
+    const auto token = preview->impact_token();
+
+    // 阻塞方握住导入记录——那是写路径的第一把锁，也应当是删除路径的第一把。
+    auto blocker_client = bridge_report::db::create_db_client(
+        bridge_report::config::PostgresConfig{}, 1);
+    auto blocker = blocker_client->newTransaction();
+    blocker->execSqlSync(
+        "select id from import_records where id=$1::uuid for update", import_id_);
+
+    auto deleter_client = bridge_report::db::create_db_client(
+        bridge_report::config::PostgresConfig{}, 1);
+    deleter_client->execSqlSync("set statement_timeout = '4000'");
+    std::thread deleter([&] {
+        bridge_report::db::InspectionYearDeletionRepository(deleter_client)
+            .delete_year(year_v1_, token, "永久删除 2026", "锁顺序测试", actor());
+    });
+
+    // 等到删除线程确实被锁挡住为止，不用固定 sleep。
+    auto probe_client = bridge_report::db::create_db_client(
+        bridge_report::config::PostgresConfig{}, 1);
+    bool deleter_blocked = false;
+    for (int attempt = 0; attempt < 200 && !deleter_blocked; ++attempt) {
+        deleter_blocked = probe_client->execSqlSync(
+            "select count(*) as n from pg_stat_activity "
+            "where wait_event_type='Lock' and datname=current_database()"
+        )[0]["n"].as<int>() > 0;
+        if (!deleter_blocked) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    ASSERT_TRUE(deleter_blocked) << "删除线程没有被导入记录的行锁挡住，本条的前提不成立";
+
+    bool year_row_free = true;
+    try {
+        auto probe = probe_client->newTransaction();
+        probe->execSqlSync(
+            "select id from inspection_years where id=$1::uuid for update nowait", year_v1_);
+        probe->rollback();
+    } catch (const drogon::orm::DrogonDbException&) {
+        year_row_free = false;  // 55P03：年度行已经在删除线程手上
+    }
+
+    blocker->rollback();
+    deleter.join();
+    blocker_client->closeAll();
+    deleter_client->closeAll();
+    probe_client->closeAll();
+
+    EXPECT_TRUE(year_row_free)
+        << "删除路径在拿到 import_records 之前就锁了 inspection_years，"
+           "与所有写路径的顺序相反，两者可凑成死锁";
+}
