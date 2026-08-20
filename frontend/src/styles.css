@@ -294,9 +294,10 @@ body {
   flex: none;
 }
 
-/* 这颗按钮原先挂的是 .review-action-primary，但那个类的所有蓝色规则都带
-   .review-action-bar 之类的父容器前缀，登录页一条都命中不了，于是永远是浏览器
-   默认灰底——可用态和禁用态长得一模一样。改成登录页自己的类。 */
+/* 这颗按钮原先挂的是 .review-action-primary，那时该类的蓝色规则都带父容器前缀，
+   登录页一条都命中不了，于是永远是浏览器默认灰底——可用态和禁用态长得一模一样，
+   所以改成了登录页自己的类。前缀限制现已取消（见 .review-action-primary），这里
+   保留独立类是因为登录页的间距和内距本来就跟评审页的按钮区不同。 */
 .login-submit {
   margin-top: 4px;
   border: 1px solid #2456c9;
@@ -1171,35 +1172,28 @@ body {
   background: #fdf3f3;
 }
 
-/* 病害工具条与详情面板底栏也在列：它们的"批量确认""确认本组"本来就挂着
-   review-action-primary，却因为容器不在这份名单里，一直渲染成浏览器默认的灰按钮。 */
-.review-action-bar .review-action-primary,
-.review-confirm-dialog-actions .review-action-primary,
-.review-photo-actions .review-action-primary,
-.defect-review-filters .review-action-primary,
-.defect-detail-actions .review-action-primary,
-.review-dialog-actions .review-action-primary {
+/* 主按钮：不限容器，挂上类就是蓝的。
+   这里以前是一份"容器白名单"（.review-action-bar .review-action-primary, ...），
+   每加一处新的按钮区就得记得往名单里补一行，忘了就渲染成浏览器默认的灰按钮——
+   而且灰得毫无征兆，因为 JSX 里类名明明写着。这个坑先后踩中登录页、病害工具条、
+   详情面板底栏和三个弹窗，所以改成容器无关。
+
+   类名写两遍不是笔误：每个按钮区都有一条 `.容器 button` 的基础样式，特异性
+   (0,1,1) 比裸类 (0,1,0) 高，裸写 .review-action-primary 会被白底压回去、修不
+   好任何东西。写两遍拿到 (0,2,0) 才压得过。个别容器若要微调（如问题组卡片把
+   字号压到 13px），照旧用 `.容器 .review-action-primary` 覆盖即可。 */
+.review-action-primary.review-action-primary {
   background: #2456c9;
   border-color: #2456c9;
   color: #ffffff;
   font-weight: 600;
 }
 
-.review-action-bar .review-action-primary:not(:disabled):hover,
-.review-confirm-dialog-actions .review-action-primary:not(:disabled):hover,
-.review-photo-actions .review-action-primary:not(:disabled):hover,
-.defect-review-filters .review-action-primary:not(:disabled):hover,
-.defect-detail-actions .review-action-primary:not(:disabled):hover,
-.review-dialog-actions .review-action-primary:not(:disabled):hover {
+.review-action-primary.review-action-primary:not(:disabled):hover {
   background: #1d49ad;
 }
 
-.review-action-bar .review-action-primary:disabled,
-.review-confirm-dialog-actions .review-action-primary:disabled,
-.review-photo-actions .review-action-primary:disabled,
-.defect-review-filters .review-action-primary:disabled,
-.defect-detail-actions .review-action-primary:disabled,
-.review-dialog-actions .review-action-primary:disabled {
+.review-action-primary.review-action-primary:disabled {
   background: #a9bce7;
   border-color: #a9bce7;
   color: #ffffff;
@@ -4794,6 +4788,9 @@ body {
   padding: 0 12px;
 }
 
+/* 问题组卡片密度更高：字号压到 13px，并且 .defect-issue-group-action button
+   只给了 flex/min-height/padding，边框和圆角得在这里自己补齐（去掉 border 会掉回
+   浏览器默认的 2px outset）。配色和 hover 走通用的 .review-action-primary。 */
 .defect-issue-group-action .review-action-primary {
   border: 1px solid #2456c9;
   border-radius: 6px;
