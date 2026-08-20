@@ -752,12 +752,6 @@ body {
   line-height: 1.5;
 }
 
-.review-photo-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
 .attention-group + .attention-group {
   margin-top: 24px;
 }
@@ -1121,7 +1115,6 @@ body {
   }
 }
 
-.review-photo-actions button,
 .review-action-bar button {
   font: inherit;
   padding: 8px 14px;
@@ -1132,13 +1125,11 @@ body {
   cursor: pointer;
 }
 
-.review-photo-actions button:hover,
 .review-action-bar button:not(:disabled):hover {
   background: #f3f5f8;
 }
 
-.review-action-bar button:disabled,
-.review-photo-actions button:disabled {
+.review-action-bar button:disabled {
   color: #97a2ae;
   cursor: not-allowed;
 }
