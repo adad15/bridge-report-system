@@ -98,7 +98,14 @@ void respond_inventory_outcome(
         respond_json(callback, body, drogon::k409Conflict);
         return;
     }
-    respond_db_unavailable(callback);
+    // Failed 是仓储事务抛异常后的收口。此前它和"连不上库"共用 503"数据库暂不可用"，
+    // 而真实原因通常是约束冲突——用户照着提示反复重试，永远好不了。分开报，并指向日志。
+    respond_json(
+        callback,
+        make_error_body(
+            "component_inventory_write_failed",
+            "构件台账写入失败，操作已回滚（详细原因见服务端日志）。"),
+        drogon::k500InternalServerError);
 }
 
 const standards::StandardPackage* load_request_package(

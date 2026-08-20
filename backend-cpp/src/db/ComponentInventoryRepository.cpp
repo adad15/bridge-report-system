@@ -1,5 +1,7 @@
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 
+#include <trantor/utils/Logger.h>
+
 #include <cctype>
 
 #include <memory>
@@ -902,8 +904,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::generate_draft(
         auto outcome = finish(tx, latch, revision_id);
         if (outcome.status == ComponentInventoryStatus::Ok) outcome.summary = std::move(summary);
         return outcome;
+    } catch (const std::exception& error) {
+        // 原来是 catch (...) 且一个字都不记，失败最终收口成 HTTP 503"数据库暂不可用"——
+        // 而真实原因往往是约束冲突。定位只能靠在库里手工重放，代价极高。
+        if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=" << error.what();
+        return {ComponentInventoryStatus::Failed};
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=<non-standard exception>";
         return {ComponentInventoryStatus::Failed};
     }
 }
@@ -941,8 +950,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::update_entry(
             outcome.entry = std::move(changed);
         }
         return outcome;
+    } catch (const std::exception& error) {
+        // 原来是 catch (...) 且一个字都不记，失败最终收口成 HTTP 503"数据库暂不可用"——
+        // 而真实原因往往是约束冲突。定位只能靠在库里手工重放，代价极高。
+        if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=" << error.what();
+        return {ComponentInventoryStatus::Failed};
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=<non-standard exception>";
         return {ComponentInventoryStatus::Failed};
     }
 }
@@ -995,8 +1011,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::add_entry(
             outcome.entry = std::move(changed);
         }
         return outcome;
+    } catch (const std::exception& error) {
+        // 原来是 catch (...) 且一个字都不记，失败最终收口成 HTTP 503"数据库暂不可用"——
+        // 而真实原因往往是约束冲突。定位只能靠在库里手工重放，代价极高。
+        if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=" << error.what();
+        return {ComponentInventoryStatus::Failed};
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=<non-standard exception>";
         return {ComponentInventoryStatus::Failed};
     }
 }
@@ -1037,8 +1060,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::delete_entry(
         if (outcome.status == ComponentInventoryStatus::Ok)
             outcome.summary = std::move(summary);
         return outcome;
+    } catch (const std::exception& error) {
+        // 原来是 catch (...) 且一个字都不记，失败最终收口成 HTTP 503"数据库暂不可用"——
+        // 而真实原因往往是约束冲突。定位只能靠在库里手工重放，代价极高。
+        if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=" << error.what();
+        return {ComponentInventoryStatus::Failed};
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=<non-standard exception>";
         return {ComponentInventoryStatus::Failed};
     }
 }
@@ -1070,8 +1100,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::deactivate_entry(
             outcome.entry = std::move(changed);
         }
         return outcome;
+    } catch (const std::exception& error) {
+        // 原来是 catch (...) 且一个字都不记，失败最终收口成 HTTP 503"数据库暂不可用"——
+        // 而真实原因往往是约束冲突。定位只能靠在库里手工重放，代价极高。
+        if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=" << error.what();
+        return {ComponentInventoryStatus::Failed};
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=<non-standard exception>";
         return {ComponentInventoryStatus::Failed};
     }
 }
@@ -1122,8 +1159,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::set_mapping(
             outcome.entry = std::move(changed);
         }
         return outcome;
+    } catch (const std::exception& error) {
+        // 原来是 catch (...) 且一个字都不记，失败最终收口成 HTTP 503"数据库暂不可用"——
+        // 而真实原因往往是约束冲突。定位只能靠在库里手工重放，代价极高。
+        if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=" << error.what();
+        return {ComponentInventoryStatus::Failed};
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=<non-standard exception>";
         return {ComponentInventoryStatus::Failed};
     }
 }
@@ -1161,8 +1205,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::confirm_pending_mappings
         if (outcome.status == ComponentInventoryStatus::Ok)
             outcome.summary = std::move(summary);
         return outcome;
+    } catch (const std::exception& error) {
+        // 原来是 catch (...) 且一个字都不记，失败最终收口成 HTTP 503"数据库暂不可用"——
+        // 而真实原因往往是约束冲突。定位只能靠在库里手工重放，代价极高。
+        if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=" << error.what();
+        return {ComponentInventoryStatus::Failed};
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=<non-standard exception>";
         return {ComponentInventoryStatus::Failed};
     }
 }
@@ -1224,8 +1275,15 @@ ComponentInventoryOutcome ComponentInventoryRepository::confirm_revision(
         if (outcome.status == ComponentInventoryStatus::Ok)
             outcome.summary = std::move(summary);
         return outcome;
+    } catch (const std::exception& error) {
+        // 原来是 catch (...) 且一个字都不记，失败最终收口成 HTTP 503"数据库暂不可用"——
+        // 而真实原因往往是约束冲突。定位只能靠在库里手工重放，代价极高。
+        if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=" << error.what();
+        return {ComponentInventoryStatus::Failed};
     } catch (...) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
+        LOG_ERROR << "component inventory write failed detail=<non-standard exception>";
         return {ComponentInventoryStatus::Failed};
     }
 }

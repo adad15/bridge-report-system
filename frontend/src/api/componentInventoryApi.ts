@@ -339,6 +339,7 @@ export function componentInventoryErrorMessage(error: unknown): string {
     component_is_referenced: "该构件已被病害或正式项目引用，只能停用。",
     component_inventory_confirmation_blocked: "台账仍有未解决项，暂时不能确认。",
     standard_package_unavailable: "所选技术评定规范包当前不可用。",
+    component_inventory_write_failed: "构件台账写入失败，操作已回滚。重试仍失败请查看服务端日志。",
   };
   return messages[error.code] ?? error.message;
 }
