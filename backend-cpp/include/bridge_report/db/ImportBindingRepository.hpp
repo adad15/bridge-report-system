@@ -138,6 +138,20 @@ public:
         const std::string& import_id, const std::vector<BindingTarget>& targets,
         const std::string& expected_revision_id,
         const std::optional<EditLockCredentials>& edit_lock = std::nullopt);
+    // "两侧"绑定：把一行病害拆到人工选定的多个实际构件上，每条各自绑定。
+    //
+    // 与 bind 的关键区别：它会**增删病害与照片候选**（一行 N 条病害拆成 N×M 条），
+    // 所以调用方写完必须重取草稿，不能沿用手里那份。产出的病害一律置"待确认"，
+    // 并带上拆分溯源，指回原来的那一条。
+    //
+    // actor_user_id 用于填写溯源里的操作人；构件至少两个且不得重复。
+    [[nodiscard]] BindingOutcome bind_multi(
+        const std::string& import_id, const std::string& part_name,
+        const std::string& component_number,
+        const std::vector<std::string>& bridge_component_ids,
+        const std::string& actor_user_id,
+        const std::string& expected_revision_id,
+        const std::optional<EditLockCredentials>& edit_lock = std::nullopt);
     [[nodiscard]] BindingOutcome mark_missing(
         const std::string& import_id, const std::string& part_name,
         const std::string& component_number, const std::string& expected_revision_id,

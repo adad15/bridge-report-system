@@ -103,6 +103,11 @@ void apply_analyzed_match(
     }
 }
 
+// 拆分是纯函数，拿不到操作 id / 操作人 / 时间，先填哨兵，落库前由 stamp_split_origin 补齐。
+constexpr const char* kPendingOperationId = "__range_split_operation__";
+constexpr const char* kPendingUserId = "__range_split_user__";
+constexpr const char* kPendingOperatedAt = "1970-01-01T00:00:00Z";
+
 Json::Value split_origin(
     const std::string& source_id,
     const std::string& source_number,
@@ -110,14 +115,14 @@ Json::Value split_origin(
     int index,
     int count) {
     Json::Value origin(Json::objectValue);
-    origin["operation_id"] = "__range_split_operation__";
+    origin["operation_id"] = kPendingOperationId;
     origin["source_candidate_id"] = source_id;
     origin["source_component_number"] = source_number;
     origin["expanded_component_number"] = expanded_number;
     origin["split_index"] = index;
     origin["split_count"] = count;
-    origin["operated_by_user_id"] = "__range_split_user__";
-    origin["operated_at"] = "1970-01-01T00:00:00Z";
+    origin["operated_by_user_id"] = kPendingUserId;
+    origin["operated_at"] = kPendingOperatedAt;
     return origin;
 }
 
@@ -262,6 +267,25 @@ ComponentRangeSplitAnalysis analyze_component_range_splits(
     }
     analysis.totals.selected_range_count = static_cast<int>(analysis.items.size());
     return analysis;
+}
+
+void stamp_split_origin(
+    Json::Value& result,
+    const std::string& operation_id,
+    const std::string& user_id,
+    const std::string& operated_at
+) {
+    if (!result["defects"].isArray()) return;
+    for (auto& defect : result["defects"]) {
+        auto& origin = defect["range_split_origin"];
+        // 只补本次新产生的：同一份草稿里可能还留着往次拆分的溯源，那些已经是真值。
+        if (!origin.isObject() || origin["operation_id"].asString() != kPendingOperationId) {
+            continue;
+        }
+        origin["operation_id"] = operation_id;
+        origin["operated_by_user_id"] = user_id;
+        origin["operated_at"] = operated_at;
+    }
 }
 
 ComponentRangeSplitAnalysis analyze_component_multi_bind(

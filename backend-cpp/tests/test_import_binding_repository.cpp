@@ -438,6 +438,94 @@ TEST_F(ImportBindingRepositoryTest, OverviewOmitsTheTwoSidedOptionOutsideTheAllo
     EXPECT_FALSE(girder->side_pair.has_value());
 }
 
+// 百股大桥 BG-2024-02 的修复路径：一条"两侧护栏"变成两条，各自绑到左右栏杆。
+TEST_F(ImportBindingRepositoryTest, BindMultiSplitsTheRowAcrossBothComponents) {
+    append_defect("栏杆、护栏", "两侧护栏");
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.bind_multi(
+        import_id_, "栏杆、护栏", "两侧护栏", {railing_left_id_, railing_right_id_},
+        user_id_, revision_id_);
+    ASSERT_EQ(outcome.status, BindingStatus::Ok) << outcome.error_message;
+
+    // 原来那一行没了，取而代之的是台账真实编号的两行，各自已绑定。
+    ASSERT_EQ(find_row(*outcome.overview, "栏杆、护栏", "两侧护栏"), nullptr);
+    const auto* left = find_row(*outcome.overview, "栏杆、护栏", "左侧栏杆");
+    const auto* right = find_row(*outcome.overview, "栏杆、护栏", "右侧栏杆");
+    ASSERT_NE(left, nullptr);
+    ASSERT_NE(right, nullptr);
+    EXPECT_EQ(left->status, "bound");
+    EXPECT_EQ(right->status, "bound");
+    ASSERT_TRUE(left->bridge_component_id.has_value());
+    EXPECT_EQ(*left->bridge_component_id, railing_left_id_);
+    ASSERT_TRUE(right->bridge_component_id.has_value());
+    EXPECT_EQ(*right->bridge_component_id, railing_right_id_);
+
+    // 溯源里的操作人与操作时间必须补成真值，不能留下哨兵。
+    const auto stored = client_->execSqlSync(
+        "select parsed_result_json::text as parsed from import_records where id=$1::uuid",
+        import_id_)[0]["parsed"].as<std::string>();
+    EXPECT_EQ(stored.find("__range_split_user__"), std::string::npos);
+    EXPECT_EQ(stored.find("__range_split_operation__"), std::string::npos);
+    EXPECT_NE(stored.find("两侧护栏"), std::string::npos)
+        << "溯源要留下原编号，否则查不到这两条从哪来";
+}
+
+TEST_F(ImportBindingRepositoryTest, BindMultiRejectsAStaleRevision) {
+    append_defect("栏杆、护栏", "两侧护栏");
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.bind_multi(
+        import_id_, "栏杆、护栏", "两侧护栏", {railing_left_id_, railing_right_id_},
+        user_id_, "00000000-0000-0000-0000-0000000000ff");
+    EXPECT_EQ(outcome.status, BindingStatus::Conflict);
+    EXPECT_EQ(outcome.error_code, "component_inventory_revision_changed");
+}
+
+// 失败路径不得留下任何痕迹：既不写草稿，也不把版本锁到年度上。
+TEST_F(ImportBindingRepositoryTest, BindMultiLeavesNoTraceWhenTheSelectionIsInvalid) {
+    append_defect("栏杆、护栏", "两侧护栏");
+    const auto before = client_->execSqlSync(
+        "select parsed_result_json::text as parsed from import_records where id=$1::uuid",
+        import_id_)[0]["parsed"].as<std::string>();
+    ASSERT_TRUE(client_->execSqlSync(
+        "select component_inventory_revision_id is null as unlocked "
+        "from inspection_years where id=$1::uuid", year_id_)[0]["unlocked"].as<bool>())
+        << "前提：年度此时尚未锁定版本";
+
+    ImportBindingRepository repository(client_);
+    // 梁不属于"栏杆、护栏"，整批必须拒绝。
+    const auto outcome = repository.bind_multi(
+        import_id_, "栏杆、护栏", "两侧护栏", {railing_left_id_, component_id_},
+        user_id_, revision_id_);
+    EXPECT_EQ(outcome.status, BindingStatus::Invalid);
+    EXPECT_EQ(outcome.error_code, "component_multi_bind_invalid_component");
+
+    const auto after = client_->execSqlSync(
+        "select parsed_result_json::text as parsed from import_records where id=$1::uuid",
+        import_id_)[0]["parsed"].as<std::string>();
+    EXPECT_EQ(before, after) << "被拒之后草稿必须原样";
+    EXPECT_TRUE(client_->execSqlSync(
+        "select component_inventory_revision_id is null as unlocked "
+        "from inspection_years where id=$1::uuid", year_id_)[0]["unlocked"].as<bool>())
+        << "被拒之后不得把版本锁到年度上——回滚要连年度锁一起退掉";
+}
+
+// 成功路径反过来必须锁上：否则随后一次绑定可能把年度锁到别的版本，
+// 而这两条病害已经按当前版本绑好了。
+TEST_F(ImportBindingRepositoryTest, BindMultiLocksTheRevisionOntoThePendingYear) {
+    append_defect("栏杆、护栏", "两侧护栏");
+    ImportBindingRepository repository(client_);
+    ASSERT_EQ(repository.bind_multi(
+                  import_id_, "栏杆、护栏", "两侧护栏",
+                  {railing_left_id_, railing_right_id_}, user_id_, revision_id_)
+                  .status,
+              BindingStatus::Ok);
+    EXPECT_EQ(client_->execSqlSync(
+                  "select component_inventory_revision_id::text as id "
+                  "from inspection_years where id=$1::uuid", year_id_)[0]["id"]
+                  .as<std::string>(),
+              revision_id_);
+}
+
 // 批量替换取数：精简条目、按可绑过滤、只校验不锁定。
 TEST_F(ImportBindingRepositoryTest, ReplaceInventoryReturnsTrimmedBindableEntries) {
     ImportBindingRepository repository(client_);
@@ -823,6 +911,12 @@ TEST_F(ImportBindingRepositoryTest, WriteEndpointsRejectAnInvalidEditLock) {
               bridge_report::db::BindingStatus::EditLockInvalid);
     EXPECT_EQ(repository.clear(import_id_, "上部承重构件", "1-1#梁",
                                revision_id_, foreign).status,
+              bridge_report::db::BindingStatus::EditLockInvalid);
+    // bind_multi 与范围拆分同级：它同样增删病害并复制照片候选。
+    EXPECT_EQ(repository.bind_multi(
+                  import_id_, "栏杆、护栏", "两侧护栏",
+                  {railing_left_id_, railing_right_id_}, user_id_, revision_id_, foreign)
+                  .status,
               bridge_report::db::BindingStatus::EditLockInvalid);
     // 这两个影响最大：绑评定树会改年度的规范组合与台账版本，范围拆分会增删病害
     // 并复制照片候选。复查发生在加载上下文之后、任何业务校验之前，所以这里传的

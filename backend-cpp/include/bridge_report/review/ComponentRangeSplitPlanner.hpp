@@ -98,6 +98,19 @@ struct ComponentRangeSplitAnalysis {
  * 选定的构件须属于该台账版本、启用、有生效映射，且类别与 target.part_name 的
  * 对照相符；至少两个且不得重复。任一不满足则整批拒绝。
  */
+/**
+ * @brief 把拆分溯源里的哨兵值换成真实的操作 id、操作人与时间。
+ *
+ * 拆分本身是纯函数，拿不到这三样，于是先写哨兵，由写事务在落库前补齐。
+ * 哨兵常量与替换逻辑必须同处一地——分开放的话改了一处、另一处会静默不再匹配，
+ * 溯源里就留下 __range_split_user__ 这种垃圾，而且没有任何报错。
+ */
+void stamp_split_origin(
+    Json::Value& result,
+    const std::string& operation_id,
+    const std::string& user_id,
+    const std::string& operated_at);
+
 [[nodiscard]] ComponentRangeSplitAnalysis analyze_component_multi_bind(
     const Json::Value& current,
     const inventory::InventoryRevision& revision,

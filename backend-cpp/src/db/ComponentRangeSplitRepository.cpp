@@ -131,24 +131,6 @@ ComponentRangeSplitOutcome analysis_outcome(
     return outcome;
 }
 
-void materialize_origin(
-    Json::Value& result,
-    const std::string& operation_id,
-    const std::string& user_id,
-    const std::string& operated_at) {
-    if (!result["defects"].isArray()) return;
-    for (auto& defect : result["defects"]) {
-        auto& origin = defect["range_split_origin"];
-        if (!origin.isObject()
-            || origin["operation_id"].asString() != "__range_split_operation__") {
-            continue;
-        }
-        origin["operation_id"] = operation_id;
-        origin["operated_by_user_id"] = user_id;
-        origin["operated_at"] = operated_at;
-    }
-}
-
 void log_timing(
     const char* operation,
     const std::string& import_id,
@@ -351,7 +333,7 @@ ComponentRangeSplitOutcome ComponentRangeSplitRepository::apply(
             "to_char(clock_timestamp() at time zone 'UTC',"
             "'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') as operated_at");
         outcome.operation_id = metadata[0]["operation_id"].as<std::string>();
-        materialize_origin(
+        review::stamp_split_origin(
             outcome.plan->result_json, outcome.operation_id, user_id,
             metadata[0]["operated_at"].as<std::string>());
         stage_start = Clock::now();

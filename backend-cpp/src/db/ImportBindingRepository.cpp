@@ -1,6 +1,7 @@
 #include "bridge_report/db/ImportBindingRepository.hpp"
 
 #include "bridge_report/db/RatingTreeRepository.hpp"
+#include "bridge_report/review/ComponentRangeSplitPlanner.hpp"
 #include "bridge_report/review/DraftValidation.hpp"
 #include <algorithm>
 #include <functional>
@@ -637,6 +638,89 @@ BindingOutcome ImportBindingRepository::bind(
         tx->execSqlSync(
             "update import_records set parsed_result_json=$2::jsonb where id=$1::uuid",
             import_id, compact_json(parsed));
+        tx.reset();
+        if (!latch->wait()) return {BindingStatus::Failed};
+        return overview(import_id);
+    } catch (...) {
+        rollback();
+        return {BindingStatus::Failed};
+    }
+}
+
+BindingOutcome ImportBindingRepository::bind_multi(
+    const std::string& import_id, const std::string& part_name,
+    const std::string& component_number,
+    const std::vector<std::string>& bridge_component_ids,
+    const std::string& actor_user_id,
+    const std::string& expected_revision_id,
+    const std::optional<EditLockCredentials>& edit_lock) {
+    if (part_name.empty() || component_number.empty() || actor_user_id.empty()) {
+        return {BindingStatus::Invalid};
+    }
+    TransactionPtr tx;
+    const auto latch = std::make_shared<CommitLatch>();
+    const auto rollback = [&]() { if (tx) { try { tx->rollback(); } catch (...) {} } };
+    try {
+        tx = db_client_->newTransaction(latch->callback());
+        const auto rows = tx->execSqlSync(
+            "select ir.bridge_id::text as bridge_id,"
+            "ir.inspection_year_id::text as inspection_year_id,ir.import_status,"
+            "coalesce(ir.parsed_result_json::text,'{}') as parsed "
+            "from import_records ir where ir.id=$1::uuid for update of ir",
+            import_id);
+        if (rows.empty()) { rollback(); return {BindingStatus::NotFound}; }
+        if (rows[0]["import_status"].as<std::string>() != "待校对") {
+            rollback(); return {BindingStatus::Conflict};
+        }
+        if (!edit_lock_still_active(tx, import_id, edit_lock)) {
+            rollback(); return {BindingStatus::EditLockInvalid};
+        }
+        const auto bridge_id = rows[0]["bridge_id"].as<std::string>();
+        const auto year_id = optional_row_text(rows[0], "inspection_year_id");
+        // 锁顺序 import_records -> inspection_years，与其余写路径一致。
+        const auto locked_revision_id = lock_year_and_read_revision(tx, year_id);
+        const auto revision = resolve_confirmed_revision(tx, bridge_id, locked_revision_id);
+        if (!revision.has_value()) { rollback(); return {BindingStatus::Conflict}; }
+        if (revision->id != expected_revision_id) {
+            rollback(); return revision_changed_outcome();
+        }
+        // 这一步会把构件绑进病害，所以要和别的写操作一样把版本锁进年度。
+        if (!attach_revision_to_pending_year(
+                tx, year_id, bridge_id, locked_revision_id, revision->id)) {
+            rollback(); return {BindingStatus::Conflict};
+        }
+
+        Json::Value parsed;
+        parse_json(rows[0]["parsed"].as<std::string>(), parsed);
+        const auto analysis = review::analyze_component_multi_bind(
+            parsed, *revision, {part_name, component_number}, bridge_component_ids);
+        if (analysis.status != review::ComponentRangeSplitPlanStatus::Ok) {
+            rollback();
+            BindingOutcome outcome{
+                analysis.status == review::ComponentRangeSplitPlanStatus::IneligibleTarget
+                    ? BindingStatus::Conflict : BindingStatus::Invalid};
+            outcome.error_code = analysis.error_code;
+            outcome.error_message = analysis.error_message;
+            outcome.rejected_component_number = component_number;
+            return outcome;
+        }
+        auto plan = review::materialize_component_range_splits(parsed, analysis);
+        if (plan.status != review::ComponentRangeSplitPlanStatus::Ok) {
+            rollback(); return {BindingStatus::Failed};
+        }
+        // 溯源里的操作 id / 时间由库给，保证与事务同源。
+        const auto metadata = tx->execSqlSync(
+            "select gen_random_uuid()::text as operation_id,"
+            "to_char(clock_timestamp() at time zone 'UTC',"
+            "'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') as operated_at");
+        review::stamp_split_origin(
+            plan.result_json, metadata[0]["operation_id"].as<std::string>(),
+            actor_user_id, metadata[0]["operated_at"].as<std::string>());
+
+        tx->execSqlSync(
+            "update import_records set parsed_result_json=$2::jsonb,updated_at=now() "
+            "where id=$1::uuid",
+            import_id, compact_json(plan.result_json));
         tx.reset();
         if (!latch->wait()) return {BindingStatus::Failed};
         return overview(import_id);
