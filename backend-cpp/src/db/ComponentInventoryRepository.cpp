@@ -538,6 +538,24 @@ std::string pg_uuid_array(const std::vector<std::string>& ids) {
     return joined + "}";
 }
 
+// text[] 字面量：把每个元素用双引号包起来，内部的引号和反斜杠转义。
+// 类别 id 目前都来自代码里的常量，但拼字面量这件事本身就该有个正确的实现。
+std::string pg_text_array(const std::vector<std::string>& values) {
+    std::string joined = "{";
+    bool first = true;
+    for (const auto& value : values) {
+        if (!first) joined += ',';
+        joined += '"';
+        for (const char ch : value) {
+            if (ch == '"' || ch == '\\') joined += '\\';
+            joined += ch;
+        }
+        joined += '"';
+        first = false;
+    }
+    return joined + "}";
+}
+
 }  // namespace
 
 // 两个查询共用的装配：先取一页构件，再一次性把这页的生效映射取回来按构件归组。
@@ -741,6 +759,42 @@ ComponentInventoryRepository::load_bindable_entries_by_component_ids(
         entry.component_number = row["component_number"].as<std::string>();
         entry.site_name = row["site_name"].as<std::string>();
         entry.site_component_type = row["site_component_type"].as<std::string>();
+        entries.push_back(std::move(entry));
+    }
+    return entries;
+}
+
+std::vector<inventory::InventoryEntry>
+ComponentInventoryRepository::load_bindable_entries_by_categories(
+    const std::string& revision_id,
+    const std::vector<std::string>& standard_component_category_ids) const {
+    std::vector<inventory::InventoryEntry> entries;
+    if (standard_component_category_ids.empty()) return entries;
+    // 过滤条件与 binding_eligible 一致：启用 + 有生效映射；再按类别收窄。
+    const auto rows = db_client_->execSqlSync(
+        "select e.id::text,e.bridge_component_id::text,e.component_number,"
+        "e.site_name,e.site_component_type,m.id::text as mapping_id,"
+        "m.standard_component_category_id,m.structure_part "
+        "from bridge_component_inventory_entries e "
+        "join bridge_component_standard_mappings m on m.inventory_entry_id=e.id and m.is_active "
+        "where e.inventory_revision_id=$1::uuid and e.is_active "
+        "and m.standard_component_category_id = any($2::text[]) "
+        "order by e.sort_order,e.id",
+        revision_id, pg_text_array(standard_component_category_ids));
+    for (const auto& row : rows) {
+        inventory::InventoryMapping mapping;
+        mapping.id = row["mapping_id"].as<std::string>();
+        mapping.standard_component_category_id =
+            row["standard_component_category_id"].as<std::string>();
+        mapping.structure_part = row["structure_part"].as<std::string>();
+        mapping.is_active = true;
+        inventory::InventoryEntry entry;
+        entry.id = row["id"].as<std::string>();
+        entry.bridge_component_id = row["bridge_component_id"].as<std::string>();
+        entry.component_number = row["component_number"].as<std::string>();
+        entry.site_name = row["site_name"].as<std::string>();
+        entry.site_component_type = row["site_component_type"].as<std::string>();
+        entry.mappings.push_back(std::move(mapping));
         entries.push_back(std::move(entry));
     }
     return entries;

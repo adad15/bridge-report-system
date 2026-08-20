@@ -8,6 +8,7 @@
 
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/EditLockRepository.hpp"
+#include "bridge_report/inventory/SideComponentPair.hpp"
 
 namespace bridge_report::db {
 
@@ -39,6 +40,9 @@ struct BindingRow {
     std::vector<BindingComponentSummary> candidate_components;
     bool split_eligible{false};
     std::optional<int> split_expanded_count;
+    // 该行可作为"两侧"整体绑定的左右构件对。与 split_eligible 同一条闸门：
+    // 只有未匹配/歧义行才可能有值。判定见 inventory::find_side_component_pair。
+    std::optional<inventory::SideComponentPair> side_pair;
 };
 
 // 按报告"部件名称"（规范固定用词）分组。

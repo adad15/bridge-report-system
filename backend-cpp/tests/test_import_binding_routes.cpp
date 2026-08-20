@@ -77,6 +77,39 @@ TEST(ImportBindingRoutesTest, SerializesOverviewForFrontend) {
     ASSERT_EQ(group_json["rows"][1]["candidate_components"].size(), 1u);
     EXPECT_EQ(group_json["rows"][1]["candidate_components"][0]["bridge_component_id"].asString(),
               "c2");
+
+    // 没有配对的行必须显式给 null：字段缺失时前端 row.side_pair_option 是 undefined，
+    // 两者在 JS 里都假，但"字段不存在"和"后端判定为没有"是两件事，接口该说清楚。
+    EXPECT_TRUE(group_json["rows"][0]["side_pair_option"].isNull());
+    EXPECT_TRUE(group_json["rows"][1]["side_pair_option"].isNull());
+}
+
+TEST(ImportBindingRoutesTest, SerializesTheTwoSidedOptionWithBothMembers) {
+    BindingOverview overview;
+    overview.inventory_confirmed = true;
+    BindingGroup group;
+    group.part_name = "栏杆、护栏";
+    group.total = 1;
+    group.unmatched = 1;
+
+    BindingRow row;
+    row.component_number = "两侧护栏";
+    row.defect_count = 1;
+    row.status = "unmatched";
+    row.side_pair = bridge_report::inventory::SideComponentPair{
+        "railing-left", "railing-right", "左侧栏杆", "右侧栏杆"};
+    group.rows.push_back(row);
+    overview.groups.push_back(group);
+
+    const auto json = bridge_report::http::binding_overview_json(overview);
+    const auto& option = json["groups"][0]["rows"][0]["side_pair_option"];
+    ASSERT_FALSE(option.isNull());
+    // label 点名将绑给哪两件，操作员据此判断这一条是不是他要的。
+    EXPECT_EQ(option["label"].asString(), "两侧 · 左侧栏杆 + 右侧栏杆");
+    ASSERT_EQ(option["bridge_component_ids"].size(), 2u);
+    // 顺序即左、右，前端据此展示，不能颠倒。
+    EXPECT_EQ(option["bridge_component_ids"][0].asString(), "railing-left");
+    EXPECT_EQ(option["bridge_component_ids"][1].asString(), "railing-right");
 }
 
 }  // namespace

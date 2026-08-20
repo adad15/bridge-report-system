@@ -69,6 +69,19 @@ Json::Value binding_overview_json(const db::BindingOverview& overview) {
             row_json["split_eligible"] = row.split_eligible;
             row_json["split_expanded_count"] = row.split_expanded_count
                 ? Json::Value(*row.split_expanded_count) : Json::Value();
+            // "两侧"选项。label 在后端拼好：它要点名将绑给哪两件构件，
+            // 拼在前端的话两处措辞迟早不一致。
+            if (row.side_pair.has_value()) {
+                Json::Value option;
+                option["label"] = "两侧 · " + row.side_pair->left_component_number + " + "
+                    + row.side_pair->right_component_number;
+                option["bridge_component_ids"] = Json::Value(Json::arrayValue);
+                option["bridge_component_ids"].append(row.side_pair->left_bridge_component_id);
+                option["bridge_component_ids"].append(row.side_pair->right_bridge_component_id);
+                row_json["side_pair_option"] = std::move(option);
+            } else {
+                row_json["side_pair_option"] = Json::Value(Json::nullValue);
+            }
             group_json["rows"].append(std::move(row_json));
         }
         value["groups"].append(std::move(group_json));

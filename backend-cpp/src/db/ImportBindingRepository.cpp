@@ -17,6 +17,7 @@
 #include "bridge_report/inventory/ComponentCategoryLexicon.hpp"
 #include "bridge_report/inventory/ComponentMatcher.hpp"
 #include "bridge_report/inventory/ComponentRangeParser.hpp"
+#include "bridge_report/inventory/SideComponentPair.hpp"
 #include "bridge_report/review/ContractCompatibility.hpp"
 
 namespace bridge_report::db {
@@ -246,6 +247,56 @@ void fill_component_summaries(
     }
 }
 
+// 侧别配对：给未处理的行带上"两侧"选项。
+//
+// 只查放行名单里、且本次概览真的用得到的类别——至多两个类别、一座桥几件构件，
+// 不会退化成加载整份台账（大桥五千多件，那正是 fill_component_summaries 按 id
+// 定向取数要避免的形态）。一个都用不上时不查库。
+void fill_side_pairs(
+    const drogon::orm::DbClientPtr& client,
+    const std::string& revision_id,
+    BindingOverview& overview) {
+    const auto row_is_open = [](const BindingRow& row) {
+        return row.status == "unmatched" || row.status == "ambiguous";
+    };
+    std::unordered_map<std::string, std::string> category_by_part;
+    std::vector<std::string> categories;
+    for (const auto& group : overview.groups) {
+        if (std::none_of(group.rows.begin(), group.rows.end(), row_is_open)) continue;
+        for (const auto& category :
+             inventory::resolve_component_categories(group.part_name)) {
+            if (!inventory::side_pair_category_allowed(category)) continue;
+            category_by_part.emplace(group.part_name, category);
+            categories.push_back(category);
+            break;
+        }
+    }
+    if (categories.empty()) return;
+    std::sort(categories.begin(), categories.end());
+    categories.erase(std::unique(categories.begin(), categories.end()), categories.end());
+
+    // 只装这几个类别的构件。find_side_component_pair 内部还会按类别过滤，
+    // 所以这份"局部台账"对它是够用的。
+    inventory::InventoryRevision scope;
+    scope.id = revision_id;
+    scope.entries = ComponentInventoryRepository(client)
+                        .load_bindable_entries_by_categories(revision_id, categories);
+
+    std::unordered_map<std::string, std::optional<inventory::SideComponentPair>> pairs;
+    for (const auto& category : categories) {
+        pairs.emplace(category, inventory::find_side_component_pair(scope, category));
+    }
+    for (auto& group : overview.groups) {
+        const auto category = category_by_part.find(group.part_name);
+        if (category == category_by_part.end()) continue;
+        const auto pair = pairs.find(category->second);
+        if (pair == pairs.end() || !pair->second.has_value()) continue;
+        for (auto& row : group.rows) {
+            if (row_is_open(row)) row.side_pair = pair->second;
+        }
+    }
+}
+
 // 台账版本在两次请求之间被人换掉了。必须让用户看见这件事：静默改用新版本的话，
 // 他看到的候选来自旧版本，校验却按新版本走，被拒时无从理解发生了什么。
 BindingOutcome revision_changed_outcome() {
@@ -341,6 +392,7 @@ BindingOutcome ImportBindingRepository::overview(const std::string& import_id) {
         if (confirmed) {
             outcome.overview->inventory_revision_id = revision->id;
             fill_component_summaries(db_client_, revision->id, *outcome.overview);
+            fill_side_pairs(db_client_, revision->id, *outcome.overview);
         }
         if (const auto version_id =
                 optional_row_text(rows[0], "rating_tree_version_id");

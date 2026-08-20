@@ -143,6 +143,14 @@ public:
         const std::string& revision_id,
         const std::vector<std::string>& bridge_component_ids) const;
 
+    // 供侧别配对按部件类别定向取构件：放行名单只有两个类别，一座桥至多几件，
+    // 不会退化成加载整份台账（大桥有五千多件）。
+    // 与上面不同，这里**会填上生效映射**——配对判定要按类别过滤并核对件数，
+    // 缺了映射就无法与匹配共用同一条"可用构件"口径。
+    std::vector<inventory::InventoryEntry> load_bindable_entries_by_categories(
+        const std::string& revision_id,
+        const std::vector<std::string>& standard_component_category_ids) const;
+
     // 批量替换预览用的精简条目：只有 bridge_component_id / component_number / is_active。
     struct ReplaceEntry {
         std::string bridge_component_id;

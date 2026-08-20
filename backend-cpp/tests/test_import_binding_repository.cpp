@@ -76,6 +76,14 @@ protected:
             "values($1::uuid,$2::uuid,'h21.bridge_type.beam','h21.component.beam.upper_bearing',"
             "'superstructure','规范模板','已确认',$3::uuid,now())",
             entry_id, package_id_, user_id_);
+        // 栏杆按 {side}侧{name} 展开成一对，供"两侧"绑定用例使用。必须在确认之前建，
+        // 已确认版本的条目不可变。
+        railing_left_id_ = add_inventory_component(
+            revision_id_, "桥面系", "栏杆", "左侧栏杆", "h21.component.deck.railing",
+            "deck_system", 2);
+        railing_right_id_ = add_inventory_component(
+            revision_id_, "桥面系", "栏杆", "右侧栏杆", "h21.component.deck.railing",
+            "deck_system", 3);
         client_->execSqlSync(
             "update bridge_component_inventory_revisions set status='已确认',"
             "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
@@ -133,6 +141,57 @@ protected:
         client_->closeAll();
     }
 
+    // 往指定**草稿**版本里加一个构件（条目 + 已确认映射），返回 bridge_component_id。
+    std::string add_inventory_component(
+        const std::string& revision_id, const std::string& structure_part_cn,
+        const std::string& component_type, const std::string& number,
+        const std::string& category_id, const std::string& structure_part_en,
+        int sort_order) {
+        const auto component_id = client_->execSqlSync(
+            "insert into bridge_components(bridge_id,structure_part,component_type,"
+            "business_component_code,normalized_component_key,current_status,creation_source) "
+            "values($1::uuid,$2,$3,$4,$5,'已确认','人工录入') returning id::text",
+            bridge_id_, structure_part_cn, component_type, number,
+            "bind-key-" + number)[0]["id"].as<std::string>();
+        const auto entry_id = client_->execSqlSync(
+            "insert into bridge_component_inventory_entries(inventory_revision_id,"
+            "bridge_component_id,component_number,site_name,site_component_type,sort_order) "
+            "values($1::uuid,$2::uuid,$3,$4,$4,$5) returning id::text",
+            revision_id, component_id, number, component_type,
+            sort_order)[0]["id"].as<std::string>();
+        client_->execSqlSync(
+            "insert into bridge_component_standard_mappings(inventory_entry_id,standard_package_id,"
+            "standard_bridge_type_id,standard_component_category_id,structure_part,mapping_source,"
+            "confirmation_status,confirmed_by_user_id,confirmed_at) "
+            "values($1::uuid,$2::uuid,'h21.bridge_type.beam',$3,$4,'规范模板','已确认',$5::uuid,now())",
+            entry_id, package_id_, category_id, structure_part_en, user_id_);
+        return component_id;
+    }
+
+    // 往草稿里追加一条未匹配病害。
+    void append_defect(const std::string& part_name, const std::string& number) {
+        const auto stored = client_->execSqlSync(
+            "select parsed_result_json::text as parsed from import_records where id=$1::uuid",
+            import_id_);
+        Json::Value parsed;
+        Json::CharReaderBuilder reader_builder;
+        std::string errors;
+        const auto text = stored[0]["parsed"].as<std::string>();
+        const std::unique_ptr<Json::CharReader> reader(reader_builder.newCharReader());
+        ASSERT_TRUE(reader->parse(text.data(), text.data() + text.size(), &parsed, &errors));
+        Json::Value defect;
+        defect["candidate_id"] = "appended-" + number;
+        defect["component_name"] = part_name;
+        defect["component_number"] = number;
+        defect["warnings"] = Json::Value(Json::arrayValue);
+        parsed["defects"].append(defect);
+        Json::StreamWriterBuilder writer;
+        writer["indentation"] = "";
+        client_->execSqlSync(
+            "update import_records set parsed_result_json=$2::jsonb where id=$1::uuid",
+            import_id_, Json::writeString(writer, parsed));
+    }
+
     // 在本桥另开一个版本。草稿版本用来复现"草稿优先排序"，已确认版本用来验证年度锁定
     // 版本优先于桥梁最新版本。返回新版本 id。
     std::string add_revision(int revision_number, bool confirmed) {
@@ -187,6 +246,7 @@ protected:
 
     drogon::orm::DbClientPtr client_;
     std::string user_id_, bridge_id_, year_id_, package_id_, component_id_, revision_id_, import_id_;
+    std::string railing_left_id_, railing_right_id_;
 };
 
 TEST_F(ImportBindingRepositoryTest, OverviewGroupsByPartNameAndCountsReferences) {
@@ -315,15 +375,81 @@ TEST_F(ImportBindingRepositoryTest, MissingSummariesDoNotChangeRowStatus) {
     EXPECT_EQ(row->candidate_components.front().bridge_component_id, component_id_);
 }
 
+// 报告写"两侧护栏"，台账里是左侧栏杆/右侧栏杆两件。这一行必须带回一个"两侧"选项，
+// 否则界面只给单构件绑定，操作员绑完左侧就以为处理完了——右侧留在 100 分，
+// 栏杆部件分算出 76 而非 56（百股大桥 BG-2024-02）。
+TEST_F(ImportBindingRepositoryTest, OverviewOffersTheTwoSidedOptionForRailings) {
+    append_defect("栏杆、护栏", "两侧护栏");
+
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.overview(import_id_);
+    ASSERT_EQ(outcome.status, BindingStatus::Ok);
+    const auto* row = find_row(*outcome.overview, "栏杆、护栏", "两侧护栏");
+    ASSERT_NE(row, nullptr);
+    ASSERT_EQ(row->status, "unmatched");
+    ASSERT_TRUE(row->side_pair.has_value());
+    EXPECT_EQ(row->side_pair->left_bridge_component_id, railing_left_id_);
+    EXPECT_EQ(row->side_pair->right_bridge_component_id, railing_right_id_);
+    EXPECT_EQ(row->side_pair->left_component_number, "左侧栏杆");
+    EXPECT_EQ(row->side_pair->right_component_number, "右侧栏杆");
+}
+
+// 已处理的行不该再劝人拆分——与 split_eligible 同一条闸门。
+//
+// 同组里必须另留一条未处理行，否则整组都处理完时组级过滤会先把这组跳过，
+// 行级闸门根本轮不到被考察，这条测试也就锁不住它（第一版正是如此：把行级
+// 闸门去掉，测试照样绿）。
+TEST_F(ImportBindingRepositoryTest, OverviewOmitsTheTwoSidedOptionOnResolvedRows) {
+    append_defect("栏杆、护栏", "两侧护栏");
+    append_defect("栏杆、护栏", "另一处护栏");
+    ImportBindingRepository repository(client_);
+    ASSERT_EQ(repository.bind(import_id_, "栏杆、护栏", "两侧护栏", railing_left_id_,
+                              revision_id_).status,
+              BindingStatus::Ok);
+
+    const auto outcome = repository.overview(import_id_);
+    ASSERT_EQ(outcome.status, BindingStatus::Ok);
+
+    const auto* resolved = find_row(*outcome.overview, "栏杆、护栏", "两侧护栏");
+    ASSERT_NE(resolved, nullptr);
+    ASSERT_EQ(resolved->status, "bound");
+    EXPECT_FALSE(resolved->side_pair.has_value());
+
+    // 同组另一条仍未处理，选项照常给——证明上面那条为空是行级闸门的功劳，
+    // 不是整组被跳过。
+    const auto* still_open = find_row(*outcome.overview, "栏杆、护栏", "另一处护栏");
+    ASSERT_NE(still_open, nullptr);
+    ASSERT_EQ(still_open->status, "unmatched");
+    EXPECT_TRUE(still_open->side_pair.has_value());
+}
+
+// 名单外的部件一概不给选项，哪怕它也未匹配。
+TEST_F(ImportBindingRepositoryTest, OverviewOmitsTheTwoSidedOptionOutsideTheAllowlist) {
+    ImportBindingRepository repository(client_);
+    const auto outcome = repository.overview(import_id_);
+    ASSERT_EQ(outcome.status, BindingStatus::Ok);
+
+    const auto* bearing = find_row(*outcome.overview, "支座", "2-1#支座");
+    ASSERT_NE(bearing, nullptr);
+    EXPECT_FALSE(bearing->side_pair.has_value());
+
+    const auto* girder = find_row(*outcome.overview, "上部承重构件", "1-1#梁");
+    ASSERT_NE(girder, nullptr);
+    EXPECT_FALSE(girder->side_pair.has_value());
+}
+
 // 批量替换取数：精简条目、按可绑过滤、只校验不锁定。
 TEST_F(ImportBindingRepositoryTest, ReplaceInventoryReturnsTrimmedBindableEntries) {
     ImportBindingRepository repository(client_);
     const auto outcome = repository.load_replace_inventory(import_id_, revision_id_);
     ASSERT_EQ(outcome.status, BindingStatus::Ok);
     EXPECT_EQ(outcome.replace_revision_id, revision_id_);
-    ASSERT_EQ(outcome.replace_entries.size(), 1u);
-    EXPECT_EQ(outcome.replace_entries.front().component_number, "1-1#梁");
-    EXPECT_EQ(outcome.replace_entries.front().bridge_component_id, component_id_);
+    // 台账里是 1-1#梁 + 左右栏杆三件，按 sort_order 返回。
+    ASSERT_EQ(outcome.replace_entries.size(), 3u);
+    EXPECT_EQ(outcome.replace_entries[0].component_number, "1-1#梁");
+    EXPECT_EQ(outcome.replace_entries[0].bridge_component_id, component_id_);
+    EXPECT_EQ(outcome.replace_entries[1].component_number, "左侧栏杆");
+    EXPECT_EQ(outcome.replace_entries[2].component_number, "右侧栏杆");
     // 服务端已按 is_active 过滤，字段仍必须带回：前端预览里 !entry.is_active 会跳过，
     // 字段缺失时 !undefined 为真，整批安静地判成"台账里没有"。
     EXPECT_TRUE(outcome.replace_entries.front().is_active);
