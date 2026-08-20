@@ -7,7 +7,10 @@ namespace {
 using bridge_report::db::BindingGroup;
 using bridge_report::db::BindingOverview;
 using bridge_report::db::BindingComponentSummary;
+using bridge_report::db::BindingOutcome;
 using bridge_report::db::BindingRow;
+using bridge_report::db::BindingStatus;
+using bridge_report::http::binding_error_response;
 
 TEST(ImportBindingRoutesTest, SerializesOverviewForFrontend) {
     BindingOverview overview;
@@ -110,6 +113,67 @@ TEST(ImportBindingRoutesTest, SerializesTheTwoSidedOptionWithBothMembers) {
     // 顺序即左、右，前端据此展示，不能颠倒。
     EXPECT_EQ(option["bridge_component_ids"][0].asString(), "railing-left");
     EXPECT_EQ(option["bridge_component_ids"][1].asString(), "railing-right");
+}
+
+
+// ---------- 仓储结果 → 错误码 + HTTP 状态 ----------
+//
+// 本仓库没有 HTTP 级夹具，这段决策若埋在路由 lambda 里就没人验得了。
+// 而它恰恰出过事：Invalid 分支一度把仓储带回的具体错误码整个丢掉。
+
+BindingOutcome failure(BindingStatus status, std::string code = "", std::string message = "") {
+    BindingOutcome outcome{status};
+    outcome.error_code = std::move(code);
+    outcome.error_message = std::move(message);
+    return outcome;
+}
+
+TEST(BindingErrorResponseTest, EditLockFailureIsAConflictWithTheSharedCode) {
+    const auto mapped = binding_error_response(failure(BindingStatus::EditLockInvalid));
+    EXPECT_EQ(mapped.error_code, "edit_lock_invalid");
+    EXPECT_EQ(mapped.http_status, 409);
+}
+
+// 台账版本变了要求前端刷新概览，与"类别不符"是两种处置，不能共用一个码。
+TEST(BindingErrorResponseTest, ConflictPrefersTheOutcomeCode) {
+    const auto mapped = binding_error_response(failure(
+        BindingStatus::Conflict, "component_inventory_revision_changed",
+        "构件台账版本已变化，请刷新后重试。"));
+    EXPECT_EQ(mapped.error_code, "component_inventory_revision_changed");
+    EXPECT_EQ(mapped.error_message, "构件台账版本已变化，请刷新后重试。");
+    EXPECT_EQ(mapped.http_status, 409);
+}
+
+TEST(BindingErrorResponseTest, ConflictFallsBackWhenNoCodeIsGiven) {
+    const auto mapped = binding_error_response(failure(BindingStatus::Conflict));
+    EXPECT_EQ(mapped.error_code, "component_binding_conflict");
+    EXPECT_EQ(mapped.http_status, 409);
+    EXPECT_FALSE(mapped.error_message.empty());
+}
+
+// 多构件绑定的几种拒绝各有各的处置："构件重复"要用户改选择，"至少选两个"是
+// 前端不该发出的请求，"类别不符"要重新挑构件。笼统一个码前端分不开。
+TEST(BindingErrorResponseTest, InvalidPrefersTheOutcomeCode) {
+    const auto mapped = binding_error_response(failure(
+        BindingStatus::Invalid, "component_multi_bind_duplicate_component",
+        "同一个构件不能选择多次。"));
+    EXPECT_EQ(mapped.error_code, "component_multi_bind_duplicate_component");
+    EXPECT_EQ(mapped.error_message, "同一个构件不能选择多次。");
+    EXPECT_EQ(mapped.http_status, 400);
+}
+
+TEST(BindingErrorResponseTest, InvalidFallsBackWhenNoCodeIsGiven) {
+    const auto mapped = binding_error_response(failure(BindingStatus::Invalid));
+    EXPECT_EQ(mapped.error_code, "invalid_component_binding");
+    EXPECT_EQ(mapped.http_status, 400);
+}
+
+TEST(BindingErrorResponseTest, RatingTreeFailuresKeepTheirOwnStatuses) {
+    EXPECT_EQ(binding_error_response(failure(BindingStatus::TreeNotFound)).http_status, 404);
+    EXPECT_EQ(binding_error_response(failure(BindingStatus::TreeUnavailable)).http_status, 409);
+    EXPECT_EQ(
+        binding_error_response(failure(BindingStatus::MappingIncompatible)).error_code,
+        "rating_tree_inventory_incompatible");
 }
 
 }  // namespace

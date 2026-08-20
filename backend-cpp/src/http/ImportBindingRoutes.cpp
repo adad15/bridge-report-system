@@ -191,75 +191,27 @@ bool parse_split_targets(
 }
 
 void respond_binding(const HttpCallback& callback, const db::BindingOutcome& outcome) {
-    switch (outcome.status) {
-        case db::BindingStatus::Ok: {
-            Json::Value body;
-            body["overview"] = binding_overview_json(*outcome.overview);
-            respond_json(callback, body);
-            return;
-        }
-        case db::BindingStatus::NotFound:
-            respond_import_record_not_found(callback);
-            return;
-        case db::BindingStatus::EditLockInvalid:
-            // 路由入口已经查过一次；能走到这里说明锁是在事务开始之后失效的
-            // （过期或被管理员强制收回）。与保存草稿、确认入库同一个错误码。
-            respond_json(callback, make_error_body(
-                "edit_lock_invalid", "编辑锁已失效，本次修改未写入，请刷新页面。"),
-                drogon::k409Conflict);
-            return;
-        case db::BindingStatus::Conflict: {
-            // 批量绑定整批不写，必须让用户知道是哪一条挡住的。
-            // 结果自带错误码时优先用它：同一个 Conflict 状态下，"台账版本已变化"要求
-            // 前端刷新概览，跟"类别不符"是两种完全不同的处置。
-            auto body = make_error_body(
-                outcome.error_code.empty()
-                    ? "component_binding_conflict" : outcome.error_code,
-                !outcome.error_message.empty() ? outcome.error_message
-                : outcome.rejected_component_number.empty()
-                    ? "台账未确认、导入不在待校对阶段，或所选构件类别与部件名称不符。"
-                    : "构件 " + outcome.rejected_component_number
-                        + " 的类别与部件名称不符，整批未应用。");
-            if (!outcome.rejected_component_number.empty()) {
-                body["details"]["rejected_component_number"] = outcome.rejected_component_number;
-            }
-            respond_json(callback, body, drogon::k409Conflict);
-            return;
-        }
-        case db::BindingStatus::Invalid: {
-            auto body = make_error_body(
-                "invalid_component_binding",
-                outcome.rejected_component_number.empty()
-                    ? "绑定参数无效或未找到该编号。"
-                    : "构件编号 " + outcome.rejected_component_number
-                        + " 不在本次导入中，整批未应用。");
-            if (!outcome.rejected_component_number.empty()) {
-                body["details"]["rejected_component_number"] = outcome.rejected_component_number;
-            }
-            respond_json(callback, body, drogon::k400BadRequest);
-            return;
-        }
-        case db::BindingStatus::TreeNotFound:
-            respond_json(callback, make_error_body(
-                "rating_tree_not_found", "评定树版本不存在。"),
-                drogon::k404NotFound);
-            return;
-        case db::BindingStatus::TreeUnavailable:
-            respond_json(callback, make_error_body(
-                "rating_tree_unavailable",
-                "所选评定树尚未发布，或关联规范包当前不可用。"),
-                drogon::k409Conflict);
-            return;
-        case db::BindingStatus::MappingIncompatible:
-            respond_json(callback, make_error_body(
-                "rating_tree_inventory_incompatible",
-                "当前已确认台账无法完整继承到所选评定树，请先检查台账规范映射。"),
-                drogon::k409Conflict);
-            return;
-        default:
-            respond_db_unavailable(callback);
-            return;
+    if (outcome.status == db::BindingStatus::Ok) {
+        Json::Value body;
+        body["overview"] = binding_overview_json(*outcome.overview);
+        respond_json(callback, body);
+        return;
     }
+    if (outcome.status == db::BindingStatus::NotFound) {
+        respond_import_record_not_found(callback);
+        return;
+    }
+    if (outcome.status == db::BindingStatus::Failed) {
+        respond_db_unavailable(callback);
+        return;
+    }
+    const auto mapped = binding_error_response(outcome);
+    auto body = make_error_body(mapped.error_code, mapped.error_message);
+    // 整批不写时必须让用户知道是哪一条挡住的。
+    if (!outcome.rejected_component_number.empty()) {
+        body["details"]["rejected_component_number"] = outcome.rejected_component_number;
+    }
+    respond_json(callback, body, static_cast<drogon::HttpStatusCode>(mapped.http_status));
 }
 
 void respond_rating_tree_binding(
@@ -293,6 +245,27 @@ bool parse_expected_revision(const Json::Value* body, std::string& expected,
 }
 
 // 取回 part_name + component_number（bind 另需 bridge_component_id）。
+bool parse_component_ids(const Json::Value* body, std::vector<std::string>& ids,
+                        const HttpCallback& callback) {
+    if (body == nullptr || !(*body)["bridge_component_ids"].isArray()) {
+        respond_json(callback, make_error_body(
+            "invalid_component_binding", "bridge_component_ids 必须是数组。"),
+            drogon::k400BadRequest);
+        return false;
+    }
+    for (const auto& id : (*body)["bridge_component_ids"]) {
+        if (!id.isString() || id.asString().empty()) {
+            respond_json(callback, make_error_body(
+                "invalid_component_binding", "构件 id 必须是非空文本。"),
+                drogon::k400BadRequest);
+            return false;
+        }
+        ids.push_back(id.asString());
+    }
+    // 数量与重复由仓储那层判定并给出具体错误码，这里只拦形状问题。
+    return true;
+}
+
 bool parse_target(const Json::Value* body, std::string& part_name, std::string& number,
                   const HttpCallback& callback) {
     if (body == nullptr || !(*body)["part_name"].isString() || !(*body)["component_number"].isString()) {
@@ -313,6 +286,47 @@ bool parse_target(const Json::Value* body, std::string& part_name, std::string& 
 }
 
 }  // namespace
+
+BindingErrorResponse binding_error_response(const db::BindingOutcome& outcome) {
+    switch (outcome.status) {
+        case db::BindingStatus::EditLockInvalid:
+            // 路由入口已经查过一次；能走到这里说明锁是在事务开始之后失效的
+            // （过期或被管理员强制收回）。与保存草稿、确认入库同一个错误码。
+            return {"edit_lock_invalid", "编辑锁已失效，本次修改未写入，请刷新页面。", 409};
+        case db::BindingStatus::Conflict:
+            // 结果自带错误码时优先用它：同一个 Conflict 下，"台账版本已变化"要求
+            // 前端刷新概览，跟"类别不符"是两种完全不同的处置。
+            return {
+                outcome.error_code.empty() ? "component_binding_conflict" : outcome.error_code,
+                !outcome.error_message.empty() ? outcome.error_message
+                : outcome.rejected_component_number.empty()
+                    ? "台账未确认、导入不在待校对阶段，或所选构件类别与部件名称不符。"
+                    : "构件 " + outcome.rejected_component_number
+                        + " 的类别与部件名称不符，整批未应用。",
+                409};
+        case db::BindingStatus::Invalid:
+            // 与 Conflict 同理，同样优先用仓储给的码。多构件绑定的"构件重复"和
+            // "至少选两个"是两种不同的处置，笼统一个码前端分不开。
+            return {
+                outcome.error_code.empty() ? "invalid_component_binding" : outcome.error_code,
+                !outcome.error_message.empty() ? outcome.error_message
+                : outcome.rejected_component_number.empty()
+                    ? "绑定参数无效或未找到该编号。"
+                    : "构件编号 " + outcome.rejected_component_number
+                        + " 不在本次导入中，整批未应用。",
+                400};
+        case db::BindingStatus::TreeNotFound:
+            return {"rating_tree_not_found", "评定树版本不存在。", 404};
+        case db::BindingStatus::TreeUnavailable:
+            return {"rating_tree_unavailable",
+                    "所选评定树尚未发布，或关联规范包当前不可用。", 409};
+        case db::BindingStatus::MappingIncompatible:
+            return {"rating_tree_inventory_incompatible",
+                    "当前已确认台账无法完整继承到所选评定树，请先检查台账规范映射。", 409};
+        default:
+            return {"database_unavailable", "数据库暂不可用。", 503};
+    }
+}
 
 void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
     const std::string base = "/api/import-records/{import_id}/component-binding";
@@ -554,6 +568,30 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                 respond_binding(callback, db::ImportBindingRepository(db_client).bind(
                     import_id, part_name, number,
                     (*body)["bridge_component_id"].asString(), expected,
+                    edit_lock_from_request(request, *actor)));
+            } catch (...) { respond_db_unavailable(callback); }
+        }, {drogon::Post});
+
+    // "两侧"绑定：把一行拆到多个构件上。会增删病害与照片候选，前端写完必须重取草稿。
+    drogon::app().registerHandler(
+        base + "/bind-multi",
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                    const std::string& import_id) {
+            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
+            try {
+                const auto actor = authenticate_request(db_client, request);
+                if (!actor.has_value()) { respond_unauthorized(callback); return; }
+                if (!require_active_edit_lock(
+                        db_client, request, import_id, *actor, callback)) return;
+                const auto body = request->getJsonObject();
+                std::string part_name, number;
+                if (!parse_target(body.get(), part_name, number, callback)) return;
+                std::vector<std::string> component_ids;
+                if (!parse_component_ids(body.get(), component_ids, callback)) return;
+                std::string expected;
+                if (!parse_expected_revision(body.get(), expected, callback)) return;
+                respond_binding(callback, db::ImportBindingRepository(db_client).bind_multi(
+                    import_id, part_name, number, component_ids, actor->id, expected,
                     edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Post});
