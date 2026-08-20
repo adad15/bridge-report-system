@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -6,6 +7,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 #include <drogon/orm/DbClient.h>
 #include <gtest/gtest.h>
@@ -1926,4 +1928,100 @@ TEST_F(ConfirmAnnualFactsTest, ConfirmTakesTheYearRowLockBeforeReadingTheYear) {
     ASSERT_EQ(after.size(), 1u);
     EXPECT_EQ(after[0]["import_status"].as<std::string>(), "待校对");
     EXPECT_EQ(after[0]["year_status"].as<std::string>(), "待校对");
+}
+
+// 两条导入记录可以挂在同一个年度上（import_records.inspection_year_id 没有唯一约束）。
+// 其中一条正在确认、已经把年度定到 R1 但还没提交时，另一条不能按自己解析出的版本
+// 一路走下去——它必须等前者落定，然后采用前者的结果。
+//
+// 造一个真会分叉的局面：桥上有 R1 与 R2 两个已确认版本，年度未锁定。
+// 自己解析的话会取"最新已确认"R2；而先手正在把年度定到 R1。
+//   - 在年度行锁内读：卡住 -> 先手提交 -> 读到 R1 -> 按 R1 确认，年度最终是 R1；
+//   - 不在行锁内读：读到的是先手提交前的 null -> 解析成 R2 -> 随后
+//     lock_pending_year_revision 回读发现年度已是 R1，判定抢锁失败，整笔确认告吹。
+// 成功/失败两分，判据确定。
+TEST_F(ConfirmAnnualFactsTest, ASecondConfirmOnTheSameYearAdoptsTheSettledRevision) {
+    // 桥上再确认一个更新的版本，并复制条目与映射，保证它自身可解析可用。
+    const auto newer_revision = client_->execSqlSync(
+        "insert into bridge_component_inventory_revisions(bridge_id,revision_number,"
+        "baseline_revision_id,created_by_user_id) values($1::uuid,2,$2::uuid,$3::uuid) "
+        "returning id::text as id",
+        bridge_id_, inventory_revision_id_, confirmed_by_user_id_)[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "insert into bridge_component_inventory_entries(inventory_revision_id,bridge_component_id,"
+        "component_number,site_name,site_component_type,sort_order) "
+        "select $1::uuid,bridge_component_id,component_number,site_name,site_component_type,sort_order "
+        "from bridge_component_inventory_entries where inventory_revision_id=$2::uuid",
+        newer_revision, inventory_revision_id_);
+    client_->execSqlSync(
+        "insert into bridge_component_standard_mappings(inventory_entry_id,standard_package_id,"
+        "standard_bridge_type_id,standard_component_category_id,structure_part,mapping_source,"
+        "confirmation_status,confirmed_by_user_id,confirmed_at) "
+        "select e.id,m.standard_package_id,m.standard_bridge_type_id,m.standard_component_category_id,"
+        "m.structure_part,m.mapping_source,m.confirmation_status,m.confirmed_by_user_id,m.confirmed_at "
+        "from bridge_component_standard_mappings m "
+        "join bridge_component_inventory_entries o on o.id=m.inventory_entry_id "
+        "  and o.inventory_revision_id=$2::uuid "
+        "join bridge_component_inventory_entries e on e.inventory_revision_id=$1::uuid "
+        "  and e.bridge_component_id=o.bridge_component_id",
+        newer_revision, inventory_revision_id_);
+    client_->execSqlSync(
+        "update bridge_component_inventory_revisions set status='已确认',"
+        "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
+        newer_revision, confirmed_by_user_id_);
+    client_->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=null where id=$1::uuid",
+        placeholder_year_id_);
+
+    bridge_report::db::ReviewRepository seeder(client_, registry_);
+    ASSERT_TRUE(seeder.save_review_draft(
+        import_record_id_, write_json_compact(build_confirmed_data())));
+
+    // 先手：把年度定到 R1 但不提交，握住年度行。
+    auto blocker_client = bridge_report::db::create_db_client(
+        bridge_report::config::PostgresConfig{}, 1);
+    auto blocker = blocker_client->newTransaction();
+    blocker->execSqlSync(
+        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
+        placeholder_year_id_, inventory_revision_id_);
+
+    auto confirm_client = bridge_report::db::create_db_client(
+        bridge_report::config::PostgresConfig{}, 1);
+    bridge_report::db::ConfirmOutcome outcome;
+    std::thread confirmer([&] {
+        outcome = bridge_report::db::ReviewRepository(confirm_client, registry_)
+                      .confirm_annual_facts(
+                          import_record_id_, false, "共享年度并发确认", confirmed_by_user_id_);
+    });
+
+    // 等到确认线程确实被年度行挡住，再放行先手——不用固定 sleep。
+    auto probe_client = bridge_report::db::create_db_client(
+        bridge_report::config::PostgresConfig{}, 1);
+    bool confirm_blocked = false;
+    for (int attempt = 0; attempt < 250 && !confirm_blocked; ++attempt) {
+        confirm_blocked = probe_client->execSqlSync(
+            "select count(*) as n from pg_stat_activity "
+            "where wait_event_type='Lock' and datname=current_database()"
+        )[0]["n"].as<int>() > 0;
+        if (!confirm_blocked) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    // 只用来确认两个事务真的相遇了（否则后面的断言测不到东西）。它不区分卡在哪句：
+    // 去掉年度行锁后，确认会改为卡在 lock_pending_year_revision 的 UPDATE 上，同样为真。
+    // 真正的判据是下面的 outcome.success 与年度最终版本。
+    ASSERT_TRUE(confirm_blocked) << "两个事务没有相遇，本条的前提不成立";
+
+    blocker->execSqlSync("commit");
+    confirmer.join();
+    blocker_client->closeAll();
+    confirm_client->closeAll();
+    probe_client->closeAll();
+
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+    const auto year = client_->execSqlSync(
+        "select component_inventory_revision_id::text as revision_id from inspection_years "
+        "where id=$1::uuid", outcome.inspection_year_id);
+    ASSERT_FALSE(year[0]["revision_id"].isNull());
+    EXPECT_EQ(year[0]["revision_id"].as<std::string>(), inventory_revision_id_)
+        << "必须采用先手落定的 R1，而不是自己解析出的 R2";
+    EXPECT_NE(year[0]["revision_id"].as<std::string>(), newer_revision);
 }
