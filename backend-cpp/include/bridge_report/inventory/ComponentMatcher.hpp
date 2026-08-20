@@ -32,6 +32,19 @@ struct ComponentMatchResult {
 };
 
 [[nodiscard]] std::string component_match_method_name(ComponentMatchMethod method);
+
+/**
+ * @brief 台账条目上的生效映射；没有则返回 nullptr。
+ */
+[[nodiscard]] const InventoryMapping* active_inventory_mapping(const InventoryEntry& entry);
+
+/**
+ * @brief 台账里"可用"的构件：启用 + 有生效映射。
+ *
+ * 匹配与侧别配对共用这一条。两处各写一份的话，对"这个构件算不算数"的答案迟早分叉。
+ */
+[[nodiscard]] std::vector<const InventoryEntry*> usable_inventory_entries(
+    const InventoryRevision& revision);
 [[nodiscard]] std::string normalize_component_number(const std::string& value);
 
 /**

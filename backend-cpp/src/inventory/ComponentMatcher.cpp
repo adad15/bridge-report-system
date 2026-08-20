@@ -7,6 +7,22 @@
 #include "bridge_report/inventory/ComponentCategoryLexicon.hpp"
 
 namespace bridge_report::inventory {
+
+const InventoryMapping* active_inventory_mapping(const InventoryEntry& entry) {
+    const auto found = std::find_if(entry.mappings.begin(), entry.mappings.end(), [](const auto& mapping) {
+        return mapping.is_active;
+    });
+    return found == entry.mappings.end() ? nullptr : &*found;
+}
+
+std::vector<const InventoryEntry*> usable_inventory_entries(const InventoryRevision& revision) {
+    std::vector<const InventoryEntry*> result;
+    for (const auto& entry : revision.entries) {
+        if (entry.is_active && active_inventory_mapping(entry) != nullptr) result.push_back(&entry);
+    }
+    return result;
+}
+
 namespace {
 
 std::string trim_ascii(const std::string& value) {
@@ -28,13 +44,6 @@ std::string replace_all(std::string value, const std::string& from, const std::s
     return value;
 }
 
-const InventoryMapping* active_mapping(const InventoryEntry& entry) {
-    const auto found = std::find_if(entry.mappings.begin(), entry.mappings.end(), [](const auto& mapping) {
-        return mapping.is_active;
-    });
-    return found == entry.mappings.end() ? nullptr : &*found;
-}
-
 bool name_matches_confirmed_alias(
     const std::string& name,
     const InventoryEntry& entry,
@@ -45,14 +54,6 @@ bool name_matches_confirmed_alias(
         return alias.bridge_component_id == entry.bridge_component_id
             && trim_ascii(alias.alias_text) == trimmed;
     });
-}
-
-std::vector<const InventoryEntry*> usable_entries(const InventoryRevision& revision) {
-    std::vector<const InventoryEntry*> result;
-    for (const auto& entry : revision.entries) {
-        if (entry.is_active && active_mapping(entry) != nullptr) result.push_back(&entry);
-    }
-    return result;
 }
 
 ComponentMatchResult candidate_result(
@@ -74,7 +75,7 @@ ComponentMatchResult matched_result(ComponentMatchMethod method, const Inventory
     ComponentMatchResult result;
     result.method = method;
     result.matched_entry = entry;
-    result.matched_mapping = *active_mapping(entry);
+    result.matched_mapping = *active_inventory_mapping(entry);
     result.candidate_component_ids.push_back(entry.bridge_component_id);
     return result;
 }
@@ -115,7 +116,7 @@ ComponentMatchResult match_defect_component(
     const InventoryRevision& revision,
     const std::vector<ConfirmedComponentAlias>& confirmed_aliases
 ) {
-    const auto entries = usable_entries(revision);
+    const auto entries = usable_inventory_entries(revision);
     const bool inventory_confirmed =
         revision.status == "已确认" || revision.status == "confirmed";
     const auto normalized_number = normalize_component_number(defect.component_number);
@@ -126,7 +127,7 @@ ComponentMatchResult match_defect_component(
     if (!categories.empty()) {
         std::vector<const InventoryEntry*> hits;
         for (const auto* entry : entries) {
-            const auto* mapping = active_mapping(*entry);
+            const auto* mapping = active_inventory_mapping(*entry);
             if (mapping != nullptr
                 && std::find(categories.begin(), categories.end(),
                              mapping->standard_component_category_id) != categories.end()

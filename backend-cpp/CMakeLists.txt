@@ -73,6 +73,7 @@ add_library(bridge_report_backend_core
     src/inventory/ComponentCategoryLexicon.cpp
     src/inventory/NumberingTemplate.cpp
     src/inventory/ComponentPartCatalog.cpp
+    src/inventory/SideComponentPair.cpp
     src/rating_tree/RatingTreeCompiler.cpp
     src/rating_tree/RatingTreeMatchText.cpp
     src/rating_tree/RatingTreeModels.cpp
@@ -170,6 +171,7 @@ add_executable(bridge_report_backend_tests
     tests/test_draft_validation.cpp
     tests/test_edit_lock_repository.cpp
     tests/test_extracted_photo_archive.cpp
+    tests/test_side_component_pair.cpp
     tests/test_source_db_reference.cpp
     tests/test_inspection_year_deletion_models.cpp
     tests/test_inspection_year_deletion_repository.cpp
