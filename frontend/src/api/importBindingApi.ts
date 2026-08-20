@@ -11,6 +11,12 @@ export interface BindingComponentSummary {
   site_name: string;
 }
 
+/** 下拉里的"两侧"选项：选中即把该行拆开，一次绑到左右两件。 */
+export interface SidePairOption {
+  label: string;
+  bridge_component_ids: string[];
+}
+
 export interface BindingRow {
   component_number: string;
   defect_count: number;
@@ -25,6 +31,11 @@ export interface BindingRow {
   candidate_components: BindingComponentSummary[];
   split_eligible?: boolean;
   split_expanded_count?: number | null;
+  /**
+   * 该行可作为"两侧"整体绑定时后端给出的选项；不成立时为 null。
+   * label 由后端拼好（它要点名将绑给哪两件），前端原样显示，不自己拼。
+   */
+  side_pair_option?: SidePairOption | null;
 }
 
 export interface BindingGroup {
@@ -176,6 +187,26 @@ export function bindComponent(
 ) {
   return overviewRequest(
     bindingUrl(baseUrl, importId, "/bind"),
+    lockedJson("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId }, lockToken)
+  );
+}
+
+/**
+ * "两侧"绑定：把一行病害拆到多个实际构件上，每条各自绑定。
+ *
+ * 与 bindComponent 的关键区别：它会**增删病害与照片候选**（一行 N 条拆成 N×M 条），
+ * 所以调用方写完必须重取校对草稿，不能沿用手里那份。工作区里走同一个 run()，
+ * onDraftInvalidated 会自动触发。
+ */
+export function bindComponentsMulti(
+  baseUrl: string,
+  importId: string,
+  input: BindingTarget & { bridge_component_ids: string[] },
+  expectedInventoryRevisionId: string,
+  lockToken: string
+) {
+  return overviewRequest(
+    bindingUrl(baseUrl, importId, "/bind-multi"),
     lockedJson("POST", { ...input, expected_inventory_revision_id: expectedInventoryRevisionId }, lockToken)
   );
 }

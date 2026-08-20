@@ -14,6 +14,7 @@ import {
   markComponentMissing,
   previewComponentRangeSplit,
   applyComponentRangeSplit,
+  bindComponentsMulti,
   fetchBindingReplaceInventory,
   INVENTORY_REVISION_CHANGED,
   type BindingComponentSummary,
@@ -171,16 +172,23 @@ function optionFromEntry(entry: ComponentInventoryEntry): BindingComponentOption
   };
 }
 
+// 下拉的 value 平时是 bridge_component_id；"两侧"选项要绑两件，塞不进一个 id，
+// 所以用一个不可能与 UUID 相撞的哨兵值，选中后按 side_pair_option 里的 id 走。
+const SIDE_PAIR_VALUE = "__side_pair__";
+
 interface RowActionProps {
   row: BindingRow;
   revisionId: string;
   busy: boolean;
   onBind: (bridgeComponentId: string) => void;
+  onBindMulti: (bridgeComponentIds: string[]) => void;
   onMarkMissing: () => void;
   onClear: () => void;
 }
 
-function RowAction({ row, revisionId, busy, onBind, onMarkMissing, onClear }: RowActionProps) {
+function RowAction(
+  { row, revisionId, busy, onBind, onBindMulti, onMarkMissing, onClear }: RowActionProps
+) {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<BindingComponentOption[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -268,12 +276,26 @@ function RowAction({ row, revisionId, busy, onBind, onMarkMissing, onClear }: Ro
         value=""
         disabled={busy}
         onChange={(event) => {
-          if (event.target.value) onBind(event.target.value);
+          const value = event.target.value;
+          if (!value) return;
+          if (value === SIDE_PAIR_VALUE) {
+            // 哨兵值不是构件 id，必须在这里分流；漏了就会把 "__side_pair__"
+            // 当成 bridge_component_id 发给单条绑定接口。
+            const option = row.side_pair_option;
+            if (option) onBindMulti(option.bridge_component_ids);
+            return;
+          }
+          onBind(value);
         }}
       >
         <option value="">
           {term && options.size === 0 ? "没有匹配的构件" : "请选择实际构件（可先搜索）"}
         </option>
+        {/* "两侧"排在候选之上：报告写"两侧护栏"时，逐个绑左右两件才是对的做法，
+            单选任一侧都会让另一侧留在满分。 */}
+        {row.side_pair_option ? (
+          <option value={SIDE_PAIR_VALUE}>{row.side_pair_option.label}</option>
+        ) : null}
         {[...options.values()].map((option) => (
           <option key={option.entryId} value={option.bridgeComponentId}>
             {option.candidate ? "候选 · " : ""}
@@ -841,6 +863,15 @@ export function ComponentBindingWorkspace({
                       part_name: group.part_name,
                       component_number: row.component_number,
                       bridge_component_id: id,
+                    }, requireRevisionId(overview), requireLockToken())
+                  )
+                }
+                onBindMulti={(ids) =>
+                  run(() =>
+                    bindComponentsMulti(backendBaseUrl, importId, {
+                      part_name: group.part_name,
+                      component_number: row.component_number,
+                      bridge_component_ids: ids,
                     }, requireRevisionId(overview), requireLockToken())
                   )
                 }

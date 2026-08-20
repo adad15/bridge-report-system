@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { searchInventoryEntries } from "../../api/componentInventoryApi";
 import {
   bindComponent,
+  bindComponentsMulti,
   bindInspectionRatingTree,
   fetchComponentBinding,
   markComponentMissing,
@@ -23,6 +24,7 @@ vi.mock("../../api/importBindingApi", async (importOriginal) => {
     ...original,
     fetchComponentBinding: vi.fn(),
     bindComponent: vi.fn(),
+    bindComponentsMulti: vi.fn(),
     bindInspectionRatingTree: vi.fn(),
     markComponentMissing: vi.fn(),
     previewComponentRangeSplit: vi.fn(),
@@ -111,6 +113,42 @@ function overview(status: "unmatched" | "bound" | "missing"): ComponentBindingOv
             candidate_components: status === "unmatched" ? [summary("c1")] : [],
             split_eligible: false,
             split_expanded_count: null,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+// 百股大桥那一行：报告写"两侧护栏"，台账里是左侧栏杆/右侧栏杆两件。
+function railingOverview(sidePair = true): ComponentBindingOverview {
+  return {
+    inventory_confirmed: true,
+    inventory_revision_id: "rev-1",
+    groups: [
+      {
+        part_name: "栏杆、护栏",
+        total: 1,
+        bound: 0,
+        unmatched: 1,
+        ambiguous: 0,
+        missing: 0,
+        rows: [
+          {
+            component_number: "两侧护栏",
+            defect_count: 1,
+            status: "unmatched",
+            bridge_component_id: null,
+            bound_component: null,
+            candidate_components: [],
+            split_eligible: false,
+            split_expanded_count: null,
+            side_pair_option: sidePair
+              ? {
+                  label: "两侧 · 左侧栏杆 + 右侧栏杆",
+                  bridge_component_ids: ["railing-left", "railing-right"],
+                }
+              : null,
           },
         ],
       },
@@ -254,6 +292,59 @@ describe("ComponentBindingWorkspace", () => {
     await userEvent.click(screen.getByLabelText("标记缺失 1-1#梁"));
 
     await waitFor(() => expect(onDraftInvalidated).toHaveBeenCalledTimes(1));
+  });
+
+  // 一条"两侧护栏"若只绑左侧，右侧会留在满分，栏杆部件分算出 76 而非 56。
+  // 选项必须摆在候选之上，让人先看见"两侧"这条路。
+  it("offers the two-sided option above the individual components", async () => {
+    vi.mocked(fetchComponentBinding).mockResolvedValue(railingOverview());
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
+
+    const select = await screen.findByLabelText("为 两侧护栏 选择实际构件");
+    const options = within(select).getAllByRole("option").map((o) => o.textContent);
+    expect(options[1]).toBe("两侧 · 左侧栏杆 + 右侧栏杆");
+  });
+
+  it("binds both components at once and refreshes the review draft", async () => {
+    vi.mocked(fetchComponentBinding).mockResolvedValue(railingOverview());
+    vi.mocked(bindComponentsMulti).mockResolvedValue(railingOverview(false));
+    const onDraftInvalidated = vi.fn();
+    render(
+      <ComponentBindingWorkspace
+        importId="i1"
+        bridgeId="bridge-1"
+        lockToken="lock-1"
+        onDraftInvalidated={onDraftInvalidated}
+      />,
+    );
+
+    const select = await screen.findByLabelText("为 两侧护栏 选择实际构件");
+    await userEvent.selectOptions(select, "__side_pair__");
+
+    await waitFor(() => expect(bindComponentsMulti).toHaveBeenCalledTimes(1));
+    expect(bindComponentsMulti).toHaveBeenCalledWith(
+      expect.anything(),
+      "i1",
+      {
+        part_name: "栏杆、护栏",
+        component_number: "两侧护栏",
+        bridge_component_ids: ["railing-left", "railing-right"],
+      },
+      "rev-1",
+      "lock-1",
+    );
+    // 单条绑定不该被误触发：哨兵值不是构件 id。
+    expect(bindComponent).not.toHaveBeenCalled();
+    // 这次写会增删病害，草稿必须重取。
+    await waitFor(() => expect(onDraftInvalidated).toHaveBeenCalledTimes(1));
+  });
+
+  it("omits the two-sided option when the backend reports no pair", async () => {
+    vi.mocked(fetchComponentBinding).mockResolvedValue(railingOverview(false));
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
+
+    const select = await screen.findByLabelText("为 两侧护栏 选择实际构件");
+    expect(within(select).queryByText(/^两侧 · /)).not.toBeInTheDocument();
   });
 
   // 首屏只等概览。此前并排拉一份完整台账（约 3.4 MB），两个都回来才渲染。
