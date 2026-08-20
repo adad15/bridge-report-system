@@ -1177,7 +1177,8 @@ body {
 .review-confirm-dialog-actions .review-action-primary,
 .review-photo-actions .review-action-primary,
 .defect-review-filters .review-action-primary,
-.defect-detail-actions .review-action-primary {
+.defect-detail-actions .review-action-primary,
+.review-dialog-actions .review-action-primary {
   background: #2456c9;
   border-color: #2456c9;
   color: #ffffff;
@@ -1188,7 +1189,8 @@ body {
 .review-confirm-dialog-actions .review-action-primary:not(:disabled):hover,
 .review-photo-actions .review-action-primary:not(:disabled):hover,
 .defect-review-filters .review-action-primary:not(:disabled):hover,
-.defect-detail-actions .review-action-primary:not(:disabled):hover {
+.defect-detail-actions .review-action-primary:not(:disabled):hover,
+.review-dialog-actions .review-action-primary:not(:disabled):hover {
   background: #1d49ad;
 }
 
@@ -1196,7 +1198,8 @@ body {
 .review-confirm-dialog-actions .review-action-primary:disabled,
 .review-photo-actions .review-action-primary:disabled,
 .defect-review-filters .review-action-primary:disabled,
-.defect-detail-actions .review-action-primary:disabled {
+.defect-detail-actions .review-action-primary:disabled,
+.review-dialog-actions .review-action-primary:disabled {
   background: #a9bce7;
   border-color: #a9bce7;
   color: #ffffff;
@@ -1323,7 +1326,8 @@ body {
   margin-top: 16px;
 }
 
-.review-confirm-dialog-actions button {
+.review-confirm-dialog-actions button,
+.review-dialog-actions button {
   font: inherit;
   padding: 8px 14px;
   border: 1px solid #d9e0e8;
@@ -1332,7 +1336,8 @@ body {
   cursor: pointer;
 }
 
-.review-confirm-dialog-actions button:disabled {
+.review-confirm-dialog-actions button:disabled,
+.review-dialog-actions button:disabled {
   color: #97a2ae;
   cursor: not-allowed;
 }
