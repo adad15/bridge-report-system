@@ -1875,3 +1875,55 @@ TEST_F(ConfirmAnnualFactsTest, ExplicitRevisionRejectsADraftOrUnknownRevision) {
         "select component_inventory_revision_id::text as revision_id from inspection_years "
         "where id=$1::uuid", placeholder_year_id_)[0]["revision_id"].isNull());
 }
+
+// 确认事务必须在**读年度数据之前**就拿到年度行锁。7f89294 把版本解析与锁定提到了
+// build_preflight_report() 之前，但那条 for update 本身一直没有测试——
+// 3b8c43b 就是在同一类位置丢过一次行锁（见 80272ab），只靠注释守不住。
+//
+// 判据靠一个能区分的出口做成确定的：让草稿在**预检**阶段失败。
+//   - 有行锁：别人握着年度行时，事务卡在第 2 步的 select ... for update 上，
+//     语句超时 -> db_write_failed，根本走不到预检；
+//   - 没行锁：那句 select 照常返回，一路走到预检才失败 -> preflight_failed，全程不阻塞。
+// 两个错误码不同，把 for update 去掉这条必红。
+TEST_F(ConfirmAnnualFactsTest, ConfirmTakesTheYearRowLockBeforeReadingTheYear) {
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto data = build_confirmed_data();
+    // 契约合法但没绑实际构件：preflight 的 check_component_inventory_links 会阻断。
+    // 挑它是因为"未校对"那种挂在契约校验上，而契约校验发生在年度行锁之前，
+    // 两条路都走不到要守的那句。
+    data["defects"][0]["bridge_component_id"] = Json::Value();
+    data["defects"][0]["standard_component_category_id"] = Json::Value();
+    data["defects"][0]["resolved_structure_part"] = Json::Value();
+    data["defects"][0]["component_inventory_revision_id"] = Json::Value();
+    ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
+
+    // 阻塞方另开一条连接：client_ 的连接池只有 1 条，用它开事务会把仓储饿死。
+    auto blocker_client = bridge_report::db::create_db_client(
+        bridge_report::config::PostgresConfig{}, 1);
+    auto blocker = blocker_client->newTransaction();
+    blocker->execSqlSync(
+        "select id from inspection_years where id=$1::uuid for update", placeholder_year_id_);
+
+    client_->execSqlSync("set statement_timeout = '1500'");
+    const auto outcome = repository.confirm_annual_facts(
+        import_record_id_, false, "别人握着年度行", confirmed_by_user_id_);
+    client_->execSqlSync("set statement_timeout = 0");
+
+    blocker->rollback();
+    blocker_client->closeAll();
+
+    ASSERT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "db_write_failed")
+        << "别人握着年度行时，确认事务必须卡在年度行锁上，而不是照常读下去";
+    EXPECT_NE(outcome.error_code, "preflight_failed")
+        << "走到了预检说明年度数据是在没有行锁的情况下读的";
+
+    // 卡住即整体回滚：导入记录仍待校对，年度没被动过。
+    const auto after = client_->execSqlSync(
+        "select ir.import_status, iy.status as year_status "
+        "from import_records ir join inspection_years iy on iy.id=ir.inspection_year_id "
+        "where ir.id=$1::uuid", import_record_id_);
+    ASSERT_EQ(after.size(), 1u);
+    EXPECT_EQ(after[0]["import_status"].as<std::string>(), "待校对");
+    EXPECT_EQ(after[0]["year_status"].as<std::string>(), "待校对");
+}
