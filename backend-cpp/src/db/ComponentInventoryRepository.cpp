@@ -900,6 +900,19 @@ ComponentInventoryOutcome ComponentInventoryRepository::generate_draft(
                 input.bridge_type_id, item.standard_component_category_id, item.structure_part,
                 user_id);
         }
+        // 刚往三张表里灌了几千行，而计划器的统计信息还停在"接近空表"。下面那句汇总
+        // 会据此选出灾难性的计划：实测 5126 个构件时它要 18.6 秒，ANALYZE 之后同一条
+        // 查询只要 42 毫秒（443 倍）。而 DbClient 的单语句超时是 10 秒，于是整个生成
+        // 以 SQL execution timeout 失败——界面上表现为"构件台账写入失败"，重试永远无解，
+        // 因为每次重试都从同样的空统计开始。
+        //
+        // autovacuum 也会做这件事，但要等到下一轮；汇总就在同一个事务里、紧接着跑，
+        // 等不到。ANALYZE 可以在事务内执行，其结果对本事务后续语句立即可见。
+        if (generated.size() >= 500) {
+            tx->execSqlSync("analyze bridge_components");
+            tx->execSqlSync("analyze bridge_component_inventory_entries");
+            tx->execSqlSync("analyze bridge_component_standard_mappings");
+        }
         auto summary = load_summary_with(tx, revision_id);
         auto outcome = finish(tx, latch, revision_id);
         if (outcome.status == ComponentInventoryStatus::Ok) outcome.summary = std::move(summary);

@@ -1,4 +1,6 @@
+#include <chrono>
 #include <cstdlib>
+#include <iostream>
 #include <fstream>
 #include <memory>
 #include <optional>
@@ -9,6 +11,7 @@
 
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
+#include "bridge_report/inventory/ComponentInventoryGenerator.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
 
 namespace db = bridge_report::db;
@@ -1308,4 +1311,36 @@ TEST_F(ConfirmedRevisionResolutionTest, ManagementLookupStillPrefersTheDraft) {
     db::ComponentInventoryRepository repository(client);
 
     EXPECT_EQ(repository.find_latest_revision_id(bridge_id).value_or(""), draft);
+}
+
+
+// 大桥生成回归：5000+ 构件时，紧跟批量插入的那条汇总查询会因为统计信息还停在
+// "接近空表"而选出灾难性计划——实测 18.6 秒，而 DbClient 单语句超时是 10 秒，
+// 于是整个生成以 SQL execution timeout 失败，界面上是"构件台账写入失败"，重试永远无解。
+//
+// 这条按生产超时（10 秒/语句）跑真实规模；去掉 generate_draft 里的 ANALYZE 即转红。
+TEST_F(ComponentInventoryRepositoryTest, GeneratesALargeBridgeWithinTheStatementTimeout) {
+    if (!client) GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置";
+    inventory::GenerateInventoryInput input;
+    input.standard_package_id = package_id;
+    input.bridge_type_id = "test.bridge.beam";
+    input.span_count = 33;
+    // 与线上那座 33 孔桥同量级：每孔 25 片板、每孔每墩 50 个支座是主要来源。
+    input.part_selections.push_back({"beam.girder", "板", {25}, {}});
+    input.part_selections.push_back({"bearing.support", "支座", {50}, {}});
+    input.part_selections.push_back({"lower.pier_column", "墩柱", {4}, {}});
+    input.part_selections.push_back({"lower.riverbed", "河床", {}, {}});
+
+    const auto generated = inventory::generate_component_inventory(input);
+    ASSERT_TRUE(generated.ok()) << generated.error_message;
+    ASSERT_GE(generated.entries.size(), 4000u) << "样本必须大到能触发坏计划";
+
+    db::ComponentInventoryRepository repository(client);
+    const auto outcome = repository.generate_draft(bridge_id, user_id, input, generated.entries);
+
+    EXPECT_EQ(outcome.status, db::ComponentInventoryStatus::Ok)
+        << "大桥生成不得超时；失败时真实原因见服务端日志";
+    ASSERT_TRUE(outcome.summary.has_value());
+    EXPECT_EQ((*outcome.summary)["revision"]["active_entry_count"].asInt64(),
+              static_cast<Json::Int64>(generated.entries.size()));
 }

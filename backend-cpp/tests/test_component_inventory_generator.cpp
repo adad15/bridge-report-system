@@ -1,3 +1,7 @@
+#include <iostream>
+#include <map>
+#include <string>
+
 #include <gtest/gtest.h>
 
 #include "bridge_report/inventory/ComponentInventoryGenerator.hpp"
@@ -88,3 +92,4 @@ TEST(ComponentInventoryGeneratorTest, RejectsUnknownPartAndEmptySelections) {
     EXPECT_EQ(inventory::generate_component_inventory(empty).error_code,
               "inventory_part_selections_required");
 }
+
