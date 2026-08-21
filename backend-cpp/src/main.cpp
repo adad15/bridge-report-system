@@ -26,6 +26,7 @@
 #include "bridge_report/http/DefectMatchingRoutes.hpp"
 #include "bridge_report/http/DefectPhotoRoutes.hpp"
 #include "bridge_report/http/ImportBindingRoutes.hpp"
+#include "bridge_report/http/RoutePreflightAudit.hpp"
 #include "bridge_report/http/ImportConfirmRoutes.hpp"
 #include "bridge_report/http/ImportRecordDeletionRoutes.hpp"
 #include "bridge_report/http/InspectionYearDeletionRoutes.hpp"
@@ -499,6 +500,29 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_inspection_year_deletion_routes(db_client, cleanup_coordinator);
     bridge_report::http::register_rating_tree_routes(db_client);
 
+    // 路由自检：能改数据的接口必须同时注册 OPTIONS 预检。
+    //
+    // 缺了会怎样：浏览器发改写请求前先发 OPTIONS 预检，预检 404 则真正的请求根本
+    // 不会发出——前端只拿到 fetch 的网络错误（报一句笼统的"操作失败"），后端日志
+    // 里一片空白，测试也照样全绿，三条线索全是死的。bind-multi 上线时就是这么坏的，
+    // 最后是用户在界面上点出来才发现。
+    //
+    // 这里拒绝启动而不是记一条日志：路径写死在代码里，缺预检就是缺预检，重启一百次
+    // 也不会自己好；带病启动只是把问题推迟到浏览器里，再以最没线索的形式冒出来。
+    // 本地开发后端，快速失败的代价不过是重编一次。
+    if (const auto missing = bridge_report::http::paths_missing_preflight(
+            drogon::app().getHandlersInfo());
+        !missing.empty()) {
+        std::cerr << "路由自检失败：以下写接口缺少 OPTIONS 预检处理器，"
+                     "浏览器的跨域预检会得到 404，真正的请求根本发不出去：\n";
+        for (const auto& path : missing) {
+            std::cerr << "    " << path << "\n";
+        }
+        std::cerr << "修法：改用成对注册（见 ImportBindingRoutes.cpp 的 "
+                     "register_post_route），它会把 POST 与其预检一起注册。\n"
+                     "后端未启动。\n";
+        return 1;
+    }
     std::cout << "Bridge Report C++ backend listening on "
               << config.host << ":" << config.port << "\n";
 

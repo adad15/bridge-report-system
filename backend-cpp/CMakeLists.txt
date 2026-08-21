@@ -57,6 +57,7 @@ add_library(bridge_report_backend_core
     src/http/DefectMatchingRoutes.cpp
     src/http/EditLockRoutes.cpp
     src/http/ImportBindingRoutes.cpp
+    src/http/RoutePreflightAudit.cpp
     src/http/ImportConfirmRoutes.cpp
     src/http/ImportRecordDeletionRoutes.cpp
     src/http/InspectionYearDeletionRoutes.cpp
@@ -171,6 +172,7 @@ add_executable(bridge_report_backend_tests
     tests/test_draft_validation.cpp
     tests/test_edit_lock_repository.cpp
     tests/test_extracted_photo_archive.cpp
+    tests/test_route_preflight_audit.cpp
     tests/test_side_component_pair.cpp
     tests/test_source_db_reference.cpp
     tests/test_two_sided_binding_end_to_end.cpp
