@@ -1,5 +1,7 @@
 #include "bridge_report/inventory/ComponentPartCatalog.hpp"
 
+#include <cstddef>
+
 #include <algorithm>
 
 namespace bridge_report::inventory {
@@ -51,6 +53,33 @@ NumberingTemplate CatalogPart::number_template_with(
     const auto pos = pattern.find("{name}");
     if (pos != std::string::npos) pattern.replace(pos, 6, name.empty() ? default_name : name);
     return assemble(pattern, counts);
+}
+
+namespace {
+
+int structure_part_rank(const std::string& structure_part) {
+    if (structure_part == "superstructure") return 0;
+    if (structure_part == "substructure") return 1;
+    if (structure_part == "deck_system") return 2;
+    return 3;  // overall 与未知，排最后
+}
+
+}  // namespace
+
+int component_review_rank(
+    const std::string& structure_part,
+    const std::string& standard_component_category_id
+) {
+    const auto& parts = component_parts();
+    // 取该类别在目录里首次出现的位置。同类别的多个部件（墩柱/盖梁等）共用这个位置，
+    // 它们之间的先后由调用方用台账 sort_order 分。
+    for (std::size_t index = 0; index < parts.size(); ++index) {
+        if (parts[index].standard_component_category_id == standard_component_category_id) {
+            return structure_part_rank(structure_part) * 1000
+                + static_cast<int>(index);
+        }
+    }
+    return structure_part_rank(structure_part) * 1000 + 999;
 }
 
 const std::vector<CatalogPart>& component_parts() {

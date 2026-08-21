@@ -89,6 +89,21 @@ public:
     // 需要完整台账做 validate_target() 或范围分析的调用方用这一条。
     // 内部先走 resolve_confirmed_revision_ref()，两者共用同一套版本解析规则。
     /**
+     * @brief 把点名的构件按病害校对的走查顺序排好，返回排序后的构件 id。
+     *
+     * 顺序 = 结构部位（上部 → 下部 → 桥面系）→ 部件在目录中的位置 → 台账 sort_order。
+     * 最后那一级不能省：墩柱与盖梁、台与台帽、锥坡与护坡各自共用一个 H21 类别，
+     * 只有台账的生成次序分得开它们。
+     *
+     * 规则整体住在后端，前端只按返回的次序摆行——同一份顺序将来若要给别的视图用，
+     * 不必在两处各维护一份。传入的构件若不在台账里，直接不出现在结果中。
+     */
+    [[nodiscard]] std::vector<std::string> order_components_for_review(
+        const std::string& bridge_id,
+        const std::optional<std::string>& locked_revision_id,
+        const std::vector<std::string>& bridge_component_ids) const;
+
+    /**
      * @brief 按同一条解析规则取已确认版本，但**只装配指定构件**。
      *
      * 专供"按 bridge_component_id 查规范类别"这一种用途（病害评定树匹配）。与完整的

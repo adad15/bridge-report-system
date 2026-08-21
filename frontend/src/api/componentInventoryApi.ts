@@ -191,6 +191,33 @@ function writeRequest(url: string, init?: RequestInit): Promise<InventoryWriteRe
   return request<InventoryWriteResult>(url, init);
 }
 
+/**
+ * 病害校对列表的部件走查顺序：上部结构 → 下部结构 → 桥面系，每段内部按台账目录
+ * 里的部件次序（板 → 铰缝 → 支座 → 墩柱 → 盖梁 → …）。
+ *
+ * 顺序规则整体在后端：墩柱与盖梁、台与台帽、锥坡与护坡各自共用一个 H21 类别，
+ * 只有台账的生成次序分得开，而前端手里没有那份数据。返回的就是排好的构件 id，
+ * 前端按数组下标摆行即可。
+ *
+ * 用 POST 是因为要传一批构件 id（大桥一次三百多个），塞进查询串会顶破 URL 长度。
+ */
+export async function fetchComponentReviewOrder(
+  baseUrl: string,
+  bridgeId: string,
+  bridgeComponentIds: string[],
+): Promise<string[]> {
+  if (bridgeComponentIds.length === 0) return [];
+  const body = await request<{ ordered_component_ids: string[] }>(
+    `${baseUrl}/api/bridges/${encodeURIComponent(bridgeId)}/component-inventories/latest/review-order`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bridge_component_ids: bridgeComponentIds }),
+    },
+  );
+  return body.ordered_component_ids;
+}
+
 export function fetchInventorySummary(baseUrl: string, bridgeId: string) {
   return request<InventorySummary>(
     `${baseUrl}/api/bridges/${encodeURIComponent(bridgeId)}/component-inventories/latest/summary`);

@@ -162,6 +162,60 @@ TEST_F(ComponentInventoryRepositoryTest, NarrowLoadMatchesTheFullLoadForTheReque
     }
 }
 
+// 病害校对列表按部件走查：上部结构 → 下部结构 → 桥面系，每段内部按台账目录里的
+// 部件次序。梁式桥的样本台账只有梁与支座两类，两者同属上部结构，靠目录位置分先后
+// （梁在目录第 18 位、支座第 45 位）。
+TEST_F(ComponentInventoryRepositoryTest, ReviewOrderFollowsThePartCatalogNotTheInventorySortOrder) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(5, 6);
+    const auto generated = inventory::generate_component_inventory(input);
+    ASSERT_TRUE(generated.ok());
+    db::ComponentInventoryRepository repository(client);
+    const auto created = repository.generate_draft(
+        bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    ASSERT_EQ(
+        repository.confirm_revision(revision_id_of(created), user_id, "走查顺序").status,
+        db::ComponentInventoryStatus::Ok);
+
+    const auto full = repository.resolve_confirmed_revision(bridge_id, std::nullopt);
+    ASSERT_TRUE(full.has_value());
+    std::vector<std::string> ids;
+    for (const auto& entry : full->entries) ids.push_back(entry.bridge_component_id);
+    // 打乱输入，确认顺序来自排序规则而不是入参次序。
+    std::reverse(ids.begin(), ids.end());
+
+    const auto ordered = repository.order_components_for_review(
+        bridge_id, std::nullopt, ids);
+    ASSERT_EQ(ordered.size(), ids.size());
+
+    std::map<std::string, const inventory::InventoryEntry*> by_component;
+    for (const auto& entry : full->entries) by_component[entry.bridge_component_id] = &entry;
+
+    // 同一部件的构件必须连成一段，不能被别的部件打断——这正是"逐部件核对"要的。
+    std::vector<std::string> part_sequence;
+    for (const auto& id : ordered) {
+        const auto& type = by_component[id]->site_component_type;
+        if (part_sequence.empty() || part_sequence.back() != type) part_sequence.push_back(type);
+    }
+    std::set<std::string> seen;
+    for (const auto& type : part_sequence) {
+        EXPECT_TRUE(seen.insert(type).second) << "部件 " << type << " 被切成了不连续的两段";
+    }
+    // 同一部件内部按台账生成次序，不能乱。
+    int previous_sort = -1;
+    std::string previous_type;
+    for (const auto& id : ordered) {
+        const auto* entry = by_component[id];
+        if (entry->site_component_type != previous_type) {
+            previous_type = entry->site_component_type;
+            previous_sort = -1;
+        }
+        EXPECT_GT(entry->sort_order, previous_sort) << "同部件内部次序乱了";
+        previous_sort = entry->sort_order;
+    }
+}
+
 // 草稿里一条绑定都没有时不该白跑一趟数据库取条目，但版本本身仍要解析出来。
 TEST_F(ComponentInventoryRepositoryTest, NarrowLoadWithNoComponentsStillResolvesTheRevision) {
     if (!client) GTEST_SKIP();

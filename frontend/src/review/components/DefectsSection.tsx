@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import type { AssessmentIssue } from "../../api/assessmentApi";
-import { componentInventoryErrorMessage, fetchInventorySummary, searchInventoryEntries, type ComponentInventoryEntry, type InventorySummary, type StructurePart as InventoryStructurePart } from "../../api/componentInventoryApi";
+import { componentInventoryErrorMessage, fetchComponentReviewOrder, fetchInventorySummary, searchInventoryEntries, type ComponentInventoryEntry, type InventorySummary, type StructurePart as InventoryStructurePart } from "../../api/componentInventoryApi";
 import {
   defectMatchErrorMessage,
   matchDefectRatingTreeNodes,
@@ -119,6 +119,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const treeNodeDetailsVersion = useRef<string | null>(null);
   const [manualTreeNode, setManualTreeNode] = useState<RatingTreeNode | null>(null);
   const [treeRulesReady, setTreeRulesReady] = useState(false);
+  const [componentOrder, setComponentOrder] = useState<Map<string, number> | null>(null);
   const [treeError, setTreeError] = useState("");
   const [filter, setFilter] = useState<DefectReviewFilter>("needs_attention");
   const [issueFilter, setIssueFilter] = useState<DefectReviewIssueFilter | null>(null);
@@ -188,6 +189,24 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
       .sort().join("|"),
     [draft.defects],
   );
+
+  // 走查顺序：后端按 结构部位 → 部件目录次序 → 台账 sort_order 排好，前端只按下标摆行。
+  // 依赖用内容键而不是 draft.defects 的引用——后者每次渲染都是新数组，会让这里反复重取。
+  useEffect(() => {
+    const ids = [...new Set(draft.defects
+      .map((defect) => defect.bridge_component_id)
+      .filter((id): id is string => Boolean(id)))];
+    if (ids.length === 0) { setComponentOrder(new Map()); return; }
+    let cancelled = false;
+    fetchComponentReviewOrder(baseUrl, bridgeId, ids)
+      .then((ordered) => {
+        if (cancelled) return;
+        setComponentOrder(new Map(ordered.map((id, index) => [id, index])));
+      })
+      // 取不到就退回纯优先级排序：列表照常可用，只是不按部件走。
+      .catch(() => { if (!cancelled) setComponentOrder(null); });
+    return () => { cancelled = true; };
+  }, [baseUrl, bridgeId, boundComponentKey, draft.defects]);
 
   // 每个构件适用哪些评定树病害节点，只取决于它的 (桥型, 规范类别)。分组汇总里就有
   // 这一对（每个类别一行，本桥 18 行），而每条已绑定病害的 JSON 里也带着
@@ -390,9 +409,10 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     ratingTreeNodeSummaries,
     applicableTreeNodeIdsByComponent,
     treeRulesReady,
+    componentOrder: componentOrder ?? undefined,
     assessmentIssues,
     matchResults,
-  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, treeNodeDetails, treeRulesReady]);
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, treeNodeDetails, treeRulesReady, componentOrder]);
   const visibleModel = useMemo(() => buildDefectPhotoReviewModel({
     draft,
     ratingTreeVersionId: ratingTree?.version_id ?? null,
@@ -400,12 +420,13 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     ratingTreeNodeSummaries,
     applicableTreeNodeIdsByComponent,
     treeRulesReady,
+    componentOrder: componentOrder ?? undefined,
     assessmentIssues,
     matchResults,
     filter,
     issueFilter,
     search,
-  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, issueFilter, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, search, treeNodeDetails, treeRulesReady]);
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, issueFilter, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, search, treeNodeDetails, treeRulesReady, componentOrder]);
 
   useEffect(() => {
     setSelectedIds((current) => {

@@ -76,7 +76,68 @@ function safeDraft() {
   return draft;
 }
 
+// 三条病害各挂一个构件，用来验按部件走查的排序。
+// 故意让"要人工判断的"落在部件顺序的中间，好看出两个键谁是主的。
+function orderingDraft() {
+  const draft = safeDraft();
+  const base = draft.defects[0];
+  draft.defects = [
+    { ...base, candidate_id: "d-railing", bridge_component_id: "c-railing" },
+    { ...base, candidate_id: "d-girder", bridge_component_id: "c-girder" },
+    { ...base, candidate_id: "d-pier", bridge_component_id: "c-pier" },
+  ];
+  draft.photos = [];
+  return draft;
+}
+
+// 后端排好的次序：板 → 墩柱 → 栏杆（上部 → 下部 → 桥面系）。
+const componentOrder = new Map([["c-girder", 0], ["c-pier", 1], ["c-railing", 2]]);
+
+function orderingInput(extra: Record<string, unknown> = {}) {
+  return {
+    draft: orderingDraft(),
+    ratingTreeVersionId: "tree-version-1",
+    ratingTreeNodes: [treeNode],
+    applicableTreeNodeIdsByComponent: new Map([
+      ["c-girder", new Set([treeNode.id])],
+      ["c-pier", new Set([treeNode.id])],
+      ["c-railing", new Set([treeNode.id])],
+    ]),
+    treeRulesReady: true,
+    assessmentIssues: [],
+    ...extra,
+  };
+}
+
 describe("buildDefectPhotoReviewModel", () => {
+  // 校对时是照着纸质报告逐部件核对的，列表就该按 板 → 铰缝 → 支座 → 墩柱 → … 一条
+  // 顺下来，而不是按"要不要人工判断"把部件打散。
+  it("orders rows by the component review order the backend gives", () => {
+    const model = buildDefectPhotoReviewModel(
+      orderingInput({ componentOrder }) as never);
+    expect(model.rows.map((row) => row.candidateId))
+      .toEqual(["d-girder", "d-pier", "d-railing"]);
+  });
+
+  // 顺序还没取到时不能把列表打乱：退回原来的优先级排序。
+  it("falls back to the priority order until the component order arrives", () => {
+    const model = buildDefectPhotoReviewModel(orderingInput() as never);
+    expect(model.rows.map((row) => row.candidateId))
+      .toEqual(["d-railing", "d-girder", "d-pier"]);
+  });
+
+  // 没绑构件的病害还不属于任何部件，插在中间会打断走查，排最后。
+  it("puts defects without a component at the end", () => {
+    const draft = orderingDraft();
+    draft.defects.push({
+      ...draft.defects[0], candidate_id: "d-unbound", bridge_component_id: null,
+    });
+    const model = buildDefectPhotoReviewModel(
+      orderingInput({ draft, componentOrder }) as never);
+    expect(model.rows[model.rows.length - 1].candidateId).toBe("d-unbound");
+  });
+
+
   it("allows exact and controlled-alias tree matches but blocks fuzzy suggestions", () => {
     const draft = safeDraft();
     Object.assign(draft.defects[0], {

@@ -1,4 +1,6 @@
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
+#include "bridge_report/inventory/ComponentPartCatalog.hpp"
+#include "bridge_report/inventory/ComponentMatcher.hpp"
 
 #include <trantor/utils/Logger.h>
 
@@ -843,6 +845,44 @@ ComponentInventoryRepository::resolve_confirmed_revision_ref(
     if (rows.empty()) return std::nullopt;
     return ConfirmedRevisionRef{rows[0]["id"].as<std::string>(),
                                 rows[0]["bridge_id"].as<std::string>()};
+}
+
+std::vector<std::string> ComponentInventoryRepository::order_components_for_review(
+    const std::string& bridge_id,
+    const std::optional<std::string>& locked_revision_id,
+    const std::vector<std::string>& bridge_component_ids) const {
+    // 精简装配本来就带着类别、结构部位和 sort_order，排序不必另取一次数。
+    const auto revision = resolve_confirmed_revision_for_components(
+        bridge_id, locked_revision_id, bridge_component_ids);
+    if (!revision.has_value()) return {};
+
+    struct Ranked {
+        int rank{0};
+        int sort_order{0};
+        std::string component_id;
+    };
+    std::vector<Ranked> ranked;
+    ranked.reserve(revision->entries.size());
+    for (const auto& entry : revision->entries) {
+        const auto* mapping = inventory::active_inventory_mapping(entry);
+        if (mapping == nullptr) continue;  // 没有生效映射就定不了部件，排不进来
+        ranked.push_back({
+            inventory::component_review_rank(
+                mapping->structure_part, mapping->standard_component_category_id),
+            entry.sort_order,
+            entry.bridge_component_id,
+        });
+    }
+    std::sort(ranked.begin(), ranked.end(), [](const Ranked& left, const Ranked& right) {
+        // component_id 兜底只为让结果稳定：同部件同 sort_order 时次序不该随查询漂。
+        return std::tie(left.rank, left.sort_order, left.component_id)
+             < std::tie(right.rank, right.sort_order, right.component_id);
+    });
+
+    std::vector<std::string> ordered;
+    ordered.reserve(ranked.size());
+    for (auto& item : ranked) ordered.push_back(std::move(item.component_id));
+    return ordered;
 }
 
 std::optional<inventory::InventoryRevision>

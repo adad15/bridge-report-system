@@ -88,6 +88,12 @@ export interface DefectPhotoReviewModelInput {
   ratingTreeNodeSummaries?: RatingTreeNodeSummary[];
   applicableTreeNodeIdsByComponent?: ReadonlyMap<string, ReadonlySet<string>>;
   treeRulesReady?: boolean;
+  /**
+   * 构件 id → 走查次序（后端排好后的下标）。给了就按部件顺序摆行：
+   * 板 → 铰缝 → 支座 → 墩柱 → 盖梁 → …，同一部件内部再按现有的优先级排。
+   * 没给（还没取到）时退回纯优先级排序，不至于把列表打乱。
+   */
+  componentOrder?: Map<string, number>;
   assessmentIssues: AssessmentIssue[];
   /** 后端批量匹配的临时结果，按 candidate_id 索引；不进入正式病害档案。 */
   matchResults?: ReadonlyMap<string, DefectMatchResult>;
@@ -447,9 +453,23 @@ export function buildDefectPhotoReviewModel(
     unmatched: allRows.filter((row) => row.matchState === "unmatched").length,
   };
   const search = input.search?.trim().toLocaleLowerCase() ?? "";
+  // 部件顺序是主键：整份列表按 板 → 铰缝 → 支座 → 墩柱 → … 一条顺下来，
+  // 像照着纸质报告逐部件核对。同一部件内部才轮到"要不要人工判断"的优先级。
+  //
+  // 没绑定构件的排在最后：它们还不属于任何部件，插在中间会打断走查。顶部那几个
+  // 统计页签本身就是筛选，要集中处理它们点一下就行，不必靠排序顶上来。
+  const componentOrder = input.componentOrder;
+  const partRank = (row: DefectReviewRow): number => {
+    if (!componentOrder) return 0;  // 顺序还没取到：整体退回优先级排序
+    const componentId = row.defect.bridge_component_id;
+    if (!componentId) return Number.MAX_SAFE_INTEGER;
+    return componentOrder.get(componentId) ?? Number.MAX_SAFE_INTEGER;
+  };
   const ordered = allRows
     .map((row, index) => ({ row, index }))
     .sort((left, right) => {
+      const part = partRank(left.row) - partRank(right.row);
+      if (part !== 0) return part;
       const rank = sortRank(left.row) - sortRank(right.row);
       return rank !== 0 ? rank : left.index - right.index;
     })

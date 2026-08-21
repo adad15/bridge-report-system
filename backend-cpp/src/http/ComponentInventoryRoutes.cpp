@@ -326,6 +326,8 @@ void register_component_inventory_routes(
     const std::string part_catalog_path = "/api/component-inventories/part-catalog";
     const std::string latest_summary_path =
         "/api/bridges/{bridge_id}/component-inventories/latest/summary";
+    const std::string review_order_path =
+        "/api/bridges/{bridge_id}/component-inventories/latest/review-order";
     const std::string revision_path = "/api/component-inventories/{revision_id}";
     const std::string revision_summary_path = revision_path + "/summary";
     const std::string entries_path = "/api/component-inventories/{revision_id}/entries";
@@ -338,9 +340,43 @@ void register_component_inventory_routes(
     // .../latest 同理：整份台账的最后两个消费者（绑定面板、校对页手动添加病害）都已
     // 改成按需检索，端点连同它的序列化一起去掉，免得日后又有人顺手把它拉回来。
     for (const auto& path : {generate_path, part_catalog_path, revision_summary_path,
-                             latest_summary_path, entries_path, entry_path, deactivate_path,
-                             mapping_path, confirm_path, confirm_mappings_path})
+                             latest_summary_path, review_order_path, entries_path, entry_path,
+                             deactivate_path, mapping_path, confirm_path, confirm_mappings_path})
         register_options_handler(path);
+
+    // 病害校对列表的走查顺序。用 POST 是因为要传一批构件 id（这座桥一次 337 个），
+    // 塞进查询串会顶破 URL 长度；语义上仍是只读，不写任何数据。
+    drogon::app().registerHandler(
+        review_order_path,
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                    const std::string& bridge_id) {
+            if (!is_valid_uuid(bridge_id)) {
+                respond_json(callback, make_error_body("bridge_not_found", "桥梁不存在。"),
+                             drogon::k404NotFound); return;
+            }
+            try {
+                if (!require_user(db_client, request, callback).has_value()) return;
+                const auto body = request->getJsonObject();
+                if (body == nullptr || !(*body)["bridge_component_ids"].isArray()) {
+                    respond_json(callback, make_error_body(
+                        "invalid_component_review_order",
+                        "bridge_component_ids 必须是数组。"),
+                        drogon::k400BadRequest); return;
+                }
+                std::vector<std::string> ids;
+                for (const auto& id : (*body)["bridge_component_ids"]) {
+                    if (id.isString() && !id.asString().empty()) ids.push_back(id.asString());
+                }
+                const auto ordered = db::ComponentInventoryRepository(db_client)
+                    .order_components_for_review(bridge_id, std::nullopt, ids);
+                Json::Value response;
+                response["ordered_component_ids"] = Json::Value(Json::arrayValue);
+                for (const auto& id : ordered) {
+                    response["ordered_component_ids"].append(id);
+                }
+                respond_json(callback, response);
+            } catch (...) { respond_db_unavailable(callback); }
+        }, {drogon::Post});
 
     drogon::app().registerHandler(
         generate_path,
