@@ -1115,7 +1115,8 @@ body {
   }
 }
 
-.review-action-bar button {
+.review-action-bar button,
+.defect-pagination button {
   font: inherit;
   padding: 8px 14px;
   border: 1px solid #d9e0e8;
@@ -1125,11 +1126,13 @@ body {
   cursor: pointer;
 }
 
-.review-action-bar button:not(:disabled):hover {
+.review-action-bar button:not(:disabled):hover,
+.defect-pagination button:not(:disabled):hover {
   background: #f3f5f8;
 }
 
-.review-action-bar button:disabled {
+.review-action-bar button:disabled,
+.defect-pagination button:disabled {
   color: #97a2ae;
   cursor: not-allowed;
 }
@@ -5845,19 +5848,27 @@ body {
 
 /* ── 病害与评定树分层匹配 ───────────────────────────────────────────── */
 
-/* 构件 / 病害 / 匹配状态 / 问题四列。状态文字必须始终可见，颜色只是辅助。 */
+/* 构件 / 病害 / 匹配状态 / 问题四列。状态文字必须始终可见，颜色只是辅助。
+ *
+ * 第三列不能用 auto：每一行都是独立的 grid 容器，auto 会让这一列按**该行**匹配标签
+ * 的文字宽度取值（实测 96–232px 不等），前两列于是跟着左右漂，整列看上去没对齐。
+ * 改成固定份额后每行算出同一组列宽。 */
 .defect-quick-main {
   grid-template-columns:
-    minmax(110px, 0.6fr) minmax(140px, 0.8fr) minmax(96px, auto) minmax(220px, 1.8fr);
+    minmax(110px, 0.6fr) minmax(140px, 0.8fr) minmax(96px, 0.9fr) minmax(220px, 1.8fr);
 }
 
 .defect-quick-match {
   display: inline-flex;
   justify-content: center;
+  /* 不拉伸到整列：否则"未找到匹配"也会摊成一颗跟列一样宽的大药丸。 */
+  justify-self: start;
   padding: 3px 8px;
   border-radius: 6px;
   font-size: 12px;
-  white-space: nowrap;
+  /* 列宽固定之后必须允许折行，否则"自动匹配：水损（参照混凝土碳化执行）"这类
+     长标签会溢出到下一列。 */
+  white-space: normal;
   background: #f1f5f9;
   color: #475569;
 }
