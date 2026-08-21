@@ -172,6 +172,7 @@ add_executable(bridge_report_backend_tests
     tests/test_draft_validation.cpp
     tests/test_edit_lock_repository.cpp
     tests/test_extracted_photo_archive.cpp
+    tests/bench_defect_matching_chain.cpp
     tests/test_route_preflight_audit.cpp
     tests/test_side_component_pair.cpp
     tests/test_source_db_reference.cpp
