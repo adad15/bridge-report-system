@@ -56,7 +56,7 @@ it("selects every batch-eligible defect in the current filter", () => {
   const onToggleSelectAll = vi.fn();
   renderToolbar({ onToggleSelectAll });
 
-  fireEvent.click(screen.getByRole("checkbox", { name: "全选筛选内可确认项（8）" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "全选可确认项（8）" }));
 
   expect(onToggleSelectAll).toHaveBeenCalledTimes(1);
 });
@@ -87,7 +87,7 @@ it("shows partial and complete selection states", () => {
       onRematch={vi.fn()}
     />,
   );
-  const checkbox = screen.getByRole("checkbox", { name: "全选筛选内可确认项（8）" }) as HTMLInputElement;
+  const checkbox = screen.getByRole("checkbox", { name: "全选可确认项（8）" }) as HTMLInputElement;
   expect(checkbox.indeterminate).toBe(true);
   expect(checkbox).not.toBeChecked();
 
@@ -123,7 +123,7 @@ it("shows partial and complete selection states", () => {
 it("disables select all when the current filter has no batch-eligible defects", () => {
   renderToolbar({ selectableCount: 0 });
 
-  expect(screen.getByRole("checkbox", { name: "全选筛选内可确认项（0）" })).toBeDisabled();
+  expect(screen.getByRole("checkbox", { name: "全选可确认项（0）" })).toBeDisabled();
 });
 
 // 评定树规则没到时，"待处理/可批量确认"是算不出来的：规则缺席会给每条病害记上一条

@@ -4583,7 +4583,9 @@ body {
 /* 原来是 flex:1 1 280px，宽屏下搜索框会被撑到近 1000px——一个只放十来个字的输入框
    占掉整行。定死 320px，富余留给右侧的全选。 */
 .defect-review-filters .defect-review-search {
-  flex: 0 1 320px;
+  /* 260 而不是 320：这个基准值会整份计入 flex 断行判定（断行看假想尺寸，不看能不能
+     收缩），是这一行放不下的主因之一。提示文字本身只要 215px，260 仍能完整显示。 */
+  flex: 0 1 260px;
 }
 
 .defect-review-filters .defect-review-select-all {

@@ -253,7 +253,9 @@ export function DefectReviewToolbar({
             disabled={disabled || selectableCount === 0}
             onChange={onToggleSelectAll}
           />
-          <span>全选筛选内可确认项（{selectableCount}）</span>
+          {/* 文案短一截是为了让这一行在更窄的宽度下仍放得下三个主动作；
+              完整说明在上面的 title 里。 */}
+          <span>全选可确认项（{selectableCount}）</span>
         </label>
         {/* 三个主动作跟在"全选"后面：全选是批量确认的前置动作，两者相邻才顺。 */}
         <div className="defect-review-toolbar-actions">
