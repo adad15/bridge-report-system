@@ -19,6 +19,14 @@ interface DefectReviewToolbarProps {
   viewMode: "records" | "groups";
   issueGroupCount: number;
   disabled?: boolean;
+  /**
+   * 评定树规则还没加载完。此时"待处理/可批量确认"算不出来——规则没到时每条病害都
+   * 被记上一条"正在加载评定树规则"的问题，而"可批量确认"的判据是一条问题都没有，
+   * 于是全都落进待处理。显示成 0 与 362 会让人以为真是这样，所以显示"—"。
+   */
+  countsPending?: boolean;
+  /** 匹配结果还没回来。没有结果时没有任何一条会被判成"无匹配"，那个 0 是假的。 */
+  matchCountsPending?: boolean;
   /** 重新匹配的作用域说明与预计处理条数，按钮按下前就要能看清。 */
   rematchScopeLabel: string;
   rematchCount: number;
@@ -43,9 +51,11 @@ const STATUS_FILTERS: Array<{
   value: DefectReviewFilter;
   label: string;
   count: keyof DefectPhotoReviewSummary;
+  /** 该计数依赖评定树规则，规则没到时算不出来。已确认与全部不看问题，不受影响。 */
+  needsTreeRules?: boolean;
 }> = [
-  { value: "needs_attention", label: "待处理", count: "pending" },
-  { value: "batchable", label: "可批量确认", count: "batchable" },
+  { value: "needs_attention", label: "待处理", count: "pending", needsTreeRules: true },
+  { value: "batchable", label: "可批量确认", count: "batchable", needsTreeRules: true },
   { value: "confirmed", label: "已确认", count: "confirmed" },
   { value: "all", label: "全部", count: "all" },
 ];
@@ -68,6 +78,11 @@ const ISSUE_FILTER_OPTIONS: Array<{ value: DefectReviewIssueFilter; label: strin
   { value: "scale_pending", label: "标度待选择" },
   { value: "photo_pending", label: "照片待处理" },
 ];
+
+// 算不出来的计数一律显示它，而不是 0——"还不知道"和"确定是 0"必须看得出区别。
+const UNKNOWN_COUNT = "—";
+const PENDING_COUNT_HINT = "正在加载评定树规则，这项统计稍后给出。";
+const PENDING_MATCH_HINT = "正在匹配评定树病害，这项统计稍后给出。";
 
 // 当前筛选由统计卡设置时下拉框里没有对应项，用一个只读项如实说明，不能显示成"全部问题"。
 const HEADLINE_ISSUE_VALUE = "__headline__";
@@ -99,6 +114,8 @@ export function DefectReviewToolbar({
   viewMode,
   issueGroupCount,
   disabled = false,
+  countsPending = false,
+  matchCountsPending = false,
   rematchScopeLabel,
   rematchCount,
   rematching = false,
@@ -140,32 +157,44 @@ export function DefectReviewToolbar({
       <div className="defect-review-toolbar-primary">
         <h2>病害与照片</h2>
         <div className="defect-review-summary" aria-label="病害校对汇总">
-          {STATUS_FILTERS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              className={filter === item.value && !issueFilter ? "active" : ""}
-              onClick={() => { onIssueFilterChange(null); onFilterChange(item.value); }}
-            >
-              <span>{item.label}</span>
-              <strong>{summary[item.count]}</strong>
-            </button>
-          ))}
+          {STATUS_FILTERS.map((item) => {
+            const unknown = Boolean(item.needsTreeRules && countsPending);
+            return (
+              <button
+                key={item.value}
+                type="button"
+                // 算不出来的筹码同时禁用：留着能点的话，点进去是一屏空列表，
+                // 那和"确实一条都没有"又长得一样，等于换个地方继续误导。
+                disabled={unknown}
+                title={unknown ? PENDING_COUNT_HINT : undefined}
+                className={filter === item.value && !issueFilter ? "active" : ""}
+                onClick={() => { onIssueFilterChange(null); onFilterChange(item.value); }}
+              >
+                <span>{item.label}</span>
+                <strong>{unknown ? UNKNOWN_COUNT : summary[item.count]}</strong>
+              </button>
+            );
+          })}
           <span className="defect-review-summary-divider" aria-hidden="true" />
-          {ISSUE_FILTERS.map((item) => (
-            <button
-              key={item.value}
-              type="button"
-              className={`defect-review-issue-stat ${issueFilter === item.value ? "active" : ""}`}
-              onClick={() => {
-                onFilterChange("all");
-                onIssueFilterChange(issueFilter === item.value ? null : item.value);
-              }}
-            >
-              <span>{item.label}</span>
-              <strong>{summary[item.count]}</strong>
-            </button>
-          ))}
+          {ISSUE_FILTERS.map((item) => {
+            const unknown = Boolean(matchCountsPending);
+            return (
+              <button
+                key={item.value}
+                type="button"
+                disabled={unknown}
+                title={unknown ? PENDING_MATCH_HINT : undefined}
+                className={`defect-review-issue-stat ${issueFilter === item.value ? "active" : ""}`}
+                onClick={() => {
+                  onFilterChange("all");
+                  onIssueFilterChange(issueFilter === item.value ? null : item.value);
+                }}
+              >
+                <span>{item.label}</span>
+                <strong>{unknown ? UNKNOWN_COUNT : summary[item.count]}</strong>
+              </button>
+            );
+          })}
         </div>
         {lastMatchSummary ? (
           <p className="defect-match-summary">{matchSummaryText(lastMatchSummary, lastMatchAt)}</p>

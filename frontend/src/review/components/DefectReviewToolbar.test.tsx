@@ -18,6 +18,8 @@ function renderToolbar({
   allSelectableSelected = false,
   someSelectableSelected = false,
   onToggleSelectAll = vi.fn(),
+  countsPending = false,
+  matchCountsPending = false,
 } = {}) {
   render(
     <DefectReviewToolbar
@@ -31,6 +33,8 @@ function renderToolbar({
       someSelectableSelected={someSelectableSelected}
       viewMode="records"
       issueGroupCount={4}
+      countsPending={countsPending}
+      matchCountsPending={matchCountsPending}
       rematchScopeLabel="全部"
       rematchCount={12}
       onFilterChange={vi.fn()}
@@ -113,4 +117,46 @@ it("disables select all when the current filter has no batch-eligible defects", 
   renderToolbar({ selectableCount: 0 });
 
   expect(screen.getByRole("checkbox", { name: "全选筛选内可确认项（0）" })).toBeDisabled();
+});
+
+// 评定树规则没到时，"待处理/可批量确认"是算不出来的：规则缺席会给每条病害记上一条
+// 问题，而"可批量确认"的判据是一条问题都没有，于是全都落进待处理。显示成 362 与 0
+// 会让人以为真是这样——加载期显示的必须是"还不知道"，不是一个假数字。
+it("shows a dash instead of a fake zero while the rating tree rules load", () => {
+  renderToolbar({ countsPending: true });
+
+  expect(screen.getByRole("button", { name: "待处理 —" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "可批量确认 —" })).toBeInTheDocument();
+  // 已确认与全部不看问题，规则没到也照常算得出来，不该跟着变成"—"。
+  expect(screen.getByRole("button", { name: "已确认 0" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "全部 12" })).toBeInTheDocument();
+});
+
+// 留着能点的话，点进去是一屏空列表——那和"确实一条都没有"又长得一样，
+// 等于换个地方继续误导。
+it("disables the counts it cannot compute yet", () => {
+  renderToolbar({ countsPending: true });
+
+  expect(screen.getByRole("button", { name: "待处理 —" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "可批量确认 —" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "全部 12" })).toBeEnabled();
+});
+
+// 匹配结果没回来时没有任何一条会被判成"无匹配"，那个 0 同样是假的。
+it("marks the match statistics as unknown until the match results arrive", () => {
+  renderToolbar({ matchCountsPending: true });
+
+  expect(screen.getByRole("button", { name: "无匹配结果 —" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "疑似组合病害 —" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "有多个候选 —" })).toBeDisabled();
+  // 两路数据互不相干：匹配没到不该把待处理也说成未知。
+  expect(screen.getByRole("button", { name: "待处理 4" })).toBeEnabled();
+});
+
+it("shows the real counts once both sides are ready", () => {
+  renderToolbar();
+
+  expect(screen.getByRole("button", { name: "待处理 4" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "可批量确认 8" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "无匹配结果 0" })).toBeEnabled();
 });
