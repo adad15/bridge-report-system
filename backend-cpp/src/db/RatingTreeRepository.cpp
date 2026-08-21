@@ -4,7 +4,9 @@
 #include <cctype>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <sstream>
+#include <unordered_map>
 #include <utility>
 
 #include <json/json.h>
@@ -114,6 +116,20 @@ struct SourcePackageProbe {
     SourcePackageLookup status{SourcePackageLookup::Missing};
     std::string id;
 };
+
+// 已发布评定树的进程内缓存。
+//
+// 安全性来自数据库那条 trg_rating_tree_versions_published_immutable：已发布的版本
+// 不允许再被修改或删除，所以同一个 version_id 的内容永远是同一份——缓存没有失效
+// 问题，也不需要过期时间。键是版本 id（UUID），测试库与生产库不会相撞。
+//
+// **只缓存命中的结果**：未命中可能只是"这个版本目前还是草稿"，它随后会被发布，
+// 把 nullopt 记下来会让它永远查不到。
+//
+// 不设容量上限：条目数等于已发布的评定树版本数（本地五个），一棵树四百来个节点，
+// 不是会长起来的东西。
+std::mutex g_published_tree_cache_mutex;
+std::unordered_map<std::string, rating_tree::EffectiveRatingTree> g_published_tree_cache;
 
 SourcePackageProbe probe_source_package(
     const drogon::orm::DbClientPtr& client,
@@ -407,6 +423,11 @@ RatingTreeRepository::list_published_versions() const {
 
 std::optional<rating_tree::EffectiveRatingTree>
 RatingTreeRepository::load_published_tree(const std::string& version_id) const {
+    {
+        const std::lock_guard<std::mutex> guard(g_published_tree_cache_mutex);
+        const auto cached = g_published_tree_cache.find(version_id);
+        if (cached != g_published_tree_cache.end()) return cached->second;
+    }
     const auto versions = db_client_->execSqlSync(
         "select tree_code,tree_name,package_version,"
         "technical_condition_standard_id,technical_condition_package_version,"
@@ -576,6 +597,10 @@ RatingTreeRepository::load_published_tree(const std::string& version_id) const {
         rule.excluded_keywords =
             parse_keywords(row["excluded_keywords"].as<std::string>());
         tree.keyword_rules.push_back(std::move(rule));
+    }
+    {
+        const std::lock_guard<std::mutex> guard(g_published_tree_cache_mutex);
+        g_published_tree_cache.insert_or_assign(version_id, tree);
     }
     return tree;
 }

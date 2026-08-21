@@ -226,6 +226,16 @@ TEST_F(RatingTreeRepositoryTest, SyncsPublishedTreeIdempotentlyAndRejectsConflic
     EXPECT_EQ(loaded->nodes.size(), tree.nodes.size());
     EXPECT_EQ(loaded->aliases.size(), tree.aliases.size());
 
+    // 第二次加载走进程内缓存（已发布版本不可变，所以缓存没有失效问题）。
+    // 内容必须与第一次逐项一致——缓存装错了东西，这里就会看出来。
+    const auto again = repository_->load_published_tree(*first.rating_tree_version_id);
+    ASSERT_TRUE(again.has_value());
+    EXPECT_EQ(again->version.tree_content_checksum, loaded->version.tree_content_checksum);
+    EXPECT_EQ(again->version.tree_code, loaded->version.tree_code);
+    EXPECT_EQ(again->nodes.size(), loaded->nodes.size());
+    EXPECT_EQ(again->aliases.size(), loaded->aliases.size());
+    EXPECT_EQ(again->keyword_rules.size(), loaded->keyword_rules.size());
+
     tree.version.tree_content_checksum =
         "sha256:" + std::string(64, 'f');
     const auto conflict = repository_->sync_published_tree(tree);
@@ -238,6 +248,28 @@ TEST_F(RatingTreeRepositoryTest, SyncsPublishedTreeIdempotentlyAndRejectsConflic
         listed.begin(),
         listed.end(),
         [&](const auto& item) { return item.id == *first.rating_tree_version_id; }));
+}
+
+// 未命中不进缓存。sync_published_tree 是先插草稿再发布的，所以"查不到"往往只是
+// "此刻还是草稿"；把 nullopt 记下来，版本发布之后就永远查不到了。
+//
+// 这里从可观察的一侧验：查一个不存在的版本不会污染缓存，随后加载真实版本照常成功。
+// 没有直接构造"草稿→发布"的用例——那需要额外发布一棵树，而已发布的评定树受不可变
+// 触发器保护、删不掉，会永久多出一个 backfill 候选，把要求"恰好一棵"的那条弄红。
+TEST_F(RatingTreeRepositoryTest, AMissDoesNotPoisonTheCache) {
+    auto tree = compile_tree();
+    const auto sync = repository_->sync_published_tree(tree);
+    ASSERT_TRUE(sync.rating_tree_version_id.has_value());
+
+    const auto missing = client_->execSqlSync(
+        "select gen_random_uuid()::text as id")[0]["id"].as<std::string>();
+    EXPECT_FALSE(repository_->load_published_tree(missing).has_value());
+    EXPECT_FALSE(repository_->load_published_tree(missing).has_value())
+        << "重复查不存在的版本不该有副作用";
+
+    const auto loaded = repository_->load_published_tree(*sync.rating_tree_version_id);
+    ASSERT_TRUE(loaded.has_value()) << "查过不存在的版本之后，真实版本仍然要加载得出来";
+    EXPECT_EQ(loaded->nodes.size(), tree.nodes.size());
 }
 
 TEST_F(RatingTreeRepositoryTest, MissingSourcePackageDoesNotPublish) {

@@ -66,8 +66,15 @@ TEST(DefectMatchingChainBench, TimesEachStageOfTheFirstPaint) {
     auto start = Clock::now();
     const auto tree = bridge_report::db::RatingTreeRepository(client)
                           .load_published_tree(tree_version);
-    std::cerr << "load_published_tree      " << ms_since(start) << " ms\n";
+    std::cerr << "load_published_tree      " << ms_since(start) << " ms（首次）\n";
     ASSERT_TRUE(tree.has_value());
+
+    start = Clock::now();
+    const auto tree_again = bridge_report::db::RatingTreeRepository(client)
+                                .load_published_tree(tree_version);
+    std::cerr << "load_published_tree      " << ms_since(start)
+              << " ms（第二次，走缓存）\n";
+    ASSERT_TRUE(tree_again.has_value());
 
     start = Clock::now();
     const auto inventory = bridge_report::db::ComponentInventoryRepository(client)
