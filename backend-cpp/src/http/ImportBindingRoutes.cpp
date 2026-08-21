@@ -328,17 +328,27 @@ BindingErrorResponse binding_error_response(const db::BindingOutcome& outcome) {
     }
 }
 
+// 注册一个写接口：POST 处理器 + 同路径的 OPTIONS 预检。两者成对，缺一不可。
+//
+// 只注册 POST 会怎样：这些接口都带 X-Edit-Lock-Token 头，浏览器因此先发 OPTIONS
+// 预检；预检没有处理器就是 404，真正的 POST 根本发不出去。前端拿到的是 fetch 的
+// 网络错误而不是 HTTP 响应，只能报一句笼统的"操作失败"，后端日志里则什么都没有,
+// 排查毫无线索。此前预检路径是一份手工维护的清单，新加接口必须记得往里补一行——
+// bind-multi 上线时就漏了。改成成对注册后漏不掉。
+template <typename Handler>
+void register_post_route(const std::string& path, Handler&& handler) {
+    register_options_handler(path);
+    drogon::app().registerHandler(path, std::forward<Handler>(handler), {drogon::Post});
+}
+
 void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
     const std::string base = "/api/import-records/{import_id}/component-binding";
-    for (const auto& path : {base, base + "/bind", base + "/bind-batch",
-                             base + "/rating-tree",
-                             base + "/mark-missing", base + "/clear",
-                             base + "/inventory",
-                             base + "/split-preview", base + "/split-apply"}) {
+    // 只读接口的预检仍需单独注册：GET 带 Authorization 头，同样会触发预检。
+    for (const auto& path : {base, base + "/inventory"}) {
         register_options_handler(path);
     }
 
-    drogon::app().registerHandler(
+    register_post_route(
         base + "/rating-tree",
         [db_client](const drogon::HttpRequestPtr& request,
                     HttpCallback&& callback,
@@ -379,7 +389,7 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
             } catch (...) {
                 respond_db_unavailable(callback);
             }
-        }, {drogon::Post});
+        });
 
     // 批量替换取数。GET，只校验版本、绝不锁定：打开一次对话框就把年度锁死，
     // 是任何人都不会预期的副作用，浏览器预取或重试还会重复触发。
@@ -435,7 +445,7 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Get});
 
-    drogon::app().registerHandler(
+    register_post_route(
         base + "/split-preview",
         [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
                     const std::string& import_id) {
@@ -454,9 +464,9 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                     db::ComponentRangeSplitRepository(db_client).preview(
                         import_id, targets, expected));
             } catch (...) { respond_db_unavailable(callback); }
-        }, {drogon::Post});
+        });
 
-    drogon::app().registerHandler(
+    register_post_route(
         base + "/split-apply",
         [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
                     const std::string& import_id) {
@@ -486,10 +496,10 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                         actor->id, expected,
                         edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
-        }, {drogon::Post});
+        });
 
     // 批量绑定：供绑定界面的"批量替换"。单次读改写，任一目标非法则整批不写。
-    drogon::app().registerHandler(
+    register_post_route(
         base + "/bind-batch",
         [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
                     const std::string& import_id) {
@@ -529,7 +539,7 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                         import_id, targets, expected,
                         edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
-        }, {drogon::Post});
+        });
 
     drogon::app().registerHandler(
         base,
@@ -544,7 +554,7 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
             } catch (...) { respond_db_unavailable(callback); }
         }, {drogon::Get});
 
-    drogon::app().registerHandler(
+    register_post_route(
         base + "/bind",
         [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
                     const std::string& import_id) {
@@ -570,10 +580,10 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                     (*body)["bridge_component_id"].asString(), expected,
                     edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
-        }, {drogon::Post});
+        });
 
     // "两侧"绑定：把一行拆到多个构件上。会增删病害与照片候选，前端写完必须重取草稿。
-    drogon::app().registerHandler(
+    register_post_route(
         base + "/bind-multi",
         [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
                     const std::string& import_id) {
@@ -594,9 +604,9 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                     import_id, part_name, number, component_ids, actor->id, expected,
                     edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
-        }, {drogon::Post});
+        });
 
-    drogon::app().registerHandler(
+    register_post_route(
         base + "/mark-missing",
         [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
                     const std::string& import_id) {
@@ -615,9 +625,9 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                     import_id, part_name, number, expected,
                     edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
-        }, {drogon::Post});
+        });
 
-    drogon::app().registerHandler(
+    register_post_route(
         base + "/clear",
         [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
                     const std::string& import_id) {
@@ -636,7 +646,7 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                     import_id, part_name, number, expected,
                     edit_lock_from_request(request, *actor)));
             } catch (...) { respond_db_unavailable(callback); }
-        }, {drogon::Post});
+        });
 }
 
 }  // namespace bridge_report::http
