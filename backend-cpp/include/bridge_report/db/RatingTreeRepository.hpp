@@ -14,13 +14,22 @@ enum class RatingTreeSyncStatus {
     Inserted,
     Unchanged,
     ChecksumConflict,
+    // 引用的规范包在库里根本没有（或校验和对不上）——真的有问题。
     SourcePackageNotFound,
+    // 引用的规范包在库里，但已被停用或同步状态非"正常"。这是**预期状态**：
+    // 只保留当前规范版本可用是正常运维，旧评定树因此无法再同步，但它们早已
+    // 发布在库里、历史年度照常可用。与 SourcePackageNotFound 分开，是为了让
+    // 启动日志里那几行常态提示不至于把真正的失败淹掉。
+    SourcePackageDisabled,
     Failed,
 };
 
 struct RatingTreeSyncOutcome {
     RatingTreeSyncStatus status{RatingTreeSyncStatus::Failed};
     std::optional<std::string> rating_tree_version_id;
+    // SourcePackageDisabled 时填：挡住本次同步的那个规范包（"标准号 版本"），
+    // 让提示能点名，而不是让人自己去猜是哪一个。
+    std::string blocking_source_package;
 };
 
 struct RatingTreeVersionRecord {

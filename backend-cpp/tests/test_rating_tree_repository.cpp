@@ -255,6 +255,71 @@ TEST_F(RatingTreeRepositoryTest, MissingSourcePackageDoesNotPublish) {
     EXPECT_FALSE(outcome.rating_tree_version_id.has_value());
 }
 
+// 只保留当前规范版本可用是正常运维，旧评定树因此同步不了——这是预期状态，不是
+// 故障。必须与"规范包在库里根本没有"分成两种结果：前者每次启动都会出现，按故障
+// 报的话会把真正的失败淹掉（那台机器上就一直刷四行）。
+//
+// 这两条用例都在同步的最前段就被挡回，不会往库里写入任何评定树版本——这是有意的：
+// 已发布的评定树受不可变触发器保护，删不掉，插一行就会永久多出一个候选，把
+// BackfillsTheOnlyPublishedTreeForAnUnboundProfile（要求"恰好一棵"）弄红。
+TEST_F(RatingTreeRepositoryTest, DisabledSourcePackageIsReportedSeparatelyFromAMissingOne) {
+    auto tree = compile_tree();
+    tree.version.tree_code += "-disabled-source";
+    tree.version.package_version += "-disabled-source";
+    tree.version.tree_content_checksum = "sha256:" + std::string(64, 'd');
+
+    client_->execSqlSync(
+        "update standard_packages set is_enabled=false "
+        "where standard_family='technical_condition' and standard_id=$1 "
+        "and package_version=$2",
+        tree.version.h21_standard_id, tree.version.h21_package_version);
+    const auto outcome = repository_->sync_published_tree(tree);
+    client_->execSqlSync(
+        "update standard_packages set is_enabled=true "
+        "where standard_family='technical_condition' and standard_id=$1 "
+        "and package_version=$2",
+        tree.version.h21_standard_id, tree.version.h21_package_version);
+
+    EXPECT_EQ(outcome.status,
+              bridge_report::db::RatingTreeSyncStatus::SourcePackageDisabled)
+        << "停用不该报成 SourcePackageNotFound——那个码是留给真的缺包的";
+    EXPECT_FALSE(outcome.rating_tree_version_id.has_value());
+    // 提示要点名是哪个包挡住的，否则用户得自己去猜。
+    EXPECT_EQ(outcome.blocking_source_package,
+              tree.version.h21_standard_id + " " + tree.version.h21_package_version);
+    // 被挡回时不得留下任何已发布版本。
+    EXPECT_TRUE(client_->execSqlSync(
+        "select 1 from rating_tree_versions where tree_code=$1",
+        tree.version.tree_code).empty());
+}
+
+// 同步状态为"故障"（同步出错后被自动置上的）走同一条分支：都是"包在库里但不可用"。
+TEST_F(RatingTreeRepositoryTest, FaultedSourcePackageCountsAsDisabled) {
+    auto tree = compile_tree();
+    tree.version.tree_code += "-faulted-source";
+    tree.version.package_version += "-faulted-source";
+    tree.version.tree_content_checksum = "sha256:" + std::string(64, 'a');
+
+    // standard_packages_fault_detail_check 要求"故障"必须同时带错误码与错误消息，
+    // 只改状态会被约束挡下。
+    client_->execSqlSync(
+        "update standard_packages set sync_status='故障',"
+        "sync_error_code='test_fault',sync_error_message='用例制造的故障' "
+        "where standard_family='technical_condition' and standard_id=$1 "
+        "and package_version=$2",
+        tree.version.h21_standard_id, tree.version.h21_package_version);
+    const auto outcome = repository_->sync_published_tree(tree);
+    client_->execSqlSync(
+        "update standard_packages set sync_status='正常',"
+        "sync_error_code=null,sync_error_message=null "
+        "where standard_family='technical_condition' and standard_id=$1 "
+        "and package_version=$2",
+        tree.version.h21_standard_id, tree.version.h21_package_version);
+
+    EXPECT_EQ(outcome.status,
+              bridge_report::db::RatingTreeSyncStatus::SourcePackageDisabled);
+}
+
 TEST_F(RatingTreeRepositoryTest, BackfillsTheOnlyPublishedTreeForAnUnboundProfile) {
     auto tree = compile_tree();
     const auto tree_sync = repository_->sync_published_tree(tree);

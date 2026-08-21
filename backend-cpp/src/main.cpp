@@ -382,6 +382,20 @@ int main(int argc, char* argv[]) {
                     bridge_report::db::RatingTreeSyncStatus::Unchanged) {
                 continue;
             }
+            // 来源规范包被停用是预期状态，不是故障：只保留当前规范版本可用是正常
+            // 运维，旧评定树因此无法再同步，但它们早已发布在库里、历史年度照常可用
+            // （下面那句"既有已发布版本未被覆盖"说的就是这个）。按故障报的话，每次
+            // 启动都刷几行，真正的同步失败反而被淹掉。
+            if (outcome.status ==
+                    bridge_report::db::RatingTreeSyncStatus::SourcePackageDisabled) {
+                // 与本函数其余启动诊断一致用 cerr：cout 是全缓冲的，重定向到文件时
+                // 这几行会一直压在缓冲区里，服务不退出就永远看不到。
+                std::cerr << "评定树跳过同步：" << tree.version.tree_code << " "
+                          << tree.version.package_version << "，来源规范包 "
+                          << outcome.blocking_source_package
+                          << " 已停用；库中既有的已发布版本保持不变。\n";
+                continue;
+            }
             const auto code =
                 outcome.status ==
                         bridge_report::db::RatingTreeSyncStatus::ChecksumConflict

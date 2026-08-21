@@ -106,24 +106,34 @@ std::string node_detail_json(const rating_tree::EffectiveRatingTreeNode& node) {
     return Json::writeString(builder, detail);
 }
 
-std::optional<std::string> find_source_package_id(
+// 规范包在库里的三种下场。"停用"与"没有"必须分开：前者是正常运维的结果
+// （只留当前版本可用），后者才是真的有问题。
+enum class SourcePackageLookup { Usable, Disabled, Missing };
+
+struct SourcePackageProbe {
+    SourcePackageLookup status{SourcePackageLookup::Missing};
+    std::string id;
+};
+
+SourcePackageProbe probe_source_package(
     const drogon::orm::DbClientPtr& client,
     const std::string& family,
     const std::string& standard_id,
     const std::string& package_version,
     const std::string& checksum) {
+    // 可用性不再写进 where：那样"停用"和"根本没有"会返回同一个空结果，分不开。
     const auto rows = client->execSqlSync(
-        "select id::text as id from standard_packages "
+        "select id::text as id,(is_enabled and sync_status='正常') as usable "
+        "from standard_packages "
         "where standard_family=$1 and standard_id=$2 and package_version=$3 "
-        "and content_checksum=$4 and is_enabled and sync_status='正常'",
+        "and content_checksum=$4",
         family,
         standard_id,
         package_version,
         checksum);
-    if (rows.size() != 1) {
-        return std::nullopt;
-    }
-    return rows[0]["id"].as<std::string>();
+    if (rows.size() != 1) return {SourcePackageLookup::Missing, {}};
+    if (!rows[0]["usable"].as<bool>()) return {SourcePackageLookup::Disabled, {}};
+    return {SourcePackageLookup::Usable, rows[0]["id"].as<std::string>()};
 }
 
 }  // namespace
@@ -137,23 +147,38 @@ RatingTreeSyncOutcome RatingTreeRepository::sync_published_tree(
     if (!tree.version.maintenance_standard_id.has_value() ||
         !tree.version.maintenance_package_version.has_value() ||
         !tree.version.maintenance_content_checksum.has_value()) {
-        return {RatingTreeSyncStatus::SourcePackageNotFound, std::nullopt};
+        return {RatingTreeSyncStatus::SourcePackageNotFound, std::nullopt, {}};
     }
-    const auto technical_id = find_source_package_id(
+    const auto technical = probe_source_package(
         db_client_,
         "technical_condition",
         tree.version.h21_standard_id,
         tree.version.h21_package_version,
         tree.version.h21_content_checksum);
-    const auto maintenance_id = find_source_package_id(
+    const auto maintenance = probe_source_package(
         db_client_,
         "maintenance",
         *tree.version.maintenance_standard_id,
         *tree.version.maintenance_package_version,
         *tree.version.maintenance_content_checksum);
-    if (!technical_id.has_value() || !maintenance_id.has_value()) {
-        return {RatingTreeSyncStatus::SourcePackageNotFound, std::nullopt};
+    // 停用优先于缺失来报：两者都不成立时，"被停用"是更贴近事实的解释。
+    if (technical.status == SourcePackageLookup::Disabled ||
+        maintenance.status == SourcePackageLookup::Disabled) {
+        RatingTreeSyncOutcome outcome{
+            RatingTreeSyncStatus::SourcePackageDisabled, std::nullopt, {}};
+        outcome.blocking_source_package =
+            technical.status == SourcePackageLookup::Disabled
+                ? tree.version.h21_standard_id + " " + tree.version.h21_package_version
+                : *tree.version.maintenance_standard_id + " "
+                      + *tree.version.maintenance_package_version;
+        return outcome;
     }
+    if (technical.status != SourcePackageLookup::Usable ||
+        maintenance.status != SourcePackageLookup::Usable) {
+        return {RatingTreeSyncStatus::SourcePackageNotFound, std::nullopt, {}};
+    }
+    const auto technical_id = std::optional<std::string>{technical.id};
+    const auto maintenance_id = std::optional<std::string>{maintenance.id};
 
     const auto existing = db_client_->execSqlSync(
         "select id::text as id, tree_content_checksum, status "
