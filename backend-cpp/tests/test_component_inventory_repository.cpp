@@ -7,6 +7,8 @@
 #include <set>
 #include <string>
 
+#include <algorithm>
+
 #include <gtest/gtest.h>
 
 #include "bridge_report/config/AppConfig.hpp"
@@ -91,6 +93,96 @@ inventory::InventoryRevision entries_of(
 }
 
 }  // namespace
+
+// 病害匹配走的是精简装配：只取草稿引用到的构件，且不算 is_referenced（那是每条构件
+// 四个 exists 子查询，5174 条的桥上占了整份装配的大头，而匹配从不读它）。
+//
+// 快没有意义，如果它顺带改了结论。这条逐字段核对：点名的那些构件，精简版必须与
+// 完整版给出同样的条目和同样的映射（顺序也一样，匹配是按顺序取第一个命中的映射）。
+TEST_F(ComponentInventoryRepositoryTest, NarrowLoadMatchesTheFullLoadForTheRequestedComponents) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(5, 6);
+    const auto generated = inventory::generate_component_inventory(input);
+    ASSERT_TRUE(generated.ok());
+
+    db::ComponentInventoryRepository repository(client);
+    const auto created = repository.generate_draft(
+        bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    ASSERT_EQ(
+        repository.confirm_revision(revision_id_of(created), user_id, "供精简装配比对")
+            .status,
+        db::ComponentInventoryStatus::Ok);
+
+    const auto full = repository.resolve_confirmed_revision(bridge_id, std::nullopt);
+    ASSERT_TRUE(full.has_value());
+    ASSERT_GT(full->entries.size(), 3u) << "样本太小，比不出什么";
+
+    // 只点名其中三条，顺带混进一个不存在的 id——匹配时草稿里完全可能引用到已被
+    // 移出台账的构件，那种情况应当是"这条查不到"，而不是整批出错。
+    std::vector<std::string> wanted{
+        full->entries[0].bridge_component_id,
+        full->entries[2].bridge_component_id,
+        full->entries[3].bridge_component_id,
+        "00000000-0000-0000-0000-0000000000ff",
+    };
+    const auto narrow = repository.resolve_confirmed_revision_for_components(
+        bridge_id, std::nullopt, wanted);
+    ASSERT_TRUE(narrow.has_value());
+
+    EXPECT_EQ(narrow->id, full->id) << "解析到的版本必须是同一个";
+    EXPECT_EQ(narrow->status, full->status);
+    ASSERT_EQ(narrow->entries.size(), 3u) << "不存在的 id 不该凭空造出条目";
+
+    for (const auto& entry : narrow->entries) {
+        const auto expected = std::find_if(
+            full->entries.begin(), full->entries.end(),
+            [&](const auto& item) {
+                return item.bridge_component_id == entry.bridge_component_id;
+            });
+        ASSERT_NE(expected, full->entries.end());
+        EXPECT_EQ(entry.id, expected->id);
+        EXPECT_EQ(entry.component_number, expected->component_number);
+        EXPECT_EQ(entry.site_component_type, expected->site_component_type);
+        EXPECT_EQ(entry.is_active, expected->is_active);
+        // 映射是匹配唯一真正要用的东西：数量、顺序、内容都必须一致。
+        ASSERT_EQ(entry.mappings.size(), expected->mappings.size());
+        for (std::size_t i = 0; i < entry.mappings.size(); ++i) {
+            EXPECT_EQ(entry.mappings[i].id, expected->mappings[i].id);
+            EXPECT_EQ(entry.mappings[i].standard_package_id,
+                      expected->mappings[i].standard_package_id);
+            EXPECT_EQ(entry.mappings[i].standard_bridge_type_id,
+                      expected->mappings[i].standard_bridge_type_id);
+            EXPECT_EQ(entry.mappings[i].standard_component_category_id,
+                      expected->mappings[i].standard_component_category_id);
+            EXPECT_EQ(entry.mappings[i].confirmation_status,
+                      expected->mappings[i].confirmation_status);
+            EXPECT_EQ(entry.mappings[i].is_active, expected->mappings[i].is_active);
+        }
+    }
+}
+
+// 草稿里一条绑定都没有时不该白跑一趟数据库取条目，但版本本身仍要解析出来。
+TEST_F(ComponentInventoryRepositoryTest, NarrowLoadWithNoComponentsStillResolvesTheRevision) {
+    if (!client) GTEST_SKIP();
+    const auto input = girder_input(5, 6);
+    const auto generated = inventory::generate_component_inventory(input);
+    ASSERT_TRUE(generated.ok());
+    db::ComponentInventoryRepository repository(client);
+    const auto created = repository.generate_draft(
+        bridge_id, user_id, input, generated.entries);
+    ASSERT_EQ(created.status, db::ComponentInventoryStatus::Ok);
+    ASSERT_EQ(
+        repository.confirm_revision(revision_id_of(created), user_id, "空清单")
+            .status,
+        db::ComponentInventoryStatus::Ok);
+
+    const auto narrow =
+        repository.resolve_confirmed_revision_for_components(bridge_id, std::nullopt, {});
+    ASSERT_TRUE(narrow.has_value());
+    EXPECT_EQ(narrow->id, revision_id_of(created));
+    EXPECT_TRUE(narrow->entries.empty());
+}
 
 TEST_F(ComponentInventoryRepositoryTest, GeneratedComponentsKeepStableIdentityWhenNumberChanges) {
     if (!client) GTEST_SKIP();

@@ -846,6 +846,94 @@ ComponentInventoryRepository::resolve_confirmed_revision_ref(
 }
 
 std::optional<inventory::InventoryRevision>
+ComponentInventoryRepository::resolve_confirmed_revision_for_components(
+    const std::string& bridge_id,
+    const std::optional<std::string>& locked_revision_id,
+    const std::vector<std::string>& bridge_component_ids) const {
+    // 版本解析规则与完整装配共用同一份，不另开一条。
+    const auto ref = resolve_confirmed_revision_ref(bridge_id, locked_revision_id);
+    if (!ref.has_value()) return std::nullopt;
+
+    const auto revisions = db_client_->execSqlSync(
+        "select id::text,bridge_id::text,revision_number,status,baseline_revision_id::text,"
+        "confirmed_at::text from bridge_component_inventory_revisions where id=$1::uuid",
+        ref->id);
+    if (revisions.empty()) return std::nullopt;
+    inventory::InventoryRevision revision;
+    revision.id = revisions[0]["id"].as<std::string>();
+    revision.bridge_id = revisions[0]["bridge_id"].as<std::string>();
+    revision.revision_number = revisions[0]["revision_number"].as<int>();
+    revision.status = revisions[0]["status"].as<std::string>();
+    revision.baseline_revision_id = optional_text(revisions[0]["baseline_revision_id"]);
+    revision.confirmed_at = optional_text(revisions[0]["confirmed_at"]);
+    if (bridge_component_ids.empty()) return revision;
+
+    const auto id_array = pg_uuid_array(bridge_component_ids);
+    // 与完整装配的差别就在这条 SQL：没有 is_referenced 那四个 exists 子查询，
+    // 也只取点名的构件。
+    const auto entries = db_client_->execSqlSync(
+        "select e.id::text,e.bridge_component_id::text,e.component_number,e.site_name,"
+        "e.site_component_type,e.span_or_location,e.is_active,e.deactivated_at::text,"
+        "e.deactivation_reason,e.sort_order,e.remarks "
+        "from bridge_component_inventory_entries e "
+        "where e.inventory_revision_id=$1::uuid "
+        "and e.bridge_component_id = any($2::uuid[]) "
+        "order by e.sort_order,e.id",
+        ref->id, id_array);
+
+    std::unordered_map<std::string, std::vector<inventory::InventoryMapping>> mappings_by_entry;
+    const auto mapping_rows = db_client_->execSqlSync(
+        "select m.id::text,m.inventory_entry_id::text,m.standard_package_id::text,"
+        "m.standard_bridge_type_id,m.standard_component_category_id,m.structure_part,"
+        "m.mapping_source,m.confirmation_status,m.is_active "
+        "from bridge_component_standard_mappings m "
+        "join bridge_component_inventory_entries e on e.id=m.inventory_entry_id "
+        "where e.inventory_revision_id=$1::uuid "
+        "and e.bridge_component_id = any($2::uuid[]) "
+        // 排序与完整装配一致，各构件内的映射顺序因此不变。
+        "order by m.inventory_entry_id,m.is_active desc,m.created_at,m.id",
+        ref->id, id_array);
+    for (const auto& mapping_row : mapping_rows) {
+        inventory::InventoryMapping mapping;
+        mapping.id = mapping_row["id"].as<std::string>();
+        mapping.standard_package_id = mapping_row["standard_package_id"].as<std::string>();
+        mapping.standard_bridge_type_id =
+            mapping_row["standard_bridge_type_id"].as<std::string>();
+        mapping.standard_component_category_id =
+            mapping_row["standard_component_category_id"].as<std::string>();
+        mapping.structure_part = mapping_row["structure_part"].as<std::string>();
+        mapping.mapping_source = mapping_row["mapping_source"].as<std::string>();
+        mapping.confirmation_status = mapping_row["confirmation_status"].as<std::string>();
+        mapping.is_active = mapping_row["is_active"].as<bool>();
+        mappings_by_entry[mapping_row["inventory_entry_id"].as<std::string>()]
+            .push_back(std::move(mapping));
+    }
+
+    revision.entries.reserve(entries.size());
+    for (const auto& row : entries) {
+        inventory::InventoryEntry entry;
+        entry.id = row["id"].as<std::string>();
+        entry.bridge_component_id = row["bridge_component_id"].as<std::string>();
+        entry.component_number = row["component_number"].as<std::string>();
+        entry.site_name = row["site_name"].as<std::string>();
+        entry.site_component_type = row["site_component_type"].as<std::string>();
+        entry.span_or_location = optional_text(row["span_or_location"]);
+        entry.is_active = row["is_active"].as<bool>();
+        entry.deactivated_at = optional_text(row["deactivated_at"]);
+        entry.deactivation_reason = optional_text(row["deactivation_reason"]);
+        entry.sort_order = row["sort_order"].as<int>();
+        entry.remarks = optional_text(row["remarks"]);
+        // is_referenced 不在这条路径上计算，保持默认的 false（见头文件说明）。
+        if (const auto found = mappings_by_entry.find(entry.id);
+            found != mappings_by_entry.end()) {
+            entry.mappings = std::move(found->second);
+        }
+        revision.entries.push_back(std::move(entry));
+    }
+    return revision;
+}
+
+std::optional<inventory::InventoryRevision>
 ComponentInventoryRepository::resolve_confirmed_revision(
     const std::string& bridge_id,
     const std::optional<std::string>& locked_revision_id) const {

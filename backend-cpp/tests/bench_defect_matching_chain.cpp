@@ -5,7 +5,9 @@
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
+#include <set>
 #include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -76,6 +78,17 @@ TEST(DefectMatchingChainBench, TimesEachStageOfTheFirstPaint) {
               << " ms（第二次，走缓存）\n";
     ASSERT_TRUE(tree_again.has_value());
 
+    // 草稿里真正引用到的构件——匹配只需要这些。
+    std::vector<std::string> referenced;
+    {
+        std::set<std::string> unique_ids;
+        for (const auto& defect : draft["defects"]) {
+            const auto& id = defect["bridge_component_id"];
+            if (id.isString() && !id.asString().empty()) unique_ids.insert(id.asString());
+        }
+        referenced.assign(unique_ids.begin(), unique_ids.end());
+    }
+
     start = Clock::now();
     const auto inventory = bridge_report::db::ComponentInventoryRepository(client)
         .resolve_confirmed_revision(
@@ -87,6 +100,18 @@ TEST(DefectMatchingChainBench, TimesEachStageOfTheFirstPaint) {
     std::cerr << "resolve_confirmed_revision " << ms_since(start) << " ms  构件 "
               << (inventory ? inventory->entries.size() : 0) << " 条\n";
 
+    start = Clock::now();
+    const auto narrow = bridge_report::db::ComponentInventoryRepository(client)
+        .resolve_confirmed_revision_for_components(
+            bridge_id,
+            context[0]["year_revision"].isNull()
+                ? std::optional<std::string>{}
+                : std::optional<std::string>{
+                      context[0]["year_revision"].as<std::string>()},
+            referenced);
+    std::cerr << "  只取引用到的构件       " << ms_since(start) << " ms  构件 "
+              << (narrow ? narrow->entries.size() : 0) << " 条\n";
+
     ASSERT_TRUE(inventory.has_value());
     start = Clock::now();
     const auto summary = bridge_report::db::ComponentInventoryRepository(client)
@@ -95,10 +120,33 @@ TEST(DefectMatchingChainBench, TimesEachStageOfTheFirstPaint) {
 
     start = Clock::now();
     const auto report = bridge_report::review::match_defect_rating_tree_nodes(
-        draft, tree_version, technical_package, *tree, inventory,
+        draft, tree_version, technical_package, *tree, narrow,
         bridge_report::review::DefectMatchScope{}, false);
     std::cerr << "match_defect_rating_tree_nodes " << ms_since(start)
-              << " ms  记录 " << report.records.size() << " 条\n\n";
+              << " ms  记录 " << report.records.size() << " 条\n";
+
+    // 精简装配必须与完整装配得出**完全一样**的匹配结果——快没有意义，
+    // 如果它顺带改了归类。拿这座桥真实的 362 条逐条比。
+    Json::Value draft_copy;
+    ASSERT_TRUE(parse_json_text(context[0]["parsed"].as<std::string>(), draft_copy));
+    const auto full_report = bridge_report::review::match_defect_rating_tree_nodes(
+        draft_copy, tree_version, technical_package, *tree, inventory,
+        bridge_report::review::DefectMatchScope{}, false);
+    ASSERT_EQ(report.records.size(), full_report.records.size());
+    std::size_t divergent = 0;
+    for (std::size_t i = 0; i < report.records.size(); ++i) {
+        if (report.records[i].candidate_id != full_report.records[i].candidate_id
+            || report.records[i].outcome != full_report.records[i].outcome
+            || report.records[i].node_id != full_report.records[i].node_id
+            || report.records[i].reason_code != full_report.records[i].reason_code
+            || report.records[i].candidates.size()
+                   != full_report.records[i].candidates.size()) {
+            ++divergent;
+        }
+    }
+    EXPECT_EQ(divergent, 0u) << "精简装配改变了匹配结果";
+    std::cerr << "  与完整装配逐条比对：" << (divergent == 0 ? "全部一致" : "有差异")
+              << "\n\n";
 }
 
 }  // namespace

@@ -88,6 +88,26 @@ public:
 
     // 需要完整台账做 validate_target() 或范围分析的调用方用这一条。
     // 内部先走 resolve_confirmed_revision_ref()，两者共用同一套版本解析规则。
+    /**
+     * @brief 按同一条解析规则取已确认版本，但**只装配指定构件**。
+     *
+     * 专供"按 bridge_component_id 查规范类别"这一种用途（病害评定树匹配）。与完整的
+     * resolve_confirmed_revision 有两处刻意的减法，都是为了不给一次匹配付整份台账的钱：
+     *
+     *   1. 只取传入的那些构件。匹配是逐条病害按 id 找条目，用不到其余构件；
+     *      5174 条的桥上，362 条病害最多只涉及几百条。
+     *   2. **不计算 is_referenced**。那个字段每条构件要跑 4 个 exists 子查询，是完整
+     *      装配里最贵的一块，而匹配从不读它。返回的条目上它一律是默认值 false。
+     *
+     * 正因为如此，返回的版本**不是完整的台账**：条目被筛过、is_referenced 不可信。
+     * 需要完整台账的调用方必须用 resolve_confirmed_revision。
+     */
+    [[nodiscard]] std::optional<inventory::InventoryRevision>
+    resolve_confirmed_revision_for_components(
+        const std::string& bridge_id,
+        const std::optional<std::string>& locked_revision_id,
+        const std::vector<std::string>& bridge_component_ids) const;
+
     std::optional<inventory::InventoryRevision> resolve_confirmed_revision(
         const std::string& bridge_id,
         const std::optional<std::string>& locked_revision_id) const;

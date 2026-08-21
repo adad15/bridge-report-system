@@ -187,11 +187,28 @@ void register_defect_matching_routes(const drogon::orm::DbClientPtr& db_client) 
                 // 用的是同一条规则。此前走 get_latest_revision()（草稿优先），桥上一有
                 // 草稿就按草稿的映射挑评定树节点，而这些节点随后会被按已确认版本校验的
                 // 保存与入库前检查判为不一致。
+                // 匹配只做一件事：按 bridge_component_id 找到构件、取它的生效映射。
+                // 因此只装配草稿里真正引用到的那些构件——整份台账在大桥上是 5174 条，
+                // 而这里最多几百条，且完整装配还要为每条算 is_referenced（四个 exists
+                // 子查询），那部分匹配从不使用。
+                std::vector<std::string> referenced_components;
+                if (draft["defects"].isArray()) {
+                    std::set<std::string> unique_ids;
+                    for (const auto& defect : draft["defects"]) {
+                        if (!defect.isObject()) continue;
+                        const auto& id = defect["bridge_component_id"];
+                        if (id.isString() && !id.asString().empty()) {
+                            unique_ids.insert(id.asString());
+                        }
+                    }
+                    referenced_components.assign(unique_ids.begin(), unique_ids.end());
+                }
                 const auto inventory =
                     db::ComponentInventoryRepository(db_client)
-                        .resolve_confirmed_revision(
+                        .resolve_confirmed_revision_for_components(
                             detail->bridge_id,
-                            detail->inspection_year_inventory_revision_id);
+                            detail->inspection_year_inventory_revision_id,
+                            referenced_components);
                 // 只读计算：不写 parsed_result_json，也不碰病害、照片与拆分关系。
                 // 自动结果由页面落进本地草稿，保存时服务端再按同一规则复核。
                 const auto report = review::match_defect_rating_tree_nodes(
