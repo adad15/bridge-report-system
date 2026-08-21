@@ -651,6 +651,9 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         viewMode={reviewMode}
         issueGroupCount={issueGroups.length}
         disabled={disabled}
+        countsPending={!treeRulesReady}
+        matchCountsPending={matchSummary === null && matchError === null
+          && draft.defects.length > 0}
         rematchScopeLabel={rematchScopeLabel}
         rematchCount={rematchCandidateIds.length}
         rematching={rematching}

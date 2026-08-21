@@ -105,6 +105,34 @@ describe("DefectsSection", () => {
     });
   });
 
+  // 首屏那几秒顶部计数是错的：规则没到时每条病害都被记上一条"正在加载评定树规则"
+  // 的问题，而"可批量确认"的判据是一条问题都没有，于是全落进待处理，显示成
+  // 待处理 362 / 可批量确认 0——与真的如此长得一模一样。
+  //
+  // 这条必须从页面这一层验：工具条自己的单测是把开关当属性直接传进去的，页面忘了
+  // 接线它照样绿（第一版正是如此，接线那段脚本没跑到，功能其实没生效）。
+  it("marks the counts unknown until the rating tree rules arrive", async () => {
+    let releaseSummary: (value: ReturnType<typeof summary>) => void = () => {};
+    mockedFetchSummary.mockReturnValue(
+      new Promise<ReturnType<typeof summary>>((resolve) => { releaseSummary = resolve; }),
+    );
+    const draft = data();
+    render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={vi.fn()} ratingTree={{ version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" }} allowStructureChanges />);
+
+    // 规则还在路上：算不出来的筹码显示"—"且点不动。
+    const pending = await screen.findByRole("button", { name: "待处理 —" });
+    expect(pending).toBeDisabled();
+    expect(screen.getByRole("button", { name: "可批量确认 —" })).toBeDisabled();
+    // 病害列表照常显示，一条不挡——草稿早就到了，错的只有派生计数。
+    expect(screen.getByRole("button", { name: /^全部 \d+$/ })).toBeEnabled();
+
+    releaseSummary(summary());
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^待处理 \d+$/ })).toBeEnabled());
+    expect(screen.queryByRole("button", { name: "可批量确认 —" })).not.toBeInTheDocument();
+  });
+
   // 这一段此前会下载整份台账（现网一座桥 5174 条构件、3.6 MB），只为两件事：
   // 拿修订版 id，以及知道每个构件属于哪个规范类别。两者分组汇总里都有。
   it("never downloads the whole inventory", async () => {
