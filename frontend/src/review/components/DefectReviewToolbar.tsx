@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import type { DefectMatchSummary } from "../../api/defectMatchingApi";
+import { UNBOUND_PART_FILTER } from "../defectPhotoReviewModel";
 import type {
   DefectPhotoReviewSummary,
   DefectReviewFilter,
@@ -27,6 +28,9 @@ interface DefectReviewToolbarProps {
   countsPending?: boolean;
   /** 匹配结果还没回来。没有结果时没有任何一条会被判成"无匹配"，那个 0 是假的。 */
   matchCountsPending?: boolean;
+  /** 当前只看哪个部件；null 表示全部。 */
+  partFilter: string | null;
+  onPartFilterChange: (partFilter: string | null) => void;
   /** 重新匹配的作用域说明与预计处理条数，按钮按下前就要能看清。 */
   rematchScopeLabel: string;
   rematchCount: number;
@@ -47,10 +51,13 @@ interface DefectReviewToolbarProps {
   onRematch: () => void;
 }
 
+// 统计筹码只显示数字字段；parts 是给下拉用的数组，不能出现在这里。
+type SummaryCountKey = Exclude<keyof DefectPhotoReviewSummary, "parts">;
+
 const STATUS_FILTERS: Array<{
   value: DefectReviewFilter;
   label: string;
-  count: keyof DefectPhotoReviewSummary;
+  count: SummaryCountKey;
   /** 该计数依赖评定树规则，规则没到时算不出来。已确认与全部不看问题，不受影响。 */
   needsTreeRules?: boolean;
 }> = [
@@ -64,28 +71,17 @@ const STATUS_FILTERS: Array<{
 const ISSUE_FILTERS: Array<{
   value: DefectReviewIssueFilter;
   label: string;
-  count: keyof DefectPhotoReviewSummary;
+  count: SummaryCountKey;
 }> = [
   { value: "composite", label: "疑似组合病害", count: "composite" },
   { value: "candidates", label: "有多个候选", count: "candidates" },
   { value: "unmatched", label: "无匹配结果", count: "unmatched" },
 ];
 
-// 疑似组合病害 / 多个候选 / 无匹配结果 已经是顶部可点的统计卡，这里不再重复一份；
-// 下拉框只补齐没有统计卡的那几类。
-const ISSUE_FILTER_OPTIONS: Array<{ value: DefectReviewIssueFilter; label: string }> = [
-  { value: "component_unbound", label: "构件未绑定" },
-  { value: "scale_pending", label: "标度待选择" },
-  { value: "photo_pending", label: "照片待处理" },
-];
-
 // 算不出来的计数一律显示它，而不是 0——"还不知道"和"确定是 0"必须看得出区别。
 const UNKNOWN_COUNT = "—";
 const PENDING_COUNT_HINT = "正在加载评定树规则，这项统计稍后给出。";
 const PENDING_MATCH_HINT = "正在匹配评定树病害，这项统计稍后给出。";
-
-// 当前筛选由统计卡设置时下拉框里没有对应项，用一个只读项如实说明，不能显示成"全部问题"。
-const HEADLINE_ISSUE_VALUE = "__headline__";
 
 function matchSummaryText(summary: DefectMatchSummary, at: Date | null | undefined): string {
   // 多个候选、疑似组合和无匹配的条数就是上一排那三个统计筹码，这里不再抄一遍；
@@ -116,6 +112,8 @@ export function DefectReviewToolbar({
   disabled = false,
   countsPending = false,
   matchCountsPending = false,
+  partFilter,
+  onPartFilterChange,
   rematchScopeLabel,
   rematchCount,
   rematching = false,
@@ -133,10 +131,6 @@ export function DefectReviewToolbar({
   onRematch,
 }: DefectReviewToolbarProps) {
   const selectAllRef = useRef<HTMLInputElement>(null);
-  const headlineIssueActive =
-    issueFilter !== null &&
-    issueFilter !== "all" &&
-    !ISSUE_FILTER_OPTIONS.some((option) => option.value === issueFilter);
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -251,20 +245,19 @@ export function DefectReviewToolbar({
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
         />
+        {/* 按部件筛选。与上面那排统计筹码正交：筹码筛"问题类型"，这里筛"部件"，
+            两者可以叠加（"只看铰缝里无匹配的"）。选项按走查顺序排、与列表顺序一致，
+            只列这份草稿里真的出现过的部件。 */}
         <select
-          aria-label="问题类型"
-          value={headlineIssueActive ? HEADLINE_ISSUE_VALUE : issueFilter ?? ""}
-          onChange={(event) =>
-            onIssueFilterChange(
-              (event.target.value || null) as DefectReviewIssueFilter | null,
-            )}
+          aria-label="按部件筛选"
+          value={partFilter ?? ""}
+          onChange={(event) => onPartFilterChange(event.target.value || null)}
         >
-          <option value="">全部问题</option>
-          {headlineIssueActive ? (
-            <option value={HEADLINE_ISSUE_VALUE} disabled>已按上方统计筛选</option>
-          ) : null}
-          {ISSUE_FILTER_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
+          <option value="">全部部件</option>
+          {summary.parts.map((part) => (
+            <option key={part.name} value={part.name}>
+              {part.name === UNBOUND_PART_FILTER ? "未绑定构件" : part.name}（{part.count}）
+            </option>
           ))}
         </select>
         <button type="button" onClick={clearFilters}>清除筛选</button>

@@ -63,6 +63,8 @@ export interface DefectReviewRow {
 }
 
 export interface DefectPhotoReviewSummary {
+  /** 各部件的条数，按走查顺序。未绑定构件的归在 UNBOUND_PART_FILTER 名下。 */
+  parts: Array<{ name: string; count: number }>;
   all: number;
   /** 待处理 = 既不能批量确认也还没确认的记录。 */
   pending: number;
@@ -94,6 +96,10 @@ export interface DefectPhotoReviewModelInput {
    * 没给（还没取到）时退回纯优先级排序，不至于把列表打乱。
    */
   componentOrder?: Map<string, number>;
+  /** 构件 id → 部件名（"板""铰缝"…）。用于按部件筛选与统计每个部件多少条。 */
+  componentPart?: Map<string, string>;
+  /** 只看某个部件；UNBOUND_PART_FILTER 表示只看还没绑定构件的。 */
+  partFilter?: string | null;
   assessmentIssues: AssessmentIssue[];
   /** 后端批量匹配的临时结果，按 candidate_id 索引；不进入正式病害档案。 */
   matchResults?: ReadonlyMap<string, DefectMatchResult>;
@@ -361,6 +367,9 @@ function analyzeDefect(
   };
 }
 
+// 还没绑定构件的病害不属于任何部件，但同样要能单独筛出来。
+export const UNBOUND_PART_FILTER = "__unbound__";
+
 // 默认优先级：先把必须人工判断的推到最前，可批量确认和已确认沉底。
 const SORT_RANK: Record<DefectMatchState, number> = {
   composite: 0,
@@ -443,15 +452,6 @@ export function buildDefectPhotoReviewModel(
       input.matchResults?.get(defect.candidate_id) ?? null,
     ),
   );
-  const summary = {
-    all: allRows.length,
-    pending: allRows.filter((row) => row.status === "needs_attention").length,
-    batchable: allRows.filter((row) => row.status === "batchable").length,
-    confirmed: allRows.filter((row) => row.status === "confirmed").length,
-    composite: allRows.filter((row) => row.matchState === "composite").length,
-    candidates: allRows.filter((row) => row.matchState === "candidates").length,
-    unmatched: allRows.filter((row) => row.matchState === "unmatched").length,
-  };
   const search = input.search?.trim().toLocaleLowerCase() ?? "";
   // 部件顺序是主键：整份列表按 板 → 铰缝 → 支座 → 墩柱 → … 一条顺下来，
   // 像照着纸质报告逐部件核对。同一部件内部才轮到"要不要人工判断"的优先级。
@@ -474,6 +474,25 @@ export function buildDefectPhotoReviewModel(
       return rank !== 0 ? rank : left.index - right.index;
     })
     .map((item) => item.row);
+  // 各部件多少条，按走查顺序给（ordered 已经排好）。下拉直接照它渲染：
+  // 只列这份草稿里真的出现过的部件，空部件不占位。
+  const partCounts = new Map<string, number>();
+  for (const row of ordered) {
+    const componentId = row.defect.bridge_component_id;
+    const name = componentId ? input.componentPart?.get(componentId) : undefined;
+    const key = name ?? UNBOUND_PART_FILTER;
+    partCounts.set(key, (partCounts.get(key) ?? 0) + 1);
+  }
+  const summary = {
+    parts: [...partCounts.entries()].map(([name, count]) => ({ name, count })),
+    all: allRows.length,
+    pending: allRows.filter((row) => row.status === "needs_attention").length,
+    batchable: allRows.filter((row) => row.status === "batchable").length,
+    confirmed: allRows.filter((row) => row.status === "confirmed").length,
+    composite: allRows.filter((row) => row.matchState === "composite").length,
+    candidates: allRows.filter((row) => row.matchState === "candidates").length,
+    unmatched: allRows.filter((row) => row.matchState === "unmatched").length,
+  };
   const rows = ordered.filter((row) => {
     if (input.filter && input.filter !== "all") {
       if (input.filter === "batchable" && row.status !== "batchable") return false;
@@ -486,6 +505,11 @@ export function buildDefectPhotoReviewModel(
       !matchesIssueFilter(row, input.issueFilter)
     ) {
       return false;
+    }
+    if (input.partFilter) {
+      const componentId = row.defect.bridge_component_id;
+      const name = componentId ? input.componentPart?.get(componentId) : undefined;
+      if ((name ?? UNBOUND_PART_FILTER) !== input.partFilter) return false;
     }
     if (!search) return true;
     const haystack = [

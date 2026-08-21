@@ -126,6 +126,40 @@ describe("buildDefectPhotoReviewModel", () => {
       .toEqual(["d-railing", "d-girder", "d-pier"]);
   });
 
+  // 下拉按部件筛：与顶部筹码（筛问题类型）正交，可以叠加使用。
+  it("counts each part in review order and filters by it", () => {
+    const componentPart = new Map([
+      ["c-girder", "板"], ["c-pier", "墩柱"], ["c-railing", "栏杆"],
+    ]);
+    const all = buildDefectPhotoReviewModel(
+      orderingInput({ componentOrder, componentPart }) as never);
+    // 顺序与列表一致：板 → 墩柱 → 栏杆，而不是按名字或出现次序。
+    expect(all.summary.parts).toEqual([
+      { name: "板", count: 1 }, { name: "墩柱", count: 1 }, { name: "栏杆", count: 1 },
+    ]);
+
+    const onlyPier = buildDefectPhotoReviewModel(
+      orderingInput({ componentOrder, componentPart, partFilter: "墩柱" }) as never);
+    expect(onlyPier.rows.map((row) => row.candidateId)).toEqual(["d-pier"]);
+    // 计数不受筛选影响：筛到某个部件之后，其余部件仍要显示各自的条数，
+    // 否则一旦筛进去就再也看不出别的部件还有多少条。
+    expect(onlyPier.summary.parts).toEqual(all.summary.parts);
+  });
+
+  it("filters the defects that have no component at all", () => {
+    const draft = orderingDraft();
+    draft.defects.push({
+      ...draft.defects[0], candidate_id: "d-unbound", bridge_component_id: null,
+    });
+    const componentPart = new Map([
+      ["c-girder", "板"], ["c-pier", "墩柱"], ["c-railing", "栏杆"],
+    ]);
+    const model = buildDefectPhotoReviewModel(orderingInput({
+      draft, componentOrder, componentPart, partFilter: "__unbound__",
+    }) as never);
+    expect(model.rows.map((row) => row.candidateId)).toEqual(["d-unbound"]);
+  });
+
   // 没绑构件的病害还不属于任何部件，插在中间会打断走查，排最后。
   it("puts defects without a component at the end", () => {
     const draft = orderingDraft();
@@ -194,6 +228,8 @@ describe("buildDefectPhotoReviewModel", () => {
     });
 
     expect(model.summary).toEqual({
+      // 没给 componentPart 时这条病害归不到任何部件，落进"未绑定构件"那一档。
+      parts: [{ name: "__unbound__", count: 1 }],
       all: 1,
       pending: 0,
       batchable: 1,

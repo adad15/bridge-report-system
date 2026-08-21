@@ -611,19 +611,21 @@ describe("DefectsSection", () => {
 
     // 三个头条问题只在顶部统计卡上有入口，下拉框不再重复一份；筛选生效时
     // 下拉框必须如实说明，不能显示成"全部问题"。
-    it("offers each issue filter in exactly one place", async () => {
+    // 原来这里是个"问题类型"下拉，与顶部统计筹码筛的是同一个维度，只是长相不同；
+    // 而它筛得到的病害必然也在问题分组里（有问题 ⇒ 不可批量确认 ⇒ 待处理），
+    // 问题分组还多给了标题、条数和整组操作。改成按部件筛，与筹码正交。
+    it("filters by component part instead of duplicating the issue chips", async () => {
       mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
 
       render(<DefectsSection draft={boundDraft()} {...matchProps()} />);
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalled());
 
-      const select = screen.getByLabelText("问题类型") as HTMLSelectElement;
-      const optionLabels = [...select.options].map((option) => option.textContent);
-      expect(optionLabels).toEqual(["全部问题", "构件未绑定", "标度待选择", "照片待处理"]);
-
-      fireEvent.click(screen.getByRole("button", { name: "疑似组合病害 0" }));
-      expect(select.value).toBe("__headline__");
-      expect(screen.getByRole("option", { name: "已按上方统计筛选" })).toBeDisabled();
+      const select = await screen.findByLabelText("按部件筛选") as HTMLSelectElement;
+      expect([...select.options][0].textContent).toBe("全部部件");
+      // 与筹码是两个维度，不该再出现问题类型的那几项。
+      const labels = [...select.options].map((option) => option.textContent);
+      expect(labels).not.toContain("构件未绑定");
+      expect(labels).not.toContain("照片待处理");
     });
 
     it("reports a matcher failure with a retry entry instead of a silent no-match", async () => {

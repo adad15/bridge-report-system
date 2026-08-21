@@ -150,17 +150,12 @@ TEST(DefectMatchingChainBench, TimesEachStageOfTheFirstPaint) {
     // 走查顺序：把排好的构件按部件去重打印，直接对照期望的清单核对。
     const auto ordered = bridge_report::db::ComponentInventoryRepository(client)
         .order_components_for_review(bridge_id, std::nullopt, referenced);
-    std::map<std::string, std::string> type_by_component;
-    for (const auto& entry : narrow->entries) {
-        type_by_component[entry.bridge_component_id] = entry.site_component_type;
-    }
     std::cerr << "  走查顺序：";
     std::string previous;
-    for (const auto& id : ordered) {
-        const auto found = type_by_component.find(id);
-        if (found == type_by_component.end() || found->second == previous) continue;
-        std::cerr << found->second << " ";
-        previous = found->second;
+    for (const auto& item : ordered) {
+        if (item.part_name == previous) continue;
+        std::cerr << item.part_name << " ";
+        previous = item.part_name;
     }
     std::cerr << "\n";
     std::cerr << "  与完整装配逐条比对：" << (divergent == 0 ? "全部一致" : "有差异")

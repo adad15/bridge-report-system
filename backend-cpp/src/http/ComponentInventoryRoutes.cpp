@@ -369,10 +369,15 @@ void register_component_inventory_routes(
                 }
                 const auto ordered = db::ComponentInventoryRepository(db_client)
                     .order_components_for_review(bridge_id, std::nullopt, ids);
+                // 一次给全排序与部件名：前端的"按部件筛选"和"按部件排序"是同一套
+                // 数据，分两个接口取只会多一趟往返。
                 Json::Value response;
-                response["ordered_component_ids"] = Json::Value(Json::arrayValue);
-                for (const auto& id : ordered) {
-                    response["ordered_component_ids"].append(id);
+                response["ordered_components"] = Json::Value(Json::arrayValue);
+                for (const auto& item : ordered) {
+                    Json::Value entry;
+                    entry["bridge_component_id"] = item.bridge_component_id;
+                    entry["part_name"] = item.part_name;
+                    response["ordered_components"].append(std::move(entry));
                 }
                 respond_json(callback, response);
             } catch (...) { respond_db_unavailable(callback); }

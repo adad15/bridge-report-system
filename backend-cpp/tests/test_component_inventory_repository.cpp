@@ -194,9 +194,12 @@ TEST_F(ComponentInventoryRepositoryTest, ReviewOrderFollowsThePartCatalogNotTheI
 
     // 同一部件的构件必须连成一段，不能被别的部件打断——这正是"逐部件核对"要的。
     std::vector<std::string> part_sequence;
-    for (const auto& id : ordered) {
-        const auto& type = by_component[id]->site_component_type;
-        if (part_sequence.empty() || part_sequence.back() != type) part_sequence.push_back(type);
+    for (const auto& item : ordered) {
+        // 返回里带的部件名必须与台账一致，前端要拿它做筛选下拉。
+        ASSERT_EQ(item.part_name, by_component[item.bridge_component_id]->site_component_type);
+        if (part_sequence.empty() || part_sequence.back() != item.part_name) {
+            part_sequence.push_back(item.part_name);
+        }
     }
     std::set<std::string> seen;
     for (const auto& type : part_sequence) {
@@ -205,8 +208,8 @@ TEST_F(ComponentInventoryRepositoryTest, ReviewOrderFollowsThePartCatalogNotTheI
     // 同一部件内部按台账生成次序，不能乱。
     int previous_sort = -1;
     std::string previous_type;
-    for (const auto& id : ordered) {
-        const auto* entry = by_component[id];
+    for (const auto& item : ordered) {
+        const auto* entry = by_component[item.bridge_component_id];
         if (entry->site_component_type != previous_type) {
             previous_type = entry->site_component_type;
             previous_sort = -1;

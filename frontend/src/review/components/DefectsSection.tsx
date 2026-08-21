@@ -120,6 +120,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const [manualTreeNode, setManualTreeNode] = useState<RatingTreeNode | null>(null);
   const [treeRulesReady, setTreeRulesReady] = useState(false);
   const [componentOrder, setComponentOrder] = useState<Map<string, number> | null>(null);
+  const [componentPart, setComponentPart] = useState<Map<string, string>>(new Map());
+  const [partFilter, setPartFilter] = useState<string | null>(null);
   const [treeError, setTreeError] = useState("");
   const [filter, setFilter] = useState<DefectReviewFilter>("needs_attention");
   const [issueFilter, setIssueFilter] = useState<DefectReviewIssueFilter | null>(null);
@@ -201,7 +203,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     fetchComponentReviewOrder(baseUrl, bridgeId, ids)
       .then((ordered) => {
         if (cancelled) return;
-        setComponentOrder(new Map(ordered.map((id, index) => [id, index])));
+        setComponentOrder(new Map(ordered.map((item, index) => [item.bridge_component_id, index])));
+        setComponentPart(new Map(ordered.map((item) => [item.bridge_component_id, item.part_name])));
       })
       // 取不到就退回纯优先级排序：列表照常可用，只是不按部件走。
       .catch(() => { if (!cancelled) setComponentOrder(null); });
@@ -410,9 +413,10 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     applicableTreeNodeIdsByComponent,
     treeRulesReady,
     componentOrder: componentOrder ?? undefined,
+    componentPart,
     assessmentIssues,
     matchResults,
-  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, treeNodeDetails, treeRulesReady, componentOrder]);
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, treeNodeDetails, treeRulesReady, componentOrder, componentPart]);
   const visibleModel = useMemo(() => buildDefectPhotoReviewModel({
     draft,
     ratingTreeVersionId: ratingTree?.version_id ?? null,
@@ -421,12 +425,14 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     applicableTreeNodeIdsByComponent,
     treeRulesReady,
     componentOrder: componentOrder ?? undefined,
+    componentPart,
     assessmentIssues,
     matchResults,
     filter,
     issueFilter,
     search,
-  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, issueFilter, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, search, treeNodeDetails, treeRulesReady, componentOrder]);
+    partFilter,
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, issueFilter, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, search, treeNodeDetails, treeRulesReady, componentOrder, componentPart, partFilter]);
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -675,6 +681,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         countsPending={!treeRulesReady}
         matchCountsPending={matchSummary === null && matchError === null
           && draft.defects.length > 0}
+        partFilter={partFilter}
+        onPartFilterChange={setPartFilter}
         rematchScopeLabel={rematchScopeLabel}
         rematchCount={rematchCandidateIds.length}
         rematching={rematching}

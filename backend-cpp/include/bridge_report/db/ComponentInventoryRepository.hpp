@@ -55,6 +55,16 @@ struct ComponentInventoryOutcome {
     std::vector<inventory::InventoryBlocker> blockers;
 };
 
+// 走查顺序里的一个构件：id + 它属于哪个部件。
+//
+// 部件名取台账的 site_component_type（"板""铰缝""支座"…）。它是向导里的现场名，
+// 同一个部件在别的桥可能叫别的名字——所以只拿它做**显示与分组**，排序仍由后端按
+// 规范类别与目录次序定，不靠这个字符串。
+struct ReviewOrderedComponent {
+    std::string bridge_component_id;
+    std::string part_name;
+};
+
 class ComponentInventoryRepository {
 public:
     explicit ComponentInventoryRepository(drogon::orm::DbClientPtr db_client);
@@ -98,7 +108,7 @@ public:
      * 规则整体住在后端，前端只按返回的次序摆行——同一份顺序将来若要给别的视图用，
      * 不必在两处各维护一份。传入的构件若不在台账里，直接不出现在结果中。
      */
-    [[nodiscard]] std::vector<std::string> order_components_for_review(
+    [[nodiscard]] std::vector<ReviewOrderedComponent> order_components_for_review(
         const std::string& bridge_id,
         const std::optional<std::string>& locked_revision_id,
         const std::vector<std::string>& bridge_component_ids) const;

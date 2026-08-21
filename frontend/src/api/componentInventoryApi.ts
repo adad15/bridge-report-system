@@ -201,13 +201,19 @@ function writeRequest(url: string, init?: RequestInit): Promise<InventoryWriteRe
  *
  * 用 POST 是因为要传一批构件 id（大桥一次三百多个），塞进查询串会顶破 URL 长度。
  */
+export interface ReviewOrderedComponent {
+  bridge_component_id: string;
+  /** 台账里的现场名（"板""铰缝""支座"…）。只用于显示与分组，排序由后端定。 */
+  part_name: string;
+}
+
 export async function fetchComponentReviewOrder(
   baseUrl: string,
   bridgeId: string,
   bridgeComponentIds: string[],
-): Promise<string[]> {
+): Promise<ReviewOrderedComponent[]> {
   if (bridgeComponentIds.length === 0) return [];
-  const body = await request<{ ordered_component_ids: string[] }>(
+  const body = await request<{ ordered_components: ReviewOrderedComponent[] }>(
     `${baseUrl}/api/bridges/${encodeURIComponent(bridgeId)}/component-inventories/latest/review-order`,
     {
       method: "POST",
@@ -215,7 +221,7 @@ export async function fetchComponentReviewOrder(
       body: JSON.stringify({ bridge_component_ids: bridgeComponentIds }),
     },
   );
-  return body.ordered_component_ids;
+  return body.ordered_components;
 }
 
 export function fetchInventorySummary(baseUrl: string, bridgeId: string) {

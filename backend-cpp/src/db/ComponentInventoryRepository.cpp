@@ -847,7 +847,7 @@ ComponentInventoryRepository::resolve_confirmed_revision_ref(
                                 rows[0]["bridge_id"].as<std::string>()};
 }
 
-std::vector<std::string> ComponentInventoryRepository::order_components_for_review(
+std::vector<ReviewOrderedComponent> ComponentInventoryRepository::order_components_for_review(
     const std::string& bridge_id,
     const std::optional<std::string>& locked_revision_id,
     const std::vector<std::string>& bridge_component_ids) const {
@@ -859,7 +859,7 @@ std::vector<std::string> ComponentInventoryRepository::order_components_for_revi
     struct Ranked {
         int rank{0};
         int sort_order{0};
-        std::string component_id;
+        ReviewOrderedComponent component;
     };
     std::vector<Ranked> ranked;
     ranked.reserve(revision->entries.size());
@@ -870,18 +870,18 @@ std::vector<std::string> ComponentInventoryRepository::order_components_for_revi
             inventory::component_review_rank(
                 mapping->structure_part, mapping->standard_component_category_id),
             entry.sort_order,
-            entry.bridge_component_id,
+            {entry.bridge_component_id, entry.site_component_type},
         });
     }
     std::sort(ranked.begin(), ranked.end(), [](const Ranked& left, const Ranked& right) {
         // component_id 兜底只为让结果稳定：同部件同 sort_order 时次序不该随查询漂。
-        return std::tie(left.rank, left.sort_order, left.component_id)
-             < std::tie(right.rank, right.sort_order, right.component_id);
+        return std::tie(left.rank, left.sort_order, left.component.bridge_component_id)
+             < std::tie(right.rank, right.sort_order, right.component.bridge_component_id);
     });
 
-    std::vector<std::string> ordered;
+    std::vector<ReviewOrderedComponent> ordered;
     ordered.reserve(ranked.size());
-    for (auto& item : ranked) ordered.push_back(std::move(item.component_id));
+    for (auto& item : ranked) ordered.push_back(std::move(item.component));
     return ordered;
 }
 

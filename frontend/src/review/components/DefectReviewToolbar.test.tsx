@@ -4,6 +4,7 @@ import { expect, it, vi } from "vitest";
 import { DefectReviewToolbar } from "./DefectReviewToolbar";
 
 const summary = {
+  parts: [{ name: "板", count: 7 }, { name: "铰缝", count: 5 }],
   all: 12,
   pending: 4,
   batchable: 8,
@@ -35,6 +36,8 @@ function renderToolbar({
       issueGroupCount={4}
       countsPending={countsPending}
       matchCountsPending={matchCountsPending}
+      partFilter={null}
+      onPartFilterChange={vi.fn()}
       rematchScopeLabel="全部"
       rematchCount={12}
       onFilterChange={vi.fn()}
@@ -71,6 +74,8 @@ it("shows partial and complete selection states", () => {
       someSelectableSelected
       viewMode="records"
       issueGroupCount={4}
+      partFilter={null}
+      onPartFilterChange={vi.fn()}
       rematchScopeLabel="全部"
       rematchCount={12}
       onFilterChange={vi.fn()}
@@ -98,6 +103,8 @@ it("shows partial and complete selection states", () => {
       someSelectableSelected={false}
       viewMode="records"
       issueGroupCount={4}
+      partFilter={null}
+      onPartFilterChange={vi.fn()}
       rematchScopeLabel="全部"
       rematchCount={12}
       onFilterChange={vi.fn()}
