@@ -146,8 +146,9 @@ export function DefectReviewToolbar({
 
   return (
     <div className="defect-review-toolbar">
-      {/* 分区标题、统计与主动作同排：三者都是"这一屏在处理什么"，各占一行只是把
-          工作区往下推。右侧原本空着一千多像素，正好装下三个按钮。 */}
+      {/* 第一行：分区标题、七个统计筹码、上一轮匹配的一句话。
+          三个主动作原本也挤在这一行，合计要 1566px，窗口略窄就整块换行；
+          现在移到第二行与"全选可确认项"同排——那一行本来右侧就空着。 */}
       <div className="defect-review-toolbar-primary">
         <h2>病害与照片</h2>
         <div className="defect-review-summary" aria-label="病害校对汇总">
@@ -193,27 +194,6 @@ export function DefectReviewToolbar({
         {lastMatchSummary ? (
           <p className="defect-match-summary">{matchSummaryText(lastMatchSummary, lastMatchAt)}</p>
         ) : null}
-        <div className="defect-review-toolbar-actions">
-          {onAddDefect ? (
-            <button type="button" disabled={addDefectDisabled} onClick={onAddDefect}>新增病害</button>
-          ) : null}
-          <button
-            type="button"
-            disabled={disabled || rematching}
-            title={`将对${rematchScopeLabel}的 ${rematchCount} 条未确认病害重新匹配`}
-            onClick={onRematch}
-          >
-            {rematching ? "匹配中…" : `重新匹配（${rematchScopeLabel} ${rematchCount}）`}
-          </button>
-          <button
-            type="button"
-            className="review-action-primary"
-            disabled={disabled || selectedCount === 0}
-            onClick={onBatchConfirm}
-          >
-            批量确认（{selectedCount}）
-          </button>
-        </div>
       </div>
       {matchError ? (
         <p className="form-error" role="alert">
@@ -275,6 +255,28 @@ export function DefectReviewToolbar({
           />
           <span>全选筛选内可确认项（{selectableCount}）</span>
         </label>
+        {/* 三个主动作跟在"全选"后面：全选是批量确认的前置动作，两者相邻才顺。 */}
+        <div className="defect-review-toolbar-actions">
+          {onAddDefect ? (
+            <button type="button" disabled={addDefectDisabled} onClick={onAddDefect}>新增病害</button>
+          ) : null}
+          <button
+            type="button"
+            disabled={disabled || rematching}
+            title={`将对${rematchScopeLabel}的 ${rematchCount} 条未确认病害重新匹配`}
+            onClick={onRematch}
+          >
+            {rematching ? "匹配中…" : `重新匹配（${rematchScopeLabel} ${rematchCount}）`}
+          </button>
+          <button
+            type="button"
+            className="review-action-primary"
+            disabled={disabled || selectedCount === 0}
+            onClick={onBatchConfirm}
+          >
+            批量确认（{selectedCount}）
+          </button>
+        </div>
       </div>
     </div>
   );

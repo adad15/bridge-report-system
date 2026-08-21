@@ -4436,8 +4436,8 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  /* 靠右：与第二行的"全选可确认项"对齐到同一条竖线上。 */
-  margin-left: auto;
+  /* 不设 margin-left:auto：它现在就跟在"全选可确认项"后面，靠右由那一项的
+     auto 外边距负责。两处都设 auto 的话，剩余空间会被平分，两组之间裂开一道缝。 */
 }
 
 .defect-review-summary-divider {
