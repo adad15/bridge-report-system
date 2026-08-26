@@ -209,6 +209,7 @@ add_executable(bridge_report_backend_tests
     tests/test_standard_registry.cpp
     tests/test_thread_canonical_key.cpp
     tests/test_thread_triage_grouping.cpp
+    tests/test_thread_triage_fixture.cpp
     tests/test_thread_suggestions.cpp
     tests/test_temporary_word_cleanup_coordinator.cpp
     tests/test_word_import_routes.cpp
