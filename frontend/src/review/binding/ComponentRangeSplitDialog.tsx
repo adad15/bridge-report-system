@@ -28,7 +28,8 @@ export function ComponentRangeSplitDialog({
         <h2 id="range-split-title">拆分构件范围</h2>
         <p className="dialog-hint">
           拆分后每个实际构件会分别参与评分，病害数量增加可能使总扣分增加。
-          每条新病害会复制原文字、标度和照片候选，并标记为待人工核对。
+          每条新病害会复制原文字和标度，并标记为待人工核对。照片整份留在第一条，
+          其余不带照片也不带照片编号——该配哪张图只有人能判断，请拆分后人工挪过去。
         </p>
         {loading ? <p className="dialog-loading" role="status">正在计算拆分影响…</p> : null}
         {error ? <p className="error-text" role="alert">{error}</p> : null}
@@ -38,7 +39,7 @@ export function ComponentRangeSplitDialog({
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>原构件范围</th><th>构件数</th><th>病害</th><th>照片</th><th>绑定结果</th>
+                    <th>原构件范围</th><th>构件数</th><th>病害</th><th>照片（留第一条）</th><th>绑定结果</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -57,8 +58,8 @@ export function ComponentRangeSplitDialog({
               </table>
             </div>
             <p className="range-split-totals">
-              共拆分 {preview.totals.selected_range_count} 个范围，生成 {preview.totals.result_defect_count} 条病害、
-              {preview.totals.result_photo_count} 条照片候选。
+              共拆分 {preview.totals.selected_range_count} 个范围，生成 {preview.totals.result_defect_count} 条病害；
+              {preview.totals.result_photo_count} 张照片留在每组第一条，不再逐条复制。
             </p>
           </>
         ) : null}

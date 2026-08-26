@@ -77,7 +77,7 @@ Json::Value document(int defect_count = 1) {
     return value;
 }
 
-TEST(ComponentRangeSplitPlannerTest, ExpandsEveryReferencedDefectAndCopiesPhotos) {
+TEST(ComponentRangeSplitPlannerTest, ExpandsEveryReferencedDefectAndKeepsPhotosOnTheFirstSplit) {
     const auto plan = plan_component_range_splits(
         document(3),
         revision({entry("c1", "1-1#梁"), entry("c2", "1-2#梁"),
@@ -88,12 +88,16 @@ TEST(ComponentRangeSplitPlannerTest, ExpandsEveryReferencedDefectAndCopiesPhotos
     ASSERT_EQ(plan.items.size(), 1u);
     EXPECT_EQ(plan.items[0].source_defect_count, 3);
     EXPECT_EQ(plan.items[0].result_defect_count, 9);
-    EXPECT_EQ(plan.items[0].result_photo_count, 3);
+    // 照片不再随构件数翻倍：源文档就一张，拆完还是一张。
+    EXPECT_EQ(plan.items[0].result_photo_count, 1);
     EXPECT_EQ(plan.items[0].bound_count, 9);
     ASSERT_EQ(plan.result_json["defects"].size(), 9u);
-    ASSERT_EQ(plan.result_json["photos"].size(), 3u);
+    ASSERT_EQ(plan.result_json["photos"].size(), 1u);
     EXPECT_EQ(plan.result_json["photos"][0]["extracted_file"]["archive_relative_path"].asString(),
               "2026/photo.jpg");
+    // 那一张挂在 d1 的第一条拆分结果上，其余八条一张都不带。
+    EXPECT_EQ(plan.result_json["photos"][0]["linked_defect_candidate_id"].asString(),
+              "d1__range_1");
     EXPECT_EQ(plan.result_json["warnings"].size(), 3u);
 
     std::set<std::string> ids;
@@ -126,7 +130,7 @@ TEST(ComponentRangeSplitPlannerTest, LightweightAnalysisMatchesMaterializedSumma
     ASSERT_EQ(analysis.items.size(), 1u);
     EXPECT_EQ(analysis.items[0].source_defect_count, 3);
     EXPECT_EQ(analysis.items[0].result_defect_count, 9);
-    EXPECT_EQ(analysis.items[0].result_photo_count, 3);
+    EXPECT_EQ(analysis.items[0].result_photo_count, 1);
     EXPECT_EQ(analysis.items[0].bound_count, 9);
     EXPECT_EQ(analysis.totals.result_defect_count, plan.totals.result_defect_count);
     EXPECT_EQ(analysis.totals.result_photo_count, plan.totals.result_photo_count);
@@ -271,25 +275,53 @@ TEST(ComponentMultiBindTest, MaterializesTwoBoundDefects) {
     EXPECT_EQ(defects[1]["bridge_component_id"].asString(), "c-right");
 }
 
-TEST(ComponentMultiBindTest, CopiesPhotosToEachSide) {
+// "两侧护栏"拆成左右两条时，原文那几张图只有人能判断该配给哪一侧。整份复制会让
+// 同一个编号同时出现在两条上，编号交叉引用作废；照片全留第一条，人工往另一侧挪。
+TEST(ComponentMultiBindTest, KeepsPhotosOnTheFirstSideOnly) {
     const auto source = document();
+    const auto analysis = analyze_component_multi_bind(
+        source, inventory(), target(), {"c-left", "c-right"});
+    ASSERT_EQ(analysis.status, ComponentRangeSplitPlanStatus::Ok);
+    EXPECT_EQ(analysis.totals.result_photo_count, 1);
+    const auto plan = materialize_component_range_splits(source, analysis);
+
+    const auto& photos = plan.result_json["photos"];
+    ASSERT_EQ(photos.size(), 1u);
+    const auto& defects = plan.result_json["defects"];
+    ASSERT_EQ(defects.size(), 2u);
+    // 照片指向第一条（左侧），不能还指着已经不存在的源候选。
+    EXPECT_EQ(photos[0]["linked_defect_candidate_id"].asString(),
+              defects[0]["candidate_id"].asString());
+    EXPECT_NE(photos[0]["linked_defect_candidate_id"].asString(), "r0");
+}
+
+// 不带照片的那一侧连 Word 引用也不留：留着只会变成一排"待核对"缺图卡，还会挡住入库。
+TEST(ComponentMultiBindTest, LeavesNoDanglingPhotoReferencesOnTheOtherSide) {
+    auto source = document();
+    Json::Value reference(Json::objectValue);
+    reference["photo_number"] = "2.3-14";
+    reference["resolution"] = "matched";
+    reference["photo_candidate_id"] = "p0";
+    reference["resolved_defect_candidate_id"] = "r0";
+    reference["review_note"] = Json::Value();
+    source["defects"][0]["photo_references"] = Json::Value(Json::arrayValue);
+    source["defects"][0]["photo_references"].append(reference);
+
     const auto analysis = analyze_component_multi_bind(
         source, inventory(), target(), {"c-left", "c-right"});
     ASSERT_EQ(analysis.status, ComponentRangeSplitPlanStatus::Ok);
     const auto plan = materialize_component_range_splits(source, analysis);
 
-    const auto& photos = plan.result_json["photos"];
-    ASSERT_EQ(photos.size(), 2u);
-    std::set<std::string> linked;
-    for (const auto& photo : photos) {
-        linked.insert(photo["linked_defect_candidate_id"].asString());
-    }
-    // 两张照片各自指向新候选，不能还指着已经不存在的源候选。
-    EXPECT_EQ(linked.count("r0"), 0u);
-    EXPECT_EQ(linked.size(), 2u);
-    for (const auto& defect : plan.result_json["defects"]) {
-        EXPECT_EQ(linked.count(defect["candidate_id"].asString()), 1u);
-    }
+    const auto& defects = plan.result_json["defects"];
+    ASSERT_EQ(defects.size(), 2u);
+    ASSERT_EQ(defects[0]["photo_references"].size(), 1u);
+    EXPECT_EQ(defects[0]["photo_references"][0]["photo_number"].asString(), "2.3-14");
+    // 引用重写到第一条自己的那份照片候选上。
+    EXPECT_EQ(defects[0]["photo_references"][0]["photo_candidate_id"].asString(),
+              plan.result_json["photos"][0]["candidate_id"].asString());
+    EXPECT_EQ(defects[0]["photo_references"][0]["resolved_defect_candidate_id"].asString(),
+              defects[0]["candidate_id"].asString());
+    EXPECT_EQ(defects[1]["photo_references"].size(), 0u);
 }
 
 TEST(ComponentMultiBindTest, RejectsAlreadyResolvedRows) {

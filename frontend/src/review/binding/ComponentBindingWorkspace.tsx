@@ -953,7 +953,7 @@ export function ComponentBindingWorkspace({
               );
               setOverview(applied.overview);
               onOverviewChange?.(applied.overview);
-              // 拆分会增删病害并复制照片候选，父页面的草稿必须重取。
+              // 拆分会增删病害并搬动照片归属，父页面的草稿必须重取。
               onDraftInvalidated?.();
               setSplitSelection(new Map());
               closeSplitDialog();

@@ -242,8 +242,8 @@ ComponentRangeSplitAnalysis analyze_component_range_splits(
             return analysis;
         }
 
-        work.summary.result_photo_count =
-            source_photo_count * work.summary.expanded_component_count;
+        // 照片只跟第一条走，不随构件数翻倍。
+        work.summary.result_photo_count = source_photo_count;
         for (const auto& number : expansion.numbers) {
             auto match = analyze_match(number, target.part_name, revision);
             if (!match.bridge_component_id.empty()) {
@@ -385,8 +385,8 @@ ComponentRangeSplitAnalysis analyze_component_multi_bind(
     work.summary.source_defect_count = static_cast<int>(work.source_candidate_ids.size());
     work.summary.result_defect_count =
         work.summary.source_defect_count * work.summary.expanded_component_count;
-    work.summary.result_photo_count =
-        source_photo_count * work.summary.expanded_component_count;
+    // 与范围拆分同一条规则：照片只留在第一条。
+    work.summary.result_photo_count = source_photo_count;
     // 每一条都直接落到选定构件上，没有未匹配或歧义的余地。
     work.summary.bound_count = work.summary.result_defect_count;
 
@@ -459,42 +459,55 @@ ComponentRangeSplitPlan materialize_component_range_splits(
                 append_split_warning(split["warnings"], new_id);
                 apply_analyzed_match(split, match, analysis.inventory_revision_id);
 
+                // 照片整份跟着第一条拆分结果走，不给每一条都复制一份。给每条都复制的
+                // 后果是同一个照片编号出现在 N 条病害上：报告里的编号交叉引用作废，
+                // 人工还得逐条把不属于自己的那些删掉。真正该配哪张图只有人知道，
+                // 让人从第一条里挪过去，比先造出 N-1 份错的再删干净省事。
+                const bool keeps_photos = index == 0;
                 std::unordered_map<std::string, std::string> split_photo_ids;
-                for (const auto* source_photo : photos_by_defect[source_id]) {
-                    auto photo = *source_photo;
-                    const auto source_photo_id =
-                        string_member(*source_photo, "candidate_id");
-                    const auto photo_id = unique_id(
-                        source_photo_id + "__range_" + std::to_string(index + 1),
-                        occupied_ids);
-                    photo["candidate_id"] = photo_id;
-                    photo["linked_defect_candidate_id"] = new_id;
-                    split_photo_ids.emplace(source_photo_id, photo_id);
-                    if (photo["warnings"].isArray()) {
-                        for (auto& warning : photo["warnings"]) {
-                            if (string_member(warning, "target_candidate_id")
-                                == source_photo_id) {
-                                warning["target_candidate_id"] = photo_id;
-                            } else if (string_member(warning, "target_candidate_id")
-                                       == source_id) {
-                                warning["target_candidate_id"] = new_id;
+                if (keeps_photos) {
+                    for (const auto* source_photo : photos_by_defect[source_id]) {
+                        auto photo = *source_photo;
+                        const auto source_photo_id =
+                            string_member(*source_photo, "candidate_id");
+                        const auto photo_id = unique_id(
+                            source_photo_id + "__range_1", occupied_ids);
+                        photo["candidate_id"] = photo_id;
+                        photo["linked_defect_candidate_id"] = new_id;
+                        split_photo_ids.emplace(source_photo_id, photo_id);
+                        if (photo["warnings"].isArray()) {
+                            for (auto& warning : photo["warnings"]) {
+                                if (string_member(warning, "target_candidate_id")
+                                    == source_photo_id) {
+                                    warning["target_candidate_id"] = photo_id;
+                                } else if (string_member(warning, "target_candidate_id")
+                                           == source_id) {
+                                    warning["target_candidate_id"] = new_id;
+                                }
                             }
                         }
+                        output_photos.append(std::move(photo));
                     }
-                    output_photos.append(std::move(photo));
                 }
                 if (split["photo_references"].isArray()) {
-                    for (auto& reference : split["photo_references"]) {
-                        const auto photo_id =
-                            string_member(reference, "photo_candidate_id");
-                        if (const auto found = split_photo_ids.find(photo_id);
-                            found != split_photo_ids.end()) {
-                            reference["photo_candidate_id"] = found->second;
+                    if (keeps_photos) {
+                        for (auto& reference : split["photo_references"]) {
+                            const auto photo_id =
+                                string_member(reference, "photo_candidate_id");
+                            if (const auto found = split_photo_ids.find(photo_id);
+                                found != split_photo_ids.end()) {
+                                reference["photo_candidate_id"] = found->second;
+                            }
+                            if (string_member(reference, "resolved_defect_candidate_id")
+                                == source_id) {
+                                reference["resolved_defect_candidate_id"] = new_id;
+                            }
                         }
-                        if (string_member(reference, "resolved_defect_candidate_id")
-                            == source_id) {
-                            reference["resolved_defect_candidate_id"] = new_id;
-                        }
+                    } else {
+                        // 不带照片的那几条也不留 Word 引用：留着只会变成一排"待核对"
+                        // 缺图卡，还会以 missing_photo_confirmation_required 挡住入库。
+                        // 原文的引用证据完整保留在第一条上。
+                        split["photo_references"] = Json::Value(Json::arrayValue);
                     }
                 }
                 output_defects.append(std::move(split));

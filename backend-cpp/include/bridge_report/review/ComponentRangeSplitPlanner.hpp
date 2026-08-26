@@ -92,8 +92,9 @@ struct ComponentRangeSplitAnalysis {
  *
  * 产出与 analyze_component_range_splits 同型的 analysis，区别只在 matches 的来源：
  * 那边来自编号范围展开，这边来自人工在下拉里选定的构件。因此可以原样交给
- * materialize_component_range_splits——拆分溯源、照片复制、待确认状态、警告改写
- * 全部复用，拆分逻辑一行不必新写。
+ * materialize_component_range_splits——拆分溯源、照片归属、待确认状态、警告改写
+ * 全部复用，拆分逻辑一行不必新写。照片整份留在第一条结果上，其余不带照片，
+ * 也不带 Word 照片引用。
  *
  * 选定的构件须属于该台账版本、启用、有生效映射，且类别与 target.part_name 的
  * 对照相符；至少两个且不得重复。任一不满足则整批拒绝。

@@ -582,7 +582,7 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
             } catch (...) { respond_db_unavailable(callback); }
         });
 
-    // "两侧"绑定：把一行拆到多个构件上。会增删病害与照片候选，前端写完必须重取草稿。
+    // "两侧"绑定：把一行拆到多个构件上。会增删病害、搬动照片归属，前端写完必须重取草稿。
     register_post_route(
         base + "/bind-multi",
         [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
