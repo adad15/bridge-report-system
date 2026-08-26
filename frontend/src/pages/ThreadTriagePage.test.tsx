@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,7 +7,9 @@ import {
   applyTriageBatch,
   fetchTriageBatchDetail,
   fetchTriageSummary,
+  resolveTriageCluster,
   type TriageBatchDetail,
+  type TriageManualCluster,
   type TriageSummary,
 } from "../api/threadTriageApi";
 import { ThreadTriagePage } from "./ThreadTriagePage";
@@ -19,6 +21,7 @@ vi.mock("../api/threadTriageApi", async (importOriginal) => {
     fetchTriageSummary: vi.fn(),
     fetchTriageBatchDetail: vi.fn(),
     applyTriageBatch: vi.fn(),
+    resolveTriageCluster: vi.fn(),
   };
 });
 
@@ -31,6 +34,7 @@ vi.mock("../api/componentArchiveApi", async (importOriginal) => {
 const mockedSummary = vi.mocked(fetchTriageSummary);
 const mockedDetail = vi.mocked(fetchTriageBatchDetail);
 const mockedApply = vi.mocked(applyTriageBatch);
+const mockedResolve = vi.mocked(resolveTriageCluster);
 
 function summary(): TriageSummary {
   return {
@@ -144,6 +148,75 @@ function bindDetail(): TriageBatchDetail {
   };
 }
 
+// 位置写法不同的两组：系统看得出它们相关，看不出该合还是该分。
+function overlapCluster(): TriageManualCluster {
+  return {
+    cluster_id: "cl-1",
+    reason_codes: ["location_overlap"],
+    group_count: 2,
+    observation_count: 3,
+    overlap_targets: [],
+    related_threads: [{
+      id: "t-9", system_number: "BHXS-000900", thread_name: "横向裂缝｜梁底",
+      bridge_component_id: "c-beam", defect_type: "横向裂缝", defect_location: "梁底",
+    }],
+    groups: [
+      {
+        group_id: "cg-1", bridge_component_id: "c-beam", business_component_code: "1#板梁",
+        defect_type: "横向裂缝", defect_location: "梁底", target_thread_id: "t-9",
+        observations: [
+          {
+            id: "co-1", inspection_year: 2024, defect_type: "横向裂缝",
+            defect_location: "梁底", updated_at: "2026-08-26 10:00:00+08",
+          },
+          {
+            id: "co-2", inspection_year: 2025, defect_type: "横向裂缝",
+            defect_location: "梁底", updated_at: "2026-08-26 10:01:00+08",
+          },
+        ],
+      },
+      {
+        group_id: "cg-2", bridge_component_id: "c-beam", business_component_code: "1#板梁",
+        defect_type: "横向裂缝", defect_location: "梁底部", target_thread_id: null,
+        observations: [{
+          id: "co-3", inspection_year: 2025, defect_type: "横向裂缝",
+          defect_location: "梁底部", updated_at: "2026-08-26 10:02:00+08",
+        }],
+      },
+    ],
+  };
+}
+
+// 同一年两条：可能是同一处记了两遍，也可能真是两处，得并排看着才判得了。
+function sameYearCluster(): TriageManualCluster {
+  return {
+    cluster_id: "cl-2",
+    reason_codes: ["multiple_in_year"],
+    group_count: 1,
+    observation_count: 2,
+    overlap_targets: [],
+    related_threads: [],
+    groups: [{
+      group_id: "cg-3", bridge_component_id: "c-rail", business_component_code: "3#栏杆",
+      defect_type: "破损", defect_location: "", target_thread_id: null,
+      observations: [
+        {
+          id: "co-4", inspection_year: 2026, defect_type: "破损",
+          defect_location: "", updated_at: "2026-08-26 11:00:00+08",
+        },
+        {
+          id: "co-5", inspection_year: 2026, defect_type: "破损",
+          defect_location: "", updated_at: "2026-08-26 11:01:00+08",
+        },
+      ],
+    }],
+  };
+}
+
+function withClusters(clusters: TriageManualCluster[]): TriageSummary {
+  return { ...summary(), manual_clusters: clusters };
+}
+
 function renderPage() {
   render(
     <MemoryRouter initialEntries={["/bridges/bridge-1/defect-threads/triage"]}>
@@ -158,6 +231,7 @@ beforeEach(() => {
   mockedSummary.mockReset();
   mockedDetail.mockReset();
   mockedApply.mockReset();
+  mockedResolve.mockReset();
   mockedSummary.mockResolvedValue(summary());
   mockedDetail.mockResolvedValue(detail());
 });
@@ -263,5 +337,136 @@ describe("ThreadTriagePage", () => {
     fireEvent.click((await screen.findAllByRole("button", { name: /确认这 \d+ 组/ }))[0]);
 
     expect(await screen.findByText(/已经处理过：3 组/)).toBeInTheDocument();
+  });
+});
+
+// 一旦退化成“一观测一张卡”，判断该合还是该分所需的上下文恰好被拆没了。
+describe("ThreadTriagePage 异常簇", () => {
+  it("shows every related location group and its yearly observations on one screen", async () => {
+    mockedSummary.mockResolvedValue(withClusters([overlapCluster()]));
+    renderPage();
+
+    const table = await screen.findByLabelText("簇内各位置历年观测");
+    expect(within(table).getByText("梁底")).toBeInTheDocument();
+    expect(within(table).getByText("梁底部")).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "2024" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "2025" })).toBeInTheDocument();
+    expect(within(table).getByLabelText("梁底 2024 第 1 条")).toBeInTheDocument();
+    expect(within(table).getByLabelText("梁底部 2025 第 1 条")).toBeInTheDocument();
+  });
+
+  it("names the existing thread with its BHXS number", async () => {
+    mockedSummary.mockResolvedValue(withClusters([overlapCluster()]));
+    renderPage();
+
+    expect(await screen.findByText("BHXS-000900")).toBeInTheDocument();
+    expect(screen.getByText("横向裂缝｜梁底")).toBeInTheDocument();
+  });
+
+  it("puts two observations of the same year side by side", async () => {
+    mockedSummary.mockResolvedValue(withClusters([sameYearCluster()]));
+    renderPage();
+
+    expect(await screen.findByLabelText("（无位置） 2026 第 1 条")).toBeInTheDocument();
+    expect(screen.getByLabelText("（无位置） 2026 第 2 条")).toBeInTheDocument();
+  });
+
+  // 组和观测是两个口径：2 组 3 条，写成“2 条”人会以为工作量只有一半。
+  it("counts groups and observations separately", async () => {
+    mockedSummary.mockResolvedValue(withClusters([overlapCluster()]));
+    renderPage();
+
+    expect(await screen.findByText(/2 组 · 3 条观测/)).toBeInTheDocument();
+  });
+
+  it("binds the selected observations to the chosen existing thread", async () => {
+    mockedSummary.mockResolvedValue(withClusters([overlapCluster()]));
+    mockedResolve.mockResolvedValue({
+      status: "applied", groups_applied: 2, threads_created: 0, observations_bound: 3,
+      results: [{
+        group_id: "cg-1", bridge_component_id: "c-beam", thread_id: "t-9",
+        thread_system_number: "BHXS-000900", outcome: "bound",
+      }],
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "绑定到该线索" }));
+
+    await waitFor(() => expect(mockedResolve).toHaveBeenCalledTimes(1));
+    const payload = mockedResolve.mock.calls[0][2];
+    expect(payload.action).toBe("bind");
+    expect(payload.target_thread_id).toBe("t-9");
+    expect(payload.bridge_component_id).toBe("c-beam");
+    // 三条都带 updated_at：服务端靠它判并发，缺一条整批就得退回。
+    expect(payload.observations.map((item) => item.id)).toEqual(["co-1", "co-2", "co-3"]);
+    expect(payload.observations.every((item) => Boolean(item.updated_at))).toBe(true);
+  });
+
+  // 写法不一致就是这一簇存在的原因，人不点头系统不能替他合。
+  it("refuses to merge mixed spellings until the person takes responsibility", async () => {
+    mockedSummary.mockResolvedValue(withClusters([overlapCluster()]));
+    renderPage();
+
+    fireEvent.click(await screen.findByLabelText("合并为一条新线索"));
+    const submit = screen.getByRole("button", { name: "建为一条线索" });
+    expect(submit).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(/我确认它们是同一处病害/));
+    expect(submit).toBeEnabled();
+
+    // 位置由人定：默认值只是起点，两种写法谁也不天然权威。
+    fireEvent.change(screen.getByLabelText("位置（可留空）"), { target: { value: "梁底" } });
+
+    mockedResolve.mockResolvedValue({
+      status: "applied", groups_applied: 2, threads_created: 1, observations_bound: 3,
+      results: [{
+        group_id: "cg-1", bridge_component_id: "c-beam", thread_id: "t-new",
+        thread_system_number: "BHXS-001000", outcome: "created",
+      }],
+    });
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(mockedResolve).toHaveBeenCalledTimes(1));
+    const payload = mockedResolve.mock.calls[0][2];
+    expect(payload.confirm_inexact_merge).toBe(true);
+    // 类型与位置由人选定，不是从任一条观测抄的。
+    expect(payload.defect_type).toBe("横向裂缝");
+    expect(payload.defect_location).toBe("梁底");
+  });
+
+  // 拆分与合并共用一个动作：少勾几条就是拆，不需要另一套界面。
+  it("lets the person split a year by selecting only part of the observations", async () => {
+    mockedSummary.mockResolvedValue(withClusters([sameYearCluster()]));
+    mockedResolve.mockResolvedValue({
+      status: "applied", groups_applied: 1, threads_created: 1, observations_bound: 1,
+      results: [{
+        group_id: "cg-3", bridge_component_id: "c-rail", thread_id: "t-a",
+        thread_system_number: "BHXS-001100", outcome: "created",
+      }],
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByLabelText("（无位置） 2026 第 2 条"));
+    expect(screen.getByText(/余下 1 条这次不处理/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "建为一条线索" }));
+
+    await waitFor(() => expect(mockedResolve).toHaveBeenCalledTimes(1));
+    expect(mockedResolve.mock.calls[0][2].observations.map((item) => item.id)).toEqual(["co-4"]);
+  });
+
+  it("reports the resulting thread number after resolving", async () => {
+    mockedSummary.mockResolvedValue(withClusters([sameYearCluster()]));
+    mockedResolve.mockResolvedValue({
+      status: "applied", groups_applied: 1, threads_created: 1, observations_bound: 2,
+      results: [{
+        group_id: "cg-3", bridge_component_id: "c-rail", thread_id: "t-a",
+        thread_system_number: "BHXS-001100", outcome: "created",
+      }],
+    });
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "建为一条线索" }));
+
+    expect(await screen.findByText(/已新建线索 BHXS-001100，含 2 条观测/)).toBeInTheDocument();
   });
 });

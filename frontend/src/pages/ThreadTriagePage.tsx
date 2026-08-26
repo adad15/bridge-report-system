@@ -5,6 +5,7 @@ import { ApiError } from "../api/apiClient";
 import type {
   TriageApplyIssue,
   TriageBatchDetail,
+  TriageResolvePayload,
   TriageSummary,
 } from "../api/threadTriageApi";
 import {
@@ -12,7 +13,9 @@ import {
   buildTriageApplyPayload,
   fetchTriageBatchDetail,
   fetchTriageSummary,
+  resolveTriageCluster,
 } from "../api/threadTriageApi";
+import { ManualClusterCard } from "../triage/ManualClusterCard";
 import { TriageBatchCard } from "../triage/TriageBatchCard";
 import { TriageBatchDetailTable } from "../triage/TriageBatchDetail";
 import { backendBaseUrl } from "../config";
@@ -35,6 +38,7 @@ export function ThreadTriagePage() {
   // 剔除与"暂不处理"只在当前会话内生效，刷新后按数据库事实重新计算（设计 §14.4）。
   const [excludedGroupIds, setExcludedGroupIds] = useState<Set<string>>(new Set());
   const [skippedBatchIds, setSkippedBatchIds] = useState<Set<string>>(new Set());
+  const [skippedClusterIds, setSkippedClusterIds] = useState<Set<string>>(new Set());
   const [issues, setIssues] = useState<TriageApplyIssue[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -107,6 +111,35 @@ export function ThreadTriagePage() {
         setIssues([{
           reason_code: "apply_failed",
           message: caught instanceof ApiError ? caught.message : "批量应用失败。",
+          group_id: null, bridge_component_id: null, observation_id: null,
+        }]);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resolveCluster(payload: TriageResolvePayload): Promise<void> {
+    if (!bridgeId) return;
+    setBusy(true);
+    setIssues([]);
+    setNotice(null);
+    try {
+      const response = await resolveTriageCluster(backendBaseUrl, bridgeId, payload);
+      const thread = response.results[0];
+      setNotice(
+        response.status === "already_completed"
+          ? "这一簇已经处理过。"
+          : `${payload.action === "create" ? "已新建线索" : "已绑定到线索"} ` +
+            `${thread?.thread_system_number ?? ""}，含 ${response.observations_bound} 条观测。`);
+      reload();
+    } catch (caught) {
+      if (caught instanceof ApiError && Array.isArray((caught.details as { issues?: unknown })?.issues)) {
+        setIssues((caught.details as { issues: TriageApplyIssue[] }).issues);
+      } else {
+        setIssues([{
+          reason_code: "resolve_failed",
+          message: caught instanceof ApiError ? caught.message : "处理失败。",
           group_id: null, bridge_component_id: null, observation_id: null,
         }]);
       }
@@ -189,8 +222,27 @@ export function ThreadTriagePage() {
         <section className="triage-manual-section" aria-label="需单独处理">
           <h2>需单独处理（{summary.manual_group_count} 组 / {summary.manual_observation_count} 条）</h2>
           <p className="archive-empty-hint">
-            这些组之间存在必须一起判断的关系，逐组界面见下一步实现。
+            这些组之间存在必须一起判断的关系：系统能看出它们有关，但看不出该合还是该分。
           </p>
+          {issues.length > 0 ? (
+            <ul className="triage-detail-issues" role="alert">
+              {issues.map((issue, index) => (
+                <li key={`${issue.reason_code}-${index}`}>{issue.message}</li>
+              ))}
+            </ul>
+          ) : null}
+          {summary.manual_clusters
+            .filter((cluster) => !skippedClusterIds.has(cluster.cluster_id))
+            .map((cluster) => (
+              <ManualClusterCard
+                key={cluster.cluster_id}
+                cluster={cluster}
+                busy={busy}
+                onResolve={(payload) => { void resolveCluster(payload); }}
+                onSkip={() => setSkippedClusterIds(
+                  (current) => new Set(current).add(cluster.cluster_id))}
+              />
+            ))}
         </section>
       ) : null}
     </section>

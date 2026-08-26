@@ -206,3 +206,38 @@ export function applyTriageBatch(
     },
   );
 }
+
+export interface TriageResolvePayload {
+  action: "create" | "bind";
+  bridge_component_id: string;
+  /** create 时由人选定，不是从任何一条观测抄的——合并之所以需要人，就是因为没有哪条写法天然权威。 */
+  defect_type?: string;
+  defect_location?: string;
+  target_thread_id?: string;
+  /** 选中观测的位置或类型不一致时必须为 true，否则服务端拒绝。 */
+  confirm_inexact_merge?: boolean;
+  observations: Array<{ id: string; updated_at: string }>;
+}
+
+export function resolveTriageCluster(
+  baseUrl: string, bridgeId: string, payload: TriageResolvePayload,
+): Promise<TriageApplyResponse> {
+  return request<TriageApplyResponse>(
+    `${baseUrl}/api/bridges/${encodeURIComponent(bridgeId)}/thread-triage/resolve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+/** 选中的观测是否跨越了不止一种"类型+位置"写法——跨了就得人显式担责。 */
+export function needsInexactMergeConfirmation(
+  observations: Array<{ defect_type: string; defect_location: string | null }>,
+): boolean {
+  const keys = new Set(
+    observations.map((observation) =>
+      `${observation.defect_type.trim()}\u001f${(observation.defect_location ?? "").trim()}`));
+  return keys.size > 1;
+}
