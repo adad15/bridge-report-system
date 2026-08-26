@@ -213,6 +213,28 @@ function sameYearCluster(): TriageManualCluster {
   };
 }
 
+// 一条观测精确命中了两条已有线索——系统没有理由偏向其中任何一条。
+function ambiguousCluster(): TriageManualCluster {
+  const base = sameYearCluster();
+  return {
+    ...base,
+    cluster_id: "cl-3",
+    reason_codes: ["ambiguous_thread"],
+    observation_count: 1,
+    groups: [{ ...base.groups[0], observations: [base.groups[0].observations[0]] }],
+    related_threads: [
+      {
+        id: "t-a", system_number: "BHXS-000700", thread_name: "破损｜上游侧",
+        bridge_component_id: "c-rail", defect_type: "破损", defect_location: "上游侧",
+      },
+      {
+        id: "t-b", system_number: "BHXS-000800", thread_name: "破损｜下游侧",
+        bridge_component_id: "c-rail", defect_type: "破损", defect_location: "下游侧",
+      },
+    ],
+  };
+}
+
 function withClusters(clusters: TriageManualCluster[]): TriageSummary {
   return { ...summary(), manual_clusters: clusters };
 }
@@ -468,5 +490,26 @@ describe("ThreadTriagePage 异常簇", () => {
     fireEvent.click(await screen.findByRole("button", { name: "建为一条线索" }));
 
     expect(await screen.findByText(/已新建线索 BHXS-001100，含 2 条观测/)).toBeInTheDocument();
+  });
+  // 命中多条时全部列出并给编号：少列一条，人就在不知情的情况下被替他选了。
+  it("lists every matched thread and binds to the one the person picks", async () => {
+    mockedSummary.mockResolvedValue(withClusters([ambiguousCluster()]));
+    mockedResolve.mockResolvedValue({
+      status: "applied", groups_applied: 1, threads_created: 0, observations_bound: 1,
+      results: [{
+        group_id: "cg-3", bridge_component_id: "c-rail", thread_id: "t-b",
+        thread_system_number: "BHXS-000800", outcome: "bound",
+      }],
+    });
+    renderPage();
+
+    expect(await screen.findByText("BHXS-000700")).toBeInTheDocument();
+    expect(screen.getByText("BHXS-000800")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("目标线索"), { target: { value: "t-b" } });
+    fireEvent.click(screen.getByRole("button", { name: "绑定到该线索" }));
+
+    await waitFor(() => expect(mockedResolve).toHaveBeenCalledTimes(1));
+    expect(mockedResolve.mock.calls[0][2].target_thread_id).toBe("t-b");
   });
 });
