@@ -36,6 +36,7 @@ add_library(bridge_report_backend_core
     src/db/ReviewRepository.cpp
     src/db/RatingTreeRepository.cpp
     src/db/StandardRepository.cpp
+    src/db/ThreadResolutionRepository.cpp
     src/db/TriageQueryRepository.cpp
     src/db/WorkspaceRepository.cpp
     src/db/WordImportRepository.cpp
@@ -214,6 +215,7 @@ add_executable(bridge_report_backend_tests
     tests/test_thread_triage_fixture.cpp
     tests/test_triage_summary_json.cpp
     tests/test_triage_query_repository.cpp
+    tests/test_thread_resolution_repository.cpp
     tests/test_thread_suggestions.cpp
     tests/test_temporary_word_cleanup_coordinator.cpp
     tests/test_word_import_routes.cpp
