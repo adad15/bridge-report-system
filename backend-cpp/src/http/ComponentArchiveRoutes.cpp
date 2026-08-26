@@ -234,6 +234,7 @@ void register_component_archive_routes(
     register_options_handler("/api/bridge-components/{component_id}/defect-archive/revisions");
     register_options_handler("/api/bridges/{bridge_id}/unbound-defect-observations");
     register_options_handler("/api/bridges/{bridge_id}/thread-triage");
+    register_options_handler("/api/bridges/{bridge_id}/thread-triage/batches/{batch_id}");
     register_options_handler("/api/defect-observations/{observation_id}/evidence");
     register_options_handler("/api/defect-observations/{observation_id}/thread-suggestions");
     register_options_handler("/api/defect-photos/{defect_photo_id}/content");
@@ -267,6 +268,40 @@ void register_component_archive_routes(
                     return;
                 }
                 respond_json(callback, db::TriageQueryRepository(db_client).summary(bridge_id));
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Get}
+    );
+
+    // 批次明细：一次给全，不分页。分页会让"跨页剔除"与"提交清单"对不上。
+    drogon::app().registerHandler(
+        "/api/bridges/{bridge_id}/thread-triage/batches/{batch_id}",
+        [db_client](
+            const drogon::HttpRequestPtr&, HttpCallback&& callback,
+            const std::string& bridge_id, const std::string& batch_id) {
+            if (!is_valid_uuid(bridge_id)) {
+                respond_bridge_not_found(callback);
+                return;
+            }
+            try {
+                if (!bridge_exists(db_client, bridge_id)) {
+                    respond_bridge_not_found(callback);
+                    return;
+                }
+                const auto detail = db::TriageQueryRepository(db_client).batch_detail(
+                    bridge_id, batch_id);
+                if (!detail.has_value()) {
+                    // 过期批次不当空批次交出去——数据变了，让前端重取摘要。
+                    respond_json(callback, make_error_body(
+                        "triage_batch_changed", "该批次已随数据变化失效，请刷新整理工作台。"),
+                        drogon::k409Conflict);
+                    return;
+                }
+                respond_json(callback, *detail);
             } catch (const drogon::orm::DrogonDbException&) {
                 respond_db_unavailable(callback);
             } catch (const std::exception&) {

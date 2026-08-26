@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -132,6 +133,69 @@ TEST(TriageSummaryJsonTest, GivesManualClustersTheirFullContext) {
         EXPECT_EQ(target["system_number"].asString(), "BHXS-000123");
     }
     EXPECT_TRUE(saw_thread_target) << "与已有线索重叠时必须标出是线索并带 BHXS 编号";
+}
+
+// 明细不分页的前提是"它确实不大"。设计里那个 150–250 KB 是估算，这里量实的：
+// 最大批次 163 组 / 489 条，只含 JSON 元数据（照片只给 id，二进制走既有内容接口）。
+// 数字若涨到接近 1 MB，说明该重新考虑分页——但那时得连"跨页剔除如何与提交清单一致"
+// 一起解决，不能只把接口切开。
+TEST(TriageSummaryJsonTest, KeepsTheLargestBatchDetailSmallEnoughToSkipPaging) {
+    const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT)
+        / "backend-cpp" / "tests" / "fixtures" / "baigu_triage_snapshot.json";
+    std::ifstream input(path);
+    ASSERT_TRUE(input.is_open());
+    Json::CharReaderBuilder builder;
+    Json::Value root;
+    std::string errors;
+    ASSERT_TRUE(Json::parseFromStream(builder, input, &root, &errors)) << errors;
+
+    std::vector<TriageObservationInput> observations;
+    for (const auto& item : root["observations"]) {
+        TriageObservationInput observation;
+        observation.id = item["id"].asString();
+        observation.bridge_component_id = item["bridge_component_id"].asString();
+        observation.structure_part = item["structure_part"].asString();
+        observation.component_type = item["component_type"].asString();
+        observation.business_component_code = item["business_component_code"].asString();
+        observation.defect_type = item["defect_type"].asString();
+        observation.defect_location = item["defect_location"].asString();
+        observation.updated_at = item["updated_at"].asString();
+        observation.inspection_year = item["inspection_year"].asInt();
+        observations.push_back(std::move(observation));
+    }
+    const auto model = build_triage_model(std::move(observations), {});
+    ASSERT_FALSE(model.batches.empty());
+    const auto& largest = model.batches.front();
+
+    // 只算归组模型能给出的部分（id、令牌、年份、类型、位置）；标度尺寸照片由仓储另取，
+    // 那部分体积与观测数同阶，这里的量级判断已足够说明问题。
+    Json::Value detail;
+    detail["batch_id"] = largest.batch_id;
+    detail["groups"] = Json::Value(Json::arrayValue);
+    for (const auto& group : largest.groups) {
+        Json::Value group_json;
+        group_json["group_id"] = group.group_id;
+        group_json["observations"] = Json::Value(Json::arrayValue);
+        for (const auto& observation : group.observations) {
+            Json::Value entry;
+            entry["id"] = observation.id;
+            entry["updated_at"] = observation.updated_at;
+            entry["inspection_year"] = observation.inspection_year;
+            entry["defect_type"] = observation.defect_type;
+            entry["defect_location"] = observation.defect_location;
+            group_json["observations"].append(entry);
+        }
+        detail["groups"].append(group_json);
+    }
+
+    Json::StreamWriterBuilder writer;
+    writer["indentation"] = "";
+    const auto serialised = Json::writeString(writer, detail);
+    EXPECT_EQ(largest.groups.size(), 163u);
+    EXPECT_EQ(largest.observation_count(), 489);
+    EXPECT_LT(serialised.size(), 512u * 1024u)
+        << "最大批次明细骨架 " << serialised.size() << " 字节";
+    std::cout << "[量测] 最大批次明细骨架：" << serialised.size() << " 字节（163 组 / 489 条）" << std::endl;
 }
 
 // 真实数据过一遍：摘要体积必须与批次数同量级，而不是与 1197 条观测同量级。

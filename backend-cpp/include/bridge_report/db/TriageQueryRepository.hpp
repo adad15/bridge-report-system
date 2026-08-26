@@ -1,6 +1,8 @@
 #pragma once
 
+#include <optional>
 #include <string>
+#include <vector>
 
 #include <drogon/orm/DbClient.h>
 #include <json/value.h>
@@ -28,7 +30,26 @@ public:
     /// 工作台摘要 JSON（见 `review::triage_summary_json`）。
     [[nodiscard]] Json::Value summary(const std::string& bridge_id) const;
 
+    /**
+     * @brief 一个批次的完整明细，**不分页**。
+     *
+     * 分页会让"跨页剔除"与"提交清单"对不上：用户在第 3 页去掉两组，提交时前端得凑齐
+     * 全部组才能表达"这批除了这两组"。当前最大批次 163 组 / 489 条，只是 JSON 元数据，
+     * 一次给完反而简单。
+     *
+     * 标度、尺寸、照片是**展示字段**，归组模型里没有（它只管身份）；这里按本批次的观测
+     * id 单独取，不把展示需求塞进 `TriageObservationInput`。
+     *
+     * 批次在当前数据下已不存在时返回 `nullopt`——调用方回 `triage_batch_changed`
+     * 让前端刷新摘要，而不是把一个过期批次当空批次交给用户。
+     */
+    [[nodiscard]] std::optional<Json::Value> batch_detail(
+        const std::string& bridge_id, const std::string& batch_id) const;
+
 private:
+    [[nodiscard]] std::vector<review::TriageThreadInput> load_threads(
+        const std::string& bridge_id) const;
+
     drogon::orm::DbClientPtr db_client_;
 };
 

@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -152,4 +153,65 @@ TEST_F(TriageQueryRepositoryTest, SummarisesWithoutTheBatchObservations) {
     EXPECT_FALSE(body["batches"][0].isMember("groups"));
     EXPECT_FALSE(body["batches"][0]["sample_groups"].empty());
     EXPECT_FALSE(body["snapshot_id"].asString().empty());
+}
+
+// 明细必须自带每条观测的 updated_at：提交时拿它做并发校验，少一条那一组就提交不了。
+TEST_F(TriageQueryRepositoryTest, CarriesEveryObservationTokenInTheBatchDetail) {
+    const bridge_report::db::TriageQueryRepository repository(client_);
+    const auto summary = repository.summary(bridge_id_);
+    ASSERT_EQ(summary["batches"].size(), 1u);
+
+    const auto detail = repository.batch_detail(
+        bridge_id_, summary["batches"][0]["batch_id"].asString());
+
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ((*detail)["observation_count"].asInt(), 2);
+    ASSERT_EQ((*detail)["groups"].size(), 1u);
+    const auto& observations = (*detail)["groups"][0]["observations"];
+    ASSERT_EQ(observations.size(), 2u);
+    for (const auto& observation : observations) {
+        EXPECT_FALSE(observation["updated_at"].asString().empty());
+        EXPECT_FALSE(observation["id"].asString().empty());
+    }
+    EXPECT_EQ((*detail)["groups"][0]["business_component_code"].asString(), "1#铰缝")
+        << "构件业务编号必须给：只显示'铰缝'的话人分不出是哪一个";
+}
+
+// 批次跨多个构件时各绑各的线索，目标必须逐组给，不能是批次级的单一编号。
+TEST_F(TriageQueryRepositoryTest, GivesEachGroupItsOwnTargetThread) {
+    const auto first_thread = insert_thread(component_id_, "渗水泛碱", "");
+    const auto second_component = insert_id(
+        "insert into bridge_components(bridge_id,structure_part,component_type,"
+        "business_component_code,normalized_component_key,creation_source) "
+        "values($1::uuid,'上部结构','铰缝','3#铰缝','triage-hinge-3','人工录入') returning id",
+        bridge_id_);
+    const auto second_thread = insert_thread(second_component, "渗水泛碱", "");
+    insert_observation(year_2025_, second_component, "渗水泛碱", "", "已确认");
+    insert_observation(year_2026_, second_component, "渗水泛碱", "", "已确认");
+
+    const bridge_report::db::TriageQueryRepository repository(client_);
+    const auto summary = repository.summary(bridge_id_);
+    ASSERT_EQ(summary["batches"].size(), 1u);
+    const auto detail = repository.batch_detail(
+        bridge_id_, summary["batches"][0]["batch_id"].asString());
+
+    ASSERT_TRUE(detail.has_value());
+    EXPECT_EQ((*detail)["action"].asString(), "bind");
+    ASSERT_EQ((*detail)["groups"].size(), 2u);
+    std::set<std::string> targets;
+    for (const auto& group : (*detail)["groups"]) {
+        ASSERT_FALSE(group["target_thread"].isNull());
+        targets.insert(group["target_thread"]["thread_id"].asString());
+        EXPECT_FALSE(group["target_thread"]["system_number"].asString().empty())
+            << "展开后要显示各自的 BHXS 编号";
+    }
+    EXPECT_EQ(targets, (std::set<std::string>{first_thread, second_thread}));
+}
+
+// 数据变了导致批次消失时，不能把过期批次当空批次交给用户。
+TEST_F(TriageQueryRepositoryTest, ReportsAVanishedBatchAsMissing) {
+    const bridge_report::db::TriageQueryRepository repository(client_);
+
+    EXPECT_FALSE(repository.batch_detail(bridge_id_, "0123456789abcdef0123456789abcdef")
+                     .has_value());
 }
