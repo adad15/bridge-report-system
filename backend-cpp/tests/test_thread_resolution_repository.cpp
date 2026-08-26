@@ -443,3 +443,152 @@ TEST_F(ThreadResolutionRepositoryTest, ReportsAGroupSplitAcrossTwoThreads) {
     EXPECT_EQ(retry.status, db::TriageApplyStatus::Rejected);
     EXPECT_TRUE(has_issue(retry, "thread_split_conflict"));
 }
+
+// ── 异常簇的人工决策 ──────────────────────────────────────────────────
+// resolve 与 apply 的关键差别：不要求观测的规范键一致。异常簇存在的理由正是"位置写法
+// 逐年变了、机器判不了"——合并这类观测按定义就违反键一致，只能由人担责。
+
+namespace {
+
+db::TriageResolveRequest merge_request(
+    const std::string& bridge_id, const std::string& component_id,
+    std::vector<db::TriageApplyObservation> observations) {
+    db::TriageResolveRequest request;
+    request.bridge_id = bridge_id;
+    request.action = review::TriageAction::Create;
+    request.bridge_component_id = component_id;
+    request.defect_type = "受渗水侵蚀";
+    request.defect_location = "大小里程侧及左悬臂底部";
+    request.observations = std::move(observations);
+    return request;
+}
+
+}  // namespace
+
+TEST_F(ThreadResolutionRepositoryTest, MergesDifferentlyLocatedObservationsWhenConfirmed) {
+    const auto cap = insert_component(bridge_id_, "16#墩盖梁", "resolve-cap-16");
+    const auto narrow = insert_observation(year_2025_, bridge_id_, cap, "受渗水侵蚀", "大小里程侧");
+    const auto wide = insert_observation(
+        year_2026_, bridge_id_, cap, "受渗水侵蚀", "大小里程侧及左悬臂底部");
+    const auto tokens = client_->execSqlSync(
+        "select id::text as id, updated_at::text as t from defect_observations "
+        "where id = any($1::uuid[]) order by id", "{" + narrow + "," + wide + "}");
+    std::vector<db::TriageApplyObservation> observations;
+    for (const auto& row : tokens) {
+        observations.push_back(
+            db::TriageApplyObservation{row["id"].as<std::string>(), row["t"].as<std::string>()});
+    }
+
+    auto request = merge_request(bridge_id_, cap, observations);
+    request.confirm_inexact_merge = true;
+    const auto outcome = db::ThreadResolutionRepository(client_).resolve(request);
+
+    ASSERT_EQ(outcome.status, db::TriageApplyStatus::Applied);
+    EXPECT_EQ(outcome.threads_created, 1);
+    EXPECT_EQ(outcome.observations_bound, 2);
+
+    const auto thread = client_->execSqlSync(
+        "select thread_name, first_seen_inspection_id::text as f, "
+        "latest_seen_inspection_id::text as l from defect_threads where id=$1::uuid",
+        outcome.results[0].thread_id);
+    EXPECT_EQ(thread[0]["thread_name"].as<std::string>(), "受渗水侵蚀｜大小里程侧及左悬臂底部")
+        << "位置由人选定，不是从任何一条观测抄的";
+    EXPECT_EQ(thread[0]["f"].as<std::string>(), year_2025_);
+    EXPECT_EQ(thread[0]["l"].as<std::string>(), year_2026_);
+}
+
+// 不带显式确认就合并位置不同的观测，等于让系统替人做那个它做不了的判断。
+TEST_F(ThreadResolutionRepositoryTest, RefusesAnInexactMergeWithoutExplicitConfirmation) {
+    const auto cap = insert_component(bridge_id_, "17#墩盖梁", "resolve-cap-17");
+    const auto narrow = insert_observation(year_2025_, bridge_id_, cap, "受渗水侵蚀", "大小里程侧");
+    const auto wide = insert_observation(
+        year_2026_, bridge_id_, cap, "受渗水侵蚀", "大小里程侧及左悬臂底部");
+    const auto tokens = client_->execSqlSync(
+        "select id::text as id, updated_at::text as t from defect_observations "
+        "where id = any($1::uuid[]) order by id", "{" + narrow + "," + wide + "}");
+    std::vector<db::TriageApplyObservation> observations;
+    for (const auto& row : tokens) {
+        observations.push_back(
+            db::TriageApplyObservation{row["id"].as<std::string>(), row["t"].as<std::string>()});
+    }
+
+    const auto outcome = db::ThreadResolutionRepository(client_).resolve(
+        merge_request(bridge_id_, cap, observations));
+
+    EXPECT_EQ(outcome.status, db::TriageApplyStatus::Rejected);
+    EXPECT_TRUE(has_issue(outcome, "inexact_merge_requires_confirmation"));
+    EXPECT_EQ(count_threads(), 0);
+}
+
+// 人工判断能豁免"位置不一致"，豁免不了"线索属于具体构件"。
+TEST_F(ThreadResolutionRepositoryTest, RefusesToMergeAcrossComponentsEvenWhenConfirmed) {
+    const auto model = db::TriageQueryRepository(client_).load_model(bridge_id_);
+    ASSERT_EQ(model.batches.size(), 1u);
+    std::vector<db::TriageApplyObservation> mixed;
+    for (const auto& group : model.batches[0].groups) {
+        mixed.push_back(db::TriageApplyObservation{
+            group.observations.front().id, group.observations.front().updated_at});
+    }
+
+    auto request = merge_request(bridge_id_, component_a_, mixed);
+    request.confirm_inexact_merge = true;
+    const auto outcome = db::ThreadResolutionRepository(client_).resolve(request);
+
+    EXPECT_EQ(outcome.status, db::TriageApplyStatus::Rejected);
+    EXPECT_TRUE(has_issue(outcome, "group_component_mismatch"));
+    EXPECT_EQ(count_threads(), 0);
+}
+
+// 同年两条要拆成两条线索：各调一次 resolve，各选一条。键一致，不需要显式确认。
+TEST_F(ThreadResolutionRepositoryTest, SplitsTwoObservationsOfOneYearIntoSeparateThreads) {
+    const auto deck = insert_component(bridge_id_, "19#跨桥面铺装", "resolve-deck-19");
+    const auto first = insert_observation(year_2026_, bridge_id_, deck, "网状裂缝", "右侧行车道");
+    const auto second = insert_observation(year_2026_, bridge_id_, deck, "网状裂缝", "右侧行车道");
+    const db::ThreadResolutionRepository repository(client_);
+
+    for (const auto& observation_id : {first, second}) {
+        const auto token = client_->execSqlSync(
+            "select updated_at::text as t from defect_observations where id=$1::uuid",
+            observation_id)[0]["t"].as<std::string>();
+        db::TriageResolveRequest request;
+        request.bridge_id = bridge_id_;
+        request.action = review::TriageAction::Create;
+        request.bridge_component_id = deck;
+        request.defect_type = "网状裂缝";
+        request.defect_location = "右侧行车道";
+        request.observations = {db::TriageApplyObservation{observation_id, token}};
+        EXPECT_EQ(repository.resolve(request).status, db::TriageApplyStatus::Applied);
+    }
+
+    EXPECT_EQ(count_threads(), 2) << "同年两条判成两处 → 两条线索";
+}
+
+TEST_F(ThreadResolutionRepositoryTest, BindsSelectedObservationsToAnExistingThread) {
+    const auto request = request_from_batch(only_batch());
+    const db::ThreadResolutionRepository repository(client_);
+    ASSERT_EQ(repository.apply(request).status, db::TriageApplyStatus::Applied);
+    const auto thread_id = client_->execSqlSync(
+        "select defect_thread_id::text as id from defect_observations where id=$1::uuid",
+        request.groups[0].observations[0].id)[0]["id"].as<std::string>();
+
+    // 新来一条位置写法不同的观测，人判断它属于那条已有线索。
+    const auto extra = insert_observation(
+        year_2025_, bridge_id_, component_a_, "渗水泛碱", "梁端附近");
+    const auto token = client_->execSqlSync(
+        "select updated_at::text as t from defect_observations where id=$1::uuid",
+        extra)[0]["t"].as<std::string>();
+
+    db::TriageResolveRequest resolve_request;
+    resolve_request.bridge_id = bridge_id_;
+    resolve_request.action = review::TriageAction::Bind;
+    resolve_request.bridge_component_id = component_a_;
+    resolve_request.target_thread_id = thread_id;
+    resolve_request.observations = {db::TriageApplyObservation{extra, token}};
+
+    const auto outcome = repository.resolve(resolve_request);
+
+    ASSERT_EQ(outcome.status, db::TriageApplyStatus::Applied);
+    EXPECT_EQ(outcome.threads_created, 0);
+    EXPECT_EQ(outcome.observations_bound, 1);
+    EXPECT_EQ(count_threads(), 2) << "绑定不建新线索";
+}

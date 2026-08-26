@@ -198,3 +198,78 @@ TEST(TriageApplyRequestTest, RejectsAnUnknownAction) {
     ASSERT_TRUE(error.has_value());
     EXPECT_EQ(*error, "triage_invalid_action");
 }
+
+// ── 异常簇决策请求解析 ────────────────────────────────────────────────
+
+namespace {
+
+Json::Value resolve_body(const std::string& action) {
+    Json::Value body;
+    body["action"] = action;
+    body["bridge_component_id"] = "33333333-3333-3333-3333-333333333333";
+    Json::Value observation;
+    observation["id"] = "11111111-1111-1111-1111-111111111111";
+    observation["updated_at"] = "2026-08-26 10:00:00+08";
+    body["observations"] = Json::Value(Json::arrayValue);
+    body["observations"].append(observation);
+    return body;
+}
+
+}  // namespace
+
+TEST(TriageResolveRequestTest, AcceptsAMergeThatNamesTypeAndLocation) {
+    auto body = resolve_body("create");
+    body["defect_type"] = "受渗水侵蚀";
+    body["defect_location"] = "大小里程侧及左悬臂底部";
+    body["confirm_inexact_merge"] = true;
+
+    bridge_report::http::TriageResolveRequestBody parsed;
+    const auto error = bridge_report::http::parse_triage_resolve_request(body, parsed);
+
+    EXPECT_FALSE(error.has_value());
+    EXPECT_TRUE(parsed.confirm_inexact_merge);
+    EXPECT_EQ(parsed.defect_location, "大小里程侧及左悬臂底部")
+        << "位置由人选定，不是从观测里抄的";
+}
+
+// 位置留空是合法的：铰缝那类构件本来就不写更细位置。
+TEST(TriageResolveRequestTest, AcceptsACreateWithoutALocation) {
+    auto body = resolve_body("create");
+    body["defect_type"] = "渗水泛碱";
+
+    bridge_report::http::TriageResolveRequestBody parsed;
+    const auto error = bridge_report::http::parse_triage_resolve_request(body, parsed);
+
+    EXPECT_FALSE(error.has_value());
+    EXPECT_TRUE(parsed.defect_location.empty());
+}
+
+TEST(TriageResolveRequestTest, RequiresADefectTypeWhenCreating) {
+    bridge_report::http::TriageResolveRequestBody parsed;
+    const auto error = bridge_report::http::parse_triage_resolve_request(
+        resolve_body("create"), parsed);
+
+    ASSERT_TRUE(error.has_value());
+    EXPECT_EQ(*error, "resolve_defect_type_required");
+}
+
+TEST(TriageResolveRequestTest, RequiresATargetWhenBinding) {
+    bridge_report::http::TriageResolveRequestBody parsed;
+    const auto error = bridge_report::http::parse_triage_resolve_request(
+        resolve_body("bind"), parsed);
+
+    ASSERT_TRUE(error.has_value());
+    EXPECT_EQ(*error, "bind_target_required");
+}
+
+// 没勾确认时解析仍然通过——是否需要确认取决于观测的实际规范键，那只有事务里才知道。
+TEST(TriageResolveRequestTest, LeavesTheInexactMergeJudgementToTheTransaction) {
+    auto body = resolve_body("create");
+    body["defect_type"] = "受渗水侵蚀";
+
+    bridge_report::http::TriageResolveRequestBody parsed;
+    const auto error = bridge_report::http::parse_triage_resolve_request(body, parsed);
+
+    EXPECT_FALSE(error.has_value());
+    EXPECT_FALSE(parsed.confirm_inexact_merge);
+}

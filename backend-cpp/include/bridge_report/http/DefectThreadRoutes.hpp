@@ -14,6 +14,7 @@ namespace bridge_report::http {
  *   POST /api/defect-threads                                    创建线索并绑定首条观测
  *   PUT  /api/defect-observations/{observation_id}/defect-thread 绑定 / 重绑 / 解绑
  *   POST /api/bridges/{bridge_id}/thread-triage/apply            批量建线索 / 批量绑定
+ *   POST /api/bridges/{bridge_id}/thread-triage/resolve          异常簇的一次人工决策
  *
  * 只改变观测与线索的组织关系，不修改年度病害事实；系统只给候选建议，
  * 绑定一律由人工发起并携带 updated_at 乐观令牌。
@@ -69,6 +70,29 @@ inline constexpr int kTriageApplyMaxGroups = 500;
 
 [[nodiscard]] std::optional<std::string> parse_triage_apply_request(
     const Json::Value& body, TriageApplyRequestBody& out);
+
+/**
+ * @brief 异常簇的一次人工决策。
+ *
+ * 位置或类型不一致的合并**必须**携带 `confirm_inexact_merge`——那正是异常簇存在的理由，
+ * 系统不替人做这个判断。
+ */
+struct TriageResolveRequestBody {
+    std::string action;  // "create" / "bind"
+    std::string bridge_component_id;
+    std::string defect_type;
+    std::string defect_location;
+    std::string target_thread_id;
+    bool confirm_inexact_merge{false};
+    struct Observation {
+        std::string id;
+        std::string updated_at;
+    };
+    std::vector<Observation> observations;
+};
+
+[[nodiscard]] std::optional<std::string> parse_triage_resolve_request(
+    const Json::Value& body, TriageResolveRequestBody& out);
 
 void register_defect_thread_routes(const drogon::orm::DbClientPtr& db_client);
 

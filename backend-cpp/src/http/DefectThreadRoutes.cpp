@@ -189,6 +189,46 @@ std::optional<std::string> parse_triage_apply_request(
     return std::nullopt;
 }
 
+std::optional<std::string> parse_triage_resolve_request(
+    const Json::Value& body, TriageResolveRequestBody& out) {
+    if (!body.isObject()) return "invalid_json_body";
+
+    const auto action = non_empty_string_member(body, "action");
+    const auto component_id = non_empty_string_member(body, "bridge_component_id");
+    if (!action.has_value() || !component_id.has_value()) return "triage_required_field_missing";
+    if (*action != "create" && *action != "bind") return "triage_invalid_action";
+    if (!is_valid_uuid(*component_id)) return "triage_required_field_missing";
+
+    out.action = *action;
+    out.bridge_component_id = *component_id;
+    out.defect_location = non_empty_string_member(body, "defect_location").value_or("");
+    out.confirm_inexact_merge = body["confirm_inexact_merge"].isBool()
+        && body["confirm_inexact_merge"].asBool();
+
+    if (*action == "create") {
+        const auto defect_type = non_empty_string_member(body, "defect_type");
+        if (!defect_type.has_value()) return "resolve_defect_type_required";
+        out.defect_type = *defect_type;
+    } else {
+        const auto target = non_empty_string_member(body, "target_thread_id");
+        if (!target.has_value() || !is_valid_uuid(*target)) return "bind_target_required";
+        out.target_thread_id = *target;
+    }
+
+    if (!body["observations"].isArray() || body["observations"].empty()) {
+        return "empty_group_selection";
+    }
+    for (const auto& entry : body["observations"]) {
+        const auto id = non_empty_string_member(entry, "id");
+        const auto token = non_empty_string_member(entry, "updated_at");
+        if (!id.has_value() || !token.has_value() || !is_valid_uuid(*id)) {
+            return "triage_required_field_missing";
+        }
+        out.observations.push_back(TriageResolveRequestBody::Observation{*id, *token});
+    }
+    return std::nullopt;
+}
+
 std::optional<std::string> parse_bind_observation_request(const Json::Value& body, BindObservationRequest& out) {
     if (!body.isObject()) {
         return "invalid_json_body";
@@ -340,6 +380,60 @@ void register_defect_thread_routes(const drogon::orm::DbClientPtr& db_client) {
 
                 const auto outcome =
                     db::ThreadResolutionRepository(db_client).apply(apply_request);
+                respond_json(callback, triage_apply_body(outcome), triage_apply_status(outcome));
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Post}
+    );
+
+    register_options_handler("/api/bridges/{bridge_id}/thread-triage/resolve");
+    drogon::app().registerHandler(
+        "/api/bridges/{bridge_id}/thread-triage/resolve",
+        [db_client](
+            const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+            const std::string& bridge_id) {
+            if (!is_valid_uuid(bridge_id)) {
+                respond_json(callback, make_error_body("bridge_not_found", "指定的桥梁不存在"),
+                             drogon::k404NotFound);
+                return;
+            }
+            const auto body = request->getJsonObject();
+            TriageResolveRequestBody parsed;
+            if (body == nullptr) {
+                respond_json(callback, make_error_body("invalid_json_body", "请求体不是合法 JSON。"),
+                             drogon::k400BadRequest);
+                return;
+            }
+            if (const auto error = parse_triage_resolve_request(*body, parsed)) {
+                respond_json(callback, make_error_body(*error, "异常簇决策请求不合法。"),
+                             drogon::k400BadRequest);
+                return;
+            }
+            try {
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                db::TriageResolveRequest resolve_request;
+                resolve_request.bridge_id = bridge_id;
+                resolve_request.action = parsed.action == "bind"
+                    ? review::TriageAction::Bind : review::TriageAction::Create;
+                resolve_request.bridge_component_id = parsed.bridge_component_id;
+                resolve_request.defect_type = parsed.defect_type;
+                resolve_request.defect_location = parsed.defect_location;
+                resolve_request.target_thread_id = parsed.target_thread_id;
+                resolve_request.confirm_inexact_merge = parsed.confirm_inexact_merge;
+                for (const auto& observation : parsed.observations) {
+                    resolve_request.observations.push_back(
+                        db::TriageApplyObservation{observation.id, observation.updated_at});
+                }
+
+                const auto outcome =
+                    db::ThreadResolutionRepository(db_client).resolve(resolve_request);
                 respond_json(callback, triage_apply_body(outcome), triage_apply_status(outcome));
             } catch (const drogon::orm::DrogonDbException&) {
                 respond_db_unavailable(callback);

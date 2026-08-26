@@ -519,4 +519,186 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
     }
 }
 
+
+TriageApplyOutcome ThreadResolutionRepository::resolve(
+    const TriageResolveRequest& request) const {
+    TriageApplyOutcome outcome;
+    TransactionPtr tx;
+    const auto latch = std::make_shared<CommitLatch>();
+    const auto rollback = [&tx]() {
+        if (tx != nullptr) {
+            try { tx->rollback(); } catch (...) {}
+        }
+    };
+
+    if (request.observations.empty()) {
+        add_issue(outcome.issues, "empty_group_selection", "本次决策没有选中任何观测。", {});
+        return outcome;
+    }
+    if (request.bridge_component_id.empty()) {
+        add_issue(outcome.issues, "resolve_component_required", "必须指定构件。", {});
+        return outcome;
+    }
+
+    try {
+        tx = db_client_->newTransaction(latch->callback());
+
+        std::vector<std::string> observation_ids;
+        std::set<std::string> seen;
+        for (const auto& observation : request.observations) {
+            if (!seen.insert(observation.id).second) {
+                add_issue(outcome.issues, "duplicate_observation",
+                          "同一条观测重复出现。", {}, {}, observation.id);
+                continue;
+            }
+            observation_ids.push_back(observation.id);
+        }
+        if (!outcome.issues.empty()) {
+            rollback();
+            return outcome;
+        }
+        std::sort(observation_ids.begin(), observation_ids.end());
+        const auto locked = lock_observations(tx, observation_ids);
+
+        std::set<std::string> canonical_keys;
+        for (const auto& requested : request.observations) {
+            const auto found = locked.find(requested.id);
+            if (found == locked.end()) {
+                add_issue(outcome.issues, "defect_observation_not_found",
+                          "观测不存在或已被删除。", {}, {}, requested.id);
+                continue;
+            }
+            const auto& observation = found->second;
+            if (observation.bridge_id != request.bridge_id) {
+                add_issue(outcome.issues, "observation_bridge_mismatch", "观测不属于本桥。",
+                          {}, observation.bridge_component_id, observation.id);
+            }
+            if (observation.bridge_component_id != request.bridge_component_id) {
+                // 线索属于具体构件，跨构件合并不是"人工判断"能豁免的。
+                add_issue(outcome.issues, "group_component_mismatch",
+                          "选中的观测不属于指定构件。", {},
+                          observation.bridge_component_id, observation.id);
+            }
+            if (!observation.year_is_current || observation.year_status != "已确认") {
+                add_issue(outcome.issues, "observation_not_current",
+                          "该观测属于旧修订版或未确认的年度版本。", {},
+                          observation.bridge_component_id, observation.id);
+            }
+            if (observation.review_status != "已确认" && observation.review_status != "已修改") {
+                add_issue(outcome.issues, "observation_not_formal", "该观测不是正式事实。",
+                          {}, observation.bridge_component_id, observation.id);
+            }
+            if (observation.updated_at != requested.updated_at) {
+                add_issue(outcome.issues, "observation_revision_conflict",
+                          "该观测已被其他操作更新，请刷新后重试。", {},
+                          observation.bridge_component_id, observation.id);
+            }
+            if (observation.defect_thread_id.has_value()) {
+                add_issue(outcome.issues, "observation_already_bound", "该观测已绑定线索。",
+                          {}, observation.bridge_component_id, observation.id);
+            }
+            if (referenced_by_confirmed_comparison(tx, observation.id)) {
+                add_issue(outcome.issues, "observation_referenced_by_confirmed_comparison",
+                          "该观测被模块 07 已确认的对比结论引用。", {},
+                          observation.bridge_component_id, observation.id);
+            }
+            canonical_keys.insert(review::make_thread_canonical_key(
+                observation.bridge_component_id, observation.defect_type,
+                observation.defect_location).canonical_string());
+        }
+
+        // 键不止一种 = 非精确合并。这正是异常簇的用途，但必须由人显式担责。
+        if (canonical_keys.size() > 1 && !request.confirm_inexact_merge) {
+            add_issue(outcome.issues, "inexact_merge_requires_confirmation",
+                      "选中的观测位置或类型不一致，合并需要显式确认。", {},
+                      request.bridge_component_id);
+        }
+
+        std::string thread_id = request.target_thread_id;
+        std::string system_number;
+        std::string result_outcome = "bound";
+
+        if (request.action == review::TriageAction::Bind) {
+            if (thread_id.empty()) {
+                add_issue(outcome.issues, "bind_target_required", "绑定必须指定目标线索。", {});
+            } else {
+                const auto threads = load_component_threads(tx, request.bridge_id);
+                const auto target = std::find_if(
+                    threads.begin(), threads.end(),
+                    [&thread_id](const ThreadRow& row) { return row.id == thread_id; });
+                if (target == threads.end()) {
+                    add_issue(outcome.issues, "defect_thread_not_found", "目标线索不存在。", {});
+                } else if (target->bridge_component_id != request.bridge_component_id) {
+                    add_issue(outcome.issues, "thread_component_mismatch",
+                              "目标线索不属于指定构件。", {}, request.bridge_component_id);
+                } else if (thread_referenced_by_confirmed_comparison(tx, thread_id)) {
+                    add_issue(outcome.issues, "thread_referenced_by_confirmed_comparison",
+                              "目标线索被模块 07 已确认的对比结论引用。", {},
+                              request.bridge_component_id);
+                } else {
+                    system_number = target->system_number;
+                }
+            }
+        } else if (request.defect_type.empty()) {
+            add_issue(outcome.issues, "resolve_defect_type_required",
+                      "新建线索必须指定标准病害类型。", {}, request.bridge_component_id);
+        }
+
+        if (!outcome.issues.empty()) {
+            rollback();
+            return outcome;
+        }
+
+        if (request.action == review::TriageAction::Create) {
+            const auto thread_name = request.defect_location.empty()
+                ? request.defect_type
+                : request.defect_type + "｜" + request.defect_location;
+            const auto inserted = tx->execSqlSync(
+                "insert into defect_threads(bridge_id,bridge_component_id,thread_name,"
+                "defect_type,defect_location,confirmation_status) "
+                "values($1::uuid,$2::uuid,$3,$4,nullif($5,''),'人工已确认') "
+                "returning id::text as id, system_number",
+                request.bridge_id, request.bridge_component_id, thread_name,
+                request.defect_type, request.defect_location);
+            thread_id = inserted[0]["id"].as<std::string>();
+            system_number = inserted[0]["system_number"].as<std::string>();
+            result_outcome = "created";
+            ++outcome.threads_created;
+        }
+
+        for (const auto& observation : request.observations) {
+            tx->execSqlSync(
+                "update defect_observations set defect_thread_id=$1::uuid, updated_at=now() "
+                "where id=$2::uuid",
+                thread_id, observation.id);
+            ++outcome.observations_bound;
+        }
+        recompute_thread_span(tx, thread_id);
+
+        outcome.results.push_back(TriageGroupResult{
+            {}, request.bridge_component_id, thread_id, system_number, result_outcome});
+
+        tx.reset();
+        if (!latch->wait()) {
+            outcome.results.clear();
+            outcome.threads_created = 0;
+            outcome.observations_bound = 0;
+            add_issue(outcome.issues, "database_commit_failed", "数据库提交失败。", {});
+            return outcome;
+        }
+        outcome.status = TriageApplyStatus::Applied;
+        return outcome;
+    } catch (const drogon::orm::DrogonDbException& exception) {
+        rollback();
+        outcome.issues.clear();
+        add_issue(outcome.issues, "db_write_failed", exception.base().what(), {});
+        return outcome;
+    } catch (const std::exception& exception) {
+        rollback();
+        outcome.issues.clear();
+        add_issue(outcome.issues, "db_write_failed", exception.what(), {});
+        return outcome;
+    }
+}
+
 }  // namespace bridge_report::db

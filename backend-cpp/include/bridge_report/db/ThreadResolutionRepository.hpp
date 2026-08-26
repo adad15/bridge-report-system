@@ -81,11 +81,36 @@ struct TriageApplyOutcome {
     int observations_bound{0};
 };
 
+/**
+ * @brief 异常簇的一次人工决策。
+ *
+ * 与 `apply` 的关键差别：**不要求观测的规范键一致**。异常簇存在的理由正是"位置写法逐年
+ * 变了、机器判不了"，合并 `大小里程侧` 与 `大小里程侧及左悬臂底部` 按定义就违反键一致。
+ * 所以这条路径把那一项换成 `confirm_inexact_merge` 的显式确认——人看过、人担责。
+ *
+ * 其余一条不减：同桥、同构件、年度当前有效、观测是正式事实、并发令牌、模块 07 引用。
+ */
+struct TriageResolveRequest {
+    std::string bridge_id;
+    review::TriageAction action{review::TriageAction::Create};
+    std::string bridge_component_id;
+    /// create 时由人选定的标准病害类型与标准位置（位置可空）。
+    std::string defect_type;
+    std::string defect_location;
+    std::string target_thread_id;
+    /// 观测的规范键不止一种时必须为 true，否则拒绝。
+    bool confirm_inexact_merge{false};
+    std::vector<TriageApplyObservation> observations;
+};
+
 class ThreadResolutionRepository {
 public:
     explicit ThreadResolutionRepository(drogon::orm::DbClientPtr db_client);
 
     [[nodiscard]] TriageApplyOutcome apply(const TriageApplyRequest& request) const;
+
+    /// 异常簇的人工决策：合并为新线索，或把选中的观测绑到已有线索。
+    [[nodiscard]] TriageApplyOutcome resolve(const TriageResolveRequest& request) const;
 
 private:
     drogon::orm::DbClientPtr db_client_;
