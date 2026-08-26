@@ -83,14 +83,34 @@ export interface AssessmentResult {
   trace: AssessmentTrace[];
 }
 
-export interface AssessmentPreviewResponse {
-  client_revision: number;
-  input_checksum: string;
-  input_summary: Record<string, unknown>;
+/**
+ * 试算与已入库回执共有的三件套。评定区只消费这三个字段，两条来路因此能共用同一套渲染，
+ * 也就不会出现"入库前看到的分数结构和入库后看到的不是一回事"。
+ */
+export interface AssessmentReport {
   standard: AssessmentStandardIdentity;
   result: AssessmentResult | null;
   issues: AssessmentIssue[];
+}
+
+export interface AssessmentPreviewResponse extends AssessmentReport {
+  client_revision: number;
+  input_checksum: string;
+  input_summary: Record<string, unknown>;
   assessment_run_id: string | null;
+}
+
+/** 入库时写下的那一次正式评定。分数不重算——规则包升级后重算会和报告里的数字对不上。 */
+export interface ConfirmedAssessmentResponse extends AssessmentReport {
+  assessment_run_id: string;
+  formal_revision_number: number;
+  /** false 表示该年度后来又被修订过，这份是历史版本。 */
+  is_current: boolean;
+  confirmed_at: string | null;
+  inspection_year: number;
+  inspection_year_version: number;
+  /** 年度行本身是否仍是当前有效版本；false 表示这一年后来被修订过。 */
+  inspection_year_is_current: boolean;
 }
 
 export function previewAssessment(
@@ -109,5 +129,17 @@ export function previewAssessment(
       body: JSON.stringify({ draft, client_revision: clientRevision }),
       signal,
     },
+  );
+}
+
+/** 读取某条导入记录入库时写下的正式评定；没有入库过时后端返回 assessment_report_not_found。 */
+export function fetchConfirmedAssessment(
+  baseUrl: string,
+  importRecordId: string,
+  signal?: AbortSignal,
+): Promise<ConfirmedAssessmentResponse> {
+  return request<ConfirmedAssessmentResponse>(
+    `${baseUrl}/api/import-records/${encodeURIComponent(importRecordId)}/assessment-report`,
+    { signal },
   );
 }

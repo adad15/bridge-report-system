@@ -1,4 +1,4 @@
-import type { AssessmentCategoryResult, AssessmentIssue, AssessmentPreviewResponse } from "../../api/assessmentApi";
+import type { AssessmentCategoryResult, AssessmentIssue, AssessmentReport } from "../../api/assessmentApi";
 import type { AssessmentPhase } from "../assessmentState";
 
 const PART_LABELS: Record<string, string> = {
@@ -101,15 +101,26 @@ function ScoreBar({ score, grade }: { score: number; grade: number }) {
 }
 
 interface AssessmentSectionProps {
+  /**
+   * preview：跟着草稿现算的试算；confirmed：入库时写下、只读取不重算的那一份。
+   * 两者的分数结构相同，区别全在措辞和动作上——把"重新试算"摆在已入库的记录上，
+   * 按下去只会得到一次注定被拒的请求。
+   */
+  mode: "preview" | "confirmed";
   phase: AssessmentPhase;
-  response: AssessmentPreviewResponse | null;
+  response: AssessmentReport | null;
   error: string | null;
+  /** 这份评定已不是当前有效版本时的说明。 */
+  note?: string | null;
+  /** 现在这一下点得动吗——试算要编辑锁，没锁就别摆一个按下去必被拒的按钮。 */
+  canRetry: boolean;
   onRetry: () => void;
   onSelectIssue: (issue: AssessmentIssue) => void;
 }
 
-export function AssessmentSection({ phase, response, error, onRetry, onSelectIssue }: AssessmentSectionProps) {
+export function AssessmentSection({ mode, phase, response, error, note, canRetry, onRetry, onSelectIssue }: AssessmentSectionProps) {
   const result = response?.result ?? null;
+  const confirmed = mode === "confirmed";
   return (
     <section className="status-panel assessment-section">
       <div className="assessment-heading">
@@ -119,11 +130,29 @@ export function AssessmentSection({ phase, response, error, onRetry, onSelectIss
             <p className="assessment-standard-identity">
               {response.standard.standard_code} · {response.standard.standard_name} · 规则包 {response.standard.package_version}
             </p>
-          ) : <p>系统将使用项目锁定的规范和已确认构件台账计算。</p>}
+          ) : (
+            <p>
+              {confirmed
+                ? "正在读取本记录入库时写下的评定结果。"
+                : "系统将使用项目锁定的规范和已确认构件台账计算。"}
+            </p>
+          )}
+          {note ? <p className="assessment-superseded-note">{note}</p> : null}
         </div>
         <div className="assessment-heading-actions">
-          {phase === "updating" ? <span className="assessment-updating" role="status">评分更新中…</span> : null}
-          <button type="button" onClick={onRetry}>重新试算</button>
+          {phase === "updating" ? (
+            <span className="assessment-updating" role="status">
+              {confirmed ? "正在读取…" : "评分更新中…"}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            disabled={!canRetry}
+            title={canRetry ? undefined : "需要先获取编辑权才能试算"}
+            onClick={onRetry}
+          >
+            {confirmed ? "重新加载" : "重新试算"}
+          </button>
         </div>
       </div>
 
@@ -209,7 +238,9 @@ export function AssessmentSection({ phase, response, error, onRetry, onSelectIss
           <details className="assessment-trace"><summary>计算轨迹（{result.trace.length} 步）</summary><ol>{result.trace.map((trace, index) => <li key={`${trace.rule_id}-${index}`}><code>{trace.rule_id}</code>{trace.source_reference ? ` · ${trace.source_reference}` : ""}</li>)}</ol></details>
           <p className="assessment-explanation">{result.explanation}</p>
         </>
-      ) : phase === "idle" ? <p>等待试算。</p> : null}
+      ) : phase === "idle" ? (
+        <p>{confirmed ? "本记录没有已入库的评定结果。" : "等待试算。"}</p>
+      ) : null}
     </section>
   );
 }

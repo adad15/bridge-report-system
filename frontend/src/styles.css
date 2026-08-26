@@ -4152,6 +4152,18 @@ body {
   font-size: 13px;
 }
 
+/* 这份评定已被后来的修订顶替时的说明：得比标准标识那行更显眼，否则用户会把历史版本
+   的分数当成当前分数读。 */
+.assessment-superseded-note {
+  margin-top: 6px !important;
+  padding: 6px 10px;
+  border-left: 3px solid #f59e0b;
+  border-radius: 0 4px 4px 0;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+}
+
 .assessment-heading-actions {
   display: flex;
   align-items: center;

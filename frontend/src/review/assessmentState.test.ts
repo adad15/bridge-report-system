@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import type { AssessmentPreviewResponse } from "../api/assessmentApi";
-import { assessmentReducer, currentAssessmentIssues, initialAssessmentState } from "./assessmentState";
+import type { AssessmentPreviewResponse, ConfirmedAssessmentResponse } from "../api/assessmentApi";
+import {
+  assessmentReducer,
+  confirmedAssessmentReducer,
+  currentAssessmentIssues,
+  initialAssessmentState,
+  initialConfirmedAssessmentState,
+} from "./assessmentState";
 
 function response(revision: number): AssessmentPreviewResponse {
   return {
@@ -55,5 +61,43 @@ describe("assessmentState", () => {
     expect(currentAssessmentIssues(state, 1)).toHaveLength(1);
     expect(currentAssessmentIssues(state, 2)).toEqual([]);
     expect(state.response?.issues).toHaveLength(1);
+  });
+});
+
+function confirmedReport(): ConfirmedAssessmentResponse {
+  return {
+    ...response(0),
+    result: null,
+    assessment_run_id: "run-1",
+    formal_revision_number: 1,
+    is_current: true,
+    confirmed_at: "2026-08-25T02:46:10Z",
+    inspection_year: 2024,
+    inspection_year_version: 1,
+    inspection_year_is_current: true,
+  };
+}
+
+describe("confirmedAssessmentReducer", () => {
+  // 重取的那几百毫秒里界面不该先把分数清空再填回去。
+  it("keeps the previous report on screen while reloading", () => {
+    const loaded = confirmedAssessmentReducer(
+      initialConfirmedAssessmentState, { type: "loaded", report: confirmedReport() });
+    const reloading = confirmedAssessmentReducer(loaded, { type: "loading" });
+
+    expect(reloading.phase).toBe("loading");
+    expect(reloading.report?.assessment_run_id).toBe("run-1");
+  });
+
+  it("drops a stale report when the reload fails and clears on reset", () => {
+    const loaded = confirmedAssessmentReducer(
+      initialConfirmedAssessmentState, { type: "loaded", report: confirmedReport() });
+
+    const failed = confirmedAssessmentReducer(loaded, { type: "failed", message: "本记录没有已入库的评定结果。" });
+    expect(failed.phase).toBe("error");
+    expect(failed.report).toBeNull();
+    expect(failed.error).toBe("本记录没有已入库的评定结果。");
+
+    expect(confirmedAssessmentReducer(failed, { type: "reset" })).toEqual(initialConfirmedAssessmentState);
   });
 });

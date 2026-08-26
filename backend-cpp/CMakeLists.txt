@@ -144,6 +144,7 @@ add_executable(bridge_report_backend_tests
     tests/test_archive_file_deletion_core.cpp
     tests/test_archive_paths.cpp
     tests/test_assessment_routes.cpp
+    tests/test_assessment_confirmed_report.cpp
     tests/test_assessment_confirmation_service.cpp
     tests/test_assessment_service.cpp
     tests/test_archived_file_deletion_queue.cpp

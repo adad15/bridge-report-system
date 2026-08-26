@@ -13,7 +13,12 @@ import {
   type PreflightResponse,
   type ReviewResponse,
 } from "../api/reviewApi";
-import { previewAssessment, type AssessmentPreviewResponse } from "../api/assessmentApi";
+import {
+  fetchConfirmedAssessment,
+  previewAssessment,
+  type AssessmentPreviewResponse,
+  type ConfirmedAssessmentResponse,
+} from "../api/assessmentApi";
 import { ApiError } from "../api/apiClient";
 import {
 } from "../api/componentInventoryApi";
@@ -59,7 +64,7 @@ vi.mock("../api/reviewApi", async (importOriginal) => {
 
 vi.mock("../api/assessmentApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../api/assessmentApi")>();
-  return { ...original, previewAssessment: vi.fn() };
+  return { ...original, previewAssessment: vi.fn(), fetchConfirmedAssessment: vi.fn() };
 });
 
 vi.mock("../api/importBindingApi", async (importOriginal) => {
@@ -585,5 +590,99 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     expect(previewAssessment).toHaveBeenCalledTimes(2);
     expect(firstSignal?.aborted).toBe(true);
     expect(vi.mocked(previewAssessment).mock.calls[1][3]).toBe(1);
+  });
+});
+
+// ── 已入库记录的评定区 ────────────────────────────────────────────────
+// 只读记录跑不了试算：预览端点要编辑锁，只读态拿不到锁，前端也先一步短路了。
+// 这一段盯的是"入库之后分数还看得见"，以及别再摆一个按下去必被拒的「重新试算」。
+
+function confirmedReviewResponse(): ReviewResponse {
+  const response = reviewResponse();
+  response.import_record.import_status = "已确认";
+  if (response.inspection_year) response.inspection_year.status = "已确认";
+  return response;
+}
+
+function confirmedAssessmentResponse(): ConfirmedAssessmentResponse {
+  return {
+    standard: assessmentResponse(0).standard,
+    issues: [],
+    result: {
+      standard_id: "H21",
+      package_version: "1.0.1",
+      bridge_type_id: "h21.bridge_type.beam",
+      overall_score: 83.25,
+      calculated_grade: 2,
+      final_grade: 2,
+      explanation: "入库时写下的评定结论",
+      structure_parts: [],
+      triggered_controls: [],
+      trace: [],
+    },
+    assessment_run_id: "run-1",
+    formal_revision_number: 1,
+    is_current: true,
+    confirmed_at: "2026-08-25T02:46:10+08:00",
+    inspection_year: 2024,
+    inspection_year_version: 1,
+    inspection_year_is_current: true,
+  };
+}
+
+async function renderConfirmedReview(): Promise<void> {
+  render(
+    <MemoryRouter initialEntries={["/imports/import-1/review"]}>
+      <Routes>
+        <Route path="/imports/:importRecordId/review" element={<ReviewWorkspacePage />} />
+      </Routes>
+    </MemoryRouter>
+  );
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  await act(async () => {
+    vi.advanceTimersByTime(0);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  fireEvent.click(screen.getByRole("button", { name: /系统技术状况评定/ }));
+}
+
+describe("ReviewWorkspacePage confirmed assessment", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.resetAllMocks();
+    vi.mocked(fetchReview).mockResolvedValue(confirmedReviewResponse());
+    vi.mocked(releaseEditLock).mockResolvedValue({ released: true });
+    vi.mocked(fetchComponentBinding).mockResolvedValue(missingBindingOverview());
+    vi.mocked(fetchConfirmedAssessment).mockResolvedValue(confirmedAssessmentResponse());
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it("reads the stored result instead of asking for a preview it cannot run", async () => {
+    await renderConfirmedReview();
+
+    expect(fetchConfirmedAssessment).toHaveBeenCalledTimes(1);
+    expect(previewAssessment).not.toHaveBeenCalled();
+    expect(screen.getByText("83.25")).toBeInTheDocument();
+    expect(screen.getByText("入库时写下的评定结论")).toBeInTheDocument();
+    expect(screen.queryByText("等待试算。")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "重新试算" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重新加载" })).toBeInTheDocument();
+  });
+
+  it("explains a record that was never confirmed instead of failing silently", async () => {
+    vi.mocked(fetchConfirmedAssessment).mockRejectedValue(
+      new ApiError("assessment_report_not_found", "该导入记录没有已入库的系统评定结果。"));
+
+    await renderConfirmedReview();
+
+    expect(screen.getByText("本记录没有已入库的评定结果。")).toBeInTheDocument();
   });
 });

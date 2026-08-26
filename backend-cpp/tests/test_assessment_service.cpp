@@ -284,3 +284,62 @@ TEST(AssessmentServiceTest, UnknownIndicatorIsStructuredBlocker) {
         "assessment_rating_tree_indicator_mismatch");
     EXPECT_FALSE(preview.result.has_value());
 }
+
+// ── 已入库评定的只读还原 ──────────────────────────────────────────────
+// 入库时把整份结果原样存进了 result_summary_json，读回来不许重算：规则包若已升级，
+// 重算出来的数字会和当年写进报告的对不上。
+
+TEST(ConfirmedAssessmentReportTest, RestoresStoredResultAndStandardWithoutRecomputing) {
+    Json::Value result_summary;
+    result_summary["result"]["overall_score"] = 83.25;
+    result_summary["result"]["final_grade"] = 2;
+    result_summary["result"]["structure_parts"] = Json::Value(Json::arrayValue);
+    result_summary["issues"] = Json::Value(Json::arrayValue);
+    Json::Value rule_package;
+    rule_package["standard_code"] = "JTG/T H21-2011";
+    rule_package["package_version"] = "1.0.3";
+
+    const auto report =
+        assessment::build_confirmed_assessment_report(result_summary, rule_package);
+
+    EXPECT_DOUBLE_EQ(report.result["overall_score"].asDouble(), 83.25);
+    EXPECT_EQ(report.standard_identity["package_version"].asString(), "1.0.3");
+    EXPECT_TRUE(report.issues.isArray());
+    EXPECT_EQ(report.issues.size(), 0U);
+}
+
+// 试算与只读回执共用同一套前端渲染，靠的就是这三个键同名同形。
+TEST(ConfirmedAssessmentReportTest, EnvelopeKeepsTheSameShapeAsThePreview) {
+    Json::Value result_summary;
+    result_summary["result"]["overall_score"] = 90.0;
+    result_summary["issues"] = Json::Value(Json::arrayValue);
+    Json::Value rule_package;
+    rule_package["standard_name"] = "公路桥梁技术状况评定标准";
+
+    auto report = assessment::build_confirmed_assessment_report(result_summary, rule_package);
+    report.assessment_run_id = "44444444-4444-4444-4444-444444444444";
+    report.formal_revision_number = 2;
+    report.is_current = false;
+    report.inspection_year = 2024;
+    report.inspection_year_version = 1;
+    const auto json = report.to_json();
+
+    EXPECT_TRUE(json.isMember("standard"));
+    EXPECT_TRUE(json.isMember("result"));
+    EXPECT_TRUE(json.isMember("issues"));
+    EXPECT_DOUBLE_EQ(json["result"]["overall_score"].asDouble(), 90.0);
+    EXPECT_EQ(json["formal_revision_number"].asInt(), 2);
+    EXPECT_FALSE(json["is_current"].asBool());
+    EXPECT_EQ(json["inspection_year"].asInt(), 2024);
+    // 没确认时间就给 null，不要拿空字符串冒充一个时间戳。
+    EXPECT_TRUE(json["confirmed_at"].isNull());
+}
+
+// 运行行还停在 '{}' 的情况：宁可报"没有可读的结果"，也不要编一个 0 分出来。
+TEST(ConfirmedAssessmentReportTest, LeavesTheResultNullWhenTheRunStoredNothing) {
+    const auto report = assessment::build_confirmed_assessment_report(
+        Json::Value(Json::objectValue), Json::Value(Json::objectValue));
+
+    EXPECT_TRUE(report.result.isNull());
+    EXPECT_TRUE(report.to_json()["result"].isNull());
+}

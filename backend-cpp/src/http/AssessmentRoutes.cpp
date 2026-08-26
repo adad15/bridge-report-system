@@ -22,6 +22,49 @@ bool parse_assessment_preview_request(
 void register_assessment_routes(
     const drogon::orm::DbClientPtr& db_client,
     std::shared_ptr<const standards::StandardRegistry> registry) {
+    // 已入库的评定是只读事实：不要锁、不重算，直接把当年写下的那份读出来。
+    const std::string report_path = "/api/import-records/{import_record_id}/assessment-report";
+    register_options_handler(report_path);
+    drogon::app().registerHandler(
+        report_path,
+        [db_client](
+            const drogon::HttpRequestPtr& request,
+            HttpCallback&& callback,
+            const std::string& import_record_id) {
+            if (!is_valid_uuid(import_record_id)) {
+                respond_import_record_not_found(callback);
+                return;
+            }
+            try {
+                const auto user = authenticate_request(db_client, request);
+                if (!user.has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                const auto outcome =
+                    assessment::fetch_confirmed_assessment(db_client, import_record_id);
+                switch (outcome.status) {
+                    case assessment::ConfirmedAssessmentStatus::ImportRecordNotFound:
+                        respond_import_record_not_found(callback);
+                        return;
+                    case assessment::ConfirmedAssessmentStatus::ReportNotFound:
+                        respond_json(callback, make_error_body(
+                            "assessment_report_not_found",
+                            "该导入记录没有已入库的系统评定结果。"),
+                            drogon::k404NotFound);
+                        return;
+                    case assessment::ConfirmedAssessmentStatus::Ok:
+                        respond_json(callback, outcome.report.to_json());
+                        return;
+                }
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Get});
+
     const std::string path = "/api/import-records/{import_record_id}/assessment-preview";
     register_options_handler(path);
     drogon::app().registerHandler(

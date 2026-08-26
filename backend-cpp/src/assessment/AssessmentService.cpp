@@ -3,6 +3,7 @@
 #include "bridge_report/standards/DefectIndicatorResolver.hpp"
 #include <algorithm>
 #include <map>
+#include <sstream>
 #include <set>
 #include <tuple>
 #include <utility>
@@ -21,6 +22,17 @@ std::string compact_json(const Json::Value& value) {
     Json::StreamWriterBuilder builder;
     builder["indentation"] = "";
     return Json::writeString(builder, value);
+}
+
+Json::Value parse_json_text(const std::string& text) {
+    Json::CharReaderBuilder builder;
+    Json::Value root;
+    std::string errors;
+    std::istringstream stream(text);
+    if (!Json::parseFromStream(builder, stream, &root, &errors)) {
+        return Json::Value(Json::objectValue);
+    }
+    return root;
 }
 
 std::string string_member(const Json::Value& value, const char* key) {
@@ -203,6 +215,77 @@ Json::Value AssessmentPreview::to_json() const {
 Json::Value assessment_result_to_json(
     const standards::BridgeAssessmentResult& result) {
     return result_json_impl(result);
+}
+
+Json::Value ConfirmedAssessmentReport::to_json() const {
+    Json::Value json;
+    json["assessment_run_id"] = assessment_run_id;
+    json["formal_revision_number"] = formal_revision_number;
+    json["is_current"] = is_current;
+    json["confirmed_at"] = confirmed_at.empty()
+        ? Json::Value(Json::nullValue) : Json::Value(confirmed_at);
+    json["inspection_year"] = inspection_year;
+    json["inspection_year_version"] = inspection_year_version;
+    json["inspection_year_is_current"] = inspection_year_is_current;
+    json["standard"] = standard_identity;
+    json["result"] = result;
+    json["issues"] = issues;
+    return json;
+}
+
+ConfirmedAssessmentReport build_confirmed_assessment_report(
+    const Json::Value& result_summary,
+    const Json::Value& rule_package_summary) {
+    ConfirmedAssessmentReport report;
+    report.standard_identity = rule_package_summary.isObject()
+        ? rule_package_summary : Json::Value(Json::objectValue);
+    if (result_summary.isObject() && result_summary.isMember("result")) {
+        report.result = result_summary["result"];
+        report.issues = result_summary["issues"].isArray()
+            ? result_summary["issues"] : Json::Value(Json::arrayValue);
+    }
+    return report;
+}
+
+ConfirmedAssessmentOutcome fetch_confirmed_assessment(
+    const drogon::orm::DbClientPtr& db_client,
+    const std::string& import_record_id) {
+    ConfirmedAssessmentOutcome outcome;
+    if (db_client->execSqlSync(
+            "select 1 from import_records where id=$1::uuid", import_record_id).empty()) {
+        outcome.status = ConfirmedAssessmentStatus::ImportRecordNotFound;
+        return outcome;
+    }
+    // 只认这条导入记录自己写下的正式评定。年度被修订之后，当前有效的那次可能来自另一条
+    // 导入记录，拿它顶替会让这一页显示别人的分数；旧记录该显示的是它当年入库的那一份。
+    const auto rows = db_client->execSqlSync(
+        "select r.id::text as id,r.formal_revision_number,r.is_current,"
+        "coalesce(r.confirmed_at::text,'') as confirmed_at,"
+        "r.result_summary_json::text as result_summary,"
+        "r.rule_package_summary_json::text as rule_package_summary,"
+        "iy.inspection_year,iy.version_number,iy.is_current as year_is_current "
+        "from assessment_runs r join inspection_years iy on iy.id=r.inspection_year_id "
+        "where r.source_import_record_id=$1::uuid and r.run_kind='正式' "
+        "and r.result_status='成功' "
+        "order by r.confirmed_at desc nulls last,r.created_at desc limit 1",
+        import_record_id);
+    if (rows.empty()) {
+        outcome.status = ConfirmedAssessmentStatus::ReportNotFound;
+        return outcome;
+    }
+    const auto& row = rows[0];
+    outcome.report = build_confirmed_assessment_report(
+        parse_json_text(row["result_summary"].as<std::string>()),
+        parse_json_text(row["rule_package_summary"].as<std::string>()));
+    outcome.report.assessment_run_id = row["id"].as<std::string>();
+    outcome.report.formal_revision_number = row["formal_revision_number"].as<int>();
+    outcome.report.is_current = row["is_current"].as<bool>();
+    outcome.report.confirmed_at = row["confirmed_at"].as<std::string>();
+    outcome.report.inspection_year = row["inspection_year"].as<int>();
+    outcome.report.inspection_year_version = row["version_number"].as<int>();
+    outcome.report.inspection_year_is_current = row["year_is_current"].as<bool>();
+    outcome.status = ConfirmedAssessmentStatus::Ok;
+    return outcome;
 }
 
 AssessmentPreview calculate_assessment_preview(

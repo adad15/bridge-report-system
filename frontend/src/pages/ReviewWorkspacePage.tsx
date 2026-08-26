@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, us
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/apiClient";
-import { previewAssessment, type AssessmentIssue } from "../api/assessmentApi";
+import { fetchConfirmedAssessment, previewAssessment, type AssessmentIssue } from "../api/assessmentApi";
 import type { ConfirmResponse, EditLockSummary, PreflightResponse, ReopenScope, ReviewResponse } from "../api/reviewApi";
 import {
   acquireEditLock,
@@ -33,7 +33,14 @@ import { ReviewMessageDock } from "../review/components/ReviewMessageDock";
 import type { GroupKey } from "../review/components/ReviewSidebar";
 import { ReviewSidebar } from "../review/components/ReviewSidebar";
 import { buildStatistics } from "../review/grouping";
-import { assessmentReducer, currentAssessmentIssues, initialAssessmentState } from "../review/assessmentState";
+import {
+  assessmentReducer,
+  confirmedAssessmentReducer,
+  currentAssessmentIssues,
+  initialAssessmentState,
+  initialConfirmedAssessmentState,
+} from "../review/assessmentState";
+import type { AssessmentPhase } from "../review/assessmentState";
 import type { ReviewDraftAction } from "../review/reviewDraft";
 import { reviewDraftReducer } from "../review/reviewDraft";
 import { deriveReviewSession, shouldClearDirtyAfterSave } from "../review/reviewSession";
@@ -266,6 +273,9 @@ function ReviewWorkspaceLoaded({
   const [lockMessage, setLockMessage] = useState<string | null>(null);
   const [assessmentState, assessmentDispatch] = useReducer(assessmentReducer, initialAssessmentState);
   const assessmentAbortRef = useRef<AbortController | null>(null);
+  const [confirmedAssessment, confirmedAssessmentDispatch] =
+    useReducer(confirmedAssessmentReducer, initialConfirmedAssessmentState);
+  const confirmedAssessmentAbortRef = useRef<AbortController | null>(null);
 
   // 绑定分区改过后端草稿后，把最新草稿换进来。连点多次绑定时合并成一次重取。
   // 后端在这些操作上是权威方：本页未保存的病害修改会被覆盖，覆盖了就明确告知，
@@ -302,12 +312,13 @@ function ReviewWorkspaceLoaded({
     assessmentState,
     draftRevision.current,
   );
+  const shownAssessment = confirmedAssessment.report ?? assessmentState.response;
   const displayedCounts = useMemo(() => ({
     ...counts,
-    rating_item_count: assessmentState.response?.result
-      ? 1 + assessmentState.response.result.structure_parts.length
-      : assessmentState.response?.issues.length ?? 0,
-  }), [counts, assessmentState.response]);
+    rating_item_count: shownAssessment?.result
+      ? 1 + shownAssessment.result.structure_parts.length
+      : shownAssessment?.issues.length ?? 0,
+  }), [counts, shownAssessment]);
   const reviewSession = deriveReviewSession(
     sessionImportStatus,
     response.contract_compatibility,
@@ -784,6 +795,58 @@ function ReviewWorkspaceLoaded({
 
   useEffect(() => () => assessmentAbortRef.current?.abort(), []);
 
+  // 只读记录跑不了试算（预览端点要编辑锁，只读态也拿不到锁），评定区改读入库时写下的
+  // 那一份。分数不重算：规则包升级后重算出来的数字会和当年报告里的对不上。
+  const loadConfirmedAssessment = useCallback(() => {
+    confirmedAssessmentAbortRef.current?.abort();
+    const controller = new AbortController();
+    confirmedAssessmentAbortRef.current = controller;
+    confirmedAssessmentDispatch({ type: "loading" });
+    fetchConfirmedAssessment(backendBaseUrl, importRecordId, controller.signal)
+      .then((report) => {
+        if (controller.signal.aborted) return;
+        confirmedAssessmentDispatch({ type: "loaded", report });
+      })
+      .catch((caught: unknown) => {
+        if (controller.signal.aborted) return;
+        confirmedAssessmentDispatch({
+          type: "failed",
+          message: caught instanceof ApiError && caught.code === "assessment_report_not_found"
+            ? "本记录没有已入库的评定结果。"
+            : caught instanceof ApiError ? caught.message : "读取已入库评定失败。",
+        });
+      });
+  }, [importRecordId]);
+
+  useEffect(() => {
+    // 门开在"记录本身已经定稿"上，而不是 effectiveReadOnly——后者在取锁的那一瞬也是
+    // true，用它当门会让每条可编辑记录都白发一次注定 404 的请求。
+    if (!readOnly) {
+      confirmedAssessmentDispatch({ type: "reset" });
+      return;
+    }
+    loadConfirmedAssessment();
+  }, [readOnly, loadConfirmedAssessment]);
+
+  useEffect(() => () => confirmedAssessmentAbortRef.current?.abort(), []);
+
+  // 只读态没有"没跑过试算"这一说：要么在读、要么读到了、要么读失败。
+  const confirmedPhase: AssessmentPhase =
+    confirmedAssessment.phase === "loading"
+      ? "updating"
+      : confirmedAssessment.phase === "error"
+        ? "error"
+        : confirmedAssessment.phase === "ready" && confirmedAssessment.report?.result
+          ? "ready"
+          // 取到了运行行却没有结果本体（result_summary_json 还停在 '{}'）：说"没有可读的
+          // 结果"，别留一块什么都不显示的空白面板。
+          : "idle";
+  const confirmedNote = confirmedAssessment.report && !confirmedAssessment.report.inspection_year_is_current
+    ? `该年度后来被修订过，这里显示的是本记录当年入库的第 ${confirmedAssessment.report.inspection_year_version} 版评定。`
+    : confirmedAssessment.report && !confirmedAssessment.report.is_current
+      ? "该年度后来又重新评定过，这里显示的是本记录当年入库的那一次。"
+      : null;
+
   // 试算问题挂在某条病害上就跳过去；挂在整个年度上（台账未确认、评定树不可用等）
   // 没有可跳转的对象，原地把说明显示出来。
   function selectAssessmentIssue(issue: AssessmentIssue): void {
@@ -905,10 +968,15 @@ function ReviewWorkspaceLoaded({
             visitedGroups={visitedGroups}
           >
             <AssessmentSection
-              phase={assessmentState.phase}
-              response={assessmentState.response}
-              error={assessmentState.error}
-              onRetry={runAssessment}
+              mode={readOnly ? "confirmed" : "preview"}
+              phase={readOnly ? confirmedPhase : assessmentState.phase}
+              response={readOnly ? confirmedAssessment.report : assessmentState.response}
+              error={readOnly ? confirmedAssessment.error : assessmentState.error}
+              note={readOnly ? confirmedNote : null}
+              // 试算要编辑锁，没锁时按钮按下去只会得到一次注定被拒的请求；已入库的
+              // 那份是纯读，任何时候都重来得。
+              canRetry={readOnly || (lockToken !== null && !effectiveReadOnly)}
+              onRetry={readOnly ? loadConfirmedAssessment : runAssessment}
               onSelectIssue={selectAssessmentIssue}
             />
           </ReviewWorkspacePanel>

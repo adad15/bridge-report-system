@@ -73,7 +73,7 @@ function rowOf(label: string): HTMLElement {
 
 describe("AssessmentSection", () => {
   it("shows system standard identity, calculated results and trace", () => {
-    render(<AssessmentSection phase="ready" response={successfulResponse()} error={null} onRetry={vi.fn()} onSelectIssue={vi.fn()} />);
+    render(<AssessmentSection mode="preview" canRetry phase="ready" response={successfulResponse()} error={null} onRetry={vi.fn()} onSelectIssue={vi.fn()} />);
     expect(screen.getByText(/JTG\/T H21—2011/)).toBeInTheDocument();
     expect(screen.getByText(/规则包 1.0.1/)).toBeInTheDocument();
     expect(screen.getByText("87.25")).toBeInTheDocument();
@@ -96,12 +96,71 @@ describe("AssessmentSection", () => {
     expect(screen.queryByText(/Word 评分/)).not.toBeInTheDocument();
   });
 
+  // 已入库的记录跑不了试算（预览端点要编辑锁），评定区改读入库时写下的那一份。
+  // 分数结构与试算同形，所以这里断言的是同一套表格。
+  it("renders the stored result of a confirmed record with a reload action", () => {
+    const reload = vi.fn();
+    render(
+      <AssessmentSection
+        mode="confirmed"
+        canRetry
+        phase="ready"
+        response={successfulResponse()}
+        error={null}
+        onRetry={reload}
+        onSelectIssue={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("87.25")).toBeInTheDocument();
+    expect(within(rowOf("上部承重构件")).getByText("81.54")).toBeInTheDocument();
+    // 只读态放「重新试算」等于摆一个按下去必被拒的按钮。
+    expect(screen.queryByRole("button", { name: "重新试算" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "重新加载" }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("says the record has no stored result instead of waiting for a preview", () => {
+    render(
+      <AssessmentSection
+        mode="confirmed"
+        canRetry
+        phase="idle"
+        response={null}
+        error={null}
+        onRetry={vi.fn()}
+        onSelectIssue={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("本记录没有已入库的评定结果。")).toBeInTheDocument();
+    expect(screen.queryByText("等待试算。")).not.toBeInTheDocument();
+  });
+
+  // 年度被修订过时，这一页显示的是历史版本，必须说出来。
+  it("marks a report whose inspection year was superseded", () => {
+    render(
+      <AssessmentSection
+        mode="confirmed"
+        canRetry
+        phase="ready"
+        response={successfulResponse()}
+        error={null}
+        note="该年度后来被修订过，这里显示的是本记录当年入库的第 1 版评定。"
+        onRetry={vi.fn()}
+        onSelectIssue={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/该年度后来被修订过/)).toBeInTheDocument();
+  });
+
   it("keeps retry available for blocked or failed previews", () => {
     const retry = vi.fn();
     const blocked = successfulResponse();
     blocked.result = null;
     blocked.issues = [{ code: "assessment_defect_scale_required", message: "缺少标度", entity_type: "defect", entity_id: "defect-1", field_path: "defect_scale", rule_id: "" }];
-    render(<AssessmentSection phase="blocked" response={blocked} error={null} onRetry={retry} onSelectIssue={vi.fn()} />);
+    render(<AssessmentSection mode="preview" canRetry phase="blocked" response={blocked} error={null} onRetry={retry} onSelectIssue={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "重新试算" }));
     expect(retry).toHaveBeenCalledTimes(1);
     expect(screen.getByText("缺少标度")).toBeInTheDocument();
