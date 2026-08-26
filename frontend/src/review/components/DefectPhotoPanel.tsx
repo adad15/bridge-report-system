@@ -95,6 +95,21 @@ export function DefectPhotoPanel({
     dispatch({ type: "unlink_photo_from_defect", photoCandidateId: photo.candidate_id });
   }
 
+  function detachReference(card: DefectPhotoCard): void {
+    // 引用条目删掉就没有回头路——"撤销缺图"只能把 resolution 翻回 pending，翻不回
+    // 一条已经不在清单里的条目。所以这里要二次确认，措辞说清是"引用"不是"照片"。
+    if (!window.confirm(
+      `确定移除照片编号 ${card.photoNumber} 的引用？本条病害将不再声明这张照片，且无法撤销。`,
+    )) {
+      return;
+    }
+    dispatch({
+      type: "remove_photo_reference",
+      defectCandidateId: defect.candidate_id,
+      photoNumber: card.photoNumber,
+    });
+  }
+
   return (
     <section className="defect-photo-panel" aria-label="Word 引用的照片">
       <div className="defect-photo-panel-heading">
@@ -206,18 +221,31 @@ export function DefectPhotoPanel({
 
             <div className="defect-photo-card-actions">
               {card.kind === "missing" ? (
-                <button
-                  type="button"
-                  disabled={disabled || busy}
-                  onClick={() => dispatch({
-                    type: "set_photo_reference_missing",
-                    defectCandidateId: defect.candidate_id,
-                    photoNumber: card.photoNumber,
-                    missing: !card.acknowledgedMissing,
-                  })}
-                >
-                  {card.acknowledgedMissing ? "撤销缺图" : "确认缺图"}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    disabled={disabled || busy}
+                    onClick={() => dispatch({
+                      type: "set_photo_reference_missing",
+                      defectCandidateId: defect.candidate_id,
+                      photoNumber: card.photoNumber,
+                      missing: !card.acknowledgedMissing,
+                    })}
+                  >
+                    {card.acknowledgedMissing ? "撤销缺图" : "确认缺图"}
+                  </button>
+                  {/* 拆分复制来的引用在这儿了结：图是真的，只是它属于另一条病害。
+                      与"确认缺图"分成两个按钮，是因为两者对报告的结论完全相反。 */}
+                  <button
+                    type="button"
+                    className="danger-text-button"
+                    disabled={disabled || busy}
+                    title="该引用不属于本病害：把这个照片编号从本条病害的 Word 引用里移除"
+                    onClick={() => { detachReference(card); }}
+                  >
+                    不属于本病害
+                  </button>
+                </>
               ) : (
                 <button
                   type="button"

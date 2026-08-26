@@ -140,6 +140,37 @@ describe("DefectPhotoPanel", () => {
     });
   });
 
+  // 范围拆分把 Word 引用整条复制给了每一侧：图是真的，只是属于另一条病害。
+  // 这时"确认缺图"是假话（那道闸也会拒绝），只能把引用本身摘掉。
+  it("removes a copied reference that belongs to another defect", () => {
+    const draft = fixtureData();
+    draft.photos[0] = { ...draft.photos[0], linked_defect_candidate_id: "defect_0002" };
+    const dispatch = renderPanel(draft);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "不属于本病害" }));
+    expect(confirmSpy).toHaveBeenCalledWith(
+      "确定移除照片编号 2.1-1 的引用？本条病害将不再声明这张照片，且无法撤销。",
+    );
+    expect(dispatch).not.toHaveBeenCalled();
+
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "不属于本病害" }));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "remove_photo_reference",
+      defectCandidateId: "defect_0001",
+      photoNumber: "2.1-1",
+    });
+  });
+
+  // 图还挂着的时候摘引用只会留下一张没人认领的照片，所以这个动作只长在缺图卡上。
+  it("keeps the reference action off cards that still have a photo", () => {
+    renderPanel(fixtureData());
+
+    expect(screen.getByRole("button", { name: "删除照片" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "不属于本病害" })).not.toBeInTheDocument();
+  });
+
   it("adds the uploaded photo to the draft exactly as the server stored it", async () => {
     const draft = fixtureData();
     const photo = uploadedPhoto(draft);

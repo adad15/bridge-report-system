@@ -2,7 +2,6 @@ import type {
   BridgeAnnualInspectionData,
   DefectCandidate,
   PhotoCandidate,
-  PhotoReference,
 } from "../contracts/annualInspection";
 
 /**
@@ -18,8 +17,6 @@ export interface DefectPhotoCard {
   photoNumber: string;
   /** 照片卡才有。 */
   photo: PhotoCandidate | null;
-  /** 有对应 Word 引用时才有；人工上传的照片为 null。 */
-  reference: PhotoReference | null;
   /** 照片来自 Word 抽取还是人工上传——决定"删除"是退回未归属还是永久删除。 */
   source: "word" | "manual";
   /** 缺图卡：是否已确认"原报告就没有这张图"。 */
@@ -49,10 +46,6 @@ export function buildDefectPhotoCards(
   const linked = draft.photos.filter(
     (photo) => photo.linked_defect_candidate_id === defect.candidate_id,
   );
-  const referenceByNumber = new Map(
-    defect.photo_references.map((reference) => [reference.photo_number, reference] as const),
-  );
-
   const cards: DefectPhotoCard[] = [];
   const usedPhotoIds = new Set<string>();
 
@@ -69,7 +62,6 @@ export function buildDefectPhotoCards(
         kind: "photo",
         photoNumber: photo.photo_number,
         photo,
-        reference,
         source: photoSource(photo),
         acknowledgedMissing: false,
       });
@@ -80,7 +72,6 @@ export function buildDefectPhotoCards(
       kind: "missing",
       photoNumber: reference.photo_number,
       photo: null,
-      reference,
       source: "word",
       // relinked / unrelated 是旧模型的结论，新模型不再产生；存量草稿里的这两个值
       // 要重新回到待核对，不能当成已处理放过（设计 §9.4）。
@@ -95,7 +86,6 @@ export function buildDefectPhotoCards(
       kind: "photo",
       photoNumber: photo.photo_number,
       photo,
-      reference: referenceByNumber.get(photo.photo_number) ?? null,
       source: photoSource(photo),
       acknowledgedMissing: false,
     });

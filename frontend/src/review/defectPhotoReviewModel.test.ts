@@ -4,6 +4,7 @@ import type { DefectMatchCandidate, DefectMatchOutcome, DefectMatchResult } from
 import type { RatingTreeNode } from "../api/ratingTreeApi";
 import { data as completeData } from "./testFixtures";
 import { buildDefectPhotoReviewModel } from "./defectPhotoReviewModel";
+import { createReviewDraftReducer } from "./reviewDraft";
 
 function matchResult(
   outcome: DefectMatchOutcome,
@@ -318,6 +319,126 @@ describe("buildDefectPhotoReviewModel", () => {
       .toEqual(["component_range_split_review_required"]);
     expect(row.confirmEligible).toBe(true);
     expect(row.batchEligible).toBe(false);
+  });
+
+  // 导入器的尺寸解析是启发式的，报出来的往往只是位置里的墩号、桩号。这条警告的原文
+  // 就写着"请人工确认"，而确认本组正是那次确认——拿它挡住确认按钮，警告就永远消不掉。
+  it("lets a human confirm past the low-confidence measurement warning", () => {
+    const draft = safeDraft();
+    draft.defects[0].measurement_text = "渗水泛碱,L=10m，近20#墩1m处，渗水滴漏";
+    draft.defects[0].warnings = [{
+      code: "measurement_parse_low_confidence",
+      message: "尺寸表达未能稳定结构化，请人工确认。",
+      severity: "warning",
+      target_candidate_id: "defect_0001",
+    }];
+
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code))
+      .toEqual(["measurement_parse_low_confidence"]);
+    expect(row.confirmEligible).toBe(true);
+    // 批量确认没有"人看一眼"这一步，仍然把它挡在外面。
+    expect(row.batchEligible).toBe(false);
+  });
+
+  // 前端自己也会推导同一条问题（尺寸原文里有"数字+单位"却一条都没结构化）。它的门槛比
+  // 导入器窄得多——导入器那边"大面积"三个字里的"面积"就够触发，前端这边必须见到数字挨着
+  // 单位。确认掉导入器那条警告之后，这条派生的不能再把病害拽回待处理，否则界面上就是
+  // "点得动、点完还挂着待处理"。
+  it("still counts as confirmed when the derived measurement warning stays", () => {
+    const draft = safeDraft();
+    draft.defects[0].measurement_text = "缝宽约3mm，未量长度";
+    draft.defects[0].measurements = [];
+    draft.defects[0].group_review_status = "已确认";
+    draft.defects[0].warnings = [];
+
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code))
+      .toEqual(["measurement_parse_low_confidence"]);
+    expect(row.status).toBe("confirmed");
+    expect(row.confirmEligible).toBe(false);
+  });
+
+  // 来源软件的结构化尺寸与描述原文对不上时报的。来源值已经保留，没有任何数据可补，
+  // 除了人工确认无从了结。
+  it("lets a human confirm past a source measurement conflict", () => {
+    const draft = safeDraft();
+    draft.defects[0].warnings = [{
+      code: "source_measurement_conflict",
+      message: "来源结构化长度与病害描述中的尺寸表达不一致，已保留来源结构化值，请人工复核。",
+      severity: "warning",
+      target_candidate_id: "defect_0001",
+    }];
+
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code)).toEqual(["source_measurement_conflict"]);
+    expect(row.confirmEligible).toBe(true);
+  });
+
+  // 标度这条要成对地看：警告本身放行，但缺口由实时的 scale_not_allowed 兜着——
+  // 标度没选出来就仍然确认不了，选对了两条一起消失。
+  it("acknowledges an invalid source scale but still needs a valid one picked", () => {
+    const draft = safeDraft();
+    draft.defects[0].warnings = [{
+      code: "defect_scale_invalid",
+      message: "病害标度“轻微”不是正整数，请人工确认。",
+      severity: "warning",
+      target_candidate_id: "defect_0001",
+    }];
+    draft.defects[0].defect_scale = null;
+
+    const unpicked = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+    expect(unpicked.problems.map((problem) => problem.code)).toContain("scale_not_allowed");
+    expect(unpicked.confirmEligible).toBe(false);
+
+    draft.defects[0].defect_scale = 2;
+    const picked = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+    expect(picked.problems.map((problem) => problem.code)).toEqual(["defect_scale_invalid"]);
+    expect(picked.confirmEligible).toBe(true);
+  });
+
+  // 放行只对"请人工确认"那一类成立：真的缺数据仍然要挡。
+  it("keeps blocking when a real gap sits alongside an acknowledgeable warning", () => {
+    const draft = safeDraft();
+    draft.defects[0].bridge_component_id = null;
+    draft.defects[0].warnings = [{
+      code: "measurement_parse_low_confidence",
+      message: "尺寸表达未能稳定结构化，请人工确认。",
+      severity: "warning",
+      target_candidate_id: "defect_0001",
+    }];
+
+    const row = buildDefectPhotoReviewModel({
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    }).rows[0];
+
+    expect(row.problems.map((problem) => problem.code)).toContain("component_required");
+    expect(row.confirmEligible).toBe(false);
   });
 
   it("treats one linked archived photo as an atomic batch-confirm candidate", () => {
@@ -698,5 +819,110 @@ describe("buildDefectPhotoReviewModel", () => {
     expect(model.rows.every((row) =>
       row.problems.some((problem) => problem.code === "photo_number_conflict")
     )).toBe(true);
+  });
+
+  describe("照片编号占用统计", () => {
+    function conflictModel(draft: ReturnType<typeof safeDraft>) {
+      return buildDefectPhotoReviewModel({ draft, ...treeWiring(), assessmentIssues: [] });
+    }
+
+    function hasProblem(model: ReturnType<typeof conflictModel>, code: string) {
+      return model.rows.some((row) => row.problems.some((problem) => problem.code === code));
+    }
+
+    function reference(photoNumber: string, overrides: Record<string, unknown> = {}) {
+      return {
+        photo_number: photoNumber,
+        resolution: "pending" as const,
+        photo_candidate_id: null,
+        resolved_defect_candidate_id: null,
+        review_note: null,
+        ...overrides,
+      };
+    }
+
+    // 范围拆分把整份引用清单复制给了每一侧，两条病害于是都声称拥有 2.1-1。
+    // 人工摘掉不属于自己的那条之后冲突必须跟着消失，否则这两条永远确认不了。
+    it("clears the conflict once the copied reference is removed", () => {
+      const draft = safeDraft();
+      draft.defects.push({
+        ...draft.defects[0],
+        candidate_id: "defect_0002",
+        component_number: "2-2#梁",
+        photo_references: [
+          reference("2.1-1"),
+          reference("2.1-2", {
+            resolution: "matched",
+            photo_candidate_id: "photo_0002",
+            resolved_defect_candidate_id: "defect_0002",
+          }),
+        ],
+      });
+      draft.photos.push({
+        ...draft.photos[0],
+        candidate_id: "photo_0002",
+        photo_number: "2.1-2",
+        linked_defect_candidate_id: "defect_0002",
+      });
+
+      expect(hasProblem(conflictModel(draft), "photo_number_conflict")).toBe(true);
+
+      const cleaned = createReviewDraftReducer()(draft, {
+        type: "remove_photo_reference",
+        defectCandidateId: "defect_0002",
+        photoNumber: "2.1-1",
+      });
+
+      expect(hasProblem(conflictModel(cleaned), "photo_number_conflict")).toBe(false);
+      expect(hasProblem(conflictModel(cleaned), "photo_reference_pending")).toBe(false);
+    });
+
+    // 库里 photo_number 没有唯一约束：两条病害各挂一张同编号的图会一路写进报告，
+    // 让编号这个交叉引用作废。只数引用条目看不见这种重号。
+    it("flags two defects that each carry a photo with the same number", () => {
+      const draft = safeDraft();
+      draft.defects[0] = { ...draft.defects[0], photo_references: [] };
+      draft.defects.push({
+        ...draft.defects[0],
+        candidate_id: "defect_0002",
+        component_number: "2-2#梁",
+      });
+      draft.photos.push({
+        ...draft.photos[0],
+        candidate_id: "photo_0002",
+        linked_defect_candidate_id: "defect_0002",
+      });
+
+      expect(conflictModel(draft).rows.every((row) =>
+        row.problems.some((problem) => problem.code === "photo_number_conflict")
+      )).toBe(true);
+    });
+
+    // 已确认缺图等于当面认了"原报告就没这张图"，不再跟别人抢编号。
+    it("stops counting a reference that is confirmed missing", () => {
+      const draft = safeDraft();
+      draft.defects.push({
+        ...draft.defects[0],
+        candidate_id: "defect_0002",
+        component_number: "2-2#梁",
+        photo_references: [reference("2.1-1", { resolution: "missing" })],
+      });
+
+      expect(hasProblem(conflictModel(draft), "photo_number_conflict")).toBe(false);
+    });
+
+    // 已忽略的病害不入库，占不住任何编号。
+    it("stops counting an ignored defect", () => {
+      const draft = safeDraft();
+      draft.defects.push({
+        ...draft.defects[0],
+        candidate_id: "defect_0002",
+        component_number: "2-2#梁",
+        review_status: "已忽略",
+        photo_references: [reference("2.1-1")],
+      });
+
+      expect(hasProblem(conflictModel(draft), "photo_number_conflict")).toBe(false);
+    });
   });
 });

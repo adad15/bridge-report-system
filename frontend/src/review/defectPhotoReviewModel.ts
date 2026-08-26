@@ -2,6 +2,7 @@ import type { AssessmentIssue } from "../api/assessmentApi";
 import type { DefectMatchCandidate, DefectMatchResult } from "../api/defectMatchingApi";
 import type { RatingTreeNode, RatingTreeNodeSummary } from "../api/ratingTreeApi";
 import { buildDefectPhotoCards, type DefectPhotoCard } from "./defectPhotoCards";
+import { isHumanAcknowledgeableWarning } from "./defectWarnings";
 import type {
   BridgeAnnualInspectionData,
   DefectCandidate,
@@ -327,19 +328,20 @@ function analyzeDefect(
   }
 
   const ignored = defect.review_status === "已忽略";
-  const confirmed = !ignored && defect.group_review_status === "已确认" && problems.length === 0;
-  const hasRangeSplitReviewWarning = defect.warnings.some(
-    (warning) => warning.code === "component_range_split_review_required",
+  // "请人工确认"类的警告不该算进阻断：确认本身就是对它的答复，拿它挡确认就成了死循环
+  // ——警告只有确认才消得掉，确认又被警告拦着。名单见 defectWarnings.ts。
+  //
+  // 确认前后用的是同一份口径：确认前决定按钮能不能点，确认后决定这条算不算办完。
+  // 两处若不一致，就会出现"点得动、点完还挂着待处理"的怪状态。
+  const blockingProblems = problems.filter(
+    (problem) => !isHumanAcknowledgeableWarning(problem.code),
   );
-  const hasIndividualConfirmationBlocker = problems.some(
-    (problem) =>
-      problem.code !== "component_range_split_review_required" ||
-      !hasRangeSplitReviewWarning,
-  );
+  const confirmed =
+    !ignored && defect.group_review_status === "已确认" && blockingProblems.length === 0;
   const confirmEligible =
-    !ignored &&
-    defect.group_review_status !== "已确认" &&
-    !hasIndividualConfirmationBlocker;
+    !ignored && defect.group_review_status !== "已确认" && blockingProblems.length === 0;
+  // 批量确认没有"人看一眼"这一步，正是这些警告要求的东西，所以它仍按最严的口径走：
+  // 一条问题都不许剩。要了结这类警告只能逐条进详情确认。
   const batchEligible = !ignored && !confirmed && problems.length === 0;
   const derived = ignored
     ? { state: "ignored" as const, label: "已忽略" }
@@ -415,6 +417,47 @@ function matchesIssueFilter(
   }
 }
 
+/**
+ * 每个照片编号被几条病害占着。
+ *
+ * "占着"是指报告里最终会印出一张这个编号的照片，或 Word 还在要这张图：
+ *   ① 挂在这条病害上的照片，编号一定会写进报告；
+ *   ② photo_references 里还没确认缺图的编号，Word 仍承诺着一张。
+ * 两者先按病害去重再跨病害相加——同一条病害既引用 2.1-1 又挂着 2.1-1 是同一份占用，
+ * 不该自己跟自己冲突。
+ *
+ * 不算的两种：已忽略的病害不入库，占不住任何编号；已确认缺图的引用等于当面认了
+ * "原报告就没这张图"，也不再跟别人抢号。范围拆分会把整份引用清单复制给每一侧，
+ * 人工把不属于自己的引用摘掉后计数必须跟着降，否则冲突永远消不掉。
+ *
+ * 照片也要算进来的原因：defect_photos.photo_number 上只有普通索引、没有唯一约束，
+ * 两条病害各挂一张同编号的图会一路写进报告，让编号这个交叉引用作废——只数引用条目
+ * 看不见这种重号。
+ */
+function countPhotoNumberClaims(draft: BridgeAnnualInspectionData): Map<string, number> {
+  const linkedNumbers = new Map<string, Set<string>>();
+  for (const photo of draft.photos) {
+    const defectId = photo.linked_defect_candidate_id;
+    if (!defectId) continue;
+    const numbers = linkedNumbers.get(defectId);
+    if (numbers) numbers.add(photo.photo_number);
+    else linkedNumbers.set(defectId, new Set([photo.photo_number]));
+  }
+  const counts = new Map<string, number>();
+  for (const defect of draft.defects) {
+    if (defect.review_status === "已忽略") continue;
+    const claimed = new Set(linkedNumbers.get(defect.candidate_id) ?? []);
+    for (const reference of defect.photo_references) {
+      if (reference.resolution === "missing") continue;
+      claimed.add(reference.photo_number);
+    }
+    for (const number of claimed) {
+      counts.set(number, (counts.get(number) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
 export function buildDefectPhotoReviewModel(
   input: DefectPhotoReviewModelInput,
 ): DefectPhotoReviewModel {
@@ -424,17 +467,8 @@ export function buildDefectPhotoReviewModel(
   const ratingTreeNodeSummaries = new Map(
     (input.ratingTreeNodeSummaries ?? []).map((node) => [node.id, node] as const),
   );
-  const photoNumberCounts = new Map<string, number>();
-  for (const defect of input.draft.defects) {
-    for (const reference of defect.photo_references) {
-      photoNumberCounts.set(
-        reference.photo_number,
-        (photoNumberCounts.get(reference.photo_number) ?? 0) + 1,
-      );
-    }
-  }
   const repeatedPhotoNumbers = new Set(
-    [...photoNumberCounts.entries()]
+    [...countPhotoNumberClaims(input.draft)]
       .filter(([, count]) => count > 1)
       .map(([number]) => number),
   );

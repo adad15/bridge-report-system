@@ -446,6 +446,115 @@ describe("reviewDraftReducer", () => {
         missing: true,
       })).toBe(state);
     });
+
+    // 范围拆分把"两侧栏杆"拆成左右两条时，四个照片编号会原样复制给两边。
+    // 左侧摘掉右侧那两张图之后，引用还在，缺图卡就一直冒出来——只能靠这个 action 了结。
+    describe("移除不属于本病害的引用", () => {
+      function splitCopies() {
+        const state = matchedData();
+        state.defects[0] = {
+          ...state.defects[0],
+          photo_references: [
+            {
+              photo_number: "2.1-1",
+              resolution: "matched",
+              photo_candidate_id: "photo_0001",
+              resolved_defect_candidate_id: "defect_0001",
+              review_note: null,
+            },
+            {
+              photo_number: "2.1-2",
+              resolution: "pending",
+              photo_candidate_id: null,
+              resolved_defect_candidate_id: null,
+              review_note: null,
+            },
+          ],
+        };
+        state.defects.push({
+          ...state.defects[0],
+          candidate_id: "defect_0002",
+          group_review_status: "已确认",
+        });
+        state.photos.push({
+          ...state.photos[0],
+          candidate_id: "photo_0002",
+          photo_number: "2.1-2",
+          linked_defect_candidate_id: "defect_0002",
+        });
+        return state;
+      }
+
+      it("drops the copied reference and reopens the group", () => {
+        const reducer = createReviewDraftReducer();
+        const state = splitCopies();
+
+        const next = reducer(state, {
+          type: "remove_photo_reference",
+          defectCandidateId: "defect_0001",
+          photoNumber: "2.1-2",
+        });
+
+        expect(next.defects[0].photo_references.map((item) => item.photo_number)).toEqual(["2.1-1"]);
+        expect(next.defects[0].group_review_status).toBe("待确认");
+        // 另一条病害留着自己的那份引用和照片，不受牵连。
+        expect(next.defects[1].photo_references.map((item) => item.photo_number))
+          .toEqual(["2.1-1", "2.1-2"]);
+        expect(next.photos).toEqual(state.photos);
+      });
+
+      it("refuses while that number is still linked to this defect", () => {
+        const reducer = createReviewDraftReducer();
+        const state = splitCopies();
+
+        // 照片还挂着时摘掉引用，卡片不会消失（照片本身照样成卡），
+        // 只会让一张没人认领的图继续印进报告。
+        expect(reducer(state, {
+          type: "remove_photo_reference",
+          defectCandidateId: "defect_0001",
+          photoNumber: "2.1-1",
+        })).toBe(state);
+      });
+
+      it("returns the same state for an unknown defect or number", () => {
+        const reducer = createReviewDraftReducer();
+        const state = splitCopies();
+
+        expect(reducer(state, {
+          type: "remove_photo_reference",
+          defectCandidateId: "missing",
+          photoNumber: "2.1-2",
+        })).toBe(state);
+        expect(reducer(state, {
+          type: "remove_photo_reference",
+          defectCandidateId: "defect_0001",
+          photoNumber: "2.9-9",
+        })).toBe(state);
+      });
+    });
+  });
+
+  // 确认就是这些警告要的那次"人工确认"，答复过了就不该继续挂着——留着的话下一次
+  // 渲染又会把它算成待处理问题，病害永远确认不完。
+  it("clears the warnings that confirmation is the answer to", () => {
+    const reducer = createReviewDraftReducer();
+    const state = matchedData();
+    state.defects[0] = {
+      ...state.defects[0],
+      review_status: "待确认",
+      group_review_status: "待确认",
+      warnings: [
+        { code: "measurement_parse_low_confidence", message: "尺寸表达未能稳定结构化，请人工确认。", severity: "warning", target_candidate_id: "defect_0001" },
+        { code: "component_range_split_review_required", message: "该病害由构件范围拆分，请人工核对构件、病害和照片关联。", severity: "warning", target_candidate_id: "defect_0001" },
+        { code: "photo_archive_missing", message: "照片归档文件缺失。", severity: "warning", target_candidate_id: "defect_0001" },
+      ],
+    };
+
+    const next = reducer(state, { type: "confirm_defect_groups", candidateIds: ["defect_0001"] });
+
+    // 只清"人看一眼就能了结"的那两条；缺归档文件是真的缺东西，必须原样留着。
+    expect(next.defects[0].warnings.map((warning) => warning.code)).toEqual(["photo_archive_missing"]);
+    expect(next.defects[0].group_review_status).toBe("已确认");
   });
 
   it("ignores and restores a defect through explicit actions", () => {

@@ -6,6 +6,7 @@ import type {
   ReviewStatus,
   StructurePart,
 } from "../contracts/annualInspection";
+import { isHumanAcknowledgeableWarning } from "./defectWarnings";
 import { parseMeasurements } from "./measurementParser";
 
 // useReducer 草稿 reducer：所有分支都必须返回新对象/新数组，绝不原地修改传入的 state
@@ -47,7 +48,6 @@ export type ReviewDraftAction =
   | { type: "edit_defect_field"; candidateId: string; field: "defect_scale"; value: number | null }
   | { type: "edit_defect_field"; candidateId: string; field: "defect_type"; value: string }
   | { type: "edit_defect_field"; candidateId: string; field: "quantity_text"; value: string | null }
-  | { type: "edit_defect_field"; candidateId: string; field: "photo_numbers"; value: string[] }
   // review_status 既可通过 set_defect_status 设置，也可通过 edit_defect_field 设置——两条路径
   // 等价，都不套用下面 nextStatusAfterContentEdit 的“内容编辑自动流转为已修改”规则。
   | { type: "edit_defect_field"; candidateId: string; field: "review_status"; value: ReviewStatus }
@@ -95,6 +95,14 @@ export type ReviewDraftAction =
       defectCandidateId: string;
       photoNumber: string;
       missing: boolean;
+    }
+  // 范围拆分把 Word 引用整条复制给了每一侧，其中大半根本不是自己的图。这个 action
+  // 把不属于本病害的编号从引用清单里摘掉——与"确认缺图"是两件事：那句说的是
+  // "原报告没印这张图"，这句说的是"这张图好好的，只是它是别人的"。
+  | {
+      type: "remove_photo_reference";
+      defectCandidateId: string;
+      photoNumber: string;
     }
   // 人工上传/删除已经在服务端落库；这两个 action 只是把结果同步进本地草稿。
   | { type: "add_photo"; photo: PhotoCandidate }
@@ -159,24 +167,6 @@ function applyDefectContentEdit(defect: DefectCandidate, action: EditDefectConte
       return { ...defect, defect_description: action.value, review_status, group_review_status: "待确认" };
     case "quantity_text":
       return { ...defect, quantity_text: action.value, review_status, group_review_status: "待确认" };
-    case "photo_numbers":
-      return {
-        ...defect,
-        photo_references: action.value.map((photoNumber) => {
-          const existing = defect.photo_references.find(
-            (reference) => reference.photo_number === photoNumber,
-          );
-          return existing ?? {
-            photo_number: photoNumber,
-            resolution: "pending",
-            photo_candidate_id: null,
-            resolved_defect_candidate_id: null,
-            review_note: null,
-          };
-        }),
-        review_status,
-        group_review_status: "待确认",
-      };
   }
 }
 
@@ -526,6 +516,33 @@ function reduceReviewDraft(
       };
     }
 
+    case "remove_photo_reference": {
+      const defect = state.defects.find((item) => item.candidate_id === action.defectCandidateId);
+      if (!defect) return state;
+      if (!defect.photo_references.some((item) => item.photo_number === action.photoNumber)) {
+        return state;
+      }
+      // 这个编号的图还挂在本病害上时，摘掉引用并不会让卡片消失（照片本身照样成卡），
+      // 只会让一张没人认领的图继续印进报告。界面因此只在缺图卡上给这个动作：
+      // 要先"删除照片"把图退回未归属，再来划掉这句话。
+      const stillLinked = state.photos.some(
+        (item) =>
+          item.linked_defect_candidate_id === action.defectCandidateId &&
+          item.photo_number === action.photoNumber,
+      );
+      if (stillLinked) return state;
+      return {
+        ...state,
+        defects: updateDefect(state.defects, action.defectCandidateId, (item) => ({
+          ...item,
+          group_review_status: "待确认",
+          photo_references: item.photo_references.filter(
+            (reference) => reference.photo_number !== action.photoNumber,
+          ),
+        })),
+      };
+    }
+
     case "add_photo": {
       const { photo } = action;
       if (!photo.linked_defect_candidate_id) return state;
@@ -584,8 +601,9 @@ function reduceReviewDraft(
           review_status: defect.review_status === "待确认"
             ? "已确认" as const
             : defect.review_status,
+          // 确认就是这些警告要的那次"人工确认"，答复过了就不该继续挂着。
           warnings: defect.warnings.filter(
-            (warning) => warning.code !== "component_range_split_review_required",
+            (warning) => !isHumanAcknowledgeableWarning(warning.code),
           ),
         };
       });
