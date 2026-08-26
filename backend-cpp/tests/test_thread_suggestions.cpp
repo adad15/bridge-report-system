@@ -54,6 +54,36 @@ TEST(SuggestThreadsTest, RanksTypeAndLocationMatchesAboveTypeOnly) {
     EXPECT_FALSE(suggestions[2]["match_basis"]["same_defect_type"].asBool());
 }
 
+// 铰缝这类构件本来就不写更细的位置：全桥 166 个铰缝的渗水泛碱位置字段全是空的。
+// 旧实现要求"双方位置非空"才算全等，于是这 166 条在候选侧永远匹配不上——第二年拿到
+// 新观测时，明明同构件同类型的线索就摆在那儿，系统一条也推不出来。
+TEST(SuggestThreadsTest, TreatsTwoEmptyLocationsAsAnExactMatch) {
+    Json::Value threads(Json::arrayValue);
+    threads.append(make_thread("t-hinge", "渗水泛碱", ""));
+
+    const ThreadSuggestionInput observation{"渗水泛碱", ""};
+    const auto suggestions = suggest_threads(observation, threads);
+
+    ASSERT_EQ(suggestions.size(), 1u);
+    EXPECT_EQ(suggestions[0]["id"].asString(), "t-hinge");
+    EXPECT_TRUE(suggestions[0]["match_basis"]["location_exact"].asBool());
+    EXPECT_DOUBLE_EQ(suggestions[0]["suggestion_score"].asDouble(), 3.0);
+}
+
+// 一侧有位置、另一侧没有，不是全等也不是包含——空位置不该和任何具体位置纠缠。
+TEST(SuggestThreadsTest, DoesNotMatchAnEmptyLocationAgainstAConcreteOne) {
+    Json::Value threads(Json::arrayValue);
+    threads.append(make_thread("t-located", "渗水泛碱", "大小里程侧"));
+
+    const ThreadSuggestionInput observation{"渗水泛碱", ""};
+    const auto suggestions = suggest_threads(observation, threads);
+
+    ASSERT_EQ(suggestions.size(), 1u) << "同类型仍然入选，但只该拿到类型那 2 分";
+    EXPECT_FALSE(suggestions[0]["match_basis"]["location_exact"].asBool());
+    EXPECT_FALSE(suggestions[0]["match_basis"]["location_contains"].asBool());
+    EXPECT_DOUBLE_EQ(suggestions[0]["suggestion_score"].asDouble(), 2.0);
+}
+
 TEST(SuggestThreadsTest, LocationContainmentCountsAsPartialMatch) {
     Json::Value threads(Json::arrayValue);
     threads.append(make_thread("t-contains", "蜂窝、麻面", "左侧端部"));

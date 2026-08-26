@@ -1,5 +1,7 @@
 #include "bridge_report/review/ThreadSuggestions.hpp"
 
+#include "bridge_report/review/ThreadCanonicalKey.hpp"
+
 #include <algorithm>
 #include <cctype>
 
@@ -126,11 +128,12 @@ Json::Value suggest_threads(const ThreadSuggestionInput& observation, const Json
                 thread["defect_location"].isString() ? thread["defect_location"].asString() : "");
 
             const bool same_type = !thread_type.empty() && thread_type == observation_type;
-            const bool location_exact =
-                !thread_location.empty() && !observation_location.empty() && thread_location == observation_location;
-            const bool location_contains = !location_exact && !thread_location.empty() && !observation_location.empty()
-                && (thread_location.find(observation_location) != std::string::npos
-                    || observation_location.find(thread_location) != std::string::npos);
+            // 空位置与空位置算全等：铰缝这类构件本来就不写更细的位置，全桥 166 个铰缝的
+            // 渗水泛碱位置字段都是空的。旧实现要求双方非空，等于把它们排除在候选之外——
+            // 明明同构件同类型的线索就在那儿，一条也推不出来。批量归组用的是同一条规则
+            // （见 ThreadCanonicalKey），两处口径必须一致，否则候选与批次会互相打架。
+            const bool location_exact = thread_location == observation_location;
+            const bool location_contains = locations_overlap(thread_location, observation_location);
 
             const double score = (same_type ? 2.0 : 0.0) + (location_exact ? 1.0 : 0.0)
                 + (location_contains ? 0.5 : 0.0);
