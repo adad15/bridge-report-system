@@ -1,12 +1,15 @@
 #include "bridge_report/db/ThreadResolutionRepository.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <cstddef>
 #include <map>
 #include <optional>
 #include <set>
 #include <utility>
 
 #include <drogon/orm/Exception.h>
+#include <trantor/utils/Logger.h>
 
 #include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/db/TriageQueryRepository.hpp"
@@ -147,6 +150,57 @@ void add_issue(
         std::move(code), std::move(message), group_id, component_id, observation_id});
 }
 
+const char* status_text(TriageApplyStatus status) {
+    switch (status) {
+        case TriageApplyStatus::Applied: return "applied";
+        case TriageApplyStatus::AlreadyCompleted: return "already_completed";
+        case TriageApplyStatus::Rejected: return "rejected";
+        case TriageApplyStatus::BatchChanged: return "batch_changed";
+    }
+    return "unknown";
+}
+
+/**
+ * 批量整理的规模与耗时记一行，格式对齐 ComponentRangeSplitRepository。
+ *
+ * 设计 §12.6 要求把性能基准“纳入回归测试或基准记录”。一次性压测量出来的数字留不下来：
+ * 换台机器、换个批次大小就得重量，而真正出问题的那次线上慢查询谁也没量过。日志才是能
+ * 一直看到的那个口径。
+ *
+ * 写成 RAII 是因为 apply 有十几个早退分支——校验不过、并发冲突、提交失败各走各的
+ * return，逐个补日志一定会漏掉一个。
+ */
+class ScopeTimer {
+public:
+    ScopeTimer(const char* operation, const TriageApplyOutcome& outcome, std::size_t group_count)
+        : operation_(operation),
+          outcome_(outcome),
+          group_count_(group_count),
+          started_(std::chrono::steady_clock::now()) {}
+
+    ScopeTimer(const ScopeTimer&) = delete;
+    ScopeTimer& operator=(const ScopeTimer&) = delete;
+
+    ~ScopeTimer() {
+        const auto total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                  std::chrono::steady_clock::now() - started_)
+                                  .count();
+        LOG_INFO << "thread triage " << operation_
+                 << " groups=" << group_count_
+                 << " status=" << status_text(outcome_.status)
+                 << " threads_created=" << outcome_.threads_created
+                 << " observations_bound=" << outcome_.observations_bound
+                 << " issues=" << outcome_.issues.size()
+                 << " total_ms=" << total_ms;
+    }
+
+private:
+    const char* operation_;
+    const TriageApplyOutcome& outcome_;
+    std::size_t group_count_;
+    std::chrono::steady_clock::time_point started_;
+};
+
 }  // namespace
 
 ThreadResolutionRepository::ThreadResolutionRepository(drogon::orm::DbClientPtr db_client)
@@ -154,6 +208,7 @@ ThreadResolutionRepository::ThreadResolutionRepository(drogon::orm::DbClientPtr 
 
 TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& request) const {
     TriageApplyOutcome outcome;
+    const ScopeTimer timer("apply", outcome, request.groups.size());
     TransactionPtr tx;
     const auto latch = std::make_shared<CommitLatch>();
     const auto rollback = [&tx]() {
@@ -523,6 +578,8 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
 TriageApplyOutcome ThreadResolutionRepository::resolve(
     const TriageResolveRequest& request) const {
     TriageApplyOutcome outcome;
+    // 异常簇一次只落一组，规模记 1 组即可；口径与 apply 一致才好横向比。
+    const ScopeTimer timer("resolve", outcome, 1);
     TransactionPtr tx;
     const auto latch = std::make_shared<CommitLatch>();
     const auto rollback = [&tx]() {
