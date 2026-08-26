@@ -11,6 +11,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/ComponentArchiveRepository.hpp"
+#include "bridge_report/db/TriageQueryRepository.hpp"
 #include "bridge_report/http/ReviewRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
 #include "bridge_report/review/ThreadSuggestions.hpp"
@@ -232,6 +233,7 @@ void register_component_archive_routes(
     register_options_handler("/api/bridge-components/{component_id}/defect-archive");
     register_options_handler("/api/bridge-components/{component_id}/defect-archive/revisions");
     register_options_handler("/api/bridges/{bridge_id}/unbound-defect-observations");
+    register_options_handler("/api/bridges/{bridge_id}/thread-triage");
     register_options_handler("/api/defect-observations/{observation_id}/evidence");
     register_options_handler("/api/defect-observations/{observation_id}/thread-suggestions");
     register_options_handler("/api/defect-photos/{defect_photo_id}/content");
@@ -248,6 +250,30 @@ void register_component_archive_routes(
         [](db::ComponentArchiveRepository& repository, const std::string& bridge_id) {
             return repository.list_unbound_observations(bridge_id);
         }
+    );
+
+    // 线索整理工作台摘要：一次请求给出全部批次与异常簇，前端不再逐观测发候选请求。
+    drogon::app().registerHandler(
+        "/api/bridges/{bridge_id}/thread-triage",
+        [db_client](
+            const drogon::HttpRequestPtr&, HttpCallback&& callback, const std::string& bridge_id) {
+            if (!is_valid_uuid(bridge_id)) {
+                respond_bridge_not_found(callback);
+                return;
+            }
+            try {
+                if (!bridge_exists(db_client, bridge_id)) {
+                    respond_bridge_not_found(callback);
+                    return;
+                }
+                respond_json(callback, db::TriageQueryRepository(db_client).summary(bridge_id));
+            } catch (const drogon::orm::DrogonDbException&) {
+                respond_db_unavailable(callback);
+            } catch (const std::exception&) {
+                respond_db_unavailable(callback);
+            }
+        },
+        {drogon::Get}
     );
 
     register_component_scoped_route(
