@@ -84,3 +84,117 @@ TEST(ParseBindObservationRequestTest, RejectsMissingTokenOrInvalidThreadId) {
     body["defect_thread_id"] = "not-a-uuid";
     EXPECT_EQ(parse_bind_observation_request(body, parsed).value(), "thread_required_field_missing");
 }
+
+// ── 批量应用请求解析 ──────────────────────────────────────────────────
+// 请求本身不合法的几种，不必进事务就能判掉——省一次数据库往返，也让错误码更准确。
+
+namespace {
+
+Json::Value apply_body(const std::string& action, const Json::Value& groups) {
+    Json::Value body;
+    body["batch_id"] = "0123456789abcdef0123456789abcdef";
+    body["batch_fingerprint"] = "fingerprint";
+    body["action"] = action;
+    body["groups"] = groups;
+    return body;
+}
+
+Json::Value apply_group(const std::string& target_thread_id = "") {
+    Json::Value group;
+    group["group_id"] = "abcdef0123456789abcdef0123456789";
+    if (!target_thread_id.empty()) group["target_thread_id"] = target_thread_id;
+    Json::Value observation;
+    observation["id"] = "11111111-1111-1111-1111-111111111111";
+    observation["updated_at"] = "2026-08-26 10:00:00+08";
+    group["observations"] = Json::Value(Json::arrayValue);
+    group["observations"].append(observation);
+    return group;
+}
+
+}  // namespace
+
+TEST(TriageApplyRequestTest, AcceptsACreateBatchWithoutTargets) {
+    Json::Value groups(Json::arrayValue);
+    groups.append(apply_group());
+
+    bridge_report::http::TriageApplyRequestBody parsed;
+    const auto error = bridge_report::http::parse_triage_apply_request(
+        apply_body("create", groups), parsed);
+
+    EXPECT_FALSE(error.has_value());
+    EXPECT_EQ(parsed.action, "create");
+    ASSERT_EQ(parsed.groups.size(), 1u);
+    EXPECT_TRUE(parsed.groups[0].target_thread_id.empty());
+    ASSERT_EQ(parsed.groups[0].observations.size(), 1u);
+    EXPECT_EQ(parsed.groups[0].observations[0].updated_at, "2026-08-26 10:00:00+08")
+        << "并发令牌必须原样带进来，落库时要拿它比对";
+}
+
+TEST(TriageApplyRequestTest, RejectsACreateGroupThatNamesATarget) {
+    Json::Value groups(Json::arrayValue);
+    groups.append(apply_group("22222222-2222-2222-2222-222222222222"));
+
+    bridge_report::http::TriageApplyRequestBody parsed;
+    const auto error = bridge_report::http::parse_triage_apply_request(
+        apply_body("create", groups), parsed);
+
+    ASSERT_TRUE(error.has_value());
+    EXPECT_EQ(*error, "unexpected_target_thread");
+}
+
+TEST(TriageApplyRequestTest, RejectsABindGroupWithoutATarget) {
+    Json::Value groups(Json::arrayValue);
+    groups.append(apply_group());
+
+    bridge_report::http::TriageApplyRequestBody parsed;
+    const auto error = bridge_report::http::parse_triage_apply_request(
+        apply_body("bind", groups), parsed);
+
+    ASSERT_TRUE(error.has_value());
+    EXPECT_EQ(*error, "bind_target_required");
+}
+
+TEST(TriageApplyRequestTest, RejectsAnEmptyOrOversizedSelection) {
+    bridge_report::http::TriageApplyRequestBody parsed;
+
+    const auto empty = bridge_report::http::parse_triage_apply_request(
+        apply_body("create", Json::Value(Json::arrayValue)), parsed);
+    ASSERT_TRUE(empty.has_value());
+    EXPECT_EQ(*empty, "empty_group_selection");
+
+    Json::Value many(Json::arrayValue);
+    for (int index = 0; index <= bridge_report::http::kTriageApplyMaxGroups; ++index) {
+        many.append(apply_group());
+    }
+    const auto oversized = bridge_report::http::parse_triage_apply_request(
+        apply_body("create", many), parsed);
+    ASSERT_TRUE(oversized.has_value());
+    // 超限直接拒绝，不由前端拆分——拆开就不再是一个事务，"全成或全败"随之作废。
+    EXPECT_EQ(*oversized, "batch_too_large");
+}
+
+TEST(TriageApplyRequestTest, RejectsAnObservationMissingItsToken) {
+    Json::Value group = apply_group();
+    group["observations"][0].removeMember("updated_at");
+    Json::Value groups(Json::arrayValue);
+    groups.append(group);
+
+    bridge_report::http::TriageApplyRequestBody parsed;
+    const auto error = bridge_report::http::parse_triage_apply_request(
+        apply_body("create", groups), parsed);
+
+    ASSERT_TRUE(error.has_value());
+    EXPECT_EQ(*error, "triage_required_field_missing");
+}
+
+TEST(TriageApplyRequestTest, RejectsAnUnknownAction) {
+    Json::Value groups(Json::arrayValue);
+    groups.append(apply_group());
+
+    bridge_report::http::TriageApplyRequestBody parsed;
+    const auto error = bridge_report::http::parse_triage_apply_request(
+        apply_body("merge", groups), parsed);
+
+    ASSERT_TRUE(error.has_value());
+    EXPECT_EQ(*error, "triage_invalid_action");
+}
