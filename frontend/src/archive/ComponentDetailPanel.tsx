@@ -89,7 +89,7 @@ export function ComponentDetailPanel({ archive, bridgeId, onRebind }: ComponentD
             <div className="archive-unbound-block">
               <p className="archive-empty-hint">
                 以下观测尚未归入病害线索（未绑定不是错误状态），可前往
-                <Link to={`/bridges/${bridgeId}/defect-threads/review`}>线索整理页</Link>
+                <Link to={`/bridges/${bridgeId}/defect-threads/triage`}>线索整理页</Link>
                 统一处理。
               </p>
               {archive.unbound_observations.map((observation) => (

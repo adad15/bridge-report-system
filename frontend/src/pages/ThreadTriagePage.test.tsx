@@ -350,6 +350,27 @@ describe("ThreadTriagePage", () => {
     expect(await screen.findByText(/该观测已被其他操作更新/)).toBeInTheDocument();
   });
 
+  // 空位置是合法取值而非缺漏：整座构件的通病本来就没有具体位置，标签必须写出来，
+  // 不能留白让人以为数据缺了一块。
+  it("labels a batch with no location rather than leaving it blank", async () => {
+    renderPage();
+
+    expect(await screen.findByText(/铰缝 · 渗水泛碱 · （无位置）/)).toBeInTheDocument();
+  });
+
+  // "暂不处理"只在本次会话折叠，不产生任何服务端写入——未归入线索不是错误状态。
+  it("skips a batch locally without writing anything", async () => {
+    renderPage();
+
+    const before = await screen.findAllByRole("button", { name: "暂不处理" });
+    fireEvent.click(before[0]);
+
+    await waitFor(() =>
+      expect(screen.queryByText("上部结构｜铰缝 · 渗水泛碱 · （无位置）")).not.toBeInTheDocument());
+    expect(mockedApply).not.toHaveBeenCalled();
+    expect(mockedSummary).toHaveBeenCalledTimes(1);
+  });
+
   it("reports a repeat submission as already handled rather than as a failure", async () => {
     mockedApply.mockResolvedValue({
       status: "already_completed", groups_applied: 3, threads_created: 0,
@@ -491,6 +512,19 @@ describe("ThreadTriagePage 异常簇", () => {
 
     expect(await screen.findByText(/已新建线索 BHXS-001100，含 2 条观测/)).toBeInTheDocument();
   });
+  it("skips a cluster locally without writing anything", async () => {
+    mockedSummary.mockResolvedValue(withClusters([overlapCluster()]));
+    renderPage();
+
+    // 批次卡上也有同名按钮，必须限定在这张簇卡里点。
+    const card = await screen.findByLabelText("异常簇 1#板梁");
+    fireEvent.click(within(card).getByRole("button", { name: "暂不处理" }));
+
+    await waitFor(() =>
+      expect(screen.queryByLabelText("簇内各位置历年观测")).not.toBeInTheDocument());
+    expect(mockedResolve).not.toHaveBeenCalled();
+  });
+
   // 命中多条时全部列出并给编号：少列一条，人就在不知情的情况下被替他选了。
   it("lists every matched thread and binds to the one the person picks", async () => {
     mockedSummary.mockResolvedValue(withClusters([ambiguousCluster()]));

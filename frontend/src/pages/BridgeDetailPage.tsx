@@ -81,7 +81,7 @@ export function BridgeDetailPage() {
           按病害线索查看构件历年观测、照片与评分校验证据，并整理未绑定观测：
           <Link to={`/bridges/${bridgeId}/components`}>进入构件病害档案</Link>
           ｜
-          <Link to={`/bridges/${bridgeId}/defect-threads/review`}>线索整理</Link>
+          <Link to={`/bridges/${bridgeId}/defect-threads/triage`}>线索整理</Link>
         </p>
       </section>
 

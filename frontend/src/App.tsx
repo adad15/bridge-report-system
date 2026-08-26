@@ -5,7 +5,6 @@ import { BridgeOverviewPage } from "./pages/BridgeOverviewPage";
 import { BridgesPage } from "./pages/BridgesPage";
 import { ComponentArchivePage } from "./pages/ComponentArchivePage";
 import { ComponentInventoryPage } from "./pages/ComponentInventoryPage";
-import { DefectThreadReviewPage } from "./pages/DefectThreadReviewPage";
 import { ThreadTriagePage } from "./pages/ThreadTriagePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ReviewWorkspacePage } from "./pages/ReviewWorkspacePage";
@@ -52,7 +51,7 @@ function CurrentUserBadge() {
 function AppShell() {
   const { user, restoring } = useAuth();
   const location = useLocation();
-  // 只有"导入记录校对工作台"使用全屏工作台壳；模块 06 的 /defect-threads/review
+  // 只有"导入记录校对工作台"使用全屏工作台壳；模块 06 的 /defect-threads/triage
   // 是普通卡片流页面，正则必须锚定 imports 段避免误匹配。
   const isReviewWorkspace = /\/imports\/[^/]+\/review$/.test(location.pathname);
   // 评定树是"树 + 节点详情"的双栏浏览页，和校对工作台一样吃得下整块屏幕：500 个节点
@@ -119,8 +118,12 @@ function AppShell() {
               <Route path="inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
               <Route path="components" element={<ComponentArchivePage />} />
               <Route path="components/:componentId" element={<ComponentArchivePage />} />
-              <Route path="defect-threads/review" element={<DefectThreadReviewPage />} />
               <Route path="defect-threads/triage" element={<ThreadTriagePage />} />
+              {/* 旧整理页已下线：整理只剩工作台一套流程，旧地址重定向而非 404。 */}
+              <Route
+                path="defect-threads/review"
+                element={<Navigate to="../defect-threads/triage" replace />}
+              />
             </Route>
             <Route
               path="/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review"

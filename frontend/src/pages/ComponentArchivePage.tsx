@@ -74,13 +74,13 @@ export function ComponentArchivePage() {
       <header className="archive-page-head">
         <h1>构件病害档案</h1>
         <nav className="archive-page-links">
-          <Link to={`/bridges/${bridgeId}/defect-threads/review`}>线索整理</Link>
+          <Link to={`/bridges/${bridgeId}/defect-threads/triage`}>线索整理</Link>
         </nav>
       </header>
       {unboundCount > 0 ? (
         <div className="archive-pending-banner">
           <span>有 {unboundCount} 条病害观测尚未归入跨年线索。</span>
-          <Link to={`/bridges/${bridgeId}/defect-threads/review`}>进入线索整理</Link>
+          <Link to={`/bridges/${bridgeId}/defect-threads/triage`}>进入线索整理</Link>
         </div>
       ) : null}
       <div className="archive-layout">

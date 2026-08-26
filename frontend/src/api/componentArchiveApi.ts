@@ -185,6 +185,12 @@ export async function fetchUnboundObservations(baseUrl: string, bridgeId: string
   return body.unbound_observations;
 }
 
+/**
+ * 逐观测候选建议。
+ *
+ * 旧整理页下线后本函数在页面里已无调用方，仍保留两个用处：后端接口在迁移期继续对外，
+ * 而整理工作台的测试拿它当绊线——断言新页面一次都不调它，逐卡请求风暴就回不来了。
+ */
 export async function fetchThreadSuggestions(
   baseUrl: string,
   observationId: string
