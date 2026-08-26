@@ -89,6 +89,7 @@ add_library(bridge_report_backend_core
     src/review/ReviewModels.cpp
     src/review/ReviewStatistics.cpp
     src/review/ThreadCanonicalKey.cpp
+    src/review/ThreadTriageGrouping.cpp
     src/review/ThreadSuggestions.cpp
     src/review/WorkspaceModels.cpp
     src/runtime/RuntimePaths.cpp
@@ -207,6 +208,7 @@ add_executable(bridge_report_backend_tests
     tests/test_standard_routes.cpp
     tests/test_standard_registry.cpp
     tests/test_thread_canonical_key.cpp
+    tests/test_thread_triage_grouping.cpp
     tests/test_thread_suggestions.cpp
     tests/test_temporary_word_cleanup_coordinator.cpp
     tests/test_word_import_routes.cpp
