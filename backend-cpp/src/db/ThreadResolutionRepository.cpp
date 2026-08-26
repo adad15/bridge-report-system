@@ -204,8 +204,10 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
             std::string defect_location_raw;
             std::string matched_thread_id;
             std::string matched_system_number;
+            bool already_completed{false};
         };
         std::vector<ResolvedGroup> resolved_groups;
+        int already_completed_groups = 0;
 
         for (const auto& group : request.groups) {
             ResolvedGroup resolved;
@@ -213,6 +215,76 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
             if (group.observations.empty()) {
                 add_issue(outcome.issues, "empty_group_selection",
                           "组内没有观测。", group.group_id);
+                continue;
+            }
+
+            // ── 幂等判定必须先于令牌校验 ──────────────────────────
+            // 第一次成功会把 updated_at 推新，响应丢失后的重试必然携带旧令牌。若先校验
+            // 令牌，服务端只会报冲突，永远走不到"这批其实已经做完了"的判断。
+            std::set<std::string> bound_threads;
+            int bound_count = 0;
+            bool all_locked = true;
+            for (const auto& requested : group.observations) {
+                const auto found = locked.find(requested.id);
+                if (found == locked.end()) {
+                    all_locked = false;
+                    break;
+                }
+                if (found->second.defect_thread_id.has_value()) {
+                    ++bound_count;
+                    bound_threads.insert(*found->second.defect_thread_id);
+                }
+            }
+
+            if (all_locked && bound_count > 0) {
+                const auto total = static_cast<int>(group.observations.size());
+                const auto& first_locked = locked.at(group.observations.front().id);
+                resolved.bridge_component_id = first_locked.bridge_component_id;
+
+                if (bound_count < total) {
+                    // 批次是原子的，半绑说明是别人动过，不能当已完成放过。
+                    add_issue(outcome.issues, "partially_bound",
+                              "组内只有部分观测已绑定线索，无法认定为已完成。",
+                              group.group_id, resolved.bridge_component_id);
+                    continue;
+                }
+                if (bound_threads.size() > 1) {
+                    add_issue(outcome.issues, "thread_split_conflict",
+                              "组内观测分散在多条线索上。", group.group_id,
+                              resolved.bridge_component_id);
+                    continue;
+                }
+
+                const auto& existing_thread_id = *bound_threads.begin();
+                const auto group_key = review::make_thread_canonical_key(
+                    first_locked.bridge_component_id, first_locked.defect_type,
+                    first_locked.defect_location);
+                const auto thread = std::find_if(
+                    threads.begin(), threads.end(),
+                    [&existing_thread_id](const ThreadRow& row) {
+                        return row.id == existing_thread_id;
+                    });
+                const bool key_matches = thread != threads.end()
+                    && review::make_thread_canonical_key(
+                           thread->bridge_component_id, thread->defect_type,
+                           thread->defect_location) == group_key;
+                // bind 还要求就是请求指定的那条：规范键相同不代表是同一条线索。
+                const bool target_matches = request.action != review::TriageAction::Bind
+                    || group.target_thread_id == existing_thread_id;
+
+                if (!key_matches || !target_matches) {
+                    add_issue(outcome.issues, "bound_to_other_thread",
+                              "组内观测已绑定到另一条线索。", group.group_id,
+                              resolved.bridge_component_id);
+                    continue;
+                }
+
+                resolved.already_completed = true;
+                resolved.key = group_key;
+                resolved.matched_thread_id = existing_thread_id;
+                resolved.matched_system_number = thread->system_number;
+                ++already_completed_groups;
+                resolved_groups.push_back(std::move(resolved));
                 continue;
             }
 
@@ -250,12 +322,6 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
                 if (observation.updated_at != requested.updated_at) {
                     add_issue(outcome.issues, "observation_revision_conflict",
                               "该观测已被其他操作更新，请刷新后重试。", group.group_id,
-                              observation.bridge_component_id, observation.id);
-                    group_ok = false;
-                }
-                if (observation.defect_thread_id.has_value()) {
-                    add_issue(outcome.issues, "observation_already_bound",
-                              "该观测已绑定线索。", group.group_id,
                               observation.bridge_component_id, observation.id);
                     group_ok = false;
                 }
@@ -364,6 +430,26 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
 
         if (!outcome.issues.empty()) {
             rollback();
+            return outcome;
+        }
+
+        if (already_completed_groups > 0) {
+            const auto total = static_cast<int>(resolved_groups.size());
+            if (already_completed_groups < total) {
+                // 批次原子提交，不该出现"一半做过一半没做"，出现即说明有人动过。
+                add_issue(outcome.issues, "batch_partially_applied",
+                          "本批次只有部分组已完成，请刷新整理工作台后重试。", {});
+                rollback();
+                return outcome;
+            }
+            for (const auto& resolved : resolved_groups) {
+                outcome.results.push_back(TriageGroupResult{
+                    resolved.request_group->group_id, resolved.bridge_component_id,
+                    resolved.matched_thread_id, resolved.matched_system_number,
+                    "already_completed"});
+            }
+            rollback();
+            outcome.status = TriageApplyStatus::AlreadyCompleted;
             return outcome;
         }
 

@@ -526,7 +526,18 @@ GET /api/defect-observations/{observation_id}/thread-suggestions
    `already_completed`；
 3. 所有组都为 `already_completed` 时，返回成功，不再检查旧令牌；
 4. 否则执行正常 `updated_at` 校验；
-5. 部分完成、绑定到其他线索或分散到多条线索时返回冲突。
+5. 部分完成、绑定到其他线索或分散到多条线索时返回冲突
+   （`partially_bound` / `bound_to_other_thread` / `thread_split_conflict`）；
+6. 批次内只有部分组已完成时返回 `batch_partially_applied`——批次是原子提交的，
+   出现这种状态说明有人动过，让人刷新后重来。
+
+> [!important] `create` 的判据是"终态达成"，不是"这条线索是我建的"
+> 若别人先建了一条规范键完全相同的线索并绑上了这些观测，用户要的结果**已经在那儿了**，
+> 该组算已完成。判成冲突只会让人对着一个已经正确的状态发懵。
+> 真正的冲突是绑到了**规范键不同**的线索（`bound_to_other_thread`）。
+> `bind` 比 `create` 严一格：规范键相同还不够，必须就是请求指定的那条——请求点名了目标，
+> 挪到别处就是走岔了。
+
 
 这样可以处理“事务已成功、响应丢失”的真实重试，同时不会把其他操作造成的绑定误认为幂等。
 

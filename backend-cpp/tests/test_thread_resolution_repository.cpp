@@ -289,3 +289,157 @@ TEST_F(ThreadResolutionRepositoryTest, RejectsAnObservationHeldByAConfirmedCompa
     EXPECT_TRUE(has_issue(outcome, "observation_referenced_by_confirmed_comparison"));
     EXPECT_EQ(count_threads(), 0);
 }
+
+// ── 幂等：判定必须先于令牌校验 ────────────────────────────────────────
+// 第一次成功会把观测的 updated_at 推新，响应丢失后原样重试必然携带旧令牌。若按常规顺序
+// 先校验令牌，服务端会直接报冲突，根本走不到"这批其实已经做完了"的判断。
+
+TEST_F(ThreadResolutionRepositoryTest, AnswersAlreadyCompletedToARetryCarryingStaleTokens) {
+    const auto request = request_from_batch(only_batch());
+    const db::ThreadResolutionRepository repository(client_);
+    ASSERT_EQ(repository.apply(request).status, db::TriageApplyStatus::Applied);
+    ASSERT_EQ(count_threads(), 2);
+
+    // 原封不动重放：令牌已经过期了。
+    const auto retry = repository.apply(request);
+
+    EXPECT_EQ(retry.status, db::TriageApplyStatus::AlreadyCompleted);
+    EXPECT_EQ(count_threads(), 2) << "重试绝不能再建一遍线索";
+    EXPECT_EQ(count_bound(), 4);
+    EXPECT_EQ(retry.threads_created, 0);
+    ASSERT_EQ(retry.results.size(), 2u);
+    for (const auto& result : retry.results) {
+        EXPECT_EQ(result.outcome, "already_completed");
+    }
+}
+
+TEST_F(ThreadResolutionRepositoryTest, AnswersAlreadyCompletedToABindRetry) {
+    const db::ThreadResolutionRepository repository(client_);
+    ASSERT_EQ(repository.apply(request_from_batch(only_batch())).status,
+              db::TriageApplyStatus::Applied);
+    // 解绑 2026 那两条，让它们重新成为一个 bind 批次。
+    client_->execSqlSync(
+        "update defect_observations set defect_thread_id=null, updated_at=now() "
+        "where inspection_year_id=$1::uuid", year_2026_);
+    const auto bind_request = request_from_batch(only_batch());
+    ASSERT_EQ(bind_request.action, review::TriageAction::Bind);
+    ASSERT_EQ(repository.apply(bind_request).status, db::TriageApplyStatus::Applied);
+
+    const auto retry = repository.apply(bind_request);
+
+    EXPECT_EQ(retry.status, db::TriageApplyStatus::AlreadyCompleted);
+    EXPECT_EQ(count_threads(), 2);
+}
+
+// 部分绑定不是幂等：批次是原子的，出现这种状态说明是别人动过，不能当"已完成"放过。
+TEST_F(ThreadResolutionRepositoryTest, RefusesToCallAPartiallyBoundGroupCompleted) {
+    const auto request = request_from_batch(only_batch());
+    const db::ThreadResolutionRepository repository(client_);
+    ASSERT_EQ(repository.apply(request).status, db::TriageApplyStatus::Applied);
+    // 把第一组里的一条解绑，制造"半绑"。
+    client_->execSqlSync(
+        "update defect_observations set defect_thread_id=null, updated_at=now() where id=$1::uuid",
+        request.groups[0].observations[0].id);
+
+    const auto retry = repository.apply(request);
+
+    EXPECT_EQ(retry.status, db::TriageApplyStatus::Rejected);
+    EXPECT_TRUE(has_issue(retry, "partially_bound"));
+}
+
+// create 的幂等判据是"终态达成"，不是"这条线索是我建的"。别人先建了一条规范键完全相同
+// 的线索并绑上了这些观测，用户要的结果就已经在那儿了——判成冲突只会让人对着一个已经
+// 正确的状态发懵。
+TEST_F(ThreadResolutionRepositoryTest, TreatsASameKeyThreadAsCompletionForCreate) {
+    const auto request = request_from_batch(only_batch());
+    const auto other_thread = insert_id(
+        "insert into defect_threads(bridge_id,bridge_component_id,thread_name,defect_type) "
+        "values($1::uuid,$2::uuid,'别人建的渗水泛碱','渗水泛碱') returning id",
+        bridge_id_, component_a_);
+    for (const auto& observation : request.groups[0].observations) {
+        client_->execSqlSync(
+            "update defect_observations set defect_thread_id=$1::uuid, updated_at=now() "
+            "where id=$2::uuid", other_thread, observation.id);
+    }
+
+    const auto outcome = db::ThreadResolutionRepository(client_).apply(request);
+
+    // 第一组已达成、第二组还没有 → 批次不是原子完成的，让人刷新后重来。
+    EXPECT_EQ(outcome.status, db::TriageApplyStatus::Rejected);
+    EXPECT_TRUE(has_issue(outcome, "batch_partially_applied"));
+    EXPECT_FALSE(has_issue(outcome, "bound_to_other_thread"))
+        << "同键线索是达成，不是走岔了";
+}
+
+// 绑到了规范键**不同**的线索：这才是真的走岔了。
+TEST_F(ThreadResolutionRepositoryTest, RefusesWhenObservationsWentToAThreadOfAnotherKind) {
+    const auto request = request_from_batch(only_batch());
+    const auto unrelated_thread = insert_id(
+        "insert into defect_threads(bridge_id,bridge_component_id,thread_name,defect_type,"
+        "defect_location) values($1::uuid,$2::uuid,'横向裂缝｜端部','横向裂缝','端部') returning id",
+        bridge_id_, component_a_);
+    for (const auto& observation : request.groups[0].observations) {
+        client_->execSqlSync(
+            "update defect_observations set defect_thread_id=$1::uuid, updated_at=now() "
+            "where id=$2::uuid", unrelated_thread, observation.id);
+    }
+
+    const auto outcome = db::ThreadResolutionRepository(client_).apply(request);
+
+    EXPECT_EQ(outcome.status, db::TriageApplyStatus::Rejected);
+    EXPECT_TRUE(has_issue(outcome, "bound_to_other_thread"));
+}
+
+// bind 比 create 严一格：规范键相同还不够，必须就是请求指定的那条。
+TEST_F(ThreadResolutionRepositoryTest, RefusesABindWhoseObservationsWentToADifferentThread) {
+    const db::ThreadResolutionRepository repository(client_);
+    ASSERT_EQ(repository.apply(request_from_batch(only_batch())).status,
+              db::TriageApplyStatus::Applied);
+    client_->execSqlSync(
+        "update defect_observations set defect_thread_id=null, updated_at=now() "
+        "where inspection_year_id=$1::uuid", year_2026_);
+    auto bind_request = request_from_batch(only_batch());
+    ASSERT_EQ(bind_request.action, review::TriageAction::Bind);
+    ASSERT_EQ(repository.apply(bind_request).status, db::TriageApplyStatus::Applied);
+
+    // 请求仍指向原目标，实际却被挪到了另一条同键线索上。
+    const auto decoy = insert_id(
+        "insert into defect_threads(bridge_id,bridge_component_id,thread_name,defect_type) "
+        "values($1::uuid,$2::uuid,'另一条渗水泛碱','渗水泛碱') returning id",
+        bridge_id_, component_a_);
+    for (const auto& observation : bind_request.groups[0].observations) {
+        client_->execSqlSync(
+            "update defect_observations set defect_thread_id=$1::uuid where id=$2::uuid",
+            decoy, observation.id);
+    }
+
+    const auto outcome = repository.apply(bind_request);
+
+    EXPECT_EQ(outcome.status, db::TriageApplyStatus::Rejected);
+    EXPECT_TRUE(has_issue(outcome, "bound_to_other_thread"));
+}
+
+// 组内观测散落在两条线索上：既不是已完成，也不是简单的重复绑定。
+TEST_F(ThreadResolutionRepositoryTest, ReportsAGroupSplitAcrossTwoThreads) {
+    const auto request = request_from_batch(only_batch());
+    const auto thread_one = insert_id(
+        "insert into defect_threads(bridge_id,bridge_component_id,thread_name,defect_type) "
+        "values($1::uuid,$2::uuid,'渗水泛碱 A','渗水泛碱') returning id",
+        bridge_id_, component_a_);
+    const auto thread_two = insert_id(
+        "insert into defect_threads(bridge_id,bridge_component_id,thread_name,defect_type) "
+        "values($1::uuid,$2::uuid,'渗水泛碱 B','渗水泛碱') returning id",
+        bridge_id_, component_a_);
+    ASSERT_EQ(request.groups[0].observations.size(), 2u);
+    client_->execSqlSync(
+        "update defect_observations set defect_thread_id=$1::uuid, updated_at=now() where id=$2::uuid",
+        thread_one, request.groups[0].observations[0].id);
+    client_->execSqlSync(
+        "update defect_observations set defect_thread_id=$1::uuid, updated_at=now() where id=$2::uuid",
+        thread_two, request.groups[0].observations[1].id);
+
+    const auto retry = db::ThreadResolutionRepository(client_).apply(request);
+
+    EXPECT_EQ(retry.status, db::TriageApplyStatus::Rejected);
+    EXPECT_TRUE(has_issue(retry, "thread_split_conflict"));
+}
