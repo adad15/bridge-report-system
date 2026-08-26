@@ -6398,3 +6398,123 @@ body {
   font: inherit;
   cursor: pointer;
 }
+
+/* ── 线索整理工作台 ────────────────────────────────────────────────── */
+/* 批次按覆盖观测数降序排，最大的一批先消掉——1197 条的进度一次走掉四成，
+   人才有做下去的动力。 */
+
+.triage-page-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.triage-page-counts {
+  margin: 4px 0 16px;
+  color: var(--text-muted, #64748b);
+  font-size: 14px;
+}
+
+.triage-page-notice {
+  padding: 8px 12px;
+  border-left: 3px solid #16a34a;
+  border-radius: 0 4px 4px 0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.triage-batch-card {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.triage-batch-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.triage-batch-years {
+  margin: 4px 0 0;
+  color: var(--text-muted, #64748b);
+  font-size: 13px;
+}
+
+.triage-batch-action {
+  flex: 0 0 auto;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.triage-batch-action-create { background: #dbeafe; color: #1e40af; }
+.triage-batch-action-bind { background: #dcfce7; color: #166534; }
+
+.triage-batch-scale {
+  margin: 8px 0 4px;
+  font-weight: 600;
+}
+
+/* 跨多构件的 bind 批次会绑到多条线索，批次层面没有唯一编号——这行文案不能被
+   换成某一个 BHXS。 */
+.triage-batch-bind-note {
+  margin: 0 0 8px;
+  color: var(--text-muted, #64748b);
+  font-size: 13px;
+}
+
+.triage-batch-samples {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.triage-batch-samples li {
+  display: flex;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.triage-sample-code { min-width: 120px; font-weight: 600; }
+.triage-sample-years { color: var(--text-muted, #64748b); }
+.triage-sample-more { color: var(--text-muted, #64748b); }
+
+.triage-batch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.triage-detail { margin: 12px 0; }
+
+.triage-detail-table { font-size: 13px; }
+
+/* 剔除的行留在原位而不是消失：人要看得见自己去掉了哪几个。 */
+.triage-row-excluded { opacity: 0.45; }
+.triage-row-problem { background: #fef2f2; }
+
+.triage-cell-empty { color: var(--text-muted, #94a3b8); }
+
+.triage-detail-summary {
+  margin: 8px 0 0;
+  font-weight: 600;
+}
+
+.triage-detail-issues {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.triage-manual-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}

@@ -6,6 +6,7 @@ import { BridgesPage } from "./pages/BridgesPage";
 import { ComponentArchivePage } from "./pages/ComponentArchivePage";
 import { ComponentInventoryPage } from "./pages/ComponentInventoryPage";
 import { DefectThreadReviewPage } from "./pages/DefectThreadReviewPage";
+import { ThreadTriagePage } from "./pages/ThreadTriagePage";
 import { LoginPage } from "./pages/LoginPage";
 import { ReviewWorkspacePage } from "./pages/ReviewWorkspacePage";
 import { RatingTreePage } from "./pages/RatingTreePage";
@@ -119,6 +120,7 @@ function AppShell() {
               <Route path="components" element={<ComponentArchivePage />} />
               <Route path="components/:componentId" element={<ComponentArchivePage />} />
               <Route path="defect-threads/review" element={<DefectThreadReviewPage />} />
+              <Route path="defect-threads/triage" element={<ThreadTriagePage />} />
             </Route>
             <Route
               path="/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review"
