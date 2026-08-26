@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from "re
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { BridgeOverviewPage } from "./pages/BridgeOverviewPage";
 import { BridgesPage } from "./pages/BridgesPage";
+import { LegacyTriageRedirect } from "./pages/LegacyTriageRedirect";
 import { ComponentArchivePage } from "./pages/ComponentArchivePage";
 import { ComponentInventoryPage } from "./pages/ComponentInventoryPage";
 import { ThreadTriagePage } from "./pages/ThreadTriagePage";
@@ -120,10 +121,7 @@ function AppShell() {
               <Route path="components/:componentId" element={<ComponentArchivePage />} />
               <Route path="defect-threads/triage" element={<ThreadTriagePage />} />
               {/* 旧整理页已下线：整理只剩工作台一套流程，旧地址重定向而非 404。 */}
-              <Route
-                path="defect-threads/review"
-                element={<Navigate to="../defect-threads/triage" replace />}
-              />
+              <Route path="defect-threads/review" element={<LegacyTriageRedirect />} />
             </Route>
             <Route
               path="/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review"
