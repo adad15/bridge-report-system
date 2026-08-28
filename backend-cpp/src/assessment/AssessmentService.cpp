@@ -11,6 +11,7 @@
 #include "bridge_report/auth/PasswordHash.hpp"
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/EditLockRepository.hpp"
+#include "bridge_report/resolution/ConfirmResolutionReader.hpp"
 #include "bridge_report/db/RatingTreeRepository.hpp"
 #include "bridge_report/db/StandardRepository.hpp"
 #include "bridge_report/standards/TechnicalConditionStandard.hpp"
@@ -695,7 +696,16 @@ AssessmentServiceOutcome AssessmentService::preview(
         context.components.push_back({entry.bridge_component_id, mapping->standard_component_category_id});
     }
 
-    outcome.preview = calculate_assessment_preview(*evaluator, *package, context, payload.draft, payload.client_revision);
+    // 5.0：构件归属与评分树节点住在解析关系表里，草稿里没有它们。直接拿客户端发来的
+    // 草稿算，下面那段逐条读 bridge_component_id / rating_tree_node_id 的判定会全部落空，
+    // 于是每条病害都报"未关联到当前已确认台账中的规范构件"，整份试算作废。
+    //
+    // 与预检、正式确认同一个来源：把关系态拼回成一份 BridgeAnnualInspectionData 形状的
+    // 可确认视图（§17），评定这段成熟逻辑一行不用改，变的只是数据从哪儿来。
+    const auto confirmable_view = resolution::build_confirmable_view(
+        db_client_, import_record_id, payload.draft);
+    outcome.preview = calculate_assessment_preview(
+        *evaluator, *package, context, confirmable_view, payload.client_revision);
     outcome.status = outcome.preview.result.has_value()
         ? AssessmentServiceStatus::Completed
         : AssessmentServiceStatus::Blocked;

@@ -15,6 +15,8 @@ function row(candidateId: string, componentId: string): DefectReviewRow {
     resolution: {
       ...UNRESOLVED,
       bridgeComponentId: componentId,
+      componentIds: [componentId],
+      components: [{ componentId, categoryId: "h21.component.deck.slab" }],
       standardComponentCategoryId: "h21.component.deck.slab",
       activeInstanceCount: 1,
     },
@@ -125,4 +127,39 @@ it("offers one group confirmation for range-split defects without requiring phot
   fireEvent.click(screen.getByRole("button", { name: "确认本组可确认项（2）" }));
 
   expect(onConfirmGroup).toHaveBeenCalledWith(groups[0]);
+});
+
+// 区间展开的行：绑了 3 件构件，单一 bridgeComponentId 按约定为 null。此前问题组按那个
+// 单一 id 取共同适用节点，于是整组候选凭空清空，"应用到本组"下拉一个选项都没有——
+// 而这些病害恰恰最需要整组套用。
+it("still offers nodes when a row is a range-expanded defect", () => {
+  const expanded = row("2-1#板~2-3#板", "component-1");
+  expanded.resolution = {
+    ...expanded.resolution,
+    bridgeComponentId: null,
+    componentIds: ["component-1", "component-2", "component-3"],
+    components: ["component-1", "component-2", "component-3"].map((componentId) => ({
+      componentId,
+      categoryId: "h21.component.deck.slab",
+    })),
+    activeInstanceCount: 3,
+  };
+  const groups = buildDefectIssueGroups([expanded]);
+
+  render(
+    <DefectIssueGroupList
+      groups={groups}
+      nodesByComponent={new Map([
+        ["component-1", [node]],
+        ["component-2", [node]],
+        ["component-3", [node]],
+      ])}
+      onApplyNode={vi.fn()}
+      onConfirmGroup={vi.fn()}
+      onOpenDefect={vi.fn()}
+    />,
+  );
+
+  const select = screen.getByRole("combobox", { name: "为 存在黑点痕迹 选择评定树病害" });
+  expect(select).toContainHTML(node.display_name);
 });

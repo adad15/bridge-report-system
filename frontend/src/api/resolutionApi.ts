@@ -225,6 +225,34 @@ export async function applyRatingResolution(
   );
 }
 
+/**
+ * 按来源病害整体写评分树解析。
+ *
+ * 校对页一行就是一条来源病害（§22.6），选一次节点要落到它的全部活动实例。逐实例接口
+ * 逐条发时，后端取草稿、装评定树、鉴权、查编辑锁、开事务、提交全部乘以实例数——区间
+ * 展开的病害是 25 次，实测 2 秒。这条命令把这些摊成一份，并且同一事务：要么整条病害
+ * 写成，要么一条都不写。
+ *
+ * 每条实例仍各带自己的 expected_version：批量写不放宽乐观并发。
+ */
+export async function applySourceRatingResolution(
+  baseUrl: string,
+  importId: string,
+  sourceCandidateId: string,
+  input: {
+    instances: { instance_id: string; expected_version: number }[];
+    rating_tree_node_id: string;
+    expected_rating_tree_version_id?: string;
+    expected_inventory_revision_id?: string;
+  },
+  lockToken: string
+): Promise<ResolutionCommandResult> {
+  return request<ResolutionCommandResult>(
+    `${base(baseUrl, importId)}/defects/${encodeURIComponent(sourceCandidateId)}/rating-resolution`,
+    locked("PUT", input, lockToken)
+  );
+}
+
 export async function applyFactOverrides(
   baseUrl: string,
   importId: string,

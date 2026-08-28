@@ -1,10 +1,8 @@
 import { useMemo, useState } from "react";
 
 import type { RatingTreeNodeSummary } from "../../api/ratingTreeApi";
-import {
-  ratingTreeOptionLabel,
-  sortRatingTreeNodes,
-} from "../../rating-tree/ratingTreeLabels";
+import { ratingTreeOptionLabel } from "../../rating-tree/ratingTreeLabels";
+import { applicableRatingTreeNodes } from "../applicableRatingTreeNodes";
 import type { DefectIssueGroup } from "../defectIssueGroups";
 
 interface DefectIssueGroupListProps {
@@ -20,16 +18,13 @@ function commonNodes(
   group: DefectIssueGroup,
   nodesByComponent: ReadonlyMap<string, RatingTreeNodeSummary[]>,
 ): RatingTreeNodeSummary[] {
-  const boundIds = group.rows.map((row) => row.resolution.bridgeComponentId);
-  const componentIds = [...new Set(boundIds.filter((id): id is string => Boolean(id)))];
-  if (componentIds.length === 0 || componentIds.length !== new Set(boundIds).size) {
-    return [];
-  }
-  const first = nodesByComponent.get(componentIds[0]) ?? [];
-  const remaining = componentIds.slice(1).map((id) =>
-    new Set((nodesByComponent.get(id) ?? []).map((node) => node.id)));
-  return sortRatingTreeNodes(
-    first.filter((node) => remaining.every((ids) => ids.has(node.id))),
+  // 只要有一行还没绑构件，这一组就没有"共同适用"可言：整组套用一个节点会把它也写上。
+  // 逐行取全部实例构件而不是单一 bridgeComponentId——区间展开的行单一 id 为 null，
+  // 按它过滤会让整组的候选凭空清空。
+  if (group.rows.some((row) => row.resolution.componentIds.length === 0)) return [];
+  return applicableRatingTreeNodes(
+    group.rows.flatMap((row) => row.resolution.componentIds),
+    nodesByComponent,
   );
 }
 

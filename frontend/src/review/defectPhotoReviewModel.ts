@@ -242,7 +242,15 @@ function analyzeDefect(
     ? ratingTreeNode ?? ratingTreeNodeSummaries.get(resolution.ratingTreeNodeId) ?? null
     : null;
 
-  if (!resolution.bridgeComponentId) {
+  // 判据是"有没有活动实例绑上构件"，不是"能不能归结到单一构件"：区间展开的病害
+  // 一条挂三件构件，bridgeComponentId 按约定为 null，用它判会把这条当成从没绑过。
+  //
+  // componentIds 为空时回落到单一 id：单构件是最常见的情况，两种构造方式都该判一致。
+  const boundComponentIds = resolution.componentIds.length > 0
+    ? resolution.componentIds
+    : resolution.bridgeComponentId ? [resolution.bridgeComponentId] : [];
+
+  if (boundComponentIds.length === 0) {
     addProblem(problems, "component_required", "component", "尚未选择实际构件。");
   }
   if (!ratingTreeVersionId) {
@@ -258,10 +266,11 @@ function analyzeDefect(
     } else if (!ratingTreeNodeSummary) {
       addProblem(problems, "rating_tree_node_unknown", "defect_type", "评定树病害节点已不存在。");
     } else if (
-      !resolution.bridgeComponentId ||
-      !applicableTreeNodeIdsByComponent
-        .get(resolution.bridgeComponentId)
-        ?.has(ratingTreeNodeSummary.id)
+      // 展开到多件构件时，节点必须对**每一件**都适用：只要有一件不适用，那一条实例
+      // 就会在确认阶段被拒，届时症状离这里已经很远。
+      boundComponentIds.length === 0 ||
+      !boundComponentIds.every((componentId) =>
+        applicableTreeNodeIdsByComponent.get(componentId)?.has(ratingTreeNodeSummary.id))
     ) {
       addProblem(problems, "rating_tree_node_not_applicable", "defect_type", "评定树病害不适用于当前实际构件。");
     }

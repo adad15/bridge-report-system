@@ -54,23 +54,24 @@ struct DefectMatchScope {
 [[nodiscard]] bool defect_is_protected_from_auto_match(const Json::Value& defect);
 
 /**
- * 统一的批量匹配入口：导入、构件绑定、评定树绑定、草稿保存和页面"重新匹配"
- * 共用这一份规则，浏览器端不复制任何匹配逻辑。
+ * 页面"重新匹配"的只读计算：给校对页算出每条来源病害当前的自动匹配结论。
  *
- * apply 为 true 时把 auto_bound 结果写回 draft 的 rating_tree_* 字段；
- * 为 false 时只计算并返回结果摘要（页面预览用），draft 不被修改。
+ * 输入是**可确认病害视图**（`resolution::build_confirmable_view`），不是
+ * `parsed_result_json`——5.0 之后草稿里没有构件与评分树解析字段，拿草稿算等于逐条
+ * 判"尚未绑定实际构件"。视图逐实例展开，本函数按 `source_candidate_id` 合回来源
+ * 病害，一条来源病害只出一条记录（§22.6）。
  *
- * 相同输入、相同规则和相同评定树版本必须得到相同输出，重复执行幂等，
- * 并且绝不新增或删除病害、照片和关联关系。
+ * 只计算、只回摘要：不写视图，更不写草稿。权威的评分树解析在
+ * `import_rating_resolutions`，由解析接口写入。
+ *
+ * 相同输入、相同规则和相同评定树版本必须得到相同输出，重复执行幂等。
  */
 [[nodiscard]] DefectMatchReport match_defect_rating_tree_nodes(
-    Json::Value& draft,
-    const std::string& rating_tree_version_id,
+    const Json::Value& view,
     const std::string& technical_standard_package_id,
     const rating_tree::EffectiveRatingTree& tree,
     const std::optional<inventory::InventoryRevision>& resolved_revision,
-    const DefectMatchScope& scope,
-    bool apply);
+    const DefectMatchScope& scope);
 
 /// 解析一条病害的桥型 + 规范构件类别；返回 nullopt 时给出具体原因码。
 [[nodiscard]] std::optional<rating_tree::RatingTreeMatchInput>

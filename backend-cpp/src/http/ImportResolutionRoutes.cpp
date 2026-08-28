@@ -439,6 +439,78 @@ void register_import_resolution_routes(const drogon::orm::DbClientPtr& db_client
             }
         });
 
+    // 按来源病害整体写：校对页一行就是一条来源病害（§22.6），选一次节点落到它的全部
+    // 活动实例。逐实例接口保留（§13.2），但页面走这条——25 条实例逐条发请求时，取草稿、
+    // 装评定树、鉴权、查锁、开事务、提交全部乘 25，实测 2 秒。
+    register_put_route(
+        import_base + "/defects/{source_candidate_id}/rating-resolution",
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
+                    const std::string& import_id, const std::string& source_candidate_id) {
+            if (!is_valid_uuid(import_id) || source_candidate_id.empty()) {
+                respond_import_record_not_found(callback);
+                return;
+            }
+            try {
+                const auto actor = authenticate_request(db_client, request);
+                if (!actor) { respond_unauthorized(callback); return; }
+                if (!require_active_edit_lock(
+                        db_client, request, import_id, *actor, callback)) return;
+                const auto body = request->getJsonObject();
+                if (body == nullptr) {
+                    respond_json(callback, make_error_body(
+                        "invalid_resolution_request", "请求体必须是 JSON 对象。"),
+                        drogon::k400BadRequest);
+                    return;
+                }
+                resolution::SourceRatingResolutionRequest command;
+                command.context.import_record_id = import_id;
+                command.context.actor_user_id = actor->id;
+                command.context.edit_lock = edit_lock_from_request(request, *actor);
+                command.context.expected_inventory_revision_id =
+                    optional_body_string(*body, "expected_inventory_revision_id");
+                command.rating_tree_node_id =
+                    optional_body_string(*body, "rating_tree_node_id");
+                command.expected_rating_tree_version_id =
+                    optional_body_string(*body, "expected_rating_tree_version_id");
+                // 每条实例各带自己的解析版本：并发口径与逐实例接口完全一致，
+                // 批量写不等于放宽乐观并发。
+                const auto& instances = (*body)["instances"];
+                if (!instances.isArray() || instances.empty()) {
+                    respond_json(callback, make_error_body(
+                        "invalid_resolution_request",
+                        "instances 必须是非空数组。"),
+                        drogon::k400BadRequest);
+                    return;
+                }
+                for (const auto& item : instances) {
+                    if (!item.isObject() || !item["instance_id"].isString() ||
+                        !item["expected_version"].isIntegral()) {
+                        respond_json(callback, make_error_body(
+                            "invalid_resolution_request",
+                            "instances 每项需要 instance_id 与 expected_version。"),
+                            drogon::k400BadRequest);
+                        return;
+                    }
+                    resolution::RatingInstanceVersion target;
+                    target.instance_id = item["instance_id"].asString();
+                    target.expected_version = item["expected_version"].asInt();
+                    if (!is_valid_uuid(target.instance_id)) {
+                        respond_json(callback, make_error_body(
+                            "invalid_resolution_request", "instance_id 不是合法的 uuid。"),
+                            drogon::k400BadRequest);
+                        return;
+                    }
+                    command.instances.push_back(std::move(target));
+                }
+                respond_command(
+                    callback,
+                    resolution::ImportResolutionService(db_client)
+                        .apply_source_rating_resolution(command));
+            } catch (...) {
+                respond_db_unavailable(callback);
+            }
+        });
+
     register_put_route(
         import_base + "/defect-instances/{instance_id}/fact-overrides",
         [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,

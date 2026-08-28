@@ -77,6 +77,30 @@ struct RatingResolutionRequest {
     std::string expected_rating_tree_version_id;
 };
 
+/// 一条待写实例及其评分树解析版本。没有解析行时版本是 0。
+struct RatingInstanceVersion {
+    std::string instance_id;
+    int expected_version{0};
+};
+
+/**
+ * @brief 按**来源病害**整体写评分树解析。
+ *
+ * 校对页一条来源病害显示一行（§22.6），用户选一次节点，落到这条病害的全部活动实例。
+ * 逐实例接口逐条发请求时，取草稿、装评定树、鉴权、查编辑锁、开事务、提交 fsync 全部
+ * 乘以实例数——区间展开的病害是 25 次，实测 2 秒。这条命令把那些一次性开销摊成一份，
+ * 并且全部实例同一事务：要么整条病害写成，要么一条都不写。校对页那一行显示的是整条
+ * 病害的结论，写进去一半比不写更难查。
+ */
+struct SourceRatingResolutionRequest {
+    ResolutionCommandContext context;
+    /// 人工选定的节点；为空表示清除、退回未解析。
+    std::string rating_tree_node_id;
+    std::string expected_rating_tree_version_id;
+    /// 这条来源病害的全部活动实例，各带自己的解析版本。
+    std::vector<RatingInstanceVersion> instances;
+};
+
 struct FactOverrideRequest {
     ResolutionCommandContext context;
     std::string instance_id;
@@ -140,6 +164,10 @@ public:
     [[nodiscard]] ResolutionOutcome apply_rating_resolution(
         const RatingResolutionRequest& request) const;
 
+    /// 按来源病害整体写评分树解析：一次事务写完它的全部活动实例。
+    [[nodiscard]] ResolutionOutcome apply_source_rating_resolution(
+        const SourceRatingResolutionRequest& request) const;
+
     /// 实例级事实覆盖；涉及匹配输入的变化后按新的有效值重算评分树解析。
     [[nodiscard]] ResolutionOutcome apply_fact_overrides(
         const FactOverrideRequest& request) const;
@@ -188,6 +216,13 @@ public:
 private:
     /// 命令成功后组装"受影响对象 + 最新统计"。与工作区共用同一份组视图构建代码，
     /// 免得命令返回的组和刷新后看到的组对不上。
+    /// 上面两个评分树命令的共同实现：一次事务写完给定的全部实例。
+    [[nodiscard]] ResolutionOutcome write_rating_resolutions(
+        const ResolutionCommandContext& context,
+        const std::vector<RatingInstanceVersion>& instances,
+        const std::string& rating_tree_node_id,
+        const std::string& expected_rating_tree_version_id) const;
+
     [[nodiscard]] ResolutionOutcome build_command_result(
         const std::string& import_record_id,
         const std::vector<std::string>& group_ids) const;

@@ -87,7 +87,7 @@ function reviewResponseBody(overrides: Partial<Record<string, unknown>> = {}) {
       object_warning_count: 0,
     },
     has_current_annual_facts: false,
-    contract_compatibility: "native_4_0",
+    contract_compatibility: "native_5_0",
     technical_condition_standard: null,
     ...overrides,
   };
@@ -117,7 +117,7 @@ describe("reviewApi", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/review");
     expect(review.parsed_result).toEqual(minimalParsedResult);
     expect(review.statistics.defect_count).toBe(0);
-    expect(review.contract_compatibility).toBe("native_4_0");
+    expect(review.contract_compatibility).toBe("native_5_0");
   });
 
   it("fetchReview throws ApiError when parsed_result fails the contract guard", async () => {

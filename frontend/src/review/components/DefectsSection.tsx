@@ -37,6 +37,7 @@ import { DefectBatchAssignDialog } from "./DefectBatchAssignDialog";
 import { DefectBatchConfirmDialog } from "./DefectBatchConfirmDialog";
 import { DefectDetailEditor } from "./DefectDetailEditor";
 import { DefectIssueGroupConfirmDialog } from "./DefectIssueGroupConfirmDialog";
+import { applicableRatingTreeNodes } from "../applicableRatingTreeNodes";
 import { DefectIssueGroupList } from "./DefectIssueGroupList";
 import { DefectQuickReviewList } from "./DefectQuickReviewList";
 import { DefectReviewToolbar } from "./DefectReviewToolbar";
@@ -212,11 +213,14 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
 
   // 草稿里出现过的 (构件, 规范类别) 组合。用内容做依赖而不是 draft.defects 的引用——
   // 后者每次渲染都是新数组，会让下面那个副作用反复重跑并把 treeRulesReady 打回 false。
+  //
+  // 逐个活动实例取构件，而不是取"这条病害的单一构件"：区间展开的病害一条挂多件，
+  // 单一 id 按约定为 null，按它过滤会把展开出来的构件整批漏掉——它们进不了适用节点表，
+  // 于是这些病害的节点全被判成"不适用于当前实际构件"。
   const boundComponentKey = useMemo(
     () => [...new Set(draft.defects
-      .map((defect) => resolutionOf(resolution, defect.candidate_id))
-      .filter((item) => item.bridgeComponentId)
-      .map((item) => `${item.bridgeComponentId}\u0000${item.standardComponentCategoryId ?? ""}`))]
+      .flatMap((defect) => resolutionOf(resolution, defect.candidate_id).components)
+      .map((item) => `${item.componentId}\u0000${item.categoryId}`))]
       .sort().join("|"),
     [draft.defects, resolution],
   );
@@ -225,8 +229,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   // 依赖用内容键而不是 draft.defects 的引用——后者每次渲染都是新数组，会让这里反复重取。
   useEffect(() => {
     const ids = [...new Set(draft.defects
-      .map((defect) => resolutionOf(resolution, defect.candidate_id).bridgeComponentId)
-      .filter((id): id is string => Boolean(id)))];
+      .flatMap((defect) => resolutionOf(resolution, defect.candidate_id).componentIds))];
     if (ids.length === 0) { setComponentOrder(new Map()); return; }
     let cancelled = false;
     fetchComponentReviewOrder(baseUrl, bridgeId, ids)
@@ -369,7 +372,9 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     () => draft.defects
       .map((defect) => [
         defect.candidate_id,
-        resolutionOf(resolution, defect.candidate_id).bridgeComponentId ?? "",
+        // 全部实例构件，不是"单一构件"——区间展开的病害那一项恒为 null，
+        // 按它取签名就不会变，绑定改了也不会重新匹配。
+        resolutionOf(resolution, defect.candidate_id).componentIds.join(","),
         defect.review_status,
         defect.group_review_status,
       ].join("|"))
@@ -838,7 +843,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
                   draft={draft}
                   row={currentRow}
                   ratingTreeVersionId={ratingTree?.version_id ?? null}
-                  applicableNodes={treeNodesByComponent.get(currentRow.resolution.bridgeComponentId ?? "") ?? []}
+                  applicableNodes={applicableRatingTreeNodes(currentRow.resolution.componentIds, treeNodesByComponent)}
                   importRecordId={importRecordId}
                   baseUrl={baseUrl}
                   initialPhotoCandidateId={selectedPhotoCandidateId}

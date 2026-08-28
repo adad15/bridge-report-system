@@ -19,9 +19,32 @@ export interface ResolvedInstanceRef {
   ratingVersion: number;
 }
 
+/** 一条活动实例绑定的构件及其规范类别。适用性判定按构件逐个进行。 */
+export interface ResolvedComponentRef {
+  componentId: string;
+  /** 由组所钉台账版本当场派生（§17.2）；缺映射时为空串。 */
+  categoryId: string;
+}
+
 export interface DefectResolution {
   /** 全部活动实例都绑到构件时为该构件 id；多目标或未绑时为 null。 */
   bridgeComponentId: string | null;
+  /**
+   * 全部活动实例各自绑定的构件，按实例顺序去重。
+   *
+   * 区间展开的病害一条挂多个构件，`bridgeComponentId` 按约定为 null（没有单一答案）。
+   * 判"绑没绑构件"、判"节点适不适用"都必须看这个集合——看单一 id 的话，展开过的病害
+   * 会被当成从没绑过，而它其实绑了三件。
+   */
+  componentIds: string[];
+  /**
+   * 与 componentIds 一一对应，另带各自的规范类别。
+   *
+   * "这件构件适用哪些评定树节点"只取决于它的 (桥型, 类别)，所以按构件取类别是构建
+   * 适用节点表的前提。此前那张表是从单一 bridgeComponentId 建的，区间展开的病害
+   * （多实例，单一 id 为 null）整批进不去表，于是它们的节点全被判成"不适用"。
+   */
+  components: ResolvedComponentRef[];
   standardComponentCategoryId: string | null;
   /** 全部活动实例都匹到同一个节点时有值；多目标匹到不同节点或未匹时为 null。 */
   ratingTreeNodeId: string | null;
@@ -64,6 +87,8 @@ export const UNRESOLVED: DefectResolution = {
   contentChangedAfterManualResolution: false,
   overriddenFields: [],
   activeInstanceCount: 0,
+  componentIds: [],
+  components: [],
   instances: [],
   groupId: null,
   groupStatus: null,
@@ -174,11 +199,18 @@ export function buildResolutionIndex(
       // 没有单一答案，编一个出来会让界面显示成绑到了其中随便一个。
       const singleComponent =
         componentIds.size === 1 ? [...componentIds][0] || null : null;
+      const boundComponents = [...componentIds].filter((id) => id !== "");
+      const componentRefs = boundComponents.map((componentId) => ({
+        componentId,
+        categoryId: categoryByComponent.get(componentId) ?? "",
+      }));
       const singleNode = nodeIds.size === 1 ? [...nodeIds][0] || null : null;
       const first = active[0]?.rating_resolution;
 
       index.set(candidateId, {
         bridgeComponentId: singleComponent,
+        componentIds: boundComponents,
+        components: componentRefs,
         standardComponentCategoryId: singleComponent
           ? categoryByComponent.get(singleComponent) ?? null
           : null,

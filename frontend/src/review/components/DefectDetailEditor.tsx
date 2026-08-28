@@ -7,7 +7,7 @@ import {
   type RatingTreeNodeSummary,
 } from "../../api/ratingTreeApi";
 import { ApiError } from "../../api/apiClient";
-import { applyRatingResolution } from "../../api/resolutionApi";
+import { applySourceRatingResolution } from "../../api/resolutionApi";
 import type { BridgeAnnualInspectionData } from "../../contracts/annualInspection";
 import {
   ratingTreeDisplayLabel,
@@ -131,22 +131,25 @@ export function DefectDetailEditor({
     setRatingError("");
     void (async () => {
       try {
-        // 展开成多个构件的病害逐条写：只写第一条的话，其余仍按自动结果走。
-        for (const instance of instances) {
-          await applyRatingResolution(
-            baseUrl,
-            importRecordId,
-            instance.instanceId,
-            {
+        // 一次请求写完这条病害的全部实例。逐条发的话，后端每次都要取草稿、装评定树、
+        // 鉴权、查编辑锁、开事务、提交——区间展开的病害是 25 次，实测 2 秒。
+        // 而且同一事务写完才有意义：这一行显示的是整条病害的结论，写进去一半更难查。
+        await applySourceRatingResolution(
+          baseUrl,
+          importRecordId,
+          defect.candidate_id,
+          {
+            instances: instances.map((instance) => ({
+              instance_id: instance.instanceId,
               expected_version: instance.ratingVersion,
-              rating_tree_node_id: selected.id,
-              expected_rating_tree_version_id: ratingTreeVersionId,
-              // 台账版本变了，"这个节点适不适用于该构件"的答案就可能变；不带上它，
-              // 旧页面能把一个基于过时映射的判断写进去。
-              ...(inventoryRevisionId ? { expected_inventory_revision_id: inventoryRevisionId } : {}),
-            },
-            editLockToken);
-        }
+            })),
+            rating_tree_node_id: selected.id,
+            expected_rating_tree_version_id: ratingTreeVersionId,
+            // 台账版本变了，"这个节点适不适用于该构件"的答案就可能变；不带上它，
+            // 旧页面能把一个基于过时映射的判断写进去。
+            ...(inventoryRevisionId ? { expected_inventory_revision_id: inventoryRevisionId } : {}),
+          },
+          editLockToken);
         onRatingResolved?.();
       } catch (caught) {
         setRatingError(caught instanceof ApiError

@@ -1,6 +1,7 @@
 #include "bridge_report/resolution/ImportResolutionService.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <map>
 #include <memory>
 #include <set>
@@ -233,25 +234,89 @@ bool edit_lock_still_active(
 }
 
 /// 写命令共用的前置：导入记录在待校对相、桥梁与年度、当前台账版本。
+/// 目标构件在当前规范包下的生效映射；没有就返回 nullptr。
+const inventory::InventoryMapping* find_active_mapping(
+    const inventory::InventoryRevision& revision,
+    const std::string& bridge_component_id,
+    const std::string& technical_standard_package_id) {
+    for (const auto& entry : revision.entries) {
+        if (!entry.is_active || entry.bridge_component_id != bridge_component_id) continue;
+        for (const auto& mapping : entry.mappings) {
+            if (mapping.is_active && mapping.confirmation_status == "已确认" &&
+                mapping.standard_package_id == technical_standard_package_id) {
+                return &mapping;
+            }
+        }
+    }
+    return nullptr;
+}
+
+bool looks_like_uuid(const std::string& value) {
+    if (value.size() != 36) return false;
+    for (std::size_t i = 0; i < value.size(); ++i) {
+        const char c = value[i];
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            if (c != '-') return false;
+        } else if (!std::isxdigit(static_cast<unsigned char>(c))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/// Postgres uuid[] 字面量，作为参数绑定（不进 SQL 文本，故无注入面）。
+/// 畸形值直接跳过：让 ::uuid[] 转换抛错会把整条命令拖成 503，而调用方随后会因为
+/// 取回的行数对不上实例数而正确地报"实例不存在"。
+std::string uuid_array_literal(const std::vector<std::string>& ids) {
+    std::string joined = "{";
+    bool first = true;
+    for (const auto& id : ids) {
+        if (!looks_like_uuid(id)) continue;
+        if (!first) joined += ',';
+        joined += id;
+        first = false;
+    }
+    return joined + "}";
+}
+
 struct CommandPreconditions {
     std::string bridge_id;
     std::string inspection_year_id;
+    /// 只有 DraftNeed::whole 装过的命令能读它；其余命令这里是空对象。
     Json::Value parsed;
     std::optional<std::string> revision_id;
 };
 
+/// 这条命令要不要整份草稿。
+///
+/// 本桥的草稿是 448 kB / 279 条病害，而按来源病害改评分树或实例覆盖只读其中**一条**
+/// （884 字节）。区间展开的病害逐实例写 25 次，无脑整份装载等于把 448 kB 取+解析 25
+/// 遍，实测占单次写入 80 ms 里的大头。真正需要整份的只有两类：按组重绑（要按 candidate
+/// 索引全部病害）和手工新增病害（要查重并追加后整份回写）。
+enum class DraftNeed { none, whole };
+
 std::optional<CommandPreconditions> load_command_preconditions(
     const TransactionPtr& tx,
     const std::string& import_record_id,
-    ResolutionOutcome& outcome) {
+    ResolutionOutcome& outcome,
+    const DraftNeed draft_need) {
     const auto rows = tx->execSqlSync(
-        "select ir.bridge_id::text as bridge_id, ir.import_status, "
-        "  coalesce(ir.inspection_year_id::text,'') as inspection_year_id, "
-        "  coalesce(ir.parsed_result_json::text,'{}') as parsed, "
-        "  iy.component_inventory_revision_id::text as year_revision_id "
-        "from import_records ir "
-        "left join inspection_years iy on iy.id = ir.inspection_year_id "
-        "where ir.id = $1::uuid for update of ir",
+        draft_need == DraftNeed::whole
+            ? "select ir.bridge_id::text as bridge_id, ir.import_status, "
+              "  coalesce(ir.inspection_year_id::text,'') as inspection_year_id, "
+              "  coalesce(ir.parsed_result_json::text,'{}') as parsed, "
+              "  iy.component_inventory_revision_id::text as year_revision_id "
+              "from import_records ir "
+              "left join inspection_years iy on iy.id = ir.inspection_year_id "
+              "where ir.id = $1::uuid for update of ir"
+            // 不需要草稿时连取都不取：448 kB 的列白白走一趟网络再被丢掉。
+            : "select ir.bridge_id::text as bridge_id, ir.import_status, "
+              "  coalesce(ir.inspection_year_id::text,'') as inspection_year_id, "
+              "  '{}' as parsed, "
+              "  iy.component_inventory_revision_id::text as year_revision_id "
+              "from import_records ir "
+              "left join inspection_years iy on iy.id = ir.inspection_year_id "
+              "where ir.id = $1::uuid for update of ir",
         import_record_id);
     if (rows.empty()) {
         outcome.status = ResolutionStatus::NotFound;
@@ -266,13 +331,35 @@ std::optional<CommandPreconditions> load_command_preconditions(
     CommandPreconditions preconditions;
     preconditions.bridge_id = rows[0]["bridge_id"].as<std::string>();
     preconditions.inspection_year_id = rows[0]["inspection_year_id"].as<std::string>();
-    parse_json(rows[0]["parsed"].as<std::string>(), preconditions.parsed);
+    if (draft_need == DraftNeed::whole) {
+        parse_json(rows[0]["parsed"].as<std::string>(), preconditions.parsed);
+    }
     const auto revision = db::ComponentInventoryRepository(tx)
                               .resolve_confirmed_revision_ref(
                                   preconditions.bridge_id,
                                   optional_row_text(rows[0], "year_revision_id"));
     if (revision.has_value()) preconditions.revision_id = revision->id;
     return preconditions;
+}
+
+/// 只取这一条来源病害。
+///
+/// 库里按 jsonb 数组展开后按 candidate_id 过滤，回来的是 884 字节而不是 448 kB。
+/// 找不到时返回空对象——与此前"整份扫一遍也没扫到"的行为一致，由调用方按缺失事实处理。
+Json::Value load_source_defect(
+    const TransactionPtr& tx,
+    const std::string& import_record_id,
+    const std::string& source_candidate_id) {
+    const auto rows = tx->execSqlSync(
+        "select d::text as defect from import_records ir, "
+        "  lateral jsonb_array_elements(ir.parsed_result_json->'defects') d "
+        "where ir.id = $1::uuid and d->>'candidate_id' = $2 limit 1",
+        import_record_id, source_candidate_id);
+    Json::Value defect(Json::objectValue);
+    if (rows.empty()) return defect;
+    parse_json(rows[0]["defect"].as<std::string>(), defect);
+    if (!defect.isObject()) return Json::Value(Json::objectValue);
+    return defect;
 }
 
 /// 客户端看到的台账版本是否仍是当前版本。
@@ -594,7 +681,7 @@ ResolutionOutcome ImportResolutionService::apply_component_resolution(
     try {
         tx = db_client_->newTransaction(latch->callback());
         const auto preconditions = load_command_preconditions(
-            tx, request.context.import_record_id, outcome);
+            tx, request.context.import_record_id, outcome, DraftNeed::whole);
         if (!preconditions.has_value()) {
             tx->rollback();
             return outcome;
@@ -732,25 +819,33 @@ ResolutionOutcome ImportResolutionService::apply_component_resolution(
     }
 }
 
-ResolutionOutcome ImportResolutionService::apply_rating_resolution(
-    const RatingResolutionRequest& request) const {
+ResolutionOutcome ImportResolutionService::write_rating_resolutions(
+    const ResolutionCommandContext& context,
+    const std::vector<RatingInstanceVersion>& instances,
+    const std::string& rating_tree_node_id,
+    const std::string& expected_rating_tree_version_id) const {
     ResolutionOutcome outcome;
+    if (instances.empty()) {
+        outcome.status = ResolutionStatus::Invalid;
+        outcome.error_code = "invalid_resolution_request";
+        outcome.error_message = "没有要写入的病害解析实例。";
+        return outcome;
+    }
     TransactionPtr tx;
     const auto latch = std::make_shared<db::CommitLatch>();
     try {
         tx = db_client_->newTransaction(latch->callback());
         const auto preconditions = load_command_preconditions(
-            tx, request.context.import_record_id, outcome);
+            tx, context.import_record_id, outcome, DraftNeed::none);
         if (!preconditions.has_value()) { tx->rollback(); return outcome; }
-        if (!inventory_revision_matches(*preconditions, request.context)) {
+        if (!inventory_revision_matches(*preconditions, context)) {
             tx->rollback();
             outcome.status = ResolutionStatus::Conflict;
             outcome.error_code = "component_inventory_revision_changed";
             outcome.error_message = "构件台账版本已变化，请刷新后重试。";
             return outcome;
         }
-        if (!edit_lock_still_active(tx, request.context.import_record_id,
-                                    request.context.edit_lock)) {
+        if (!edit_lock_still_active(tx, context.import_record_id, context.edit_lock)) {
             tx->rollback();
             outcome.status = ResolutionStatus::EditLockInvalid;
             return outcome;
@@ -759,7 +854,6 @@ ResolutionOutcome ImportResolutionService::apply_rating_resolution(
         // 仓库对象一律用临时量：它的构造函数按值收下 DbClientPtr 并一直持有，
         // 留一个具名变量与 tx 同域，就会让事务的 shared_ptr 活过下面的 tx.reset()，
         // 提交回调永远不来，最后以 30 秒超时收场。
-        const auto existing = db::ImportResolutionRepository(tx).find_rating_resolution(request.instance_id);
         const auto rating = load_rating_context(tx, preconditions->inspection_year_id);
         if (!rating.has_value()) {
             tx->rollback();
@@ -768,159 +862,189 @@ ResolutionOutcome ImportResolutionService::apply_rating_resolution(
             outcome.error_message = "当前检测年度尚未绑定评定树版本。";
             return outcome;
         }
-        if (!request.expected_rating_tree_version_id.empty() &&
-            request.expected_rating_tree_version_id != rating->rating_tree_version_id) {
+        if (!expected_rating_tree_version_id.empty() &&
+            expected_rating_tree_version_id != rating->rating_tree_version_id) {
             tx->rollback();
             outcome.status = ResolutionStatus::Conflict;
             outcome.error_code = "rating_tree_version_changed";
             outcome.error_message = "评定树版本已变化，请刷新后重新选择。";
             return outcome;
         }
-        // 已有解析行时按它的版本做乐观并发；还没有解析行时只接受 0，避免客户端
-        // 拿着一个凭空编出来的版本号写入。
-        const int current_version = existing.has_value() ? existing->version : 0;
-        if (request.expected_version != current_version) {
-            tx->rollback();
-            outcome.status = ResolutionStatus::VersionConflict;
-            outcome.error_code = "resolution_version_conflict";
-            outcome.error_message = "评分树解析版本已过期，请刷新后重试。";
-            return outcome;
-        }
 
+        // 一次取回本次要写的全部实例（连同各自的构件、组、覆盖与现有解析版本），
+        // 而不是每条实例发一轮往返。
+        std::vector<std::string> instance_ids;
+        instance_ids.reserve(instances.size());
+        for (const auto& item : instances) instance_ids.push_back(item.instance_id);
         const auto instance_rows = tx->execSqlSync(
-            "select i.id::text as id, i.instance_status, t.bridge_component_id::text as "
-            "  bridge_component_id, m.source_candidate_id, g.id::text as group_id, "
-            "  g.version as group_version "
+            "select i.id::text as id, i.instance_status, "
+            "  t.bridge_component_id::text as bridge_component_id, "
+            "  m.source_candidate_id, g.id::text as group_id, "
+            "  g.version as group_version, "
+            "  i.fact_overrides_json::text as fact_overrides_json, "
+            "  coalesce(r.version, 0) as rating_version "
             "from import_resolved_defect_instances i "
             "join import_component_resolution_targets t on t.id = i.target_id "
             "join import_component_group_members m on m.id = i.group_member_id "
             "join import_component_resolution_groups g on g.id = m.group_id "
-            "where i.id = $1::uuid and m.import_record_id = $2::uuid",
-            request.instance_id, request.context.import_record_id);
-        if (instance_rows.empty()) {
+            "left join import_rating_resolutions r on r.resolved_defect_instance_id = i.id "
+            "where i.id = any($1::uuid[]) and m.import_record_id = $2::uuid",
+            uuid_array_literal(instance_ids), context.import_record_id);
+        if (instance_rows.size() != instances.size()) {
             tx->rollback();
             outcome.status = ResolutionStatus::NotFound;
             outcome.error_code = "defect_instance_not_found";
             outcome.error_message = "病害解析实例不存在。";
             return outcome;
         }
-        const auto group_id = instance_rows[0]["group_id"].as<std::string>();
 
-        RatingResolution resolution;
-        resolution.resolved_defect_instance_id = request.instance_id;
-        resolution.rating_tree_version_id = rating->rating_tree_version_id;
-        resolution.component_resolution_version =
-            instance_rows[0]["group_version"].as<int>();
-        // 人工选择也要留哈希：适用性一变它同样必须失效，只是文字变化不动它（§8.5）。
-        const auto bridge_component_id =
-            instance_rows[0]["bridge_component_id"].as<std::string>();
-        const auto source_candidate_id =
-            instance_rows[0]["source_candidate_id"].as<std::string>();
-        std::optional<inventory::InventoryRevision> revision;
-        if (preconditions->revision_id.has_value()) {
-            revision = db::ComponentInventoryRepository(tx).resolve_confirmed_revision(
-                preconditions->bridge_id, preconditions->revision_id);
-        }
-        const inventory::InventoryMapping* mapping = nullptr;
-        if (revision.has_value()) {
-            for (const auto& entry : revision->entries) {
-                if (!entry.is_active || entry.bridge_component_id != bridge_component_id) {
-                    continue;
-                }
-                for (const auto& candidate : entry.mappings) {
-                    if (candidate.is_active && candidate.confirmation_status == "已确认" &&
-                        candidate.standard_package_id ==
-                            rating->technical_standard_package_id) {
-                        mapping = &candidate;
-                        break;
-                    }
-                }
-                if (mapping != nullptr) break;
-            }
-        }
-        if (mapping == nullptr) {
-            tx->rollback();
-            outcome.status = ResolutionStatus::Conflict;
-            outcome.error_code = "target_not_allowed";
-            outcome.error_message = "目标构件在当前规范包下没有已确认的类别映射。";
-            return outcome;
+        struct InstanceFacts {
+            std::string bridge_component_id;
+            std::string source_candidate_id;
+            std::string group_id;
+            int group_version{0};
+            int rating_version{0};
+            Json::Value overrides;
+        };
+        std::map<std::string, InstanceFacts> facts_by_instance;
+        std::vector<std::string> component_ids;
+        std::set<std::string> source_candidate_ids;
+        std::set<std::string> group_ids;
+        for (const auto& row : instance_rows) {
+            InstanceFacts facts;
+            facts.bridge_component_id = row["bridge_component_id"].as<std::string>();
+            facts.source_candidate_id = row["source_candidate_id"].as<std::string>();
+            facts.group_id = row["group_id"].as<std::string>();
+            facts.group_version = row["group_version"].as<int>();
+            facts.rating_version = row["rating_version"].as<int>();
+            parse_json(row["fact_overrides_json"].as<std::string>(), facts.overrides);
+            if (!facts.overrides.isObject()) facts.overrides = Json::Value(Json::objectValue);
+            component_ids.push_back(facts.bridge_component_id);
+            source_candidate_ids.insert(facts.source_candidate_id);
+            group_ids.insert(facts.group_id);
+            facts_by_instance.emplace(row["id"].as<std::string>(), std::move(facts));
         }
 
-        Json::Value source_defect(Json::objectValue);
-        for (const auto& defect : preconditions->parsed["defects"]) {
-            if (defect["candidate_id"].isString() &&
-                defect["candidate_id"].asString() == source_candidate_id) {
-                source_defect = defect;
-                break;
-            }
-        }
-        const auto instances = db::ImportResolutionRepository(tx).list_instances_by_import(
-            request.context.import_record_id);
-        Json::Value overrides(Json::objectValue);
-        for (const auto& instance : instances) {
-            if (instance.id == request.instance_id) {
-                overrides = instance.fact_overrides_json;
-                break;
-            }
-        }
-        const auto effective = merge_effective_defect_facts(source_defect, overrides);
-        const auto hashes = compute_rating_match_hashes(build_rating_match_hash_input(
-            effective, source_candidate_id, bridge_component_id,
-            rating->technical_standard_package_id, mapping->standard_bridge_type_id,
-            mapping->standard_component_category_id, rating->rating_tree_version_id));
-        resolution.applicability_hash = hashes.applicability_hash;
-        resolution.match_input_hash = hashes.match_input_hash;
-
-        if (request.rating_tree_node_id.empty()) {
-            resolution.status = "unresolved";
-            resolution.match_method = std::nullopt;
-            resolution.resolved_match_input_hash = std::nullopt;
-        } else {
-            resolution.status = "matched";
-            resolution.rating_tree_node_id = request.rating_tree_node_id;
-            resolution.match_method = "manual";
-            // 裁决那一刻的输入哈希（§8.5）。之后文字再变，节点保留，但界面据此提示复核。
-            resolution.resolved_match_input_hash = hashes.match_input_hash;
-            resolution.resolved_by_user_id = request.context.actor_user_id;
-            const auto node = rating->tree.nodes.find(request.rating_tree_node_id);
-            if (node == rating->tree.nodes.end()) {
+        // 乐观并发按每条实例自己的解析行版本判定，与逐实例接口同一口径。
+        for (const auto& item : instances) {
+            const auto found = facts_by_instance.find(item.instance_id);
+            if (found == facts_by_instance.end()) {
                 tx->rollback();
-                outcome.status = ResolutionStatus::Invalid;
-                outcome.error_code = "invalid_resolution_request";
-                outcome.error_message = "所选节点不属于当前评定树版本。";
+                outcome.status = ResolutionStatus::NotFound;
+                outcome.error_code = "defect_instance_not_found";
+                outcome.error_message = "病害解析实例不存在。";
                 return outcome;
             }
-            // 节点存在还不够，还得适用于目标构件的桥型与类别——否则会存进一个自动
-            // 匹配永远挑不到的节点，直到评定阶段才以"该构件不适用此病害"暴露出来。
-            if (!rating_tree::node_applies_to(
-                    node->second, mapping->standard_bridge_type_id,
-                    mapping->standard_component_category_id)) {
+            if (found->second.rating_version != item.expected_version) {
+                tx->rollback();
+                outcome.status = ResolutionStatus::VersionConflict;
+                outcome.error_code = "resolution_version_conflict";
+                outcome.error_message = "评分树解析版本已过期，请刷新后重试。";
+                return outcome;
+            }
+        }
+
+        // 涉及的构件一次装完。区间展开的病害是 25 件，装 25 条而不是 25 遍 5174 条。
+        std::optional<inventory::InventoryRevision> revision;
+        if (preconditions->revision_id.has_value()) {
+            revision = db::ComponentInventoryRepository(tx)
+                           .resolve_confirmed_revision_for_components(
+                               preconditions->bridge_id, preconditions->revision_id,
+                               component_ids);
+        }
+
+        // 来源病害按 candidate 取一次即可：同一条来源病害的实例共用同一份来源事实，
+        // 差别只在各自的 fact_overrides_json。
+        std::map<std::string, Json::Value> source_defects;
+        for (const auto& candidate : source_candidate_ids) {
+            source_defects.emplace(
+                candidate, load_source_defect(tx, context.import_record_id, candidate));
+        }
+
+        const bool clearing = rating_tree_node_id.empty();
+        for (const auto& item : instances) {
+            const auto& facts = facts_by_instance.at(item.instance_id);
+            const inventory::InventoryMapping* mapping = nullptr;
+            if (revision.has_value()) {
+                mapping = find_active_mapping(
+                    *revision, facts.bridge_component_id,
+                    rating->technical_standard_package_id);
+            }
+            if (mapping == nullptr) {
                 tx->rollback();
                 outcome.status = ResolutionStatus::Conflict;
                 outcome.error_code = "target_not_allowed";
-                outcome.error_message = "所选评定树节点不适用于该构件的桥型与类别。";
+                outcome.error_message = "目标构件在当前规范包下没有已确认的类别映射。";
                 return outcome;
             }
-            resolution.standard_defect_indicator_id = node->second.h21_indicator_id;
-            Json::Value evidence(Json::objectValue);
-            evidence["outcome"] = "manual";
-            evidence["reason_code"] = "manual_selection";
-            evidence["reason_message"] = "人工选择评定树病害节点。";
-            resolution.match_evidence_json = std::move(evidence);
-        }
-        db::ImportResolutionRepository(tx).upsert_rating_resolution(resolution);
 
-        ResolutionEvent event;
-        event.import_record_id = request.context.import_record_id;
-        event.group_id = group_id;
-        event.resolved_defect_instance_id = request.instance_id;
-        event.operation_type = request.rating_tree_node_id.empty()
-            ? "rating_clear" : "rating_manual_select";
-        event.actor_user_id = request.context.actor_user_id;
-        Json::Value after(Json::objectValue);
-        after["status"] = resolution.status;
-        event.after_json = std::move(after);
-        db::ImportResolutionRepository(tx).append_event(event);
+            RatingResolution resolution;
+            resolution.resolved_defect_instance_id = item.instance_id;
+            resolution.rating_tree_version_id = rating->rating_tree_version_id;
+            resolution.component_resolution_version = facts.group_version;
+            // 人工选择也要留哈希：适用性一变它同样必须失效，只是文字变化不动它（§8.5）。
+            const auto effective = merge_effective_defect_facts(
+                source_defects.at(facts.source_candidate_id), facts.overrides);
+            const auto hashes = compute_rating_match_hashes(build_rating_match_hash_input(
+                effective, facts.source_candidate_id, facts.bridge_component_id,
+                rating->technical_standard_package_id, mapping->standard_bridge_type_id,
+                mapping->standard_component_category_id, rating->rating_tree_version_id));
+            resolution.applicability_hash = hashes.applicability_hash;
+            resolution.match_input_hash = hashes.match_input_hash;
+
+            if (clearing) {
+                resolution.status = "unresolved";
+                resolution.match_method = std::nullopt;
+                resolution.resolved_match_input_hash = std::nullopt;
+            } else {
+                resolution.status = "matched";
+                resolution.rating_tree_node_id = rating_tree_node_id;
+                resolution.match_method = "manual";
+                // 裁决那一刻的输入哈希（§8.5）。之后文字再变，节点保留，但界面据此提示复核。
+                resolution.resolved_match_input_hash = hashes.match_input_hash;
+                resolution.resolved_by_user_id = context.actor_user_id;
+                const auto node = rating->tree.nodes.find(rating_tree_node_id);
+                if (node == rating->tree.nodes.end()) {
+                    tx->rollback();
+                    outcome.status = ResolutionStatus::Invalid;
+                    outcome.error_code = "invalid_resolution_request";
+                    outcome.error_message = "所选节点不属于当前评定树版本。";
+                    return outcome;
+                }
+                // 节点存在还不够，还得适用于目标构件的桥型与类别——否则会存进一个自动
+                // 匹配永远挑不到的节点，直到评定阶段才以"该构件不适用此病害"暴露出来。
+                //
+                // 按来源病害整体写时这一条逐实例都要过：只要有一件构件不适用就整批回滚，
+                // 而不是写进去一半——校对页那一行显示的是整条病害的结论。
+                if (!rating_tree::node_applies_to(
+                        node->second, mapping->standard_bridge_type_id,
+                        mapping->standard_component_category_id)) {
+                    tx->rollback();
+                    outcome.status = ResolutionStatus::Conflict;
+                    outcome.error_code = "target_not_allowed";
+                    outcome.error_message = "所选评定树节点不适用于该构件的桥型与类别。";
+                    return outcome;
+                }
+                resolution.standard_defect_indicator_id = node->second.h21_indicator_id;
+                Json::Value evidence(Json::objectValue);
+                evidence["outcome"] = "manual";
+                evidence["reason_code"] = "manual_selection";
+                evidence["reason_message"] = "人工选择评定树病害节点。";
+                resolution.match_evidence_json = std::move(evidence);
+            }
+            db::ImportResolutionRepository(tx).upsert_rating_resolution(resolution);
+
+            ResolutionEvent event;
+            event.import_record_id = context.import_record_id;
+            event.group_id = facts.group_id;
+            event.resolved_defect_instance_id = item.instance_id;
+            event.operation_type = clearing ? "rating_clear" : "rating_manual_select";
+            event.actor_user_id = context.actor_user_id;
+            Json::Value after(Json::objectValue);
+            after["status"] = resolution.status;
+            event.after_json = std::move(after);
+            db::ImportResolutionRepository(tx).append_event(event);
+        }
 
         tx.reset();
         if (!latch->wait()) {
@@ -929,7 +1053,9 @@ ResolutionOutcome ImportResolutionService::apply_rating_resolution(
             outcome.error_message = "事务提交未确认。";
             return outcome;
         }
-        return build_command_result(request.context.import_record_id, {group_id});
+        return build_command_result(
+            context.import_record_id,
+            std::vector<std::string>(group_ids.begin(), group_ids.end()));
     } catch (const std::exception& error) {
         if (tx) { try { tx->rollback(); } catch (...) {} }
         outcome.status = ResolutionStatus::Failed;
@@ -937,6 +1063,29 @@ ResolutionOutcome ImportResolutionService::apply_rating_resolution(
         outcome.error_message = error.what();
         return outcome;
     }
+}
+
+ResolutionOutcome ImportResolutionService::apply_rating_resolution(
+    const RatingResolutionRequest& request) const {
+    return write_rating_resolutions(
+        request.context,
+        {RatingInstanceVersion{request.instance_id, request.expected_version}},
+        request.rating_tree_node_id,
+        request.expected_rating_tree_version_id);
+}
+
+ResolutionOutcome ImportResolutionService::apply_source_rating_resolution(
+    const SourceRatingResolutionRequest& request) const {
+    ResolutionOutcome outcome;
+    if (request.instances.empty()) {
+        outcome.status = ResolutionStatus::Invalid;
+        outcome.error_code = "invalid_resolution_request";
+        outcome.error_message = "这条病害没有可写入的活动实例。";
+        return outcome;
+    }
+    return write_rating_resolutions(
+        request.context, request.instances, request.rating_tree_node_id,
+        request.expected_rating_tree_version_id);
 }
 
 ResolutionOutcome ImportResolutionService::apply_fact_overrides(
@@ -947,7 +1096,7 @@ ResolutionOutcome ImportResolutionService::apply_fact_overrides(
     try {
         tx = db_client_->newTransaction(latch->callback());
         const auto preconditions = load_command_preconditions(
-            tx, request.context.import_record_id, outcome);
+            tx, request.context.import_record_id, outcome, DraftNeed::none);
         if (!preconditions.has_value()) { tx->rollback(); return outcome; }
         if (!inventory_revision_matches(*preconditions, request.context)) {
             tx->rollback();
@@ -1020,19 +1169,17 @@ ResolutionOutcome ImportResolutionService::apply_fact_overrides(
         const auto rating = load_rating_context(tx, preconditions->inspection_year_id);
         if (rating.has_value() && preconditions->revision_id.has_value() &&
             rows[0]["instance_status"].as<std::string>() == "active") {
+            // 与评分树那条路径同理：只用它查一件构件的 (桥型, 规范类别)，
+            // 装整份 5174 条纯属浪费。
             const auto revision =
-                db::ComponentInventoryRepository(tx).resolve_confirmed_revision(
-                    preconditions->bridge_id, preconditions->revision_id);
+                db::ComponentInventoryRepository(tx)
+                    .resolve_confirmed_revision_for_components(
+                        preconditions->bridge_id, preconditions->revision_id,
+                        {rows[0]["bridge_component_id"].as<std::string>()});
             if (revision.has_value()) {
-                Json::Value source_defect(Json::objectValue);
                 const auto candidate = rows[0]["source_candidate_id"].as<std::string>();
-                for (const auto& defect : preconditions->parsed["defects"]) {
-                    if (defect["candidate_id"].isString() &&
-                        defect["candidate_id"].asString() == candidate) {
-                        source_defect = defect;
-                        break;
-                    }
-                }
+                const auto source_defect = load_source_defect(
+                    tx, request.context.import_record_id, candidate);
                 ResolvedDefectInstance instance;
                 instance.id = request.instance_id;
                 instance.fact_overrides_json = overrides;
@@ -1089,7 +1236,7 @@ ResolutionOutcome ImportResolutionService::apply_instance_status(
     try {
         tx = db_client_->newTransaction(latch->callback());
         const auto preconditions = load_command_preconditions(
-            tx, request.context.import_record_id, outcome);
+            tx, request.context.import_record_id, outcome, DraftNeed::none);
         if (!preconditions.has_value()) { tx->rollback(); return outcome; }
         if (!inventory_revision_matches(*preconditions, request.context)) {
             tx->rollback();
@@ -1186,7 +1333,7 @@ ResolutionOutcome ImportResolutionService::add_manual_defect(
     try {
         tx = db_client_->newTransaction(latch->callback());
         auto preconditions = load_command_preconditions(
-            tx, request.context.import_record_id, outcome);
+            tx, request.context.import_record_id, outcome, DraftNeed::whole);
         if (!preconditions.has_value()) { tx->rollback(); return outcome; }
         if (!inventory_revision_matches(*preconditions, request.context)) {
             tx->rollback();

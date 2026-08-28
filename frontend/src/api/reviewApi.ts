@@ -45,7 +45,7 @@ export interface ReviewStatistics {
   object_warning_count: number;
 }
 
-export type ContractCompatibility = "native_4_0";
+export type ContractCompatibility = "native_5_0";
 
 export interface ReviewTechnicalConditionStandard {
   package_id: string;

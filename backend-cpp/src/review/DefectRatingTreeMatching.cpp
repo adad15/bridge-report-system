@@ -1,6 +1,10 @@
 #include "bridge_report/review/DefectRatingTreeMatching.hpp"
 
+#include <cstddef>
+#include <map>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "bridge_report/review/JsonAccessors.hpp"
 
@@ -14,28 +18,36 @@ bool is_auto_match_method(const std::string& method) {
     return method == "source_indicator";
 }
 
-void clear_rating_tree_fields(
-    Json::Value& defect,
-    const std::string& rating_tree_version_id) {
-    defect["rating_tree_version_id"] = rating_tree_version_id;
-    defect["rating_tree_node_id"] = Json::Value();
-    defect["standard_defect_indicator_id"] = Json::Value();
-    defect["rating_tree_match_method"] = Json::Value();
-    defect["rating_tree_match_evidence"] = Json::Value();
+// 可确认视图里 candidate_id 是实例 id，来源病害身份在 source_candidate_id。缺这一项
+// 就退回 candidate_id：手工新增的病害在解析表里建实例前只有来源身份。
+std::string source_candidate_key(const Json::Value& defect) {
+    const auto source_id = string_member_or_empty(defect, "source_candidate_id");
+    return source_id.empty() ? string_member_or_empty(defect, "candidate_id") : source_id;
 }
 
-void write_auto_binding(
-    Json::Value& defect,
-    const rating_tree::RatingTreeMatchResult& result) {
-    defect["rating_tree_node_id"] = *result.node_id;
-    defect["standard_defect_indicator_id"] = result.h21_indicator_id.has_value()
-        ? Json::Value(*result.h21_indicator_id)
-        : Json::Value();
-    defect["rating_tree_match_method"] = result.match_method;
-    // 依据为空就写 null：契约允许缺省，页面据此隐藏那一行。
-    defect["rating_tree_match_evidence"] = result.match_evidence.empty()
-        ? Json::Value()
-        : Json::Value(result.match_evidence);
+bool same_result(const DefectMatchRecord& a, const DefectMatchRecord& b) {
+    return a.outcome == b.outcome && a.skipped == b.skipped &&
+        a.node_id.value_or(std::string{}) == b.node_id.value_or(std::string{});
+}
+
+// 一条来源病害的多个实例合成它那一行的结论。
+//
+// 全体一致才敢把结论摆上去：展开出来的构件通常同类别、同结果，合并后与展开前看到的
+// 完全一样。真出现分歧（各实例落在不同规范类别）时不能挑一个充数——页面这一行会被
+// 当成整条病害的判断，写谁都是错的，只能明说需要逐个实例处理。
+DefectMatchRecord merge_instance_records(std::vector<DefectMatchRecord>& records) {
+    DefectMatchRecord merged = std::move(records.front());
+    for (std::size_t index = 1; index < records.size(); ++index) {
+        if (same_result(merged, records[index])) continue;
+        DefectMatchRecord disagreement;
+        disagreement.candidate_id = merged.candidate_id;
+        disagreement.outcome = RatingTreeMatchOutcome::unmatched;
+        disagreement.reason_code = rating_tree::kReasonInstancesDisagree;
+        disagreement.reason_message =
+            "展开后的各实际构件匹配结果不一致，请逐个实例选择评定树病害。";
+        return disagreement;
+    }
+    return merged;
 }
 
 void count(DefectMatchStats& stats, const RatingTreeMatchOutcome outcome) {
@@ -113,25 +125,27 @@ std::optional<rating_tree::RatingTreeMatchInput> build_defect_match_input(
 }
 
 DefectMatchReport match_defect_rating_tree_nodes(
-    Json::Value& draft,
-    const std::string& rating_tree_version_id,
+    const Json::Value& view,
     const std::string& technical_standard_package_id,
     const rating_tree::EffectiveRatingTree& tree,
     const std::optional<inventory::InventoryRevision>& resolved_revision,
-    const DefectMatchScope& scope,
-    const bool apply) {
+    const DefectMatchScope& scope) {
     DefectMatchReport report;
-    if (!draft["defects"].isArray()) return report;
+    if (!view["defects"].isArray()) return report;
+
+    // 视图里一条来源病害展开成几条实例就有几项，但校对页按来源病害显示一行
+    // （§22.6），所以逐实例算完再按来源合并，一条来源病害只回一条记录。
+    std::vector<std::string> source_order;
+    std::map<std::string, std::vector<DefectMatchRecord>> by_source;
 
     const rating_tree::RatingTreeResolver resolver;
-    for (Json::ArrayIndex index = 0; index < draft["defects"].size(); ++index) {
-        auto& defect = draft["defects"][index];
-        const auto candidate_id = string_member_or_empty(defect, "candidate_id");
-        if (scope.has_scope && !scope.candidate_ids.contains(candidate_id)) continue;
+    for (const auto& defect : view["defects"]) {
+        const auto source_id = source_candidate_key(defect);
+        if (scope.has_scope && !scope.candidate_ids.contains(source_id)) continue;
+        if (!by_source.contains(source_id)) source_order.push_back(source_id);
 
-        ++report.stats.processed;
         DefectMatchRecord record;
-        record.candidate_id = candidate_id;
+        record.candidate_id = source_id;
 
         if (defect_is_protected_from_auto_match(defect)) {
             // 人工与已确认结果不参与自动匹配，也不被自动结果覆盖：只回传现状，
@@ -144,8 +158,7 @@ DefectMatchReport match_defect_rating_tree_nodes(
                 string_member_or_empty(defect, "rating_tree_match_method");
             record.match_evidence =
                 string_member_or_empty(defect, "rating_tree_match_evidence");
-            ++report.stats.skipped;
-            report.records.push_back(std::move(record));
+            by_source[source_id].push_back(std::move(record));
             continue;
         }
 
@@ -158,12 +171,10 @@ DefectMatchReport match_defect_rating_tree_nodes(
             reason_code,
             reason_message);
         if (!input.has_value()) {
-            if (apply) clear_rating_tree_fields(defect, rating_tree_version_id);
             record.outcome = RatingTreeMatchOutcome::prerequisite_missing;
             record.reason_code = reason_code;
             record.reason_message = reason_message;
-            count(report.stats, record.outcome);
-            report.records.push_back(std::move(record));
+            by_source[source_id].push_back(std::move(record));
             continue;
         }
 
@@ -178,14 +189,6 @@ DefectMatchReport match_defect_rating_tree_nodes(
             result.reason_message = "匹配服务执行失败，请稍后重试。";
         }
 
-        if (apply) {
-            clear_rating_tree_fields(defect, rating_tree_version_id);
-            if (result.outcome == RatingTreeMatchOutcome::auto_bound &&
-                result.node_id.has_value()) {
-                write_auto_binding(defect, result);
-            }
-        }
-
         record.outcome = result.outcome;
         record.node_id = result.node_id;
         record.match_method = result.match_method;
@@ -193,8 +196,18 @@ DefectMatchReport match_defect_rating_tree_nodes(
         record.candidates = result.candidates;
         record.reason_code = result.reason_code;
         record.reason_message = result.reason_message;
-        count(report.stats, record.outcome);
-        report.records.push_back(std::move(record));
+        by_source[source_id].push_back(std::move(record));
+    }
+
+    for (const auto& source_id : source_order) {
+        auto merged = merge_instance_records(by_source[source_id]);
+        ++report.stats.processed;
+        if (merged.skipped) {
+            ++report.stats.skipped;
+        } else {
+            count(report.stats, merged.outcome);
+        }
+        report.records.push_back(std::move(merged));
     }
     return report;
 }

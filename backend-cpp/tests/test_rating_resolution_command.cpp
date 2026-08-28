@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -10,6 +11,7 @@
 #include "bridge_report/db/WordImportRepository.hpp"
 #include "bridge_report/db/InspectionRatingTreeRepository.hpp"
 #include "bridge_report/resolution/ImportResolutionService.hpp"
+#include "bridge_report/resolution/ConfirmResolutionReader.hpp"
 #include "RatingTreeFixture.hpp"
 
 // 评分树解析命令（设计 §9.2）与验收标准 6/7/24。
@@ -26,6 +28,7 @@ using bridge_report::resolution::ImportResolutionService;
 using bridge_report::resolution::RatingResolutionRequest;
 using bridge_report::resolution::ResolutionStatus;
 using bridge_report::resolution::ResolutionTargetSelection;
+using bridge_report::resolution::SourceRatingResolutionRequest;
 
 class RatingResolutionCommandTest : public testing::Test {
 protected:
@@ -175,6 +178,30 @@ protected:
         EXPECT_EQ(outcome.status, ResolutionStatus::Ok) << outcome.error_message;
         EXPECT_EQ(outcome.workspace->groups.size(), 1u);
         return outcome.workspace->groups[0];
+    }
+
+    /// 绑到两件构件：一条来源病害挂两条活动实例，用来验证按来源病害整体写。
+    void bind_to_both() {
+        const auto group = only_group();
+        ComponentResolutionRequest request;
+        request.context = context();
+        request.group_id = group.group_id;
+        request.expected_version = group.version;
+        request.action = "bind";
+        for (const auto& component_id : component_ids_) {
+            ResolutionTargetSelection selection;
+            selection.bridge_component_id = component_id;
+            selection.target_role = "range_member";
+            request.targets.push_back(selection);
+        }
+        const auto outcome = ImportResolutionService(client_).apply_component_resolution(request);
+        ASSERT_EQ(outcome.status, ResolutionStatus::Ok) << outcome.error_message;
+    }
+
+    std::vector<bridge_report::resolution::WorkspaceDefectInstance> all_instances() {
+        const auto group = only_group();
+        EXPECT_EQ(group.members.size(), 1u);
+        return group.members[0].instances;
     }
 
     bridge_report::resolution::WorkspaceDefectInstance only_instance() {
@@ -448,4 +475,144 @@ TEST_F(RatingResolutionCommandTest, RejectsAStaleInventoryRevisionOnFactOverride
     const auto outcome = ImportResolutionService(client_).apply_fact_overrides(request);
     EXPECT_EQ(outcome.status, ResolutionStatus::Conflict);
     EXPECT_EQ(outcome.error_code, "component_inventory_revision_changed");
+}
+
+// 可确认视图必须带着评定要读的那几个字段。
+//
+// 系统评定逐条读 bridge_component_id / standard_component_category_id / rating_tree_node_id
+// 来判"这条病害挂在哪件构件、算哪个指标"。5.0 草稿里没有这些字段，直接拿草稿去算，
+// 判定全部落空，每条病害都报"未关联到当前已确认台账中的规范构件"——整份试算作废，
+// 而校对页会把这些评定问题挂到每一行上，于是一条都确认不了。
+//
+// 视图是评定、预检、写计划三者共同的数据来源，所以这里钉住它的输出形状。
+TEST_F(RatingResolutionCommandTest, ConfirmableViewCarriesWhatAssessmentReads) {
+    ASSERT_EQ(select_node(node_id_).status, ResolutionStatus::Ok);
+
+    const auto stored = client_->execSqlSync(
+        "select parsed_result_json::text as json from import_records where id=$1::uuid",
+        import_id_)[0]["json"].as<std::string>();
+    Json::Value draft;
+    Json::CharReaderBuilder reader;
+    std::string errors;
+    const std::unique_ptr<Json::CharReader> parser(reader.newCharReader());
+    ASSERT_TRUE(parser->parse(stored.data(), stored.data() + stored.size(), &draft, &errors))
+        << errors;
+
+    const auto view = bridge_report::resolution::build_confirmable_view(
+        client_, import_id_, draft);
+
+    ASSERT_TRUE(view["defects"].isArray());
+    ASSERT_GT(view["defects"].size(), 0u);
+    const auto& defect = view["defects"][0];
+    EXPECT_FALSE(defect["bridge_component_id"].asString().empty());
+    EXPECT_FALSE(defect["standard_component_category_id"].asString().empty());
+    EXPECT_EQ(defect["rating_tree_node_id"].asString(), node_id_);
+    // 来源身份要留着：预检靠它把展开出来的多条实例去重回一条报告行。
+    EXPECT_FALSE(defect["source_candidate_id"].asString().empty());
+}
+
+// --- 按来源病害整体写（§22.6）-------------------------------------------
+//
+// 校对页一条来源病害显示一行，用户选一次节点，落到它的全部活动实例。逐实例接口逐条
+// 发请求时，取草稿、装评定树、鉴权、查编辑锁、开事务、提交全部乘以实例数——区间展开
+// 的病害是 25 次，实测 2 秒。
+
+TEST_F(RatingResolutionCommandTest, SourceCommandWritesEveryInstance) {
+    bind_to_both();
+    const auto before = all_instances();
+    ASSERT_EQ(before.size(), 2u);
+
+    SourceRatingResolutionRequest request;
+    request.context = context();
+    request.rating_tree_node_id = node_id_;
+    for (const auto& instance : before) {
+        request.instances.push_back(
+            {instance.instance_id, instance.has_rating ? instance.rating_version : 0});
+    }
+    const auto outcome =
+        ImportResolutionService(client_).apply_source_rating_resolution(request);
+    ASSERT_EQ(outcome.status, ResolutionStatus::Ok) << outcome.error_message;
+
+    for (const auto& instance : all_instances()) {
+        EXPECT_TRUE(instance.has_rating);
+        EXPECT_EQ(instance.rating_status, "matched");
+        EXPECT_EQ(instance.rating_tree_node_id.value_or(""), node_id_);
+        EXPECT_EQ(instance.rating_match_method.value_or(""), "manual");
+    }
+}
+
+// 全部实例同一事务：任一条版本过期就整批回滚。
+//
+// 写一半最难查——校对页那一行显示的是整条病害的结论，用户看到"已选择"，而实际上只有
+// 一部分构件带着这个节点，直到正式入库评分才以扣分对不上暴露出来。
+TEST_F(RatingResolutionCommandTest, SourceCommandRollsBackWhenOneVersionIsStale) {
+    bind_to_both();
+    const auto before = all_instances();
+    ASSERT_EQ(before.size(), 2u);
+
+    SourceRatingResolutionRequest request;
+    request.context = context();
+    request.rating_tree_node_id = node_id_;
+    request.instances.push_back({before[0].instance_id, 0});
+    // 第二条带一个过期版本。
+    request.instances.push_back({before[1].instance_id, 99});
+
+    const auto outcome =
+        ImportResolutionService(client_).apply_source_rating_resolution(request);
+    EXPECT_EQ(outcome.status, ResolutionStatus::VersionConflict);
+    EXPECT_EQ(outcome.error_code, "resolution_version_conflict");
+
+    // 第一条也不能落库。
+    for (const auto& instance : all_instances()) {
+        EXPECT_NE(instance.rating_match_method.value_or(""), "manual");
+    }
+}
+
+// 逐实例接口（§13.2）保留，且与批量走同一份实现：单实例只是 instances 长度为 1。
+TEST_F(RatingResolutionCommandTest, SingleInstanceEndpointStillWorks) {
+    ASSERT_EQ(select_node(node_id_).status, ResolutionStatus::Ok);
+    EXPECT_EQ(only_instance().rating_match_method.value_or(""), "manual");
+}
+
+TEST_F(RatingResolutionCommandTest, SourceCommandRejectsAnUnknownInstance) {
+    bind_to_both();
+    SourceRatingResolutionRequest request;
+    request.context = context();
+    request.rating_tree_node_id = node_id_;
+    request.instances.push_back({all_instances()[0].instance_id, 0});
+    request.instances.push_back({"11111111-1111-4111-8111-111111111111", 0});
+
+    const auto outcome =
+        ImportResolutionService(client_).apply_source_rating_resolution(request);
+    EXPECT_EQ(outcome.status, ResolutionStatus::NotFound);
+    EXPECT_EQ(outcome.error_code, "defect_instance_not_found");
+}
+
+TEST_F(RatingResolutionCommandTest, SourceCommandClearsEveryInstance) {
+    bind_to_both();
+    {
+        SourceRatingResolutionRequest select;
+        select.context = context();
+        select.rating_tree_node_id = node_id_;
+        for (const auto& instance : all_instances()) {
+            select.instances.push_back(
+                {instance.instance_id, instance.has_rating ? instance.rating_version : 0});
+        }
+        ASSERT_EQ(ImportResolutionService(client_).apply_source_rating_resolution(select).status,
+                  ResolutionStatus::Ok);
+    }
+
+    SourceRatingResolutionRequest clear;
+    clear.context = context();
+    clear.rating_tree_node_id = "";
+    for (const auto& instance : all_instances()) {
+        clear.instances.push_back({instance.instance_id, instance.rating_version});
+    }
+    ASSERT_EQ(ImportResolutionService(client_).apply_source_rating_resolution(clear).status,
+              ResolutionStatus::Ok);
+
+    for (const auto& instance : all_instances()) {
+        EXPECT_EQ(instance.rating_status, "unresolved");
+        EXPECT_NE(instance.rating_match_method.value_or(""), "manual");
+    }
 }

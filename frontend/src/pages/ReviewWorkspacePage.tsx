@@ -337,7 +337,7 @@ function ReviewWorkspaceLoaded({
   const isAdmin = user?.role === "admin";
   const hasWarningDefects = draft.defects.some((defect) => defect.warnings.length > 0);
   // 只有已确认的 2.0 记录允许进入受控重开流程。
-  const canReopen = sessionImportStatus === "已确认" && response.contract_compatibility === "native_4_0" && !busy;
+  const canReopen = sessionImportStatus === "已确认" && response.contract_compatibility === "native_5_0" && !busy;
   const needsEditLock = !reviewSession.readOnly;
   const returnPath = response.inspection_year
     ? inspectionWorkspacePath(response.bridge.id, response.inspection_year.id)

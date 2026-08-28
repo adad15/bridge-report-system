@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
-import { applyRatingResolution } from "../../api/resolutionApi";
+import { applySourceRatingResolution } from "../../api/resolutionApi";
 
 vi.mock("../../api/resolutionApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/resolutionApi")>();
-  return { ...actual, applyRatingResolution: vi.fn().mockResolvedValue({}) };
+  return { ...actual, applySourceRatingResolution: vi.fn().mockResolvedValue({}) };
 });
 
 import type { RatingTreeNode, RatingTreeNodeSummary } from "../../api/ratingTreeApi";
@@ -221,18 +221,20 @@ it("persists a manual node choice to the rating resolution", async () => {
 
   fireEvent.change(screen.getByRole("combobox", { name: "评定树病害" }), { target: { value: node.id } });
 
-  await waitFor(() => expect(applyRatingResolution).toHaveBeenCalledTimes(2));
-  expect(applyRatingResolution).toHaveBeenNthCalledWith(
-    1, "http://backend", "record-1", "instance-1",
+  // 一次请求写完两条实例：逐条发的话后端每次都要取草稿、装评定树、开事务，
+  // 区间展开的病害那是 25 遍。命令按**来源病害**编址，不是按实例。
+  await waitFor(() => expect(applySourceRatingResolution).toHaveBeenCalledTimes(1));
+  expect(applySourceRatingResolution).toHaveBeenCalledWith(
+    "http://backend", "record-1", "defect_0001",
     {
-      expected_version: 3,
+      instances: [
+        { instance_id: "instance-1", expected_version: 3 },
+        // 第二条实例的版本是它自己的，不能套用第一条的——批量写不放宽乐观并发。
+        { instance_id: "instance-2", expected_version: 1 },
+      ],
       rating_tree_node_id: node.id,
       expected_rating_tree_version_id: "tree-version-1",
     },
     "lock-1");
-  // 第二条实例的版本是它自己的，不能套用第一条的。
-  expect(applyRatingResolution).toHaveBeenNthCalledWith(
-    2, "http://backend", "record-1", "instance-2",
-    expect.objectContaining({ expected_version: 1 }), "lock-1");
   await waitFor(() => expect(onRatingResolved).toHaveBeenCalled());
 });

@@ -22,7 +22,6 @@ constexpr const char* kUpper = "upper_general";
 constexpr const char* kWaterNode = "11111111-1111-4111-8111-111111111111";
 constexpr const char* kSpallingNode = "22222222-2222-4222-8222-222222222222";
 constexpr const char* kPackage = "h21-package";
-constexpr const char* kTreeVersion = "tree-version-1";
 
 EffectiveRatingTree tree_fixture() {
     EffectiveRatingTree tree;
@@ -90,6 +89,8 @@ bridge_report::inventory::InventoryRevision inventory_fixture() {
     return revision;
 }
 
+// 一条可确认视图项。视图逐**实例**展开，所以 candidate_id 是实例 id，来源病害身份在
+// source_candidate_id；单实例时两者同值。
 Json::Value make_defect(
     const std::string& candidate_id,
     const std::string& defect_type,
@@ -97,6 +98,7 @@ Json::Value make_defect(
     const bool bound = true) {
     Json::Value defect(Json::objectValue);
     defect["candidate_id"] = candidate_id;
+    defect["source_candidate_id"] = candidate_id;
     defect["defect_type"] = defect_type;
     defect["defect_location"] = "";
     defect["defect_description"] = description.empty() ? defect_type : description;
@@ -106,11 +108,23 @@ Json::Value make_defect(
     return defect;
 }
 
-Json::Value make_draft(const std::vector<Json::Value>& defects) {
-    Json::Value draft(Json::objectValue);
-    draft["defects"] = Json::Value(Json::arrayValue);
-    for (const auto& defect : defects) draft["defects"].append(defect);
-    return draft;
+Json::Value make_view(const std::vector<Json::Value>& defects) {
+    Json::Value view(Json::objectValue);
+    view["defects"] = Json::Value(Json::arrayValue);
+    for (const auto& defect : defects) view["defects"].append(defect);
+    return view;
+}
+
+// 同一条来源病害展开出的一条实例：各绑各的构件，来源身份共享。
+Json::Value make_instance(
+    const std::string& source_candidate_id,
+    const std::string& instance_id,
+    const std::string& component_id,
+    const std::string& defect_type) {
+    auto defect = make_defect(instance_id, defect_type);
+    defect["source_candidate_id"] = source_candidate_id;
+    defect["bridge_component_id"] = component_id;
+    return defect;
 }
 
 Json::Value with_source(
@@ -126,54 +140,55 @@ Json::Value with_source(
     return defect;
 }
 
-bridge_report::review::DefectMatchReport run(Json::Value& draft, const bool apply = true) {
+bridge_report::review::DefectMatchReport run(const Json::Value& view) {
     return match_defect_rating_tree_nodes(
-        draft, kTreeVersion, kPackage, tree_fixture(), inventory_fixture(),
-        DefectMatchScope{}, apply);
+        view, kPackage, tree_fixture(), inventory_fixture(), DefectMatchScope{});
 }
 
 }  // namespace
 
-TEST(DefectRatingTreeMatchingTest, BindsUniqueResultsWithoutConfirmingThem) {
-    auto draft = make_draft({with_source(
+
+TEST(DefectRatingTreeMatchingTest, ReportsUniqueResultsWithoutTouchingTheView) {
+    const auto view = make_view({with_source(
         make_defect("d1", "文字与映射无关"),
         "group-water",
         "index-water",
         "5.1.1",
         "5.1.1-13")});
+    const auto before = view;
 
-    const auto report = run(draft);
+    const auto report = run(view);
 
     EXPECT_EQ(report.stats.processed, 1);
     EXPECT_EQ(report.stats.auto_bound, 1);
-    const auto& defect = draft["defects"][0];
-    EXPECT_EQ(defect["rating_tree_node_id"].asString(), kWaterNode);
-    EXPECT_EQ(defect["rating_tree_match_method"].asString(), "source_indicator");
-    EXPECT_EQ(defect["standard_defect_indicator_id"].asString(), "h21.defect.5_1_1_6");
-    // 自动绑定不等于确认：记录仍然停留在待确认。
-    EXPECT_EQ(defect["review_status"].asString(), "待确认");
-    EXPECT_EQ(defect["group_review_status"].asString(), "待确认");
+    ASSERT_EQ(report.records.size(), 1U);
+    ASSERT_TRUE(report.records[0].node_id.has_value());
+    EXPECT_EQ(*report.records[0].node_id, kWaterNode);
+    EXPECT_EQ(report.records[0].match_method, "source_indicator");
+    // 只读计算：权威的评分树解析在 import_rating_resolutions，由解析接口写入。
+    // 这里再往视图里写一次，等于让页面预览悄悄改动权威状态。
+    EXPECT_EQ(view, before);
 }
 
 TEST(DefectRatingTreeMatchingTest, TextDoesNotCreateAnAutomaticBinding) {
-    auto draft = make_draft({make_defect("d1", "", "板底存在渗水泛碱")});
+    const auto view = make_view({make_defect("d1", "", "板底存在渗水泛碱")});
 
-    const auto report = run(draft);
+    const auto report = run(view);
 
     EXPECT_EQ(report.stats.auto_bound, 0);
     EXPECT_EQ(report.stats.unmatched, 1);
-    EXPECT_TRUE(draft["defects"][0]["rating_tree_node_id"].isNull());
+    ASSERT_EQ(report.records.size(), 1U);
+    EXPECT_FALSE(report.records[0].node_id.has_value());
 }
 
 TEST(DefectRatingTreeMatchingTest, CompositeTextDoesNotCreateCandidates) {
-    auto draft =
-        make_draft({make_defect("d1", "受渗水侵蚀，混凝土剥蚀破损")});
+    const auto view =
+        make_view({make_defect("d1", "受渗水侵蚀，混凝土剥蚀破损")});
 
-    const auto report = run(draft);
+    const auto report = run(view);
 
     EXPECT_EQ(report.stats.unmatched, 1);
     EXPECT_EQ(report.stats.auto_bound, 0);
-    EXPECT_TRUE(draft["defects"][0]["rating_tree_node_id"].isNull());
     ASSERT_EQ(report.records.size(), 1U);
     EXPECT_EQ(report.records[0].outcome, RatingTreeMatchOutcome::unmatched);
     EXPECT_EQ(report.records[0].reason_code, "no_matching_rule");
@@ -181,12 +196,12 @@ TEST(DefectRatingTreeMatchingTest, CompositeTextDoesNotCreateCandidates) {
 }
 
 TEST(DefectRatingTreeMatchingTest, SeparatesMissingPrerequisitesFromRealMisses) {
-    auto draft = make_draft({
+    const auto view = make_view({
         make_defect("d1", "水损", "", false),
         make_defect("d2", "无此规范病害"),
     });
 
-    const auto report = run(draft);
+    const auto report = run(view);
 
     EXPECT_EQ(report.stats.prerequisite_missing, 1);
     EXPECT_EQ(report.stats.unmatched, 1);
@@ -200,15 +215,17 @@ TEST(DefectRatingTreeMatchingTest, NeverOverwritesManualSelections) {
     defect["rating_tree_node_id"] = kSpallingNode;
     defect["rating_tree_match_method"] = "manual";
     defect["rating_tree_match_evidence"] = "用户选择";
-    auto draft = make_draft({defect});
+    const auto view = make_view({defect});
 
-    const auto report = run(draft);
+    const auto report = run(view);
 
     EXPECT_EQ(report.stats.skipped, 1);
     EXPECT_EQ(report.stats.auto_bound, 0);
-    EXPECT_EQ(draft["defects"][0]["rating_tree_node_id"].asString(), kSpallingNode);
-    EXPECT_EQ(draft["defects"][0]["rating_tree_match_method"].asString(), "manual");
+    ASSERT_EQ(report.records.size(), 1U);
     EXPECT_TRUE(report.records[0].skipped);
+    ASSERT_TRUE(report.records[0].node_id.has_value());
+    EXPECT_EQ(*report.records[0].node_id, kSpallingNode);
+    EXPECT_EQ(report.records[0].match_method, "manual");
 }
 
 TEST(DefectRatingTreeMatchingTest, NeverOverwritesConfirmedOrIgnoredRecords) {
@@ -217,46 +234,29 @@ TEST(DefectRatingTreeMatchingTest, NeverOverwritesConfirmedOrIgnoredRecords) {
     confirmed["rating_tree_node_id"] = kSpallingNode;
     auto ignored = make_defect("d2", "水损");
     ignored["review_status"] = "已忽略";
-    auto draft = make_draft({confirmed, ignored});
+    const auto view = make_view({confirmed, ignored});
 
-    const auto report = run(draft);
+    const auto report = run(view);
 
     EXPECT_EQ(report.stats.skipped, 2);
-    EXPECT_EQ(draft["defects"][0]["rating_tree_node_id"].asString(), kSpallingNode);
-    EXPECT_TRUE(draft["defects"][1]["rating_tree_node_id"].isNull());
-}
-
-TEST(DefectRatingTreeMatchingTest, PreviewModeLeavesTheDraftUntouched) {
-    auto draft = make_draft({with_source(
-        make_defect("d1", "水损"),
-        "group-water",
-        "index-water",
-        "5.1.1",
-        "5.1.1-13")});
-    const auto before = draft;
-
-    const auto report = run(draft, false);
-
-    EXPECT_EQ(report.stats.auto_bound, 1);
-    EXPECT_EQ(draft, before);
-    ASSERT_EQ(report.records.size(), 1U);
+    ASSERT_EQ(report.records.size(), 2U);
     ASSERT_TRUE(report.records[0].node_id.has_value());
-    EXPECT_EQ(*report.records[0].node_id, kWaterNode);
+    EXPECT_EQ(*report.records[0].node_id, kSpallingNode);
+    EXPECT_FALSE(report.records[1].node_id.has_value());
 }
 
-TEST(DefectRatingTreeMatchingTest, RepeatedRunsAreIdempotentAndKeepTheDefectCount) {
-    auto draft = make_draft({
+TEST(DefectRatingTreeMatchingTest, RepeatedRunsAreIdempotent) {
+    const auto view = make_view({
         make_defect("d1", "水损"),
         make_defect("d2", "受渗水侵蚀，混凝土剥蚀破损"),
         make_defect("d3", "无此规范病害"),
     });
 
-    const auto first = run(draft);
-    const auto after_first = draft;
-    const auto second = run(draft);
+    const auto first = run(view);
+    const auto second = run(view);
 
-    EXPECT_EQ(draft, after_first);
-    EXPECT_EQ(draft["defects"].size(), 3U);
+    EXPECT_EQ(first.stats.processed, 3);
+    EXPECT_EQ(second.stats.processed, 3);
     EXPECT_EQ(first.stats.auto_bound, second.stats.auto_bound);
     EXPECT_EQ(first.stats.composite, second.stats.composite);
     EXPECT_EQ(first.stats.unmatched, second.stats.unmatched);
@@ -275,16 +275,82 @@ TEST(DefectRatingTreeMatchingTest, ScopeLimitsProcessingToTheSelectedCandidates)
         "index-water",
         "5.1.1",
         "5.1.1-13");
-    auto draft = make_draft({first, second});
+    const auto view = make_view({first, second});
     DefectMatchScope scope;
     scope.has_scope = true;
     scope.candidate_ids.insert("d2");
 
     const auto report = match_defect_rating_tree_nodes(
-        draft, kTreeVersion, kPackage, tree_fixture(), inventory_fixture(), scope,
-        true);
+        view, kPackage, tree_fixture(), inventory_fixture(), scope);
 
     EXPECT_EQ(report.stats.processed, 1);
-    EXPECT_TRUE(draft["defects"][0]["rating_tree_node_id"].isNull());
-    EXPECT_EQ(draft["defects"][1]["rating_tree_node_id"].asString(), kWaterNode);
+    ASSERT_EQ(report.records.size(), 1U);
+    EXPECT_EQ(report.records[0].candidate_id, "d2");
+}
+
+// --- 区间/多目标展开：视图逐实例，报告按来源病害 -------------------------
+//
+// 校对页一条来源病害显示一行（§22.6）。展开成 25 条实例后若逐实例回报，页面会拿到 25
+// 条 candidate_id 对不上任何一行的记录，整条病害就永远停在"待匹配"。
+
+TEST(DefectRatingTreeMatchingTest, CollapsesAgreeingInstancesIntoOneSourceRecord) {
+    const auto view = make_view({
+        with_source(make_instance("d1", "inst-1", "component-1", "水损"),
+                    "group-water", "index-water", "5.1.1", "5.1.1-13"),
+        with_source(make_instance("d1", "inst-2", "component-1", "水损"),
+                    "group-water", "index-water", "5.1.1", "5.1.1-13"),
+        with_source(make_instance("d1", "inst-3", "component-1", "水损"),
+                    "group-water", "index-water", "5.1.1", "5.1.1-13"),
+    });
+
+    const auto report = run(view);
+
+    EXPECT_EQ(report.stats.processed, 1);
+    EXPECT_EQ(report.stats.auto_bound, 1);
+    ASSERT_EQ(report.records.size(), 1U);
+    // 记录要按来源病害编址，页面才对得上那一行。
+    EXPECT_EQ(report.records[0].candidate_id, "d1");
+    ASSERT_TRUE(report.records[0].node_id.has_value());
+    EXPECT_EQ(*report.records[0].node_id, kWaterNode);
+}
+
+TEST(DefectRatingTreeMatchingTest, ScopeMatchesTheSourceIdOfExpandedInstances) {
+    const auto view = make_view({
+        with_source(make_instance("d1", "inst-1", "component-1", "水损"),
+                    "group-water", "index-water", "5.1.1", "5.1.1-13"),
+        with_source(make_instance("d1", "inst-2", "component-1", "水损"),
+                    "group-water", "index-water", "5.1.1", "5.1.1-13"),
+        make_defect("d2", "无此规范病害"),
+    });
+    DefectMatchScope scope;
+    scope.has_scope = true;
+    // 页面送的是来源病害 id——它不知道实例 id，也不该知道。
+    scope.candidate_ids.insert("d1");
+
+    const auto report = match_defect_rating_tree_nodes(
+        view, kPackage, tree_fixture(), inventory_fixture(), scope);
+
+    EXPECT_EQ(report.stats.processed, 1);
+    ASSERT_EQ(report.records.size(), 1U);
+    EXPECT_EQ(report.records[0].candidate_id, "d1");
+}
+
+TEST(DefectRatingTreeMatchingTest, ReportsDisagreementInsteadOfPickingOneInstance) {
+    const auto view = make_view({
+        with_source(make_instance("d1", "inst-1", "component-1", "水损"),
+                    "group-water", "index-water", "5.1.1", "5.1.1-13"),
+        // 台账里没有这件构件：这条实例解析不出规范类别。
+        with_source(make_instance("d1", "inst-2", "component-elsewhere", "水损"),
+                    "group-water", "index-water", "5.1.1", "5.1.1-13"),
+    });
+
+    const auto report = run(view);
+
+    EXPECT_EQ(report.stats.processed, 1);
+    ASSERT_EQ(report.records.size(), 1U);
+    EXPECT_EQ(report.records[0].candidate_id, "d1");
+    EXPECT_EQ(report.records[0].outcome, RatingTreeMatchOutcome::unmatched);
+    EXPECT_EQ(report.records[0].reason_code, "instances_disagree");
+    // 挑其中一个充数最危险：页面把这一行当成整条病害的结论，写谁都是错的。
+    EXPECT_FALSE(report.records[0].node_id.has_value());
 }

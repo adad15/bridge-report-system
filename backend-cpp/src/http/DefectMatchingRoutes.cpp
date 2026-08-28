@@ -11,6 +11,7 @@
 #include "bridge_report/db/ReviewRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
+#include "bridge_report/resolution/ConfirmResolutionReader.hpp"
 #include "bridge_report/review/JsonAccessors.hpp"
 
 namespace bridge_report::http {
@@ -19,8 +20,9 @@ namespace {
 
 // 页面提交的当前草稿覆盖层：只接受匹配真正用到的字段，且只认已存在的
 // candidate_id，客户端无法凭请求体凭空造出新病害。
+// 只接受来源事实和校对状态：构件解析与评分树解析都在关系表里，由解析接口写入，
+// 客户端再送一份只会让陈旧值盖掉权威状态（5.0 合同也明确拒收这些字段）。
 const char* const kOverlayFields[] = {
-    "bridge_component_id",
     "defect_type",
     "defect_description",
     "defect_location",
@@ -28,8 +30,6 @@ const char* const kOverlayFields[] = {
     "source_defect_group_number",
     "source_defect_indicator_id",
     "source_defect_indicator_number",
-    "rating_tree_node_id",
-    "rating_tree_match_method",
     "review_status",
     "group_review_status",
 };
@@ -183,6 +183,13 @@ void register_defect_matching_routes(const drogon::orm::DbClientPtr& db_client) 
                 const auto scope =
                     body == nullptr ? review::DefectMatchScope{} : parse_scope(*body);
 
+                // 构件与评分树解析在关系表里，草稿只剩来源事实（5.0 §7.1）。直接拿草稿
+                // 匹配会逐条读到空的 bridge_component_id，把每条病害都判成"尚未绑定
+                // 实际构件"。视图把来源事实、构件解析与实例覆盖合到一起，正是匹配要的
+                // 输入；页面刚改过的文字仍由上面的 overlay 盖在来源事实上。
+                const auto view = resolution::build_confirmable_view(
+                    db_client, import_record_id, draft);
+
                 // 年度锁定版本优先，否则该桥最新的**已确认**版本——与绑定写入病害时
                 // 用的是同一条规则。此前走 get_latest_revision()（草稿优先），桥上一有
                 // 草稿就按草稿的映射挑评定树节点，而这些节点随后会被按已确认版本校验的
@@ -192,9 +199,9 @@ void register_defect_matching_routes(const drogon::orm::DbClientPtr& db_client) 
                 // 而这里最多几百条，且完整装配还要为每条算 is_referenced（四个 exists
                 // 子查询），那部分匹配从不使用。
                 std::vector<std::string> referenced_components;
-                if (draft["defects"].isArray()) {
+                if (view["defects"].isArray()) {
                     std::set<std::string> unique_ids;
-                    for (const auto& defect : draft["defects"]) {
+                    for (const auto& defect : view["defects"]) {
                         if (!defect.isObject()) continue;
                         const auto& id = defect["bridge_component_id"];
                         if (id.isString() && !id.asString().empty()) {
@@ -212,13 +219,11 @@ void register_defect_matching_routes(const drogon::orm::DbClientPtr& db_client) 
                 // 只读计算：不写 parsed_result_json，也不碰病害、照片与拆分关系。
                 // 自动结果由页面落进本地草稿，保存时服务端再按同一规则复核。
                 const auto report = review::match_defect_rating_tree_nodes(
-                    draft,
-                    *detail->rating_tree_version_id,
+                    view,
                     *detail->technical_standard_package_id,
                     *tree,
                     inventory,
-                    scope,
-                    false);
+                    scope);
                 // 依赖缺失与匹配失败逐条落日志（导入 ID、候选 ID、评定树版本、原因码），
                 // 页面只拿到原因码与说明，不暴露内部堆栈。
                 for (const auto& record : report.records) {

@@ -968,3 +968,91 @@ describe("buildDefectPhotoReviewModel", () => {
     });
   });
 });
+
+// 区间展开的病害一条挂多件构件，不能被当成"从没绑过构件"。
+//
+// buildResolutionIndex 在多实例绑不同构件时把 bridgeComponentId 置 null——那是有意的，
+// "这条病害绑到哪一件"本来就没有单一答案。但判定不能跟着看那个 null：重构前区间展开
+// 是把病害复制成多条、每条一件构件，老判据因此成立；现在是一条病害挂多个实例，再看
+// 单一 id 就会把已经绑好三件构件的病害整片打回待处理。
+it("treats a range-expanded defect as bound when its instances have components", () => {
+  const draft = safeDraft();
+  const candidateId = draft.defects[0].candidate_id;
+  setResolution(candidateId, {
+    bridgeComponentId: null,          // 多目标：没有单一答案
+    componentIds: ["c-1", "c-2", "c-3"],
+    activeInstanceCount: 3,
+    ratingTreeNodeId: treeNode.id,
+    ratingMatchMethod: "exact",
+    ratingTreeVersionId: "tree-version-1",
+  });
+
+  const row = buildDefectPhotoReviewModel({
+    draft,
+    ratingTreeVersionId: "tree-version-1",
+    ratingTreeNodes: [treeNode],
+    applicableTreeNodeIdsByComponent: new Map([
+      ["c-1", new Set([treeNode.id])],
+      ["c-2", new Set([treeNode.id])],
+      ["c-3", new Set([treeNode.id])],
+    ]),
+    treeRulesReady: true,
+    resolution: fixtureResolution,
+    assessmentIssues: [],
+  }).rows[0];
+
+  expect(row.problems.map((p) => p.code)).not.toContain("component_required");
+  expect(row.problems.map((p) => p.code)).not.toContain("rating_tree_node_not_applicable");
+});
+
+// 节点必须对每一件构件都适用。只对其中两件适用时，第三条实例会在确认阶段被拒，
+// 那时症状离这里已经很远，所以要在校对页就说出来。
+it("flags a node that does not apply to every expanded component", () => {
+  const draft = safeDraft();
+  setResolution(draft.defects[0].candidate_id, {
+    bridgeComponentId: null,
+    componentIds: ["c-1", "c-2", "c-3"],
+    activeInstanceCount: 3,
+    ratingTreeNodeId: treeNode.id,
+    ratingMatchMethod: "exact",
+    ratingTreeVersionId: "tree-version-1",
+  });
+
+  const row = buildDefectPhotoReviewModel({
+    draft,
+    ratingTreeVersionId: "tree-version-1",
+    ratingTreeNodes: [treeNode],
+    applicableTreeNodeIdsByComponent: new Map([
+      ["c-1", new Set([treeNode.id])],
+      ["c-2", new Set([treeNode.id])],
+      ["c-3", new Set<string>()],   // 第三件不适用
+    ]),
+    treeRulesReady: true,
+    resolution: fixtureResolution,
+    assessmentIssues: [],
+  }).rows[0];
+
+  expect(row.problems.map((p) => p.code)).toContain("rating_tree_node_not_applicable");
+});
+
+// 一条活动实例都没绑上构件，才是真的"尚未选择实际构件"。
+it("still requires a component when no instance has one", () => {
+  const draft = safeDraft();
+  setResolution(draft.defects[0].candidate_id, {
+    bridgeComponentId: null,
+    componentIds: [],
+    activeInstanceCount: 0,
+  });
+
+  const row = buildDefectPhotoReviewModel({
+    draft,
+    ratingTreeVersionId: "tree-version-1",
+    ratingTreeNodes: [treeNode],
+    applicableTreeNodeIdsByComponent: new Map(),
+    treeRulesReady: true,
+    resolution: fixtureResolution,
+    assessmentIssues: [],
+  }).rows[0];
+
+  expect(row.problems.map((p) => p.code)).toContain("component_required");
+});

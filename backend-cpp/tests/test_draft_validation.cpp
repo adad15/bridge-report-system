@@ -258,55 +258,6 @@ TEST(DraftValidationTest, RejectsChangedImportedDefectEvidence) {
     ASSERT_EQ(result.issues.size(), 1U);
 }
 
-TEST(DraftValidationTest, SourceMappingDerivesH21AndIgnoresForgery) {
-    auto stored = fixture();
-    auto draft = stored;
-    auto& defect = draft["defects"][0];
-    defect["bridge_component_id"] = "component-1";
-    defect["standard_defect_indicator_id"] = "forged";
-    defect["source_defect_group_id"] = "source-group-crack";
-    defect["source_defect_indicator_id"] = "source-indicator-crack";
-    defect["source_defect_group_number"] = "5.1.1";
-    defect["source_defect_indicator_number"] = "5.1.1-1";
-
-    const auto result =
-        bridge_report::review::normalize_defect_rating_tree_associations(
-            draft,
-            stored,
-            "tree-version-1",
-            "h21-package",
-            rating_tree_fixture(),
-            inventory_fixture());
-
-    ASSERT_TRUE(result.ok) << result.message;
-    EXPECT_EQ(
-        defect["rating_tree_node_id"].asString(),
-        "11111111-1111-4111-8111-111111111111");
-    EXPECT_EQ(defect["standard_defect_indicator_id"].asString(), "h21.crack");
-    EXPECT_EQ(defect["rating_tree_match_method"].asString(), "source_indicator");
-}
-
-TEST(DraftValidationTest, RatingTreeNormalizationRejectsInapplicableManualNode) {
-    auto stored = fixture();
-    stored["defects"][0]["bridge_component_id"] = "component-1";
-    auto draft = stored;
-    draft["defects"][0]["rating_tree_node_id"] =
-        "11111111-1111-4111-8111-111111111111";
-
-    const auto result =
-        bridge_report::review::normalize_defect_rating_tree_associations(
-            draft,
-            stored,
-            "tree-version-1",
-            "h21-package",
-            rating_tree_fixture(),
-            inventory_fixture("deck"));
-
-    EXPECT_FALSE(result.ok);
-    EXPECT_TRUE(draft["defects"][0]["rating_tree_node_id"].isNull());
-    EXPECT_TRUE(draft["defects"][0]["standard_defect_indicator_id"].isNull());
-}
-
 TEST(DraftValidationTest, RatingTreeConfirmationValidatesScaleAndAllowsNonScoring) {
     auto data = fixture();
     auto& defect = data["defects"][0];

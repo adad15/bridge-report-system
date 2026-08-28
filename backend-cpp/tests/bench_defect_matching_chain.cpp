@@ -121,8 +121,8 @@ TEST(DefectMatchingChainBench, TimesEachStageOfTheFirstPaint) {
 
     start = Clock::now();
     const auto report = bridge_report::review::match_defect_rating_tree_nodes(
-        draft, tree_version, technical_package, *tree, narrow,
-        bridge_report::review::DefectMatchScope{}, false);
+        draft, technical_package, *tree, narrow,
+        bridge_report::review::DefectMatchScope{});
     std::cerr << "match_defect_rating_tree_nodes " << ms_since(start)
               << " ms  记录 " << report.records.size() << " 条\n";
 
@@ -131,8 +131,8 @@ TEST(DefectMatchingChainBench, TimesEachStageOfTheFirstPaint) {
     Json::Value draft_copy;
     ASSERT_TRUE(parse_json_text(context[0]["parsed"].as<std::string>(), draft_copy));
     const auto full_report = bridge_report::review::match_defect_rating_tree_nodes(
-        draft_copy, tree_version, technical_package, *tree, inventory,
-        bridge_report::review::DefectMatchScope{}, false);
+        draft_copy, technical_package, *tree, inventory,
+        bridge_report::review::DefectMatchScope{});
     ASSERT_EQ(report.records.size(), full_report.records.size());
     std::size_t divergent = 0;
     for (std::size_t i = 0; i < report.records.size(); ++i) {

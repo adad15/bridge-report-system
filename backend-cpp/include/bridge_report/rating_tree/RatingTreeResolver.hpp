@@ -32,6 +32,9 @@ inline constexpr const char* kReasonMatcherFailed = "matcher_failed";
 /// 结果唯一但规则只允许推荐，仍须人工确认。
 inline constexpr const char* kReasonCandidateRequiresReview =
     "candidate_requires_review";
+/// 区间或多目标展开后，各实例落在不同类别、匹到不同结果。校对页按来源病害显示一行
+/// （§22.6），一行给不出互相矛盾的自动结果，只能请人逐个实例处理。
+inline constexpr const char* kReasonInstancesDisagree = "instances_disagree";
 
 /// 候选只在当前页面展示，绝不写入正式 rating_tree_node_id。
 struct RatingTreeMatchCandidate {

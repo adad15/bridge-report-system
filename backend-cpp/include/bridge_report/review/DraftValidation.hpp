@@ -70,25 +70,6 @@ enum class DraftInventoryRevisionConsistency {
     const std::optional<std::string>& resolved_revision_id
 );
 
-/** 校验病害中的实际构件 ID、规范类别和内部结构部位均来自本检测年度使用的构件台账。 */
-[[nodiscard]] DraftValidationResult validate_defect_component_associations(
-    const Json::Value& body,
-    const std::optional<inventory::InventoryRevision>& resolved_revision
-);
-
-/**
- * 服务端规范化草稿中的评定树引用。客户端只能提交一个候选树节点；
- * 年度树版本、H21 指标、自动匹配方式和证据均由服务端覆盖。
- */
-[[nodiscard]] DraftValidationResult normalize_defect_rating_tree_associations(
-    Json::Value& draft,
-    const Json::Value& stored_draft,
-    const std::string& rating_tree_version_id,
-    const std::string& technical_standard_package_id,
-    const rating_tree::EffectiveRatingTree& tree,
-    const std::optional<inventory::InventoryRevision>& resolved_revision
-);
-
 /** 正式确认前校验每条已处理病害的树节点、构件适用范围和合法标度。 */
 [[nodiscard]] DraftValidationResult validate_defect_rating_tree_for_confirmation(
     const Json::Value& draft,
