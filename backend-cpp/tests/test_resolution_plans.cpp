@@ -440,3 +440,26 @@ TEST_F(ResolutionPlanTest, RepointingAnUnresolvedGroupKeepsItUnresolved) {
     ASSERT_TRUE(after.workspace->groups[0].inventory_revision_id.has_value());
     EXPECT_EQ(*after.workspace->groups[0].inventory_revision_id, revision_id_);
 }
+
+// P2-6 回归：多个组的预览计数不得互相累加。
+//
+// 原来每轮累的是已经累计过的 instances_after，于是第二个组会把第一个组的量再算一遍：
+// 两个各 3 条病害、各展开到 1 件构件的组，重算数会显示成 3 + 6 = 9，而实际是 6。
+// 预览是用户点"应用"之前唯一能看的规模说明，数字虚高会让人误判影响面。
+TEST_F(ResolutionPlanTest, PreviewCountsDoNotAccumulateAcrossRows) {
+    import_defects({"第1孔桥面", "第2孔桥面"});
+    BulkReplaceIntent intent;
+    intent.find = "第*孔桥面";
+    intent.replace = "*#跨桥面铺装";
+
+    const auto outcome =
+        ImportResolutionService(client_).build_bulk_replace_plan(context(), intent);
+    ASSERT_EQ(outcome.status, ResolutionStatus::Ok) << outcome.error_message;
+    const auto& plan = *outcome.plan;
+
+    ASSERT_EQ(plan.will_apply_count, 2);
+    // 两个组各一条病害各绑一件构件：实例前后都是 2，重算 2 条。
+    EXPECT_EQ(plan.instances_before, 2);
+    EXPECT_EQ(plan.instances_after, 2);
+    EXPECT_EQ(plan.rating_recomputed_count, 2);
+}

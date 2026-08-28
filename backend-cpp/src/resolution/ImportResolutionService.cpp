@@ -275,6 +275,22 @@ std::optional<CommandPreconditions> load_command_preconditions(
     return preconditions;
 }
 
+/// 客户端看到的台账版本是否仍是当前版本。
+///
+/// 用户打开工作区后台账被别处确认成新版本时，旧页面手里的构件候选、类别映射、可选
+/// 评分树节点全是按旧版本算的。放它写进去，等于让一份基于过时语义的判断落库，而且
+/// 出错时症状出现在很远的地方（确认入库阶段报"该构件不适用此病害"）。
+///
+/// 空的 expected 视为"调用方不校验"：并非所有内部调用点都拿得到版本。
+[[nodiscard]] bool inventory_revision_matches(
+    const CommandPreconditions& preconditions,
+    const ResolutionCommandContext& context) {
+    return context.expected_inventory_revision_id.empty()
+        || preconditions.revision_id.value_or(std::string{})
+               == context.expected_inventory_revision_id;
+}
+
+
 }  // namespace
 
 ImportResolutionService::ImportResolutionService(drogon::orm::DbClientPtr db_client)
@@ -470,6 +486,12 @@ ResolutionOutcome ImportResolutionService::load_workspace(
                         instance_view.rating_tree_node_id = rating->second->rating_tree_node_id;
                         instance_view.rating_match_method = rating->second->match_method;
                         instance_view.rating_version = rating->second->version;
+                        // 人工裁决之后内容变过：节点保留，但界面要提示复核（§8.5）。
+                        // 判据是"裁决当时的输入哈希"与"当前输入哈希"不一致。
+                        instance_view.content_changed_after_manual_resolution =
+                            rating->second->resolved_match_input_hash.has_value()
+                            && *rating->second->resolved_match_input_hash
+                                   != rating->second->match_input_hash;
                     }
 
                     // 目标构件 id 直接带上，前端不必再做一次关联。
@@ -720,6 +742,13 @@ ResolutionOutcome ImportResolutionService::apply_rating_resolution(
         const auto preconditions = load_command_preconditions(
             tx, request.context.import_record_id, outcome);
         if (!preconditions.has_value()) { tx->rollback(); return outcome; }
+        if (!inventory_revision_matches(*preconditions, request.context)) {
+            tx->rollback();
+            outcome.status = ResolutionStatus::Conflict;
+            outcome.error_code = "component_inventory_revision_changed";
+            outcome.error_message = "构件台账版本已变化，请刷新后重试。";
+            return outcome;
+        }
         if (!edit_lock_still_active(tx, request.context.import_record_id,
                                     request.context.edit_lock)) {
             tx->rollback();
@@ -845,10 +874,13 @@ ResolutionOutcome ImportResolutionService::apply_rating_resolution(
         if (request.rating_tree_node_id.empty()) {
             resolution.status = "unresolved";
             resolution.match_method = std::nullopt;
+            resolution.resolved_match_input_hash = std::nullopt;
         } else {
             resolution.status = "matched";
             resolution.rating_tree_node_id = request.rating_tree_node_id;
             resolution.match_method = "manual";
+            // 裁决那一刻的输入哈希（§8.5）。之后文字再变，节点保留，但界面据此提示复核。
+            resolution.resolved_match_input_hash = hashes.match_input_hash;
             resolution.resolved_by_user_id = request.context.actor_user_id;
             const auto node = rating->tree.nodes.find(request.rating_tree_node_id);
             if (node == rating->tree.nodes.end()) {
@@ -917,6 +949,13 @@ ResolutionOutcome ImportResolutionService::apply_fact_overrides(
         const auto preconditions = load_command_preconditions(
             tx, request.context.import_record_id, outcome);
         if (!preconditions.has_value()) { tx->rollback(); return outcome; }
+        if (!inventory_revision_matches(*preconditions, request.context)) {
+            tx->rollback();
+            outcome.status = ResolutionStatus::Conflict;
+            outcome.error_code = "component_inventory_revision_changed";
+            outcome.error_message = "构件台账版本已变化，请刷新后重试。";
+            return outcome;
+        }
         if (!edit_lock_still_active(tx, request.context.import_record_id,
                                     request.context.edit_lock)) {
             tx->rollback();
@@ -1052,6 +1091,13 @@ ResolutionOutcome ImportResolutionService::apply_instance_status(
         const auto preconditions = load_command_preconditions(
             tx, request.context.import_record_id, outcome);
         if (!preconditions.has_value()) { tx->rollback(); return outcome; }
+        if (!inventory_revision_matches(*preconditions, request.context)) {
+            tx->rollback();
+            outcome.status = ResolutionStatus::Conflict;
+            outcome.error_code = "component_inventory_revision_changed";
+            outcome.error_message = "构件台账版本已变化，请刷新后重试。";
+            return outcome;
+        }
         if (!edit_lock_still_active(tx, request.context.import_record_id,
                                     request.context.edit_lock)) {
             tx->rollback();
@@ -1142,6 +1188,13 @@ ResolutionOutcome ImportResolutionService::add_manual_defect(
         auto preconditions = load_command_preconditions(
             tx, request.context.import_record_id, outcome);
         if (!preconditions.has_value()) { tx->rollback(); return outcome; }
+        if (!inventory_revision_matches(*preconditions, request.context)) {
+            tx->rollback();
+            outcome.status = ResolutionStatus::Conflict;
+            outcome.error_code = "component_inventory_revision_changed";
+            outcome.error_message = "构件台账版本已变化，请刷新后重试。";
+            return outcome;
+        }
         if (!edit_lock_still_active(tx, request.context.import_record_id,
                                     request.context.edit_lock)) {
             tx->rollback();

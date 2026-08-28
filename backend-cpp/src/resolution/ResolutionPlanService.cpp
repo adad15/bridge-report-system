@@ -444,9 +444,12 @@ ResolutionOutcome ImportResolutionService::build_range_expand_plan(
             row.outcome = "will_bind";
             ++preview.will_apply_count;
             preview.instances_before += row.member_count;
-            preview.instances_after +=
+            // 累的是本行新增的实例数，不是已经累计过的总数。写成 += instances_after
+            // 的话，第二个组会把第一个组的量再加一遍：两个各 3 实例的组显示成 9。
+            const int row_instances =
                 row.member_count * static_cast<int>(row.target_component_ids.size());
-            preview.rating_recomputed_count += preview.instances_after;
+            preview.instances_after += row_instances;
+            preview.rating_recomputed_count += row_instances;
             group_versions.emplace(group.id, group.version);
             rows.push_back(std::move(row));
         }
@@ -552,9 +555,10 @@ ResolutionOutcome ImportResolutionService::build_inventory_repoint_plan(
                 row.reason_code = "target_still_valid";
                 row.reason_message = "目标在新版本中仍然可用，实例与覆盖原样保留。";
                 preview.instances_before += row.member_count;
-                preview.instances_after +=
+                const int row_instances =
                     row.member_count * static_cast<int>(row.target_component_ids.size());
-                preview.rating_recomputed_count += preview.instances_after;
+                preview.instances_after += row_instances;
+                preview.rating_recomputed_count += row_instances;
             } else {
                 // 构件在新版本里停用或类别变了：组回落未解析，等人工重绑。
                 row.outcome = "will_clear";

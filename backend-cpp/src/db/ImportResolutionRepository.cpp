@@ -147,6 +147,7 @@ const char* rating_columns() {
            "r.standard_defect_indicator_id, r.status, r.match_method, "
            "r.match_evidence_json::text as match_evidence_json, "
            "r.component_resolution_version, r.applicability_hash, r.match_input_hash, "
+           "r.resolved_match_input_hash, "
            "r.version, r.resolved_by_user_id::text as resolved_by_user_id, "
            "r.resolved_at::text as resolved_at";
 }
@@ -167,6 +168,10 @@ RatingResolution row_to_rating(const drogon::orm::Row& row) {
         row["component_resolution_version"].as<int>();
     resolution.applicability_hash = row["applicability_hash"].as<std::string>();
     resolution.match_input_hash = row["match_input_hash"].as<std::string>();
+    if (!row["resolved_match_input_hash"].isNull()) {
+        resolution.resolved_match_input_hash =
+            row["resolved_match_input_hash"].as<std::string>();
+    }
     resolution.version = row["version"].as<int>();
     resolution.resolved_by_user_id = optional_text(row, "resolved_by_user_id");
     resolution.resolved_at = optional_text(row, "resolved_at");
@@ -455,9 +460,10 @@ void ImportResolutionRepository::upsert_rating_resolution(
         "(resolved_defect_instance_id, rating_tree_version_id, rating_tree_node_id, "
         " standard_defect_indicator_id, status, match_method, match_evidence_json, "
         " component_resolution_version, applicability_hash, match_input_hash, "
-        " resolved_by_user_id, resolved_at) "
+        " resolved_match_input_hash, resolved_by_user_id, resolved_at) "
         "values ($1::uuid, $2::uuid, nullif($3,'')::uuid, nullif($4,''), $5, "
-        "        nullif($6,''), $7::jsonb, $8, $9, $10, nullif($11,'')::uuid, "
+        "        nullif($6,''), $7::jsonb, $8, $9, $10, nullif($12,''), "
+        "        nullif($11,'')::uuid, "
         "        case when nullif($11,'') is null then null else now() end) "
         "on conflict (resolved_defect_instance_id) do update set "
         "  rating_tree_version_id = excluded.rating_tree_version_id, "
@@ -468,6 +474,7 @@ void ImportResolutionRepository::upsert_rating_resolution(
         "  component_resolution_version = excluded.component_resolution_version, "
         "  applicability_hash = excluded.applicability_hash, "
         "  match_input_hash = excluded.match_input_hash, "
+        "  resolved_match_input_hash = excluded.resolved_match_input_hash, "
         "  resolved_by_user_id = excluded.resolved_by_user_id, "
         "  resolved_at = excluded.resolved_at, "
         "  version = import_rating_resolutions.version + 1, updated_at = now()",
@@ -481,7 +488,8 @@ void ImportResolutionRepository::upsert_rating_resolution(
         resolution.component_resolution_version,
         resolution.applicability_hash,
         resolution.match_input_hash,
-        bind_optional(resolution.resolved_by_user_id));
+        bind_optional(resolution.resolved_by_user_id),
+        bind_optional(resolution.resolved_match_input_hash));
 }
 
 std::vector<RatingResolution>
@@ -523,11 +531,16 @@ void ImportResolutionRepository::delete_rating_resolution(
 
 void ImportResolutionRepository::append_event(const ResolutionEvent& event) const {
     db_client_->execSqlSync(
+        // id 快照与外键同时写：外键在实体被删时会置空（迁移 028），
+        // 而重绑定、删候选、重开恢复都会删那些行。只靠外键的话，历史行虽然留下了，
+        // 却再也看不出当初说的是哪个对象。
         "insert into import_resolution_events "
         "(import_record_id, group_id, resolved_defect_instance_id, plan_id, "
-        " operation_type, before_json, after_json, actor_user_id) "
+        " operation_type, before_json, after_json, actor_user_id, "
+        " group_id_snapshot, resolved_defect_instance_id_snapshot) "
         "values ($1::uuid, nullif($2,'')::uuid, nullif($3,'')::uuid, "
-        "        nullif($4,'')::uuid, $5, $6::jsonb, $7::jsonb, nullif($8,'')::uuid)",
+        "        nullif($4,'')::uuid, $5, $6::jsonb, $7::jsonb, nullif($8,'')::uuid, "
+        "        nullif($2,'')::uuid, nullif($3,'')::uuid)",
         event.import_record_id,
         bind_optional(event.group_id),
         bind_optional(event.resolved_defect_instance_id),

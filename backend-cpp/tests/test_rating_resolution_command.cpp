@@ -379,3 +379,73 @@ TEST_F(RatingResolutionCommandTest, SwitchingTheRatingTreeLeavesTheSourceDraftAl
         year_id_, profile_id_);
     bridge_report::testing::drop_rating_tree(client_, other);
 }
+
+// P2-4 回归：人工裁决之后改了文字，节点要留住，同时给出复核提示。
+//
+// §8.5 的两半：前一半（改文字不冲掉人工选择）本来就做到了；后一半没有——保留裁决时
+// 代码把 match_input_hash 一并更新成最新值，"裁决当时的输入"当场丢失，无从比较，
+// content_changed_after_manual_resolution 于是永远是 false，那句提示永远不出现。
+TEST_F(RatingResolutionCommandTest, FlagsContentChangedAfterAManualChoice) {
+    ASSERT_EQ(select_node(node_id_).status, ResolutionStatus::Ok);
+    // 刚裁决完：内容没变过，不该提示。
+    EXPECT_FALSE(only_instance().content_changed_after_manual_resolution);
+
+    const auto instance = only_instance();
+    FactOverrideRequest override_request;
+    override_request.context = context();
+    override_request.instance_id = instance.instance_id;
+    override_request.expected_version = instance.version;
+    override_request.overrides["defect_description"] = "顶面出现纵向裂缝（复核后改写）";
+    ASSERT_EQ(ImportResolutionService(client_).apply_fact_overrides(override_request).status,
+              ResolutionStatus::Ok);
+
+    const auto after = only_instance();
+    // 节点仍是人选的那个——改文字不该冲掉人工判断。
+    EXPECT_EQ(after.rating_tree_node_id.value_or(""), node_id_);
+    EXPECT_EQ(after.rating_match_method.value_or(""), "manual");
+    // 但要提示复核：文字变了，当初据以判断的依据已经不同。
+    EXPECT_TRUE(after.content_changed_after_manual_resolution);
+}
+
+// 自动匹配的结果不带这个标记：它本来就会在输入变化时重新匹配，没有"人工判断待复核"
+// 这回事，挂上提示只会让人以为有什么要处理。
+TEST_F(RatingResolutionCommandTest, AutomaticResultsNeverFlagContentChange) {
+    const auto instance = only_instance();
+    if (!instance.has_rating || instance.rating_match_method.value_or("") == "manual") {
+        GTEST_SKIP() << "这条病害没有自动匹配结果";
+    }
+    EXPECT_FALSE(instance.content_changed_after_manual_resolution);
+}
+
+// P2-8 回归：实例级命令也要校验台账版本。
+//
+// 用户打开工作区后台账被别处确认成新版本时，旧页面手里的候选、类别映射、可选节点全是
+// 按旧版本算的。放它写进去，等于让一份基于过时语义的判断落库，而出错的症状会出现在很远
+// 的地方——确认入库阶段才报"该构件不适用此病害"。
+TEST_F(RatingResolutionCommandTest, RejectsAStaleInventoryRevisionOnRatingCommands) {
+    const auto instance = only_instance();
+    RatingResolutionRequest request;
+    request.context = context();
+    request.context.expected_inventory_revision_id = "00000000-0000-4000-8000-000000000000";
+    request.instance_id = instance.instance_id;
+    request.expected_version = instance.has_rating ? instance.rating_version : 0;
+    request.rating_tree_node_id = node_id_;
+
+    const auto outcome = ImportResolutionService(client_).apply_rating_resolution(request);
+    EXPECT_EQ(outcome.status, ResolutionStatus::Conflict);
+    EXPECT_EQ(outcome.error_code, "component_inventory_revision_changed");
+}
+
+TEST_F(RatingResolutionCommandTest, RejectsAStaleInventoryRevisionOnFactOverrides) {
+    const auto instance = only_instance();
+    FactOverrideRequest request;
+    request.context = context();
+    request.context.expected_inventory_revision_id = "00000000-0000-4000-8000-000000000000";
+    request.instance_id = instance.instance_id;
+    request.expected_version = instance.version;
+    request.overrides["defect_description"] = "改一句";
+
+    const auto outcome = ImportResolutionService(client_).apply_fact_overrides(request);
+    EXPECT_EQ(outcome.status, ResolutionStatus::Conflict);
+    EXPECT_EQ(outcome.error_code, "component_inventory_revision_changed");
+}

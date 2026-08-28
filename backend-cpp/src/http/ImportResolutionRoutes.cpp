@@ -291,7 +291,14 @@ ResolutionErrorResponse resolution_error_response(
             outcome.error_message.empty() ? "导入记录不在待校对状态。" : outcome.error_message,
             409};
     case resolution::ResolutionStatus::VersionConflict:
-        return {"resolution_version_conflict", "解析状态版本已过期，请刷新冲突对象。", 409};
+        // 优先用服务层带回的具体码。同一个 VersionConflict 下，"来源草稿被别人存过"
+        // 要求客户端取回最新草稿再合并，跟"解析对象版本过期"只需刷新那一个对象
+        // 是两种处置。笼统成一个码，前端定义的 review_draft_version_conflict 分支永远走不到。
+        return {
+            outcome.error_code.empty() ? "resolution_version_conflict" : outcome.error_code,
+            outcome.error_message.empty()
+                ? "解析状态版本已过期，请刷新冲突对象。" : outcome.error_message,
+            409};
     case resolution::ResolutionStatus::EditLockInvalid:
         return {"edit_lock_invalid", "编辑锁已失效，请刷新页面重新获取编辑权。", 409};
     case resolution::ResolutionStatus::Invalid:
@@ -351,6 +358,10 @@ void register_import_resolution_routes(const drogon::orm::DbClientPtr& db_client
                 command.context.import_record_id = import_id;
                 command.context.actor_user_id = actor->id;
                 command.context.edit_lock = edit_lock_from_request(request, *actor);
+                // 实例级命令同样按台账版本判定适用性（节点是否适用于该构件、
+                // 覆盖后的事实按哪一版算哈希），因此也要带版本。
+                command.context.expected_inventory_revision_id =
+                    optional_body_string(*body, "expected_inventory_revision_id");
                 command.context.expected_inventory_revision_id =
                     optional_body_string(*body, "expected_inventory_revision_id");
                 command.group_id = group_id;
@@ -407,6 +418,10 @@ void register_import_resolution_routes(const drogon::orm::DbClientPtr& db_client
                 command.context.import_record_id = import_id;
                 command.context.actor_user_id = actor->id;
                 command.context.edit_lock = edit_lock_from_request(request, *actor);
+                // 实例级命令同样按台账版本判定适用性（节点是否适用于该构件、
+                // 覆盖后的事实按哪一版算哈希），因此也要带版本。
+                command.context.expected_inventory_revision_id =
+                    optional_body_string(*body, "expected_inventory_revision_id");
                 command.instance_id = instance_id;
                 command.rating_tree_node_id =
                     optional_body_string(*body, "rating_tree_node_id");
@@ -448,6 +463,10 @@ void register_import_resolution_routes(const drogon::orm::DbClientPtr& db_client
                 command.context.import_record_id = import_id;
                 command.context.actor_user_id = actor->id;
                 command.context.edit_lock = edit_lock_from_request(request, *actor);
+                // 实例级命令同样按台账版本判定适用性（节点是否适用于该构件、
+                // 覆盖后的事实按哪一版算哈希），因此也要带版本。
+                command.context.expected_inventory_revision_id =
+                    optional_body_string(*body, "expected_inventory_revision_id");
                 command.instance_id = instance_id;
                 if ((*body)["overrides"].isObject()) {
                     command.overrides = (*body)["overrides"];
@@ -497,6 +516,10 @@ void register_import_resolution_routes(const drogon::orm::DbClientPtr& db_client
                 command.context.import_record_id = import_id;
                 command.context.actor_user_id = actor->id;
                 command.context.edit_lock = edit_lock_from_request(request, *actor);
+                // 实例级命令同样按台账版本判定适用性（节点是否适用于该构件、
+                // 覆盖后的事实按哪一版算哈希），因此也要带版本。
+                command.context.expected_inventory_revision_id =
+                    optional_body_string(*body, "expected_inventory_revision_id");
                 command.instance_id = instance_id;
                 command.instance_status = optional_body_string(*body, "instance_status");
                 if (!read_expected_version(*body, command.expected_version, callback)) {
@@ -663,6 +686,10 @@ void register_import_resolution_routes(const drogon::orm::DbClientPtr& db_client
                 command.context.import_record_id = import_id;
                 command.context.actor_user_id = actor->id;
                 command.context.edit_lock = edit_lock_from_request(request, *actor);
+                // 实例级命令同样按台账版本判定适用性（节点是否适用于该构件、
+                // 覆盖后的事实按哪一版算哈希），因此也要带版本。
+                command.context.expected_inventory_revision_id =
+                    optional_body_string(*body, "expected_inventory_revision_id");
                 command.context.expected_inventory_revision_id =
                     optional_body_string(*body, "expected_inventory_revision_id");
                 command.expected_draft_version = *draft_version;

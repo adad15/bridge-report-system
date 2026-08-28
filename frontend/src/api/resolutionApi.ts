@@ -214,6 +214,8 @@ export async function applyRatingResolution(
     expected_version: number;
     rating_tree_node_id: string;
     expected_rating_tree_version_id?: string;
+    /** 台账版本决定"这个节点是否适用于该构件"，所以裁决也要带上它。 */
+    expected_inventory_revision_id?: string;
   },
   lockToken: string
 ): Promise<ResolutionCommandResult> {
@@ -232,6 +234,8 @@ export async function applyFactOverrides(
     overrides?: Record<string, unknown>;
     /** 清除是删键，不是写 null：两者在接口上必须分得开。 */
     cleared_fields?: string[];
+    /** 覆盖后的有效事实要按台账版本重算哈希，因此也要带版本。 */
+    expected_inventory_revision_id?: string;
   },
   lockToken: string
 ): Promise<ResolutionCommandResult> {
@@ -245,7 +249,11 @@ export async function applyInstanceStatus(
   baseUrl: string,
   importId: string,
   instanceId: string,
-  input: { expected_version: number; instance_status: "active" | "ignored" },
+  input: {
+    expected_version: number;
+    instance_status: "active" | "ignored";
+    expected_inventory_revision_id?: string;
+  },
   lockToken: string
 ): Promise<ResolutionCommandResult> {
   return request<ResolutionCommandResult>(

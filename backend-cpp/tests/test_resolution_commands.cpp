@@ -620,3 +620,42 @@ TEST_F(ResolutionCommandTest, SavingTwoDefectsOfOneNewGroupInOneGo) {
     ASSERT_EQ(rows.size(), 1u);
     EXPECT_EQ(rows[0]["members"].as<int>(), 2);
 }
+
+// P2-2 回归：正常业务操作不得抹掉审计历史。
+//
+// import_resolution_events 是追加式的：当前状态表只表达当前结果，它只表达历史。可它
+// 对组和实例用的是 on delete cascade，而重绑定要删目标重建实例、删候选要删成员——
+// 都是每天都在发生的操作，历史却跟着一起没了，恰恰在最需要回溯"这条绑定怎么变成
+// 今天这样"的时候。
+TEST_F(ResolutionCommandTest, RebindingKeepsTheAuditTrail) {
+    import_one_unresolved_defect();
+    ImportResolutionService service(client_);
+
+    auto group = only_group();
+    ASSERT_EQ(service.apply_component_resolution(
+                  bind_request(group, {component_ids_[0]})).status,
+              ResolutionStatus::Ok);
+    const auto after_bind = client_->execSqlSync(
+        "select count(*)::int as n from import_resolution_events where import_record_id=$1::uuid",
+        import_id_)[0]["n"].as<int>();
+    ASSERT_GT(after_bind, 0);
+
+    // 换一个目标：旧目标与实例被删除重建。
+    group = only_group();
+    ASSERT_EQ(service.apply_component_resolution(
+                  bind_request(group, {component_ids_[1]})).status,
+              ResolutionStatus::Ok);
+
+    const auto after_rebind = client_->execSqlSync(
+        "select count(*)::int as n from import_resolution_events where import_record_id=$1::uuid",
+        import_id_)[0]["n"].as<int>();
+    // 只会更多，不会更少。
+    EXPECT_GT(after_rebind, after_bind);
+
+    // 指向已删实体的事件外键置空了，但快照留着——仍看得出当初说的是哪个对象。
+    const auto orphaned = client_->execSqlSync(
+        "select count(*)::int as n from import_resolution_events "
+        "where import_record_id=$1::uuid and group_id_snapshot is not null",
+        import_id_)[0]["n"].as<int>();
+    EXPECT_GT(orphaned, 0);
+}

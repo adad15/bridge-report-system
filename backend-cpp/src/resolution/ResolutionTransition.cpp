@@ -129,7 +129,16 @@ void refresh_rating_resolution(
     if (is_manual && existing->applicability_hash == hashes.applicability_hash) {
         // 人工选择只有用户自己能改：文字、位置、描述变了也保留节点，只更新哈希并
         // 让读模型给出复核提示。把它按自动结果冲掉是行为变更，不能借哈希偷偷实现。
+        //
+        // 当前哈希跟着有效事实走（失效判定要用它），而裁决时的哈希原样留住——
+        // 两者一比才知道"裁决之后内容变过没有"。之前把两者写成同一个值，
+        // 那句注释里的"复核提示"于是永远不可能出现。
         RatingResolution kept = *existing;
+        if (!kept.resolved_match_input_hash.has_value()) {
+            // 028 之前存下的人工结果没有这一列：按"裁决后未变过"补上，
+            // 否则它们会在下一次刷新时集体挂上复核提示，那是噪声。
+            kept.resolved_match_input_hash = existing->match_input_hash;
+        }
         kept.match_input_hash = hashes.match_input_hash;
         kept.component_resolution_version = component_resolution_version;
         repository.upsert_rating_resolution(kept);

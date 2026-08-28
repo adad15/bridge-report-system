@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "bridge_report/http/InspectionRatingTreeRoutes.hpp"
+#include "bridge_report/http/ImportResolutionRoutes.hpp"
 
 // 仓储结果 → 错误码 + HTTP 状态的映射。
 //
@@ -73,4 +74,32 @@ TEST(RatingTreeBindingRoutesTest, DatabaseFailureIsUnavailableNotABusinessRefusa
         rating_tree_binding_error_response(outcome(RatingTreeBindingStatus::Failed));
     EXPECT_EQ(response.error_code, "database_unavailable");
     EXPECT_EQ(response.http_status, 503);
+}
+
+// P2-5 回归：解析命令的版本冲突要保留服务层给的具体错误码。
+//
+// 三种版本冲突的处置完全不同：来源草稿冲突要客户端取回最新草稿再合并；解析对象冲突
+// 只需刷新那一个对象；台账版本冲突要重新选构件。硬编码成一个码，前端就只能一律提示
+// "请刷新"，而它为草稿冲突准备的差异恢复分支永远走不到。
+TEST(ResolutionErrorResponseTest, KeepsTheSpecificVersionConflictCode) {
+    bridge_report::resolution::ResolutionOutcome outcome;
+    outcome.status = bridge_report::resolution::ResolutionStatus::VersionConflict;
+    outcome.error_code = "review_draft_version_conflict";
+    outcome.error_message = "草稿已被其他页面保存，请刷新后重试。";
+
+    const auto response = bridge_report::http::resolution_error_response(outcome);
+    EXPECT_EQ(response.error_code, "review_draft_version_conflict");
+    EXPECT_EQ(response.error_message, "草稿已被其他页面保存，请刷新后重试。");
+    EXPECT_EQ(response.http_status, 409);
+}
+
+// 服务层没给具体码时才用默认的，行为与此前一致。
+TEST(ResolutionErrorResponseTest, FallsBackToTheGenericResolutionConflict) {
+    bridge_report::resolution::ResolutionOutcome outcome;
+    outcome.status = bridge_report::resolution::ResolutionStatus::VersionConflict;
+
+    const auto response = bridge_report::http::resolution_error_response(outcome);
+    EXPECT_EQ(response.error_code, "resolution_version_conflict");
+    EXPECT_FALSE(response.error_message.empty());
+    EXPECT_EQ(response.http_status, 409);
 }

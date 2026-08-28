@@ -45,6 +45,8 @@ interface DefectDetailEditorProps {
    * 否则界面还显示旧结果，而下一次写会拿着过期版本撞冲突。
    */
   onRatingResolved?: () => void;
+  /** 当前工作区所依据的台账版本，随裁决一起提交做前提校验。 */
+  inventoryRevisionId?: string | null;
 }
 
 export function DefectDetailEditor({
@@ -63,6 +65,7 @@ export function DefectDetailEditor({
   onClose,
   onDefectTextCommitted,
   onRatingResolved,
+  inventoryRevisionId,
 }: DefectDetailEditorProps) {
   const defect = row.defect;
   const [treeNode, setTreeNode] = useState<RatingTreeNode | null>(row.ratingTreeNode);
@@ -138,6 +141,9 @@ export function DefectDetailEditor({
               expected_version: instance.ratingVersion,
               rating_tree_node_id: selected.id,
               expected_rating_tree_version_id: ratingTreeVersionId,
+              // 台账版本变了，"这个节点适不适用于该构件"的答案就可能变；不带上它，
+              // 旧页面能把一个基于过时映射的判断写进去。
+              ...(inventoryRevisionId ? { expected_inventory_revision_id: inventoryRevisionId } : {}),
             },
             editLockToken);
         }

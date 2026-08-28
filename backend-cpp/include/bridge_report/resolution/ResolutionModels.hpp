@@ -71,6 +71,9 @@ struct RatingResolution {
     int component_resolution_version{1};
     std::string applicability_hash;
     std::string match_input_hash;
+    /// 人工裁决那一刻的 match_input_hash；与当前值不同即"裁决后内容变过"（§8.5）。
+    /// 仅 match_method = manual 时有值。
+    std::optional<std::string> resolved_match_input_hash;
     int version{1};
     std::optional<std::string> resolved_by_user_id;
     std::optional<std::string> resolved_at;
