@@ -161,7 +161,7 @@ const char* status_text(TriageApplyStatus status) {
 }
 
 /**
- * 批量整理的规模与耗时记一行，格式对齐 ComponentRangeSplitRepository。
+ * 批量整理的规模与耗时记一行，格式对齐解析计划的批量日志。
  *
  * 设计 §12.6 要求把性能基准“纳入回归测试或基准记录”。一次性压测量出来的数字留不下来：
  * 换台机器、换个批次大小就得重量，而真正出问题的那次线上慢查询谁也没量过。日志才是能

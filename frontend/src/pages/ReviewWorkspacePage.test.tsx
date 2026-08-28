@@ -23,10 +23,10 @@ import { ApiError } from "../api/apiClient";
 import {
 } from "../api/componentInventoryApi";
 import {
-  clearComponentBinding,
-  fetchComponentBinding,
-  type ComponentBindingOverview,
-} from "../api/importBindingApi";
+  applyComponentResolution,
+  fetchResolutionWorkspace,
+  type ResolutionWorkspace,
+} from "../api/resolutionApi";
 import { data } from "../review/testFixtures";
 import { canModifyDefectStructure, ReviewWorkspacePage } from "./ReviewWorkspacePage";
 
@@ -67,12 +67,12 @@ vi.mock("../api/assessmentApi", async (importOriginal) => {
   return { ...original, previewAssessment: vi.fn(), fetchConfirmedAssessment: vi.fn() };
 });
 
-vi.mock("../api/importBindingApi", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../api/importBindingApi")>();
+vi.mock("../api/resolutionApi", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../api/resolutionApi")>();
   return {
     ...original,
-    fetchComponentBinding: vi.fn(),
-    clearComponentBinding: vi.fn(),
+    fetchResolutionWorkspace: vi.fn(),
+    applyComponentResolution: vi.fn(),
   };
 });
 
@@ -182,26 +182,42 @@ function assessmentResponse(revision: number): AssessmentPreviewResponse {
   };
 }
 
-function missingBindingOverview(): ComponentBindingOverview {
+function missingBindingOverview(): ResolutionWorkspace {
   return {
+    import_record_id: "import-1",
+    bridge_id: "bridge-1",
+    draft_version: 1,
     inventory_confirmed: true,
     inventory_revision_id: "rev-1",
+    rating_tree: null,
     groups: [{
-      part_name: "上部承重构件",
-      total: 1,
-      bound: 0,
-      unmatched: 0,
-      ambiguous: 0,
-      missing: 1,
-      rows: [{
-        component_number: "1-1#梁",
-        defect_count: 1,
-        status: "missing",
-        bridge_component_id: null,
-        bound_component: null,
-        candidate_components: [],
-      }],
+      group_id: "g1",
+      source_component_name: "上部承重构件",
+      source_component_number: "1-1#梁",
+      normalized_component_number: "1-1#梁",
+      resolution_mode: "single",
+      status: "missing",
+      match_method: null,
+      inventory_revision_id: "rev-1",
+      version: 1,
+      ambiguous: false,
+      split_eligible: false,
+      split_expanded_count: null,
+      side_pair_option: null,
+      targets: [],
+      candidates: [],
+      members: [
+        { member_id: "m1", source_candidate_id: "d1", source_order: 0, instances: [] },
+      ],
+      allowed_actions: ["clear"],
+      blocked_reasons: [],
     }],
+    parts: [],
+    progress: {
+      group_count: 1, bound_count: 0, unresolved_count: 0, ambiguous_count: 0,
+      missing_count: 1, instance_count: 0, active_instance_count: 0,
+      rating_matched_count: 0, rating_unresolved_count: 0, rating_missing_count: 0,
+    },
   };
 }
 
@@ -245,7 +261,7 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     });
     vi.mocked(releaseEditLock).mockResolvedValue({ released: true });
     vi.mocked(previewAssessment).mockImplementation(async (_baseUrl, _recordId, _draft, revision) => assessmentResponse(revision));
-    vi.mocked(fetchComponentBinding).mockResolvedValue(missingBindingOverview());
+    vi.mocked(fetchResolutionWorkspace).mockResolvedValue(missingBindingOverview());
   });
 
   afterEach(() => {
@@ -379,7 +395,7 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    const bindingRequests = vi.mocked(fetchComponentBinding).mock.calls.length;
+    const bindingRequests = vi.mocked(fetchResolutionWorkspace).mock.calls.length;
     // 从没点开过的分区连 DOM 都不存在。
     expect(document.querySelector("[data-review-group='ratings']")).toBeNull();
 
@@ -397,7 +413,7 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     fireEvent.click(screen.getByRole("button", { name: /构件绑定/ }));
     expect(screen.getByRole("button", { name: "已标记缺失 1" })).toBe(missingFilter);
     expect(missingFilter).toHaveAttribute("aria-pressed", "true");
-    expect(fetchComponentBinding).toHaveBeenCalledTimes(bindingRequests);
+    expect(fetchResolutionWorkspace).toHaveBeenCalledTimes(bindingRequests);
   });
 
   // 绑定分区的写操作（绑定 / 批量替换 / 标记缺失 / 取消绑定 / 范围拆分）由后端直接
@@ -410,7 +426,8 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     const splitDraft = data();
     splitDraft.defects[0] = { ...splitDraft.defects[0], defect_location: "拆分后的位置" };
     vi.mocked(fetchReview).mockResolvedValue({ ...reviewResponse(), parsed_result: splitDraft });
-    vi.mocked(clearComponentBinding).mockResolvedValue(missingBindingOverview());
+    vi.mocked(applyComponentResolution).mockResolvedValue(
+      { affected_groups: [], progress: missingBindingOverview().progress });
 
     fireEvent.click(screen.getByRole("button", { name: /构件绑定/ }));
     await act(async () => {
@@ -656,7 +673,7 @@ describe("ReviewWorkspacePage confirmed assessment", () => {
     vi.resetAllMocks();
     vi.mocked(fetchReview).mockResolvedValue(confirmedReviewResponse());
     vi.mocked(releaseEditLock).mockResolvedValue({ released: true });
-    vi.mocked(fetchComponentBinding).mockResolvedValue(missingBindingOverview());
+    vi.mocked(fetchResolutionWorkspace).mockResolvedValue(missingBindingOverview());
     vi.mocked(fetchConfirmedAssessment).mockResolvedValue(confirmedAssessmentResponse());
   });
 

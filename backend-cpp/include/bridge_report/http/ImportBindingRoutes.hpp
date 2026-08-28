@@ -10,7 +10,6 @@
 namespace bridge_report::http {
 
 // 绑定视图序列化（供前端绑定页与序列化契约测试）。
-Json::Value binding_overview_json(const db::BindingOverview& overview);
 
 // 仓储结果 → 错误码 + 提示 + HTTP 状态。
 //

@@ -17,7 +17,10 @@ struct ContractCompatibilityResult {
 
 // 让构件匹配警告与当前绑定状态保持一致：已绑定/已标记缺失时清除，
 // 未处理时按有无候选恢复一条 required/ambiguous 警告；其他警告不变。
+/// 剔除病害上残留的构件匹配警告。5.0 下这类判定的权威来源是解析关系表，
+/// 草稿 JSON 里不再存它。本函数**不得给病害添任何键**。
 void reconcile_defect_component_match_warning(Json::Value& defect);
+
 void reconcile_component_match_warnings(Json::Value& data);
 
 // 运行时只接受原生 5.0；本函数不补造或展示旧合同结构。

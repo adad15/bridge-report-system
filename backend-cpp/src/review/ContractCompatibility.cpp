@@ -29,41 +29,26 @@ bool is_component_match_warning(const Json::Value& warning) {
 }  // namespace
 
 void reconcile_defect_component_match_warning(Json::Value& defect) {
-    if (!defect.isObject()) return;
+    if (!defect.isObject() || !defect.isMember("warnings")) return;
+    if (!defect["warnings"].isArray()) return;
 
-    Json::Value warnings(Json::arrayValue);
-    if (defect["warnings"].isArray()) {
-        for (const auto& warning : defect["warnings"]) {
-            if (!is_component_match_warning(warning)) warnings.append(warning);
-        }
+    // 5.0："这条病害绑没绑上构件"的权威来源是解析关系表——预检读
+    // confirmable_view 的 resolved/missing 集合，校对页读工作区读模型。所以这里
+    // 只剔除存量警告，不再自己判定、也不再生成新警告。
+    //
+    // 判定那段原本读 `bridge_component_id` / `component_match_method` /
+    // `component_match_candidate_ids`。这三个字段 5.0 已删，而 JsonCpp 非 const 的
+    // operator[] 是会**建成员**的：读一下就往病害里插一个 null 键，于是
+    // 响应里凭空多出被删字段，前端契约守卫整份拒掉。
+    Json::Value kept(Json::arrayValue);
+    for (const auto& warning : defect["warnings"]) {
+        if (!is_component_match_warning(warning)) kept.append(warning);
     }
-
-    const bool resolved =
-        non_empty_string_member(defect, "bridge_component_id")
-        || (defect["component_match_method"].isString()
-            && defect["component_match_method"].asString() == "missing")
-        || (defect["review_status"].isString()
-            && defect["review_status"].asString() == "已忽略");
-    if (!resolved) {
-        const bool ambiguous =
-            defect["component_match_candidate_ids"].isArray()
-            && !defect["component_match_candidate_ids"].empty();
-        Json::Value warning(Json::objectValue);
-        warning["code"] = ambiguous ? kMatchAmbiguous : kMatchRequired;
-        warning["message"] = ambiguous
-            ? "存在构件匹配候选，请人工确认实际构件。"
-            : "未找到可唯一关联的实际构件，请人工选择。";
-        warning["severity"] = "warning";
-        warning["target_candidate_id"] =
-            non_empty_string_member(defect, "candidate_id")
-            ? defect["candidate_id"] : Json::Value();
-        warnings.append(std::move(warning));
-    }
-    defect["warnings"] = std::move(warnings);
+    defect["warnings"] = std::move(kept);
 }
 
 void reconcile_component_match_warnings(Json::Value& data) {
-    if (!data["defects"].isArray()) return;
+    if (!data.isObject() || !data.isMember("defects") || !data["defects"].isArray()) return;
     for (auto& defect : data["defects"]) {
         reconcile_defect_component_match_warning(defect);
     }

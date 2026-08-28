@@ -25,6 +25,18 @@ struct WorkspaceComponentSummary {
     std::string standard_bridge_type_id;
 };
 
+/// "两侧"整体绑定候选。左右幅桥的人行道、栏杆这类构件，报告里常写成一条
+/// "两侧栏杆"，台账里却是左右各一件。后端把那一对找好交给界面，用户一下就能
+/// 把它绑到两件上（resolution_mode = multi，target_role = left/right）。
+///
+/// 判定只看台账结构，不解析病害编号里的"两侧""全幅"等文字。
+struct WorkspaceSidePairOption {
+    /// 后端拼好的展示文案（它要点名将绑给哪两件），前端原样显示。
+    std::string label;
+    /// 顺序即 target_order：左在前、右在后。
+    std::vector<std::string> bridge_component_ids;
+};
+
 /// 一条病害解析实例在读模型里的样子。
 struct WorkspaceDefectInstance {
     std::string instance_id;
@@ -81,6 +93,9 @@ struct WorkspaceComponentGroup {
     std::vector<WorkspaceComponentSummary> candidates;
     std::vector<WorkspaceGroupMember> members;
 
+    /// 该组可作"两侧"整体绑定时的候选；不成立时为 nullopt。只给尚未解决的组。
+    std::optional<WorkspaceSidePairOption> side_pair_option;
+
     /// 后端判定的允许动作；前端只按它决定按钮可用性，不自己推。
     std::vector<std::string> allowed_actions;
     /// 动作被禁用的原因码，供界面直接展示，不必自己拼话术。
@@ -116,6 +131,10 @@ struct WorkspaceRatingTree {
     std::string version_id;
     std::string tree_name;
     std::string package_version;
+    /// 评定树所钉的两个规范包版本。绑定面板要把它们写出来：
+    /// 病害匹配与系统评定都按这两个版本走，用户得看得见自己钉的是哪一版。
+    std::string h21_package_version;
+    std::string maintenance_package_version;
 };
 
 struct ResolutionWorkspace {

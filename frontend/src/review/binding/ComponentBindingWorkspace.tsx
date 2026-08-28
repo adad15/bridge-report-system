@@ -1,34 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  applyComponentResolution,
   applyResolutionPlan,
   createResolutionPlan,
+  fetchResolutionWorkspace,
+  INVENTORY_REVISION_CHANGED,
   type ResolutionPlanPreview,
 } from "../../api/resolutionApi";
+import {
+  bindingProgress,
+  toBindingOverview,
+  type BindingComponentSummary,
+  type BindingRow,
+  type ComponentBindingOverview,
+} from "./bindingViewModel";
 
 import {
   searchInventoryEntries,
   type ComponentInventoryEntry,
 } from "../../api/componentInventoryApi";
-import {
-  bindComponent,
-  bindComponentsBatch,
-  bindInspectionRatingTree,
-  bindingProgress,
-  clearComponentBinding,
-  fetchComponentBinding,
-  markComponentMissing,
-  previewComponentRangeSplit,
-  applyComponentRangeSplit,
-  bindComponentsMulti,
-  fetchBindingReplaceInventory,
-  INVENTORY_REVISION_CHANGED,
-  type BindingComponentSummary,
-  type BindingReplaceInventoryEntry,
-  type BindingRow,
-  type BindingTarget,
-  type ComponentRangeSplitPreview,
-  type ComponentBindingOverview,
-} from "../../api/importBindingApi";
+import { bindInspectionRatingTree } from "../../api/importBindingApi";
+
+/** 区间展开的选中项。group_id 是计划的定位键，后两项仅供展示。 */
+interface SplitTarget {
+  group_id: string;
+  part_name: string;
+  component_number: string;
+}
 import {
   fetchRatingTreeVersions,
   type RatingTreeVersionSummary,
@@ -101,7 +99,7 @@ function GroupSplitSelector({
 }: {
   partName: string;
   eligibleRows: BindingRow[];
-  selection: Map<string, BindingTarget>;
+  selection: Map<string, SplitTarget>;
   busy: boolean;
   onChange: (checked: boolean) => void;
 }) {
@@ -147,7 +145,6 @@ function GroupSplitSelector({
  * 所以两边都先转成这一种模型再合并。
  */
 interface BindingComponentOption {
-  entryId: string;
   bridgeComponentId: string;
   componentNumber: string;
   siteComponentType: string;
@@ -157,7 +154,6 @@ interface BindingComponentOption {
 
 function optionFromSummary(summary: BindingComponentSummary): BindingComponentOption {
   return {
-    entryId: summary.entry_id,
     bridgeComponentId: summary.bridge_component_id,
     componentNumber: summary.component_number,
     siteComponentType: summary.site_component_type,
@@ -168,7 +164,6 @@ function optionFromSummary(summary: BindingComponentSummary): BindingComponentOp
 
 function optionFromEntry(entry: ComponentInventoryEntry): BindingComponentOption {
   return {
-    entryId: entry.id,
     bridgeComponentId: entry.bridge_component_id,
     componentNumber: entry.component_number,
     siteComponentType: entry.site_component_type,
@@ -302,7 +297,7 @@ function RowAction(
           <option value={SIDE_PAIR_VALUE}>{row.side_pair_option.label}</option>
         ) : null}
         {[...options.values()].map((option) => (
-          <option key={option.entryId} value={option.bridgeComponentId}>
+          <option key={option.bridgeComponentId} value={option.bridgeComponentId}>
             {option.candidate ? "候选 · " : ""}
             {option.componentNumber} / {option.siteComponentType} / {option.siteName}
           </option>
@@ -351,10 +346,6 @@ export function ComponentBindingWorkspace({
   onDraftInvalidated?: () => void;
 }) {
   const [overview, setOverview] = useState<ComponentBindingOverview | null>(null);
-  // 批量替换的取数结果按台账版本缓存：同版本重开对话框可复用，版本一变即失效。
-  // 不能按 bridgeId 缓存——那正是"预览与校验用了不同版本"那类错误的温床。
-  const [replaceInventory, setReplaceInventory] =
-    useState<{ revisionId: string; entries: BindingReplaceInventoryEntry[] } | null>(null);
   const [replaceLoading, setReplaceLoading] = useState(false);
   // 预览计划一律来自后端（§13.3）：前端不构造、不重算，只展示并拿 token 去执行。
   const [replacePlan, setReplacePlan] = useState<ResolutionPlanPreview | null>(null);
@@ -369,9 +360,9 @@ export function ComponentBindingWorkspace({
   const [replaceGroup, setReplaceGroup] = useState<string | null>(null);
   // 批量应用被后端整批拒绝时的提示，显示在对话框内而非页面上——用户正对着预览表。
   const [replaceError, setReplaceError] = useState<string | null>(null);
-  const [splitSelection, setSplitSelection] = useState<Map<string, BindingTarget>>(new Map());
-  const [splitDialogTargets, setSplitDialogTargets] = useState<BindingTarget[] | null>(null);
-  const [splitPreview, setSplitPreview] = useState<ComponentRangeSplitPreview | null>(null);
+  const [splitSelection, setSplitSelection] = useState<Map<string, SplitTarget>>(new Map());
+  const [splitDialogTargets, setSplitDialogTargets] = useState<SplitTarget[] | null>(null);
+  const [splitPreview, setSplitPreview] = useState<ResolutionPlanPreview | null>(null);
   const [splitPreviewLoading, setSplitPreviewLoading] = useState(false);
   const [splitError, setSplitError] = useState<string | null>(null);
   const splitPreviewRequest = useRef(0);
@@ -384,9 +375,10 @@ export function ComponentBindingWorkspace({
     let cancelled = false;
     setLoading(true);
     // 首屏只等概览。此前还并排拉一份完整台账（约 3.4 MB），两个都回来才渲染。
-    fetchComponentBinding(backendBaseUrl, importId)
-      .then((boundOverview) => {
+    fetchResolutionWorkspace(backendBaseUrl, importId)
+      .then((workspace) => {
         if (cancelled) return;
+        const boundOverview = toBindingOverview(workspace);
         setOverview(boundOverview);
         setError(null);
         onOverviewChange?.(boundOverview);
@@ -422,7 +414,7 @@ export function ComponentBindingWorkspace({
   }, [overview?.rating_tree?.version_id, ratingTrees]);
 
   const progress = useMemo(
-    () => (overview ? bindingProgress(overview) : { total: 0, resolved: 0, pending: 0 }),
+    () => (overview ? bindingProgress(overview) : { total: 0, settled: 0, pending: 0 }),
     [overview]
   );
 
@@ -447,15 +439,21 @@ export function ComponentBindingWorkspace({
     setSplitError(null);
   }, [importId]);
 
-  async function loadSplitPreview(targets: BindingTarget[]) {
+  async function loadSplitPreview(targets: SplitTarget[]) {
     const requestId = ++splitPreviewRequest.current;
     setSplitPreview(null);
     setSplitError(null);
     setSplitPreviewLoading(true);
     try {
-      const preview = await previewComponentRangeSplit(
-        backendBaseUrl, importId, targets, requireRevisionId(overview!));
-      if (splitPreviewRequest.current === requestId) setSplitPreview(preview);
+      const plan = await createResolutionPlan(
+        backendBaseUrl, importId,
+        {
+          operation_type: "range_expand",
+          group_ids: targets.map((target) => target.group_id),
+          expected_inventory_revision_id: requireRevisionId(overview!),
+        },
+        requireLockToken());
+      if (splitPreviewRequest.current === requestId) setSplitPreview(plan);
     } catch (caught) {
       if (splitPreviewRequest.current === requestId) setSplitError(errorMessage(caught));
     } finally {
@@ -524,49 +522,17 @@ export function ComponentBindingWorkspace({
   }, [overview]);
 
   // 单条绑定 / 标记缺失 / 取消绑定共用；三者都会改写后端草稿里的病害构件关联。
-  // 只在打开批量替换对话框时取数，且只取精简条目。关掉对话框就取消在途请求——
-  // 取消是用户的动作，不显示为加载失败。
-  useEffect(() => {
-    if (replaceGroup === null || !overview?.inventory_revision_id) return;
-    const revisionId = overview.inventory_revision_id;
-    if (replaceInventory?.revisionId === revisionId) return;   // 同版本复用缓存
-    const requestId = ++replaceRequest.current;
-    const controller = new AbortController();
-    setReplaceLoading(true);
-    setReplaceError(null);
-    fetchBindingReplaceInventory(backendBaseUrl, importId, revisionId, controller.signal)
-      .then((response) => {
-        if (replaceRequest.current !== requestId) return;
-        // 响应里的版本与当前概览不一致就不生成预览，走版本变化流程。
-        if (response.inventory_revision_id !== revisionId) {
-          void refreshAfterRevisionChange();
-          return;
-        }
-        setReplaceInventory({ revisionId, entries: response.entries });
-      })
-      .catch((caught) => {
-        if (controller.signal.aborted || replaceRequest.current !== requestId) return;
-        if (isRevisionChanged(caught)) void refreshAfterRevisionChange();
-        else setReplaceError(errorMessage(caught));
-      })
-      .finally(() => {
-        if (replaceRequest.current === requestId) setReplaceLoading(false);
-      });
-    return () => controller.abort();
-  }, [replaceGroup, overview?.inventory_revision_id, replaceInventory?.revisionId, importId]);
 
   // 台账版本变了：重新拉概览并说清楚发生了什么。只显示一条错误的话，用户会对着
   // 一份已经过期的候选反复重试。
   async function refreshAfterRevisionChange() {
     try {
-      const next = await fetchComponentBinding(backendBaseUrl, importId);
+      const next = toBindingOverview(
+        await fetchResolutionWorkspace(backendBaseUrl, importId));
       setOverview(next);
       onOverviewChange?.(next);
       setSplitPreview(null);
       splitPreviewRequest.current += 1;
-      // 批量缓存按版本失效；在途的取数也要作废，否则旧响应会覆盖新状态。
-      setReplaceInventory(null);
-      replaceRequest.current += 1;
       setError("构件台账版本已变化，已为你刷新，请确认后重试。");
     } catch (caught) {
       setError(errorMessage(caught));
@@ -585,10 +551,48 @@ export function ComponentBindingWorkspace({
   const canEdit = lockToken !== null;
   const writeDisabled = busy || !canEdit;
 
-  async function run(action: () => Promise<ComponentBindingOverview>) {
+  /**
+   * 一条行的解析动作。三个动作同一个接口，差别只在 action 与目标集合。
+   *
+   * expected_version 取行上的组版本：两个页面同时改一条时，后到的那个必须撞版本
+   * 冲突，而不是默默覆盖先到的。
+   */
+  async function resolveGroup(
+    row: BindingRow,
+    action: "bind" | "mark_missing" | "clear",
+    componentIds: string[] = [],
+  ) {
+    return applyComponentResolution(
+      backendBaseUrl,
+      importId,
+      row.group_id,
+      {
+        expected_version: row.version,
+        action,
+        // 两侧整体绑定靠 target_role 区分左右；单目标时统一是 primary。
+        ...(action === "bind"
+          ? {
+              targets: componentIds.map((id, index) => ({
+                bridge_component_id: id,
+                target_role: componentIds.length > 1
+                  ? (index === 0 ? "left" : "right")
+                  : "primary",
+              })),
+            }
+          : {}),
+        expected_inventory_revision_id: requireRevisionId(overview!),
+      },
+      requireLockToken());
+  }
+
+  // 写操作只回受影响的组与最新统计（§13.2），所以成功后重取一次工作区。
+  // 几百个组一次请求，比在前端合并局部结果再自己算一遍计数可靠。
+  async function run(action: () => Promise<unknown>) {
     setBusy(true);
     try {
-      const next = await action();
+      await action();
+      const next = toBindingOverview(
+        await fetchResolutionWorkspace(backendBaseUrl, importId));
       setOverview(next);
       setError(null);
       onOverviewChange?.(next);
@@ -625,11 +629,11 @@ export function ComponentBindingWorkspace({
         requireRevisionId(overview!),
         requireLockToken()
       );
-      setOverview(next);
-      onOverviewChange?.(next);
-      // 绑评定树确实会改年度使用的台账版本，但响应已经带回按新版本生成的完整概览，
-      // 不必再单独取一次台账。缓存按版本失效即可。
-      setReplaceInventory(null);
+      void next;
+      const refreshed = toBindingOverview(
+        await fetchResolutionWorkspace(backendBaseUrl, importId));
+      setOverview(refreshed);
+      onOverviewChange?.(refreshed);
       setRatingTreeMessage(
         overview?.rating_tree ? "评定树已切换。" : "评定树已绑定。"
       );
@@ -644,7 +648,7 @@ export function ComponentBindingWorkspace({
   if (loading) return <p>正在加载构件绑定…</p>;
   if (error && !overview) return <p className="error-text" role="alert">{error}</p>;
   if (!overview) return <p>没有可绑定的病害。</p>;
-  const allResolved = progress.total > 0 && progress.resolved === progress.total;
+  const allResolved = progress.total > 0 && progress.settled === progress.total;
 
   return (
     <section className="component-binding-workspace" aria-labelledby="component-binding-title">
@@ -806,6 +810,7 @@ export function ComponentBindingWorkspace({
                         const key = splitTargetKey(group.part_name, row.component_number);
                         if (checked) {
                           next.set(key, {
+                            group_id: row.group_id,
                             part_name: group.part_name,
                             component_number: row.component_number,
                           });
@@ -846,6 +851,7 @@ export function ComponentBindingWorkspace({
                       const next = new Map(current);
                       if (event.target.checked) {
                         next.set(key, {
+                          group_id: row.group_id,
                           part_name: group.part_name,
                           component_number: row.component_number,
                         });
@@ -864,40 +870,10 @@ export function ComponentBindingWorkspace({
                 row={row}
                 revisionId={requireRevisionId(overview)}
                 busy={writeDisabled}
-                onBind={(id) =>
-                  run(() =>
-                    bindComponent(backendBaseUrl, importId, {
-                      part_name: group.part_name,
-                      component_number: row.component_number,
-                      bridge_component_id: id,
-                    }, requireRevisionId(overview), requireLockToken())
-                  )
-                }
-                onBindMulti={(ids) =>
-                  run(() =>
-                    bindComponentsMulti(backendBaseUrl, importId, {
-                      part_name: group.part_name,
-                      component_number: row.component_number,
-                      bridge_component_ids: ids,
-                    }, requireRevisionId(overview), requireLockToken())
-                  )
-                }
-                onMarkMissing={() =>
-                  run(() =>
-                    markComponentMissing(backendBaseUrl, importId, {
-                      part_name: group.part_name,
-                      component_number: row.component_number,
-                    }, requireRevisionId(overview), requireLockToken())
-                  )
-                }
-                onClear={() =>
-                  run(() =>
-                    clearComponentBinding(backendBaseUrl, importId, {
-                      part_name: group.part_name,
-                      component_number: row.component_number,
-                    }, requireRevisionId(overview), requireLockToken())
-                  )
-                }
+                onBind={(id) => run(() => resolveGroup(row, "bind", [id]))}
+                onBindMulti={(ids) => run(() => resolveGroup(row, "bind", ids))}
+                onMarkMissing={() => run(() => resolveGroup(row, "mark_missing"))}
+                onClear={() => run(() => resolveGroup(row, "clear"))}
               />
             </div>
           ))}
@@ -944,7 +920,8 @@ export function ComponentBindingWorkspace({
               // 只提交 plan token：“用户看到的计划”与“实际执行的计划”因此天然是同一份。
               await applyResolutionPlan(
                 backendBaseUrl, importId, planToken, requireLockToken());
-              const next = await fetchComponentBinding(backendBaseUrl, importId);
+              const next = toBindingOverview(
+                await fetchResolutionWorkspace(backendBaseUrl, importId));
               setOverview(next);
               setError(null);
               onOverviewChange?.(next);
@@ -963,21 +940,20 @@ export function ComponentBindingWorkspace({
         <ComponentRangeSplitDialog
           preview={splitPreview}
           loading={splitPreviewLoading}
-          targets={splitDialogTargets}
           busy={busy}
           error={splitError}
           onClose={closeSplitDialog}
           onRetry={() => void loadSplitPreview(splitDialogTargets)}
-          onApply={async (targets, impactToken) => {
+          onApply={async (planToken) => {
             setBusy(true);
             setSplitError(null);
             try {
-              const applied = await applyComponentRangeSplit(
-                backendBaseUrl, importId, targets, impactToken, requireRevisionId(overview),
-                requireLockToken()
-              );
-              setOverview(applied.overview);
-              onOverviewChange?.(applied.overview);
+              await applyResolutionPlan(
+                backendBaseUrl, importId, planToken, requireLockToken());
+              const applied = toBindingOverview(
+                await fetchResolutionWorkspace(backendBaseUrl, importId));
+              setOverview(applied);
+              onOverviewChange?.(applied);
               // 拆分会增删病害并搬动照片归属，父页面的草稿必须重取。
               onDraftInvalidated?.();
               setSplitSelection(new Map());

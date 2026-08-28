@@ -26,7 +26,6 @@ add_library(bridge_report_backend_core
     src/db/BridgeDeletionRepository.cpp
     src/db/ComponentArchiveRepository.cpp
     src/db/ComponentInventoryRepository.cpp
-    src/db/ComponentRangeSplitRepository.cpp
     src/db/DbClientFactory.cpp
     src/db/CommitLatch.cpp
     src/db/DefectThreadRepository.cpp
@@ -95,7 +94,6 @@ add_library(bridge_report_backend_core
     src/resolution/ResolutionReopenSnapshot.cpp
     src/resolution/ResolutionTransition.cpp
     src/review/ConfirmPlan.cpp
-    src/review/ComponentRangeSplitPlanner.cpp
     src/review/ContractCompatibility.cpp
     src/review/DefectRatingTreeMatching.cpp
     src/review/DraftValidation.cpp
@@ -169,9 +167,7 @@ add_executable(bridge_report_backend_tests
     tests/test_component_inventory_generator.cpp
     tests/test_component_inventory_repository.cpp
     tests/test_component_inventory_routes.cpp
-    tests/test_import_binding_routes.cpp
     tests/test_component_range_parser.cpp
-    tests/test_component_range_split_planner.cpp
     tests/test_component_matcher.cpp
     tests/test_h21_bridge_evaluation.cpp
     tests/test_h21_component_evaluation.cpp
@@ -196,7 +192,6 @@ add_executable(bridge_report_backend_tests
     tests/test_route_preflight_audit.cpp
     tests/test_side_component_pair.cpp
     tests/test_source_db_reference.cpp
-    tests/test_two_sided_binding_end_to_end.cpp
     tests/test_inspection_year_deletion_models.cpp
     tests/test_inspection_year_deletion_repository.cpp
     tests/test_inspection_year_deletion_routes.cpp
@@ -240,7 +235,6 @@ add_executable(bridge_report_backend_tests
     tests/test_temporary_word_cleanup_coordinator.cpp
     tests/test_word_import_routes.cpp
     tests/test_word_import_repository.cpp
-    tests/test_import_binding_repository.cpp
     tests/test_import_resolution_repository.cpp
     tests/test_import_resolution_service.cpp
     tests/test_manual_defect_command.cpp

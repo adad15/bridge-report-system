@@ -99,6 +99,17 @@ Json::Value group_json(const resolution::WorkspaceComponentGroup& group) {
         }
         value["members"].append(std::move(member_json));
     }
+    if (group.side_pair_option.has_value()) {
+        Json::Value option(Json::objectValue);
+        option["label"] = group.side_pair_option->label;
+        option["bridge_component_ids"] = Json::Value(Json::arrayValue);
+        for (const auto& id : group.side_pair_option->bridge_component_ids) {
+            option["bridge_component_ids"].append(id);
+        }
+        value["side_pair_option"] = std::move(option);
+    } else {
+        value["side_pair_option"] = Json::Value(Json::nullValue);
+    }
     value["allowed_actions"] = string_list_json(group.allowed_actions);
     value["blocked_reasons"] = string_list_json(group.blocked_reasons);
     return value;
@@ -242,6 +253,9 @@ Json::Value resolution_workspace_json(
         tree["version_id"] = workspace.rating_tree->version_id;
         tree["tree_name"] = workspace.rating_tree->tree_name;
         tree["package_version"] = workspace.rating_tree->package_version;
+        tree["h21_package_version"] = workspace.rating_tree->h21_package_version;
+        tree["maintenance_package_version"] =
+            workspace.rating_tree->maintenance_package_version;
         value["rating_tree"] = std::move(tree);
     }
 

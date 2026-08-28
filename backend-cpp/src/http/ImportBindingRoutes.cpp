@@ -3,7 +3,6 @@
 #include <string>
 
 #include "bridge_report/db/ImportBindingRepository.hpp"
-#include "bridge_report/db/ComponentRangeSplitRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/EditLockRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
@@ -12,188 +11,10 @@ namespace bridge_report::http {
 
 namespace {
 
-Json::Value binding_component_json(const db::BindingComponentSummary& summary) {
-    Json::Value value(Json::objectValue);
-    value["entry_id"] = summary.entry_id;
-    value["bridge_component_id"] = summary.bridge_component_id;
-    value["component_number"] = summary.component_number;
-    value["site_component_type"] = summary.site_component_type;
-    value["site_name"] = summary.site_name;
-    return value;
-}
-
-}  // namespace
-
-Json::Value binding_overview_json(const db::BindingOverview& overview) {
-    Json::Value value;
-    value["inventory_confirmed"] = overview.inventory_confirmed;
-    // 契约不变量：inventory_revision_id 非空 当且仅当 inventory_confirmed 为真。
-    value["inventory_revision_id"] = overview.inventory_revision_id.has_value()
-        ? Json::Value(*overview.inventory_revision_id) : Json::Value(Json::nullValue);
-    value["rating_tree"] = Json::Value(Json::nullValue);
-    if (overview.rating_tree.has_value()) {
-        const auto& tree = *overview.rating_tree;
-        value["rating_tree"]["version_id"] = tree.version_id;
-        value["rating_tree"]["tree_name"] = tree.tree_name;
-        value["rating_tree"]["package_version"] = tree.package_version;
-        value["rating_tree"]["h21_package_version"] =
-            tree.h21_package_version;
-        value["rating_tree"]["maintenance_package_version"] =
-            tree.maintenance_package_version;
-    }
-    value["groups"] = Json::Value(Json::arrayValue);
-    for (const auto& group : overview.groups) {
-        Json::Value group_json;
-        group_json["part_name"] = group.part_name;
-        group_json["total"] = group.total;
-        group_json["bound"] = group.bound;
-        group_json["unmatched"] = group.unmatched;
-        group_json["ambiguous"] = group.ambiguous;
-        group_json["missing"] = group.missing;
-        group_json["rows"] = Json::Value(Json::arrayValue);
-        for (const auto& row : group.rows) {
-            Json::Value row_json;
-            row_json["component_number"] = row.component_number;
-            row_json["defect_count"] = row.defect_count;
-            row_json["status"] = row.status;
-            row_json["bridge_component_id"] = row.bridge_component_id.has_value()
-                ? Json::Value(*row.bridge_component_id) : Json::Value(Json::nullValue);
-            // candidate_component_ids 不再进 JSON：前端要的是可显示的构件信息，
-            // 裸 id 只能靠拉整份台账去换。行状态仍由那批 id 在后端判定。
-            row_json["bound_component"] = row.bound_component.has_value()
-                ? binding_component_json(*row.bound_component) : Json::Value(Json::nullValue);
-            row_json["candidate_components"] = Json::Value(Json::arrayValue);
-            for (const auto& candidate : row.candidate_components) {
-                row_json["candidate_components"].append(binding_component_json(candidate));
-            }
-            row_json["split_eligible"] = row.split_eligible;
-            row_json["split_expanded_count"] = row.split_expanded_count
-                ? Json::Value(*row.split_expanded_count) : Json::Value();
-            // "两侧"选项。label 在后端拼好：它要点名将绑给哪两件构件，
-            // 拼在前端的话两处措辞迟早不一致。
-            if (row.side_pair.has_value()) {
-                Json::Value option;
-                option["label"] = "两侧 · " + row.side_pair->left_component_number + " + "
-                    + row.side_pair->right_component_number;
-                option["bridge_component_ids"] = Json::Value(Json::arrayValue);
-                option["bridge_component_ids"].append(row.side_pair->left_bridge_component_id);
-                option["bridge_component_ids"].append(row.side_pair->right_bridge_component_id);
-                row_json["side_pair_option"] = std::move(option);
-            } else {
-                row_json["side_pair_option"] = Json::Value(Json::nullValue);
-            }
-            group_json["rows"].append(std::move(row_json));
-        }
-        value["groups"].append(std::move(group_json));
-    }
-    return value;
-}
-
-namespace {
-
-Json::Value split_analysis_json(const review::ComponentRangeSplitAnalysis& analysis) {
-    Json::Value value(Json::objectValue);
-    value["items"] = Json::Value(Json::arrayValue);
-    for (const auto& item : analysis.items) {
-        Json::Value row(Json::objectValue);
-        row["part_name"] = item.target.part_name;
-        row["component_number"] = item.target.component_number;
-        row["expanded_component_count"] = item.expanded_component_count;
-        row["source_defect_count"] = item.source_defect_count;
-        row["result_defect_count"] = item.result_defect_count;
-        row["result_photo_count"] = item.result_photo_count;
-        row["bound_count"] = item.bound_count;
-        row["ambiguous_count"] = item.ambiguous_count;
-        row["unmatched_count"] = item.unmatched_count;
-        value["items"].append(std::move(row));
-    }
-    const auto& totals = analysis.totals;
-    value["totals"]["selected_range_count"] = totals.selected_range_count;
-    value["totals"]["source_defect_count"] = totals.source_defect_count;
-    value["totals"]["result_defect_count"] = totals.result_defect_count;
-    value["totals"]["result_photo_count"] = totals.result_photo_count;
-    value["totals"]["bound_count"] = totals.bound_count;
-    value["totals"]["ambiguous_count"] = totals.ambiguous_count;
-    value["totals"]["unmatched_count"] = totals.unmatched_count;
-    return value;
-}
-
-void respond_split(const HttpCallback& callback,
-                   const db::ComponentRangeSplitOutcome& outcome) {
-    if (outcome.status == db::ComponentRangeSplitStatus::Ok) {
-        Json::Value body = split_analysis_json(*outcome.analysis);
-        body["impact_token"] = outcome.impact_token;
-        if (!outcome.operation_id.empty()) body["operation_id"] = outcome.operation_id;
-        if (outcome.overview) body["overview"] = binding_overview_json(*outcome.overview);
-        respond_json(callback, body);
-        return;
-    }
-    if (outcome.status == db::ComponentRangeSplitStatus::NotFound) {
-        respond_import_record_not_found(callback);
-        return;
-    }
-    if (outcome.status == db::ComponentRangeSplitStatus::EditLockInvalid) {
-        respond_json(callback, make_error_body(
-            "edit_lock_invalid", "编辑锁已失效，本次拆分未写入，请刷新页面。"),
-            drogon::k409Conflict);
-        return;
-    }
-    const auto code = !outcome.error_code.empty() ? outcome.error_code
-        : outcome.status == db::ComponentRangeSplitStatus::Stale
-            ? "component_range_split_stale"
-        : outcome.status == db::ComponentRangeSplitStatus::Conflict
-            ? "component_range_split_conflict"
-            : "invalid_component_range_split";
-    const auto message = !outcome.error_message.empty() ? outcome.error_message
-        : outcome.status == db::ComponentRangeSplitStatus::Conflict
-            ? "导入记录不在待校对阶段，或没有已确认构件台账。"
-            : "所选构件范围无法拆分。";
-    auto body = make_error_body(code, message);
-    if (!outcome.rejected_target.component_number.empty()) {
-        body["details"]["part_name"] = outcome.rejected_target.part_name;
-        body["details"]["component_number"] =
-            outcome.rejected_target.component_number;
-    }
-    const auto status = outcome.status == db::ComponentRangeSplitStatus::Conflict
-            || outcome.status == db::ComponentRangeSplitStatus::Stale
-        ? drogon::k409Conflict
-        : outcome.status == db::ComponentRangeSplitStatus::Failed
-            ? drogon::k503ServiceUnavailable : drogon::k400BadRequest;
-    respond_json(callback, body, status);
-}
-
-bool parse_split_targets(
-    const Json::Value* body,
-    std::vector<review::ComponentRangeSplitTarget>& targets,
-    const HttpCallback& callback) {
-    if (body == nullptr || !(*body)["targets"].isArray()
-        || (*body)["targets"].empty()) {
-        respond_json(callback, make_error_body(
-            "invalid_component_range_split", "targets 必须是非空数组。"),
-            drogon::k400BadRequest);
-        return false;
-    }
-    for (const auto& item : (*body)["targets"]) {
-        if (!item.isObject() || !item["part_name"].isString()
-            || !item["component_number"].isString()
-            || item["part_name"].asString().empty()
-            || item["component_number"].asString().empty()) {
-            respond_json(callback, make_error_body(
-                "invalid_component_range_split",
-                "每个目标都需要非空的 part_name 与 component_number。"),
-                drogon::k400BadRequest);
-            return false;
-        }
-        targets.push_back(
-            {item["part_name"].asString(), item["component_number"].asString()});
-    }
-    return true;
-}
-
 void respond_binding(const HttpCallback& callback, const db::BindingOutcome& outcome) {
     if (outcome.status == db::BindingStatus::Ok) {
-        Json::Value body;
-        body["overview"] = binding_overview_json(*outcome.overview);
+        Json::Value body(Json::objectValue);
+        body["bound"] = true;
         respond_json(callback, body);
         return;
     }
@@ -201,17 +22,20 @@ void respond_binding(const HttpCallback& callback, const db::BindingOutcome& out
         respond_import_record_not_found(callback);
         return;
     }
-    if (outcome.status == db::BindingStatus::Failed) {
-        respond_db_unavailable(callback);
+    if (outcome.status == db::BindingStatus::EditLockInvalid) {
+        respond_json(callback, make_error_body("edit_lock_required", "需要编辑权才能绑定评定树。"),
+                     drogon::k409Conflict);
         return;
     }
-    const auto mapped = binding_error_response(outcome);
-    auto body = make_error_body(mapped.error_code, mapped.error_message);
-    // 整批不写时必须让用户知道是哪一条挡住的。
-    if (!outcome.rejected_component_number.empty()) {
-        body["details"]["rejected_component_number"] = outcome.rejected_component_number;
+    if (outcome.status == db::BindingStatus::Conflict) {
+        respond_json(callback,
+                     make_error_body(outcome.error_code.empty()
+                                         ? "component_binding_conflict" : outcome.error_code,
+                                     outcome.error_message),
+                     drogon::k409Conflict);
+        return;
     }
-    respond_json(callback, body, static_cast<drogon::HttpStatusCode>(mapped.http_status));
+    respond_db_unavailable(callback);
 }
 
 void respond_rating_tree_binding(
@@ -244,47 +68,6 @@ bool parse_expected_revision(const Json::Value* body, std::string& expected,
     return true;
 }
 
-// 取回 part_name + component_number（bind 另需 bridge_component_id）。
-bool parse_component_ids(const Json::Value* body, std::vector<std::string>& ids,
-                        const HttpCallback& callback) {
-    if (body == nullptr || !(*body)["bridge_component_ids"].isArray()) {
-        respond_json(callback, make_error_body(
-            "invalid_component_binding", "bridge_component_ids 必须是数组。"),
-            drogon::k400BadRequest);
-        return false;
-    }
-    for (const auto& id : (*body)["bridge_component_ids"]) {
-        if (!id.isString() || id.asString().empty()) {
-            respond_json(callback, make_error_body(
-                "invalid_component_binding", "构件 id 必须是非空文本。"),
-                drogon::k400BadRequest);
-            return false;
-        }
-        ids.push_back(id.asString());
-    }
-    // 数量与重复由仓储那层判定并给出具体错误码，这里只拦形状问题。
-    return true;
-}
-
-bool parse_target(const Json::Value* body, std::string& part_name, std::string& number,
-                  const HttpCallback& callback) {
-    if (body == nullptr || !(*body)["part_name"].isString() || !(*body)["component_number"].isString()) {
-        respond_json(callback, make_error_body(
-            "invalid_component_binding", "部件名称与构件编号必须是文本。"),
-            drogon::k400BadRequest);
-        return false;
-    }
-    part_name = (*body)["part_name"].asString();
-    number = (*body)["component_number"].asString();
-    if (part_name.empty() || number.empty()) {
-        respond_json(callback, make_error_body(
-            "invalid_component_binding", "部件名称与构件编号不能为空。"),
-            drogon::k400BadRequest);
-        return false;
-    }
-    return true;
-}
-
 }  // namespace
 
 BindingErrorResponse binding_error_response(const db::BindingOutcome& outcome) {
@@ -295,25 +78,17 @@ BindingErrorResponse binding_error_response(const db::BindingOutcome& outcome) {
             return {"edit_lock_invalid", "编辑锁已失效，本次修改未写入，请刷新页面。", 409};
         case db::BindingStatus::Conflict:
             // 结果自带错误码时优先用它：同一个 Conflict 下，"台账版本已变化"要求
-            // 前端刷新概览，跟"类别不符"是两种完全不同的处置。
+            // 前端刷新，跟"年度已有正式评定"是两种完全不同的处置。
             return {
                 outcome.error_code.empty() ? "component_binding_conflict" : outcome.error_code,
                 !outcome.error_message.empty() ? outcome.error_message
-                : outcome.rejected_component_number.empty()
-                    ? "台账未确认、导入不在待校对阶段，或所选构件类别与部件名称不符。"
-                    : "构件 " + outcome.rejected_component_number
-                        + " 的类别与部件名称不符，整批未应用。",
+                    : "台账未确认，或导入不在待校对阶段。",
                 409};
         case db::BindingStatus::Invalid:
-            // 与 Conflict 同理，同样优先用仓储给的码。多构件绑定的"构件重复"和
-            // "至少选两个"是两种不同的处置，笼统一个码前端分不开。
             return {
                 outcome.error_code.empty() ? "invalid_component_binding" : outcome.error_code,
                 !outcome.error_message.empty() ? outcome.error_message
-                : outcome.rejected_component_number.empty()
-                    ? "绑定参数无效或未找到该编号。"
-                    : "构件编号 " + outcome.rejected_component_number
-                        + " 不在本次导入中，整批未应用。",
+                    : "绑定参数无效。",
                 400};
         case db::BindingStatus::TreeNotFound:
             return {"rating_tree_not_found", "评定树版本不存在。", 404};
@@ -344,9 +119,6 @@ void register_post_route(const std::string& path, Handler&& handler) {
 void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
     const std::string base = "/api/import-records/{import_id}/component-binding";
     // 只读接口的预检仍需单独注册：GET 带 Authorization 头，同样会触发预检。
-    for (const auto& path : {base, base + "/inventory"}) {
-        register_options_handler(path);
-    }
 
     register_post_route(
         base + "/rating-tree",
@@ -391,262 +163,14 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
             }
         });
 
-    // 批量替换取数。GET，只校验版本、绝不锁定：打开一次对话框就把年度锁死，
-    // 是任何人都不会预期的副作用，浏览器预取或重试还会重复触发。
-    drogon::app().registerHandler(
-        base + "/inventory",
-        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
-                    const std::string& import_id) {
-            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
-            const auto expected = request->getParameter("expected_inventory_revision_id");
-            if (!is_valid_uuid(expected)) {
-                respond_json(callback, make_error_body(
-                    "invalid_component_binding_inventory_request",
-                    "expected_inventory_revision_id 必须是有效的台账版本 UUID。"),
-                    drogon::k400BadRequest);
-                return;
-            }
-            try {
-                if (!authenticate_request(db_client, request).has_value()) {
-                    respond_unauthorized(callback); return;
-                }
-                const auto outcome =
-                    db::ImportBindingRepository(db_client).load_replace_inventory(
-                        import_id, expected);
-                switch (outcome.status) {
-                    case db::BindingStatus::NotFound:
-                        respond_import_record_not_found(callback); return;
-                    case db::BindingStatus::Conflict:
-                        respond_json(callback, make_error_body(
-                            outcome.error_code.empty()
-                                ? "component_binding_conflict" : outcome.error_code,
-                            outcome.error_message.empty()
-                                ? "导入记录不在待校对阶段。" : outcome.error_message),
-                            drogon::k409Conflict);
-                        return;
-                    case db::BindingStatus::Failed:
-                        respond_db_unavailable(callback); return;
-                    default: break;
-                }
-                Json::Value body;
-                body["inventory_revision_id"] = outcome.replace_revision_id;
-                body["entries"] = Json::Value(Json::arrayValue);
-                for (const auto& entry : outcome.replace_entries) {
-                    Json::Value item(Json::objectValue);
-                    item["bridge_component_id"] = entry.bridge_component_id;
-                    item["component_number"] = entry.component_number;
-                    // 服务端已经过滤掉停用构件，字段仍然要返回：前端预览里有一句
-                    // if (!entry.is_active) continue，缺字段时 !undefined 为真，
-                    // 会把每一条都跳过，预览安静地全判成"台账里没有"。
-                    item["is_active"] = entry.is_active;
-                    body["entries"].append(std::move(item));
-                }
-                respond_json(callback, body);
-            } catch (...) { respond_db_unavailable(callback); }
-        }, {drogon::Get});
-
-    register_post_route(
-        base + "/split-preview",
-        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
-                    const std::string& import_id) {
-            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
-            try {
-                if (!authenticate_request(db_client, request)) {
-                    respond_unauthorized(callback); return;
-                }
-                const auto body = request->getJsonObject();
-                std::vector<review::ComponentRangeSplitTarget> targets;
-                if (!parse_split_targets(body.get(), targets, callback)) return;
-                std::string expected;
-                if (!parse_expected_revision(body.get(), expected, callback,
-                                             "invalid_component_range_split")) return;
-                respond_split(callback,
-                    db::ComponentRangeSplitRepository(db_client).preview(
-                        import_id, targets, expected));
-            } catch (...) { respond_db_unavailable(callback); }
-        });
-
-    register_post_route(
-        base + "/split-apply",
-        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
-                    const std::string& import_id) {
-            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
-            try {
-                const auto actor = authenticate_request(db_client, request);
-                if (!actor) { respond_unauthorized(callback); return; }
-                if (!require_active_edit_lock(
-                        db_client, request, import_id, *actor, callback)) return;
-                const auto body = request->getJsonObject();
-                std::vector<review::ComponentRangeSplitTarget> targets;
-                if (!parse_split_targets(body.get(), targets, callback)) return;
-                if (!(*body)["impact_token"].isString()
-                    || (*body)["impact_token"].asString().empty()) {
-                    respond_json(callback, make_error_body(
-                        "component_range_split_impact_token_required",
-                        "应用拆分前必须提供预览影响令牌。"),
-                        drogon::k400BadRequest);
-                    return;
-                }
-                std::string expected;
-                if (!parse_expected_revision(body.get(), expected, callback,
-                                             "invalid_component_range_split")) return;
-                respond_split(callback,
-                    db::ComponentRangeSplitRepository(db_client).apply(
-                        import_id, targets, (*body)["impact_token"].asString(),
-                        actor->id, expected,
-                        edit_lock_from_request(request, *actor)));
-            } catch (...) { respond_db_unavailable(callback); }
-        });
-
-    // 批量绑定：供绑定界面的"批量替换"。单次读改写，任一目标非法则整批不写。
-    register_post_route(
-        base + "/bind-batch",
-        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
-                    const std::string& import_id) {
-            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
-            try {
-                const auto actor = authenticate_request(db_client, request);
-                if (!actor.has_value()) { respond_unauthorized(callback); return; }
-                if (!require_active_edit_lock(
-                        db_client, request, import_id, *actor, callback)) return;
-                const auto body = request->getJsonObject();
-                if (body == nullptr || !(*body)["targets"].isArray()
-                    || (*body)["targets"].empty()) {
-                    respond_json(callback, make_error_body(
-                        "invalid_component_binding", "targets 必须是非空数组。"),
-                        drogon::k400BadRequest);
-                    return;
-                }
-                std::vector<db::BindingTarget> targets;
-                for (const auto& item : (*body)["targets"]) {
-                    if (!item.isObject() || !item["part_name"].isString()
-                        || !item["component_number"].isString()
-                        || !item["bridge_component_id"].isString()) {
-                        respond_json(callback, make_error_body(
-                            "invalid_component_binding",
-                            "每个目标都需要 part_name、component_number 与 bridge_component_id。"),
-                            drogon::k400BadRequest);
-                        return;
-                    }
-                    targets.push_back({item["part_name"].asString(),
-                                       item["component_number"].asString(),
-                                       item["bridge_component_id"].asString()});
-                }
-                std::string expected;
-                if (!parse_expected_revision(body.get(), expected, callback)) return;
-                respond_binding(callback,
-                    db::ImportBindingRepository(db_client).bind_batch(
-                        import_id, targets, expected,
-                        edit_lock_from_request(request, *actor)));
-            } catch (...) { respond_db_unavailable(callback); }
-        });
-
-    drogon::app().registerHandler(
-        base,
-        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
-                    const std::string& import_id) {
-            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
-            try {
-                if (!authenticate_request(db_client, request).has_value()) {
-                    respond_unauthorized(callback); return;
-                }
-                respond_binding(callback, db::ImportBindingRepository(db_client).overview(import_id));
-            } catch (...) { respond_db_unavailable(callback); }
-        }, {drogon::Get});
-
-    register_post_route(
-        base + "/bind",
-        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
-                    const std::string& import_id) {
-            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
-            try {
-                const auto actor = authenticate_request(db_client, request);
-                if (!actor.has_value()) { respond_unauthorized(callback); return; }
-                if (!require_active_edit_lock(
-                        db_client, request, import_id, *actor, callback)) return;
-                const auto body = request->getJsonObject();
-                std::string part_name, number;
-                if (!parse_target(body.get(), part_name, number, callback)) return;
-                if (!(*body)["bridge_component_id"].isString()
-                    || (*body)["bridge_component_id"].asString().empty()) {
-                    respond_json(callback, make_error_body(
-                        "invalid_component_binding", "必须选择实际构件。"),
-                        drogon::k400BadRequest); return;
-                }
-                std::string expected;
-                if (!parse_expected_revision(body.get(), expected, callback)) return;
-                respond_binding(callback, db::ImportBindingRepository(db_client).bind(
-                    import_id, part_name, number,
-                    (*body)["bridge_component_id"].asString(), expected,
-                    edit_lock_from_request(request, *actor)));
-            } catch (...) { respond_db_unavailable(callback); }
-        });
-
-    // "两侧"绑定：把一行拆到多个构件上。会增删病害、搬动照片归属，前端写完必须重取草稿。
-    register_post_route(
-        base + "/bind-multi",
-        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
-                    const std::string& import_id) {
-            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
-            try {
-                const auto actor = authenticate_request(db_client, request);
-                if (!actor.has_value()) { respond_unauthorized(callback); return; }
-                if (!require_active_edit_lock(
-                        db_client, request, import_id, *actor, callback)) return;
-                const auto body = request->getJsonObject();
-                std::string part_name, number;
-                if (!parse_target(body.get(), part_name, number, callback)) return;
-                std::vector<std::string> component_ids;
-                if (!parse_component_ids(body.get(), component_ids, callback)) return;
-                std::string expected;
-                if (!parse_expected_revision(body.get(), expected, callback)) return;
-                respond_binding(callback, db::ImportBindingRepository(db_client).bind_multi(
-                    import_id, part_name, number, component_ids, actor->id, expected,
-                    edit_lock_from_request(request, *actor)));
-            } catch (...) { respond_db_unavailable(callback); }
-        });
-
-    register_post_route(
-        base + "/mark-missing",
-        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
-                    const std::string& import_id) {
-            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
-            try {
-                const auto actor = authenticate_request(db_client, request);
-                if (!actor.has_value()) { respond_unauthorized(callback); return; }
-                if (!require_active_edit_lock(
-                        db_client, request, import_id, *actor, callback)) return;
-                const auto body = request->getJsonObject();
-                std::string part_name, number;
-                if (!parse_target(body.get(), part_name, number, callback)) return;
-                std::string expected;
-                if (!parse_expected_revision(body.get(), expected, callback)) return;
-                respond_binding(callback, db::ImportBindingRepository(db_client).mark_missing(
-                    import_id, part_name, number, expected,
-                    edit_lock_from_request(request, *actor)));
-            } catch (...) { respond_db_unavailable(callback); }
-        });
-
-    register_post_route(
-        base + "/clear",
-        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
-                    const std::string& import_id) {
-            if (!is_valid_uuid(import_id)) { respond_import_record_not_found(callback); return; }
-            try {
-                const auto actor = authenticate_request(db_client, request);
-                if (!actor.has_value()) { respond_unauthorized(callback); return; }
-                if (!require_active_edit_lock(
-                        db_client, request, import_id, *actor, callback)) return;
-                const auto body = request->getJsonObject();
-                std::string part_name, number;
-                if (!parse_target(body.get(), part_name, number, callback)) return;
-                std::string expected;
-                if (!parse_expected_revision(body.get(), expected, callback)) return;
-                respond_binding(callback, db::ImportBindingRepository(db_client).clear(
-                    import_id, part_name, number, expected,
-                    edit_lock_from_request(request, *actor)));
-            } catch (...) { respond_db_unavailable(callback); }
-        });
+    // 5.0：构件绑定、标记缺失、取消绑定、批量替换与区间展开已全部改走解析链路
+    // （ImportResolutionRoutes）。这里原有的九个路由不再注册。
+    //
+    // 它们不是“没人调就算了”：那些写操作会往草稿 JSON 里写 bridge_component_id、
+    // rating_tree_node_id 等 5.0 已删字段，调一次就把草稿写成非法契约，下一次读
+    // 就被前端契约守卫整份拒掉。设计 §21 也明确禁止新关系表与旧 JSON 字段双写。
+    //
+    // 年度评定树绑定（上面那一个）不属于构件解析，照常保留。
 }
 
 }  // namespace bridge_report::http

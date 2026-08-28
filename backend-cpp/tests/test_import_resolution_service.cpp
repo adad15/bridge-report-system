@@ -77,7 +77,8 @@ protected:
     /// 出现两次就只能靠不同的现场类型——而这正是真实的歧义形态（报告写"1-1#梁"，
     /// 台账里空心板和 T 梁各有一件 1-1#，两者同属一个 H21 类别）。
     void seed_confirmed_inventory(
-        const std::vector<std::pair<std::string, std::string>>& entries) {
+        const std::vector<std::pair<std::string, std::string>>& entries,
+        const std::string& category_id = "h21.component.beam.upper_bearing") {
         package_id_ = client_->execSqlSync(
             "insert into standard_packages(standard_family,standard_id,standard_code,"
             "standard_name,official_edition,package_version,contract_version,algorithm_id,"
@@ -107,9 +108,9 @@ protected:
                 "standard_package_id,standard_bridge_type_id,standard_component_category_id,"
                 "structure_part,mapping_source,confirmation_status,confirmed_by_user_id,"
                 "confirmed_at) values($1::uuid,$2::uuid,'h21.bridge_type.beam',"
-                "'h21.component.beam.upper_bearing','superstructure','规范模板','已确认',"
+                "$4,'superstructure','规范模板','已确认',"
                 "$3::uuid,now())",
-                entry_id, package_id_, user_id_);
+                entry_id, package_id_, user_id_, category_id);
             ++order;
         }
         client_->execSqlSync(
@@ -317,4 +318,42 @@ TEST_F(ImportResolutionServiceTest, WorkspaceJsonNamesIdentitiesExplicitly) {
     EXPECT_FALSE(instance_json.isMember("defect_id"));
     EXPECT_TRUE(instance_json.isMember("overridden_fields"));
     EXPECT_TRUE(instance_json["rating_resolution"].isMember("present"));
+}
+
+// 两侧整体绑定：左右幅桥的人行道/栏杆在报告里常写成一条"两侧栏杆"，台账里却是左右
+// 各一件。后端把那一对找好交给界面，用户一下就能绑到两件上。
+//
+// 这个能力此前只在旧绑定链路（ImportBindingRepository::fill_side_pairs）里有。前端从旧
+// 链路迁到解析工作区时，读模型必须先把它补齐，否则迁移就是功能倒退：用户再也没法
+// 一键整体绑定，只能一条一条手动找左右两件。
+TEST_F(ImportResolutionServiceTest, OpenGroupCarriesTheSidePairOption) {
+    seed_confirmed_inventory({{"左侧栏杆", "栏杆"}, {"右侧栏杆", "栏杆"}},
+                             "h21.component.deck.railing");
+    // 编号对不上台账，组停在 unresolved——两侧候选只给尚未解决的组。
+    import_defects({{"栏杆、护栏", "两侧栏杆"}});
+
+    const auto outcome = ImportResolutionService(client_).load_workspace(import_id_);
+    ASSERT_EQ(outcome.status, ResolutionStatus::Ok) << outcome.error_message;
+    ASSERT_EQ(outcome.workspace->groups.size(), 1u);
+
+    const auto& group = outcome.workspace->groups[0];
+    ASSERT_EQ(group.status, "unresolved");
+    ASSERT_TRUE(group.side_pair_option.has_value());
+    EXPECT_EQ(group.side_pair_option->bridge_component_ids.size(), 2u);
+    // 文案由后端拼好并点名将绑给哪两件，前端原样显示，不自己拼。
+    EXPECT_NE(group.side_pair_option->label.find("左侧栏杆"), std::string::npos);
+    EXPECT_NE(group.side_pair_option->label.find("右侧栏杆"), std::string::npos);
+}
+
+// 已绑定的组不再需要两侧候选：留着它界面就会在一条已经处理好的行上继续劝人整体绑定。
+TEST_F(ImportResolutionServiceTest, ResolvedGroupHasNoSidePairOption) {
+    seed_confirmed_inventory({{"左侧栏杆", "栏杆"}, {"右侧栏杆", "栏杆"}},
+                             "h21.component.deck.railing");
+    import_defects({{"栏杆、护栏", "左侧栏杆"}});
+
+    const auto outcome = ImportResolutionService(client_).load_workspace(import_id_);
+    ASSERT_EQ(outcome.status, ResolutionStatus::Ok) << outcome.error_message;
+    ASSERT_EQ(outcome.workspace->groups.size(), 1u);
+    ASSERT_EQ(outcome.workspace->groups[0].status, "bound");
+    EXPECT_FALSE(outcome.workspace->groups[0].side_pair_option.has_value());
 }

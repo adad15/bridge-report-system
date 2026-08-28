@@ -12,6 +12,7 @@
 #include "bridge_report/auth/PasswordHash.hpp"
 #include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
+#include "bridge_report/inventory/SideComponentPair.hpp"
 #include "bridge_report/db/ImportResolutionRepository.hpp"
 #include "bridge_report/inventory/ComponentCategoryLexicon.hpp"
 #include "bridge_report/inventory/ComponentMatcher.hpp"
@@ -130,6 +131,63 @@ std::unordered_map<std::string, WorkspaceComponentSummary> load_component_summar
     return summaries;
 }
 
+/// 给尚未解决的组填"两侧"整体绑定候选。
+///
+/// 与旧绑定链路的 fill_side_pairs 同一口径：只按台账结构判定（类别在放行名单内、
+/// 且该类别下可用构件恰好两件且编号仅左↔右不同），不解析病害编号里的文字。
+/// 只装这几个类别的构件，find_side_component_pair 内部还会再按类别过滤。
+void fill_side_pair_options(
+    const drogon::orm::DbClientPtr& client,
+    const std::string& revision_id,
+    std::vector<WorkspaceComponentGroup>& groups) {
+    const auto group_is_open = [](const WorkspaceComponentGroup& group) {
+        return group.status == "unresolved";
+    };
+
+    std::unordered_map<std::string, std::string> category_by_part;
+    std::vector<std::string> categories;
+    for (const auto& group : groups) {
+        if (!group_is_open(group)) continue;
+        if (category_by_part.contains(group.source_component_name)) continue;
+        for (const auto& category :
+             inventory::resolve_component_categories(group.source_component_name)) {
+            if (!inventory::side_pair_category_allowed(category)) continue;
+            category_by_part.emplace(group.source_component_name, category);
+            categories.push_back(category);
+            break;
+        }
+    }
+    if (categories.empty()) return;
+    std::sort(categories.begin(), categories.end());
+    categories.erase(std::unique(categories.begin(), categories.end()), categories.end());
+
+    inventory::InventoryRevision scope;
+    scope.id = revision_id;
+    scope.entries = db::ComponentInventoryRepository(client)
+                        .load_bindable_entries_by_categories(revision_id, categories);
+
+    std::unordered_map<std::string, std::optional<inventory::SideComponentPair>> pairs;
+    for (const auto& category : categories) {
+        pairs.emplace(category, inventory::find_side_component_pair(scope, category));
+    }
+
+    for (auto& group : groups) {
+        if (!group_is_open(group)) continue;
+        const auto category = category_by_part.find(group.source_component_name);
+        if (category == category_by_part.end()) continue;
+        const auto pair = pairs.find(category->second);
+        if (pair == pairs.end() || !pair->second.has_value()) continue;
+
+        WorkspaceSidePairOption option;
+        option.label = "整体绑定到 " + pair->second->left_component_number +
+                       " 与 " + pair->second->right_component_number;
+        option.bridge_component_ids = {
+            pair->second->left_bridge_component_id,
+            pair->second->right_bridge_component_id};
+        group.side_pair_option = std::move(option);
+    }
+}
+
 /// 组上允许哪些动作。前端只按这份清单决定按钮可用性，不自己推。
 void fill_allowed_actions(WorkspaceComponentGroup& group, const bool inventory_confirmed) {
     if (!inventory_confirmed) {
@@ -231,7 +289,9 @@ ResolutionOutcome ImportResolutionService::load_workspace(
             "  coalesce(ir.parsed_result_json::text,'{}') as parsed, "
             "  iy.component_inventory_revision_id::text as year_revision_id, "
             "  rtv.id::text as rating_tree_version_id, rtv.tree_name, "
-            "  rtv.package_version as rating_tree_package_version "
+            "  rtv.package_version as rating_tree_package_version, "
+            "  rtv.technical_condition_package_version as rating_tree_h21_version, "
+            "  rtv.maintenance_package_version as rating_tree_maintenance_version "
             "from import_records ir "
             "left join inspection_years iy on iy.id = ir.inspection_year_id "
             "left join project_standard_profiles profile on profile.id = iy.standard_profile_id "
@@ -265,6 +325,10 @@ ResolutionOutcome ImportResolutionService::load_workspace(
             tree.tree_name = rows[0]["tree_name"].as<std::string>();
             tree.package_version =
                 rows[0]["rating_tree_package_version"].as<std::string>();
+            tree.h21_package_version =
+                rows[0]["rating_tree_h21_version"].as<std::string>();
+            tree.maintenance_package_version =
+                rows[0]["rating_tree_maintenance_version"].as<std::string>();
             workspace.rating_tree = std::move(tree);
         }
 
@@ -470,6 +534,8 @@ ResolutionOutcome ImportResolutionService::load_workspace(
                 fill(group.targets);
                 fill(group.candidates);
             }
+            fill_side_pair_options(
+                db_client_, *workspace.inventory_revision_id, workspace.groups);
         }
 
         for (auto& [_, part] : parts) workspace.parts.push_back(std::move(part));

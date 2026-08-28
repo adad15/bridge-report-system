@@ -1,37 +1,70 @@
-import type {
-  BindingTarget,
-  ComponentRangeSplitPreview,
-} from "../../api/importBindingApi";
+import type { ResolutionPlanPreview } from "../../api/resolutionApi";
+
+// 区间展开的确认对话框。
+//
+// 5.0 起预览由后端生成（§13.3）：前端只展示计划并拿 plan token 去执行，不自己算展开
+// 结果。此前两边各算一次，规则一分叉就会出现"预览说能展开、执行时却判无此编号"。
+//
+// 展示口径也跟着换了。旧预览逐行给"病害数 / 照片数"，那是把展开当成复制病害来算的；
+// 新模型里展开只是给同一条来源病害多挂几个解析实例，所以逐行给的是"会绑到几件构件"，
+// 总量给的是实例数变化。
+
+const OUTCOME_LABELS: Record<string, string> = {
+  will_bind: "将展开绑定",
+  will_clear: "将清除绑定",
+  will_repoint: "将重指版本",
+  skipped: "跳过",
+  blocked: "阻断",
+};
+
+const REASON_LABELS: Record<string, string> = {
+  not_a_range: "该编号不是可展开的构件范围",
+  component_not_found: "台账中无此编号",
+  component_ambiguous: "台账中有多个同号构件",
+  group_already_resolved: "已绑定或已标记缺失，不参与",
+};
+
+function outcomeLabel(row: ResolutionPlanPreview["rows"][number]): string {
+  if (row.outcome === "will_bind") return OUTCOME_LABELS.will_bind;
+  return REASON_LABELS[row.reason_code] ?? row.reason_message ??
+    OUTCOME_LABELS[row.outcome] ?? row.outcome;
+}
 
 export function ComponentRangeSplitDialog({
   preview,
   loading,
-  targets,
   busy,
   error,
   onClose,
   onRetry,
   onApply,
 }: {
-  preview: ComponentRangeSplitPreview | null;
+  /** null 表示还没预览过。计划一律来自后端，前端不构造。 */
+  preview: ResolutionPlanPreview | null;
   loading: boolean;
-  targets: BindingTarget[];
   busy: boolean;
   error: string | null;
   onClose: () => void;
   onRetry: () => void;
-  onApply: (targets: BindingTarget[], impactToken: string) => void;
+  onApply: (planToken: string) => void;
 }) {
+  const canApply = preview !== null && preview.will_apply_count > 0 && !busy && !loading;
+
   return (
     <div className="dialog-backdrop" role="presentation">
-      <section className="workspace-dialog range-split-dialog" role="dialog" aria-modal="true" aria-labelledby="range-split-title">
+      <section
+        className="workspace-dialog range-split-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="range-split-title"
+      >
         <h2 id="range-split-title">拆分构件范围</h2>
         <p className="dialog-hint">
-          拆分后每个实际构件会分别参与评分，病害数量增加可能使总扣分增加。
-          每条新病害会复制原文字和标度，并标记为待人工核对。照片整份留在第一条，
-          其余不带照片也不带照片编号——该配哪张图只有人能判断，请拆分后人工挪过去。
+          展开后每个实际构件分别参与评分，病害数量增加可能使总扣分增加。
+          照片整份留在编号最小的那条实例上，其余不带照片——同一个照片编号出现在多条
+          观测上，报告里的编号交叉引用就作废了；该配哪张图只有人能判断，请展开后人工挪。
         </p>
-        {loading ? <p className="dialog-loading" role="status">正在计算拆分影响…</p> : null}
+        {loading ? <p className="dialog-loading" role="status">正在计算展开影响…</p> : null}
         {error ? <p className="error-text" role="alert">{error}</p> : null}
         {preview ? (
           <>
@@ -39,18 +72,24 @@ export function ComponentRangeSplitDialog({
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>原构件范围</th><th>构件数</th><th>病害</th><th>照片（留第一条）</th><th>绑定结果</th>
+                    <th>原构件范围</th><th>部件</th><th>病害</th><th>展开到</th><th>结果</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.items.map((item) => (
-                    <tr key={`${item.part_name}\n${item.component_number}`}>
-                      <td>{item.component_number}</td>
-                      <td>{item.expanded_component_count}</td>
-                      <td>{item.source_defect_count} → {item.result_defect_count}</td>
-                      <td>{item.result_photo_count}</td>
-                      <td>
-                        自动绑定 {item.bound_count} · 歧义 {item.ambiguous_count} · 未匹配 {item.unmatched_count}
+                  {preview.rows.map((row) => (
+                    <tr key={row.group_id}>
+                      <td>{row.source_component_number}</td>
+                      <td>{row.source_component_name}</td>
+                      <td>{row.member_count}</td>
+                      <td>{row.target_component_ids.length || "—"}</td>
+                      <td
+                        className={
+                          row.outcome === "will_bind"
+                            ? "range-split-ok"
+                            : "range-split-skip"
+                        }
+                      >
+                        {outcomeLabel(row)}
                       </td>
                     </tr>
                   ))}
@@ -58,8 +97,14 @@ export function ComponentRangeSplitDialog({
               </table>
             </div>
             <p className="range-split-totals">
-              共拆分 {preview.totals.selected_range_count} 个范围，生成 {preview.totals.result_defect_count} 条病害；
-              {preview.totals.result_photo_count} 张照片留在每组第一条，不再逐条复制。
+              将展开 {preview.will_apply_count} 个范围
+              {preview.skipped_count > 0 ? ` · 跳过 ${preview.skipped_count} 个` : ""}
+              {preview.blocked_count > 0 ? ` · 阻断 ${preview.blocked_count} 个` : ""}
+              ；解析实例 {preview.instances_before} → {preview.instances_after}
+              {preview.rating_recomputed_count > 0
+                ? `，重算评分树 ${preview.rating_recomputed_count} 条`
+                : ""}
+              。
             </p>
           </>
         ) : null}
@@ -73,8 +118,8 @@ export function ComponentRangeSplitDialog({
             <button
               type="button"
               className="primary-button"
-              disabled={busy || loading || !preview}
-              onClick={() => preview && onApply(targets, preview.impact_token)}
+              disabled={!canApply}
+              onClick={() => preview && onApply(preview.plan_token)}
             >
               {busy ? "正在应用…" : "确认拆分"}
             </button>

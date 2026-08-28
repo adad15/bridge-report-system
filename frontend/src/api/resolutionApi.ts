@@ -24,6 +24,18 @@ export interface WorkspaceComponentSummary {
   component_number: string;
   site_component_type: string;
   site_name: string;
+  /** 由组所钉的台账版本当场派生（§17.2），不再冻在草稿里。 */
+  standard_component_category_id: string;
+  standard_bridge_type_id: string;
+}
+
+/**
+ * "两侧"整体绑定候选。报告里写一条"两侧栏杆"，台账里却是左右各一件；
+ * 后端把那一对找好并拼好文案，前端原样显示、一下绑两件。
+ */
+export interface WorkspaceSidePairOption {
+  label: string;
+  bridge_component_ids: string[];
 }
 
 export interface WorkspaceRatingResolution {
@@ -70,6 +82,8 @@ export interface WorkspaceComponentGroup {
   ambiguous: boolean;
   split_eligible: boolean;
   split_expanded_count: number | null;
+  /** 仅尚未解决的组会带；不成立时为 null。 */
+  side_pair_option: WorkspaceSidePairOption | null;
   targets: WorkspaceComponentSummary[];
   candidates: WorkspaceComponentSummary[];
   members: WorkspaceGroupMember[];
@@ -107,7 +121,13 @@ export interface ResolutionWorkspace extends ResolutionWorkspaceResponse {
   draft_version: number;
   inventory_confirmed: boolean;
   inventory_revision_id: string | null;
-  rating_tree: { version_id: string; tree_name: string; package_version: string } | null;
+  rating_tree: {
+    version_id: string;
+    tree_name: string;
+    package_version: string;
+    h21_package_version: string;
+    maintenance_package_version: string;
+  } | null;
   groups: WorkspaceComponentGroup[];
   parts: WorkspacePartSummary[];
   progress: WorkspaceProgress;

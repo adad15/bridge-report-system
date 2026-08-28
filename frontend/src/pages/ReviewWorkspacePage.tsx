@@ -21,7 +21,12 @@ import { useAuth } from "../auth/AuthContext";
 import { backendBaseUrl } from "../config";
 import { canPressConfirm, canRunPreflight, formatConfirmSuccess, parsePreflightDetails, validateRevisionForm } from "../review/confirmFlow";
 import type { BridgeAnnualInspectionData } from "../contracts/annualInspection";
-import { bindingProgress, fetchComponentBinding, type ComponentBindingOverview } from "../api/importBindingApi";
+import { fetchResolutionWorkspace } from "../api/resolutionApi";
+import {
+  bindingProgress,
+  toBindingOverview,
+  type ComponentBindingOverview,
+} from "../review/binding/bindingViewModel";
 import { ComponentBindingWorkspace } from "../review/binding/ComponentBindingWorkspace";
 import { DefectsSection } from "../review/components/DefectsSection";
 import { OverviewHeader } from "../review/components/OverviewHeader";
@@ -231,9 +236,10 @@ function ReviewWorkspaceLoaded({
   useEffect(() => {
     if (!importRecordId) return;
     let cancelled = false;
-    fetchComponentBinding(backendBaseUrl, importRecordId)
-      .then((overview) => {
+    fetchResolutionWorkspace(backendBaseUrl, importRecordId)
+      .then((workspace) => {
         if (cancelled) return;
+        const overview = toBindingOverview(workspace);
         setBindingOverview(overview);
         // 台账未确认时绑定不可用，保持 null 让侧栏显示 "-"。
         setBindingPending(
