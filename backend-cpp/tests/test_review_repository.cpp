@@ -1588,7 +1588,16 @@ protected:
         input.draft = draft;
         input.actor_username = "校对员";
         input.actor_is_admin = false;
+        // 默认拿当前版本，让现有用例保持"正常保存"的语义；
+        // 并发用例自己传一个陈旧版本。
+        input.expected_draft_version = current_draft_version();
         return input;
+    }
+
+    [[nodiscard]] int current_draft_version() const {
+        return client_->execSqlSync(
+            "select draft_version from import_records where id=$1::uuid",
+            import_record_id_)[0]["draft_version"].as<int>();
     }
 
     // 在桥上派生一条草稿台账版本（编号递增，status 默认即为“草稿”）。
@@ -2087,4 +2096,40 @@ TEST_F(ConfirmAnnualFactsTest, ReportsDatabaseCommitFailedWhenTheCommitItselfFai
     EXPECT_EQ(client_->execSqlSync(
         "select import_status from import_records where id=$1::uuid",
         import_record_id_)[0]["import_status"].as<std::string>(), "待校对");
+}
+
+// P1-2 回归：两个客户端基于同一版本保存，后到的必须撞冲突。
+//
+// 普通保存是整份覆盖 parsed_result_json。没有版本谓词时，旧标签页一保存就会把另一个
+// 页面刚手工新增的病害抄掉；更重的是同步器会把旧草稿里缺的那条候选解释成
+// "用户删掉了"，连带删掉成员、实例与评分树解析——丢的是真数据，而不只是一次编辑。
+TEST_F(SaveReviewDraftTest, ConcurrentSavesFromTheSameVersionConflict) {
+    const auto base_version = current_draft_version();
+
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto first = make_input(build_confirmed_data());
+    first.expected_draft_version = base_version;
+    const auto first_outcome = repository.save_review_draft(first);
+    ASSERT_TRUE(first_outcome.success) << first_outcome.error_code;
+    EXPECT_EQ(first_outcome.draft_version, base_version + 1);
+
+    // 第二个标签页手里还是旧版本。
+    auto second = make_input(build_confirmed_data());
+    second.expected_draft_version = base_version;
+    const auto second_outcome = repository.save_review_draft(second);
+    EXPECT_FALSE(second_outcome.success);
+    EXPECT_EQ(second_outcome.error_code, "review_draft_version_conflict");
+    // 带回当前版本，客户端才能取回最新草稿再合并。
+    EXPECT_EQ(second_outcome.draft_version, base_version + 1);
+}
+
+// 不带 If-Match 的写入直接拒：放行等于允许一个不知道自己基于哪一版的
+// 客户端整份覆盖，那正是上面那条用例要防的事。
+TEST_F(SaveReviewDraftTest, SavingWithoutAnExpectedVersionIsRefused) {
+    bridge_report::db::ReviewRepository repository(client_, registry_);
+    auto input = make_input(build_confirmed_data());
+    input.expected_draft_version = std::nullopt;
+    const auto outcome = repository.save_review_draft(input);
+    EXPECT_FALSE(outcome.success);
+    EXPECT_EQ(outcome.error_code, "review_draft_version_required");
 }

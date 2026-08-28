@@ -750,6 +750,15 @@ ResolutionOutcome ImportResolutionService::apply_resolution_plan(
                 input.status = "unresolved";
                 input.match_method = std::nullopt;
                 input.resolution_mode = "single";
+            } else if (row.outcome == "will_repoint" && row.target_component_ids.empty()) {
+                // 仅换所依据的台账版本。这一路来自"导入时该桥还没有已确认台账"：组停在
+                // unresolved（或已标记缺失），台账确认后统一重指（§9.4）。
+                //
+                // 不能顺手写成 bound——它一个目标都没有，而 bound 组按约束必须至少有一个，
+                // 整批计划会在提交阶段炸掉。而且语义上也不对：换版本不代表有人挑好了构件。
+                input.status = group->status;
+                input.match_method = group->match_method;
+                input.resolution_mode = group->resolution_mode;
             } else {
                 input.status = "bound";
                 input.match_method =

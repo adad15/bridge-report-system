@@ -72,6 +72,8 @@ Json::Value build_review_response(
     import_record["import_name"] = detail.import_name;
     import_record["source_type"] = detail.source_type;
     import_record["import_status"] = detail.import_status;
+    // 客户端下一次写草稿要拿它做 If-Match（§8.0）。
+    import_record["draft_version"] = detail.draft_version;
     import_record["importer_name"] =
         detail.importer_name.has_value() ? Json::Value(*detail.importer_name) : Json::Value(Json::nullValue);
     import_record["importer_version"] =

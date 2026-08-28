@@ -67,6 +67,14 @@ struct SaveReviewDraftInput {
     std::string actor_username;
     bool actor_is_admin{false};
     std::optional<EditLockCredentials> edit_lock;
+    /**
+     * 期望的来源草稿版本（§8.0）。整份保存会覆盖 parsed_result_json，因此必须带上它。
+     *
+     * 缺失时视为版本冲突而不是放行：放行等于允许一个不知道自己看的是哪一版的客户端
+     * 整份覆盖——它遗漏的候选还会被同步器解释成"用户删掉了"，连带删掉成员、实例与
+     * 评分树解析。
+     */
+    std::optional<int> expected_draft_version;
 };
 
 /**
@@ -94,6 +102,8 @@ struct SaveReviewDraftOutcome {
     std::string error_code;
     std::string error_message;
     review::DraftValidationResult validation;
+    /// 成功时是写入后的新版本；版本冲突时是库里的当前版本，供客户端取回重试。
+    int draft_version{0};
 };
 
 /**

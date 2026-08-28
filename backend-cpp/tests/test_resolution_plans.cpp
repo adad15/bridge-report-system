@@ -398,3 +398,45 @@ TEST_F(ResolutionPlanTest, RejectsAnUncompilablePattern) {
     EXPECT_EQ(outcome.status, ResolutionStatus::Invalid);
     EXPECT_EQ(outcome.error_code, "invalid_resolution_request");
 }
+
+// P1-3 回归：给尚未解析的组执行台账版本重指。
+//
+// 这是"导入时该桥还没有已确认台账，之后台账确认了再统一重指"这一路（§9.4、验收 16）。
+// 预览端给这类组的是 will_repoint + 空目标——语义就是"只改所依据的版本"。执行端却
+// 无条件把它写成 status=bound，而 bound 组按约束必须至少有一个目标，于是整批计划在
+// 提交阶段炸掉、全部回滚。
+TEST_F(ResolutionPlanTest, RepointingAnUnresolvedGroupKeepsItUnresolved) {
+    // 台账里没有这个编号，组停在 unresolved。
+    import_defects({"看不懂的编号"});
+
+    // 模拟"导入时该桥还没有已确认台账"：那种情况下组不钉任何版本（§8.1 允许为空），
+    // 等台账确认后再由重指计划统一钉上。
+    client_->execSqlSync(
+        "update import_component_resolution_groups set inventory_revision_id=null "
+        "where import_record_id=$1::uuid", import_id_);
+
+    const auto before = ImportResolutionService(client_).load_workspace(import_id_);
+    ASSERT_EQ(before.status, ResolutionStatus::Ok) << before.error_message;
+    ASSERT_EQ(before.workspace->groups.size(), 1u);
+    ASSERT_EQ(before.workspace->groups[0].status, "unresolved");
+
+    InventoryRepointIntent intent;
+    intent.group_ids = {before.workspace->groups[0].group_id};
+    const auto plan = ImportResolutionService(client_)
+        .build_inventory_repoint_plan(context(), intent);
+    ASSERT_EQ(plan.status, ResolutionStatus::Ok) << plan.error_message;
+    ASSERT_EQ(plan.plan->will_apply_count, 1);
+
+    const auto applied = ImportResolutionService(client_)
+        .apply_resolution_plan(context(), plan.plan->plan_token);
+    ASSERT_EQ(applied.status, ResolutionStatus::Ok) << applied.error_message;
+
+    // 组仍未解析：重指只换所依据的台账版本，不代表有人挑好了构件。
+    const auto after = ImportResolutionService(client_).load_workspace(import_id_);
+    ASSERT_EQ(after.status, ResolutionStatus::Ok) << after.error_message;
+    ASSERT_EQ(after.workspace->groups.size(), 1u);
+    EXPECT_EQ(after.workspace->groups[0].status, "unresolved");
+    EXPECT_TRUE(after.workspace->groups[0].targets.empty());
+    ASSERT_TRUE(after.workspace->groups[0].inventory_revision_id.has_value());
+    EXPECT_EQ(*after.workspace->groups[0].inventory_revision_id, revision_id_);
+}

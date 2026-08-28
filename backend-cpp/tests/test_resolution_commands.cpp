@@ -568,3 +568,55 @@ TEST_F(ResolutionCommandTest, DraftSaveKeepsTheBindingAndRefusesToMoveTheSourceI
             "where import_record_id=$1::uuid", import_id_)[0]["n"].as<int>(),
         0);
 }
+
+// P2-7 回归：一次保存新增两条属于同一个新构件组的病害。
+//
+// 同步器为第一条新病害建组后只更新了 group_id_by_key，没同步 group_by_id。第二条走
+// "组已存在"分支拿到 group_id，紧接着 group_by_id.at(group_id) 抛 out_of_range——
+// 整次草稿保存失败，而用户只是一次加了两条同编号的病害。
+TEST_F(ResolutionCommandTest, SavingTwoDefectsOfOneNewGroupInOneGo) {
+    import_one_unresolved_defect();
+    const auto stored_text = client_->execSqlSync(
+        "select parsed_result_json::text as json from import_records where id=$1::uuid",
+        import_id_)[0]["json"].as<std::string>();
+    Json::Value stored;
+    Json::CharReaderBuilder reader;
+    std::string errors;
+    const std::unique_ptr<Json::CharReader> parser(reader.newCharReader());
+    ASSERT_TRUE(parser->parse(stored_text.data(), stored_text.data() + stored_text.size(),
+                              &stored, &errors)) << errors;
+
+    // 两条新病害同部件、同编号，因此归到同一个尚不存在的组。
+    Json::Value added = stored;
+    for (const auto* candidate_id : {"added_0001", "added_0002"}) {
+        Json::Value defect = stored["defects"][0];
+        defect["candidate_id"] = candidate_id;
+        defect["component_name"] = "上部承重构件";
+        defect["component_number"] = "9-9#梁";
+        added["defects"].append(defect);
+    }
+
+    {
+        std::shared_ptr<drogon::orm::Transaction> tx;
+        auto latch = std::make_shared<bridge_report::db::CommitLatch>();
+        tx = client_->newTransaction(latch->callback());
+        const auto sync = bridge_report::resolution::synchronize_draft_resolution(
+            tx, import_id_, bridge_id_, year_id_, stored, added,
+            bridge_report::db::ComponentInventoryRepository(tx).resolve_confirmed_revision(
+                bridge_id_, revision_id_));
+        EXPECT_TRUE(sync.ok) << sync.error_code << ": " << sync.error_message;
+        EXPECT_EQ(sync.members_added, 2);
+        tx.reset();
+        ASSERT_TRUE(latch->wait());
+    }
+
+    // 两条都落到同一个组里，而不是各建一个。
+    const auto rows = client_->execSqlSync(
+        "select g.id::text as group_id, count(m.id)::int as members "
+        "from import_component_resolution_groups g "
+        "join import_component_group_members m on m.group_id = g.id "
+        "where g.import_record_id=$1::uuid and g.normalized_component_number='9-9#梁' "
+        "group by g.id", import_id_);
+    ASSERT_EQ(rows.size(), 1u);
+    EXPECT_EQ(rows[0]["members"].as<int>(), 2);
+}

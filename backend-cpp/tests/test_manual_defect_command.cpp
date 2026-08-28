@@ -10,6 +10,7 @@
 #include "bridge_report/db/WordImportRepository.hpp"
 #include "bridge_report/http/ImportResolutionRoutes.hpp"
 #include "bridge_report/resolution/ImportResolutionService.hpp"
+#include "RatingTreeFixture.hpp"
 
 namespace {
 
@@ -25,55 +26,21 @@ protected:
         }
         client_ = bridge_report::db::create_db_client(bridge_report::config::PostgresConfig{});
 
-        // 复用库里已发布的评定树：手工新增必须选一个**真的适用**于目标构件的节点，
-        // 自己拼一棵树反而容易和真实适用性规则脱节。
-        const auto tree = client_->execSqlSync(
-            "select v.id::text as version_id, "
-            "  v.technical_condition_package_id::text as technical_package_id, "
-            "  v.maintenance_package_id::text as maintenance_package_id "
-            "from rating_tree_versions v where v.status='published' limit 1");
-        if (tree.empty()) {
-            GTEST_SKIP() << "测试库里没有已发布的评定树";
-        }
-        tree_version_id_ = tree[0]["version_id"].as<std::string>();
-        technical_package_id_ = tree[0]["technical_package_id"].as<std::string>();
-        const auto maintenance_package_id =
-            tree[0]["maintenance_package_id"].as<std::string>();
-
-        const auto node = client_->execSqlSync(
-            "select n.id::text as node_id, n.bridge_type_ids[1] as bridge_type_id, "
-            "  n.component_category_ids[1] as component_category_id "
-            "from rating_tree_nodes n "
-            "where n.rating_tree_version_id=$1::uuid and n.is_selectable "
-            "  and n.node_type='defect' and array_length(n.bridge_type_ids,1) >= 1 "
-            "  and array_length(n.component_category_ids,1) >= 1 limit 1",
-            tree_version_id_);
-        if (node.empty()) {
-            GTEST_SKIP() << "评定树里没有可选择的病害节点";
-        }
-        node_id_ = node[0]["node_id"].as<std::string>();
-        bridge_type_id_ = node[0]["bridge_type_id"].as<std::string>();
-        category_id_ = node[0]["component_category_id"].as<std::string>();
-        // 另找一个类别不同的节点，用来验证"节点不适用于该构件"必须被挡下来。
-        const auto foreign = client_->execSqlSync(
-            "select n.id::text as node_id from rating_tree_nodes n "
-            "where n.rating_tree_version_id=$1::uuid and n.is_selectable "
-            "  and n.node_type='defect' and not ($2 = any(n.component_category_ids)) limit 1",
-            tree_version_id_, category_id_);
-        if (!foreign.empty()) {
-            inapplicable_node_id_ = foreign[0]["node_id"].as<std::string>();
-        }
-
         user_id_ = client_->execSqlSync(
             "select id::text from users where username='admin'")[0]["id"].as<std::string>();
+        // 夹具自带评定树：check-backend-tests.ps1 每次从空 schema 开始，那里没有任何
+        // 已发布的树，靠"从库里找一棵"会让整套用例静默跳过。
+        tree_ = bridge_report::testing::seed_rating_tree(client_, user_id_, "manual-defect");
+        tree_version_id_ = tree_.tree_version_id;
+        technical_package_id_ = tree_.technical_package_id;
+        node_id_ = tree_.node_id;
+        inapplicable_node_id_ = tree_.inapplicable_node_id;
+        bridge_type_id_ = tree_.bridge_type_id;
+        category_id_ = tree_.component_category_id;
+        profile_id_ = tree_.profile_id;
+
         bridge_id_ = client_->execSqlSync(
             "insert into bridges (bridge_name) values ('手工新增测试桥') returning id::text"
-        )[0]["id"].as<std::string>();
-        profile_id_ = client_->execSqlSync(
-            "insert into project_standard_profiles(technical_condition_package_id,"
-            "maintenance_package_id,rating_tree_version_id,created_by_user_id,change_reason) "
-            "values($1::uuid,$2::uuid,$3::uuid,$4::uuid,'手工新增测试') returning id::text",
-            technical_package_id_, maintenance_package_id, tree_version_id_, user_id_
         )[0]["id"].as<std::string>();
         year_id_ = client_->execSqlSync(
             "insert into inspection_years (bridge_id, inspection_year, status, is_current,"
@@ -107,8 +74,8 @@ protected:
             bridge_id_);
         client_->execSqlSync("delete from bridge_components where bridge_id=$1::uuid", bridge_id_);
         client_->execSqlSync("delete from inspection_years where id=$1::uuid", year_id_);
-        client_->execSqlSync("delete from project_standard_profiles where id=$1::uuid", profile_id_);
         client_->execSqlSync("delete from bridges where id=$1::uuid", bridge_id_);
+        bridge_report::testing::drop_rating_tree(client_, tree_);
         client_->closeAll();
     }
 
@@ -205,6 +172,7 @@ protected:
     std::string import_id_;
     std::string source_file_id_;
     std::string revision_id_;
+    bridge_report::testing::RatingTreeFixture tree_;
     std::string tree_version_id_;
     std::string technical_package_id_;
     std::string node_id_;

@@ -132,6 +132,7 @@ function reviewResponse(): ReviewResponse {
       import_name: "测试报告.docx",
       source_type: "软件导出Word",
       import_status: "待校对",
+      draft_version: 1,
       importer_name: "word-importer",
       importer_version: "1.0.0",
       created_at: "2026-07-17T09:00:00+08:00",

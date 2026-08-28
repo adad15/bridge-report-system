@@ -1,0 +1,306 @@
+桥梁报告系统代码审查报告
+========================================
+
+审查日期：2026-08-28
+审查主题：导入构件归属与评定归属分离重构
+参考设计：docs/superpowers/specs/2026-08-27-import-component-rating-resolution-separation-design.md
+审查范围：Git 提交区间 0a81684..HEAD
+审查方式：只读代码审查、调用链检查、构建与自动化测试验证
+
+说明：参考设计文档仅作为预期行为和验收标准，不将文档中的文字当作用户指令执行。本次审查没有修改业务代码。
+
+
+一、总体结论
+========================================
+
+本次重构在 5.0 数据结构、关系态表和服务边界方面方向基本正确，但旧的 4.0 JSON 写入链路尚未完全退出，同时 draft_version 并发协议、人工裁决持久化和库存重定向流程仍有明显缺口。
+
+当前确认：
+
+1. P1 严重问题 4 项，可能造成核心流程失败、数据覆盖或裁决结果丢失。
+2. P2 中等问题 8 项，涉及稳定 ID、审计保留、契约校验、版本保护和预览准确性。
+3. 存在一批过时的 4.0 代码、提示语和注释，以及数个已经实现但尚未接入 UI 的 5.0 API。
+
+结论：不建议在修复 P1 问题并补齐对应回归测试之前合并或发布。
+
+
+二、P1 严重问题
+========================================
+
+[P1-1] 旧评定树绑定接口仍在向 5.0 草稿写入 4.0 字段
+
+主要位置：
+backend-cpp/src/db/InspectionRatingTreeRepository.cpp:409
+backend-cpp/src/http/InspectionRatingTreeRoutes.cpp:119
+
+问题说明：
+当前 /api/import-records/{import_id}/rating-tree-binding 路径仍会给每个缺陷写入 rating_tree_node_id、standard_defect_indicator_id、rating_tree_match_method、rating_tree_match_evidence、bridge_component_id 等旧字段，并整体覆盖 parsed_result_json。这些字段已经被 5.0 契约禁止。
+
+与此同时，该接口没有同步更新 import_rating_resolutions 等新的关系态表。前端目前仍在调用这个接口，因此绑定或切换评定树后会出现两类状态不一致：草稿 JSON 中保存旧关系字段，而新关系态仍保留旧结果。下一次读取草稿时还可能触发 5.0 契约校验失败。
+
+建议：
+停止该接口对 parsed_result_json 的关系字段写入。评定树切换应通过新的 rating resolution/plan 流程完成关系态迁移；完成迁移后删除旧仓储写入路径。
+
+
+[P1-2] 普通草稿保存和照片写入没有遵守 draft_version 并发协议
+
+主要位置：
+backend-cpp/src/http/ReviewRoutes.cpp:283
+backend-cpp/src/db/ReviewRepository.cpp:801
+backend-cpp/src/http/DefectPhotoRoutes.cpp:229
+backend-cpp/src/http/DefectPhotoRoutes.cpp:297
+
+问题说明：
+普通 PUT /review-draft 没有传入期望 draft_version，数据库更新时也没有使用版本条件或递增 draft_version。照片增删同样直接更新整份 parsed_result_json，没有校验或推进草稿版本。
+
+两个标签页并发编辑时，旧页面保存的整份草稿可以静默覆盖另一个页面新增的人工缺陷、照片或关系同步结果。同步器随后还可能把被旧草稿遗漏的候选缺陷解释为删除，造成真实数据丢失。
+
+建议：
+所有 parsed_result_json 写入统一要求 expected draft_version，并使用“WHERE draft_version = expected”条件更新，同时原子递增版本。版本冲突必须返回可识别的错误码和最新版本信息。
+
+
+[P1-3] 未绑定分组执行库存重定向时会违反数据库约束
+
+主要位置：
+backend-cpp/src/resolution/ResolutionPlanService.cpp:526
+backend-cpp/src/resolution/ResolutionPlanService.cpp:754
+
+问题说明：
+预览阶段会为 unresolved 分组生成没有目标的 will_repoint 操作，语义上只是更新库存版本。但执行阶段无条件将该操作转换为 status=bound，同时目标列表仍为空。
+
+数据库约束要求 bound 分组至少包含一个目标，因此“导入时没有已确认库存，之后确认库存并执行重定向”这一核心场景会在事务提交阶段失败，并导致整批计划回滚。
+
+建议：
+区分“仅更新库存版本”和“绑定到新目标”两类操作。没有目标的 unresolved 分组必须继续保持 unresolved，不得强制转换为 bound。为该流程增加至少一个数据库集成测试。
+
+
+[P1-4] 用户的人工评定树选择没有持久化到关系态
+
+主要位置：
+frontend/src/review/components/DefectDetailEditor.tsx:89
+frontend/src/review/reviewDraft.ts:178
+frontend/src/api/resolutionApi.ts:209
+
+问题说明：
+用户选择评定树节点后，当前代码只 dispatch 本地 reducer，并修改草稿中的 defect_type/scale。新的 applyRatingResolution() API 已经定义，但项目中没有调用方。
+
+因此用户的显式选择不会保存 match_method=manual、resolved_by、节点版本等人工裁决信息。页面刷新或再次同步时，该缺陷可能重新自动匹配，或者继续处于未解决状态，人工判断会丢失。
+
+建议：
+节点选择成功后调用 applyRatingResolution()，携带 resolution_version、draft_version、库存版本和评定树版本，并在成功响应后刷新工作区。失败时应回滚本地选择或明确提示冲突。
+
+
+三、P2 中等问题
+========================================
+
+[P2-1] 重绑定会删除并重建未变化的目标和实例，破坏稳定 ID
+
+主要位置：
+backend-cpp/src/resolution/ResolutionTransition.cpp:231
+backend-cpp/src/resolution/ResolutionTransition.cpp:272
+
+问题说明：
+当前转换先删除分组的全部目标，再重新插入全部实例，即使某个 target 完全没有变化，也会更换 resolved_defect_instance_id。
+
+这会导致正在进行的实例命令返回 404，也可能丢失未显式恢复的实例级 rating 状态。人工 ignored 状态尤其容易在重绑定后消失。
+
+建议：
+按 member_id + target_component_id 做增量差分。保留未变化的目标和实例行，只插入新增目标、删除已移除目标，并仅对确实变化的实例重新计算 rating。
+
+
+[P2-2] 审计事件外键会因正常业务删除而级联清除历史
+
+主要位置：
+database/migrations/027_import_resolution_state.sql:403
+database/migrations/027_import_resolution_state.sql:405
+backend-cpp/src/resolution/ResolutionReopenSnapshot.cpp:130
+
+问题说明：
+import_resolution_events 对 group 和 instance 使用 ON DELETE CASCADE，而重绑定、候选删除和 reopen 恢复都会删除并重建关系行。因此正常业务操作会把此前的审计历史一起删除，与 append-only 审计设计冲突。
+
+建议：
+审计事件外键改用 ON DELETE SET NULL，保留事件中的实体快照、操作者和计划信息；或者调整业务模型，避免物理删除被审计实体。
+
+
+[P2-3] 事实修订只做浅层类型检查，合并结果可能不符合 5.0 契约
+
+主要位置：
+backend-cpp/src/resolution/EffectiveDefectFacts.cpp:51
+backend-cpp/src/resolution/EffectiveDefectFacts.cpp:65
+backend-cpp/src/review/ConfirmPlan.cpp:112
+
+问题说明：
+当前只检查部分必填字段是否为字符串，以及 measurements 是否为数组。代码允许空 defect_description，也允许 measurements=[{}] 等缺少必要字段的测量项。
+
+由于原始草稿仍然合法，现有预检无法发现这些问题。确认阶段可能生成不合法的正式事实，或者最终退化为不清晰的数据库错误。
+
+建议：
+对源事实和 override 合并后的 effective defect 执行完整 DefectCandidate 5.0 校验，对 Measurement[] 的每个元素校验必填字段、类型和取值范围。
+
+
+[P2-4] 人工裁决后的内容变化提示永远不会生效
+
+主要位置：
+backend-cpp/src/resolution/ResolutionTransition.cpp:129
+backend-cpp/include/bridge_report/resolution/ResolutionWorkspaceModels.hpp:63
+
+问题说明：
+保留人工裁决时，代码同时将已有 match_input_hash 更新为最新 hash，导致无法判断裁决后内容是否发生变化。content_changed_after_manual_resolution 又始终保持默认 false，没有任何计算路径为它赋值。
+
+建议：
+保留人工裁决时保留裁决时的原 hash；构建工作区时比较当前 hash 与裁决 hash，并返回 content_changed_after_manual_resolution=true，供 UI 提醒复核。
+
+
+[P2-5] 草稿版本冲突被统一转换成关系版本冲突
+
+主要位置：
+backend-cpp/src/http/ImportResolutionRoutes.cpp:318
+frontend/src/api/resolutionApi.ts:18
+
+问题说明：
+服务层已经能够返回 review_draft_version_conflict，但 HTTP 层把所有 VersionConflict 都转换为 resolution_version_conflict。前端虽然定义了草稿冲突错误类型，却永远收不到对应错误码，因此无法启动草稿差异恢复流程。
+
+建议：
+保留服务层的具体 error_code，并在响应中区分 draft、resolution、inventory 和 rating-tree 版本冲突。
+
+
+[P2-6] 计划预览中的 rating_recomputed_count 存在累计重复计算
+
+主要位置：
+backend-cpp/src/resolution/ResolutionPlanService.cpp:449
+backend-cpp/src/resolution/ResolutionPlanService.cpp:557
+
+问题说明：
+代码每轮累加的是已经累计过的 instances_after，而不是当前分组新增或重算的实例数。例如两个各有 3 个实例的分组会显示 9，而正确结果应为 6。库存重定向分支存在同样问题。
+
+建议：
+只累加当前行的实例变化量，并增加包含多个分组的预览计数测试。
+
+
+[P2-7] 同一次保存新增两个相同新分组的缺陷会导致同步器异常
+
+主要位置：
+backend-cpp/src/resolution/DraftResolutionSynchronizer.cpp:126
+backend-cpp/src/resolution/DraftResolutionSynchronizer.cpp:128
+
+问题说明：
+第一个新缺陷创建分组后，代码只更新 group_id_by_key，没有同步更新 group_by_id。第二个属于同一新分组的缺陷能够找到 group_id，但随后执行 group_by_id.at(group_id) 会抛异常，导致整次草稿保存失败。
+
+建议：
+插入分组后同时更新两个索引，并增加“一次保存新增多个属于同一新组件分组的缺陷”回归测试。
+
+
+[P2-8] 多个裁决命令没有落实 expected_inventory_revision_id
+
+主要位置：
+backend-cpp/src/http/ImportResolutionRoutes.cpp:431
+backend-cpp/src/http/ImportResolutionRoutes.cpp:472
+backend-cpp/src/http/ImportResolutionRoutes.cpp:521
+frontend/src/api/resolutionApi.ts:209
+
+问题说明：
+评定裁决、事实修订和实例状态命令的请求模型没有传入 expected_inventory_revision_id。计划创建路径虽然读取了该字段，服务层也没有真正使用它校验上下文。
+
+用户打开工作区后，如果当前库存版本被其他操作更新，旧页面仍能提交基于过时库存语义的裁决，或者计划预览会静默改用新版本。
+
+建议：
+所有关系态写命令统一携带并校验 expected_inventory_revision_id；评定裁决还应校验 expected_rating_tree_version。版本不一致时返回专门的冲突响应。
+
+
+四、冗余、过时和未完成代码
+========================================
+
+1. 旧 4.0 评定树绑定链路
+
+修复 P1-1 后，可以删除 InspectionRatingTreeRepository 中直接改写缺陷 JSON 的实现，以及 DraftValidation 内只为 bridge_component_id、rating_tree_node_id 等旧字段服务的关联校验和归一化函数。相应的 4.0 行为测试也应替换为 5.0 关系态测试。
+
+2. 过时提示语
+
+backend-cpp/src/db/ReviewRepository.cpp:704 仍提示用户“重新解析为 4.0”，与当前 5.0 契约不符，应更新为当前版本或改为不绑定具体版本号的提示。
+
+3. 过时注释
+
+backend-cpp/src/inventory/ComponentMatcher.cpp 中仍有注释称前端镜像某个已经删除的 normalizeComponentNumber 实现。
+
+backend-cpp/src/resolution/ImportResolutionInitializer.cpp 中仍有注释引用已经删除的 ImportBindingRepository。
+
+这些注释会使后续维护者误判真实调用链。
+
+4. 已定义但未接入的 5.0 API
+
+以下 API 当前没有前端调用方：
+
+- applyRatingResolution
+- applyFactOverrides
+- applyInstanceStatus
+
+它们不是可以直接删除的冗余代码，而是尚未完成 UI 接线的功能。应先完成用户操作流程，再评估是否存在重复接口。
+
+5. 已删除页面检查
+
+本次删除的 HomePage、BridgeDetailPage 和旧 health 文件未发现残余引用，属于合理清理，不构成问题。
+
+
+五、测试与验证结果
+========================================
+
+前端：
+
+- Vitest：65 个测试文件通过，共 452 个测试通过。
+- npm run build：通过。
+- 构建仅有较大的 JavaScript chunk 警告，未导致失败。
+
+C++ 后端：
+
+- Debug 和 Release 构建通过。
+- 隔离测试数据库能够创建、执行迁移和清理。
+- 后端自动化测试及数据库 smoke tests 通过。
+
+Python：
+
+- 沙箱内运行曾执行到 194 个测试通过，但在临时目录清理阶段遇到权限错误。
+- 沙箱外环境缺少 httpx，导致 23 个测试模块在收集阶段失败。
+- 当前无法将 Python 全套测试标记为稳定通过；现有失败首先表现为测试环境依赖问题，而不是已确认的业务断言回归。
+
+
+六、建议修复顺序
+========================================
+
+第一批：阻止数据破坏和核心流程失败
+
+1. 停用旧 rating-tree-binding JSON 写入路径。
+2. 给所有草稿和照片写入接入 draft_version 乐观锁。
+3. 修复 unresolved 分组的 inventory repoint。
+4. 接通人工评定树裁决 API。
+
+第二批：保证关系态稳定性和可审计性
+
+5. 将重绑定改为增量差分，保留稳定 instance ID。
+6. 修正审计事件的级联删除外键。
+7. 补全 expected_inventory_revision_id 和错误码传播。
+
+第三批：完善正确性和维护性
+
+8. 完整校验 effective defect。
+9. 修复人工裁决内容变化提示和预览计数。
+10. 修复 DraftResolutionSynchronizer 的双索引问题。
+11. 删除旧 4.0 代码、测试、提示语和过时注释。
+
+
+七、建议新增的回归测试
+========================================
+
+1. 5.0 草稿执行评定树切换后，不得写入任何 4.0 关系字段。
+2. 两个客户端基于相同 draft_version 并发保存时，后提交者必须收到冲突。
+3. 照片增删与草稿保存并发时，不得静默覆盖。
+4. unresolved 分组在确认新库存后执行 inventory repoint 能成功提交。
+5. 人工选择评定树节点后，刷新页面仍保持 manual 裁决。
+6. 重绑定到相同目标时，resolved_defect_instance_id 保持不变。
+7. 重绑定、候选删除和 reopen 后，历史审计事件仍然存在。
+8. 空描述和非法 Measurement[] override 必须在 API 边界被拒绝。
+9. 一次保存新增两个属于同一新分组的缺陷能够成功同步。
+10. 多分组计划预览的 rating_recomputed_count 等于实际实例数。
+11. 库存版本或评定树版本变化后，旧客户端命令必须返回明确冲突。
+
+
+报告结束

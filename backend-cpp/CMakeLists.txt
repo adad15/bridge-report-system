@@ -211,6 +211,7 @@ add_executable(bridge_report_backend_tests
     tests/test_resolution_commands.cpp
     tests/test_resolution_hashes.cpp
     tests/test_resolution_plans.cpp
+    tests/RatingTreeFixture.cpp
     tests/test_rating_resolution_command.cpp
     tests/test_rating_tree_binding_routes.cpp
     tests/test_resolution_reopen_snapshot.cpp

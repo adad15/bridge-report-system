@@ -67,18 +67,29 @@ std::string zero_padded(int value) {
     return buffer;
 }
 
+/// 锁住的草稿及其当前版本。读改写路径要拿版本回去做写入谓词。
+struct LockedDraft {
+    Json::Value draft;
+    int draft_version{0};
+};
+
 /// 事务里锁住导入记录并取回草稿；状态不可编辑时返回空。
-std::optional<Json::Value> lock_editable_draft(
+std::optional<LockedDraft> lock_editable_draft(
     const std::shared_ptr<drogon::orm::Transaction>& tx,
     const std::string& import_record_id
 ) {
     const auto locked = tx->execSqlSync(
-        "select import_status, parsed_result_json::text as parsed_result_json "
+        "select import_status, draft_version, "
+        "parsed_result_json::text as parsed_result_json "
         "from import_records where id=$1::uuid for update",
         import_record_id);
     if (locked.empty()) return std::nullopt;
     if (locked[0]["import_status"].as<std::string>() != "待校对") return std::nullopt;
-    return parse_parsed_result_json(locked[0]["parsed_result_json"].as<std::string>());
+    LockedDraft result;
+    result.draft = parse_parsed_result_json(
+        locked[0]["parsed_result_json"].as<std::string>());
+    result.draft_version = locked[0]["draft_version"].as<int>();
+    return result;
 }
 
 /// 在写事务内复查编辑锁。路由入口那道 require_active_edit_lock 是**事务外**的检查：
@@ -196,14 +207,14 @@ UploadedPhotoWriteOutcome insert_uploaded_photo(
             outcome.error_message = "编辑锁已失效，照片未新增，请刷新页面。";
             return outcome;
         }
-        if (!draft_has_defect_candidate(*draft, review::string_member_or_empty(candidate, "linked_defect_candidate_id"))) {
+        if (!draft_has_defect_candidate(draft->draft, review::string_member_or_empty(candidate, "linked_defect_candidate_id"))) {
             tx->rollback();
             outcome.error_code = "defect_candidate_not_found";
             outcome.error_message = "目标病害不在本次导入中。";
             return outcome;
         }
         // 编号是在加锁之前算的；加锁后再确认一次没被别人占走。
-        if (draft_has_photo_naming(*draft, naming)) {
+        if (draft_has_photo_naming(draft->draft, naming)) {
             tx->rollback();
             outcome.error_code = "photo_candidate_conflict";
             outcome.error_message = "照片编号已被占用，请重试。";
@@ -224,11 +235,16 @@ UploadedPhotoWriteOutcome insert_uploaded_photo(
             "insert into import_record_files (import_record_id, archived_file_id, file_role, process_status, "
             "process_note) values ($1::uuid, $2::uuid, '附件', '处理成功', $3)",
             detail.id, inserted[0]["id"].as<std::string>(), "人工补充照片：" + naming.candidate_id);
-        // 单语句追加，不做读改写：草稿的其余部分完全不受影响。
+        // 单语句追加，不做读改写：草稿的其余部分完全不受影响。正因为不覆盖，
+        // 这里不要求 If-Match——别人刚保存过也不影响加一张照片。
+        //
+        // 但版本必须推进（§8.0）：草稿内容变了。不推进的话，另一个页面拿着看似
+        // 还新鲜的旧版本整份保存，刚加的照片就没了，而版本检查还会认为一切正常。
         tx->execSqlSync(
             "update import_records set parsed_result_json = jsonb_set(parsed_result_json, '{photos}', "
             "(case when jsonb_typeof(parsed_result_json->'photos') = 'array' "
-            "then parsed_result_json->'photos' else '[]'::jsonb end) || $2::jsonb, true), updated_at = now() "
+            "then parsed_result_json->'photos' else '[]'::jsonb end) || $2::jsonb, true), "
+            "draft_version = draft_version + 1, updated_at = now() "
             "where id = $1::uuid and import_status = '待校对'",
             detail.id, compact_json(candidate));
 
@@ -276,7 +292,7 @@ UploadedPhotoDeleteOutcome delete_uploaded_photo(
             outcome.error_message = "编辑锁已失效，照片未删除，请刷新页面。";
             return outcome;
         }
-        const auto removed = take_photo_candidate(*draft, photo_candidate_id);
+        const auto removed = take_photo_candidate(draft->draft, photo_candidate_id);
         if (removed.isNull()) {
             tx->rollback();
             outcome.error_code = "photo_candidate_not_found";
@@ -293,10 +309,20 @@ UploadedPhotoDeleteOutcome delete_uploaded_photo(
         const auto relative =
             review::string_member_or_empty(removed["extracted_file"], "archive_relative_path");
 
-        tx->execSqlSync(
-            "update import_records set parsed_result_json = $2::jsonb, updated_at = now() "
-            "where id = $1::uuid and import_status = '待校对'",
-            import_record_id, compact_json(*draft));
+        // 这一条是读改写后整份覆盖，所以必须带版本谓词：读到写之间别人存过一次的话，
+        // 直接写会把那次修改整个抹掉。期望版本取自本事务开头那次加锁读。
+        const auto photo_updated = tx->execSqlSync(
+            "update import_records set parsed_result_json = $2::jsonb, "
+            "draft_version = draft_version + 1, updated_at = now() "
+            "where id = $1::uuid and import_status = '待校对' and draft_version = $3 "
+            "returning draft_version",
+            import_record_id, compact_json(draft->draft), draft->draft_version);
+        if (photo_updated.empty()) {
+            tx->rollback();
+            outcome.error_code = "review_draft_version_conflict";
+            outcome.error_message = "草稿已被其他页面保存，照片未删除，请刷新后重试。";
+            return outcome;
+        }
         if (!relative.empty()) {
             const auto files = tx->execSqlSync(
                 "select af.id::text as id, af.file_hash from import_record_files irf "

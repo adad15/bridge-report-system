@@ -10,6 +10,8 @@ export interface ReviewImportRecordSummary {
   import_name: string;
   source_type: string;
   import_status: string;
+  /** 来源草稿并发版本（§8.0）。下一次写拿它做 If-Match。 */
+  draft_version: number;
   importer_name: string | null;
   importer_version: string | null;
   created_at: string;
@@ -198,15 +200,30 @@ export async function fetchReview(baseUrl: string, importRecordId: string): Prom
   throw new ApiError("invalid_review_payload", "校对数据不符合 BridgeAnnualInspectionData 契约。");
 }
 
+/** 草稿已被其他页面保存；响应里带回当前版本，供取回最新草稿后重试。 */
+export const DRAFT_VERSION_CONFLICT = "review_draft_version_conflict";
+
+/**
+ * 保存整份校对草稿。
+ *
+ * 写入走 `If-Match: "draft-<n>"` 乐观并发（§8.0）：这是一次整份覆盖，两个标签页基于
+ * 同一版本各自保存时，后到的那个必须撞冲突——否则它不仅盖掉别人的编辑，还会让
+ * 同步器把自己缺的那条候选当成"用户删掉了"，连带删掉成员、实例与评分树解析。
+ *
+ * 版本取自 `fetchReview` 回的 `import_record.draft_version`，写成功后用响应里的新值替换。
+ */
 export async function saveReviewDraft(
   baseUrl: string,
   importRecordId: string,
   data: BridgeAnnualInspectionData,
-  lockToken: string
-): Promise<{ saved: boolean; import_status: string }> {
+  lockToken: string,
+  draftVersion: number
+): Promise<{ saved: boolean; import_status: string; draft_version: number }> {
+  const headers = lockHeaders(lockToken, true);
+  headers.set("If-Match", `"draft-${draftVersion}"`);
   return request(`${baseUrl}${reviewRoute(importRecordId, "/review-draft")}`, {
     method: "PUT",
-    headers: lockHeaders(lockToken, true),
+    headers,
     body: JSON.stringify(data),
   });
 }

@@ -848,6 +848,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
                   editLockToken={editLockToken}
                   onClose={closeDetail}
                   onDefectTextCommitted={(candidateId) => { void runMatch([candidateId]); }}
+                  onRatingResolved={() => { void refreshResolution(); }}
                   onConfirm={() => {
                     setPinnedConfirmedId(currentRow.candidateId);
                     dispatch({ type: "confirm_defect_groups", candidateIds: [currentRow.candidateId] });

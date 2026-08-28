@@ -62,6 +62,7 @@ function reviewResponseBody(overrides: Partial<Record<string, unknown>> = {}) {
       import_name: "2026年度检查报告.docx",
       source_type: "软件导出Word",
       import_status: "待校对",
+      draft_version: 1,
       importer_name: "张三",
       importer_version: null,
       created_at: "2026-07-01T00:00:00+08:00",
@@ -142,7 +143,7 @@ describe("reviewApi", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult, "lock-token");
+    const result = await saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult, "lock-token", 1);
 
     expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:18080/api/import-records/record-1/review-draft", expect.objectContaining({
       method: "PUT",
@@ -239,7 +240,7 @@ describe("reviewApi", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult, "lock-token")).rejects.toMatchObject({
+    await expect(saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult, "lock-token", 1)).rejects.toMatchObject({
       code: "import_record_not_editable",
       message: "导入记录状态已变化，无法保存草稿。",
     });
@@ -257,7 +258,7 @@ describe("reviewApi", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult, "lock-token")).rejects.toMatchObject({
+    await expect(saveReviewDraft("http://127.0.0.1:18080", "record-1", minimalParsedResult, "lock-token", 1)).rejects.toMatchObject({
       code: "contract_validation_failed",
       issues: [{ path: "defects[0].confidence", message: "must be between 0 and 1" }],
     });

@@ -1,6 +1,7 @@
 #include "bridge_report/resolution/DraftResolutionSynchronizer.hpp"
 
 #include <algorithm>
+#include <list>
 #include <map>
 #include <set>
 #include <string>
@@ -103,6 +104,9 @@ DraftSyncResult synchronize_draft_resolution(
     const auto rating = load_rating_context(tx, inspection_year_id);
 
     // 新增的候选：建组或复用组并加成员。组已绑定时补出实例并匹配评分树。
+    // 本次新建的组要留在这里：group_by_id 存的是指针，指向 list_groups 返回的那份
+    // vector；新建的组不在那份 vector 里，得有个地方安放，否则指针悬空。
+    std::list<ComponentResolutionGroup> created_groups;
     std::map<std::pair<std::string, std::string>, std::string> group_id_by_key;
     for (const auto& group : groups) {
         group_id_by_key.emplace(
@@ -137,6 +141,10 @@ DraftSyncResult synchronize_draft_resolution(
             group_id = stored.id;
             group_version = stored.version;
             group_id_by_key.emplace(key, group_id);
+            // 两个索引必须一起更新：同一次保存里第二条属于这个新组的病害会走上面那条
+            // "组已存在"分支，紧接着 group_by_id.at() 就会抛 out_of_range，整次保存失败。
+            created_groups.push_back(stored);
+            group_by_id.emplace(group_id, &created_groups.back());
         }
 
         ComponentGroupMember member;

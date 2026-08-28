@@ -1,7 +1,6 @@
 #include "bridge_report/db/InspectionRatingTreeRepository.hpp"
 
 #include "bridge_report/db/RatingTreeRepository.hpp"
-#include "bridge_report/review/DraftValidation.hpp"
 #include <algorithm>
 #include <functional>
 #include <memory>
@@ -41,18 +40,7 @@ bool edit_lock_still_active(
     return !rows.empty() && rows[0]["active"].as<bool>();
 }
 
-std::string compact_json(const Json::Value& value) {
-    Json::StreamWriterBuilder builder;
-    builder["indentation"] = "";
-    return Json::writeString(builder, value);
-}
 
-bool parse_json(const std::string& text, Json::Value& out) {
-    Json::CharReaderBuilder builder;
-    std::string errors;
-    const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-    return reader->parse(text.c_str(), text.c_str() + text.size(), &out, &errors);
-}
 
 std::optional<std::string> optional_row_text(
     const drogon::orm::Row& row, const std::string& column) {
@@ -118,8 +106,7 @@ RatingTreeBindingOutcome InspectionRatingTreeRepository::bind_rating_tree(
             "ir.import_status,iy.status as inspection_year_status,"
             "iy.component_inventory_revision_id::text as inventory_revision_id,"
             "profile.rating_tree_version_id::text as current_tree_version_id,"
-            "profile.technical_condition_package_id::text as current_technical_package_id,"
-            "coalesce(ir.parsed_result_json::text,'{}') as parsed "
+            "profile.technical_condition_package_id::text as current_technical_package_id "
             "from import_records ir "
             "left join inspection_years iy on iy.id=ir.inspection_year_id "
             "left join project_standard_profiles profile "
@@ -398,55 +385,37 @@ RatingTreeBindingOutcome InspectionRatingTreeRepository::bind_rating_tree(
         }
         profile_id = profiles[0]["id"].as<std::string>();
 
-        Json::Value parsed;
-        if (!parse_json(context[0]["parsed"].as<std::string>(), parsed)) {
-            rollback();
-            return {RatingTreeBindingStatus::Invalid};
-        }
-        const Json::Value stored = parsed;
-        if (parsed["defects"].isArray()) {
-            for (auto& defect : parsed["defects"]) {
-                defect["rating_tree_node_id"] =
-                    Json::Value(Json::nullValue);
-                defect["standard_defect_indicator_id"] =
-                    Json::Value(Json::nullValue);
-                defect["rating_tree_match_method"] =
-                    Json::Value(Json::nullValue);
-                defect["rating_tree_match_evidence"] =
-                    Json::Value(Json::nullValue);
-                if (defect["bridge_component_id"].isString() &&
-                    !defect["bridge_component_id"].asString().empty()) {
-                    defect["component_inventory_revision_id"] =
-                        target_revision_id;
-                }
-            }
-        }
-
+        // 5.0：来源草稿不再被这里碰。此前这段会逐条病害写 rating_tree_node_id、
+        // standard_defect_indicator_id、rating_tree_match_method 等已删字段（写 null 同样
+        // 建出键），再整份覆盖 parsed_result_json——草稿当场变成非法契约。
+        //
+        // 同行删掉的还有 normalize_defect_rating_tree_associations：它按草稿里的
+        // rating_tree_node_id 判定“用户提交的节点是否适用”，而 5.0 草稿压根没有那个字段，
+        // 判定恒为真。它在这条路径上既不提供保护，又会写字段。
         const auto tree =
-            RatingTreeRepository(tx).load_published_tree(
-                rating_tree_version_id);
+            RatingTreeRepository(tx).load_published_tree(rating_tree_version_id);
         const auto target_revision =
-            ComponentInventoryRepository(tx).get_revision(
-                target_revision_id);
-        if (!tree.has_value() || !target_revision.has_value() ||
-            !review::normalize_defect_rating_tree_associations(
-                 parsed, stored, rating_tree_version_id,
-                 target_technical_package_id, *tree,
-                 target_revision).ok) {
+            ComponentInventoryRepository(tx).get_revision(target_revision_id);
+        if (!tree.has_value() || !target_revision.has_value()) {
             rollback();
             return {RatingTreeBindingStatus::MappingIncompatible};
         }
+
+        // 树版本变了就是适用性变了：applicability_hash 含 rating_tree_version_id，
+        // 所以旧解析结果（含人工选的节点）按 §8.5 一律失效。删掉它们而不是改写：
+        // 新树里那些节点 id 未必存在，改写会撞跨版本引用的检查触发器。
+        tx->execSqlSync(
+            "delete from import_rating_resolutions r using "
+            "  import_resolved_defect_instances i, import_component_group_members m "
+            "where r.resolved_defect_instance_id = i.id and i.group_member_id = m.id "
+            "  and m.import_record_id = $1::uuid",
+            import_id);
 
         tx->execSqlSync(
             "update inspection_years set standard_profile_id=$2::uuid,"
             "component_inventory_revision_id=$3::uuid,updated_at=now() "
             "where id=$1::uuid and status='待校对'",
             *year_id, profile_id, target_revision_id);
-        tx->execSqlSync(
-            "update import_records set parsed_result_json=$2::jsonb "
-            "where id=$1::uuid",
-            import_id, compact_json(parsed));
-
         tx.reset();
         if (!latch->wait()) return {RatingTreeBindingStatus::Failed};
         // 概览不再由这里产出：调用方绑完会重取解析工作区，那是当前状态的唯一来源。

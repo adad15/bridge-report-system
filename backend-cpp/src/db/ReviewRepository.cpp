@@ -431,7 +431,7 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
     const auto result = db_client_->execSqlSync(
         "select "
         "ir.id, ir.system_number, ir.bridge_id, ir.inspection_year_id, "
-        "ir.import_name, ir.source_type, ir.import_status, "
+        "ir.import_name, ir.source_type, ir.import_status, ir.draft_version, "
         "ir.importer_name, ir.importer_version, ir.parsed_result_json::text as parsed_result_json, "
         "ir.created_at::text as created_at, ir.updated_at::text as updated_at, "
         "ir.reopened_at::text as reopened_at, ir.reopened_by_username, ir.reopen_scope, "
@@ -471,6 +471,7 @@ std::optional<review::ImportRecordDetail> ReviewRepository::get_import_record_de
     detail.import_name = row["import_name"].as<std::string>();
     detail.source_type = row["source_type"].as<std::string>();
     detail.import_status = row["import_status"].as<std::string>();
+    detail.draft_version = row["draft_version"].as<int>();
     detail.importer_name = optional_text(row, "importer_name");
     detail.importer_version = optional_text(row, "importer_version");
     detail.parsed_result_json = row["parsed_result_json"].as<std::string>();
@@ -632,6 +633,12 @@ SaveReviewDraftOutcome ReviewRepository::save_review_draft(const SaveReviewDraft
         failed.error_message = std::move(message);
         return failed;
     };
+    // 没带期望版本就不得写：整份覆盖的写入必须知道自己基于哪一版。
+    // 放行等于允许一个不知道自己看的是哪一版的客户端覆盖别人刚存的东西。
+    if (!input.expected_draft_version.has_value()) {
+        return fail("review_draft_version_required",
+                    "缺少 If-Match: \"draft-<version>\" 请求头，无法安全保存草稿。");
+    }
     // 校验类失败：error_code 与 validation.code 保持一致，逐项问题原样带出。
     const auto fail_validation = [&](review::DraftValidationResult validation) -> SaveReviewDraftOutcome {
         auto failed = fail(validation.code, validation.message);
@@ -803,15 +810,17 @@ SaveReviewDraftOutcome ReviewRepository::save_review_draft(const SaveReviewDraft
                 "jsonb_set(coalesce(validation_result_json, '{}'::jsonb), '{draft_audit_events}', "
                 "coalesce(validation_result_json->'draft_audit_events', '[]'::jsonb) "
                 "|| jsonb_build_array($6::jsonb || jsonb_build_object('saved_at', now())), true) end, "
-                "updated_at = now() "
+                "draft_version = draft_version + 1, updated_at = now() "
                 "where id = $1::uuid and import_status = '待校对' "
+                "and draft_version = $7 "
                 "and exists(select 1 from import_record_edit_locks l "
                 "  where l.import_record_id = import_records.id and l.user_id = $3::uuid "
                 "  and l.user_session_id = $4::uuid and l.lock_token_hash = $5 and l.expires_at > now()) "
-                "returning id",
+                "returning draft_version",
                 input.import_record_id, write_compact_json(draft_to_save),
                 input.edit_lock->user_id, input.edit_lock->session_id,
-                auth::sha256_hex(input.edit_lock->lock_token), audit_json)
+                auth::sha256_hex(input.edit_lock->lock_token), audit_json,
+                *input.expected_draft_version)
             : tx->execSqlSync(
                 "update import_records "
                 "set parsed_result_json = $2::jsonb, "
@@ -819,14 +828,30 @@ SaveReviewDraftOutcome ReviewRepository::save_review_draft(const SaveReviewDraft
                 "jsonb_set(coalesce(validation_result_json, '{}'::jsonb), '{draft_audit_events}', "
                 "coalesce(validation_result_json->'draft_audit_events', '[]'::jsonb) "
                 "|| jsonb_build_array($3::jsonb || jsonb_build_object('saved_at', now())), true) end, "
-                "updated_at = now() "
-                "where id = $1::uuid and import_status = '待校对' returning id",
-                input.import_record_id, write_compact_json(draft_to_save), audit_json);
+                "draft_version = draft_version + 1, updated_at = now() "
+                "where id = $1::uuid and import_status = '待校对' "
+                "and draft_version = $4 returning draft_version",
+                input.import_record_id, write_compact_json(draft_to_save), audit_json,
+                *input.expected_draft_version);
         if (updated.empty()) {
+            // 谓词里同时含状态、锁和版本，回来空行分不出是哪一个挂的。
+            // 版本对不上时要告诉客户端当前版本，它才能取回最新草稿再合并。
+            const auto current = tx->execSqlSync(
+                "select draft_version from import_records where id = $1::uuid",
+                input.import_record_id);
+            if (!current.empty()
+                && current[0]["draft_version"].as<int>() != *input.expected_draft_version) {
+                auto conflict = fail(
+                    "review_draft_version_conflict",
+                    "草稿已被其他页面保存，请刷新后重试。");
+                conflict.draft_version = current[0]["draft_version"].as<int>();
+                return conflict;
+            }
             return fail("import_record_not_editable", "导入记录状态已变化，无法保存草稿。");
         }
 
         SaveReviewDraftOutcome outcome;
+        outcome.draft_version = updated[0]["draft_version"].as<int>();
         tx.reset();
         if (!latch->wait()) {
             outcome.error_code = "database_commit_failed";

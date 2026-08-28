@@ -77,6 +77,8 @@ struct ImportRecordDetail {
     std::string import_name;
     std::string source_type;
     std::string import_status;
+    /// 来源草稿并发版本（§8.0）。客户端下一次写要拿它做 If-Match。
+    int draft_version{0};
     std::optional<std::string> importer_name;
     std::optional<std::string> importer_version;
     std::string parsed_result_json;

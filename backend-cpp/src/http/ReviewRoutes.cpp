@@ -207,6 +207,19 @@ void respond_save_review_draft_failure(
         respond_import_record_not_found(callback);
         return;
     }
+    // 版本冲突把当前版本一并带回：客户端靠它取回最新草稿再合并，
+    // 而不是只能提示"请刷新"。错误码与解析版本冲突分开，两者的处置不同。
+    if (outcome.error_code == "review_draft_version_conflict") {
+        auto body = make_error_body(outcome.error_code, outcome.error_message);
+        body["draft_version"] = outcome.draft_version;
+        respond_json(callback, body, drogon::k409Conflict);
+        return;
+    }
+    if (outcome.error_code == "review_draft_version_required") {
+        respond_json(callback, make_error_body(outcome.error_code, outcome.error_message),
+                     drogon::k428PreconditionRequired);
+        return;
+    }
     if (outcome.error_code == "forbidden") {
         respond_forbidden(callback);
         return;
@@ -287,6 +300,9 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                 input.actor_is_admin = user->is_admin();
                 input.edit_lock = db::EditLockCredentials{
                     user->id, user->session_id, edit_lock_token_from_request(request)};
+                // 整份覆盖的写入走 If-Match 乐观并发（§8.0）：两个标签页基于同一版
+                // 本各自保存时，后到的那个必须撞冲突，而不是默默盖掉先到的。
+                input.expected_draft_version = parse_if_match_draft_version(request);
                 const auto outcome = repository.save_review_draft(input);
                 if (!outcome.success) {
                     respond_save_review_draft_failure(callback, outcome);
@@ -296,7 +312,12 @@ void register_save_review_draft_route(const drogon::orm::DbClientPtr& db_client)
                 Json::Value response_body;
                 response_body["saved"] = true;
                 response_body["import_status"] = detail->import_status;
-                respond_json(callback, response_body);
+                response_body["draft_version"] = outcome.draft_version;
+                // 新版本回 ETag，客户端下一次写才能带对 If-Match。
+                auto response = drogon::HttpResponse::newHttpJsonResponse(response_body);
+                apply_local_dev_cors_headers(response);
+                set_draft_version_etag(response, outcome.draft_version);
+                callback(response);
             } catch (const drogon::orm::DrogonDbException&) {
                 respond_db_unavailable(callback);
             } catch (const std::exception&) {

@@ -3,6 +3,9 @@
 #include <functional>
 #include <regex>
 #include <sstream>
+#include <optional>
+#include <string_view>
+#include <cctype>
 #include <string>
 
 #include <drogon/HttpResponse.h>
@@ -21,6 +24,42 @@ using HttpCallback = std::function<void(const drogon::HttpResponsePtr&)>;
  *
  * 供 ReviewRoutes.cpp / ImportConfirmRoutes.cpp 共用。
  */
+/**
+ * @brief 解析 `If-Match: "draft-<version>"`。缺失或格式不对时返回 nullopt。
+ *
+ * 用标准头而不是塞进请求体，是为了不把并发元数据混进 5.0 合同：
+ * `saveReviewDraft` 的请求体必须仍然是一份纯粹的 BridgeAnnualInspectionData（§11.1）。
+ *
+ * 草稿写入三条路径（普通保存、手工新增病害、照片增删）共用同一个
+ * draft_version 边界，因此解析也只能有一份（§8.0）。
+ */
+inline std::optional<int> parse_if_match_draft_version(
+    const drogon::HttpRequestPtr& request) {
+    auto value = request->getHeader("if-match");
+    if (value.empty()) value = request->getHeader("If-Match");
+    if (value.size() < 3) return std::nullopt;
+    if (value.front() == '"' && value.back() == '"') {
+        value = value.substr(1, value.size() - 2);
+    }
+    constexpr std::string_view prefix = "draft-";
+    if (value.rfind(prefix, 0) != 0) return std::nullopt;
+    const auto digits = value.substr(prefix.size());
+    if (digits.empty()) return std::nullopt;
+    for (const char character : digits) {
+        if (!std::isdigit(static_cast<unsigned char>(character))) return std::nullopt;
+    }
+    try {
+        return std::stoi(digits);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+/// 把新的草稿版本放进 ETag，让客户端下一次写能带对 If-Match。
+inline void set_draft_version_etag(const drogon::HttpResponsePtr& response, int version) {
+    response->addHeader("ETag", "\"draft-" + std::to_string(version) + "\"");
+}
+
 inline bool is_valid_uuid(const std::string& value) {
     static const std::regex uuid_pattern(
         "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"

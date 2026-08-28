@@ -6,6 +6,8 @@ import {
   type RatingTreeNode,
   type RatingTreeNodeSummary,
 } from "../../api/ratingTreeApi";
+import { ApiError } from "../../api/apiClient";
+import { applyRatingResolution } from "../../api/resolutionApi";
 import type { BridgeAnnualInspectionData } from "../../contracts/annualInspection";
 import {
   ratingTreeDisplayLabel,
@@ -36,6 +38,13 @@ interface DefectDetailEditorProps {
    * 不能每敲一个键就发一次请求。
    */
   onDefectTextCommitted?: (candidateId: string) => void;
+  /**
+   * 人工选定评定树节点后触发，用于重取解析工作区。
+   *
+   * 节点住在评分树解析表里，不在草稿里（5.0），所以选完必须让工作区刷新一次，
+   * 否则界面还显示旧结果，而下一次写会拿着过期版本撞冲突。
+   */
+  onRatingResolved?: () => void;
 }
 
 export function DefectDetailEditor({
@@ -53,6 +62,7 @@ export function DefectDetailEditor({
   onConfirm,
   onClose,
   onDefectTextCommitted,
+  onRatingResolved,
 }: DefectDetailEditorProps) {
   const defect = row.defect;
   const [treeNode, setTreeNode] = useState<RatingTreeNode | null>(row.ratingTreeNode);
@@ -86,9 +96,13 @@ export function DefectDetailEditor({
         })
         .join("、")
     : defect.measurement_text ?? "";
+  const [ratingError, setRatingError] = useState("");
+
   const selectNode = (nodeId: string) => {
     const selected = applicableNodes.find((item) => item.id === nodeId);
     if (!selected || !ratingTreeVersionId) return;
+
+    // 草稿这边只跟着改连带变化的**来源事实**（病害名称与标度）。
     dispatch({
       type: "select_rating_tree_node",
       candidateId: defect.candidate_id,
@@ -98,6 +112,42 @@ export function DefectDetailEditor({
       isScoring: selected.is_scoring,
       matchEvidence: "用户在精细维护中从当前构件适用节点选择",
     });
+
+    // 节点本身写进评分树解析表（§9.2）。不写的话，用户的显式选择只活在这一次渲染里：
+    // 刷新页面或下一次同步，这条病害要么被自动匹配重新盖掉，要么退回未解析——
+    // 人工判断丢得无声无息。
+    if (!editLockToken) {
+      setRatingError("当前页面没有编辑权，节点选择未保存。");
+      return;
+    }
+    const instances = row.resolution.instances;
+    if (instances.length === 0) {
+      setRatingError("这条病害还没绑定实际构件，无法保存评定树选择。");
+      return;
+    }
+    setRatingError("");
+    void (async () => {
+      try {
+        // 展开成多个构件的病害逐条写：只写第一条的话，其余仍按自动结果走。
+        for (const instance of instances) {
+          await applyRatingResolution(
+            baseUrl,
+            importRecordId,
+            instance.instanceId,
+            {
+              expected_version: instance.ratingVersion,
+              rating_tree_node_id: selected.id,
+              expected_rating_tree_version_id: ratingTreeVersionId,
+            },
+            editLockToken);
+        }
+        onRatingResolved?.();
+      } catch (caught) {
+        setRatingError(caught instanceof ApiError
+          ? caught.message
+          : "评定树选择保存失败，请刷新后重试。");
+      }
+    })();
   };
 
   useEffect(() => {
@@ -240,6 +290,8 @@ export function DefectDetailEditor({
             ) : null}
           </div>
           {treeNodeError ? <p className="form-error" role="alert">{treeNodeError}</p> : null}
+          {/* 节点没存进解析表时必须说出来：界面显示成选上了、刷新后却没有，比直接报错更难查。 */}
+          {ratingError ? <p className="form-error" role="alert">{ratingError}</p> : null}
           <div className="defect-detail-fields">
             <label>位置<input disabled={disabled} value={defect.defect_location} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} onBlur={() => onDefectTextCommitted?.(defect.candidate_id)} /></label>
             <label>

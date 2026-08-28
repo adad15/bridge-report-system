@@ -12,6 +12,13 @@ import type {
   RatingTreeMatchMethod,
 } from "../contracts/resolution";
 
+/** 一条活动实例的写入坐标：实例级命令按它定位并做乐观并发。 */
+export interface ResolvedInstanceRef {
+  instanceId: string;
+  /** 评分树解析行的版本；还没有解析行时为 0（命令端约定只接受 0）。 */
+  ratingVersion: number;
+}
+
 export interface DefectResolution {
   /** 全部活动实例都绑到构件时为该构件 id；多目标或未绑时为 null。 */
   bridgeComponentId: string | null;
@@ -29,6 +36,13 @@ export interface DefectResolution {
   overriddenFields: string[];
   /** 活动实例数。大于一表示这条来源病害展开到了多个构件。 */
   activeInstanceCount: number;
+  /**
+   * 活动实例的写入坐标。
+   *
+   * 界面上人选一次节点，语义是"这条病害就是它"，所以要落到每一条活动实例上——
+   * 展开成多个构件的那种，逐条都得写，否则只有第一条带着人工判断，其余仍按自动结果走。
+   */
+  instances: ResolvedInstanceRef[];
   /** 所属来源构件组，供界面跳转到绑定工作区。 */
   groupId: string | null;
   groupStatus: string | null;
@@ -50,6 +64,7 @@ export const UNRESOLVED: DefectResolution = {
   contentChangedAfterManualResolution: false,
   overriddenFields: [],
   activeInstanceCount: 0,
+  instances: [],
   groupId: null,
   groupStatus: null,
 };
@@ -79,6 +94,7 @@ export function resolutionOf(
 }
 
 interface WorkspaceInstance {
+  resolved_defect_instance_id?: string;
   instance_status?: string;
   bridge_component_id?: string | null;
   overridden_fields?: string[];
@@ -87,6 +103,7 @@ interface WorkspaceInstance {
     status?: string | null;
     rating_tree_node_id?: string | null;
     match_method?: string | null;
+    version?: number;
     content_changed_after_manual_resolution?: boolean;
   };
 }
@@ -178,6 +195,15 @@ export function buildResolutionIndex(
         ),
         overriddenFields: [...overridden],
         activeInstanceCount: active.length,
+        instances: active
+          .filter((instance) => instance.resolved_defect_instance_id)
+          .map((instance) => ({
+            instanceId: instance.resolved_defect_instance_id as string,
+            // 没有解析行时命令端只接受 0，不能编一个版本号出来。
+            ratingVersion: instance.rating_resolution?.present
+              ? instance.rating_resolution.version ?? 0
+              : 0,
+          })),
         groupId: group.group_id ?? null,
         groupStatus: group.status ?? null,
       });

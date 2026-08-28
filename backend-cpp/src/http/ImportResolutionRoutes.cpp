@@ -169,31 +169,6 @@ std::string optional_body_string(const Json::Value& body, const char* key) {
     return body[key].isString() ? body[key].asString() : std::string{};
 }
 
-/// 解析 `If-Match: "draft-<version>"`。缺失或格式不对时返回 nullopt。
-///
-/// 用标准头而不是塞进请求体，是为了不把并发元数据混进 5.0 合同：`saveReviewDraft`
-/// 的请求体必须仍然是一份纯粹的 BridgeAnnualInspectionData（§11.1）。
-std::optional<int> parse_if_match_draft_version(const drogon::HttpRequestPtr& request) {
-    auto value = request->getHeader("if-match");
-    if (value.empty()) value = request->getHeader("If-Match");
-    if (value.size() < 3) return std::nullopt;
-    if (value.front() == '"' && value.back() == '"') {
-        value = value.substr(1, value.size() - 2);
-    }
-    constexpr std::string_view prefix = "draft-";
-    if (value.rfind(prefix, 0) != 0) return std::nullopt;
-    const auto digits = value.substr(prefix.size());
-    if (digits.empty()) return std::nullopt;
-    for (const char character : digits) {
-        if (!std::isdigit(static_cast<unsigned char>(character))) return std::nullopt;
-    }
-    try {
-        return std::stoi(digits);
-    } catch (...) {
-        return std::nullopt;
-    }
-}
-
 Json::Value plan_preview_json(const resolution::ResolutionPlanPreview& plan) {
     Json::Value value(Json::objectValue);
     value["plan_token"] = plan.plan_token;

@@ -261,6 +261,9 @@ function ReviewWorkspaceLoaded({
   const [revisionHint, setRevisionHint] = useState<string | null>(null);
   const [confirmResult, setConfirmResult] = useState<ConfirmResponse | null>(null);
   const [sessionImportStatus, setSessionImportStatus] = useState(response.import_record.import_status);
+  // 来源草稿并发版本（§8.0）。整份保存要拿它做 If-Match；每次保存成功后用响应里的
+  // 新值替换，不为此重取整份词情。
+  const [draftVersion, setDraftVersion] = useState(response.import_record.draft_version);
   // 重开校对现场：已确认记录被翻回待校对时非空；再确认（修订版）或放弃修改后清空。
   const [reopenState, setReopenState] = useState(response.reopen);
   const [busy, setBusy] = useState(false);
@@ -568,7 +571,11 @@ function ReviewWorkspaceLoaded({
     const saveRevision = draftRevision.current;
     setBusy(true);
     try {
-      await saveReviewDraft(backendBaseUrl, importRecordId, draftToSave, lockToken);
+      // 版本取自最近一次 fetchReview；保存成功后用响应里的新值替换，
+      // 不重取整份词情。撞版本冲突时下面的 catch 会把后端的提示原样显出来。
+      const saved = await saveReviewDraft(
+        backendBaseUrl, importRecordId, draftToSave, lockToken, draftVersion);
+      setDraftVersion(saved.draft_version);
       const savedLatestRevision = shouldClearDirtyAfterSave(saveRevision, draftRevision.current);
       setSaveMessage({ kind: "success", text: savedLatestRevision ? "已保存" : "本次保存已完成，但仍有较新的修改未保存。" });
       if (savedLatestRevision) setDirty(false);
