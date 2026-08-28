@@ -19,7 +19,7 @@ import {
   searchInventoryEntries,
   type ComponentInventoryEntry,
 } from "../../api/componentInventoryApi";
-import { bindInspectionRatingTree } from "../../api/importBindingApi";
+import { bindInspectionRatingTree } from "../../api/inspectionRatingTreeApi";
 
 /** 区间展开的选中项。group_id 是计划的定位键，后两项仅供展示。 */
 interface SplitTarget {

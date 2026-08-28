@@ -18,7 +18,7 @@
 // 不属于构件解析那套状态，因此留在原地。
 namespace bridge_report::db {
 
-enum class BindingStatus {
+enum class RatingTreeBindingStatus {
     Ok,
     EditLockInvalid,  // 编辑锁在写事务内已失效（过期或被管理员强制收回）
     NotFound,     // 导入记录不存在
@@ -30,17 +30,17 @@ enum class BindingStatus {
     Failed,       // 数据库异常
 };
 
-struct BindingOutcome {
-    BindingStatus status{BindingStatus::Ok};
+struct RatingTreeBindingOutcome {
+    RatingTreeBindingStatus status{RatingTreeBindingStatus::Ok};
     // 同一个 status 可能对应多种拒绝原因；置了这两项，路由就用它们而不是按状态套用
     // 默认错误码。
     std::string error_code;
     std::string error_message;
 };
 
-class ImportBindingRepository {
+class InspectionRatingTreeRepository {
 public:
-    explicit ImportBindingRepository(drogon::orm::DbClientPtr db_client);
+    explicit InspectionRatingTreeRepository(drogon::orm::DbClientPtr db_client);
 
     /**
      * @brief 为年度绑定（或切换）评定树版本。
@@ -48,7 +48,7 @@ public:
      * 成功时不回概览：调用方绑完会重取解析工作区，那是当前状态的唯一来源。此前这里
      * 返回一份完整概览，两处各自表达"现在是什么样"，迟早会不一致。
      */
-    [[nodiscard]] BindingOutcome bind_rating_tree(
+    [[nodiscard]] RatingTreeBindingOutcome bind_rating_tree(
         const std::string& import_id,
         const std::string& rating_tree_version_id,
         const std::string& actor_user_id,

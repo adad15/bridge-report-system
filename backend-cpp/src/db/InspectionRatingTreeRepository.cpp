@@ -1,4 +1,4 @@
-#include "bridge_report/db/ImportBindingRepository.hpp"
+#include "bridge_report/db/InspectionRatingTreeRepository.hpp"
 
 #include "bridge_report/db/RatingTreeRepository.hpp"
 #include "bridge_report/review/DraftValidation.hpp"
@@ -80,8 +80,8 @@ std::optional<ComponentInventoryRepository::ConfirmedRevisionRef> resolve_confir
         bridge_id, locked_revision_id);
 }
 
-BindingOutcome revision_changed_outcome() {
-    BindingOutcome outcome{BindingStatus::Conflict};
+RatingTreeBindingOutcome revision_changed_outcome() {
+    RatingTreeBindingOutcome outcome{RatingTreeBindingStatus::Conflict};
     outcome.error_code = "component_inventory_revision_changed";
     outcome.error_message = "构件台账版本已变化，请刷新后重试。";
     return outcome;
@@ -89,10 +89,10 @@ BindingOutcome revision_changed_outcome() {
 
 }  // namespace
 
-ImportBindingRepository::ImportBindingRepository(drogon::orm::DbClientPtr db_client)
+InspectionRatingTreeRepository::InspectionRatingTreeRepository(drogon::orm::DbClientPtr db_client)
     : db_client_(std::move(db_client)) {}
 
-BindingOutcome ImportBindingRepository::bind_rating_tree(
+RatingTreeBindingOutcome InspectionRatingTreeRepository::bind_rating_tree(
     const std::string& import_id,
     const std::string& rating_tree_version_id,
     const std::string& actor_user_id,
@@ -100,7 +100,7 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
     const std::optional<EditLockCredentials>& edit_lock) {
     if (import_id.empty() || rating_tree_version_id.empty() ||
         actor_user_id.empty()) {
-        return {BindingStatus::Invalid};
+        return {RatingTreeBindingStatus::Invalid};
     }
 
     TransactionPtr tx;
@@ -128,11 +128,11 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
             import_id);
         if (context.empty()) {
             rollback();
-            return {BindingStatus::NotFound};
+            return {RatingTreeBindingStatus::NotFound};
         }
         if (!edit_lock_still_active(tx, import_id, edit_lock)) {
             rollback();
-            return {BindingStatus::EditLockInvalid};
+            return {RatingTreeBindingStatus::EditLockInvalid};
         }
         const auto year_id =
             optional_row_text(context[0], "inspection_year_id");
@@ -141,7 +141,7 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
             context[0]["inspection_year_status"].as<std::string>() !=
                 "待校对") {
             rollback();
-            return {BindingStatus::Conflict};
+            return {RatingTreeBindingStatus::Conflict};
         }
         const auto locked_year = tx->execSqlSync(
             "select id from inspection_years "
@@ -149,7 +149,7 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
             *year_id);
         if (locked_year.empty()) {
             rollback();
-            return {BindingStatus::Conflict};
+            return {RatingTreeBindingStatus::Conflict};
         }
 
         const auto target = tx->execSqlSync(
@@ -173,8 +173,8 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
                 "select 1 from rating_tree_versions where id=$1::uuid",
                 rating_tree_version_id);
             rollback();
-            return {exists.empty() ? BindingStatus::TreeNotFound
-                                   : BindingStatus::TreeUnavailable};
+            return {exists.empty() ? RatingTreeBindingStatus::TreeNotFound
+                                   : RatingTreeBindingStatus::TreeUnavailable};
         }
 
         const auto current_tree =
@@ -182,8 +182,8 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
         if (current_tree.has_value() &&
             *current_tree == rating_tree_version_id) {
             tx.reset();
-            if (!latch->wait()) return {BindingStatus::Failed};
-            return {BindingStatus::Ok};
+            if (!latch->wait()) return {RatingTreeBindingStatus::Failed};
+            return {RatingTreeBindingStatus::Ok};
         }
 
         const auto successful_formal = tx->execSqlSync(
@@ -193,7 +193,7 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
             *year_id);
         if (!successful_formal.empty()) {
             rollback();
-            return {BindingStatus::Conflict};
+            return {RatingTreeBindingStatus::Conflict};
         }
 
         const auto bridge_id = context[0]["bridge_id"].as<std::string>();
@@ -203,7 +203,7 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
             resolve_confirmed_revision_ref(tx, bridge_id, locked_revision_id);
         if (!source_revision.has_value()) {
             rollback();
-            return {BindingStatus::Conflict};
+            return {RatingTreeBindingStatus::Conflict};
         }
         // 迁移的起点必须是用户看到的那份台账，否则派生出来的新版本基线就不对了。
         if (source_revision->id != expected_revision_id) {
@@ -262,7 +262,7 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
             }
             if (!source_complete) {
                 rollback();
-                return {BindingStatus::MappingIncompatible};
+                return {RatingTreeBindingStatus::MappingIncompatible};
             }
 
             const auto new_revision = tx->execSqlSync(
@@ -275,7 +275,7 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
                 bridge_id, source_revision->id, actor_user_id);
             if (new_revision.empty()) {
                 rollback();
-                return {BindingStatus::Failed};
+                return {RatingTreeBindingStatus::Failed};
             }
             target_revision_id =
                 new_revision[0]["id"].as<std::string>();
@@ -364,7 +364,7 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
             if (inherited_complete.empty() ||
                 !inherited_complete[0]["complete"].as<bool>()) {
                 rollback();
-                return {BindingStatus::MappingIncompatible};
+                return {RatingTreeBindingStatus::MappingIncompatible};
             }
             tx->execSqlSync(
                 "update bridge_component_inventory_revisions set "
@@ -394,14 +394,14 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
         }
         if (profiles.empty()) {
             rollback();
-            return {BindingStatus::Failed};
+            return {RatingTreeBindingStatus::Failed};
         }
         profile_id = profiles[0]["id"].as<std::string>();
 
         Json::Value parsed;
         if (!parse_json(context[0]["parsed"].as<std::string>(), parsed)) {
             rollback();
-            return {BindingStatus::Invalid};
+            return {RatingTreeBindingStatus::Invalid};
         }
         const Json::Value stored = parsed;
         if (parsed["defects"].isArray()) {
@@ -434,7 +434,7 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
                  target_technical_package_id, *tree,
                  target_revision).ok) {
             rollback();
-            return {BindingStatus::MappingIncompatible};
+            return {RatingTreeBindingStatus::MappingIncompatible};
         }
 
         tx->execSqlSync(
@@ -448,12 +448,12 @@ BindingOutcome ImportBindingRepository::bind_rating_tree(
             import_id, compact_json(parsed));
 
         tx.reset();
-        if (!latch->wait()) return {BindingStatus::Failed};
+        if (!latch->wait()) return {RatingTreeBindingStatus::Failed};
         // 概览不再由这里产出：调用方绑完会重取解析工作区，那是当前状态的唯一来源。
-        return {BindingStatus::Ok};
+        return {RatingTreeBindingStatus::Ok};
     } catch (...) {
         rollback();
-        return {BindingStatus::Failed};
+        return {RatingTreeBindingStatus::Failed};
     }
 }
 

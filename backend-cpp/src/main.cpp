@@ -25,7 +25,7 @@
 #include "bridge_report/http/EditLockRoutes.hpp"
 #include "bridge_report/http/DefectMatchingRoutes.hpp"
 #include "bridge_report/http/DefectPhotoRoutes.hpp"
-#include "bridge_report/http/ImportBindingRoutes.hpp"
+#include "bridge_report/http/InspectionRatingTreeRoutes.hpp"
 #include "bridge_report/http/ImportResolutionRoutes.hpp"
 #include "bridge_report/http/RoutePreflightAudit.hpp"
 #include "bridge_report/http/ImportConfirmRoutes.hpp"
@@ -501,7 +501,7 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_review_routes(db_client, config.archive_root);
     bridge_report::http::register_bridge_administration_routes(db_client, cleanup_coordinator);
     bridge_report::http::register_import_confirm_routes(db_client, standards.registry);
-    bridge_report::http::register_import_binding_routes(db_client);
+    bridge_report::http::register_inspection_rating_tree_routes(db_client);
     bridge_report::http::register_import_resolution_routes(db_client);
     bridge_report::http::register_defect_matching_routes(db_client);
     bridge_report::http::register_defect_photo_routes(db_client, config);
@@ -534,7 +534,7 @@ int main(int argc, char* argv[]) {
         for (const auto& path : missing) {
             std::cerr << "    " << path << "\n";
         }
-        std::cerr << "修法：改用成对注册（见 ImportBindingRoutes.cpp 的 "
+        std::cerr << "修法：改用成对注册（见 InspectionRatingTreeRoutes.cpp 的 "
                      "register_post_route），它会把 POST 与其预检一起注册。\n"
                      "后端未启动。\n";
         return 1;

@@ -15,27 +15,21 @@ const lockedJson = (method: string, body: unknown, lockToken: string): RequestIn
   body: JSON.stringify(body),
 });
 
-function bindingUrl(baseUrl: string, importId: string, suffix = ""): string {
-  return `${baseUrl}/api/import-records/${encodeURIComponent(importId)}/component-binding${suffix}`;
-}
-
 /**
- * 响应里仍带一份旧形状的概览，但调用方已不再消费它——绑完评定树会重取解析工作区。
- * 这里只关心请求是否成功。
+ * 为年度绑定（或切换）评定树版本。
+ *
+ * 响应只表示成败：绑完会重取解析工作区，那才是当前状态的唯一来源。
+ * 此前这里会回一份完整概览，两处各自表达"现在是什么样"，迟早会不一致。
  */
-async function overviewRequest(url: string, init?: RequestInit): Promise<unknown> {
-  return request<unknown>(url, init);
-}
-
 export function bindInspectionRatingTree(
   baseUrl: string,
   importId: string,
   ratingTreeVersionId: string,
   expectedInventoryRevisionId: string,
   lockToken: string
-) {
-  return overviewRequest(
-    bindingUrl(baseUrl, importId, "/rating-tree"),
+): Promise<unknown> {
+  return request<unknown>(
+    `${baseUrl}/api/import-records/${encodeURIComponent(importId)}/rating-tree-binding`,
     lockedJson("POST", {
       rating_tree_version_id: ratingTreeVersionId,
       expected_inventory_revision_id: expectedInventoryRevisionId,

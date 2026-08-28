@@ -39,7 +39,7 @@ add_library(bridge_report_backend_core
     src/db/TriageQueryRepository.cpp
     src/db/WorkspaceRepository.cpp
     src/db/WordImportRepository.cpp
-    src/db/ImportBindingRepository.cpp
+    src/db/InspectionRatingTreeRepository.cpp
     src/db/ImportResolutionRepository.cpp
     src/deletion/ArchiveFileCleanupCoordinator.cpp
     src/deletion/ArchiveFileDeletionCore.cpp
@@ -58,7 +58,7 @@ add_library(bridge_report_backend_core
     src/http/DefectThreadRoutes.cpp
     src/http/DefectMatchingRoutes.cpp
     src/http/EditLockRoutes.cpp
-    src/http/ImportBindingRoutes.cpp
+    src/http/InspectionRatingTreeRoutes.cpp
     src/http/ImportResolutionRoutes.cpp
     src/http/RoutePreflightAudit.cpp
     src/http/ImportConfirmRoutes.cpp
@@ -212,6 +212,7 @@ add_executable(bridge_report_backend_tests
     tests/test_resolution_hashes.cpp
     tests/test_resolution_plans.cpp
     tests/test_rating_resolution_command.cpp
+    tests/test_rating_tree_binding_routes.cpp
     tests/test_resolution_reopen_snapshot.cpp
     tests/test_review_repository.cpp
     tests/test_review_statistics.cpp

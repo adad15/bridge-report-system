@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { searchInventoryEntries } from "../../api/componentInventoryApi";
-import { bindInspectionRatingTree } from "../../api/importBindingApi";
+import { bindInspectionRatingTree } from "../../api/inspectionRatingTreeApi";
 import {
   applyComponentResolution,
   createResolutionPlan,
@@ -17,8 +17,8 @@ import { ApiError } from "../../api/apiClient";
 import { fetchRatingTreeVersions } from "../../api/ratingTreeApi";
 import { ComponentBindingWorkspace } from "./ComponentBindingWorkspace";
 
-vi.mock("../../api/importBindingApi", async (importOriginal) => {
-  const original = await importOriginal<typeof import("../../api/importBindingApi")>();
+vi.mock("../../api/inspectionRatingTreeApi", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../api/inspectionRatingTreeApi")>();
   return { ...original, bindInspectionRatingTree: vi.fn() };
 });
 

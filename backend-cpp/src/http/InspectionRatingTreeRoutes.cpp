@@ -1,8 +1,8 @@
-#include "bridge_report/http/ImportBindingRoutes.hpp"
+#include "bridge_report/http/InspectionRatingTreeRoutes.hpp"
 
 #include <string>
 
-#include "bridge_report/db/ImportBindingRepository.hpp"
+#include "bridge_report/db/InspectionRatingTreeRepository.hpp"
 #include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/EditLockRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
@@ -11,23 +11,23 @@ namespace bridge_report::http {
 
 namespace {
 
-void respond_binding(const HttpCallback& callback, const db::BindingOutcome& outcome) {
-    if (outcome.status == db::BindingStatus::Ok) {
+void respond_binding(const HttpCallback& callback, const db::RatingTreeBindingOutcome& outcome) {
+    if (outcome.status == db::RatingTreeBindingStatus::Ok) {
         Json::Value body(Json::objectValue);
         body["bound"] = true;
         respond_json(callback, body);
         return;
     }
-    if (outcome.status == db::BindingStatus::NotFound) {
+    if (outcome.status == db::RatingTreeBindingStatus::NotFound) {
         respond_import_record_not_found(callback);
         return;
     }
-    if (outcome.status == db::BindingStatus::EditLockInvalid) {
+    if (outcome.status == db::RatingTreeBindingStatus::EditLockInvalid) {
         respond_json(callback, make_error_body("edit_lock_required", "需要编辑权才能绑定评定树。"),
                      drogon::k409Conflict);
         return;
     }
-    if (outcome.status == db::BindingStatus::Conflict) {
+    if (outcome.status == db::RatingTreeBindingStatus::Conflict) {
         respond_json(callback,
                      make_error_body(outcome.error_code.empty()
                                          ? "component_binding_conflict" : outcome.error_code,
@@ -40,8 +40,8 @@ void respond_binding(const HttpCallback& callback, const db::BindingOutcome& out
 
 void respond_rating_tree_binding(
     const HttpCallback& callback,
-    const db::BindingOutcome& outcome) {
-    if (outcome.status == db::BindingStatus::Conflict) {
+    const db::RatingTreeBindingOutcome& outcome) {
+    if (outcome.status == db::RatingTreeBindingStatus::Conflict) {
         respond_json(callback, make_error_body(
             "rating_tree_binding_conflict",
             "仅可为待校对、尚无成功正式评定且已确认构件台账的年度绑定评定树。"),
@@ -70,13 +70,13 @@ bool parse_expected_revision(const Json::Value* body, std::string& expected,
 
 }  // namespace
 
-BindingErrorResponse binding_error_response(const db::BindingOutcome& outcome) {
+RatingTreeBindingErrorResponse rating_tree_binding_error_response(const db::RatingTreeBindingOutcome& outcome) {
     switch (outcome.status) {
-        case db::BindingStatus::EditLockInvalid:
+        case db::RatingTreeBindingStatus::EditLockInvalid:
             // 路由入口已经查过一次；能走到这里说明锁是在事务开始之后失效的
             // （过期或被管理员强制收回）。与保存草稿、确认入库同一个错误码。
             return {"edit_lock_invalid", "编辑锁已失效，本次修改未写入，请刷新页面。", 409};
-        case db::BindingStatus::Conflict:
+        case db::RatingTreeBindingStatus::Conflict:
             // 结果自带错误码时优先用它：同一个 Conflict 下，"台账版本已变化"要求
             // 前端刷新，跟"年度已有正式评定"是两种完全不同的处置。
             return {
@@ -84,18 +84,18 @@ BindingErrorResponse binding_error_response(const db::BindingOutcome& outcome) {
                 !outcome.error_message.empty() ? outcome.error_message
                     : "台账未确认，或导入不在待校对阶段。",
                 409};
-        case db::BindingStatus::Invalid:
+        case db::RatingTreeBindingStatus::Invalid:
             return {
                 outcome.error_code.empty() ? "invalid_component_binding" : outcome.error_code,
                 !outcome.error_message.empty() ? outcome.error_message
                     : "绑定参数无效。",
                 400};
-        case db::BindingStatus::TreeNotFound:
+        case db::RatingTreeBindingStatus::TreeNotFound:
             return {"rating_tree_not_found", "评定树版本不存在。", 404};
-        case db::BindingStatus::TreeUnavailable:
+        case db::RatingTreeBindingStatus::TreeUnavailable:
             return {"rating_tree_unavailable",
                     "所选评定树尚未发布，或关联规范包当前不可用。", 409};
-        case db::BindingStatus::MappingIncompatible:
+        case db::RatingTreeBindingStatus::MappingIncompatible:
             return {"rating_tree_inventory_incompatible",
                     "当前已确认台账无法完整继承到所选评定树，请先检查台账规范映射。", 409};
         default:
@@ -116,12 +116,14 @@ void register_post_route(const std::string& path, Handler&& handler) {
     drogon::app().registerHandler(path, std::forward<Handler>(handler), {drogon::Post});
 }
 
-void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
-    const std::string base = "/api/import-records/{import_id}/component-binding";
+void register_inspection_rating_tree_routes(const drogon::orm::DbClientPtr& db_client) {
+    // 路径跟着职责走：这里绑的是年度评定树，不再是构件。旧的
+    // component-binding 前缀下那九个构件绑定路由已随 4.0 链路一起下线。
+    const std::string base = "/api/import-records/{import_id}/rating-tree-binding";
     // 只读接口的预检仍需单独注册：GET 带 Authorization 头，同样会触发预检。
 
     register_post_route(
-        base + "/rating-tree",
+        base,
         [db_client](const drogon::HttpRequestPtr& request,
                     HttpCallback&& callback,
                     const std::string& import_id) {
@@ -153,7 +155,7 @@ void register_import_binding_routes(const drogon::orm::DbClientPtr& db_client) {
                                              "invalid_rating_tree_binding")) return;
                 respond_rating_tree_binding(
                     callback,
-                    db::ImportBindingRepository(db_client).bind_rating_tree(
+                    db::InspectionRatingTreeRepository(db_client).bind_rating_tree(
                         import_id,
                         (*body)["rating_tree_version_id"].asString(),
                         actor->id, expected,
