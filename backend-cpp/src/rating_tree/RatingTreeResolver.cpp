@@ -14,14 +14,6 @@ bool contains(const std::vector<std::string>& values, const std::string& value) 
     return std::find(values.begin(), values.end(), value) != values.end();
 }
 
-bool applicable(
-    const EffectiveRatingTreeNode& node,
-    const std::string& bridge_type_id,
-    const std::string& component_category_id) {
-    return node.node_type == RatingTreeNodeType::defect && node.is_selectable &&
-        contains(node.bridge_type_ids, bridge_type_id) &&
-        contains(node.component_category_ids, component_category_id);
-}
 
 struct NodeHit {
     std::string node_id;
@@ -105,6 +97,15 @@ std::optional<RatingTreeMatchResult> resolve_hits(
 
 }  // namespace
 
+bool node_applies_to(
+    const EffectiveRatingTreeNode& node,
+    const std::string& bridge_type_id,
+    const std::string& component_category_id) {
+    return node.node_type == RatingTreeNodeType::defect && node.is_selectable &&
+        contains(node.bridge_type_ids, bridge_type_id) &&
+        contains(node.component_category_ids, component_category_id);
+}
+
 std::string to_string(const RatingTreeMatchOutcome value) {
     switch (value) {
         case RatingTreeMatchOutcome::auto_bound: return "auto_bound";
@@ -127,7 +128,7 @@ RatingTreeMatchResult RatingTreeResolver::resolve(
 
     std::vector<const EffectiveRatingTreeNode*> pool;
     for (const auto& [_, node] : tree.nodes) {
-        if (applicable(node, input.bridge_type_id, input.component_category_id)) {
+        if (node_applies_to(node, input.bridge_type_id, input.component_category_id)) {
             pool.push_back(&node);
         }
     }

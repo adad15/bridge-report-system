@@ -46,8 +46,6 @@ def test_carries_the_raw_source_group_and_indicator_identity() -> None:
     assert candidate["source_defect_group_number"] == "5.1.1"
     assert candidate["source_defect_indicator_id"] == "idx-spall"
     assert candidate["source_defect_indicator_number"] == "5.1.1-2"
-    # 派生字段留空：它由后端按选中的节点算，解析器写它就会被当成已解析结果。
-    assert candidate["standard_defect_indicator_id"] is None
 
 
 def test_carries_a_unit_extension_indicator_as_is() -> None:
@@ -58,13 +56,30 @@ def test_carries_a_unit_extension_indicator_as_is() -> None:
     assert candidate["defect_type"] == "渗水泛碱"
 
 
-def test_never_fills_the_rating_tree_node() -> None:
-    """选节点要看桥型与构件类别，那是 C++ 的上下文；解析器不越权。"""
+def test_never_emits_resolution_fields() -> None:
+    """选节点要看桥型与构件类别，那是 C++ 的上下文；解析器不越权。
+
+    5.0 之后这些字段连合同都没有了，解析器只要写出任意一个，整份候选就会被
+    ``extra="forbid"`` 挡在导入之外。
+    """
     candidate = build([defect()])[0]
 
-    assert candidate["rating_tree_node_id"] is None
-    assert candidate["rating_tree_version_id"] is None
-    assert candidate["rating_tree_match_method"] is None
+    for field_name in (
+        "bridge_component_id",
+        "standard_component_category_id",
+        "resolved_structure_part",
+        "component_inventory_revision_id",
+        "component_match_candidate_ids",
+        "component_match_method",
+        "component_match_confirmed_by",
+        "rating_tree_version_id",
+        "rating_tree_node_id",
+        "rating_tree_match_method",
+        "rating_tree_match_evidence",
+        "standard_defect_indicator_id",
+        "range_split_origin",
+    ):
+        assert field_name not in candidate
 
 
 def test_takes_the_component_number_and_category_from_the_tree() -> None:

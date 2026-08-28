@@ -5,8 +5,7 @@
 #include "bridge_report/db/CommitLatch.hpp"
 #include "bridge_report/db/ComponentInventoryRepository.hpp"
 #include "bridge_report/db/RatingTreeRepository.hpp"
-#include "bridge_report/inventory/ComponentMatcher.hpp"
-#include "bridge_report/review/DefectRatingTreeMatching.hpp"
+#include "bridge_report/resolution/ImportResolutionInitializer.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -32,163 +31,6 @@ std::string parser_member(const Json::Value& data, const char* member) {
         ? data["contract"][member].asString() : std::string();
 }
 
-std::string contract_structure_part(const std::string& value) {
-    if (value == "superstructure") return "上部结构";
-    if (value == "substructure") return "下部结构";
-    if (value == "deck_system") return "桥面系";
-    if (value == "overall") return "全桥";
-    return "其他";
-}
-
-void append_match_warning(
-    Json::Value& defect,
-    const std::string& code,
-    const std::string& message) {
-    if (!defect["warnings"].isArray()) defect["warnings"] = Json::Value(Json::arrayValue);
-    Json::Value warning(Json::objectValue);
-    warning["code"] = code;
-    warning["message"] = message;
-    warning["severity"] = "warning";
-    warning["target_candidate_id"] = defect["candidate_id"];
-    defect["warnings"].append(std::move(warning));
-}
-
-// 版本由调用方在年度行锁内解析好一次后传进来：构件匹配与评定树匹配必须用同一份台账，
-// 各自解析的话，READ COMMITTED 下两次查询可以落在不同快照上。
-Json::Value match_imported_defects(
-    const std::shared_ptr<drogon::orm::Transaction>& tx,
-    const std::string& bridge_id,
-    const std::optional<inventory::InventoryRevision>& revision,
-    const Json::Value& source) {
-    Json::Value matched = source;
-
-    if (!revision.has_value() || revision->bridge_id != bridge_id) {
-        for (auto& defect : matched["defects"]) {
-            defect["component_match_candidate_ids"] = Json::Value(Json::arrayValue);
-            defect["component_match_method"] = Json::Value(Json::nullValue);
-            defect["component_inventory_revision_id"] = Json::Value(Json::nullValue);
-            defect["component_match_confirmed_by"] = Json::Value(Json::nullValue);
-            append_match_warning(
-                defect,
-                "defect_component_match_required",
-                "尚未建立构件台账，请选择实际构件后再正式确认。");
-        }
-        return matched;
-    }
-    std::vector<inventory::ConfirmedComponentAlias> aliases;
-    const auto alias_rows = tx->execSqlSync(
-        "select ca.bridge_component_id::text,ca.alias_text from component_aliases ca "
-        "join bridge_components c on c.id=ca.bridge_component_id "
-        "where c.bridge_id=$1::uuid and ca.is_manually_confirmed",
-        bridge_id);
-    for (const auto& row : alias_rows) {
-        aliases.push_back({
-            row["bridge_component_id"].as<std::string>(),
-            row["alias_text"].as<std::string>()});
-    }
-
-    for (auto& defect : matched["defects"]) {
-        const inventory::DefectComponentText text{
-            defect["component_number"].isString()
-                ? defect["component_number"].asString() : std::string(),
-            defect["component_name"].isString()
-                ? defect["component_name"].asString() : std::string()};
-        const auto result = inventory::match_defect_component(text, *revision, aliases);
-        defect["component_inventory_revision_id"] = revision->id;
-        defect["component_match_confirmed_by"] = Json::Value(Json::nullValue);
-        defect["component_match_candidate_ids"] = Json::Value(Json::arrayValue);
-        for (const auto& candidate_id : result.candidate_component_ids) {
-            defect["component_match_candidate_ids"].append(candidate_id);
-        }
-        defect["component_match_method"] =
-            result.method == inventory::ComponentMatchMethod::None
-                ? Json::Value(Json::nullValue)
-                : Json::Value(inventory::component_match_method_name(result.method));
-
-        if (result.matched_entry.has_value() && result.matched_mapping.has_value()) {
-            defect["bridge_component_id"] = result.matched_entry->bridge_component_id;
-            defect["standard_component_category_id"] =
-                result.matched_mapping->standard_component_category_id;
-            defect["resolved_structure_part"] =
-                contract_structure_part(result.matched_mapping->structure_part);
-            continue;
-        }
-        defect["bridge_component_id"] = Json::Value(Json::nullValue);
-        defect["standard_component_category_id"] = Json::Value(Json::nullValue);
-        defect["resolved_structure_part"] = Json::Value(Json::nullValue);
-        append_match_warning(
-            defect,
-            result.candidate_component_ids.empty()
-                ? "defect_component_match_required"
-                : "defect_component_match_ambiguous",
-            result.candidate_component_ids.empty()
-                ? "未找到可唯一关联的实际构件，请人工选择。"
-                : "存在构件匹配候选，请人工确认实际构件。");
-    }
-    return matched;
-}
-
-// 依赖齐备时就地写入自动匹配结果；评定树未绑定或装载失败时安静跳过，
-// 由构件/评定树绑定完成后的触发点或页面"重新匹配"补上，绝不阻断导入落库。
-void match_imported_defect_rating_tree_nodes_unguarded(
-    const std::shared_ptr<drogon::orm::Transaction>& tx,
-    const std::string& inspection_year_id,
-    const std::optional<inventory::InventoryRevision>& revision,
-    Json::Value& data) {
-    if (inspection_year_id.empty() || !data["defects"].isArray()) return;
-    const auto profile = tx->execSqlSync(
-        "select psp.rating_tree_version_id::text as rating_tree_version_id,"
-        "psp.technical_condition_package_id::text as technical_package_id,"
-        "iy.bridge_id::text as bridge_id "
-        "from inspection_years iy "
-        "join project_standard_profiles psp on psp.id=iy.standard_profile_id "
-        "where iy.id=$1::uuid",
-        inspection_year_id);
-    if (profile.empty() || profile[0]["rating_tree_version_id"].isNull() ||
-        profile[0]["technical_package_id"].isNull()) {
-        return;
-    }
-    const auto tree_version_id =
-        profile[0]["rating_tree_version_id"].as<std::string>();
-    const auto tree = RatingTreeRepository(tx).load_published_tree(tree_version_id);
-    if (!tree.has_value()) return;
-    (void)review::match_defect_rating_tree_nodes(
-        data,
-        tree_version_id,
-        profile[0]["technical_package_id"].as<std::string>(),
-        *tree,
-        revision,
-        review::DefectMatchScope{},
-        true);
-}
-
-// 评定树匹配只是导入的便利层，绝不能把整批解析结果挡在门外。PostgreSQL 里一条语句
-// 失败会让整个事务进入 aborted 态，光靠 try/catch 救不回来，所以这里先开 SAVEPOINT：
-// 匹配出任何问题就回滚到保存点，病害照常落库，等依赖补齐后由绑定或"重新匹配"补上。
-void match_imported_defect_rating_tree_nodes(
-    const std::shared_ptr<drogon::orm::Transaction>& tx,
-    const std::string& inspection_year_id,
-    const std::optional<inventory::InventoryRevision>& revision,
-    Json::Value& data) {
-    const Json::Value unmatched = data;
-    try {
-        tx->execSqlSync("savepoint import_rating_tree_match");
-        match_imported_defect_rating_tree_nodes_unguarded(
-            tx, inspection_year_id, revision, data);
-        tx->execSqlSync("release savepoint import_rating_tree_match");
-    } catch (const std::exception& error) {
-        data = unmatched;
-        try {
-            tx->execSqlSync("rollback to savepoint import_rating_tree_match");
-            tx->execSqlSync("release savepoint import_rating_tree_match");
-        } catch (...) {
-        }
-        LOG_WARN << "import-time rating tree matching skipped year="
-                 << inspection_year_id << " reason="
-                 << bridge_report::rating_tree::kReasonMatcherFailed
-                 << " detail=" << error.what();
-    }
-}
 
 }  // namespace
 
@@ -361,12 +203,22 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
             }
         }
 
-        auto matched_data =
-            match_imported_defects(tx, bridge_id, revision, batch.data);
-        // 导入完成即尝试一次评定树匹配：构件已唯一命中的病害立刻拿到自动结果，
-        // 依赖尚未补齐的仍然停在待处理，等构件/评定树绑定完成后再触发。
-        if (has_year) {
-            match_imported_defect_rating_tree_nodes(tx, year_id, revision, matched_data);
+        // 5.0 起构件解析与评分树解析都不写回 parsed_result_json：它们落进 027 建的
+        // 关系表，由初始化在**同一事务**里建立（设计 §10）。出现"JSON 已落库但一条组
+        // 都没有"的中间态时，界面会把整份导入显示成没有任何构件行，而重跑导入又会撞上
+        // candidate 唯一约束。
+        //
+        // 该桥没有已确认台账版本不算失败：全部组停在 unresolved，病害与照片校对照常。
+        const auto initialization = resolution::initialize_import_resolution(
+            tx,
+            resolution::ImportResolutionInitializationContext{
+                import_record_id, bridge_id, has_year ? year_id : std::string(), revision},
+            batch.data);
+        if (!initialization.success) {
+            tx->rollback();
+            outcome.error_code = initialization.error_code;
+            outcome.error_message = initialization.error_message;
+            return outcome;
         }
         for (const auto& file : batch.files) {
             const auto inserted = tx->execSqlSync(
@@ -384,8 +236,8 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
         tx->execSqlSync(
             "update import_records set parsed_result_json = $2::jsonb, importer_name = $3, importer_version = $4, "
             "import_status = '待校对', finished_at = now(), error_message = null, updated_at = now() where id = $1::uuid",
-            import_record_id, compact_json(matched_data), parser_member(matched_data, "parser_name"),
-            parser_member(matched_data, "parser_version"));
+            import_record_id, compact_json(batch.data), parser_member(batch.data, "parser_name"),
+            parser_member(batch.data, "parser_version"));
         tx->execSqlSync(
             "update import_source_files set status='待清理',cleanup_reason='解析成功',expires_at=null,"
             "last_error=null,next_cleanup_at=now(),updated_at=now() "

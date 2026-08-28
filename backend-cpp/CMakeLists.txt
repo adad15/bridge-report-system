@@ -41,6 +41,7 @@ add_library(bridge_report_backend_core
     src/db/WorkspaceRepository.cpp
     src/db/WordImportRepository.cpp
     src/db/ImportBindingRepository.cpp
+    src/db/ImportResolutionRepository.cpp
     src/deletion/ArchiveFileCleanupCoordinator.cpp
     src/deletion/ArchiveFileDeletionCore.cpp
     src/deletion/ArchivedFileDeletionQueue.cpp
@@ -59,6 +60,7 @@ add_library(bridge_report_backend_core
     src/http/DefectMatchingRoutes.cpp
     src/http/EditLockRoutes.cpp
     src/http/ImportBindingRoutes.cpp
+    src/http/ImportResolutionRoutes.cpp
     src/http/RoutePreflightAudit.cpp
     src/http/ImportConfirmRoutes.cpp
     src/http/ImportRecordDeletionRoutes.cpp
@@ -72,6 +74,7 @@ add_library(bridge_report_backend_core
     src/inventory/ComponentInventoryGenerator.cpp
     src/inventory/ComponentInventoryModels.cpp
     src/inventory/ComponentRangeParser.cpp
+    src/inventory/ComponentReplacePattern.cpp
     src/inventory/ComponentMatcher.cpp
     src/inventory/ComponentCategoryLexicon.cpp
     src/inventory/NumberingTemplate.cpp
@@ -82,6 +85,15 @@ add_library(bridge_report_backend_core
     src/rating_tree/RatingTreeModels.cpp
     src/rating_tree/RatingTreePackageLoader.cpp
     src/rating_tree/RatingTreeResolver.cpp
+    src/resolution/ConfirmResolutionReader.cpp
+    src/resolution/EffectiveDefectFacts.cpp
+    src/resolution/DraftResolutionSynchronizer.cpp
+    src/resolution/ImportResolutionInitializer.cpp
+    src/resolution/ImportResolutionService.cpp
+    src/resolution/ResolutionHashes.cpp
+    src/resolution/ResolutionPlanService.cpp
+    src/resolution/ResolutionReopenSnapshot.cpp
+    src/resolution/ResolutionTransition.cpp
     src/review/ConfirmPlan.cpp
     src/review/ComponentRangeSplitPlanner.cpp
     src/review/ContractCompatibility.cpp
@@ -173,10 +185,12 @@ add_executable(bridge_report_backend_tests
     tests/test_defect_thread_repository.cpp
     tests/test_defect_indicator_resolver.cpp
     tests/test_defect_thread_routes.cpp
+    tests/test_component_replace_pattern.cpp
     tests/test_contract_compatibility.cpp
     tests/test_db_client_factory.cpp
     tests/test_draft_validation.cpp
     tests/test_edit_lock_repository.cpp
+    tests/test_effective_defect_facts.cpp
     tests/test_extracted_photo_archive.cpp
     tests/bench_defect_matching_chain.cpp
     tests/test_route_preflight_audit.cpp
@@ -199,6 +213,11 @@ add_executable(bridge_report_backend_tests
     tests/test_preflight_report.cpp
     tests/test_photo_content.cpp
     tests/test_review_models.cpp
+    tests/test_resolution_commands.cpp
+    tests/test_resolution_hashes.cpp
+    tests/test_resolution_plans.cpp
+    tests/test_rating_resolution_command.cpp
+    tests/test_resolution_reopen_snapshot.cpp
     tests/test_review_repository.cpp
     tests/test_review_statistics.cpp
     tests/test_rating_tree_compiler.cpp
@@ -222,6 +241,9 @@ add_executable(bridge_report_backend_tests
     tests/test_word_import_routes.cpp
     tests/test_word_import_repository.cpp
     tests/test_import_binding_repository.cpp
+    tests/test_import_resolution_repository.cpp
+    tests/test_import_resolution_service.cpp
+    tests/test_manual_defect_command.cpp
     tests/test_word_input_archive.cpp
     tests/test_workspace_models.cpp
     tests/test_workspace_repository.cpp

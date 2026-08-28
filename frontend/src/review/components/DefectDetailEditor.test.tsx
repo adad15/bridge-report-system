@@ -3,8 +3,28 @@ import { expect, it, vi } from "vitest";
 
 import type { RatingTreeNode, RatingTreeNodeSummary } from "../../api/ratingTreeApi";
 import { buildDefectPhotoReviewModel } from "../defectPhotoReviewModel";
+import { UNRESOLVED, type ResolutionIndex } from "../resolutionIndex";
 import { data } from "../testFixtures";
 import { DefectDetailEditor } from "./DefectDetailEditor";
+
+// 5.0：构件与评分树结果不在草稿里，由工作区读模型交给 buildDefectPhotoReviewModel。
+function resolvedTo(
+  candidateId: string,
+  nodeId: string,
+  categoryId: string,
+): ResolutionIndex {
+  return new Map([[candidateId, {
+    ...UNRESOLVED,
+    bridgeComponentId: "component-1",
+    standardComponentCategoryId: categoryId,
+    ratingTreeVersionId: "tree-version-1",
+    ratingTreeNodeId: nodeId,
+    ratingMatchMethod: "manual" as const,
+    ratingStatus: "matched" as const,
+    hasRating: true,
+    activeInstanceCount: 1,
+  }]]);
+}
 
 it("lets a range-split defect without photos be confirmed individually", () => {
   const node: RatingTreeNode = {
@@ -33,11 +53,6 @@ it("lets a range-split defect without photos be confirmed individually", () => {
   const draft = data();
   draft.photos = [];
   Object.assign(draft.defects[0], {
-    bridge_component_id: "component-1",
-    standard_component_category_id: "h21.component.beam",
-    rating_tree_version_id: "tree-version-1",
-    rating_tree_node_id: node.id,
-    rating_tree_match_method: "manual",
     defect_scale: 2,
     photo_references: [],
     warnings: [{
@@ -53,6 +68,7 @@ it("lets a range-split defect without photos be confirmed individually", () => {
     ratingTreeNodes: [node],
     applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([node.id])]]),
     treeRulesReady: true,
+    resolution: resolvedTo("defect_0001", node.id, "h21.component.beam"),
     assessmentIssues: [],
   }).rows[0];
   const onConfirm = vi.fn();
@@ -98,15 +114,7 @@ it("uses summary scale rules before the full node detail has loaded", () => {
     scale_descriptions: { "1": "完好", "2": "排水不畅" },
   };
   const draft = data();
-  Object.assign(draft.defects[0], {
-    bridge_component_id: "component-1",
-    standard_component_category_id: "h21.component.beam",
-    rating_tree_version_id: "tree-version-1",
-    rating_tree_node_id: node.id,
-    rating_tree_match_method: "manual",
-    defect_scale: 1,
-    warnings: [],
-  });
+  Object.assign(draft.defects[0], { defect_scale: 1, warnings: [] });
   const row = buildDefectPhotoReviewModel({
     draft,
     ratingTreeVersionId: "tree-version-1",
@@ -114,6 +122,7 @@ it("uses summary scale rules before the full node detail has loaded", () => {
     ratingTreeNodeSummaries: [node],
     applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([node.id])]]),
     treeRulesReady: true,
+    resolution: resolvedTo("defect_0001", node.id, "h21.component.beam"),
     assessmentIssues: [],
   }).rows[0];
 

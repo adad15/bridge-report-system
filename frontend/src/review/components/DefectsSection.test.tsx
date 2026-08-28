@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchInventorySummary, searchInventoryEntries } from "../../api/componentInventoryApi";
 import { ApiError } from "../../api/apiClient";
 import { matchDefectRatingTreeNodes } from "../../api/defectMatchingApi";
+import { addManualDefect, fetchResolutionWorkspace } from "../../api/resolutionApi";
 import { fetchApplicableRatingTreeDefects, fetchRatingTreeNode } from "../../api/ratingTreeApi";
 import { data } from "../testFixtures";
 import { DefectsSection } from "./DefectsSection";
@@ -26,8 +27,100 @@ vi.mock("../../api/defectMatchingApi", async (importOriginal) => {
   return { ...actual, matchDefectRatingTreeNodes: vi.fn() };
 });
 
+vi.mock("../../api/resolutionApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api/resolutionApi")>();
+  return { ...actual, fetchResolutionWorkspace: vi.fn(), addManualDefect: vi.fn() };
+});
+
 const mockedMatchDefects = vi.mocked(matchDefectRatingTreeNodes);
+const mockedFetchWorkspace = vi.mocked(fetchResolutionWorkspace);
+const mockedAddManualDefect = vi.mocked(addManualDefect);
 const mockedFetchSummary = vi.mocked(fetchInventorySummary);
+
+// 5.0：绑定与评分树结果住在关系表里，页面自己去 `GET /resolution-workspace` 取。
+// 夹具照读模型的形状造，别在这里另起一套——两边一分叉，页面读得到而测试读不到。
+interface Resolved {
+  candidateId: string;
+  componentId?: string;
+  nodeId?: string | null;
+  matchMethod?: string | null;
+}
+
+function workspaceGroups(resolved: Resolved[]) {
+  return resolved.map((item, index) => ({
+    group_id: `group-${index + 1}`,
+    source_component_name: "主梁",
+    source_component_number: "2-1#梁",
+    normalized_component_number: "2-1#梁",
+    resolution_mode: "single",
+    status: "bound",
+    match_method: "exact",
+    inventory_revision_id: "revision-1",
+    version: 1,
+    ambiguous: false,
+    split_eligible: false,
+    split_expanded_count: null,
+    targets: [{
+      bridge_component_id: item.componentId ?? "component-1",
+      component_number: "2-1#梁",
+      site_component_type: "主梁",
+      site_name: "主梁",
+      standard_component_category_id: "h21.component.beam",
+      standard_bridge_type_id: "bridge-type-1",
+    }],
+    candidates: [],
+    allowed_actions: [],
+    blocked_reasons: [],
+    members: [{
+      member_id: `member-${index + 1}`,
+      source_candidate_id: item.candidateId,
+      source_order: index,
+      instances: [{
+        resolved_defect_instance_id: `instance-${index + 1}`,
+        target_id: `target-${index + 1}`,
+        bridge_component_id: item.componentId ?? "component-1",
+        instance_order: 1,
+        instance_status: "active" as const,
+        is_photo_owner: true,
+        version: 1,
+        component_resolution_version: 1,
+        overridden_fields: [],
+        effective_facts: {},
+        rating_resolution: {
+          present: Boolean(item.nodeId),
+          status: item.nodeId ? "matched" : null,
+          rating_tree_node_id: item.nodeId ?? null,
+          match_method: item.matchMethod ?? (item.nodeId ? "manual" : null),
+          version: 1,
+          content_changed_after_manual_resolution: false,
+        },
+      }],
+    }],
+  }));
+}
+
+function workspace(resolved: Resolved[] = [{ candidateId: "defect_0001" }]) {
+  return {
+    import_record_id: "record-1",
+    bridge_id: "bridge-1",
+    draft_version: 1,
+    inventory_confirmed: true,
+    inventory_revision_id: "revision-1",
+    rating_tree: {
+      version_id: "tree-version-1",
+      tree_name: "单位桥梁评定树",
+      package_version: "1.0.3",
+    },
+    groups: workspaceGroups(resolved),
+    parts: [],
+    progress: {
+      group_count: resolved.length, bound_count: resolved.length,
+      unresolved_count: 0, ambiguous_count: 0, missing_count: 0,
+      instance_count: resolved.length, active_instance_count: resolved.length,
+      rating_matched_count: 0, rating_unresolved_count: 0, rating_missing_count: 0,
+    },
+  };
+}
 const mockedSearchEntries = vi.mocked(searchInventoryEntries);
 
 // 台账条目只在搜索命中时才回来；映射随条目一起返回。
@@ -87,6 +180,9 @@ const mockedFetchTreeNode = vi.mocked(fetchRatingTreeNode);
 
 describe("DefectsSection", () => {
   beforeEach(() => {
+    mockedFetchWorkspace.mockReset();
+    mockedFetchWorkspace.mockResolvedValue(workspace() as never);
+    mockedAddManualDefect.mockReset();
     mockedFetchSummary.mockReset();
     mockedFetchSummary.mockResolvedValue(summary());
     mockedSearchEntries.mockReset();
@@ -96,12 +192,12 @@ describe("DefectsSection", () => {
     mockedFetchTreeNode.mockReset();
     mockedMatchDefects.mockReset();
     mockedMatchDefects.mockResolvedValue({
+      rating_tree_version_id: "tree-version-1",
       summary: {
         processed: 0, auto_bound: 0, candidates: 0, composite: 0,
         unmatched: 0, prerequisite_missing: 0, failed: 0, skipped: 0,
       },
       results: [],
-      rating_tree_version_id: "tree-version-1",
     });
   });
 
@@ -194,9 +290,18 @@ describe("DefectsSection", () => {
     });
     const dispatch = vi.fn();
     const draft = data();
+    const created = { ...data().defects[0], candidate_id: "manual_defect_0001" };
+    mockedAddManualDefect.mockResolvedValue({
+      source_defect: created as never,
+      draft_version: 2,
+      result: {
+        affected_groups: workspace([{ candidateId: "manual_defect_0001" }]).groups as never,
+        progress: workspace().progress,
+      },
+    });
     draft.defects = [];
 
-    render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={dispatch} ratingTree={{ version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" }} allowStructureChanges />);
+    render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={dispatch} ratingTree={{ version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" }} editLockToken="lock-1" allowStructureChanges />);
     fireEvent.click(screen.getByRole("button", { name: "新增病害" }));
     // 构件按需检索：先搜，再从命中结果里选。此前是把整份台账灌进下拉并默认选中第一条。
     fireEvent.change(screen.getByLabelText("搜索构件"), { target: { value: "1-1#梁" } });
@@ -209,24 +314,31 @@ describe("DefectsSection", () => {
     fireEvent.change(screen.getByLabelText("新增病害描述"), { target: { value: "梁底纵向裂缝" } });
     fireEvent.click(screen.getByRole("button", { name: "添加病害" }));
 
-    expect(dispatch).toHaveBeenCalledWith({
-      type: "add_defect",
-      input: {
-        componentName: "主梁",
-        componentNumber: "1-1#梁",
-        bridgeComponentId: "component-1",
-        standardComponentCategoryId: "h21.component.beam",
-        resolvedStructurePart: "上部结构",
-        inventoryRevisionId: "revision-1",
-        defectLocation: "第1跨梁底",
-        defectType: "裂缝",
-        ratingTreeVersionId: "tree-version-1",
-        ratingTreeNodeId: "tree-node-crack",
-        defectDescription: "梁底纵向裂缝",
-        defectScale: null,
-        isScoring: true,
+    // 5.0：手工新增走专用命令，构件与评分树节点在后端同一事务里写入。
+    // 退回"建组 + 自动匹配"是把用户明确的点选降级成一次猜测。
+    await waitFor(() => expect(mockedAddManualDefect).toHaveBeenCalledWith(
+      "http://backend",
+      "record-1",
+      {
+        bridge_component_id: "component-1",
+        rating_tree_node_id: "tree-node-crack",
+        defect_facts: {
+          defect_type: "裂缝",
+          defect_location: "第1跨梁底",
+          defect_description: "梁底纵向裂缝",
+          defect_scale: null,
+        },
+        expected_inventory_revision_id: "revision-1",
       },
-    });
+      1,
+      "lock-1",
+    ));
+    // 新候选必须并进本地草稿：只更新版本却保留旧草稿，下一次整份保存
+    // 就会把它当成"用户删掉了"。
+    await waitFor(() => expect(dispatch).toHaveBeenCalledWith({
+      type: "replace_draft",
+      data: { ...draft, defects: [created] },
+    }));
   });
   it("disables editable controls but keeps photo viewing available in a read-only review", () => {
     const draft = data();
@@ -279,9 +391,6 @@ describe("DefectsSection", () => {
     const unbound = data();
     unbound.defects[0] = {
       ...unbound.defects[0],
-      bridge_component_id: "component-1",
-      standard_component_category_id: "h21.component.beam",
-      rating_tree_node_id: null,
     };
     const props = {
       importRecordId: "record-1",
@@ -305,9 +414,6 @@ describe("DefectsSection", () => {
     const bound = data();
     bound.defects[0] = {
       ...bound.defects[0],
-      bridge_component_id: "component-1",
-      standard_component_category_id: "h21.component.beam",
-      rating_tree_node_id: "tree-node-crack",
     };
     rerender(<DefectsSection draft={bound} {...props} />);
     expect(screen.getByRole("combobox", { name: "评定树病害" })).toBeInTheDocument();
@@ -430,15 +536,12 @@ describe("DefectsSection", () => {
     };
     mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
     mockedFetchTreeNode.mockResolvedValue(treeNode);
+    mockedFetchWorkspace.mockResolvedValue(workspace([
+      { candidateId: "defect_0001", nodeId: treeNode.id },
+    ]) as never);
     const draft = data();
     draft.defects[0] = {
       ...draft.defects[0],
-      bridge_component_id: "component-1",
-      standard_component_category_id: "h21.component.beam",
-      rating_tree_version_id: "tree-version-1",
-      rating_tree_node_id: treeNode.id,
-      rating_tree_match_method: "exact",
-      standard_defect_indicator_id: "h21.defect.crack",
       photo_references: [{
         photo_number: "2.1-1",
         resolution: "matched",
@@ -520,10 +623,6 @@ describe("DefectsSection", () => {
       const draft = data();
       draft.defects[0] = {
         ...draft.defects[0],
-        bridge_component_id: "component-1",
-        standard_component_category_id: "h21.component.beam",
-        rating_tree_node_id: null,
-        rating_tree_match_method: null,
         photo_references: [],
       };
       return draft;
@@ -532,6 +631,7 @@ describe("DefectsSection", () => {
     it("uses a single batch request and applies unique automatic results without confirming them", async () => {
       mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
       mockedMatchDefects.mockResolvedValue({
+        rating_tree_version_id: "tree-version-1",
         summary: {
           processed: 1, auto_bound: 1, candidates: 0, composite: 0,
           unmatched: 0, prerequisite_missing: 0, failed: 0, skipped: 0,
@@ -547,25 +647,19 @@ describe("DefectsSection", () => {
           reason_message: null,
           candidates: [],
         }],
-        rating_tree_version_id: "tree-version-1",
       });
       const dispatch = vi.fn();
 
       render(<DefectsSection draft={boundDraft()} {...matchProps(dispatch)} />);
 
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(1));
-      await waitFor(() => expect(dispatch).toHaveBeenCalledWith({
-        type: "apply_rating_tree_auto_matches",
-        versionId: "tree-version-1",
-        matches: [{
-          candidateId: "defect_0001",
-          nodeId: treeNode.id,
-          matchMethod: "controlled_keyword",
-          matchEvidence: "命中受控关键词“渗水”。",
-          isScoring: true,
-        }],
-      }));
-      // 自动匹配不确认病害：reducer 之外没有任何确认动作被派发。
+      // 5.0：自动结果由后端写进评分树解析表，页面重新拉一次工作区看结果，
+      // 而不是把它塞回草稿。草稿里再存一份就会与权威状态两头不一致。
+      await waitFor(() => expect(mockedFetchWorkspace).toHaveBeenCalledTimes(2));
+      expect(dispatch).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "select_rating_tree_nodes" }),
+      );
+      // 自动匹配不确认病害。
       expect(dispatch).not.toHaveBeenCalledWith(
         expect.objectContaining({ type: "confirm_defect_groups" }),
       );
@@ -578,6 +672,7 @@ describe("DefectsSection", () => {
     it("shows composite and candidate results as their own states instead of plain unmatched", async () => {
       mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
       mockedMatchDefects.mockResolvedValue({
+        rating_tree_version_id: "tree-version-1",
         summary: {
           processed: 1, auto_bound: 0, candidates: 0, composite: 1,
           unmatched: 0, prerequisite_missing: 0, failed: 0, skipped: 0,
@@ -596,7 +691,6 @@ describe("DefectsSection", () => {
             { rating_tree_node_id: "tree-node-spalling", display_name: "剥落、掉角", match_method: "controlled_keyword", evidence: "命中关键词“剥蚀”。" },
           ],
         }],
-        rating_tree_version_id: "tree-version-1",
       });
 
       render(<DefectsSection draft={boundDraft()} {...matchProps()} />);
@@ -666,7 +760,8 @@ describe("DefectsSection", () => {
 
       fireEvent.blur(description);
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(2));
-      expect(mockedMatchDefects.mock.calls[1][3]).toEqual(["defect_0001"]);
+      // 第 4 个实参是解析索引，候选范围排在它后面。
+      expect(mockedMatchDefects.mock.calls[1][4]).toEqual(["defect_0001"]);
     });
 
     it("rematches the current filter scope through one request", async () => {
@@ -678,12 +773,14 @@ describe("DefectsSection", () => {
       fireEvent.click(screen.getByRole("button", { name: /^重新匹配（当前筛选 1）/ }));
 
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(2));
-      expect(mockedMatchDefects.mock.calls[1][3]).toEqual(["defect_0001"]);
+      // 第 4 个实参是解析索引，候选范围排在它后面。
+      expect(mockedMatchDefects.mock.calls[1][4]).toEqual(["defect_0001"]);
     });
 
     it("groups exact source identities and dispatches one batch rating-tree assignment", async () => {
       mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
       mockedMatchDefects.mockResolvedValue({
+        rating_tree_version_id: "tree-version-1",
         summary: {
           processed: 2, auto_bound: 0, candidates: 0, composite: 0,
           unmatched: 2, prerequisite_missing: 0, failed: 0, skipped: 0,
@@ -699,14 +796,16 @@ describe("DefectsSection", () => {
           reason_message: "来源分组与指标没有精确对应关系。",
           candidates: [],
         })),
-        rating_tree_version_id: "tree-version-1",
       });
+      mockedFetchWorkspace.mockResolvedValue(workspace([
+        { candidateId: "defect_0001", componentId: "component-1" },
+        { candidateId: "defect_0002", componentId: "component-2" },
+      ]) as never);
       const draft = boundDraft();
-      draft.defects = ["component-1", "component-2"].map((componentId, index) => ({
+      draft.defects = ["component-1", "component-2"].map((_componentId, index) => ({
         ...draft.defects[0],
         candidate_id: `defect_000${index + 1}`,
         component_number: `1-${index + 1}#板`,
-        bridge_component_id: componentId,
         defect_type: "",
         defect_description: "存在黑点痕迹",
         source_defect_group_id: "source-group-a",
@@ -743,14 +842,13 @@ describe("DefectsSection", () => {
     it("confirms all safe range-split defects in an issue group even when they have no photos", async () => {
       mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
       mockedFetchTreeNode.mockResolvedValue(treeNode);
+      mockedFetchWorkspace.mockResolvedValue(workspace([
+        { candidateId: "defect_0001", nodeId: treeNode.id },
+      ]) as never);
       const draft = boundDraft();
       draft.photos = [];
       draft.defects[0] = {
         ...draft.defects[0],
-        rating_tree_version_id: "tree-version-1",
-        rating_tree_node_id: treeNode.id,
-        rating_tree_match_method: "source_indicator",
-        standard_defect_indicator_id: treeNode.h21_indicator_id,
         defect_type: "渗水泛碱",
         group_review_status: "待确认",
         source_defect_group_id: "source-group-water",

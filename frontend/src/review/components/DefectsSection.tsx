@@ -1,4 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  EMPTY_RESOLUTION_INDEX,
+  buildResolutionIndex,
+  mergeResolutionIndex,
+  resolutionOf,
+  type ResolutionIndex,
+} from "../resolutionIndex";
+import { addManualDefect, fetchResolutionWorkspace } from "../../api/resolutionApi";
 
 import type { AssessmentIssue } from "../../api/assessmentApi";
 import { componentInventoryErrorMessage, fetchComponentReviewOrder, fetchInventorySummary, searchInventoryEntries, type ComponentInventoryEntry, type InventorySummary, type StructurePart as InventoryStructurePart } from "../../api/componentInventoryApi";
@@ -101,6 +109,26 @@ const EMPTY_MANUAL_DEFECT: ManualDefectFormState = {
 // 筛选、翻页、缩略图等只读动作在已确认记录中仍可使用。
 export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, onCloseDetail, dispatch, ratingTree = null, assessmentIssues = EMPTY_ASSESSMENT_ISSUES, disabled = false, allowStructureChanges = false, editLockToken = null, isDefectEditable }: DefectsSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
+  // 构件绑定与评分树节点 5.0 起住在关系表里，由工作区读模型提供；草稿版本供手工新增
+  // 的 If-Match 使用。两者一起来自同一个响应，不会各自过期。
+  const [resolution, setResolution] = useState<ResolutionIndex>(EMPTY_RESOLUTION_INDEX);
+  const [draftVersion, setDraftVersion] = useState(1);
+  const [inventoryRevisionId, setInventoryRevisionId] = useState<string | null>(null);
+
+  // 解析状态的唯一来源。绑定、评分树选择、批量应用之后都重新拉一次——写操作只回
+  // 受影响对象，整份重取才是这一页保持一致的最省心做法（几百个组一次请求）。
+  const refreshResolution = useCallback(async () => {
+    try {
+      const workspace = await fetchResolutionWorkspace(baseUrl, importRecordId);
+      setResolution(buildResolutionIndex(workspace));
+      setDraftVersion(workspace.draft_version);
+      setInventoryRevisionId(workspace.inventory_revision_id);
+    } catch {
+      // 工作区取不回来时保持上一份：清空会让整页突然显示成"一条都没绑"。
+    }
+  }, [baseUrl, importRecordId]);
+
+  useEffect(() => { void refreshResolution(); }, [refreshResolution]);
   // 搜索命中的构件（选中的那条也留在这里），不再是整份台账。
   const [inventoryEntries, setInventoryEntries] = useState<ComponentInventoryEntry[]>([]);
   // 首屏只要这份分组汇总：修订版 id 与每个类别的 (桥型, 规范类别) 都在里面，而它不含
@@ -146,10 +174,10 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const selectedTreeNodeIds = useMemo(
     () => [...new Set(
       draft.defects
-        .map((defect) => defect.rating_tree_node_id)
+        .map((defect) => resolutionOf(resolution, defect.candidate_id).ratingTreeNodeId)
         .filter((id): id is string => Boolean(id)),
     )].sort(),
-    [draft.defects],
+    [draft.defects, resolution],
   );
   const selectedTreeNodeIdsKey = selectedTreeNodeIds.join("\u0000");
 
@@ -186,17 +214,18 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   // 后者每次渲染都是新数组，会让下面那个副作用反复重跑并把 treeRulesReady 打回 false。
   const boundComponentKey = useMemo(
     () => [...new Set(draft.defects
-      .filter((defect) => defect.bridge_component_id && defect.standard_component_category_id)
-      .map((defect) => `${defect.bridge_component_id}\u0000${defect.standard_component_category_id}`))]
+      .map((defect) => resolutionOf(resolution, defect.candidate_id))
+      .filter((item) => item.bridgeComponentId)
+      .map((item) => `${item.bridgeComponentId}\u0000${item.standardComponentCategoryId ?? ""}`))]
       .sort().join("|"),
-    [draft.defects],
+    [draft.defects, resolution],
   );
 
   // 走查顺序：后端按 结构部位 → 部件目录次序 → 台账 sort_order 排好，前端只按下标摆行。
   // 依赖用内容键而不是 draft.defects 的引用——后者每次渲染都是新数组，会让这里反复重取。
   useEffect(() => {
     const ids = [...new Set(draft.defects
-      .map((defect) => defect.bridge_component_id)
+      .map((defect) => resolutionOf(resolution, defect.candidate_id).bridgeComponentId)
       .filter((id): id is string => Boolean(id)))];
     if (ids.length === 0) { setComponentOrder(new Map()); return; }
     let cancelled = false;
@@ -340,12 +369,12 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     () => draft.defects
       .map((defect) => [
         defect.candidate_id,
-        defect.bridge_component_id ?? "",
+        resolutionOf(resolution, defect.candidate_id).bridgeComponentId ?? "",
         defect.review_status,
         defect.group_review_status,
       ].join("|"))
       .join("~"),
-    [draft.defects],
+    [draft.defects, resolution],
   );
   const lastMatchSignature = useRef<string | null>(null);
 
@@ -355,7 +384,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     try {
       // 几百条病害只发这一个请求；后端只算不写，页面拿到结果后再落进本地草稿。
       const report = await matchDefectRatingTreeNodes(
-        baseUrl, importRecordId, draft.defects, candidateIds,
+        baseUrl, importRecordId, draft.defects, resolution, candidateIds,
       );
       setMatchResults((current) => {
         const next = candidateIds ? new Map(current) : new Map<string, DefectMatchResult>();
@@ -365,22 +394,11 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
       setMatchSummary(report.summary);
       setMatchedAt(new Date());
       setMatchError(null);
-      const autoMatches = report.results
-        .filter((result) => !result.skipped && result.outcome === "auto_bound" && result.rating_tree_node_id)
-        .map((result) => ({
-          candidateId: result.candidate_id,
-          nodeId: result.rating_tree_node_id!,
-          matchMethod: result.match_method ?? "exact",
-          matchEvidence: result.match_evidence ?? "系统自动匹配",
-          isScoring: nodeSummaryById.get(result.rating_tree_node_id!)?.is_scoring ?? true,
-        }));
-      if (autoMatches.length > 0) {
-        dispatch({
-          type: "apply_rating_tree_auto_matches",
-          versionId: report.rating_tree_version_id,
-          matches: autoMatches,
-        });
-      }
+      // 5.0：自动匹配结果由后端直接写进评分树解析表，前端不再把它塞回草稿。
+      // 重新拉一次工作区就能看到最新状态。
+      const wroteAnyMatch = report.results.some((result) =>
+        !result.skipped && result.outcome === "auto_bound" && result.rating_tree_node_id);
+      if (wroteAnyMatch) void refreshResolution();
     } catch (error) {
       // 服务失败不能伪装成"这批病害都没有匹配结果"：清掉上一轮结果并显式报错。
       setMatchResults(new Map());
@@ -390,7 +408,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     } finally {
       setRematching(false);
     }
-  }, [baseUrl, dispatch, draft.defects, importRecordId, nodeSummaryById, ratingTree]);
+  }, [baseUrl, draft.defects, importRecordId, ratingTree, refreshResolution, resolution]);
 
   // 自动触发：导入、构件绑定、评定树绑定完成，或未确认病害的构件/类型/描述改动后
   // 各触发一次。输入过程中不请求，短时间内的重复变化合并成一次。
@@ -412,11 +430,12 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     ratingTreeNodeSummaries,
     applicableTreeNodeIdsByComponent,
     treeRulesReady,
+    resolution,
     componentOrder: componentOrder ?? undefined,
     componentPart,
     assessmentIssues,
     matchResults,
-  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, treeNodeDetails, treeRulesReady, componentOrder, componentPart]);
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, resolution, treeNodeDetails, treeRulesReady, componentOrder, componentPart]);
   const visibleModel = useMemo(() => buildDefectPhotoReviewModel({
     draft,
     ratingTreeVersionId: ratingTree?.version_id ?? null,
@@ -424,6 +443,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     ratingTreeNodeSummaries,
     applicableTreeNodeIdsByComponent,
     treeRulesReady,
+    resolution,
     componentOrder: componentOrder ?? undefined,
     componentPart,
     assessmentIssues,
@@ -432,7 +452,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     issueFilter,
     search,
     partFilter,
-  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, issueFilter, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, search, treeNodeDetails, treeRulesReady, componentOrder, componentPart, partFilter]);
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, issueFilter, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, resolution, search, treeNodeDetails, treeRulesReady, componentOrder, componentPart, partFilter]);
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -639,27 +659,55 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
       setFormError("病害标度不在该评定树节点允许范围内。");
       return;
     }
-    dispatch({
-      type: "add_defect",
-      input: {
-        componentName: entry.site_component_type,
-        componentNumber: entry.component_number,
-        bridgeComponentId: entry.bridge_component_id,
-        standardComponentCategoryId: mapping.standard_component_category_id,
-        resolvedStructurePart: STRUCTURE_PART_LABELS[mapping.structure_part],
-        inventoryRevisionId: inventory.id,
-        defectLocation: location,
-        defectType: treeNode.display_name,
-        ratingTreeVersionId: ratingTree.version_id,
-        ratingTreeNodeId: treeNode.id,
-        defectDescription: description,
-        defectScale: scale,
-        isScoring: treeNode.is_scoring,
-      },
-    });
-    setForm(EMPTY_MANUAL_DEFECT);
-    setShowAddForm(false);
-    setFormError("");
+    if (!editLockToken) {
+      setFormError("需要编辑权才能新增病害。");
+      return;
+    }
+    // 5.0：手工新增走专用命令。用户在这个对话框里选定的**构件与评分树节点**必须原样
+    // 保住——退回"建组 + 自动匹配"是把明确的点选降级成一次猜测，节点那一半几乎必然
+    // 丢失（自动匹配只在唯一命中时才写）。
+    void (async () => {
+      try {
+        const created = await addManualDefect(
+          baseUrl,
+          importRecordId,
+          {
+            bridge_component_id: entry.bridge_component_id,
+            rating_tree_node_id: treeNode.id,
+            defect_facts: {
+              defect_type: treeNode.display_name,
+              defect_location: location,
+              defect_description: description,
+              defect_scale: treeNode.is_scoring ? scale : null,
+            },
+            expected_inventory_revision_id: inventory.id,
+          },
+          draftVersion,
+          editLockToken,
+        );
+        // 新候选与新版本必须**一起**并进本地状态：只更新版本却保留缺少新候选的旧草稿，
+        // 下一次整份保存就会把它当成"用户删掉了"。
+        dispatch({
+          type: "replace_draft",
+          data: {
+            ...draft,
+            defects: [...draft.defects, created.source_defect as never],
+          },
+        });
+        setDraftVersion(created.draft_version);
+        // 并进去而不是整份替换；评定树版本跟着一起给，否则新病害会被当成
+        // "节点版本对不上"。
+        setResolution((previous) => mergeResolutionIndex(previous, {
+          groups: created.result.affected_groups as never,
+          rating_tree: ratingTree ? { version_id: ratingTree.version_id } : null,
+        }));
+        setForm(EMPTY_MANUAL_DEFECT);
+        setShowAddForm(false);
+        setFormError("");
+      } catch (error) {
+        setFormError(error instanceof Error ? error.message : "新增病害失败。");
+      }
+    })();
   };
 
   return (
@@ -790,7 +838,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
                   draft={draft}
                   row={currentRow}
                   ratingTreeVersionId={ratingTree?.version_id ?? null}
-                  applicableNodes={treeNodesByComponent.get(currentRow.defect.bridge_component_id ?? "") ?? []}
+                  applicableNodes={treeNodesByComponent.get(currentRow.resolution.bridgeComponentId ?? "") ?? []}
                   importRecordId={importRecordId}
                   baseUrl={baseUrl}
                   initialPhotoCandidateId={selectedPhotoCandidateId}

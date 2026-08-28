@@ -39,7 +39,7 @@ export interface SourceRef {
 
 export interface ContractInfo {
   name: "BridgeAnnualInspectionData";
-  version: "4.0";
+  version: "5.0";
   generated_at: string;
   producer: string;
   parser_name: string;
@@ -79,34 +79,7 @@ export interface Measurement {
   source_text: string;
 }
 
-export interface RangeSplitOrigin {
-  operation_id: string;
-  source_candidate_id: string;
-  source_component_number: string;
-  expanded_component_number: string;
-  split_index: number;
-  split_count: number;
-  operated_by_user_id: string;
-  operated_at: string;
-}
-
 export type PhotoReferenceResolution = "pending" | "matched" | "relinked" | "missing" | "unrelated";
-
-/**
- * 评定树病害的匹配方式。前三种是后端分层确定性匹配写入的自动结果，`fuzzy_candidate`
- * 只是候选提示（永远不落 rating_tree_node_id），`manual` 是人工选择且不被自动结果覆盖。
- */
-export const RATING_TREE_MATCH_METHODS = [
-  "exact",
-  "controlled_alias",
-  "controlled_keyword",
-  "fuzzy_candidate",
-  // 来源软件直接标注的评定指标：不是从文字推断的，来源要能区分开
-  "source_indicator",
-  "manual",
-] as const;
-
-export type RatingTreeMatchMethod = (typeof RATING_TREE_MATCH_METHODS)[number];
 
 export interface PhotoReference {
   photo_number: string;
@@ -121,13 +94,6 @@ export interface DefectCandidate {
   source_structure_part?: StructurePart | null;
   component_name: string;
   component_number?: string | null;
-  bridge_component_id?: string | null;
-  standard_component_category_id?: string | null;
-  resolved_structure_part?: StructurePart | null;
-  component_inventory_revision_id?: string | null;
-  component_match_candidate_ids?: string[];
-  component_match_method?: "exact" | "confirmed_alias" | "normalized_candidate" | "manual" | "missing" | null;
-  component_match_confirmed_by?: string | null;
   defect_type: string;
   defect_location: string;
   defect_scale?: number | null;
@@ -135,12 +101,7 @@ export interface DefectCandidate {
   quantity_text?: string | null;
   measurement_text?: string | null;
   measurements: Measurement[];
-  rating_tree_version_id?: string | null;
-  rating_tree_node_id?: string | null;
-  rating_tree_match_method?: RatingTreeMatchMethod | null;
-  rating_tree_match_evidence?: string | null;
-  standard_defect_indicator_id?: string | null;
-  /** 来源软件原始 judgeTreeId；派生评定树字段重算时不得清空。 */
+  /** 来源软件原始 judgeTreeId；评分树重新解析时不得清空。 */
   source_defect_group_id?: string | null;
   /** 来源软件 judgeTree.chapterNum，仅用于结构化编号精确回退。 */
   source_defect_group_number?: string | null;
@@ -155,7 +116,6 @@ export interface DefectCandidate {
   source_ref: SourceRef;
   confidence: number;
   review_status: ReviewStatus;
-  range_split_origin?: RangeSplitOrigin | null;
   warnings: WarningItem[];
 }
 
@@ -300,31 +260,23 @@ function isValidMeasurement(value: unknown): value is Measurement {
   return false;
 }
 
-function isValidRangeSplitOrigin(value: unknown): value is RangeSplitOrigin {
-  if (!isRecord(value)) return false;
-  const allowed = new Set([
-    "operation_id",
-    "source_candidate_id",
-    "source_component_number",
-    "expanded_component_number",
-    "split_index",
-    "split_count",
-    "operated_by_user_id",
-    "operated_at",
-  ]);
-  return (
-    Object.keys(value).every((key) => allowed.has(key)) &&
-    typeof value.operation_id === "string" && value.operation_id.length > 0 &&
-    typeof value.source_candidate_id === "string" && value.source_candidate_id.length > 0 &&
-    typeof value.source_component_number === "string" && value.source_component_number.length > 0 &&
-    typeof value.expanded_component_number === "string" && value.expanded_component_number.length > 0 &&
-    Number.isInteger(value.split_index) && (value.split_index as number) >= 1 &&
-    Number.isInteger(value.split_count) && (value.split_count as number) >= 2 &&
-    (value.split_index as number) <= (value.split_count as number) &&
-    typeof value.operated_by_user_id === "string" && value.operated_by_user_id.length > 0 &&
-    typeof value.operated_at === "string" && value.operated_at.length > 0
-  );
-}
+// 5.0 把构件解析与评分树解析整体搬进关系表。旧客户端的草稿会原样回传这些字段，
+// 所以必须显式拒绝而不是忽略：忽略等于让陈旧解析结果继续盖过权威状态。
+const RESOLUTION_FIELDS_REMOVED_IN_V5 = [
+  "bridge_component_id",
+  "standard_component_category_id",
+  "resolved_structure_part",
+  "component_inventory_revision_id",
+  "component_match_candidate_ids",
+  "component_match_method",
+  "component_match_confirmed_by",
+  "rating_tree_version_id",
+  "rating_tree_node_id",
+  "rating_tree_match_method",
+  "rating_tree_match_evidence",
+  "standard_defect_indicator_id",
+  "range_split_origin",
+] as const;
 
 function isValidPhotoReference(value: unknown): value is PhotoReference {
   if (
@@ -358,9 +310,6 @@ function isValidDefectCandidate(value: unknown): boolean {
   }
   const photoReferences = getRequiredArray(value, "photo_references");
   const measurements = getRequiredArray(value, "measurements");
-  const matchCandidateIds = value.component_match_candidate_ids;
-  const matchMethod = value.component_match_method;
-  const rangeSplitOrigin = value.range_split_origin;
   return (
     hasRequiredArrayMembers(value, ["measurements", "photo_references", "warnings"]) &&
     measurements !== null && measurements.every(isValidMeasurement) &&
@@ -379,49 +328,9 @@ function isValidDefectCandidate(value: unknown): boolean {
     !hasOwn(value, "defect_deduction") &&
     !hasOwn(value, "photo_numbers") &&
     !hasOwn(value, "confirmed_missing_photo_numbers") &&
+    RESOLUTION_FIELDS_REMOVED_IN_V5.every((field) => !hasOwn(value, field)) &&
     (value.group_review_status === "待确认" || value.group_review_status === "已确认") &&
     isNullablePositiveInteger(value.defect_scale) &&
-    (matchCandidateIds === undefined ||
-      (Array.isArray(matchCandidateIds) &&
-        matchCandidateIds.every((item) => typeof item === "string") &&
-        new Set(matchCandidateIds).size === matchCandidateIds.length)) &&
-    (matchMethod === undefined ||
-      matchMethod === null ||
-      matchMethod === "exact" ||
-      matchMethod === "confirmed_alias" ||
-      matchMethod === "normalized_candidate" ||
-      matchMethod === "manual" ||
-      matchMethod === "missing") &&
-    (rangeSplitOrigin === undefined ||
-      rangeSplitOrigin === null ||
-      isValidRangeSplitOrigin(rangeSplitOrigin)) &&
-    (value.component_inventory_revision_id === undefined ||
-      value.component_inventory_revision_id === null ||
-      typeof value.component_inventory_revision_id === "string") &&
-    (value.component_match_confirmed_by === undefined ||
-      value.component_match_confirmed_by === null ||
-      typeof value.component_match_confirmed_by === "string") &&
-    (value.rating_tree_version_id === undefined ||
-      value.rating_tree_version_id === null ||
-      (typeof value.rating_tree_version_id === "string" &&
-        value.rating_tree_version_id.trim().length > 0)) &&
-    (value.rating_tree_node_id === undefined ||
-      value.rating_tree_node_id === null ||
-      (typeof value.rating_tree_node_id === "string" &&
-        value.rating_tree_node_id.trim().length > 0)) &&
-    (value.rating_tree_match_method === undefined ||
-      value.rating_tree_match_method === null ||
-      RATING_TREE_MATCH_METHODS.includes(
-        value.rating_tree_match_method as RatingTreeMatchMethod
-      )) &&
-    (value.rating_tree_match_evidence === undefined ||
-      value.rating_tree_match_evidence === null ||
-      (typeof value.rating_tree_match_evidence === "string" &&
-        value.rating_tree_match_evidence.trim().length > 0)) &&
-    (value.standard_defect_indicator_id === undefined ||
-      value.standard_defect_indicator_id === null ||
-      (typeof value.standard_defect_indicator_id === "string" &&
-        value.standard_defect_indicator_id.trim().length > 0)) &&
     (value.source_defect_group_id === undefined ||
       value.source_defect_group_id === null ||
       (typeof value.source_defect_group_id === "string" &&
@@ -477,7 +386,7 @@ export function isBridgeAnnualInspectionData(value: unknown): value is BridgeAnn
   if (contract === null) {
     return false;
   }
-  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "4.0") {
+  if (contract.name !== "BridgeAnnualInspectionData" || contract.version !== "5.0") {
     return false;
   }
 

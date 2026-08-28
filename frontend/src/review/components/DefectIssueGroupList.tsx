@@ -20,12 +20,11 @@ function commonNodes(
   group: DefectIssueGroup,
   nodesByComponent: ReadonlyMap<string, RatingTreeNodeSummary[]>,
 ): RatingTreeNodeSummary[] {
-  const componentIds = [...new Set(group.rows
-    .map((row) => row.defect.bridge_component_id)
-    .filter((id): id is string => Boolean(id)))];
-  if (componentIds.length === 0 || componentIds.length !== new Set(
-    group.rows.map((row) => row.defect.bridge_component_id),
-  ).size) return [];
+  const boundIds = group.rows.map((row) => row.resolution.bridgeComponentId);
+  const componentIds = [...new Set(boundIds.filter((id): id is string => Boolean(id)))];
+  if (componentIds.length === 0 || componentIds.length !== new Set(boundIds).size) {
+    return [];
+  }
   const first = nodesByComponent.get(componentIds[0]) ?? [];
   const remaining = componentIds.slice(1).map((id) =>
     new Set((nodesByComponent.get(id) ?? []).map((node) => node.id)));

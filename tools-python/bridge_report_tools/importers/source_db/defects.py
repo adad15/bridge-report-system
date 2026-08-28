@@ -211,13 +211,9 @@ def build_defect_candidates(
             "source_defect_group_number": group_number or None,
             "source_defect_indicator_id": defect.judge_index_id or None,
             "source_defect_indicator_number": indicator_number or None,
-            # 选节点和它派生的 standard_defect_indicator_id 都是后端的活：要看桥型
-            # 与构件类别，且构件重绑与草稿保存都会重算。解析器只报来源怎么标的。
-            "standard_defect_indicator_id": None,
-            "rating_tree_version_id": None,
-            "rating_tree_node_id": None,
-            "rating_tree_match_method": None,
-            "rating_tree_match_evidence": None,
+            # 选节点和它派生的标准指标都是后端的活：要看桥型与构件类别，且构件重绑
+            # 会重算。5.0 之后它们连同构件解析一起存在关系表里，解析结果不再回到这份
+            # JSON；解析器只报来源怎么标的。
             "photo_references": [],
             "group_review_status": "待确认",
             "remark": SOURCE_REMARK,

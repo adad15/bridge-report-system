@@ -20,7 +20,7 @@ def load_fixture(name: str) -> dict:
 
 
 def valid_payload() -> dict:
-    return copy.deepcopy(load_fixture("bridge_annual_inspection_data.v4.valid.json"))
+    return copy.deepcopy(load_fixture("bridge_annual_inspection_data.v5.valid.json"))
 
 
 def delete_path(data: dict, path: tuple[str | int, ...]) -> None:
@@ -30,16 +30,13 @@ def delete_path(data: dict, path: tuple[str | int, ...]) -> None:
     del current[path[-1]]  # type: ignore[index]
 
 
-def test_valid_version_four_fixture_is_accepted() -> None:
+def test_valid_version_five_fixture_is_accepted() -> None:
     model = BridgeAnnualInspectionData.model_validate(valid_payload())
 
     assert model.contract.name == "BridgeAnnualInspectionData"
-    assert model.contract.version == "4.0"
+    assert model.contract.version == "5.0"
     assert model.defects[0].source_structure_part == "上部结构"
     assert model.defects[0].component_number == "2-1#梁"
-    assert model.defects[0].bridge_component_id is None
-    assert model.defects[0].standard_component_category_id is None
-    assert model.defects[0].resolved_structure_part is None
     assert model.defects[0].defect_scale == 2
     assert model.defects[0].source_ref.source_type == "word"
     assert not hasattr(model, "ratings")
@@ -48,78 +45,73 @@ def test_valid_version_four_fixture_is_accepted() -> None:
     assert not hasattr(model.photos[0], "review_status")
 
 
-def test_range_split_origin_is_optional_and_validated() -> None:
-    data = valid_payload()
-    data["defects"][0]["range_split_origin"] = {
-        "operation_id": "operation-1",
-        "source_candidate_id": "defect_0001",
-        "source_component_number": "1-1#板~1-25#板",
-        "expanded_component_number": "1-7#板",
-        "split_index": 7,
-        "split_count": 25,
-        "operated_by_user_id": "user-1",
-        "operated_at": "2026-07-24T16:00:00+08:00",
-    }
-
-    model = BridgeAnnualInspectionData.model_validate(data)
-    assert model.defects[0].range_split_origin is not None
-    assert model.defects[0].range_split_origin.split_index == 7
-
-    data = valid_payload()
-    assert BridgeAnnualInspectionData.model_validate(data).defects[0].range_split_origin is None
+# 5.0 把构件解析与评分树解析整体搬进关系表。这些字段一个都不能再被合同接受：
+# 静默忽略等于让旧客户端的草稿继续把陈旧解析结果回传，正好是本次拆分要根除的。
+RESOLUTION_FIELDS_REMOVED_IN_V5 = [
+    ("bridge_component_id", "component-1"),
+    ("standard_component_category_id", "category-1"),
+    ("resolved_structure_part", "上部结构"),
+    ("component_inventory_revision_id", "revision-1"),
+    ("component_match_candidate_ids", ["component-1"]),
+    ("component_match_method", "manual"),
+    ("component_match_confirmed_by", "user-1"),
+    ("rating_tree_version_id", "tree-1"),
+    ("rating_tree_node_id", "node-1"),
+    ("rating_tree_match_method", "manual"),
+    ("rating_tree_match_evidence", "人工选择"),
+    ("standard_defect_indicator_id", "indicator-1"),
+    (
+        "range_split_origin",
+        {
+            "operation_id": "operation-1",
+            "source_candidate_id": "defect_0001",
+            "source_component_number": "1-1#板~1-25#板",
+            "expanded_component_number": "1-7#板",
+            "split_index": 7,
+            "split_count": 25,
+            "operated_by_user_id": "user-1",
+            "operated_at": "2026-07-24T16:00:00+08:00",
+        },
+    ),
+]
 
 
 @pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("operation_id", ""),
-        ("source_component_number", ""),
-        ("split_index", 0),
-        ("split_count", 1),
-        ("split_index", 26),
-    ],
+    "field_name,value",
+    RESOLUTION_FIELDS_REMOVED_IN_V5,
+    ids=[name for name, _ in RESOLUTION_FIELDS_REMOVED_IN_V5],
 )
-def test_range_split_origin_rejects_invalid_values(field: str, value: object) -> None:
+def test_resolution_fields_are_rejected_in_version_five(
+    field_name: str, value: object
+) -> None:
     data = valid_payload()
-    origin = {
-        "operation_id": "operation-1",
-        "source_candidate_id": "defect_0001",
-        "source_component_number": "1-1#板~1-25#板",
-        "expanded_component_number": "1-7#板",
-        "split_index": 7,
-        "split_count": 25,
-        "operated_by_user_id": "user-1",
-        "operated_at": "2026-07-24T16:00:00+08:00",
-    }
-    origin[field] = value
-    data["defects"][0]["range_split_origin"] = origin
+    data["defects"][0][field_name] = value
 
     with pytest.raises(ValidationError) as exc_info:
         BridgeAnnualInspectionData.model_validate(data)
 
-    assert "range_split_origin" in str(exc_info.value)
+    message = str(exc_info.value)
+    assert f"defects.0.{field_name}" in message
+    assert "Extra inputs are not permitted" in message
 
 
-def test_range_split_origin_rejects_extra_fields() -> None:
-    data = valid_payload()
-    data["defects"][0]["range_split_origin"] = {
-        "operation_id": "operation-1",
-        "source_candidate_id": "defect_0001",
-        "source_component_number": "1-1#板~1-25#板",
-        "expanded_component_number": "1-7#板",
-        "split_index": 7,
-        "split_count": 25,
-        "operated_by_user_id": "user-1",
-        "operated_at": "2026-07-24T16:00:00+08:00",
-        "unexpected": True,
-    }
-    with pytest.raises(ValidationError):
-        BridgeAnnualInspectionData.model_validate(data)
+def test_version_four_fixture_is_rejected_whole() -> None:
+    """4.0 不是"多几个字段的 5.0"，整份都得被挡下来，不能只挑版本号报错。"""
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(
+            load_fixture("bridge_annual_inspection_data.v4.valid.json")
+        )
+
+    message = str(exc_info.value)
+    assert "contract.version" in message
+    assert "defects.0.bridge_component_id" in message
+    assert "defects.0.rating_tree_node_id" in message
 
 
 def test_with_comparison_fixture_is_accepted() -> None:
     model = BridgeAnnualInspectionData.model_validate(
-        load_fixture("bridge_annual_inspection_data.v4.with-comparison.json")
+        load_fixture("bridge_annual_inspection_data.v5.with-comparison.json")
     )
 
     assert len(model.comparison_candidates) == 1
@@ -127,8 +119,10 @@ def test_with_comparison_fixture_is_accepted() -> None:
     assert model.comparison_candidates[0].match_basis is not None
 
 
-@pytest.mark.parametrize("version", ["1.0", "1.1", "1.2", "2.0", "2.1", "3.0", "4"])
-def test_only_contract_version_four_is_accepted(version: str) -> None:
+@pytest.mark.parametrize(
+    "version", ["1.0", "1.1", "1.2", "2.0", "2.1", "3.0", "4.0", "4", "5"]
+)
+def test_only_contract_version_five_is_accepted(version: str) -> None:
     data = valid_payload()
     data["contract"]["version"] = version
 
@@ -138,7 +132,7 @@ def test_only_contract_version_four_is_accepted(version: str) -> None:
     assert "contract.version" in str(exc_info.value)
 
 
-def test_ratings_are_rejected_in_version_four() -> None:
+def test_ratings_are_rejected_in_version_five() -> None:
     data = valid_payload()
     data["ratings"] = {"overall": {"total_score": 85.61}}
 
@@ -191,34 +185,11 @@ def test_manual_source_reference_is_valid_without_word_location() -> None:
     assert model.defects[0].source_ref.row_index is None
 
 
-def test_component_match_audit_fields_are_validated() -> None:
+def test_source_indicator_identity_is_optional_and_validated() -> None:
+    """来源分组/指标身份不是评分树解析结果，5.0 里继续留在来源事实中。"""
+
     data = valid_payload()
     data["defects"][0].update(
-        component_inventory_revision_id="revision-1",
-        component_match_candidate_ids=["component-1"],
-        component_match_method="manual",
-        component_match_confirmed_by="editor",
-    )
-
-    model = BridgeAnnualInspectionData.model_validate(data)
-    assert model.defects[0].component_match_method == "manual"
-    assert model.defects[0].component_match_candidate_ids == ["component-1"]
-
-    data["defects"][0]["component_match_candidate_ids"] = ["component-1", "component-1"]
-    with pytest.raises(ValidationError) as exc_info:
-        BridgeAnnualInspectionData.model_validate(data)
-    assert "component_match_candidate_ids" in str(exc_info.value)
-
-
-def test_rating_tree_association_fields_are_optional_and_validated() -> None:
-    data = valid_payload()
-    defect = data["defects"][0]
-    defect.update(
-        rating_tree_version_id="tree-version-1",
-        rating_tree_node_id="tree-node-1",
-        rating_tree_match_method="controlled_alias",
-        rating_tree_match_evidence="裂缝 -> 裂缝（受力裂缝）",
-        standard_defect_indicator_id="indicator-1",
         source_defect_group_id="source-group-1",
         source_defect_group_number="9.1.2",
         source_defect_indicator_id="source-indicator-1",
@@ -226,20 +197,12 @@ def test_rating_tree_association_fields_are_optional_and_validated() -> None:
     )
 
     model = BridgeAnnualInspectionData.model_validate(data)
-    assert model.defects[0].rating_tree_version_id == "tree-version-1"
-    assert model.defects[0].rating_tree_node_id == "tree-node-1"
-    assert model.defects[0].rating_tree_match_method == "controlled_alias"
-    assert model.defects[0].standard_defect_indicator_id == "indicator-1"
     assert model.defects[0].source_defect_group_id == "source-group-1"
     assert model.defects[0].source_defect_group_number == "9.1.2"
     assert model.defects[0].source_defect_indicator_id == "source-indicator-1"
     assert model.defects[0].source_defect_indicator_number == "9.1.2-1"
 
     for field_name in (
-        "rating_tree_version_id",
-        "rating_tree_node_id",
-        "rating_tree_match_evidence",
-        "standard_defect_indicator_id",
         "source_defect_group_id",
         "source_defect_group_number",
         "source_defect_indicator_id",
@@ -250,12 +213,6 @@ def test_rating_tree_association_fields_are_optional_and_validated() -> None:
         with pytest.raises(ValidationError) as exc_info:
             BridgeAnnualInspectionData.model_validate(invalid)
         assert f"defects.0.{field_name}" in str(exc_info.value)
-
-    invalid = valid_payload()
-    invalid["defects"][0]["rating_tree_match_method"] = "guessed"
-    with pytest.raises(ValidationError) as exc_info:
-        BridgeAnnualInspectionData.model_validate(invalid)
-    assert "defects.0.rating_tree_match_method" in str(exc_info.value)
 
 
 def test_unknown_source_reference_type_is_rejected() -> None:
@@ -394,17 +351,17 @@ def test_top_level_candidate_and_issue_lists_are_required(field_name: str) -> No
 @pytest.mark.parametrize(
     ("fixture_name", "path", "error_path"),
     [
-        ("bridge_annual_inspection_data.v4.valid.json", ("bridge_check", "warnings"), "bridge_check.warnings"),
-        ("bridge_annual_inspection_data.v4.valid.json", ("defects", 0, "measurements"), "defects.0.measurements"),
-        ("bridge_annual_inspection_data.v4.valid.json", ("defects", 0, "photo_references"), "defects.0.photo_references"),
-        ("bridge_annual_inspection_data.v4.valid.json", ("defects", 0, "warnings"), "defects.0.warnings"),
-        ("bridge_annual_inspection_data.v4.valid.json", ("photos", 0, "warnings"), "photos.0.warnings"),
+        ("bridge_annual_inspection_data.v5.valid.json", ("bridge_check", "warnings"), "bridge_check.warnings"),
+        ("bridge_annual_inspection_data.v5.valid.json", ("defects", 0, "measurements"), "defects.0.measurements"),
+        ("bridge_annual_inspection_data.v5.valid.json", ("defects", 0, "photo_references"), "defects.0.photo_references"),
+        ("bridge_annual_inspection_data.v5.valid.json", ("defects", 0, "warnings"), "defects.0.warnings"),
+        ("bridge_annual_inspection_data.v5.valid.json", ("photos", 0, "warnings"), "photos.0.warnings"),
         (
-            "bridge_annual_inspection_data.v4.with-comparison.json",
+            "bridge_annual_inspection_data.v5.with-comparison.json",
             ("comparison_candidates", 0, "warnings"),
             "comparison_candidates.0.warnings",
         ),
-        ("bridge_annual_inspection_data.v4.valid.json", ("defects", 0, "source_ref"), "defects.0.source_ref"),
+        ("bridge_annual_inspection_data.v5.valid.json", ("defects", 0, "source_ref"), "defects.0.source_ref"),
     ],
 )
 def test_nested_arrays_and_source_refs_are_required(
@@ -482,27 +439,16 @@ def test_export_bridge_annual_inspection_schema(tmp_path: Path) -> None:
     assert "ratings" not in properties
     assert "ratings" not in schema["required"]
     assert "defect_deduction" not in defect_properties
-    assert defect_properties["bridge_component_id"]["default"] is None
-    assert defect_properties["standard_component_category_id"]["default"] is None
-    assert defect_properties["resolved_structure_part"]["default"] is None
-    assert defect_properties["rating_tree_version_id"]["default"] is None
-    assert defect_properties["rating_tree_node_id"]["default"] is None
-    assert defect_properties["rating_tree_match_evidence"]["default"] is None
-    assert defect_properties["standard_defect_indicator_id"]["default"] is None
+    # 5.0 的导出 schema 是 C++ 与前端契约的共同来源。这些字段必须一并消失，
+    # 否则下游会照着 schema 重新长出解析字段。
+    for removed_field, _ in RESOLUTION_FIELDS_REMOVED_IN_V5:
+        assert removed_field not in defect_properties
+    assert "RangeSplitOrigin" not in schema["$defs"]
     assert defect_properties["source_defect_group_id"]["default"] is None
     assert defect_properties["source_defect_group_number"]["default"] is None
     assert defect_properties["source_defect_indicator_id"]["default"] is None
     assert defect_properties["source_defect_indicator_number"]["default"] is None
-    assert set(
-        defect_properties["rating_tree_match_method"]["anyOf"][0]["enum"]
-    ) == {
-        "exact",
-        "controlled_alias",
-        "controlled_keyword",
-        "fuzzy_candidate",
-        "source_indicator",
-        "manual",
-    }
+    assert schema["$defs"]["ContractInfo"]["properties"]["version"]["const"] == "5.0"
     assert set(source_properties["source_type"]["enum"]) == {"word", "manual"}
     assert set(measurement_properties["value_type"]["enum"]) == {"single", "range"}
     assert measurement_properties["minimum_value"]["default"] is None

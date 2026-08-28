@@ -1,4 +1,10 @@
 import type { AssessmentIssue } from "../api/assessmentApi";
+import {
+  EMPTY_RESOLUTION_INDEX,
+  resolutionOf,
+  type DefectResolution,
+  type ResolutionIndex,
+} from "./resolutionIndex";
 import type { DefectMatchCandidate, DefectMatchResult } from "../api/defectMatchingApi";
 import type { RatingTreeNode, RatingTreeNodeSummary } from "../api/ratingTreeApi";
 import { buildDefectPhotoCards, type DefectPhotoCard } from "./defectPhotoCards";
@@ -47,6 +53,13 @@ export interface DefectReviewProblem {
 export interface DefectReviewRow {
   candidateId: string;
   defect: DefectCandidate;
+  /**
+   * 该来源病害的解析状态（构件绑定、评分树节点）。
+   *
+   * 5.0 起这些不在 `defect` 上，挂到行上是为了让每个消费方读 `row.resolution` 就够，
+   * 不必各自再把索引传一遍——传的地方越多，漏传一处就越可能出现"这一处以为没绑定"。
+   */
+  resolution: DefectResolution;
   photos: PhotoCandidate[];
   problems: DefectReviewProblem[];
   /** 当前详情可人工确认；范围拆分提示需要靠这次确认消除，因此不作为单条确认阻断项。 */
@@ -84,6 +97,13 @@ export interface DefectPhotoReviewModel {
 
 export interface DefectPhotoReviewModelInput {
   draft: BridgeAnnualInspectionData;
+  /**
+   * 按来源病害索引的解析状态（构件绑定、评分树节点）。
+   *
+   * 5.0 起这些不在草稿里，由 `GET /resolution-workspace` 提供。没给时一律按"未解析"
+   * 处理：那正是工作区还没加载回来的真实状态，编一个"已绑定"出来只会让界面先绿后红。
+   */
+  resolution?: ResolutionIndex;
   /** null 表示当前年度尚未锁定评定树。 */
   ratingTreeVersionId: string | null;
   ratingTreeNodes?: RatingTreeNode[];
@@ -162,6 +182,7 @@ function addProblem(
  */
 function deriveMatchState(
   defect: DefectCandidate,
+  resolution: DefectResolution,
   match: DefectMatchResult | null,
   ratingTreeNode: RatingTreeNodeSummary | null,
 ): { state: DefectMatchState; label: string } {
@@ -169,13 +190,13 @@ function deriveMatchState(
   if (defect.group_review_status === "已确认") {
     return { state: "confirmed", label: nodeName ? `已确认：${nodeName}` : "已确认" };
   }
-  if (defect.rating_tree_match_method === "manual" && defect.rating_tree_node_id) {
+  if (resolution.ratingMatchMethod === "manual" && resolution.ratingTreeNodeId) {
     return { state: "manual", label: nodeName ? `人工选择：${nodeName}` : "人工选择" };
   }
   if (
-    defect.rating_tree_node_id &&
-    defect.rating_tree_match_method &&
-    defect.rating_tree_match_method !== "fuzzy_candidate"
+    resolution.ratingTreeNodeId &&
+    resolution.ratingMatchMethod &&
+    resolution.ratingMatchMethod !== "fuzzy_candidate"
   ) {
     return { state: "auto_bound", label: nodeName ? `自动匹配：${nodeName}` : "自动匹配" };
   }
@@ -199,6 +220,7 @@ function deriveMatchState(
 function analyzeDefect(
   draft: BridgeAnnualInspectionData,
   defect: DefectCandidate,
+  resolution: DefectResolution,
   assessmentIssues: AssessmentIssue[],
   repeatedPhotoNumbers: Set<string>,
   ratingTreeVersionId: string | null,
@@ -213,22 +235,22 @@ function analyzeDefect(
   const photos = photoCards
     .map((card) => card.photo)
     .filter((photo): photo is PhotoCandidate => photo !== null);
-  const ratingTreeNode = defect.rating_tree_node_id
-    ? ratingTreeNodes.get(defect.rating_tree_node_id) ?? null
+  const ratingTreeNode = resolution.ratingTreeNodeId
+    ? ratingTreeNodes.get(resolution.ratingTreeNodeId) ?? null
     : null;
-  const ratingTreeNodeSummary = defect.rating_tree_node_id
-    ? ratingTreeNode ?? ratingTreeNodeSummaries.get(defect.rating_tree_node_id) ?? null
+  const ratingTreeNodeSummary = resolution.ratingTreeNodeId
+    ? ratingTreeNode ?? ratingTreeNodeSummaries.get(resolution.ratingTreeNodeId) ?? null
     : null;
 
-  if (!defect.bridge_component_id || !defect.standard_component_category_id) {
+  if (!resolution.bridgeComponentId) {
     addProblem(problems, "component_required", "component", "尚未选择实际构件。");
   }
   if (!ratingTreeVersionId) {
     addProblem(problems, "rating_tree_required", "defect_type", "当前年度尚未锁定评定树。");
-  } else if (!defect.rating_tree_node_id) {
+  } else if (!resolution.ratingTreeNodeId) {
     addProblem(problems, "rating_tree_node_required", "defect_type", "尚未选择评定树病害。");
   } else {
-    if (defect.rating_tree_version_id !== ratingTreeVersionId) {
+    if (resolution.ratingTreeVersionId !== ratingTreeVersionId) {
       addProblem(problems, "rating_tree_version_mismatch", "defect_type", "病害关联的评定树版本与当前年度不一致。");
     }
     if (!treeRulesReady) {
@@ -236,13 +258,15 @@ function analyzeDefect(
     } else if (!ratingTreeNodeSummary) {
       addProblem(problems, "rating_tree_node_unknown", "defect_type", "评定树病害节点已不存在。");
     } else if (
-      !defect.bridge_component_id ||
-      !applicableTreeNodeIdsByComponent.get(defect.bridge_component_id)?.has(ratingTreeNodeSummary.id)
+      !resolution.bridgeComponentId ||
+      !applicableTreeNodeIdsByComponent
+        .get(resolution.bridgeComponentId)
+        ?.has(ratingTreeNodeSummary.id)
     ) {
       addProblem(problems, "rating_tree_node_not_applicable", "defect_type", "评定树病害不适用于当前实际构件。");
     }
   }
-  if (defect.rating_tree_match_method === "fuzzy_candidate") {
+  if (resolution.ratingMatchMethod === "fuzzy_candidate") {
     addProblem(problems, "rating_tree_fuzzy_review_required", "defect_type", "模糊匹配建议需要人工确认。");
   }
   if (ratingTreeNodeSummary?.is_scoring) {
@@ -259,7 +283,7 @@ function analyzeDefect(
   }
 
   // 匹配服务给出的问题：依赖缺失、服务故障和真的没规则必须能分开看。
-  if (match && !match.skipped && !defect.rating_tree_node_id) {
+  if (match && !match.skipped && !resolution.ratingTreeNodeId) {
     if (match.outcome === "composite") {
       addProblem(problems, "rating_tree_composite_defect", "defect_type", "疑似组合病害，请拆分或确认为单一病害。");
     } else if (match.outcome === "candidates") {
@@ -345,10 +369,11 @@ function analyzeDefect(
   const batchEligible = !ignored && !confirmed && problems.length === 0;
   const derived = ignored
     ? { state: "ignored" as const, label: "已忽略" }
-    : deriveMatchState(defect, match, ratingTreeNodeSummary);
+    : deriveMatchState(defect, resolution, match, ratingTreeNodeSummary);
   return {
     candidateId: defect.candidate_id,
     defect,
+    resolution,
     photos,
     problems,
     confirmEligible,
@@ -363,7 +388,7 @@ function analyzeDefect(
     matchState: derived.state,
     matchLabel: derived.label,
     matchResult: match,
-    matchCandidates: match && !defect.rating_tree_node_id ? match.candidates : [],
+    matchCandidates: match && !resolution.ratingTreeNodeId ? match.candidates : [],
     photoCards,
     ratingTreeNode,
   };
@@ -472,10 +497,12 @@ export function buildDefectPhotoReviewModel(
       .filter(([, count]) => count > 1)
       .map(([number]) => number),
   );
+  const resolution = input.resolution ?? EMPTY_RESOLUTION_INDEX;
   const allRows = input.draft.defects.map((defect) =>
     analyzeDefect(
       input.draft,
       defect,
+      resolutionOf(resolution, defect.candidate_id),
       input.assessmentIssues,
       repeatedPhotoNumbers,
       input.ratingTreeVersionId,
@@ -495,7 +522,7 @@ export function buildDefectPhotoReviewModel(
   const componentOrder = input.componentOrder;
   const partRank = (row: DefectReviewRow): number => {
     if (!componentOrder) return 0;  // 顺序还没取到：整体退回优先级排序
-    const componentId = row.defect.bridge_component_id;
+    const componentId = resolutionOf(resolution, row.defect.candidate_id).bridgeComponentId;
     if (!componentId) return Number.MAX_SAFE_INTEGER;
     return componentOrder.get(componentId) ?? Number.MAX_SAFE_INTEGER;
   };
@@ -512,7 +539,7 @@ export function buildDefectPhotoReviewModel(
   // 只列这份草稿里真的出现过的部件，空部件不占位。
   const partCounts = new Map<string, number>();
   for (const row of ordered) {
-    const componentId = row.defect.bridge_component_id;
+    const componentId = resolutionOf(resolution, row.defect.candidate_id).bridgeComponentId;
     const name = componentId ? input.componentPart?.get(componentId) : undefined;
     const key = name ?? UNBOUND_PART_FILTER;
     partCounts.set(key, (partCounts.get(key) ?? 0) + 1);
@@ -541,7 +568,7 @@ export function buildDefectPhotoReviewModel(
       return false;
     }
     if (input.partFilter) {
-      const componentId = row.defect.bridge_component_id;
+      const componentId = resolutionOf(resolution, row.defect.candidate_id).bridgeComponentId;
       const name = componentId ? input.componentPart?.get(componentId) : undefined;
       if ((name ?? UNBOUND_PART_FILTER) !== input.partFilter) return false;
     }

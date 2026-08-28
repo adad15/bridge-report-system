@@ -41,4 +41,18 @@ inline std::string review_status_of(const Json::Value& candidate) {
     return string_member_or_empty(candidate, "review_status");
 }
 
+/**
+ * @brief 该候选背后的来源病害身份。
+ *
+ * 可确认病害视图里一条来源病害会展开成多条实例，每条实例有自己的 candidate_id，
+ * 但 review_status / group_review_status 这类校对事实是**来源病害**的属性。
+ * 按实例逐条报，同一件事会重复 N 遍；用它做来源级去重。
+ *
+ * 视图之外（原始草稿）没有这个字段，此时来源身份就是候选自己。
+ */
+inline std::string source_candidate_id_of(const Json::Value& candidate) {
+    const auto source = string_member_or_empty(candidate, "source_candidate_id");
+    return source.empty() ? candidate_id_of(candidate) : source;
+}
+
 }  // 命名空间 bridge_report::review

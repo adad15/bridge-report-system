@@ -62,16 +62,17 @@ export function DefectDetailEditor({
     [applicableNodes],
   );
   const selectedNodeSummary = applicableNodes.find(
-    (item) => item.id === defect.rating_tree_node_id,
+    (item) => item.id === row.resolution.ratingTreeNodeId,
   ) ?? null;
-  const activeTreeNode = treeNode?.id === defect.rating_tree_node_id ? treeNode : null;
+  const activeTreeNode = treeNode?.id === row.resolution.ratingTreeNodeId ? treeNode : null;
   const selectedNodeIsScoring = activeTreeNode?.is_scoring ?? selectedNodeSummary?.is_scoring ?? false;
   const selectedNodeAllowedScales = activeTreeNode?.allowed_scales ?? selectedNodeSummary?.allowed_scales ?? [];
   const selectedNodeScaleDescriptions = activeTreeNode?.scale_descriptions ?? selectedNodeSummary?.scale_descriptions ?? {};
   // 候选是后端这次算出来的临时结果，不在草稿里；采用候选后按人工选择处理。
+  // 5.0 起匹配证据不再写回草稿，展示的就是本次匹配给出的原因。
   const evidence = displayMatchEvidence(
-    defect.rating_tree_match_evidence ?? row.matchResult?.reason_message,
-    defect.rating_tree_match_method,
+    row.matchResult?.reason_message,
+    row.resolution.ratingMatchMethod,
   );
   // 尺寸原文只是解析用的输入，本身没有单独展示的价值；展示解析结果即可。
   // 解析不出来时才退回原文，那种情况下原文是唯一的记录。
@@ -100,18 +101,18 @@ export function DefectDetailEditor({
   };
 
   useEffect(() => {
-    if (!ratingTreeVersionId || !defect.rating_tree_node_id) {
+    if (!ratingTreeVersionId || !row.resolution.ratingTreeNodeId) {
       setTreeNode(null);
       return;
     }
-    if (row.ratingTreeNode?.id === defect.rating_tree_node_id) {
+    if (row.ratingTreeNode?.id === row.resolution.ratingTreeNodeId) {
       setTreeNode(row.ratingTreeNode);
       return;
     }
     let active = true;
     setTreeNode(null);
     setTreeNodeError("");
-    void fetchRatingTreeNode(baseUrl, ratingTreeVersionId, defect.rating_tree_node_id)
+    void fetchRatingTreeNode(baseUrl, ratingTreeVersionId, row.resolution.ratingTreeNodeId)
       .then((node) => {
         if (active) setTreeNode(node);
       })
@@ -121,7 +122,7 @@ export function DefectDetailEditor({
     return () => {
       active = false;
     };
-  }, [baseUrl, defect.rating_tree_node_id, ratingTreeVersionId, row.ratingTreeNode]);
+  }, [baseUrl, row.resolution.ratingTreeNodeId, ratingTreeVersionId, row.ratingTreeNode]);
 
   return (
     <section className="defect-detail-editor" aria-label="病害详情维护">
@@ -158,10 +159,10 @@ export function DefectDetailEditor({
               <span>评定树病害</span>
               {/* 定了病害就不在这里重复写名字——下面的下拉显示的就是它。
                   没定时这句红字必须留着：下拉那时只是一片空白，说不出"还没定"。 */}
-              {defect.rating_tree_node_id ? null : <strong>尚未确定规范病害</strong>}
+              {row.resolution.ratingTreeNodeId ? null : <strong>尚未确定规范病害</strong>}
               <em className={`defect-match-method ${row.matchState}`}>
-                {defect.rating_tree_node_id
-                  ? matchMethodLabel(defect.rating_tree_match_method)
+                {row.resolution.ratingTreeNodeId
+                  ? matchMethodLabel(row.resolution.ratingMatchMethod)
                   : row.matchLabel}
               </em>
             </div>
@@ -206,7 +207,7 @@ export function DefectDetailEditor({
             <select
               aria-label="评定树病害"
               disabled={disabled || !ratingTreeVersionId}
-              value={defect.rating_tree_node_id ?? ""}
+              value={row.resolution.ratingTreeNodeId ?? ""}
               onChange={(event) => selectNode(event.target.value)}
             >
               <option value="">请选择评定树病害</option>
@@ -249,7 +250,7 @@ export function DefectDetailEditor({
                 value={defect.defect_scale ?? ""}
                 onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_scale", value: event.target.value === "" ? null : Number(event.target.value) })}
               >
-                <option value="">{defect.rating_tree_node_id ? (selectedNodeIsScoring ? "请选择标度" : "该节点暂不计分") : "请先确定规范病害"}</option>
+                <option value="">{row.resolution.ratingTreeNodeId ? (selectedNodeIsScoring ? "请选择标度" : "该节点暂不计分") : "请先确定规范病害"}</option>
                 {selectedNodeAllowedScales.map((scale) => (
                   <option key={scale} value={scale}>
                     {scale} · {selectedNodeScaleDescriptions[String(scale)] ?? ""}

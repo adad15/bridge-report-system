@@ -1,4 +1,10 @@
-import type { DefectCandidate, RatingTreeMatchMethod } from "../contracts/annualInspection";
+import type { DefectCandidate } from "../contracts/annualInspection";
+import type { RatingTreeMatchMethod } from "../contracts/resolution";
+import {
+  EMPTY_RESOLUTION_INDEX,
+  resolutionOf,
+  type ResolutionIndex,
+} from "../review/resolutionIndex";
 import { ApiError, request } from "./apiClient";
 
 /** 与后端 RatingTreeMatchOutcome 一一对应的统一结果类型。 */
@@ -47,11 +53,22 @@ export interface DefectMatchReport {
   rating_tree_version_id: string;
 }
 
-/** 匹配请求只带匹配真正用到的字段，几百条病害也只发一个请求。 */
-function matchInput(defect: DefectCandidate) {
+/**
+ * 匹配请求只带匹配真正用到的字段，几百条病害也只发一个请求。
+ *
+ * 绑定构件与已有节点 5.0 起不在草稿里，由调用方从工作区读模型取好传进来。
+ */
+function matchInput(
+  defect: DefectCandidate,
+  resolution: {
+    bridgeComponentId: string | null;
+    ratingTreeNodeId: string | null;
+    ratingMatchMethod: RatingTreeMatchMethod | null;
+  },
+) {
   return {
     candidate_id: defect.candidate_id,
-    bridge_component_id: defect.bridge_component_id ?? null,
+    bridge_component_id: resolution.bridgeComponentId,
     defect_type: defect.defect_type,
     defect_description: defect.defect_description,
     defect_location: defect.defect_location,
@@ -59,8 +76,8 @@ function matchInput(defect: DefectCandidate) {
     source_defect_group_number: defect.source_defect_group_number ?? null,
     source_defect_indicator_id: defect.source_defect_indicator_id ?? null,
     source_defect_indicator_number: defect.source_defect_indicator_number ?? null,
-    rating_tree_node_id: defect.rating_tree_node_id ?? null,
-    rating_tree_match_method: defect.rating_tree_match_method ?? null,
+    rating_tree_node_id: resolution.ratingTreeNodeId,
+    rating_tree_match_method: resolution.ratingMatchMethod,
     review_status: defect.review_status,
     group_review_status: defect.group_review_status,
   };
@@ -74,6 +91,7 @@ export function matchDefectRatingTreeNodes(
   baseUrl: string,
   importRecordId: string,
   defects: DefectCandidate[],
+  resolution: ResolutionIndex = EMPTY_RESOLUTION_INDEX,
   candidateIds?: string[],
 ): Promise<DefectMatchReport> {
   return request<DefectMatchReport>(
@@ -82,7 +100,8 @@ export function matchDefectRatingTreeNodes(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        defects: defects.map(matchInput),
+        defects: defects.map((defect) =>
+          matchInput(defect, resolutionOf(resolution, defect.candidate_id))),
         ...(candidateIds ? { candidate_ids: candidateIds } : {}),
       }),
     },

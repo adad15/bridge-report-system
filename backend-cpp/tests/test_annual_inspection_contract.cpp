@@ -2,6 +2,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -15,7 +16,7 @@ Json::Value read_contract_fixture(const std::string& file_name) {
     auto current_file_name = file_name;
     const auto version_marker = current_file_name.find(".v2.");
     if (version_marker != std::string::npos) {
-        current_file_name.replace(version_marker, 4, ".v4.");
+        current_file_name.replace(version_marker, 4, ".v5.");
     }
     const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
                       "samples" / "contracts" / current_file_name;
@@ -42,7 +43,7 @@ void expect_summary_contains(
 
 }  // namespace
 
-TEST(AnnualInspectionContractTest, AcceptsValidVersionFourContractFixture) {
+TEST(AnnualInspectionContractTest, AcceptsValidVersionFiveContractFixture) {
     const auto root =
         read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
 
@@ -60,7 +61,7 @@ TEST(AnnualInspectionContractTest, RejectsVersionOneTwoWithoutTransitionMode) {
     const auto final_result =
         bridge_report::contracts::validate_bridge_annual_inspection_data(root);
     EXPECT_FALSE(final_result.ok());
-    expect_summary_contains(final_result, "contract.version: must be 4.0");
+    expect_summary_contains(final_result, "contract.version: must be 5.0");
 }
 
 TEST(AnnualInspectionContractTest, AcceptsComparisonCandidateFixture) {
@@ -73,8 +74,9 @@ TEST(AnnualInspectionContractTest, AcceptsComparisonCandidateFixture) {
     EXPECT_TRUE(result.ok()) << result.summary();
 }
 
-TEST(AnnualInspectionContractTest, RejectsEveryNonFourContractVersion) {
-    for (const auto* version : {"1.0", "1.1", "1.2", "2", "2.0", "2.1", "3", "3.0", "4"}) {
+TEST(AnnualInspectionContractTest, RejectsEveryNonFiveContractVersion) {
+    for (const auto* version :
+         {"1.0", "1.1", "1.2", "2", "2.0", "2.1", "3", "3.0", "4", "4.0", "5"}) {
         auto root =
             read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
         root["contract"]["version"] = version;
@@ -83,7 +85,7 @@ TEST(AnnualInspectionContractTest, RejectsEveryNonFourContractVersion) {
             bridge_report::contracts::validate_bridge_annual_inspection_data(root);
 
         EXPECT_FALSE(result.ok());
-        expect_summary_contains(result, "contract.version: must be 4.0");
+        expect_summary_contains(result, "contract.version: must be 5.0");
     }
 }
 
@@ -97,7 +99,7 @@ TEST(AnnualInspectionContractTest, RejectsImportedRatingsWithExactPath) {
 
     EXPECT_FALSE(result.ok());
     expect_summary_contains(
-        result, "ratings: is not allowed in contract 4.0");
+        result, "ratings: is not allowed in contract 5.0");
 }
 
 TEST(AnnualInspectionContractTest, RejectsWordDeductionWithExactPath) {
@@ -111,7 +113,7 @@ TEST(AnnualInspectionContractTest, RejectsWordDeductionWithExactPath) {
     EXPECT_FALSE(result.ok());
     expect_summary_contains(
         result,
-        "defects[0].defect_deduction: is not allowed in contract 4.0");
+        "defects[0].defect_deduction: is not allowed in contract 5.0");
 }
 
 TEST(AnnualInspectionContractTest, RejectsLegacyPhotoReviewState) {
@@ -142,46 +144,63 @@ TEST(AnnualInspectionContractTest, RejectsLegacyDefectNames) {
     expect_summary_contains(result, "defects[0].component_alias");
 }
 
-TEST(AnnualInspectionContractTest, AcceptsNullDatabaseAssociationFields) {
-    auto root =
+// 5.0 把构件解析与评分树解析整体搬进关系表。这些字段必须逐个被拒绝而不是静默忽略：
+// 旧客户端的草稿会原样回传它们，忽略等于让陈旧解析结果继续盖过权威状态。
+TEST(AnnualInspectionContractTest, RejectsEveryResolutionFieldRemovedInFive) {
+    const std::vector<std::pair<std::string, Json::Value>> removed = {
+        {"bridge_component_id", Json::Value("component-1")},
+        {"standard_component_category_id", Json::Value("category-1")},
+        {"resolved_structure_part", Json::Value("上部结构")},
+        {"component_inventory_revision_id", Json::Value("revision-1")},
+        {"component_match_method", Json::Value("manual")},
+        {"component_match_confirmed_by", Json::Value("editor")},
+        {"rating_tree_version_id", Json::Value("tree-version-1")},
+        {"rating_tree_node_id", Json::Value("tree-node-1")},
+        {"rating_tree_match_method", Json::Value("controlled_alias")},
+        {"rating_tree_match_evidence", Json::Value("controlled alias")},
+        {"standard_defect_indicator_id", Json::Value("indicator-1")},
+    };
+
+    for (const auto& [field, value] : removed) {
+        auto root =
+            read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+        root["defects"][0][field] = value;
+
+        const auto result =
+            bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+
+        EXPECT_FALSE(result.ok()) << field;
+        expect_summary_contains(
+            result, "defects[0]." + field + ": is not allowed in contract 5.0");
+    }
+
+    // 显式 null 同样不行：字段存在本身就是旧客户端的证据。
+    auto null_root =
         read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
-    root["defects"][0]["bridge_component_id"] = Json::Value();
-    root["defects"][0]["standard_component_category_id"] = Json::Value();
-    root["defects"][0]["resolved_structure_part"] = Json::Value();
+    null_root["defects"][0]["bridge_component_id"] = Json::Value();
+    const auto null_result =
+        bridge_report::contracts::validate_bridge_annual_inspection_data(null_root);
+    EXPECT_FALSE(null_result.ok());
+    expect_summary_contains(null_result, "defects[0].bridge_component_id");
 
-    const auto result =
-        bridge_report::contracts::validate_bridge_annual_inspection_data(root);
-
-    EXPECT_TRUE(result.ok()) << result.summary();
+    for (const auto* container : {"component_match_candidate_ids", "range_split_origin"}) {
+        auto root =
+            read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
+        root["defects"][0][container] = Json::Value(Json::arrayValue);
+        const auto result =
+            bridge_report::contracts::validate_bridge_annual_inspection_data(root);
+        EXPECT_FALSE(result.ok()) << container;
+        expect_summary_contains(
+            result,
+            "defects[0]." + std::string(container) + ": is not allowed in contract 5.0");
+    }
 }
 
-TEST(AnnualInspectionContractTest, ValidatesComponentMatchAuditFields) {
+// 来源分组/指标身份不是评分树解析结果，5.0 里继续留在来源事实中。
+TEST(AnnualInspectionContractTest, ValidatesSourceIndicatorIdentityFields) {
     auto root =
         read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
     auto& defect = root["defects"][0];
-    defect["component_inventory_revision_id"] = "revision-1";
-    defect["component_match_candidate_ids"].append("component-1");
-    defect["component_match_method"] = "manual";
-    defect["component_match_confirmed_by"] = "editor";
-
-    EXPECT_TRUE(bridge_report::contracts::validate_bridge_annual_inspection_data(root).ok());
-
-    defect["component_match_method"] = "fuzzy";
-    const auto invalid =
-        bridge_report::contracts::validate_bridge_annual_inspection_data(root);
-    EXPECT_FALSE(invalid.ok());
-    expect_summary_contains(invalid, "defects[0].component_match_method");
-}
-
-TEST(AnnualInspectionContractTest, ValidatesRatingTreeAssociationFields) {
-    auto root =
-        read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
-    auto& defect = root["defects"][0];
-    defect["rating_tree_version_id"] = "tree-version-1";
-    defect["rating_tree_node_id"] = "tree-node-1";
-    defect["rating_tree_match_method"] = "controlled_alias";
-    defect["rating_tree_match_evidence"] = "controlled alias";
-    defect["standard_defect_indicator_id"] = "indicator-1";
     defect["source_defect_group_id"] = "source-group-1";
     defect["source_defect_group_number"] = "9.1.2";
     defect["source_defect_indicator_id"] = "source-indicator-1";
@@ -190,10 +209,6 @@ TEST(AnnualInspectionContractTest, ValidatesRatingTreeAssociationFields) {
     EXPECT_TRUE(bridge_report::contracts::validate_bridge_annual_inspection_data(root).ok());
 
     for (const auto* field : {
-             "rating_tree_version_id",
-             "rating_tree_node_id",
-             "rating_tree_match_evidence",
-             "standard_defect_indicator_id",
              "source_defect_group_id",
              "source_defect_group_number",
              "source_defect_indicator_id",
@@ -208,56 +223,6 @@ TEST(AnnualInspectionContractTest, ValidatesRatingTreeAssociationFields) {
         EXPECT_FALSE(invalid.ok()) << field;
         expect_summary_contains(invalid, "defects[0]." + std::string(field));
     }
-
-    defect["rating_tree_match_method"] = "guessed";
-    const auto invalid_method =
-        bridge_report::contracts::validate_bridge_annual_inspection_data(root);
-    EXPECT_FALSE(invalid_method.ok());
-    expect_summary_contains(
-        invalid_method, "defects[0].rating_tree_match_method");
-}
-
-TEST(AnnualInspectionContractTest, ValidatesOptionalRangeSplitOrigin) {
-    auto root =
-        read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
-    auto& origin = root["defects"][0]["range_split_origin"];
-    origin["operation_id"] = "operation-1";
-    origin["source_candidate_id"] = "defect_0001";
-    origin["source_component_number"] = "1-1#板~1-25#板";
-    origin["expanded_component_number"] = "1-7#板";
-    origin["split_index"] = 7;
-    origin["split_count"] = 25;
-    origin["operated_by_user_id"] = "user-1";
-    origin["operated_at"] = "2026-07-24T16:00:00+08:00";
-
-    EXPECT_TRUE(bridge_report::contracts::validate_bridge_annual_inspection_data(root).ok());
-
-    origin["split_index"] = 26;
-    const auto invalid =
-        bridge_report::contracts::validate_bridge_annual_inspection_data(root);
-    EXPECT_FALSE(invalid.ok());
-    expect_summary_contains(invalid, "defects[0].range_split_origin");
-}
-
-TEST(AnnualInspectionContractTest, RejectsUnknownRangeSplitOriginMember) {
-    auto root =
-        read_contract_fixture("bridge_annual_inspection_data.v2.valid.json");
-    auto& origin = root["defects"][0]["range_split_origin"];
-    origin["operation_id"] = "operation-1";
-    origin["source_candidate_id"] = "defect_0001";
-    origin["source_component_number"] = "1-1#板~1-25#板";
-    origin["expanded_component_number"] = "1-7#板";
-    origin["split_index"] = 7;
-    origin["split_count"] = 25;
-    origin["operated_by_user_id"] = "user-1";
-    origin["operated_at"] = "2026-07-24T16:00:00+08:00";
-    origin["unexpected"] = true;
-
-    const auto invalid =
-        bridge_report::contracts::validate_bridge_annual_inspection_data(root);
-    EXPECT_FALSE(invalid.ok());
-    expect_summary_contains(
-        invalid, "defects[0].range_split_origin.unexpected");
 }
 
 TEST(AnnualInspectionContractTest, AcceptsManualSourceWithoutWordCoordinates) {

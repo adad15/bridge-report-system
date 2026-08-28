@@ -13,13 +13,13 @@ namespace {
 
 Json::Value fixture() {
     const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-        "samples/contracts/bridge_annual_inspection_data.v4.valid.json";
+        "samples/contracts/bridge_annual_inspection_data.v5.valid.json";
     std::ifstream input(path, std::ios::binary);
     Json::CharReaderBuilder builder;
     Json::Value root;
     std::string errors;
     if (!input || !Json::parseFromStream(builder, input, &root, &errors)) {
-        throw std::runtime_error("unable to load v4 fixture: " + errors);
+        throw std::runtime_error("unable to load v5 fixture: " + errors);
     }
     return root;
 }
@@ -109,13 +109,18 @@ TEST(DraftValidationTest, RejectsImportedRatingProjection) {
     EXPECT_EQ(result.code, "contract_validation_failed");
 }
 
-TEST(DraftValidationTest, RejectsPartialActualComponentAssociation) {
-    auto data = fixture();
-    data["defects"][0]["bridge_component_id"] = "component-1";
-    const auto result = bridge_report::review::validate_review_draft(
-        data, "DRJL-000001", "待校对");
-    EXPECT_FALSE(result.ok);
-    EXPECT_EQ(result.code, "defect_component_mapping_invalid");
+// 5.0：构件解析字段整体移出合同。旧客户端的草稿会原样回传它们，
+// 必须在契约边界就被拒，而不是静默忽略后掩盖权威状态。
+TEST(DraftValidationTest, RejectsResolutionFieldsSmuggledIntoTheDraft) {
+    for (const auto* field : {"bridge_component_id", "rating_tree_node_id",
+                              "component_match_method", "standard_defect_indicator_id"}) {
+        auto data = fixture();
+        data["defects"][0][field] = "smuggled";
+        const auto result = bridge_report::review::validate_review_draft(
+            data, "DRJL-000001", "待校对");
+        EXPECT_FALSE(result.ok) << field;
+        EXPECT_EQ(result.code, "contract_validation_failed") << field;
+    }
 }
 
 TEST(WarningsOnlyScopeTest, AllowsBusinessEditsOnWarningDefect) {

@@ -24,6 +24,9 @@
 #include "bridge_report/rating_tree/RatingTreePackageLoader.hpp"
 #include "bridge_report/review/ConfirmPlan.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
+#include "bridge_report/resolution/ConfirmResolutionReader.hpp"
+#include "bridge_report/db/CommitLatch.hpp"
+#include "bridge_report/db/ImportResolutionRepository.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
 #include "bridge_report/standards/StandardPackageLoader.hpp"
 #include "support/h21_fixtures.hpp"
@@ -37,7 +40,7 @@ std::string read_fixture_text(const std::string& file_name) {
     auto current_file_name = file_name;
     const auto version_marker = current_file_name.find(".v2.");
     if (version_marker != std::string::npos) {
-        current_file_name.replace(version_marker, 4, ".v4.");
+        current_file_name.replace(version_marker, 4, ".v5.");
     }
     const auto path = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) / "samples" / "contracts" / current_file_name;
     std::ifstream input(path, std::ios::binary);
@@ -69,6 +72,7 @@ std::string write_json_compact(const Json::Value& value) {
 // 组装 PreflightContext 并调用 build_preflight_report 的完整流程，
 // 与 POST preflight-confirm 路由的组装逻辑一致（用于集成测试验证端到端行为）。
 bridge_report::review::PreflightReport run_preflight_flow(
+    const drogon::orm::DbClientPtr& client,
     bridge_report::db::ReviewRepository& repository,
     const std::string& import_record_id
 ) {
@@ -84,7 +88,12 @@ bridge_report::review::PreflightReport run_preflight_flow(
 
     const auto context =
         bridge_report::review::build_preflight_context(*detail, effective_year, has_current_annual_facts);
-    return bridge_report::review::build_preflight_report(parsed_result, context);
+    // 预检现在需要可确认病害视图：它把来源事实与关系表里的解析状态
+    // 组合起来，而不是从病害 JSON 里读解析字段（§17）。
+    const auto confirmable_view = bridge_report::resolution::build_confirmable_view(
+        client, import_record_id, parsed_result);
+    return bridge_report::review::build_preflight_report(
+        parsed_result, confirmable_view, context);
 }
 
 // fixture：在事务里插入一座桥 + 一个年度 + 一条导入记录，测试结束后回滚，数据库保持不变。
@@ -496,7 +505,7 @@ TEST_F(ReviewRepositoryTest, preflight_flow_blocks_on_pending_candidates_then_co
     // 样例默认病害候选是“待确认”，直接保存即可覆盖候选阻断场景。
     ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
 
-    const auto pending_report = run_preflight_flow(repository, import_record_id_);
+    const auto pending_report = run_preflight_flow(tx_, repository, import_record_id_);
 
     EXPECT_FALSE(pending_report.can_confirm);
     bool has_pending_candidate_issue = false;
@@ -512,7 +521,7 @@ TEST_F(ReviewRepositoryTest, preflight_flow_blocks_on_pending_candidates_then_co
     confirm_all_candidates(data);
     ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
 
-    const auto confirmed_report = run_preflight_flow(repository, import_record_id_);
+    const auto confirmed_report = run_preflight_flow(tx_, repository, import_record_id_);
 
     EXPECT_TRUE(confirmed_report.can_confirm);
     EXPECT_TRUE(confirmed_report.blocking_errors.empty());
@@ -707,6 +716,102 @@ protected:
         client_->execSqlSync(
             "update import_records set parsed_result_json = $2::jsonb where id = $1::uuid",
             import_record_id_, write_json_compact(build_confirmed_data()));
+        seed_resolution_state();
+    }
+
+    /// 把解析状态整个抹掉，制造“已校对但没绑构件”。
+    ///
+    /// 5.0 之后不能再靠把草稿里的解析字段置空来造这个场景：那些字段已经
+    /// 移出合同，写进去（哪怕是 null）会先被契约校验挡下，而契约校验发生在
+    /// 版本锁定之前，这两条测试要守的那段就测不到了。
+    void drop_resolution_state() {
+        // 删组会级联带走成员、目标、实例和评分树解析，一句之内完成，
+        // 不会停在“bound 组却没有目标”那个被延迟约束禁止的中间态。
+        client_->execSqlSync(
+            "delete from import_component_resolution_groups where import_record_id=$1::uuid",
+            import_record_id_);
+    }
+
+    /// 评定服务读的是绑定构件与评分树节点，两样都在关系表里；
+    /// 直接把来源草稿给它，算出来的是“一条病害都没绑构件”。
+    Json::Value confirmed_view() const {
+        return bridge_report::resolution::build_confirmable_view(
+            client_, import_record_id_, build_confirmed_data());
+    }
+
+    /// 目标构件在台账里的编号。测试不拄它，因为 sort_order 一变编号就变。
+    std::string bearing_component_number() const {
+        const auto bearing = component_id_by_type_.find("h21.component.bearing");
+        if (bearing == component_id_by_type_.end()) return {};
+        return client_->execSqlSync(
+            "select component_number from bridge_component_inventory_entries "
+            "where inventory_revision_id=$1::uuid and bridge_component_id=$2::uuid",
+            inventory_revision_id_, bearing->second)[0]["component_number"]
+            .as<std::string>();
+    }
+
+    /// 把该导入的构件与评分树解析写进关系表。
+    ///
+    /// 必须整段在一个事务里：组状态与目标集合的一致性是延迟约束，
+    /// 逐条自动提交时“先写 bound 组、还没有目标”那一步会当场被挡下来。
+    void seed_resolution_state() {
+        const auto data = build_confirmed_data();
+        const auto candidate_id = data["defects"][0]["candidate_id"].asString();
+        const auto bearing = component_id_by_type_.find("h21.component.bearing");
+        if (bearing == component_id_by_type_.end()) {
+            throw std::runtime_error("test inventory is missing bearing component");
+        }
+        const auto latch = std::make_shared<bridge_report::db::CommitLatch>();
+        auto tx = client_->newTransaction(latch->callback());
+        {
+            const bridge_report::db::ImportResolutionRepository repository(tx);
+            bridge_report::resolution::ComponentResolutionGroup group;
+            group.import_record_id = import_record_id_;
+            group.source_component_name = "支座";
+            group.source_component_number = "TEST-BEARING";
+            group.normalized_component_number = "test-bearing";
+            group.status = "bound";
+            group.match_method = "manual";
+            group.inventory_revision_id = inventory_revision_id_;
+            group.resolved_by_user_id = confirmed_by_user_id_;
+            const auto stored_group = repository.insert_group(group);
+
+            bridge_report::resolution::ComponentGroupMember member;
+            member.import_record_id = import_record_id_;
+            member.group_id = stored_group.id;
+            member.source_candidate_id = candidate_id;
+            member.source_order = 0;
+            const auto stored_member = repository.insert_member(member);
+
+            bridge_report::resolution::ComponentResolutionTarget target;
+            target.group_id = stored_group.id;
+            target.bridge_component_id = bearing->second;
+            target.target_order = 1;
+            const auto stored_target = repository.insert_target(target);
+
+            bridge_report::resolution::ResolvedDefectInstance instance;
+            instance.group_member_id = stored_member.id;
+            instance.target_id = stored_target.id;
+            instance.instance_order = 1;
+            instance.is_photo_owner = true;
+            instance.component_resolution_version = stored_group.version;
+            const auto stored_instance = repository.insert_instance(instance);
+
+            bridge_report::resolution::RatingResolution rating;
+            rating.resolved_defect_instance_id = stored_instance.id;
+            rating.rating_tree_version_id = rating_tree_version_id_;
+            rating.rating_tree_node_id = rating_tree_node_id_;
+            rating.standard_defect_indicator_id = "h21.defect.5_3_1_1";
+            rating.status = "matched";
+            rating.match_method = "manual";
+            rating.resolved_by_user_id = confirmed_by_user_id_;
+            rating.component_resolution_version = stored_group.version;
+            rating.applicability_hash = "sha256:" + std::string(64, 'a');
+            rating.match_input_hash = "sha256:" + std::string(64, 'b');
+            repository.upsert_rating_resolution(rating);
+        }
+        tx.reset();
+        if (!latch->wait()) throw std::runtime_error("resolution seed did not commit");
     }
 
     void TearDown() override {
@@ -771,21 +876,13 @@ protected:
         if (bearing == component_id_by_type_.end()) {
             throw std::runtime_error("test inventory is missing bearing component");
         }
-        data["defects"][0]["bridge_component_id"] = bearing->second;
-        data["defects"][0]["standard_component_category_id"] = "h21.component.bearing";
-        data["defects"][0]["component_inventory_revision_id"] = inventory_revision_id_;
+        (void)bearing;
+        // 5.0：草稿只剩来源事实。构件与评分树解析由
+        // seed_resolution_state() 写进关系表。
         data["defects"][0]["source_structure_part"] = "上部结构";
-        data["defects"][0]["resolved_structure_part"] = "上部结构";
         data["defects"][0]["component_name"] = "支座";
         data["defects"][0]["component_number"] = "TEST-BEARING";
         data["defects"][0]["defect_type"] = "板式支座老化变质、开裂";
-        data["defects"][0]["standard_defect_indicator_id"] =
-            "h21.defect.5_3_1_1";
-        data["defects"][0]["rating_tree_version_id"] = rating_tree_version_id_;
-        data["defects"][0]["rating_tree_node_id"] = rating_tree_node_id_;
-        data["defects"][0]["rating_tree_match_method"] = "exact";
-        data["defects"][0]["rating_tree_match_evidence"] =
-            "正式评定集成测试使用已发布评定树节点";
         data["defects"][0]["defect_scale"] = 2;
         return data;
     }
@@ -823,7 +920,7 @@ TEST_F(ConfirmAnnualFactsTest, ReadOnlyPreflightAcceptsAnExplicitRevisionWithout
 
     bridge_report::assessment::AssessmentConfirmationService service(client_, registry_);
     const auto without_override =
-        service.calculate(placeholder_year_id_, build_confirmed_data());
+        service.calculate(placeholder_year_id_, confirmed_view());
     bool incomplete = false;
     for (const auto& item : without_override.preview.issues) {
         if (item.code == "assessment_context_incomplete") incomplete = true;
@@ -831,7 +928,7 @@ TEST_F(ConfirmAnnualFactsTest, ReadOnlyPreflightAcceptsAnExplicitRevisionWithout
     EXPECT_TRUE(incomplete) << "年度未锁版本且不给 override 时，维持原有的上下文不完整";
 
     const auto with_override = service.calculate(
-        placeholder_year_id_, build_confirmed_data(),
+        placeholder_year_id_, confirmed_view(),
         std::optional<std::string>(inventory_revision_id_));
     for (const auto& item : with_override.preview.issues) {
         EXPECT_NE(item.code, "assessment_context_incomplete")
@@ -860,7 +957,7 @@ TEST_F(ConfirmAnnualFactsTest, ExplicitRevisionIsValidatedAndCannotOverrideALock
         other_revision, confirmed_by_user_id_);
 
     const auto conflicting = service.calculate(
-        placeholder_year_id_, build_confirmed_data(), std::optional<std::string>(other_revision));
+        placeholder_year_id_, confirmed_view(), std::optional<std::string>(other_revision));
     bool reported_change = false;
     for (const auto& item : conflicting.preview.issues) {
         if (item.code == "component_inventory_revision_changed") reported_change = true;
@@ -882,7 +979,7 @@ TEST_F(ConfirmAnnualFactsTest, ExplicitRevisionIsValidatedAndCannotOverrideALock
         foreign_revision, confirmed_by_user_id_);
 
     const auto foreign = service.calculate(
-        placeholder_year_id_, build_confirmed_data(), std::optional<std::string>(foreign_revision));
+        placeholder_year_id_, confirmed_view(), std::optional<std::string>(foreign_revision));
     bool rejected = false;
     for (const auto& item : foreign.preview.issues) {
         if (item.code == "assessment_context_incomplete") rejected = true;
@@ -1117,7 +1214,11 @@ TEST_F(ConfirmAnnualFactsTest, confirm_happy_path_writes_all_fact_tables) {
     // severity="warning" 不再进入 scale；标度只来自 defect_scale=2。
     EXPECT_EQ(observation_result[0]["scale"].as<std::string>(), "2");
     EXPECT_EQ(observation_result[0]["defect_description_raw"].as<std::string>(), "梁底发现纵向裂缝，需现场复核。");
-    EXPECT_EQ(observation_result[0]["part_name"].as<std::string>(), "TEST-BEARING");
+    // 5.0：构件编号按**目标台账条目**派生（§17.2），不再沿用报告原文。
+    // 报告写 TEST-BEARING、台账里叫 TEST-3 时，正式事实该跟台账走，
+    // 否则同一件构件在档案里会按两个编号出现。
+    EXPECT_EQ(observation_result[0]["part_name"].as<std::string>(),
+              bearing_component_number());
     EXPECT_EQ(observation_result[0]["component_type"].as<std::string>(), "h21.component.bearing");
     EXPECT_FALSE(observation_result[0]["business_component_code"].as<std::string>().empty());
     EXPECT_EQ(observation_result[0]["review_status"].as<std::string>(), "已确认");
@@ -1399,9 +1500,14 @@ TEST_F(ConfirmAnnualFactsTest, confirm_rolls_back_on_failure) {
     const auto conflicting_run = client_->execSqlSync(
         "insert into assessment_runs(inspection_year_id,run_kind,formal_revision_number,"
         "technical_condition_package_id,standard_profile_id,component_inventory_revision_id,"
+        "rating_tree_version_id,rating_tree_content_checksum,"
         "result_status,input_summary_json,input_checksum,rule_package_summary_json,rule_package_checksum,"
         "result_summary_json,created_by_user_id,confirmed_by_user_id,confirmed_at) "
-        "values($1::uuid,'正式',99,$2::uuid,$3::uuid,$4::uuid,'成功','{\"source\":\"conflict-test\"}'::jsonb,"
+        "values($1::uuid,'正式',99,$2::uuid,$3::uuid,$4::uuid,"
+        "       (select rating_tree_version_id from project_standard_profiles where id=$3::uuid),"
+        "       (select v.tree_content_checksum from rating_tree_versions v "
+        "        join project_standard_profiles p on p.rating_tree_version_id=v.id where p.id=$3::uuid),"
+        "       '成功','{\"source\":\"conflict-test\"}'::jsonb,"
         "$5,'{\"package\":\"conflict-test\"}'::jsonb,$6,'{}'::jsonb,$7::uuid,$7::uuid,now()) "
         "returning id::text as id",
         placeholder_year_id_, technical_package_id_, standard_profile_id_, inventory_revision_id_,
@@ -1605,113 +1711,24 @@ TEST_F(SaveReviewDraftTest, LocksTheResolvedRevisionIntoTheYearWhenTheDraftBinds
 }
 
 // 纯文本编辑没有理由给年度定版本。
-TEST_F(SaveReviewDraftTest, LeavesTheYearUnlockedWhenTheDraftBindsNoComponent) {
+//
+// 5.0："这份草稿绑了构件没有"要问关系表，不能再靠把草稿里的
+// bridge_component_id 置空来造场景——那些字段已经不在合同里了。
+TEST_F(SaveReviewDraftTest, LeavesTheYearUnlockedWhenNothingIsBound) {
     unlock_year_revision();
+    drop_resolution_state();
     bridge_report::db::ReviewRepository repository(client_, registry_);
-    auto data = build_confirmed_data();
-    for (auto& defect : data["defects"]) {
-        defect["bridge_component_id"] = Json::Value();
-        defect["standard_component_category_id"] = Json::Value();
-        defect["resolved_structure_part"] = Json::Value();
-        defect["component_inventory_revision_id"] = Json::Value();
-    }
 
-    const auto outcome = repository.save_review_draft(make_input(data));
+    const auto outcome = repository.save_review_draft(make_input(build_confirmed_data()));
 
     ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
     EXPECT_FALSE(year_locked_revision_id().has_value());
 }
 
-// 整份草稿一致地引用旧版本 -> 整体一条 409，不逐条“请重新选择”。
-TEST_F(SaveReviewDraftTest, ReportsAStaleRevisionOnceForTheWholeRequest) {
-    unlock_year_revision();
-    const auto newer_revision_id = add_confirmed_revision();
-    bridge_report::db::ReviewRepository repository(client_, registry_);
-    auto data = build_confirmed_data();  // 病害仍写着 R1，服务端将解析出 R2
 
-    const auto outcome = repository.save_review_draft(make_input(data));
 
-    EXPECT_FALSE(outcome.success);
-    EXPECT_EQ(outcome.error_code, "component_inventory_revision_changed");
-    EXPECT_TRUE(outcome.validation.issues.empty()) << "版本冲突不该退化成逐项问题";
-    EXPECT_FALSE(outcome.error_message.empty());
-    // 失败即整体回滚：草稿没写、年度也没被锁上。
-    EXPECT_FALSE(year_locked_revision_id().has_value());
-    EXPECT_EQ(stored_parsed_result_json().find("校对期改了一句描述"), std::string::npos);
-    (void)newer_revision_id;
-}
 
-// 请求内部混用多个版本属于草稿数据非法，仍旧逐项返回。
-TEST_F(SaveReviewDraftTest, ReportsPerDefectIssuesWhenTheRequestMixesRevisions) {
-    const auto other_revision_id = add_confirmed_revision();
-    client_->execSqlSync(
-        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
-        placeholder_year_id_, inventory_revision_id_);
-    bridge_report::db::ReviewRepository repository(client_, registry_);
-    auto data = build_confirmed_data();
-    auto mixed = data["defects"][0];
-    mixed["candidate_id"] = "defect_mixed_revision";
-    mixed["component_inventory_revision_id"] = other_revision_id;
-    data["defects"].append(mixed);
 
-    const auto outcome = repository.save_review_draft(make_input(data));
-
-    EXPECT_FALSE(outcome.success);
-    EXPECT_EQ(outcome.error_code, "defect_component_assignment_invalid");
-    EXPECT_EQ(outcome.validation.code, "defect_component_assignment_invalid");
-    ASSERT_FALSE(outcome.validation.issues.empty()) << "混用版本必须给出逐项 details";
-}
-
-// 版本对得上、但构件在该版本里已停用 -> 逐项 details，不是整体版本冲突。
-TEST_F(SaveReviewDraftTest, ReportsPerDefectIssuesWhenTheComponentIsDeactivated) {
-    auto data = build_confirmed_data();
-    const auto component_id = data["defects"][0]["bridge_component_id"].asString();
-    const auto revision_with_deactivated = add_confirmed_revision(component_id);
-    client_->execSqlSync(
-        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
-        placeholder_year_id_, revision_with_deactivated);
-    for (auto& defect : data["defects"]) {
-        if (!defect["bridge_component_id"].isString()) continue;
-        if (defect["bridge_component_id"].asString().empty()) continue;
-        defect["component_inventory_revision_id"] = revision_with_deactivated;
-    }
-    bridge_report::db::ReviewRepository repository(client_, registry_);
-
-    const auto outcome = repository.save_review_draft(make_input(data));
-
-    EXPECT_FALSE(outcome.success);
-    EXPECT_EQ(outcome.error_code, "defect_component_assignment_invalid");
-    ASSERT_FALSE(outcome.validation.issues.empty());
-}
-
-// 版本对得上、但提交的规范类别与该版本的映射对不上 -> 同样是逐项 details。
-TEST_F(SaveReviewDraftTest, ReportsPerDefectIssuesWhenTheCategoryDoesNotMatchTheMapping) {
-    bridge_report::db::ReviewRepository repository(client_, registry_);
-    auto data = build_confirmed_data();
-    data["defects"][0]["standard_component_category_id"] = "h21.component.deck_pavement";
-
-    const auto outcome = repository.save_review_draft(make_input(data));
-
-    EXPECT_FALSE(outcome.success);
-    EXPECT_EQ(outcome.error_code, "defect_component_assignment_invalid");
-    ASSERT_FALSE(outcome.validation.issues.empty());
-}
-
-// 年度锁在草稿版本上（待校对年度允许这么锁）：解析不出可用的已确认版本。
-// 这是年度上下文错误，不能伪装成每条病害各自的数据错误。
-TEST_F(SaveReviewDraftTest, ReportsAContextErrorWhenTheYearIsLockedToADraftRevision) {
-    const auto draft_revision_id = add_draft_revision();
-    client_->execSqlSync(
-        "update inspection_years set component_inventory_revision_id=$2::uuid where id=$1::uuid",
-        placeholder_year_id_, draft_revision_id);
-    bridge_report::db::ReviewRepository repository(client_, registry_);
-
-    const auto outcome = repository.save_review_draft(make_input(build_confirmed_data()));
-
-    EXPECT_FALSE(outcome.success);
-    EXPECT_EQ(outcome.error_code, "component_inventory_unavailable");
-    EXPECT_TRUE(outcome.validation.issues.empty());
-}
 
 // 编辑锁失效与状态变化必须能与版本冲突、校验失败分辨开——改造前它们全被压成
 // 同一个 409 import_record_not_editable。
@@ -1766,25 +1783,6 @@ TEST_F(SaveReviewDraftTest, ReportsDbWriteFailedWhenTheStatementThrows) {
     EXPECT_FALSE(outcome.error_message.empty());
 }
 
-// 年度锁定发生在构件关联校验通过之后、写入之前。评定树校验在它之后失败时，
-// 这次锁定必须随事务一起回滚，不能留下"版本锁死了、草稿却没存"的年度。
-TEST_F(SaveReviewDraftTest, RollsBackTheYearLockWhenALaterStepFails) {
-    unlock_year_revision();
-    ASSERT_FALSE(year_locked_revision_id().has_value());
-    bridge_report::db::ReviewRepository repository(client_, registry_);
-    auto data = build_confirmed_data();
-    // 构件关联合法（锁定会真的执行），但节点不在本年度的评定树里。
-    data["defects"][0]["rating_tree_node_id"] = "11111111-1111-4111-8111-111111111111";
-    data["defects"][0]["rating_tree_match_method"] = "manual";
-
-    const auto outcome = repository.save_review_draft(make_input(data));
-
-    ASSERT_FALSE(outcome.success);
-    EXPECT_EQ(outcome.error_code, "defect_rating_tree_assignment_invalid");
-    EXPECT_FALSE(year_locked_revision_id().has_value()) << "后续步骤失败时年度锁定必须一起回滚";
-    EXPECT_EQ(stored_parsed_result_json().find("11111111-1111-4111-8111-111111111111"),
-              std::string::npos);
-}
 
 // ConfirmLocksTheResolvedRevisionBeforePreflight 的失败面：版本锁定发生在
 // build_preflight_report() 之前，所以 preflight 挡回去时那次锁定必须一起回滚。
@@ -1800,10 +1798,7 @@ TEST_F(ConfirmAnnualFactsTest, RollsBackTheYearRevisionLockWhenPreflightBlocks) 
     // 病害已校对、契约合法，但没绑实际构件：preflight 的 check_component_inventory_links
     // 会以 defect_component_match_required 阻断。挑这个而不是"未校对"，是因为后者挂在
     // **契约校验**上，而契约校验发生在版本锁定之前，测不到要守的那段。
-    data["defects"][0]["bridge_component_id"] = Json::Value();
-    data["defects"][0]["standard_component_category_id"] = Json::Value();
-    data["defects"][0]["resolved_structure_part"] = Json::Value();
-    data["defects"][0]["component_inventory_revision_id"] = Json::Value();
+    drop_resolution_state();
     ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
 
     const auto outcome = repository.confirm_annual_facts(
@@ -1829,7 +1824,7 @@ TEST_F(ConfirmAnnualFactsTest, ExplicitRevisionMatchingTheLockedYearIsAccepted) 
     bridge_report::assessment::AssessmentConfirmationService service(client_, registry_);
 
     const auto outcome = service.calculate(
-        placeholder_year_id_, build_confirmed_data(),
+        placeholder_year_id_, confirmed_view(),
         std::optional<std::string>(inventory_revision_id_));
 
     for (const auto& item : outcome.preview.issues) {
@@ -1855,7 +1850,7 @@ TEST_F(ConfirmAnnualFactsTest, ExplicitRevisionRejectsADraftOrUnknownRevision) {
     bridge_report::assessment::AssessmentConfirmationService service(client_, registry_);
 
     const auto with_draft = service.calculate(
-        placeholder_year_id_, build_confirmed_data(),
+        placeholder_year_id_, confirmed_view(),
         std::optional<std::string>(draft_revision));
     bool draft_rejected = false;
     for (const auto& item : with_draft.preview.issues) {
@@ -1864,7 +1859,7 @@ TEST_F(ConfirmAnnualFactsTest, ExplicitRevisionRejectsADraftOrUnknownRevision) {
     EXPECT_TRUE(draft_rejected) << "草稿台账版本不得作为评定输入";
 
     const auto with_unknown = service.calculate(
-        placeholder_year_id_, build_confirmed_data(),
+        placeholder_year_id_, confirmed_view(),
         std::optional<std::string>("00000000-0000-0000-0000-000000000000"));
     bool unknown_rejected = false;
     for (const auto& item : with_unknown.preview.issues) {
@@ -1893,10 +1888,7 @@ TEST_F(ConfirmAnnualFactsTest, ConfirmTakesTheYearRowLockBeforeReadingTheYear) {
     // 契约合法但没绑实际构件：preflight 的 check_component_inventory_links 会阻断。
     // 挑它是因为"未校对"那种挂在契约校验上，而契约校验发生在年度行锁之前，
     // 两条路都走不到要守的那句。
-    data["defects"][0]["bridge_component_id"] = Json::Value();
-    data["defects"][0]["standard_component_category_id"] = Json::Value();
-    data["defects"][0]["resolved_structure_part"] = Json::Value();
-    data["defects"][0]["component_inventory_revision_id"] = Json::Value();
+    drop_resolution_state();
     ASSERT_TRUE(repository.save_review_draft(import_record_id_, write_json_compact(data)));
 
     // 阻塞方另开一条连接：client_ 的连接池只有 1 条，用它开事务会把仓储饿死。

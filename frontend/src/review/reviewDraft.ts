@@ -2,10 +2,10 @@ import type {
   BridgeAnnualInspectionData,
   DefectCandidate,
   PhotoCandidate,
-  RatingTreeMatchMethod,
   ReviewStatus,
   StructurePart,
 } from "../contracts/annualInspection";
+import type { RatingTreeMatchMethod } from "../contracts/resolution";
 import { isHumanAcknowledgeableWarning } from "./defectWarnings";
 import { parseMeasurements } from "./measurementParser";
 
@@ -38,9 +38,7 @@ export type CandidateIdFactory = () => string;
 // 编译期锁死（模块 05 §8.1/§8.3 可编辑字段白名单）。HTML input 拿到的是字符串，由调用方
 // （UI 组件，Task 13/14）在 dispatch 前用 Number(...) 转好再传进来，reducer 不再做运行时兜底转换。
 export type ReviewDraftAction =
-  | { type: "add_defect"; input: ManualDefectInput }
   | { type: "delete_defect"; candidateId: string }
-  | { type: "link_defect_component"; candidateId: string; component: DefectComponentSelection }
   // §8.1 病害候选可编辑字段（measurement_text 走它自己的 edit_measurement_text action）。
   | { type: "edit_defect_field"; candidateId: string; field: "component_name"; value: string }
   | { type: "edit_defect_field"; candidateId: string; field: "component_number"; value: string | null }
@@ -72,19 +70,6 @@ export type ReviewDraftAction =
       matchEvidence: string;
     }
   // 后端批量匹配返回的唯一自动结果。方式沿用后端给的 exact/controlled_alias/
-  // controlled_keyword/source_indicator，保存时服务端会用同一份规则复核，
-  // 伪造的自动方式会被降级为人工。
-  | {
-      type: "apply_rating_tree_auto_matches";
-      versionId: string;
-      matches: Array<{
-        candidateId: string;
-        nodeId: string;
-        matchMethod: RatingTreeMatchMethod;
-        matchEvidence: string;
-        isScoring: boolean;
-      }>;
-    }
   | { type: "ignore_defect"; candidateId: string }
   | { type: "restore_ignored_defect"; candidateId: string }
   // 照片归属由 link/unlink 表达；换绑仍是先 unlink 再 link。
@@ -200,13 +185,13 @@ function applyRatingTreeSelection(
     matchEvidence: string;
   },
 ): DefectCandidate {
+  // 5.0：节点本身写进评分树解析表，由调用方走
+  // `PUT /defect-instances/{id}/rating-resolution`。草稿这边只跟着改人选完节点后
+  // 连带变化的**来源事实**：病害名称与标度。
+  void selection.versionId;
+  void selection.matchEvidence;
   return {
     ...defect,
-    rating_tree_version_id: selection.versionId,
-    rating_tree_node_id: selection.nodeId,
-    rating_tree_match_method: "manual",
-    rating_tree_match_evidence: selection.matchEvidence,
-    standard_defect_indicator_id: null,
     defect_type: selection.nodeName,
     defect_scale: selection.isScoring ? defect.defect_scale : null,
     review_status: nextStatusAfterContentEdit(defect.review_status),
@@ -225,44 +210,6 @@ function reduceReviewDraft(
       return action.data;
     }
 
-    case "add_defect": {
-      const input = action.input;
-      const defect: DefectCandidate = {
-        candidate_id: nextUnusedCandidateId(state, candidateIdFactory, issuedCandidateIds),
-        source_structure_part: null,
-        component_name: input.componentName,
-        component_number: input.componentNumber,
-        bridge_component_id: input.bridgeComponentId,
-        standard_component_category_id: input.standardComponentCategoryId,
-        resolved_structure_part: input.resolvedStructurePart,
-        component_inventory_revision_id: input.inventoryRevisionId,
-        component_match_candidate_ids: [input.bridgeComponentId],
-        component_match_method: "manual",
-        component_match_confirmed_by: null,
-        defect_location: input.defectLocation,
-        defect_type: input.defectType,
-        defect_description: input.defectDescription,
-        defect_scale: input.isScoring ? input.defectScale ?? null : null,
-        quantity_text: null,
-        measurement_text: null,
-        measurements: [],
-        rating_tree_version_id: input.ratingTreeVersionId,
-        rating_tree_node_id: input.ratingTreeNodeId,
-        rating_tree_match_method: "manual",
-        rating_tree_match_evidence: "人工新增病害时从当前年度评定树选择",
-        standard_defect_indicator_id: null,
-        photo_references: [],
-        group_review_status: "待确认",
-        severity: null,
-        remark: null,
-        source_ref: { source_type: "manual" },
-        confidence: 1,
-        review_status: "已修改",
-        warnings: [],
-      };
-      return { ...state, defects: [...state.defects, defect] };
-    }
-
     case "delete_defect": {
       if (!state.defects.some((defect) => defect.candidate_id === action.candidateId)) return state;
       return {
@@ -276,33 +223,6 @@ function reduceReviewDraft(
               }
             : photo
         ),
-      };
-    }
-
-    case "link_defect_component": {
-      const component = action.component;
-      return {
-        ...state,
-        defects: updateDefect(state.defects, action.candidateId, (defect) => ({
-          ...defect,
-          bridge_component_id: component.bridgeComponentId,
-          standard_component_category_id: component.standardComponentCategoryId,
-          resolved_structure_part: component.resolvedStructurePart,
-          component_inventory_revision_id: component.inventoryRevisionId,
-          component_match_candidate_ids: [component.bridgeComponentId],
-          component_match_method: "manual",
-          component_match_confirmed_by: null,
-          rating_tree_version_id: null,
-          rating_tree_node_id: null,
-          rating_tree_match_method: null,
-          rating_tree_match_evidence: null,
-          standard_defect_indicator_id: null,
-          warnings: defect.warnings.filter((warning) =>
-            warning.code !== "defect_component_match_required" &&
-            warning.code !== "defect_component_match_ambiguous"),
-          review_status: nextStatusAfterContentEdit(defect.review_status),
-          group_review_status: "待确认",
-        })),
       };
     }
 
@@ -358,44 +278,6 @@ function reduceReviewDraft(
           defect.group_review_status !== "已确认"
             ? applyRatingTreeSelection(defect, action)
             : defect),
-      };
-    }
-
-    case "apply_rating_tree_auto_matches": {
-      const matches = new Map(
-        action.matches.map((match) => [match.candidateId, match] as const),
-      );
-      return {
-        ...state,
-        defects: state.defects.map((defect) => {
-          const match = matches.get(defect.candidate_id);
-          if (!match) return defect;
-          // 自动结果绝不覆盖人工选择、已确认或已忽略的记录，也不改写复核状态：
-          // 自动匹配只是把待确认病害填好，确认仍然由人做。
-          if (
-            defect.review_status === "已忽略" ||
-            defect.group_review_status === "已确认" ||
-            (defect.rating_tree_match_method === "manual" && defect.rating_tree_node_id)
-          ) {
-            return defect;
-          }
-          if (
-            defect.rating_tree_node_id === match.nodeId &&
-            defect.rating_tree_match_method === match.matchMethod
-          ) {
-            return defect;
-          }
-          return {
-            ...defect,
-            rating_tree_version_id: action.versionId,
-            rating_tree_node_id: match.nodeId,
-            rating_tree_match_method: match.matchMethod,
-            rating_tree_match_evidence: match.matchEvidence,
-            standard_defect_indicator_id: null,
-            defect_scale: match.isScoring ? defect.defect_scale : null,
-            group_review_status: "待确认",
-          };
-        }),
       };
     }
 

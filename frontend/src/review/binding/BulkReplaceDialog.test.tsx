@@ -1,111 +1,123 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { BindingReplaceInventoryEntry, BindingRow } from "../../api/importBindingApi";
 import { BulkReplaceDialog } from "./BulkReplaceDialog";
+import type { ResolutionPlanPreview, ResolutionPlanRow } from "../../api/resolutionApi";
 
-function row(component_number: string, status: BindingRow["status"] = "unmatched"): BindingRow {
+// 5.0：预览由后端生成，前端只展示并拿 plan token 去执行。这些用例因此不再验证
+// "前端算得对不对"（那份规则已经迁到 C++，由 ComponentReplacePatternTest 守），
+// 而是验证"后端给什么就显示什么、应用时提交的是 token"。
+
+function planRow(overrides: Partial<ResolutionPlanRow> = {}): ResolutionPlanRow {
   return {
-    component_number,
-    defect_count: 1,
-    status,
-    bridge_component_id: null,
-    bound_component: null,
-    candidate_components: [],
+    group_id: `group-${overrides.source_component_number ?? "x"}`,
+    source_component_name: "桥面铺装",
+    source_component_number: "第32孔桥面",
+    member_count: 1,
+    resolved_numbers: ["32#跨桥面铺装"],
+    target_component_ids: ["c32"],
+    outcome: "will_bind",
+    reason_code: "",
+    reason_message: "",
+    ...overrides,
   };
 }
 
-function entry(id: string, component_number: string): BindingReplaceInventoryEntry {
-  return { bridge_component_id: id, component_number, is_active: true };
+function plan(overrides: Partial<ResolutionPlanPreview> = {}): ResolutionPlanPreview {
+  return {
+    plan_token: "11111111-1111-4111-8111-111111111111",
+    operation_type: "bulk_replace",
+    expires_at: "2026-08-27T10:15:00+08:00",
+    will_apply_count: 2,
+    skipped_count: 1,
+    blocked_count: 0,
+    instances_before: 3,
+    instances_after: 3,
+    rating_recomputed_count: 2,
+    inventory_revision_id: "revision-1",
+    rating_tree_version_id: "tree-1",
+    rows: [
+      planRow(),
+      planRow({
+        source_component_number: "第33孔桥面",
+        resolved_numbers: ["33#跨桥面铺装"],
+        target_component_ids: ["c33"],
+      }),
+      planRow({
+        source_component_number: "第7孔桥面",
+        resolved_numbers: ["7#跨桥面铺装"],
+        target_component_ids: [],
+        outcome: "skipped",
+        reason_code: "component_not_found",
+        reason_message: "台账中无此编号。",
+      }),
+    ],
+    ...overrides,
+  };
 }
 
-const rows = [row("第32孔桥面"), row("第33孔桥面"), row("第7孔桥面")];
-const entries = [entry("c32", "32#跨桥面铺装"), entry("c33", "33#跨桥面铺装")];
-
 function renderDialog(overrides: Partial<Parameters<typeof BulkReplaceDialog>[0]> = {}) {
+  const onPreview = vi.fn().mockResolvedValue(undefined);
   const onApply = vi.fn().mockResolvedValue(undefined);
   const onClose = vi.fn();
   render(
     <BulkReplaceDialog
       partName="桥面铺装"
-      rows={rows}
-      entries={entries}
+      plan={null}
+      previewing={false}
       busy={false}
+      onPreview={onPreview}
       onApply={onApply}
       onClose={onClose}
       {...overrides}
     />
   );
-  return { onApply, onClose };
-}
-
-async function fillPattern(find: string, replace: string) {
-  await userEvent.type(screen.getByLabelText("查找"), find);
-  await userEvent.type(screen.getByLabelText("替换为"), replace);
+  return { onPreview, onApply, onClose };
 }
 
 describe("BulkReplaceDialog", () => {
-  // 取数完成前用空数组顶替，会让预览把每一条都判成"台账中无此编号"——不报错、
-  // 不崩溃，只是全错。所以未加载必须是 null，而且此时不许输入。
-  it("does not preview before the inventory arrives", async () => {
-    renderDialog({ entries: null, loading: true });
+  it("asks the backend for a preview instead of computing one", async () => {
+    const { onPreview } = renderDialog();
+    await userEvent.type(screen.getByLabelText("查找"), "第*孔桥面");
+    await userEvent.type(screen.getByLabelText("替换为"), "*#跨桥面铺装");
+    await userEvent.click(screen.getByRole("button", { name: "生成预览" }));
 
-    expect(screen.getByText("正在加载台账构件…")).toBeInTheDocument();
-    expect(screen.getByLabelText("查找")).toBeDisabled();
-    expect(screen.getByLabelText("替换为")).toBeDisabled();
-    expect(screen.queryByText("台账中无此编号")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
+    expect(onPreview).toHaveBeenCalledWith("第*孔桥面", "*#跨桥面铺装");
   });
 
-  it("offers a retry when the inventory failed to load", async () => {
-    const onRetry = vi.fn();
-    renderDialog({ entries: null, loading: false, onRetry });
+  it("renders the backend rows with their own reasons and totals", () => {
+    renderDialog({ plan: plan() });
 
-    await userEvent.click(screen.getByRole("button", { name: "重试" }));
-    expect(onRetry).toHaveBeenCalled();
-  });
-
-
-  it("previews each row and totals bindable versus skipped", async () => {
-    renderDialog();
-    await fillPattern("第*孔桥面", "*#跨桥面铺装");
-
-    expect(await screen.findByText("32#跨桥面铺装")).toBeInTheDocument();
+    expect(screen.getByText("32#跨桥面铺装")).toBeInTheDocument();
     expect(screen.getByText("33#跨桥面铺装")).toBeInTheDocument();
-    // 第7孔转换成功但台账里没有，应与"不符合模式"区分开。
+    // 行级原因码由后端给；"台账中无此编号"与"不符合模式"必须能分开看。
     expect(screen.getByText("台账中无此编号")).toBeInTheDocument();
     expect(screen.getByText(/将绑定 2 行/)).toBeInTheDocument();
     expect(screen.getByText(/跳过 1 行/)).toBeInTheDocument();
   });
 
-  it("disables applying while no pattern is entered", () => {
+  it("disables previewing until a pattern is entered", () => {
     renderDialog();
+    expect(screen.getByRole("button", { name: "生成预览" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
   });
 
-  it("reports an invalid pattern and keeps applying disabled", async () => {
-    renderDialog();
-    await fillPattern("第*孔桥面", "*-*#板");
-    expect(await screen.findByText(/替换内容里的 \* 比查找内容多/)).toBeInTheDocument();
+  it("disables applying when the plan would bind nothing", () => {
+    renderDialog({ plan: plan({ will_apply_count: 0 }) });
     expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
   });
 
-  it("disables applying when nothing would bind", async () => {
-    renderDialog();
-    await fillPattern("第*孔铰缝", "*#铰缝");
-    await waitFor(() => expect(screen.getByText(/将绑定 0 行/)).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
+  it("applies by plan token, not by a locally computed target list", async () => {
+    const { onApply } = renderDialog({ plan: plan() });
+    await userEvent.click(screen.getByRole("button", { name: "应用" }));
+
+    expect(onApply).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
   });
 
-  it("applies only the rows that resolve to exactly one component", async () => {
-    const { onApply } = renderDialog();
-    await fillPattern("第*孔桥面", "*#跨桥面铺装");
-    await userEvent.click(await screen.findByRole("button", { name: "应用" }));
-
-    expect(onApply).toHaveBeenCalledWith([
-      { part_name: "桥面铺装", component_number: "第32孔桥面", bridge_component_id: "c32" },
-      { part_name: "桥面铺装", component_number: "第33孔桥面", bridge_component_id: "c33" },
-    ]);
+  it("surfaces a backend error without pretending the plan is usable", () => {
+    renderDialog({ error: "替换内容里的 * 比查找内容多（2 > 1），多出的无从取值。" });
+    expect(screen.getByRole("alert")).toHaveTextContent(/比查找内容多/);
+    expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
   });
 });

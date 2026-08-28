@@ -150,30 +150,53 @@ TEST_F(WordImportRepositoryTest, PersistsExactDefectMatchAgainstConfirmedInvento
     const auto outcome = repository.persist_parse_result(import_id_, batch);
 
     ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+
+    // 5.0：解析结果落关系表，parsed_result_json 里一个解析字段都不该有。
     const auto stored = client_->execSqlSync(
-        "select parsed_result_json#>>'{defects,0,bridge_component_id}' as component_id,"
-        "parsed_result_json#>>'{defects,0,standard_component_category_id}' as category_id,"
-        "parsed_result_json#>>'{defects,0,resolved_structure_part}' as structure_part,"
-        "parsed_result_json#>>'{defects,0,component_match_method}' as match_method,"
-        "parsed_result_json#>>'{defects,0,component_inventory_revision_id}' as revision_id,"
-        "parsed_result_json#>>'{defects,0,component_number}' as component_number,"
-        "parsed_result_json#>>'{defects,0,component_name}' as component_name,"
-        "iy.component_inventory_revision_id::text as year_revision_id "
+        "select g.status, g.match_method, g.inventory_revision_id::text as revision_id,"
+        " g.source_component_name, g.source_component_number, g.normalized_component_number,"
+        " g.version,"
+        " t.bridge_component_id::text as target_component_id, t.target_role,"
+        " i.instance_order, i.instance_status, i.is_photo_owner,"
+        " i.component_resolution_version,"
+        " m.source_candidate_id,"
+        " ir.parsed_result_json#>>'{defects,0,component_number}' as component_number,"
+        " ir.parsed_result_json#>>'{defects,0,component_name}' as component_name,"
+        " ir.parsed_result_json#>>'{defects,0,bridge_component_id}' as leaked_component_id,"
+        " iy.component_inventory_revision_id::text as year_revision_id "
         "from import_records ir "
         "join inspection_years iy on iy.id=ir.inspection_year_id "
+        "join import_component_resolution_groups g on g.import_record_id=ir.id "
+        "join import_component_group_members m on m.group_id=g.id "
+        "join import_component_resolution_targets t on t.group_id=g.id "
+        "join import_resolved_defect_instances i on i.group_member_id=m.id "
         "where ir.id=$1::uuid",
         import_id_);
     ASSERT_EQ(stored.size(), 1u);
-    EXPECT_EQ(stored[0]["component_id"].as<std::string>(), component_id);
-    EXPECT_EQ(stored[0]["category_id"].as<std::string>(), "h21.component.beam.upper_bearing");
-    EXPECT_EQ(stored[0]["structure_part"].as<std::string>(), "上部结构");
+    EXPECT_EQ(stored[0]["status"].as<std::string>(), "bound");
     EXPECT_EQ(stored[0]["match_method"].as<std::string>(), "exact");
     EXPECT_EQ(stored[0]["revision_id"].as<std::string>(), revision_id);
     EXPECT_EQ(stored[0]["year_revision_id"].as<std::string>(), revision_id);
+    EXPECT_EQ(stored[0]["target_component_id"].as<std::string>(), component_id);
+    EXPECT_EQ(stored[0]["target_role"].as<std::string>(), "primary");
+    EXPECT_EQ(stored[0]["source_candidate_id"].as<std::string>(), "defect_0001");
+    EXPECT_EQ(stored[0]["instance_order"].as<int>(), 1);
+    EXPECT_EQ(stored[0]["instance_status"].as<std::string>(), "active");
+    // 唯一目标 → 这条实例就是唯一的活动实例，照片天然归它。
+    EXPECT_TRUE(stored[0]["is_photo_owner"].as<bool>());
+    EXPECT_EQ(stored[0]["component_resolution_version"].as<int>(),
+              stored[0]["version"].as<int>());
+
+    // 组身份：部件名称原文 + 权威归一化编号（去尾部 # 并转小写，不剥类型词）。
+    EXPECT_EQ(stored[0]["source_component_name"].as<std::string>(), "上部承重构件");
+    EXPECT_EQ(stored[0]["source_component_number"].as<std::string>(), "1-1#梁");
+    EXPECT_EQ(stored[0]["normalized_component_number"].as<std::string>(), "1-1#梁");
+
     // 导入保真：构件编号/部件名称按报告原文存储，不裁剪类型词、不归一化。
     EXPECT_EQ(stored[0]["component_number"].as<std::string>(), "1-1#梁");
     EXPECT_EQ(stored[0]["component_name"].as<std::string>(), "上部承重构件");
-
+    EXPECT_TRUE(stored[0]["leaked_component_id"].isNull())
+        << "构件解析结果不得写回 parsed_result_json";
 }
 
 // 桥上同时有已确认版本和草稿时，导入必须按已确认版本匹配。此前构件匹配走
@@ -187,15 +210,30 @@ TEST_F(WordImportRepositoryTest, MatchesAgainstTheConfirmedRevisionWhileADraftEx
         "normalized_component_key,current_status,creation_source) values($1::uuid,'上部结构','主梁',"
         "'1-1#','word-draft-1','已确认','人工录入') returning id::text",
         bridge_id_)[0]["id"].as<std::string>();
+    package_id_ = client_->execSqlSync(
+        "insert into standard_packages(standard_family,standard_id,standard_code,standard_name,"
+        "official_edition,package_version,contract_version,algorithm_id,effective_date,content_checksum) "
+        "values('technical_condition','WORD-DRAFT-'||gen_random_uuid()::text,'WORD DRAFT',"
+        "'Word草稿并存测试规范','2026','1.0.0',1,'word-draft','2026-01-01',"
+        "'sha256:'||repeat('c',64)) returning id::text")[0]["id"].as<std::string>();
     const auto confirmed_id = client_->execSqlSync(
         "insert into bridge_component_inventory_revisions(bridge_id,revision_number,created_by_user_id) "
         "values($1::uuid,1,$2::uuid) returning id::text",
         bridge_id_, user_id)[0]["id"].as<std::string>();
-    client_->execSqlSync(
+    // 映射不能省：匹配器只认"启用 + 有生效映射"的条目，缺了它这条测试就只能证明
+    // "版本号记对了"，证不了"确实按已确认版本匹上了"。
+    const auto confirmed_entry_id = client_->execSqlSync(
         "insert into bridge_component_inventory_entries(inventory_revision_id,bridge_component_id,"
         "component_number,site_name,site_component_type,sort_order) "
-        "values($1::uuid,$2::uuid,'1-1#梁','空心板','空心板',1)",
-        confirmed_id, component_id);
+        "values($1::uuid,$2::uuid,'1-1#梁','空心板','空心板',1) returning id::text",
+        confirmed_id, component_id)[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "insert into bridge_component_standard_mappings(inventory_entry_id,standard_package_id,"
+        "standard_bridge_type_id,standard_component_category_id,structure_part,mapping_source,"
+        "confirmation_status,confirmed_by_user_id,confirmed_at) "
+        "values($1::uuid,$2::uuid,'h21.bridge_type.beam','h21.component.beam.upper_bearing',"
+        "'superstructure','规范模板','已确认',$3::uuid,now())",
+        confirmed_entry_id, package_id_, user_id);
     client_->execSqlSync(
         "update bridge_component_inventory_revisions set status='已确认',"
         "confirmed_by_user_id=$2::uuid,confirmed_at=now() where id=$1::uuid",
@@ -222,17 +260,21 @@ TEST_F(WordImportRepositoryTest, MatchesAgainstTheConfirmedRevisionWhileADraftEx
     ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
 
     const auto stored = client_->execSqlSync(
-        "select parsed_result_json#>>'{defects,0,component_inventory_revision_id}' as revision_id,"
+        "select g.inventory_revision_id::text as revision_id, g.status,"
         "iy.component_inventory_revision_id::text as year_revision_id "
         "from import_records ir join inspection_years iy on iy.id=ir.inspection_year_id "
+        "join import_component_resolution_groups g on g.import_record_id=ir.id "
         "where ir.id=$1::uuid", import_id_);
-    // 病害带的版本、年度锁定的版本，都必须是已确认那个。
+    ASSERT_EQ(stored.size(), 1u);
+    // 组钉住的版本、年度锁定的版本，都必须是已确认那个。
     EXPECT_EQ(stored[0]["revision_id"].as<std::string>(), confirmed_id);
     EXPECT_EQ(stored[0]["year_revision_id"].as<std::string>(), confirmed_id);
+    EXPECT_EQ(stored[0]["status"].as<std::string>(), "bound");
 }
 
-// 桥上根本没有已确认台账时是**降级**而不是失败：解析结果照常入库、带上待人工处理的
-// 警告。把这条改成导入失败是行为回归——现在允许先导入、之后再补台账。
+// 桥上根本没有已确认台账时是**降级**而不是失败：解析结果照常入库，组建出来停在
+// unresolved 且不钉版本。把这条改成导入失败是行为回归——它会把"绑定面板不可用"这个
+// 局部限制升级成整条导入不可校对，而现在允许先导入、之后再补台账（设计 §10）。
 TEST_F(WordImportRepositoryTest, KeepsDegradingWhenTheBridgeHasNoConfirmedInventory) {
     bridge_report::archive::ArchivedPhotoBatch batch;
     batch.data["contract"]["parser_name"] = "liaoning-word-importer";
@@ -250,15 +292,60 @@ TEST_F(WordImportRepositoryTest, KeepsDegradingWhenTheBridgeHasNoConfirmedInvent
     ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
 
     const auto stored = client_->execSqlSync(
-        "select parsed_result_json#>>'{defects,0,component_inventory_revision_id}' as revision_id,"
-        "parsed_result_json#>>'{defects,0,warnings,0,code}' as warning_code,"
-        "iy.component_inventory_revision_id::text as year_revision_id "
+        "select g.status, g.match_method, g.inventory_revision_id::text as revision_id,"
+        " g.normalized_component_number,"
+        " (select count(*) from import_component_group_members m where m.group_id=g.id) as members,"
+        " (select count(*) from import_component_resolution_targets t where t.group_id=g.id) as targets,"
+        " iy.component_inventory_revision_id::text as year_revision_id "
         "from import_records ir join inspection_years iy on iy.id=ir.inspection_year_id "
+        "join import_component_resolution_groups g on g.import_record_id=ir.id "
         "where ir.id=$1::uuid", import_id_);
+    ASSERT_EQ(stored.size(), 1u) << "台账未确认也要建组，否则整条导入没有构件行可校对";
+    EXPECT_EQ(stored[0]["status"].as<std::string>(), "unresolved");
+    EXPECT_TRUE(stored[0]["match_method"].isNull());
     EXPECT_TRUE(stored[0]["revision_id"].isNull());
-    EXPECT_EQ(stored[0]["warning_code"].as<std::string>(), "defect_component_match_required");
+    EXPECT_EQ(stored[0]["normalized_component_number"].as<std::string>(), "1-1#梁");
+    EXPECT_EQ(stored[0]["members"].as<long long>(), 1);
+    EXPECT_EQ(stored[0]["targets"].as<long long>(), 0);
     // 没有可锁的版本，年度也不该被锁上。
     EXPECT_TRUE(stored[0]["year_revision_id"].isNull());
+
+    // 导入照常进入可校对状态——这正是这条测试要守住的东西。
+    const auto status = client_->execSqlSync(
+        "select import_status from import_records where id=$1::uuid", import_id_);
+    EXPECT_EQ(status[0]["import_status"].as<std::string>(), "待校对");
+}
+
+// 同一部件下的多条无编号病害必须进同一个组。归一化写 NULL 时唯一约束会静默失效，
+// 每条各成一组，"同一构件只绑一次"当场垮掉——这条专门盯住空串那个约定。
+TEST_F(WordImportRepositoryTest, GroupsUnnumberedDefectsOfOnePartTogether) {
+    bridge_report::archive::ArchivedPhotoBatch batch;
+    batch.data["contract"]["parser_name"] = "liaoning-word-importer";
+    batch.data["contract"]["parser_version"] = "2.0.0";
+    batch.data["photos"] = Json::Value(Json::arrayValue);
+    for (const auto* candidate : {"defect_0001", "defect_0002"}) {
+        Json::Value defect(Json::objectValue);
+        defect["candidate_id"] = candidate;
+        defect["component_name"] = "桥面铺装";
+        defect["component_number"] = Json::Value();  // 报告里本列为空
+        defect["warnings"] = Json::Value(Json::arrayValue);
+        batch.data["defects"].append(defect);
+    }
+
+    bridge_report::db::WordImportRepository repository(client_);
+    const auto outcome = repository.persist_parse_result(import_id_, batch);
+    ASSERT_TRUE(outcome.success) << outcome.error_code << ": " << outcome.error_message;
+
+    const auto stored = client_->execSqlSync(
+        "select g.normalized_component_number, g.source_component_number,"
+        " count(m.id) as members "
+        "from import_component_resolution_groups g "
+        "join import_component_group_members m on m.group_id=g.id "
+        "where g.import_record_id=$1::uuid group by g.id", import_id_);
+    ASSERT_EQ(stored.size(), 1u) << "无编号病害各成一组说明归一化落了 NULL";
+    EXPECT_EQ(stored[0]["normalized_component_number"].as<std::string>(), "");
+    EXPECT_TRUE(stored[0]["source_component_number"].isNull());
+    EXPECT_EQ(stored[0]["members"].as<long long>(), 2);
 }
 
 TEST_F(WordImportRepositoryTest, LoadsTemporaryCurrentAnnualWordContext) {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { UNRESOLVED, type DefectResolution } from "./resolutionIndex";
 
 import type { DefectMatchCandidate, DefectMatchOutcome, DefectMatchResult } from "../api/defectMatchingApi";
 import type { RatingTreeNode } from "../api/ratingTreeApi";
@@ -47,23 +48,43 @@ const treeNode: RatingTreeNode = {
   sources: [],
 };
 
+// 5.0：解析状态不在草稿里。下面的夹具在造草稿的同时把对应的解析快照记在这里，
+// treeWiring() 把它一并交给模型——否则四十多个调用点每处都要再传一遍，
+// 漏一处就是“这一处以为没绑定”。
+let fixtureResolution = new Map<string, DefectResolution>();
+
+function setResolution(candidateId: string, patch: Partial<DefectResolution>) {
+  fixtureResolution.set(candidateId, {
+    ...UNRESOLVED,
+    ...(fixtureResolution.get(candidateId) ?? {}),
+    ...patch,
+  });
+}
+
 function treeWiring() {
   return {
     ratingTreeVersionId: "tree-version-1",
     ratingTreeNodes: [treeNode],
     applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
     treeRulesReady: true,
+    resolution: fixtureResolution,
   };
 }
 
 function safeDraft() {
+  fixtureResolution = new Map();
   const draft = completeData();
   const defect = draft.defects[0];
-  defect.bridge_component_id = "component-1";
-  defect.standard_component_category_id = "category-1";
-  defect.rating_tree_version_id = "tree-version-1";
-  defect.rating_tree_node_id = treeNode.id;
-  defect.rating_tree_match_method = "exact";
+  setResolution(defect.candidate_id, {
+    bridgeComponentId: "component-1",
+    standardComponentCategoryId: "category-1",
+    ratingTreeVersionId: "tree-version-1",
+    ratingTreeNodeId: treeNode.id,
+    ratingMatchMethod: "exact",
+    ratingStatus: "matched",
+    hasRating: true,
+    activeInstanceCount: 1,
+  });
   defect.defect_scale = 2;
   defect.review_status = "待确认";
   defect.group_review_status = "待确认";
@@ -83,10 +104,16 @@ function orderingDraft() {
   const draft = safeDraft();
   const base = draft.defects[0];
   draft.defects = [
-    { ...base, candidate_id: "d-railing", bridge_component_id: "c-railing" },
-    { ...base, candidate_id: "d-girder", bridge_component_id: "c-girder" },
-    { ...base, candidate_id: "d-pier", bridge_component_id: "c-pier" },
+    { ...base, candidate_id: "d-railing" },
+    { ...base, candidate_id: "d-girder" },
+    { ...base, candidate_id: "d-pier" },
   ];
+  const bound = fixtureResolution.get(base.candidate_id) ?? UNRESOLVED;
+  for (const [candidateId, componentId] of [
+    ["d-railing", "c-railing"], ["d-girder", "c-girder"], ["d-pier", "c-pier"],
+  ] as const) {
+    setResolution(candidateId, { ...bound, bridgeComponentId: componentId });
+  }
   draft.photos = [];
   return draft;
 }
@@ -95,8 +122,11 @@ function orderingDraft() {
 const componentOrder = new Map([["c-girder", 0], ["c-pier", 1], ["c-railing", 2]]);
 
 function orderingInput(extra: Record<string, unknown> = {}) {
+  // 调用方自带草稿时不再重建：重建会连带重置 fixtureResolution，把调用方刚写进去的
+  // 解析快照冲掉。
+  const draft = extra.draft ?? orderingDraft();
   return {
-    draft: orderingDraft(),
+    draft,
     ratingTreeVersionId: "tree-version-1",
     ratingTreeNodes: [treeNode],
     applicableTreeNodeIdsByComponent: new Map([
@@ -105,6 +135,7 @@ function orderingInput(extra: Record<string, unknown> = {}) {
       ["c-railing", new Set([treeNode.id])],
     ]),
     treeRulesReady: true,
+    resolution: fixtureResolution,
     assessmentIssues: [],
     ...extra,
   };
@@ -149,9 +180,8 @@ describe("buildDefectPhotoReviewModel", () => {
 
   it("filters the defects that have no component at all", () => {
     const draft = orderingDraft();
-    draft.defects.push({
-      ...draft.defects[0], candidate_id: "d-unbound", bridge_component_id: null,
-    });
+    draft.defects.push({ ...draft.defects[0], candidate_id: "d-unbound" });
+    // 不给它写解析快照：默认就是"还没绑构件"，正是这条用例要的状态。
     const componentPart = new Map([
       ["c-girder", "板"], ["c-pier", "墩柱"], ["c-railing", "栏杆"],
     ]);
@@ -164,9 +194,8 @@ describe("buildDefectPhotoReviewModel", () => {
   // 没绑构件的病害还不属于任何部件，插在中间会打断走查，排最后。
   it("puts defects without a component at the end", () => {
     const draft = orderingDraft();
-    draft.defects.push({
-      ...draft.defects[0], candidate_id: "d-unbound", bridge_component_id: null,
-    });
+    draft.defects.push({ ...draft.defects[0], candidate_id: "d-unbound" });
+    // 不给它写解析快照：默认就是"还没绑构件"，正是这条用例要的状态。
     const model = buildDefectPhotoReviewModel(
       orderingInput({ draft, componentOrder }) as never);
     expect(model.rows[model.rows.length - 1].candidateId).toBe("d-unbound");
@@ -175,10 +204,10 @@ describe("buildDefectPhotoReviewModel", () => {
 
   it("allows exact and controlled-alias tree matches but blocks fuzzy suggestions", () => {
     const draft = safeDraft();
-    Object.assign(draft.defects[0], {
-      rating_tree_version_id: "tree-version-1",
-      rating_tree_node_id: treeNode.id,
-      rating_tree_match_method: "exact",
+    setResolution(draft.defects[0].candidate_id, {
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodeId: treeNode.id,
+      ratingMatchMethod: "exact",
     });
     const input = {
       draft,
@@ -186,31 +215,33 @@ describe("buildDefectPhotoReviewModel", () => {
       ratingTreeNodes: [treeNode],
       applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
       treeRulesReady: true,
+      resolution: fixtureResolution,
       assessmentIssues: [],
     };
 
     expect(buildDefectPhotoReviewModel(input).rows[0].batchEligible).toBe(true);
-    draft.defects[0].rating_tree_match_method = "controlled_alias";
+    setResolution(draft.defects[0].candidate_id, { ratingMatchMethod: "controlled_alias" });
     expect(buildDefectPhotoReviewModel(input).rows[0].batchEligible).toBe(true);
-    draft.defects[0].rating_tree_match_method = "fuzzy_candidate";
+    setResolution(draft.defects[0].candidate_id, { ratingMatchMethod: "fuzzy_candidate" });
     expect(buildDefectPhotoReviewModel(input).rows[0].problems.map((problem) => problem.code))
       .toContain("rating_tree_fuzzy_review_required");
   });
 
   it("validates tree version, component scope and allowed scales independently", () => {
     const draft = safeDraft();
-    Object.assign(draft.defects[0], {
-      rating_tree_version_id: "old-version",
-      rating_tree_node_id: treeNode.id,
-      rating_tree_match_method: "manual",
-      defect_scale: 5,
+    setResolution(draft.defects[0].candidate_id, {
+      ratingTreeVersionId: "old-version",
+      ratingTreeNodeId: treeNode.id,
+      ratingMatchMethod: "manual",
     });
+    draft.defects[0].defect_scale = 5;
     const row = buildDefectPhotoReviewModel({
       draft,
       ratingTreeVersionId: "tree-version-1",
       ratingTreeNodes: [treeNode],
       applicableTreeNodeIdsByComponent: new Map([["component-1", new Set<string>()]]),
       treeRulesReady: true,
+      resolution: fixtureResolution,
       assessmentIssues: [],
     }).rows[0];
 
@@ -252,10 +283,14 @@ describe("buildDefectPhotoReviewModel", () => {
       h21_indicator_id: null,
       is_scoring: false,
     };
+    setResolution(draft.defects[0].candidate_id, {
+      ratingTreeNodeId: nonScoringSummary.id,
+      ratingMatchMethod: "manual",
+      ratingStatus: "matched",
+      hasRating: true,
+    });
     draft.defects[0] = {
       ...draft.defects[0],
-      rating_tree_node_id: nonScoringSummary.id,
-      rating_tree_match_method: "manual",
       defect_type: nonScoringSummary.display_name,
       defect_scale: null,
     };
@@ -269,6 +304,7 @@ describe("buildDefectPhotoReviewModel", () => {
         ["component-1", new Set([nonScoringSummary.id])],
       ]),
       treeRulesReady: true,
+      resolution: fixtureResolution,
       assessmentIssues: [],
     }).rows[0];
 
@@ -292,6 +328,7 @@ describe("buildDefectPhotoReviewModel", () => {
         ["component-1", new Set([treeNode.id])],
       ]),
       treeRulesReady: true,
+      resolution: fixtureResolution,
       assessmentIssues: [],
     }).rows[0];
 
@@ -423,7 +460,7 @@ describe("buildDefectPhotoReviewModel", () => {
   // 放行只对"请人工确认"那一类成立：真的缺数据仍然要挡。
   it("keeps blocking when a real gap sits alongside an acknowledgeable warning", () => {
     const draft = safeDraft();
-    draft.defects[0].bridge_component_id = null;
+    setResolution(draft.defects[0].candidate_id, { bridgeComponentId: null });
     draft.defects[0].warnings = [{
       code: "measurement_parse_low_confidence",
       message: "尺寸表达未能稳定结构化，请人工确认。",
@@ -462,8 +499,8 @@ describe("buildDefectPhotoReviewModel", () => {
 
   it("blocks batch confirmation until a rating tree defect is chosen", () => {
     const draft = safeDraft();
-    draft.defects[0].rating_tree_node_id = null;
-    draft.defects[0].rating_tree_match_method = null;
+    setResolution(draft.defects[0].candidate_id, {
+      ratingTreeNodeId: null, ratingMatchMethod: null, ratingStatus: null, hasRating: false });
     const row = buildDefectPhotoReviewModel({
       draft,
       ...treeWiring(),
@@ -476,8 +513,8 @@ describe("buildDefectPhotoReviewModel", () => {
 
   it("drops backend issues that restate a problem the frontend already derived", () => {
     const draft = safeDraft();
-    draft.defects[0].rating_tree_node_id = null;
-    draft.defects[0].rating_tree_match_method = null;
+    setResolution(draft.defects[0].candidate_id, {
+      ratingTreeNodeId: null, ratingMatchMethod: null, ratingStatus: null, hasRating: false });
     const row = buildDefectPhotoReviewModel({
       draft,
       ...treeWiring(),
@@ -515,10 +552,10 @@ describe("buildDefectPhotoReviewModel", () => {
 
   it("labels controlled matches, candidates and composite defects distinctly", () => {
     const draft = safeDraft();
-    Object.assign(draft.defects[0], {
-      rating_tree_version_id: "tree-version-1",
-      rating_tree_node_id: treeNode.id,
-      rating_tree_match_method: "controlled_keyword",
+    setResolution(draft.defects[0].candidate_id, {
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodeId: treeNode.id,
+      ratingMatchMethod: "controlled_keyword",
     });
     const treeInput = {
       draft,
@@ -526,6 +563,7 @@ describe("buildDefectPhotoReviewModel", () => {
       ratingTreeNodes: [treeNode],
       applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
       treeRulesReady: true,
+      resolution: fixtureResolution,
       assessmentIssues: [],
     };
 
@@ -536,8 +574,8 @@ describe("buildDefectPhotoReviewModel", () => {
     expect(bound.defect.group_review_status).toBe("待确认");
     expect(bound.batchEligible).toBe(true);
 
-    draft.defects[0].rating_tree_node_id = null;
-    draft.defects[0].rating_tree_match_method = null;
+    setResolution(draft.defects[0].candidate_id, {
+      ratingTreeNodeId: null, ratingMatchMethod: null, ratingStatus: null, hasRating: false });
     const composite = buildDefectPhotoReviewModel({
       ...treeInput,
       matchResults: new Map([["defect_0001", matchResult("composite", [
@@ -563,8 +601,8 @@ describe("buildDefectPhotoReviewModel", () => {
 
   it("keeps missing prerequisites and matcher failures out of the plain unmatched bucket", () => {
     const draft = safeDraft();
-    draft.defects[0].rating_tree_node_id = null;
-    draft.defects[0].rating_tree_match_method = null;
+    setResolution(draft.defects[0].candidate_id, {
+      ratingTreeNodeId: null, ratingMatchMethod: null, ratingStatus: null, hasRating: false });
     const treeInput = {
       draft,
       ratingTreeVersionId: "tree-version-1",
@@ -631,10 +669,10 @@ describe("buildDefectPhotoReviewModel", () => {
 
   it("never lets an automatic result relabel a manual or confirmed record", () => {
     const draft = safeDraft();
-    Object.assign(draft.defects[0], {
-      rating_tree_version_id: "tree-version-1",
-      rating_tree_node_id: treeNode.id,
-      rating_tree_match_method: "manual",
+    setResolution(draft.defects[0].candidate_id, {
+      ratingTreeVersionId: "tree-version-1",
+      ratingTreeNodeId: treeNode.id,
+      ratingMatchMethod: "manual",
     });
     const row = buildDefectPhotoReviewModel({
       draft,
@@ -642,6 +680,7 @@ describe("buildDefectPhotoReviewModel", () => {
       ratingTreeNodes: [treeNode],
       applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([treeNode.id])]]),
       treeRulesReady: true,
+      resolution: fixtureResolution,
       assessmentIssues: [],
       matchResults: new Map([["defect_0001", { ...matchResult("auto_bound", []), skipped: true }]]),
     }).rows[0];
@@ -652,14 +691,17 @@ describe("buildDefectPhotoReviewModel", () => {
 
   it("puts composite, candidate and unmatched rows ahead of batchable ones", () => {
     const draft = safeDraft();
-    draft.defects = ["defect_0001", "defect_0002", "defect_0003"].map((candidateId, index) => ({
-      ...draft.defects[0],
-      candidate_id: candidateId,
-      rating_tree_version_id: "tree-version-1",
-      rating_tree_node_id: index === 0 ? treeNode.id : null,
-      rating_tree_match_method: index === 0 ? ("exact" as const) : null,
-      photo_references: [],
-    }));
+    draft.defects = ["defect_0001", "defect_0002", "defect_0003"].map((candidateId, index) => {
+      setResolution(candidateId, {
+        bridgeComponentId: "component-1",
+        ratingTreeVersionId: "tree-version-1",
+        ratingTreeNodeId: index === 0 ? treeNode.id : null,
+        ratingMatchMethod: index === 0 ? ("exact" as const) : null,
+        hasRating: index === 0,
+        activeInstanceCount: 1,
+      });
+      return { ...draft.defects[0], candidate_id: candidateId, photo_references: [] };
+    });
     const model = buildDefectPhotoReviewModel({
       draft,
       ratingTreeVersionId: "tree-version-1",
@@ -681,14 +723,14 @@ describe("buildDefectPhotoReviewModel", () => {
 
   it("filters by composite, candidate and unmatched issue buckets", () => {
     const draft = safeDraft();
-    draft.defects = ["defect_0001", "defect_0002"].map((candidateId) => ({
-      ...draft.defects[0],
-      candidate_id: candidateId,
-      rating_tree_version_id: "tree-version-1",
-      rating_tree_node_id: null,
-      rating_tree_match_method: null,
-      photo_references: [],
-    }));
+    draft.defects = ["defect_0001", "defect_0002"].map((candidateId) => {
+      setResolution(candidateId, {
+        bridgeComponentId: "component-1",
+        ratingTreeVersionId: "tree-version-1",
+        activeInstanceCount: 1,
+      });
+      return { ...draft.defects[0], candidate_id: candidateId, photo_references: [] };
+    });
     const base = {
       draft,
       ratingTreeVersionId: "tree-version-1",

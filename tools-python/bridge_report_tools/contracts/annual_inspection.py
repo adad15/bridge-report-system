@@ -61,7 +61,7 @@ class SourceRef(ContractModel):
 
 class ContractInfo(ContractModel):
     name: Literal["BridgeAnnualInspectionData"]
-    version: Literal["4.0"]
+    version: Literal["5.0"]
     generated_at: datetime
     producer: str
     parser_name: str
@@ -118,25 +118,6 @@ class Measurement(ContractModel):
         return self
 
 
-class RangeSplitOrigin(ContractModel):
-    """用户在构件绑定界面把范围病害拆成单构件病害时的永久来源。"""
-
-    operation_id: str = Field(min_length=1)
-    source_candidate_id: str = Field(min_length=1)
-    source_component_number: str = Field(min_length=1)
-    expanded_component_number: str = Field(min_length=1)
-    split_index: int = Field(ge=1, strict=True)
-    split_count: int = Field(ge=2, strict=True)
-    operated_by_user_id: str = Field(min_length=1)
-    operated_at: datetime
-
-    @model_validator(mode="after")
-    def validate_split_position(self) -> RangeSplitOrigin:
-        if self.split_index > self.split_count:
-            raise ValueError("split_index must not exceed split_count")
-        return self
-
-
 class PhotoReference(ContractModel):
     """Word 照片编号及其人工核对结论。"""
 
@@ -171,17 +152,6 @@ class DefectCandidate(ContractModel):
     source_structure_part: StructurePart | None = None
     component_name: str
     component_number: str | None = None
-    bridge_component_id: str | None = None
-    standard_component_category_id: str | None = None
-    resolved_structure_part: StructurePart | None = None
-    component_inventory_revision_id: str | None = None
-    component_match_candidate_ids: list[str] = Field(
-        default_factory=list, json_schema_extra={"uniqueItems": True}
-    )
-    component_match_method: Literal[
-        "exact", "confirmed_alias", "normalized_candidate", "manual"
-    ] | None = None
-    component_match_confirmed_by: str | None = None
     defect_type: str
     defect_location: str
     defect_scale: int | None = Field(default=None, gt=0, strict=True)
@@ -189,15 +159,6 @@ class DefectCandidate(ContractModel):
     quantity_text: str | None = None
     measurement_text: str | None = None
     measurements: list[Measurement]
-    rating_tree_version_id: str | None = None
-    rating_tree_node_id: str | None = None
-    rating_tree_match_method: Literal[
-        "exact", "controlled_alias", "controlled_keyword", "fuzzy_candidate",
-        # 来源软件直接标注的评定指标：不是从文字推断的，来源要能区分开
-        "source_indicator", "manual",
-    ] | None = None
-    rating_tree_match_evidence: str | None = None
-    standard_defect_indicator_id: str | None = None
     #: 来源软件原始评定分组和指标身份。ID 来自 judgeTreeId / judgeIndexId，编号来自
     #: judgeTree.chapterNum / judgeIndex.tableNum。它们与派生的 H21 指标严格分开，重绑与
     #: 草稿保存都不得清空。
@@ -212,7 +173,6 @@ class DefectCandidate(ContractModel):
     source_ref: SourceRef
     confidence: float = Field(ge=0, le=1)
     review_status: ReviewStatus
-    range_split_origin: RangeSplitOrigin | None = None
     warnings: list[WarningItem]
 
     @field_validator("photo_references")
@@ -226,26 +186,15 @@ class DefectCandidate(ContractModel):
         return value
 
     @field_validator(
-        "rating_tree_version_id",
-        "rating_tree_node_id",
-        "rating_tree_match_evidence",
-        "standard_defect_indicator_id",
         "source_defect_group_id",
         "source_defect_group_number",
         "source_defect_indicator_id",
         "source_defect_indicator_number",
     )
     @classmethod
-    def require_non_empty_server_reference(cls, value: str | None) -> str | None:
+    def require_non_empty_source_reference(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
-            raise ValueError("server-derived rating tree references must not be blank")
-        return value
-
-    @field_validator("component_match_candidate_ids")
-    @classmethod
-    def require_unique_component_match_candidates(cls, value: list[str]) -> list[str]:
-        if len(value) != len(set(value)):
-            raise ValueError("component_match_candidate_ids must be unique")
+            raise ValueError("source indicator references must not be blank")
         return value
 
 

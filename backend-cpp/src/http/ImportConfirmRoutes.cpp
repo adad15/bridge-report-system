@@ -18,6 +18,7 @@
 #include "bridge_report/review/ConfirmPlan.hpp"
 #include "bridge_report/review/DraftValidation.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
+#include "bridge_report/resolution/ConfirmResolutionReader.hpp"
 #include "bridge_report/review/ReviewModels.hpp"
 
 namespace bridge_report::http {
@@ -81,7 +82,12 @@ void register_preflight_confirm_route(
                     inventory.has_value()
                         ? std::optional<std::string>(inventory->id) : std::nullopt,
                     std::optional<bool>(inventory.has_value()));
-                auto report = review::build_preflight_report(parsed_result, context);
+                // 只读路径：视图与草稿分开传，视图刻意带着 5.0 已移出合同的解析
+                // 字段，拿它跑契约校验会整份失败。
+                const auto confirmable_view = resolution::build_confirmable_view(
+                    db_client, import_record_id, parsed_result);
+                auto report = review::build_preflight_report(
+                    parsed_result, confirmable_view, context);
                 if (report.can_confirm) {
                     if (!detail->rating_tree_version_id.has_value() ||
                         !detail->technical_standard_package_id.has_value()) {
@@ -103,7 +109,7 @@ void register_preflight_confirm_route(
                         } else {
                             const auto tree_validation =
                                 review::validate_defect_rating_tree_for_confirmation(
-                                    parsed_result,
+                                    confirmable_view,
                                     *detail->rating_tree_version_id,
                                     *detail->technical_standard_package_id,
                                     *tree,
@@ -128,7 +134,7 @@ void register_preflight_confirm_route(
                     // 上下文，但**不写年度**。它自己那条上下文查询用的是内连接，年度没锁
                     // 版本时无行可取，六处解析全部改对也照样过不去。
                     const auto assessment = assessment_service.calculate(
-                        *detail->inspection_year_id, parsed_result,
+                        *detail->inspection_year_id, confirmable_view,
                         inventory.has_value()
                             ? std::optional<std::string>(inventory->id) : std::nullopt);
                     if (assessment.status != assessment::AssessmentConfirmationStatus::Completed) {

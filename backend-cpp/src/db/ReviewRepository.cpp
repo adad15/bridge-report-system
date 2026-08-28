@@ -8,6 +8,9 @@
 #include "bridge_report/review/ContractCompatibility.hpp"
 #include "bridge_report/review/DraftValidation.hpp"
 #include "bridge_report/review/PreflightReport.hpp"
+#include "bridge_report/resolution/ConfirmResolutionReader.hpp"
+#include "bridge_report/resolution/ResolutionReopenSnapshot.hpp"
+#include "bridge_report/resolution/DraftResolutionSynchronizer.hpp"
 
 #include <optional>
 #include <memory>
@@ -718,34 +721,26 @@ SaveReviewDraftOutcome ReviewRepository::save_review_draft(const SaveReviewDraft
                                             .resolve_confirmed_revision(bridge_id, locked_revision_id);
         const auto resolved_revision_id = resolved_inventory.has_value()
             ? std::optional<std::string>(resolved_inventory->id) : std::nullopt;
-        // 整请求级判定必须先于逐项校验：整份草稿一致地落后于服务端解析出的版本时，
-        // 该整体提示一次让用户刷新，而不是给出一串“请重新选择”——重新绑定写回的
-        // 仍是同一个版本，逐条重选解决不了。
-        const auto consistency =
-            review::classify_draft_inventory_revision(draft_to_save, resolved_revision_id);
-        if (consistency == review::DraftInventoryRevisionConsistency::unresolved) {
-            return fail(
-                "component_inventory_unavailable",
-                "本检测年度没有可用的已确认构件台账，无法保存已绑定构件的病害。");
-        }
-        if (consistency == review::DraftInventoryRevisionConsistency::all_stale) {
-            return fail(
-                "component_inventory_revision_changed",
-                "本检测年度使用的构件台账版本已变化，请刷新后重试。");
-        }
-        const auto association_validation =
-            review::validate_defect_component_associations(draft_to_save, resolved_inventory);
-        if (!association_validation.ok) {
-            return fail_validation(association_validation);
-        }
+        // 5.0：草稿里已经没有构件解析字段可校验了。绑定状态住在关系表里，草稿保存
+        // 要做的是把来源病害的增删改**同步**过去，而不是校验草稿自带的绑定。
 
         // 版本在这里就定下来了，因此锁也在这里上：草稿写的是版本化数据，与绑定和
         // Word 导入同类，同样要把版本锁进年度。否则草稿按 R1 存下、年度仍未锁定，
         // 别人确认 R2 之后下次加载会解析成 R2，刚存的绑定立刻变成旧版本数据。
         // 年度已锁定时 lock_pending_year_revision() 只做一致性确认，不覆盖。
         // 后面任何一步失败，这次锁定都随事务一起回滚。
-        if (consistency != review::DraftInventoryRevisionConsistency::no_bindings &&
-            resolved_revision_id.has_value()) {
+        //
+        // "有没有绑定"5.0 之后要问关系表：草稿里已经没有 bridge_component_id 可数了。
+        // 不问就锁的话，一份一条构件都没绑的草稿也会把年度钉死在某个版本上——那正是
+        // 这条规则当初要避免的。
+        const bool has_any_binding = [&] {
+            const auto rows = tx->execSqlSync(
+                "select exists(select 1 from import_component_resolution_groups "
+                "where import_record_id = $1::uuid and status = 'bound') as bound",
+                input.import_record_id);
+            return !rows.empty() && rows[0]["bound"].as<bool>();
+        }();
+        if (has_any_binding && resolved_revision_id.has_value()) {
             if (!ComponentInventoryRepository(tx).lock_pending_year_revision(
                     inspection_year_id, bridge_id, locked_revision_id, *resolved_revision_id)) {
                 return fail(
@@ -762,22 +757,9 @@ SaveReviewDraftOutcome ReviewRepository::save_review_draft(const SaveReviewDraft
         if (!rating_tree.has_value()) {
             return fail("rating_tree_unavailable", "本年度锁定的评定树不可用。");
         }
-        const auto rating_tree_validation = review::normalize_defect_rating_tree_associations(
-            draft_to_save, stored_draft, *rating_tree_version_id, *technical_package_id,
-            *rating_tree, resolved_inventory);
-        if (!rating_tree_validation.ok) {
-            return fail_validation(rating_tree_validation);
-        }
-
-        for (auto& defect : draft_to_save["defects"]) {
-            const bool manual = defect["component_match_method"].isString() &&
-                defect["component_match_method"].asString() == "manual" &&
-                defect["bridge_component_id"].isString() &&
-                !defect["bridge_component_id"].asString().empty();
-            defect["component_match_confirmed_by"] = manual
-                ? Json::Value(input.actor_username)
-                : Json::Value(Json::nullValue);
-        }
+        // 评分树解析同样住在关系表里；草稿不再携带节点，也就没有可规范化的引用。
+        (void)technical_package_id;
+        (void)rating_tree;
 
         // 步骤 5：重开态的范围与角色校验（后端兜底，不依赖前端按钮显隐）：
         //   full 重开由管理员发起，其草稿保存同样只认管理员；
@@ -793,6 +775,17 @@ SaveReviewDraftOutcome ReviewRepository::save_review_draft(const SaveReviewDraft
                     return fail_validation(scope_validation);
                 }
             }
+        }
+
+        // 步骤 6：把来源病害的增删改同步到解析关系表（§11.1）。与 JSON 的写入同事务：
+        // "JSON 已保存而成员未同步"的中间态里，新增的病害在绑定工作区里根本不存在，
+        // 删掉的病害却还占着组。
+        const auto sync = resolution::synchronize_draft_resolution(
+            tx, input.import_record_id, bridge_id,
+            inspection_year_id.value_or(std::string{}),
+            stored_draft, draft_to_save, resolved_inventory);
+        if (!sync.ok) {
+            return fail(sync.error_code, sync.error_message);
         }
 
         const auto audit_event = review::build_defect_change_audit_event(
@@ -900,29 +893,56 @@ bool ReviewRepository::restore_reopened_import_record(
 ) {
     // coalesce 兜底：备份列理论上在重开态必非空（reopen 时同步快照），
     // 万一为空则保留现草稿，宁可多显示修改也不清空数据。
+    //
+    // 来源 JSON 与关系态快照必须同事务还原（§8.8）。只回滚其中一半时，病害文字回到
+    // 确认时的样子、绑定却停在重开期间改成的样子，两半各自看着都对。
     const std::string update_sql =
         "update import_records set import_status = '已确认', "
         "parsed_result_json = coalesce(reopen_backup_parsed_result_json, parsed_result_json), "
         "reopened_at = null, reopened_by_username = null, reopen_scope = null, "
         "reopen_backup_parsed_result_json = null, updated_at = now() ";
-    const auto result = edit_lock.has_value()
-        ? db_client_->execSqlSync(
-            "with updated as (" + update_sql +
-            "  where id = $1::uuid and import_status = '待校对' and reopened_at is not null "
-            "  and exists(select 1 from import_record_edit_locks l "
-            "    where l.import_record_id = import_records.id and l.user_id = $2::uuid "
-            "    and l.user_session_id = $3::uuid and l.lock_token_hash = $4 and l.expires_at > now()) "
-            "  returning id"
-            ") delete from import_record_edit_locks l using updated u "
-            "where l.import_record_id = u.id and l.user_id = $2::uuid and l.user_session_id = $3::uuid "
-            "and l.lock_token_hash = $4 returning l.import_record_id",
-            import_record_id, edit_lock->user_id, edit_lock->session_id,
-            auth::sha256_hex(edit_lock->lock_token))
-        : db_client_->execSqlSync(
-            update_sql +
-            "where id = $1::uuid and import_status = '待校对' and reopened_at is not null returning id",
-            import_record_id);
-    return !result.empty();
+    std::shared_ptr<drogon::orm::Transaction> tx;
+    auto latch = std::make_shared<CommitLatch>();
+    try {
+        tx = db_client_->newTransaction(latch->callback());
+        const auto result = edit_lock.has_value()
+            ? tx->execSqlSync(
+                "with updated as (" + update_sql +
+                "  where id = $1::uuid and import_status = '待校对' and reopened_at is not null "
+                "  and exists(select 1 from import_record_edit_locks l "
+                "    where l.import_record_id = import_records.id and l.user_id = $2::uuid "
+                "    and l.user_session_id = $3::uuid and l.lock_token_hash = $4 and l.expires_at > now()) "
+                "  returning id"
+                ") delete from import_record_edit_locks l using updated u "
+                "where l.import_record_id = u.id and l.user_id = $2::uuid and l.user_session_id = $3::uuid "
+                "and l.lock_token_hash = $4 returning l.import_record_id",
+                import_record_id, edit_lock->user_id, edit_lock->session_id,
+                auth::sha256_hex(edit_lock->lock_token))
+            : tx->execSqlSync(
+                update_sql +
+                "where id = $1::uuid and import_status = '待校对' and reopened_at is not null returning id",
+                import_record_id);
+        if (result.empty()) {
+            tx->rollback();
+            tx.reset();
+            return false;
+        }
+        const auto restored = resolution::restore_reopen_snapshot(
+            tx, import_record_id, edit_lock.has_value() ? edit_lock->user_id : std::string{});
+        if (!restored.success) {
+            tx->rollback();
+            tx.reset();
+            return false;
+        }
+        tx.reset();
+        return latch->wait();
+    } catch (const std::exception&) {
+        if (tx) {
+            tx->rollback();
+            tx.reset();
+        }
+        throw;
+    }
 }
 
 bool ReviewRepository::has_current_annual_facts(const std::string& bridge_id, int inspection_year) {
@@ -1096,7 +1116,12 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         context.component_inventory_revision_id = resolved_revision.has_value()
             ? std::optional<std::string>(resolved_revision->id) : std::nullopt;
         context.component_inventory_confirmed = resolved_revision.has_value();
-        const auto preflight = review::build_preflight_report(data, context);
+        // 5.0：预检与写计划都不再从病害 JSON 读解析字段。可确认病害视图把来源事实
+        // 与关系表里的解析状态组合起来，两者在同一事务里读，看到的是同一份快照。
+        const auto confirmable_view =
+            resolution::build_confirmable_view(tx, import_record_id, data);
+        const auto preflight =
+            review::build_preflight_report(data, confirmable_view, context);
         if (!preflight.can_confirm) {
             auto failed = fail("preflight_failed", "最新草稿未通过入库前检查。");
             failed.preflight_details = preflight.to_json();
@@ -1127,9 +1152,10 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
                 failed.preflight_details = report.to_json();
                 return failed;
             }
+            // 评分树校验也要看可确认视图：节点住在关系表里，草稿里没有它。
             const auto tree_validation =
                 review::validate_defect_rating_tree_for_confirmation(
-                    data,
+                    confirmable_view,
                     *rating_tree_version_id,
                     *technical_package_id,
                     *tree,
@@ -1167,8 +1193,10 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
         {
             assessment::AssessmentConfirmationService assessment_service(
                 tx, standard_registry_);
+            // 评定输入同样按可确认视图：它读的是绑定构件与评分树节点，那两样都在
+            // 关系表里；给来源草稿的话算出来的是"一条病害都没绑构件"。
             assessment_outcome = assessment_service.calculate(
-                *existing_inspection_year_id, data);
+                *existing_inspection_year_id, confirmable_view);
         }
         if (assessment_outcome.status != assessment::AssessmentConfirmationStatus::Completed) {
             review::PreflightReport report = preflight;
@@ -1182,7 +1210,7 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             return failed;
         }
 
-        const auto plan = review::build_confirm_plan(data);
+        const auto plan = review::build_confirm_plan(confirmable_view);
         std::unordered_map<std::string, std::string> archived_file_id_by_photo_candidate;
         archived_file_id_by_photo_candidate.reserve(plan.photos.size());
         for (const auto& photo : plan.photos) {
@@ -1332,6 +1360,10 @@ ConfirmOutcome ReviewRepository::confirm_annual_facts(
             confirmation_note,
             write_compact_json(written_json)
         );
+
+        // 重新确认成功也是一个世代边界（§8.8）：删掉关系态快照，并把重开期间生成、
+        // 还没执行的计划一律作废——它们预览的是已经不存在的那一版状态。
+        resolution::discard_reopen_snapshot(tx, import_record_id, confirmed_by_user_id);
 
         // 步骤 7 收尾：清理被遗弃的挂载占位年度行。
         // 场景：导入记录原本挂在占位年度行 X（待校对、is_current=false）；同桥同年的另一条导入先被

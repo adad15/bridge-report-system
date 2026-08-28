@@ -321,7 +321,7 @@ def test_parse_word_import_outputs_contract_data_and_photo_files(tmp_path: Path)
     assert response.temporary_photo_files == ["photo_0001.png"]
     data = response.data
     assert data.contract.name == "BridgeAnnualInspectionData"
-    assert data.contract.version == "4.0"
+    assert data.contract.version == "5.0"
     assert data.contract.parser_name == "word_importer"
     assert data.import_context.source_type == "软件导出Word"
     assert data.import_context.file_role == "当前年度检测资料"
@@ -339,7 +339,7 @@ def test_parse_word_import_outputs_contract_data_and_photo_files(tmp_path: Path)
     )
     assert len(data.photos) == 1
     assert data.photos[0].linked_defect_candidate_id == "defect_0001"
-    assert data.contract.version == "4.0"
+    assert data.contract.version == "5.0"
     assert not hasattr(data, "ratings")
     assert data.comparison_candidates == []
     assert data.report_text_candidates == []
@@ -365,7 +365,7 @@ def test_parse_word_import_keeps_defect_table_missing_as_contract_error(tmp_path
     assert response.data.defects == []
     assert response.data.photos == []
     assert response.data.errors[0].code == "defect_tables_not_found"
-    assert response.data.contract.version == "4.0"
+    assert response.data.contract.version == "5.0"
     assert not hasattr(response.data, "ratings")
 
 
@@ -383,7 +383,7 @@ def test_parse_word_import_succeeds_when_rating_table_missing(tmp_path: Path) ->
 
     response = parse_word_import(request)
 
-    assert response.data.contract.version == "4.0"
+    assert response.data.contract.version == "5.0"
     assert len(response.data.defects) == 1
     assert not hasattr(response.data, "ratings")
     assert "rating_table_not_found" not in {
@@ -445,7 +445,7 @@ def test_parse_word_endpoint_accepts_document_without_rating_table(tmp_path: Pat
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["data"]["contract"]["version"] == "4.0"
+    assert payload["data"]["contract"]["version"] == "5.0"
     assert "ratings" not in payload["data"]
 
 

@@ -273,11 +273,46 @@ TEST_F(InspectionYearDeletionRepositoryTest, RefusesToDeleteAYearWithACompletedF
     };
     const auto technical_package = make_package("DEL-TECH", "technical_condition");
     const auto maintenance_package = make_package("DEL-MAINT", "maintenance");
+    // 迁移 019：新 profile 必须绑一份已发布评定树，且该年度的病害观测必须挂到它的可选节点上。
+    const auto tree_version_id = client_->execSqlSync(
+        "insert into rating_tree_versions("
+        "tree_code,tree_name,package_version,contract_version,"
+        "technical_condition_package_id,technical_condition_standard_id,"
+        "technical_condition_package_version,technical_condition_content_checksum,"
+        "maintenance_package_id,maintenance_standard_id,"
+        "maintenance_package_version,maintenance_content_checksum,"
+        "organization_tree_code,organization_package_version,"
+        "organization_content_checksum,tree_content_checksum,status"
+        ") select 'DEL-TREE-'||gen_random_uuid()::text,'删除测试评定树','1.0.0',1,"
+        "       $1::uuid,t.standard_id,t.package_version,t.content_checksum,"
+        "       $2::uuid,m.standard_id,m.package_version,m.content_checksum,"
+        "       'DEL-TREE-ORG','1.0.0',"
+        "       'sha256:'||md5(gen_random_uuid()::text)||md5(gen_random_uuid()::text),"
+        "       'sha256:'||md5(gen_random_uuid()::text)||md5(gen_random_uuid()::text),'draft' "
+        "from standard_packages t, standard_packages m "
+        "where t.id=$1::uuid and m.id=$2::uuid returning id::text as id",
+        technical_package, maintenance_package)[0]["id"].as<std::string>();
+    client_->execSqlSync(
+        "insert into rating_tree_nodes("
+        "rating_tree_version_id,node_key,display_name,node_type,scoring_mode,is_selectable"
+        ") values ($1::uuid,'root','桥梁评定','root','non_scoring',false),"
+        "         ($1::uuid,'defect.test','裂缝','defect','non_scoring',true)",
+        tree_version_id);
+    // published 要求 published_at 非空（018 的 publish_state_check），因此分两步。
+    client_->execSqlSync(
+        "update rating_tree_versions set status='published',published_at=now() where id=$1::uuid",
+        tree_version_id);
+    const auto defect_node_id = client_->execSqlSync(
+        "select id::text as id from rating_tree_nodes "
+        "where rating_tree_version_id=$1::uuid and node_key='defect.test'",
+        tree_version_id)[0]["id"].as<std::string>();
     const auto profile_id = client_->execSqlSync(
         "insert into project_standard_profiles(technical_condition_package_id,maintenance_package_id,"
-        "created_by_user_id,change_reason) values($1::uuid,$2::uuid,$3::uuid,'删除测试') "
+        "rating_tree_version_id,created_by_user_id,change_reason) "
+        "values($1::uuid,$2::uuid,$4::uuid,$3::uuid,'删除测试') "
         "returning id::text as id",
-        technical_package, maintenance_package, user_id_)[0]["id"].as<std::string>();
+        technical_package, maintenance_package, user_id_,
+        tree_version_id)[0]["id"].as<std::string>();
     const auto revision_id = client_->execSqlSync(
         "insert into bridge_component_inventory_revisions(bridge_id,revision_number,created_by_user_id) "
         "values($1::uuid,1,$2::uuid) returning id::text as id",
@@ -292,10 +327,16 @@ TEST_F(InspectionYearDeletionRepositoryTest, RefusesToDeleteAYearWithACompletedF
         "insert into assessment_runs(inspection_year_id,run_kind,result_status,input_summary_json,"
         "input_checksum,rule_package_summary_json,rule_package_checksum,result_summary_json,"
         "created_by_user_id,formal_revision_number,technical_condition_package_id,standard_profile_id,"
-        "component_inventory_revision_id,is_current,confirmed_by_user_id,confirmed_at) "
+        // 迁移 019 的身份触发器：run 的评定树版本与校验和必须等于 profile 所绑的那一份。
+        "component_inventory_revision_id,is_current,confirmed_by_user_id,confirmed_at,"
+        "rating_tree_version_id,rating_tree_content_checksum) "
         "values($1::uuid,'正式','成功','{\"source\":\"deletion-test\"}'::jsonb,$2,"
         "'{\"package\":\"deletion-test\"}'::jsonb,$3,'{\"score\":80}'::jsonb,$4::uuid,1,"
-        "$5::uuid,$6::uuid,$7::uuid,true,$4::uuid,now()) returning id::text as id",
+        "$5::uuid,$6::uuid,$7::uuid,true,$4::uuid,now(),"
+        "(select rating_tree_version_id from project_standard_profiles where id=$6::uuid),"
+        "(select v.tree_content_checksum from rating_tree_versions v "
+        " join project_standard_profiles p on p.rating_tree_version_id=v.id where p.id=$6::uuid)) "
+        "returning id::text as id",
         year_v1_, "sha256:" + std::string(64, '3'),
         // validate_assessment_run_context() 要求它等于锁定规范包的 content_checksum。
         "sha256:" + std::string(64, 'd'),
@@ -327,6 +368,15 @@ TEST_F(InspectionYearDeletionRepositoryTest, RefusesToDeleteAYearWithACompletedF
     client_->execSqlSync(
         "alter table assessment_runs enable trigger trg_assessment_runs_completed_formal_immutable");
     client_->execSqlSync("delete from project_standard_profiles where id=$1::uuid", profile_id);
+    // 已发布的评定树不可变（018 的 protect_published_rating_tree_version），清场时暂停它；
+    // 而评定树版本对规范包是 RESTRICT 外键，所以它必须排在规范包之前删。
+    client_->execSqlSync(
+        "alter table rating_tree_versions disable trigger "
+        "trg_rating_tree_versions_published_immutable");
+    client_->execSqlSync("delete from rating_tree_versions where id=$1::uuid", tree_version_id);
+    client_->execSqlSync(
+        "alter table rating_tree_versions enable trigger "
+        "trg_rating_tree_versions_published_immutable");
     client_->execSqlSync("delete from standard_packages where id=$1::uuid", technical_package);
     client_->execSqlSync("delete from standard_packages where id=$1::uuid", maintenance_package);
     // 夹具的 TearDown 先删用户，任何 on delete restrict 引用它的行都会把删除挡住。

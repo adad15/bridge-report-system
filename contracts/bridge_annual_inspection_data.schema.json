@@ -203,7 +203,7 @@
           "type": "string"
         },
         "version": {
-          "const": "4.0",
+          "const": "5.0",
           "title": "Version",
           "type": "string"
         },
@@ -279,99 +279,6 @@
           "default": null,
           "title": "Component Number"
         },
-        "bridge_component_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Bridge Component Id"
-        },
-        "standard_component_category_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Standard Component Category Id"
-        },
-        "resolved_structure_part": {
-          "anyOf": [
-            {
-              "enum": [
-                "全桥",
-                "上部结构",
-                "下部结构",
-                "桥面系",
-                "其他"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Resolved Structure Part"
-        },
-        "component_inventory_revision_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Component Inventory Revision Id"
-        },
-        "component_match_candidate_ids": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Component Match Candidate Ids",
-          "type": "array",
-          "uniqueItems": true
-        },
-        "component_match_method": {
-          "anyOf": [
-            {
-              "enum": [
-                "exact",
-                "confirmed_alias",
-                "normalized_candidate",
-                "manual"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Component Match Method"
-        },
-        "component_match_confirmed_by": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Component Match Confirmed By"
-        },
         "defect_type": {
           "title": "Defect Type",
           "type": "string"
@@ -427,74 +334,6 @@
           },
           "title": "Measurements",
           "type": "array"
-        },
-        "rating_tree_version_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Rating Tree Version Id"
-        },
-        "rating_tree_node_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Rating Tree Node Id"
-        },
-        "rating_tree_match_method": {
-          "anyOf": [
-            {
-              "enum": [
-                "exact",
-                "controlled_alias",
-                "controlled_keyword",
-                "fuzzy_candidate",
-                "source_indicator",
-                "manual"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Rating Tree Match Method"
-        },
-        "rating_tree_match_evidence": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Rating Tree Match Evidence"
-        },
-        "standard_defect_indicator_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Standard Defect Indicator Id"
         },
         "source_defect_group_id": {
           "anyOf": [
@@ -606,17 +445,6 @@
           ],
           "title": "Review Status",
           "type": "string"
-        },
-        "range_split_origin": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RangeSplitOrigin"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
         },
         "warnings": {
           "items": {
@@ -956,64 +784,6 @@
         "resolution"
       ],
       "title": "PhotoReference",
-      "type": "object"
-    },
-    "RangeSplitOrigin": {
-      "additionalProperties": false,
-      "description": "用户在构件绑定界面把范围病害拆成单构件病害时的永久来源。",
-      "properties": {
-        "operation_id": {
-          "minLength": 1,
-          "title": "Operation Id",
-          "type": "string"
-        },
-        "source_candidate_id": {
-          "minLength": 1,
-          "title": "Source Candidate Id",
-          "type": "string"
-        },
-        "source_component_number": {
-          "minLength": 1,
-          "title": "Source Component Number",
-          "type": "string"
-        },
-        "expanded_component_number": {
-          "minLength": 1,
-          "title": "Expanded Component Number",
-          "type": "string"
-        },
-        "split_index": {
-          "minimum": 1,
-          "title": "Split Index",
-          "type": "integer"
-        },
-        "split_count": {
-          "minimum": 2,
-          "title": "Split Count",
-          "type": "integer"
-        },
-        "operated_by_user_id": {
-          "minLength": 1,
-          "title": "Operated By User Id",
-          "type": "string"
-        },
-        "operated_at": {
-          "format": "date-time",
-          "title": "Operated At",
-          "type": "string"
-        }
-      },
-      "required": [
-        "operation_id",
-        "source_candidate_id",
-        "source_component_number",
-        "expanded_component_number",
-        "split_index",
-        "split_count",
-        "operated_by_user_id",
-        "operated_at"
-      ],
-      "title": "RangeSplitOrigin",
       "type": "object"
     },
     "ReportTextCandidate": {

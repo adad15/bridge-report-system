@@ -57,9 +57,10 @@ def test_extracts_scale_component_number_and_internal_fields() -> None:
     assert defect.component_number == "1-1#板"
     assert defect.defect_scale == 2
     assert defect.defect_location == "底板"
-    assert defect.bridge_component_id is None
-    assert defect.standard_component_category_id is None
-    assert defect.resolved_structure_part is None
+    # 5.0 起构件解析不在来源事实里，模型上连字段都不该存在。
+    assert not hasattr(defect, "bridge_component_id")
+    assert not hasattr(defect, "standard_component_category_id")
+    assert not hasattr(defect, "resolved_structure_part")
     assert not hasattr(defect, "defect_deduction")
     assert not any("扣分" in warning.message or "评分" in warning.message for warning in defect.warnings)
 

@@ -157,9 +157,6 @@ def parse_defect_tables(
                     source_structure_part=structure_part,
                     component_name=component_name,
                     component_number=component_number,
-                    bridge_component_id=None,
-                    standard_component_category_id=None,
-                    resolved_structure_part=None,
                     # 清洗后为空就保持为空：分层匹配的受控关键词层要靠描述兜底，
                     # 用"未识别病害"这类假值填坑只会让匹配器把提示语当成病害名。
                     defect_type=defect_type,
@@ -169,7 +166,6 @@ def parse_defect_tables(
                     quantity_text=get_business_cell(row, quantity_index) or derive_quantity_text(measurement_text),
                     measurement_text=measurement_text,
                     measurements=measurements,
-                    standard_defect_indicator_id=None,
                     photo_references=[
                         PhotoReference(
                             photo_number=photo_number,

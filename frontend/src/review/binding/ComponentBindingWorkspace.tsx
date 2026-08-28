@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  applyResolutionPlan,
+  createResolutionPlan,
+  type ResolutionPlanPreview,
+} from "../../api/resolutionApi";
 
 import {
   searchInventoryEntries,
@@ -351,6 +356,8 @@ export function ComponentBindingWorkspace({
   const [replaceInventory, setReplaceInventory] =
     useState<{ revisionId: string; entries: BindingReplaceInventoryEntry[] } | null>(null);
   const [replaceLoading, setReplaceLoading] = useState(false);
+  // 预览计划一律来自后端（§13.3）：前端不构造、不重算，只展示并拿 token 去执行。
+  const [replacePlan, setReplacePlan] = useState<ResolutionPlanPreview | null>(null);
   const replaceRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -899,31 +906,49 @@ export function ComponentBindingWorkspace({
       {replaceGroup !== null ? (
         <BulkReplaceDialog
           partName={replaceGroup}
-          rows={overview.groups.find((item) => item.part_name === replaceGroup)?.rows ?? []}
-          entries={
-            replaceInventory?.revisionId === overview.inventory_revision_id
-              ? replaceInventory.entries : null
-          }
-          loading={replaceLoading}
+          plan={replacePlan}
+          previewing={replaceLoading}
           busy={busy}
           error={replaceError}
-          onRetry={() => {
-            setReplaceInventory(null);
-            setReplaceError(null);
-          }}
           onClose={() => {
-            replaceRequest.current += 1;   // 取消在途取数
+            setReplacePlan(null);
+            setReplaceError(null);
             setReplaceGroup(null);
           }}
-          onApply={async (targets) => {
+          onPreview={async (find, replace) => {
+            // 预览由后端生成：前端不再拿一份台账自己算一遍。
+            setReplaceLoading(true);
+            try {
+              const plan = await createResolutionPlan(
+                backendBaseUrl, importId,
+                {
+                  operation_type: "bulk_replace",
+                  source_component_name: replaceGroup,
+                  find,
+                  replace,
+                  expected_inventory_revision_id: requireRevisionId(overview),
+                },
+                requireLockToken());
+              setReplacePlan(plan);
+              setReplaceError(null);
+            } catch (caught) {
+              setReplacePlan(null);
+              setReplaceError(errorMessage(caught));
+            } finally {
+              setReplaceLoading(false);
+            }
+          }}
+          onApply={async (planToken) => {
             setBusy(true);
             try {
-              const next = await bindComponentsBatch(
-                backendBaseUrl, importId, targets, requireRevisionId(overview), requireLockToken());
+              // 只提交 plan token：“用户看到的计划”与“实际执行的计划”因此天然是同一份。
+              await applyResolutionPlan(
+                backendBaseUrl, importId, planToken, requireLockToken());
+              const next = await fetchComponentBinding(backendBaseUrl, importId);
               setOverview(next);
               setError(null);
               onOverviewChange?.(next);
-              onDraftInvalidated?.();
+              setReplacePlan(null);
               setReplaceGroup(null);
             } catch (caught) {
               // 整批被拒时留在对话框里显示原因，用户可改模式重来。

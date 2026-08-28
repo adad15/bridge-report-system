@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { data } from "./testFixtures";
 import type { DefectReviewRow } from "./defectPhotoReviewModel";
 import { buildDefectIssueGroups } from "./defectIssueGroups";
+import { UNRESOLVED } from "./resolutionIndex";
 
 function unmatchedRow(
   candidateId: string,
@@ -14,10 +15,6 @@ function unmatchedRow(
     ...data().defects[0],
     candidate_id: candidateId,
     component_number: candidateId,
-    bridge_component_id: `component-${candidateId}`,
-    standard_component_category_id: "h21.component.deck.slab",
-    rating_tree_node_id: null,
-    rating_tree_match_method: null,
     source_defect_group_id: groupId,
     source_defect_group_number: "5.1.1",
     source_defect_indicator_id: indicatorId,
@@ -29,6 +26,13 @@ function unmatchedRow(
   return {
     candidateId,
     defect,
+    // 5.0：解析状态挂在行上，不在 defect 上。
+    resolution: {
+      ...UNRESOLVED,
+      bridgeComponentId: `component-${candidateId}`,
+      standardComponentCategoryId: "h21.component.deck.slab",
+      activeInstanceCount: 1,
+    },
     photos: [],
     problems: [{
       code: "rating_tree_node_required",
@@ -49,8 +53,11 @@ function unmatchedRow(
 
 function rangeSplitRow(candidateId: string, confirmEligible = true): DefectReviewRow {
   const result = unmatchedRow(candidateId, "group-a", "indicator-a", "渗水泛碱");
-  result.defect.rating_tree_node_id = "tree-node-water";
-  result.defect.rating_tree_match_method = "source_indicator";
+  result.resolution = {
+    ...result.resolution,
+    ratingTreeNodeId: "tree-node-water",
+    ratingMatchMethod: "source_indicator",
+  };
   result.defect.defect_type = "渗水泛碱";
   result.problems = [{
     code: "component_range_split_review_required",

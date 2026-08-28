@@ -1,61 +1,63 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
-import type { BindingReplaceInventoryEntry, BindingRow } from "../../api/importBindingApi";
-import { buildReplacePreview, type ReplaceOutcome } from "./replacePreview";
+import type { ResolutionPlanPreview } from "../../api/resolutionApi";
 
 // 批量查找替换。设计见
-// docs/superpowers/specs/2026-07-24-bulk-binding-replace-design.md §3。
-// 预览在前端算，entries 由父组件在打开对话框时按需取回，只有"应用"才打后端。
+// docs/superpowers/specs/2026-07-24-bulk-binding-replace-design.md §3 与
+// docs/superpowers/specs/2026-08-27-import-component-rating-resolution-separation-design.md §13.3。
+//
+// 5.0 起**预览由后端生成**：前端把查找/替换串交上去换一份计划，应用时只提交
+// plan token，不提交自己算出来的结果集合。这样"用户看到的计划"与"实际执行的计划"
+// 天然是同一份——此前两边各算一次，规则一分叉就会出现"预览说能绑、后端却判无此编号"。
 
-const OUTCOME_LABELS: Record<ReplaceOutcome, string> = {
+const OUTCOME_LABELS: Record<string, string> = {
   will_bind: "将绑定",
-  pattern_miss: "不符合查找模式",
-  not_in_inventory: "台账中无此编号",
-  ambiguous: "台账中有多个同号构件",
+  will_clear: "将清除绑定",
+  will_repoint: "将重指版本",
+  skipped: "跳过",
+  blocked: "阻断",
 };
 
-export interface BulkReplaceTarget {
-  part_name: string;
-  component_number: string;
-  bridge_component_id: string;
+// 行级原因码由后端给，前端只做展示措辞，不自己判断为什么跳过。
+const REASON_LABELS: Record<string, string> = {
+  pattern_not_matched: "不符合查找模式",
+  component_not_found: "台账中无此编号",
+  component_ambiguous: "台账中有多个同号构件",
+  group_already_resolved: "已绑定或已标记缺失，不参与",
+  not_a_range: "该编号不是可展开的构件范围",
+};
+
+function outcomeLabel(row: ResolutionPlanPreview["rows"][number]): string {
+  if (row.outcome === "will_bind") return OUTCOME_LABELS.will_bind;
+  return REASON_LABELS[row.reason_code] ?? row.reason_message ??
+    OUTCOME_LABELS[row.outcome] ?? row.outcome;
 }
 
 export function BulkReplaceDialog({
   partName,
-  rows,
-  entries,
-  loading = false,
+  plan,
+  previewing,
   busy,
   error,
-  onRetry,
+  onPreview,
   onApply,
   onClose,
 }: {
   partName: string;
-  rows: BindingRow[];
-  /** null 表示尚未取回。不能用空数组代替——那会让预览把所有编号判成"台账中无此编号"。 */
-  entries: BindingReplaceInventoryEntry[] | null;
-  loading?: boolean;
+  /** null 表示还没预览过。计划一律来自后端，前端不构造。 */
+  plan: ResolutionPlanPreview | null;
+  previewing: boolean;
   busy: boolean;
   error?: string | null;
-  onRetry?: () => void;
-  onApply: (targets: BulkReplaceTarget[]) => void | Promise<void>;
+  onPreview: (find: string, replace: string) => void | Promise<void>;
+  onApply: (planToken: string) => void | Promise<void>;
   onClose: () => void;
 }) {
   const [find, setFind] = useState("");
   const [replace, setReplace] = useState("");
 
-  const preview = useMemo(
-    () => (find === "" || entries === null
-      ? null : buildReplacePreview(rows, entries, find, replace)),
-    [rows, entries, find, replace]
-  );
-
-  const bindable = preview?.ok
-    ? preview.items.filter((item) => item.outcome === "will_bind")
-    : [];
-  const ready = entries !== null && !loading;
-  const canApply = ready && !busy && preview?.ok === true && bindable.length > 0;
+  const canPreview = find.trim() !== "" && !previewing && !busy;
+  const canApply = plan !== null && plan.will_apply_count > 0 && !busy && !previewing;
 
   return (
     <div className="dialog-backdrop" role="presentation">
@@ -76,7 +78,7 @@ export function BulkReplaceDialog({
             查找
             <input
               value={find}
-              disabled={!ready}
+              disabled={busy}
               onChange={(event) => setFind(event.target.value)}
             />
           </label>
@@ -84,27 +86,22 @@ export function BulkReplaceDialog({
             替换为
             <input
               value={replace}
-              disabled={!ready}
+              disabled={busy}
               onChange={(event) => setReplace(event.target.value)}
             />
           </label>
+          <button
+            type="button"
+            disabled={!canPreview}
+            onClick={() => void onPreview(find, replace)}
+          >
+            {previewing ? "正在生成预览…" : "生成预览"}
+          </button>
         </div>
 
-        {/* 取数完成前不生成预览，也不让人输入——否则会看到一份"全都不在台账里"的假结果。 */}
-        {loading ? <p className="bulk-replace-summary">正在加载台账构件…</p> : null}
-        {!loading && entries === null && !error ? (
-          <p className="error-text" role="alert">
-            台账构件加载失败。
-            {onRetry ? <button type="button" onClick={onRetry}>重试</button> : null}
-          </p>
-        ) : null}
-
-        {preview && !preview.ok ? (
-          <p className="error-text" role="alert">{preview.error}</p>
-        ) : null}
         {error ? <p className="error-text" role="alert">{error}</p> : null}
 
-        {preview?.ok ? (
+        {plan ? (
           <>
             <div className="inventory-table-scroll bulk-replace-preview">
               <table className="data-table">
@@ -112,18 +109,18 @@ export function BulkReplaceDialog({
                   <tr><th>报告编号</th><th>转换后</th><th>结果</th></tr>
                 </thead>
                 <tbody>
-                  {preview.items.map((item) => (
-                    <tr key={item.componentNumber}>
-                      <td>{item.componentNumber}</td>
-                      <td>{item.targetNumber ?? "—"}</td>
+                  {plan.rows.map((row) => (
+                    <tr key={row.group_id}>
+                      <td>{row.source_component_number}</td>
+                      <td>{row.resolved_numbers[0] ?? "—"}</td>
                       <td
                         className={
-                          item.outcome === "will_bind"
+                          row.outcome === "will_bind"
                             ? "bulk-replace-ok"
                             : "bulk-replace-skip"
                         }
                       >
-                        {OUTCOME_LABELS[item.outcome]}
+                        {outcomeLabel(row)}
                       </td>
                     </tr>
                   ))}
@@ -131,7 +128,8 @@ export function BulkReplaceDialog({
               </table>
             </div>
             <p className="bulk-replace-summary">
-              将绑定 {preview.bindableCount} 行 · 跳过 {preview.skippedCount} 行
+              将绑定 {plan.will_apply_count} 行 · 跳过 {plan.skipped_count} 行
+              {plan.blocked_count > 0 ? ` · 阻断 ${plan.blocked_count} 行` : ""}
             </p>
           </>
         ) : null}
@@ -142,15 +140,7 @@ export function BulkReplaceDialog({
             type="button"
             className="is-primary-action"
             disabled={!canApply}
-            onClick={() =>
-              void onApply(
-                bindable.map((item) => ({
-                  part_name: partName,
-                  component_number: item.componentNumber,
-                  bridge_component_id: item.bridgeComponentId as string,
-                }))
-              )
-            }
+            onClick={() => plan && void onApply(plan.plan_token)}
           >
             {busy ? "正在应用…" : "应用"}
           </button>

@@ -126,27 +126,6 @@ void require_optional_nullable_non_blank_string(
     }
 }
 
-void validate_optional_string_array(
-    const Json::Value& object,
-    const std::string& path,
-    const std::string& member,
-    ContractValidationResult& result) {
-    if (!object.isObject() || !object.isMember(member)) return;
-    const auto& values = object[member];
-    if (!values.isArray()) {
-        result.add_issue(member_path(path, member), "must be an array");
-        return;
-    }
-    std::unordered_set<std::string> unique;
-    for (Json::ArrayIndex index = 0; index < values.size(); ++index) {
-        if (!values[index].isString()) {
-            result.add_issue(indexed_path(member_path(path, member), index), "must be a string");
-        } else if (!unique.insert(values[index].asString()).second) {
-            result.add_issue(member_path(path, member), "must contain unique values");
-        }
-    }
-}
-
 void require_optional_positive_integer(
     const Json::Value& object,
     const std::string& path,
@@ -218,8 +197,8 @@ void validate_contract_info(
     const auto version = contract["version"].isString()
                              ? contract["version"].asString()
                              : std::string{};
-    if (version != "4.0") {
-        result.add_issue("contract.version", "must be 4.0");
+    if (version != "5.0") {
+        result.add_issue("contract.version", "must be 5.0");
     }
 }
 
@@ -247,7 +226,7 @@ void reject_member(
     const std::string& member,
     ContractValidationResult& result) {
     if (object.isObject() && object.isMember(member)) {
-        result.add_issue(member_path(path, member), "is not allowed in contract 4.0");
+        result.add_issue(member_path(path, member), "is not allowed in contract 5.0");
     }
 }
 
@@ -287,42 +266,6 @@ void validate_measurement(
         } else if (measurement["minimum_value"].asDouble() > measurement["maximum_value"].asDouble()) {
             result.add_issue(path, "range minimum_value must not exceed maximum_value");
         }
-    }
-}
-
-void validate_range_split_origin(
-    const Json::Value& origin,
-    const std::string& path,
-    ContractValidationResult& result) {
-    if (!origin.isObject()) {
-        result.add_issue(path, "must be an object");
-        return;
-    }
-    const std::unordered_set<std::string> allowed{
-        "operation_id", "source_candidate_id", "source_component_number",
-        "expanded_component_number", "split_index", "split_count",
-        "operated_by_user_id", "operated_at"};
-    for (const auto& member : origin.getMemberNames()) {
-        if (!allowed.contains(member)) {
-            result.add_issue(member_path(path, member), "is not allowed");
-        }
-    }
-    for (const auto* member : {
-             "operation_id", "source_candidate_id", "source_component_number",
-             "expanded_component_number", "operated_by_user_id", "operated_at"}) {
-        require_non_empty_string(origin, path, member, result);
-    }
-    if (!origin.isMember("split_index") || !origin["split_index"].isInt()
-        || origin["split_index"].asInt() < 1) {
-        result.add_issue(member_path(path, "split_index"), "must be a positive integer");
-    }
-    if (!origin.isMember("split_count") || !origin["split_count"].isInt()
-        || origin["split_count"].asInt() < 2) {
-        result.add_issue(member_path(path, "split_count"), "must be an integer greater than one");
-    }
-    if (origin["split_index"].isInt() && origin["split_count"].isInt()
-        && origin["split_index"].asInt() > origin["split_count"].asInt()) {
-        result.add_issue(path, "split_index must not exceed split_count");
     }
 }
 
@@ -387,32 +330,7 @@ void validate_defect(
     require_enum(defect, path, "group_review_status", {"待确认", "已确认"}, result);
     require_optional_positive_integer(defect, path, "defect_scale", result);
     require_optional_nullable_string(defect, path, "component_number", result);
-    require_optional_nullable_string(defect, path, "bridge_component_id", result);
-    require_optional_nullable_string(
-        defect, path, "standard_component_category_id", result);
-    require_optional_nullable_string(
-        defect, path, "component_inventory_revision_id", result);
-    require_optional_nullable_string(
-        defect, path, "component_match_confirmed_by", result);
-    require_optional_nullable_non_blank_string(
-        defect, path, "rating_tree_version_id", result);
-    require_optional_nullable_non_blank_string(
-        defect, path, "rating_tree_node_id", result);
-    require_optional_nullable_non_blank_string(
-        defect, path, "rating_tree_match_evidence", result);
-    if (defect.isMember("rating_tree_match_method") &&
-        !defect["rating_tree_match_method"].isNull()) {
-        require_enum(
-            defect,
-            path,
-            "rating_tree_match_method",
-            {"exact", "controlled_alias", "controlled_keyword",
-             "fuzzy_candidate", "source_indicator", "manual"},
-            result);
-    }
-    require_optional_nullable_non_blank_string(
-        defect, path, "standard_defect_indicator_id", result);
-    // 来源软件原始分组与指标身份：只读输入，与派生 H21 字段分开，重绑时不清空。
+    // 来源软件原始分组与指标身份：只读输入，与评分树解析结果分开，重绑时不清空。
     require_optional_nullable_non_blank_string(
         defect, path, "source_defect_group_id", result);
     require_optional_nullable_non_blank_string(
@@ -421,33 +339,10 @@ void validate_defect(
         defect, path, "source_defect_indicator_id", result);
     require_optional_nullable_non_blank_string(
         defect, path, "source_defect_indicator_number", result);
-    validate_optional_string_array(
-        defect, path, "component_match_candidate_ids", result);
-    if (defect.isMember("component_match_method") &&
-        !defect["component_match_method"].isNull()) {
-        require_enum(
-            defect,
-            path,
-            "component_match_method",
-            {"exact", "confirmed_alias", "normalized_candidate", "manual"},
-            result);
-    }
     if (defect.isMember("source_structure_part") &&
         !defect["source_structure_part"].isNull()) {
         require_enum(
             defect, path, "source_structure_part", structure_parts(), result);
-    }
-    if (defect.isMember("resolved_structure_part") &&
-        !defect["resolved_structure_part"].isNull()) {
-        require_enum(
-            defect, path, "resolved_structure_part", structure_parts(), result);
-    }
-    if (defect.isMember("range_split_origin")
-        && !defect["range_split_origin"].isNull()) {
-        validate_range_split_origin(
-            defect["range_split_origin"],
-            member_path(path, "range_split_origin"),
-            result);
     }
 
     reject_member(defect, path, "structure_part", result);
@@ -455,6 +350,24 @@ void validate_defect(
     reject_member(defect, path, "defect_deduction", result);
     reject_member(defect, path, "photo_numbers", result);
     reject_member(defect, path, "confirmed_missing_photo_numbers", result);
+    // 5.0 把构件解析与评分树解析整体搬进关系表。这里必须逐个显式拒绝而不是静默忽略：
+    // 旧客户端的草稿会原样回传这些字段，忽略等于让陈旧解析结果继续覆盖权威状态。
+    for (const auto* removed : {
+             "bridge_component_id",
+             "standard_component_category_id",
+             "resolved_structure_part",
+             "component_inventory_revision_id",
+             "component_match_candidate_ids",
+             "component_match_method",
+             "component_match_confirmed_by",
+             "rating_tree_version_id",
+             "rating_tree_node_id",
+             "rating_tree_match_method",
+             "rating_tree_match_evidence",
+             "standard_defect_indicator_id",
+             "range_split_origin"}) {
+        reject_member(defect, path, removed, result);
+    }
 
     if (require_array_member(defect, path, "measurements", result)) {
         for (Json::ArrayIndex index = 0; index < defect["measurements"].size(); ++index) {

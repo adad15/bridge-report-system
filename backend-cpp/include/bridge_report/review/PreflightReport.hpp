@@ -64,7 +64,18 @@ struct PreflightReport {
  * 以及非阻断警告：defect_without_photo / unreferenced_photo_ignored /
  * measurement_unstructured_kept。
  */
-[[nodiscard]] PreflightReport build_preflight_report(const Json::Value& data, const PreflightContext& context);
+/**
+ * `data` 是来源草稿（BridgeAnnualInspectionData 5.0）：契约校验、导入上下文、校对状态和
+ * 照片检查都按**来源病害**逐条进行，不按实例展开（§17.1）。
+ *
+ * `confirmable_view` 是 `build_confirmable_view()` 组合出的可确认病害视图，只用来回答
+ * 构件解析相关的问题。两者必须分开传：视图刻意带着 5.0 已经移出合同的解析字段，
+ * 拿它去跑契约校验必然整份失败。
+ */
+[[nodiscard]] PreflightReport build_preflight_report(
+    const Json::Value& data,
+    const Json::Value& confirmable_view,
+    const PreflightContext& context);
 
 /**
  * @brief 组装 build_preflight_report 所需的 PreflightContext：把从数据库读到的 ImportRecordDetail

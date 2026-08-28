@@ -33,6 +33,8 @@ function groupTitle(rows: DefectReviewRow[]): string {
   return names[0] ?? descriptions[0] ?? "未命名病害";
 }
 
+// 解析状态只从 `row.resolution` 读：buildDefectPhotoReviewModel 已经把它挂到行上，
+// 再另收一份索引就会出现"行上说绑了、分组时却当没绑"的两头不一致。
 export function buildDefectIssueGroups(rows: DefectReviewRow[]): DefectIssueGroup[] {
   const buckets = new Map<string, DefectReviewRow[]>();
   for (const row of rows) {
@@ -40,8 +42,9 @@ export function buildDefectIssueGroups(rows: DefectReviewRow[]): DefectIssueGrou
     const defect = row.defect;
     const groupId = clean(defect.source_defect_group_id);
     const indicatorId = clean(defect.source_defect_indicator_id);
-    const categoryId = clean(defect.standard_component_category_id);
-    const unmatched = !defect.rating_tree_node_id && row.matchState === "unmatched";
+    const resolved = row.resolution;
+    const categoryId = clean(resolved.standardComponentCategoryId);
+    const unmatched = !resolved.ratingTreeNodeId && row.matchState === "unmatched";
     const exactIdentity = groupId && indicatorId
       ? `${groupId}\u0000${indicatorId}`
       : `candidate:${defect.candidate_id}`;
@@ -50,7 +53,7 @@ export function buildDefectIssueGroups(rows: DefectReviewRow[]): DefectIssueGrou
       : row.problems.map((problem) => problem.code).sort().join("|") || "other";
     const contextKey = unmatched
       ? exactIdentity
-      : defect.rating_tree_node_id ?? exactIdentity;
+      : resolved.ratingTreeNodeId ?? exactIdentity;
     const key = `${problemKey}\u0000${contextKey}\u0000${categoryId ?? ""}`;
     const bucket = buckets.get(key) ?? [];
     bucket.push(row);
@@ -60,8 +63,9 @@ export function buildDefectIssueGroups(rows: DefectReviewRow[]): DefectIssueGrou
   return [...buckets.entries()]
     .map(([key, groupedRows]) => {
       const first = groupedRows[0].defect;
+      const firstResolved = groupedRows[0].resolution;
       const kind: DefectIssueGroupKind =
-        !first.rating_tree_node_id && groupedRows[0].matchState === "unmatched"
+        !firstResolved.ratingTreeNodeId && groupedRows[0].matchState === "unmatched"
           ? "unmatched"
           : "problem";
       return {
@@ -71,7 +75,7 @@ export function buildDefectIssueGroups(rows: DefectReviewRow[]): DefectIssueGrou
         title: groupTitle(groupedRows),
         sourceGroupNumber: clean(first.source_defect_group_number),
         sourceIndicatorNumber: clean(first.source_defect_indicator_number),
-        componentCategoryId: clean(first.standard_component_category_id),
+        componentCategoryId: clean(firstResolved.standardComponentCategoryId),
         hasExactSourceIdentity: Boolean(
           clean(first.source_defect_group_id) && clean(first.source_defect_indicator_id),
         ),

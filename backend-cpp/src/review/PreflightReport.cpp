@@ -1,6 +1,8 @@
 #include "bridge_report/review/PreflightReport.hpp"
 
 #include <optional>
+#include <set>
+#include <string>
 #include <vector>
 
 #include "bridge_report/contracts/AnnualInspectionContract.hpp"
@@ -67,14 +69,17 @@ void check_import_context_mismatch(const Json::Value& data, const PreflightConte
 
 void check_candidate_pending_review(const Json::Value& data, std::vector<PreflightIssue>& blocking) {
     if (data["defects"].isArray()) {
+        // 校对状态是**来源病害**的属性。可确认病害视图里一条来源病害会展开成多条实例，
+        // 按实例逐条报的话，同一件事会重复 N 遍，用户看到的是"三条一模一样的待确认"。
+        std::set<std::string> reported;
         for (const auto& defect : data["defects"]) {
-            if (review_status_of(defect) == kPending) {
-                add_issue(blocking, "candidate_pending_review",
-                          "病害候选 " + candidate_id_of(defect) + " 仍处于待确认状态。", candidate_id_of(defect));
-            }
+            if (review_status_of(defect) != kPending) continue;
+            const auto source_id = source_candidate_id_of(defect);
+            if (!reported.insert(source_id).second) continue;
+            add_issue(blocking, "candidate_pending_review",
+                      "病害候选 " + source_id + " 仍处于待确认状态。", source_id);
         }
     }
-
 }
 
 // -----------------------------------------------------------------------
@@ -132,8 +137,26 @@ void check_defect_location_missing(const Json::Value& data, std::vector<Prefligh
     }
 }
 
+std::set<std::string> summary_ids(const Json::Value& view, const char* key) {
+    std::set<std::string> ids;
+    const auto& list = view["resolution_summary"][key];
+    if (!list.isArray()) return ids;
+    for (const auto& id : list) {
+        if (id.isString()) ids.insert(id.asString());
+    }
+    return ids;
+}
+
+/**
+ * 构件解析覆盖检查。
+ *
+ * 5.0 之后"这条病害绑到哪个构件"不在草稿里，所以判定改为：这条来源病害在可确认视图里
+ * 有没有解析出来的实例。视图里只有解析成功的实例，光看它分不出"已标记缺失"和"还没解析"
+ * ——两者都是没有实例——所以缺失集合由读取器单独给出。
+ */
 void check_component_inventory_links(
     const Json::Value& data,
+    const Json::Value& confirmable_view,
     const PreflightContext& context,
     std::vector<PreflightIssue>& blocking) {
     if (!context.component_inventory_confirmed.has_value()) return;
@@ -146,24 +169,19 @@ void check_component_inventory_links(
         return;
     }
     if (!data["defects"].isArray()) return;
+    const auto resolved = summary_ids(confirmable_view, "resolved_source_candidate_ids");
+    // 绑定界面"标记缺失"表示台账确无此构件：视为已处理，不落实际构件、不阻塞。
+    const auto marked_missing = summary_ids(confirmable_view, "missing_source_candidate_ids");
     for (const auto& defect : data["defects"]) {
         if (!is_review_settled(review_status_of(defect))) continue;
-        const bool linked = !string_member_or_empty(defect, "bridge_component_id").empty() &&
-            !string_member_or_empty(defect, "standard_component_category_id").empty() &&
-            !string_member_or_empty(defect, "resolved_structure_part").empty() &&
-            string_member_or_empty(defect, "component_inventory_revision_id") ==
-                *context.component_inventory_revision_id;
-        // 绑定界面"标记缺失"表示台账确无此构件：视为已处理，不落实际构件、不阻塞。
-        const bool marked_missing =
-            string_member_or_empty(defect, "component_match_method") == "missing";
-        if (!linked && !marked_missing) {
-            add_issue(
-                blocking,
-                "defect_component_match_required",
-                "病害候选 " + candidate_id_of(defect) +
-                    " 尚未关联实际构件，请在绑定界面绑定或标记缺失。",
-                candidate_id_of(defect));
-        }
+        const auto source_id = source_candidate_id_of(defect);
+        if (resolved.contains(source_id) || marked_missing.contains(source_id)) continue;
+        add_issue(
+            blocking,
+            "defect_component_match_required",
+            "病害候选 " + source_id +
+                " 尚未关联实际构件，请在绑定界面绑定或标记缺失。",
+            source_id);
     }
 }
 
@@ -218,14 +236,19 @@ void check_defect_photo_groups(const Json::Value& data, std::vector<PreflightIss
         return;
     }
 
+    // 联合确认状态同样是来源病害的属性，按实例报会重复；照片引用则只留在持有者
+    // 那条实例上，因此下面的照片检查天然不会重复。
+    std::set<std::string> group_reported;
     for (const auto& defect : data["defects"]) {
         if (!is_review_settled(review_status_of(defect))) {
             continue;
         }
         const auto defect_id = candidate_id_of(defect);
-        if (string_member_or_empty(defect, "group_review_status") != "已确认") {
+        const auto source_id = source_candidate_id_of(defect);
+        if (string_member_or_empty(defect, "group_review_status") != "已确认" &&
+            group_reported.insert(source_id).second) {
             add_issue(blocking, "group_confirmation_required",
-                      "病害候选 " + defect_id + " 尚未完成病害与照片联合确认。", defect_id);
+                      "病害候选 " + source_id + " 尚未完成病害与照片联合确认。", source_id);
         }
 
         if (!defect["photo_references"].isArray()) {
@@ -389,7 +412,10 @@ Json::Value PreflightReport::to_json() const {
     return json;
 }
 
-PreflightReport build_preflight_report(const Json::Value& data, const PreflightContext& context) {
+PreflightReport build_preflight_report(
+    const Json::Value& data,
+    const Json::Value& confirmable_view,
+    const PreflightContext& context) {
     PreflightReport report;
     report.requires_revision_confirmation = context.has_current_annual_facts;
 
@@ -410,7 +436,8 @@ PreflightReport build_preflight_report(const Json::Value& data, const PreflightC
     check_import_context_mismatch(data, context, report.blocking_errors);
     check_candidate_pending_review(data, report.blocking_errors);
     check_defect_missing_required_field(data, report.blocking_errors);
-    check_component_inventory_links(data, context, report.blocking_errors);
+    check_component_inventory_links(
+        data, confirmable_view, context, report.blocking_errors);
     check_photo_link_unresolved(data, report.blocking_errors);
     check_defect_photo_groups(data, report.blocking_errors);
     check_photo_archives(data, report.blocking_errors);

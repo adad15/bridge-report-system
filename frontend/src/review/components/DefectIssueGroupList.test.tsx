@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { UNRESOLVED } from "../resolutionIndex";
 import { expect, it, vi } from "vitest";
 
 import type { RatingTreeNodeSummary } from "../../api/ratingTreeApi";
@@ -10,14 +11,17 @@ import { DefectIssueGroupList } from "./DefectIssueGroupList";
 function row(candidateId: string, componentId: string): DefectReviewRow {
   return {
     candidateId,
+    // 5.0：解析状态挂行上。
+    resolution: {
+      ...UNRESOLVED,
+      bridgeComponentId: componentId,
+      standardComponentCategoryId: "h21.component.deck.slab",
+      activeInstanceCount: 1,
+    },
     defect: {
       ...data().defects[0],
       candidate_id: candidateId,
       component_number: candidateId,
-      bridge_component_id: componentId,
-      standard_component_category_id: "h21.component.deck.slab",
-      rating_tree_node_id: null,
-      rating_tree_match_method: null,
       source_defect_group_id: "group-a",
       source_defect_group_number: "5.1.1",
       source_defect_indicator_id: "indicator-a",
@@ -90,8 +94,11 @@ it("offers one group confirmation for range-split defects without requiring phot
     row("1-2#板", "component-2"),
   ];
   for (const item of rows) {
-    item.defect.rating_tree_node_id = node.id;
-    item.defect.rating_tree_match_method = "source_indicator";
+    item.resolution = {
+      ...item.resolution,
+      ratingTreeNodeId: node.id,
+      ratingMatchMethod: "source_indicator",
+    };
     item.defect.defect_type = "渗水泛碱";
     item.problems = [{
       code: "component_range_split_review_required",

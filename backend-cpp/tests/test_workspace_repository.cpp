@@ -69,6 +69,12 @@ protected:
             "rating_tree_version_id,node_key,display_name,node_type,scoring_mode"
             ") values ($1::uuid,'root','桥梁评定','root','non_scoring') returning id",
             rating_tree_version_id_);
+        // 迁移 019：年度绑了评定树时，病害观测必须挂到该树的可选节点上。
+        defect_node_id_ = insert_id(
+            "insert into rating_tree_nodes ("
+            "rating_tree_version_id,node_key,display_name,node_type,scoring_mode,is_selectable"
+            ") values ($1::uuid,'defect.test','裂缝','defect','non_scoring',true) returning id",
+            rating_tree_version_id_);
         client_->execSqlSync(
             "update rating_tree_versions set status='published',published_at=now() "
             "where id=$1::uuid",
@@ -105,10 +111,15 @@ protected:
             "insert into assessment_runs (inspection_year_id, run_kind, result_status, input_summary_json, "
             "input_checksum, rule_package_summary_json, rule_package_checksum, result_summary_json, "
             "created_by_user_id, formal_revision_number, technical_condition_package_id, "
-            "standard_profile_id, component_inventory_revision_id, is_current, confirmed_by_user_id, confirmed_at) "
+            "standard_profile_id, component_inventory_revision_id, is_current, confirmed_by_user_id, confirmed_at, "
+            // 迁移 019 的身份触发器：run 的评定树版本与校验和必须等于 profile 所绑的那一份。
+            "rating_tree_version_id, rating_tree_content_checksum) "
             "values ($1::uuid, '正式', '成功', '{\"source\":\"workspace-test\"}'::jsonb, "
             "$2, '{\"package\":\"workspace-test\"}'::jsonb, $3, '{\"score\":85.61}'::jsonb, $4::uuid, "
-            "1, $5::uuid, $6::uuid, $7::uuid, true, $4::uuid, now()) "
+            "1, $5::uuid, $6::uuid, $7::uuid, true, $4::uuid, now(), "
+            "(select rating_tree_version_id from project_standard_profiles where id=$6::uuid), "
+            "(select v.tree_content_checksum from rating_tree_versions v "
+            " join project_standard_profiles p on p.rating_tree_version_id=v.id where p.id=$6::uuid)) "
             "returning id",
             confirmed_year_id_, "sha256:" + std::string(64, '8'),
             "sha256:" + std::string(64, '6'), standard_user_id_, technical_package_id_,
@@ -195,9 +206,11 @@ protected:
     std::string insert_observation(const std::optional<std::string>& thread_id, const std::string& type) {
         return insert_id(
             "insert into defect_observations (inspection_year_id, bridge_id, bridge_component_id, defect_thread_id, "
-            "structure_part, defect_type, defect_location, defect_description_raw, review_status) "
-            "values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, '上部结构', $5, '左侧端部', $5, '已确认') returning id",
-            confirmed_year_id_, bridge_id_, component_id_, thread_id, type);
+            "structure_part, defect_type, defect_location, defect_description_raw, review_status, "
+            "rating_tree_node_id) "
+            "values ($1::uuid, $2::uuid, $3::uuid, $4::uuid, '上部结构', $5, '左侧端部', $5, '已确认', "
+            "$6::uuid) returning id",
+            confirmed_year_id_, bridge_id_, component_id_, thread_id, type, defect_node_id_);
     }
 
     drogon::orm::DbClientPtr client_;
@@ -216,6 +229,7 @@ protected:
     std::string technical_package_id_;
     std::string maintenance_package_id_;
     std::string rating_tree_version_id_;
+    std::string defect_node_id_;
     std::string standard_profile_id_;
     std::string inventory_revision_id_;
     std::string assessment_run_id_;

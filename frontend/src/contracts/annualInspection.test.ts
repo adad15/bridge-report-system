@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { BridgeAnnualInspectionData } from "./annualInspection";
-import { isBridgeAnnualInspectionData, RATING_TREE_MATCH_METHODS } from "./annualInspection";
+import { isBridgeAnnualInspectionData } from "./annualInspection";
 
 const validData: BridgeAnnualInspectionData = {
   contract: {
     name: "BridgeAnnualInspectionData",
-    version: "4.0",
+    version: "5.0",
     generated_at: "2026-07-03T00:00:00+08:00",
     producer: "bridge-report-system",
     parser_name: "annual_inspection_contract_parser",
@@ -37,13 +37,6 @@ const validData: BridgeAnnualInspectionData = {
       source_structure_part: "上部结构",
       component_name: "主梁",
       component_number: "2-1#梁",
-      bridge_component_id: null,
-      standard_component_category_id: null,
-      resolved_structure_part: null,
-      component_inventory_revision_id: null,
-      component_match_candidate_ids: [],
-      component_match_method: null,
-      component_match_confirmed_by: null,
       defect_type: "裂缝",
       defect_location: "第二跨左幅梁底",
       defect_scale: 2,
@@ -62,11 +55,6 @@ const validData: BridgeAnnualInspectionData = {
           source_text: "L=0.8m",
         },
       ],
-      rating_tree_version_id: null,
-      rating_tree_node_id: null,
-      rating_tree_match_method: null,
-      rating_tree_match_evidence: null,
-      standard_defect_indicator_id: null,
       photo_references: [
         {
           photo_number: "2.1-1",
@@ -115,8 +103,8 @@ function cloneValidData(): BridgeAnnualInspectionData {
   return JSON.parse(JSON.stringify(validData)) as BridgeAnnualInspectionData;
 }
 
-describe("isBridgeAnnualInspectionData 4.0", () => {
-  it("accepts valid version four data without imported ratings or photo review state", () => {
+describe("isBridgeAnnualInspectionData 5.0", () => {
+  it("accepts valid version five data without imported ratings or photo review state", () => {
     expect(isBridgeAnnualInspectionData(validData)).toBe(true);
     expect("ratings" in validData).toBe(false);
     expect("defect_deduction" in validData.defects[0]).toBe(false);
@@ -178,7 +166,8 @@ describe("isBridgeAnnualInspectionData 4.0", () => {
     ).toBe(false);
   });
 
-  it("accepts null scale and null database association fields", () => {
+  // 5.0 起解析字段已整体移出草稿，这里只剩"标度可空"这一条来源事实。
+  it("accepts a null scale", () => {
     expect(
       isBridgeAnnualInspectionData({
         ...validData,
@@ -186,69 +175,10 @@ describe("isBridgeAnnualInspectionData 4.0", () => {
           {
             ...validData.defects[0],
             defect_scale: null,
-            bridge_component_id: null,
-            standard_component_category_id: null,
-            resolved_structure_part: null,
           },
         ],
       }),
     ).toBe(true);
-  });
-
-  it("accepts audited component matching fields", () => {
-    const data = cloneValidData();
-    Object.assign(data.defects[0], {
-      bridge_component_id: "component-1",
-      standard_component_category_id: "category-1",
-      resolved_structure_part: "上部结构",
-      component_inventory_revision_id: "revision-1",
-      component_match_candidate_ids: ["component-1"],
-      component_match_method: "manual",
-      component_match_confirmed_by: "editor",
-    });
-    expect(isBridgeAnnualInspectionData(data)).toBe(true);
-  });
-
-  it("validates optional rating-tree association fields", () => {
-    const data = cloneValidData();
-    Object.assign(data.defects[0], {
-      rating_tree_version_id: "tree-version-1",
-      rating_tree_node_id: "tree-node-1",
-      rating_tree_match_method: "controlled_alias",
-      rating_tree_match_evidence: "裂缝 -> 裂缝（受力裂缝）",
-      standard_defect_indicator_id: "indicator-1",
-      source_defect_group_id: "source-group-1",
-      source_defect_group_number: "9.1.2",
-      source_defect_indicator_id: "source-indicator-1",
-      source_defect_indicator_number: "9.1.2-1",
-    });
-    expect(isBridgeAnnualInspectionData(data)).toBe(true);
-
-    for (const fieldName of [
-      "rating_tree_version_id",
-      "rating_tree_node_id",
-      "rating_tree_match_evidence",
-      "standard_defect_indicator_id",
-      "source_defect_group_id",
-      "source_defect_group_number",
-      "source_defect_indicator_id",
-      "source_defect_indicator_number",
-    ]) {
-      const invalid = cloneValidData();
-      Object.assign(invalid.defects[0], { [fieldName]: "   " });
-      expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
-    }
-
-    for (const method of RATING_TREE_MATCH_METHODS) {
-      const valid = cloneValidData();
-      Object.assign(valid.defects[0], { rating_tree_match_method: method });
-      expect(isBridgeAnnualInspectionData(valid)).toBe(true);
-    }
-    expect(RATING_TREE_MATCH_METHODS).toContain("controlled_keyword");
-
-    const invalidMethod = cloneValidData();
-    Object.assign(invalidMethod.defects[0], { rating_tree_match_method: "guessed" });
-    expect(isBridgeAnnualInspectionData(invalidMethod)).toBe(false);
   });
 
   it("accepts an empty defect type or location but still requires a description", () => {
@@ -268,54 +198,6 @@ describe("isBridgeAnnualInspectionData 4.0", () => {
     const noDescription = cloneValidData();
     Object.assign(noDescription.defects[0], { defect_description: "" });
     expect(isBridgeAnnualInspectionData(noDescription)).toBe(false);
-  });
-
-  it("validates optional range split provenance", () => {
-    const data = cloneValidData();
-    Object.assign(data.defects[0], {
-      range_split_origin: {
-        operation_id: "operation-1",
-        source_candidate_id: "defect_0001",
-        source_component_number: "1-1#板~1-25#板",
-        expanded_component_number: "1-7#板",
-        split_index: 7,
-        split_count: 25,
-        operated_by_user_id: "user-1",
-        operated_at: "2026-07-24T16:00:00+08:00",
-      },
-    });
-    expect(isBridgeAnnualInspectionData(data)).toBe(true);
-
-    data.defects[0].range_split_origin!.split_index = 26;
-    expect(isBridgeAnnualInspectionData(data)).toBe(false);
-  });
-
-  it("rejects unknown range split provenance fields", () => {
-    const data = cloneValidData();
-    Object.assign(data.defects[0], {
-      range_split_origin: {
-        operation_id: "operation-1",
-        source_candidate_id: "defect_0001",
-        source_component_number: "1-1#板~1-25#板",
-        expanded_component_number: "1-7#板",
-        split_index: 7,
-        split_count: 25,
-        operated_by_user_id: "user-1",
-        operated_at: "2026-07-24T16:00:00+08:00",
-        unexpected: true,
-      },
-    });
-    expect(isBridgeAnnualInspectionData(data)).toBe(false);
-  });
-
-  it("rejects duplicate candidates and unknown component match methods", () => {
-    const duplicate = cloneValidData();
-    duplicate.defects[0].component_match_candidate_ids = ["component-1", "component-1"];
-    expect(isBridgeAnnualInspectionData(duplicate)).toBe(false);
-
-    const unknown = cloneValidData();
-    Object.assign(unknown.defects[0], { component_match_method: "fuzzy" });
-    expect(isBridgeAnnualInspectionData(unknown)).toBe(false);
   });
 
   it("accepts a manual source without Word coordinates", () => {
@@ -419,5 +301,51 @@ describe("isBridgeAnnualInspectionData 4.0", () => {
     ];
 
     expect(isBridgeAnnualInspectionData(data)).toBe(true);
+  });
+
+  // 5.0 把构件解析与评分树解析整体搬进关系表。旧客户端的草稿会原样回传它们，
+  // 必须在契约边界就被拒，而不是静默忽略后覆盖权威状态。
+  it("rejects every resolution field removed in 5.0", () => {
+    for (const fieldName of [
+      "bridge_component_id",
+      "standard_component_category_id",
+      "resolved_structure_part",
+      "component_inventory_revision_id",
+      "component_match_candidate_ids",
+      "component_match_method",
+      "component_match_confirmed_by",
+      "rating_tree_version_id",
+      "rating_tree_node_id",
+      "rating_tree_match_method",
+      "rating_tree_match_evidence",
+      "standard_defect_indicator_id",
+      "range_split_origin",
+    ]) {
+      const invalid = cloneValidData();
+      Object.assign(invalid.defects[0], { [fieldName]: "smuggled" });
+      expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
+    }
+  });
+
+  it("keeps the source indicator identity in 5.0", () => {
+    const data = cloneValidData();
+    Object.assign(data.defects[0], {
+      source_defect_group_id: "source-group-1",
+      source_defect_group_number: "9.1.2",
+      source_defect_indicator_id: "source-indicator-1",
+      source_defect_indicator_number: "9.1.2-1",
+    });
+    expect(isBridgeAnnualInspectionData(data)).toBe(true);
+
+    for (const fieldName of [
+      "source_defect_group_id",
+      "source_defect_group_number",
+      "source_defect_indicator_id",
+      "source_defect_indicator_number",
+    ]) {
+      const invalid = cloneValidData();
+      Object.assign(invalid.defects[0], { [fieldName]: "   " });
+      expect(isBridgeAnnualInspectionData(invalid)).toBe(false);
+    }
   });
 });

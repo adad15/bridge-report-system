@@ -68,6 +68,18 @@ struct RatingTreeMatchResult {
 
 std::string to_string(RatingTreeMatchOutcome value);
 
+/**
+ * @brief 该节点是否适用于给定桥型与规范构件类别。
+ *
+ * 自动匹配用它收窄候选范围，人工选择与手工新增用它校验用户选中的节点。三处必须共用
+ * 一份：各写一份的话，会出现"自动匹配挑不到、人工却能选进去"的节点，而它到了评定阶段
+ * 才会以"该构件不适用此病害"暴露出来。
+ */
+[[nodiscard]] bool node_applies_to(
+    const EffectiveRatingTreeNode& node,
+    const std::string& bridge_type_id,
+    const std::string& component_category_id);
+
 /// 单条病害按当前桥型/构件范围过滤后，仅以来源分组+指标精确解析。
 /// 先匹配原始 ID 对，再匹配编号对；病害名称、描述、别名和关键词均不参与。
 class RatingTreeResolver {

@@ -1,8 +1,11 @@
 #include "bridge_report/db/EditLockRepository.hpp"
 
+#include <memory>
 #include <utility>
 
 #include "bridge_report/auth/PasswordHash.hpp"
+#include "bridge_report/db/CommitLatch.hpp"
+#include "bridge_report/resolution/ResolutionReopenSnapshot.hpp"
 
 namespace bridge_report::db {
 namespace {
@@ -81,50 +84,79 @@ AcquireEditLockOutcome EditLockRepository::acquire_and_reopen(
     AcquireEditLockOutcome outcome;
     const auto token = auth::generate_session_token();
     const auto token_hash = auth::sha256_hex(token);
-    const auto result = db_client_->execSqlSync(
-        "with eligible as ("
-        "  select id from import_records where id = $1::uuid and import_status = '已确认' for update"
-        "), locked as ("
-        "  insert into import_record_edit_locks "
-        "  (import_record_id, user_id, user_session_id, lock_token_hash, acquired_at, last_heartbeat_at, expires_at) "
-        "  select id, $2::uuid, $3::uuid, $4, now(), now(), now() + interval '2 minutes' from eligible "
-        "  on conflict (import_record_id) do update set "
-        "    user_id = excluded.user_id, user_session_id = excluded.user_session_id, "
-        "    lock_token_hash = excluded.lock_token_hash, acquired_at = now(), "
-        "    last_heartbeat_at = now(), expires_at = now() + interval '2 minutes' "
-        "  where import_record_edit_locks.expires_at <= now() "
-        "  returning import_record_id"
-        "), reopened as ("
-        "  update import_records ir set import_status = '待校对', reopened_at = now(), "
-        "    reopened_by_username = $5, reopen_scope = $6, "
-        "    reopen_backup_parsed_result_json = parsed_result_json, updated_at = now() "
-        "  from locked where ir.id = locked.import_record_id returning ir.id"
-        ") select id::text as id from reopened",
-        import_record_id,
-        user.id,
-        user.session_id,
-        token_hash,
-        user.username,
-        scope
-    );
-    if (!result.empty()) {
-        outcome.acquired = true;
-        outcome.lock_token = token;
-        outcome.lock = get_active(import_record_id);
-        return outcome;
-    }
 
-    outcome.lock = get_active(import_record_id);
-    if (!outcome.lock.has_value()) {
-        const auto record = db_client_->execSqlSync(
-            "select import_status from import_records where id = $1::uuid",
-            import_record_id
+    // 关系态快照必须与重开同事务（§8.8）。分两步时，中间崩一下就留下一个
+    // 重开态但没有快照的记录，"放弃修改"再也回不到确认时的绑定。
+    std::shared_ptr<drogon::orm::Transaction> tx;
+    auto latch = std::make_shared<CommitLatch>();
+    try {
+        tx = db_client_->newTransaction(latch->callback());
+        const auto result = tx->execSqlSync(
+            "with eligible as ("
+            "  select id from import_records where id = $1::uuid and import_status = '已确认' for update"
+            "), locked as ("
+            "  insert into import_record_edit_locks "
+            "  (import_record_id, user_id, user_session_id, lock_token_hash, acquired_at, last_heartbeat_at, expires_at) "
+            "  select id, $2::uuid, $3::uuid, $4, now(), now(), now() + interval '2 minutes' from eligible "
+            "  on conflict (import_record_id) do update set "
+            "    user_id = excluded.user_id, user_session_id = excluded.user_session_id, "
+            "    lock_token_hash = excluded.lock_token_hash, acquired_at = now(), "
+            "    last_heartbeat_at = now(), expires_at = now() + interval '2 minutes' "
+            "  where import_record_edit_locks.expires_at <= now() "
+            "  returning import_record_id"
+            "), reopened as ("
+            "  update import_records ir set import_status = '待校对', reopened_at = now(), "
+            "    reopened_by_username = $5, reopen_scope = $6, "
+            "    reopen_backup_parsed_result_json = parsed_result_json, updated_at = now() "
+            "  from locked where ir.id = locked.import_record_id returning ir.id"
+            ") select id::text as id from reopened",
+            import_record_id,
+            user.id,
+            user.session_id,
+            token_hash,
+            user.username,
+            scope
         );
-        outcome.import_record_found = !record.empty();
-        outcome.import_record_state_changed = !record.empty()
-            && record[0]["import_status"].as<std::string>() != "已确认";
+        if (!result.empty()) {
+            const auto snapshot = resolution::capture_reopen_snapshot(tx, import_record_id, user.id);
+            if (!snapshot.success) {
+                tx->rollback();
+                tx.reset();
+                outcome.lock = get_active(import_record_id);
+                return outcome;
+            }
+            tx.reset();
+            if (!latch->wait()) {
+                outcome.lock = get_active(import_record_id);
+                return outcome;
+            }
+            outcome.acquired = true;
+            outcome.lock_token = token;
+            outcome.lock = get_active(import_record_id);
+            return outcome;
+        }
+
+        // 没拿到锁：事务里一个字也没改，直接回滚，下面的诊断查询走普通连接。
+        tx->rollback();
+        tx.reset();
+        outcome.lock = get_active(import_record_id);
+        if (!outcome.lock.has_value()) {
+            const auto record = db_client_->execSqlSync(
+                "select import_status from import_records where id = $1::uuid",
+                import_record_id
+            );
+            outcome.import_record_found = !record.empty();
+            outcome.import_record_state_changed = !record.empty()
+                && record[0]["import_status"].as<std::string>() != "已确认";
+        }
+        return outcome;
+    } catch (const std::exception&) {
+        if (tx) {
+            tx->rollback();
+            tx.reset();
+        }
+        throw;
     }
-    return outcome;
 }
 
 std::optional<EditLockInfo> EditLockRepository::get_active(const std::string& import_record_id) {

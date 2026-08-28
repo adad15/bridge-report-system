@@ -78,7 +78,7 @@ def parse_source_import(request: SourceImportRequest) -> WordImportResponse:
         data = BridgeAnnualInspectionData(
             contract=ContractInfo(
                 name="BridgeAnnualInspectionData",
-                version="4.0",
+                version="5.0",
                 generated_at=datetime.now(timezone.utc),
                 producer="python-tools",
                 parser_name="source_db_importer",

@@ -176,8 +176,12 @@ TEST(CorsTest, AppliesLocalFrontendCorsHeaders) {
 
     EXPECT_EQ(response->getHeader("Access-Control-Allow-Origin"), "http://127.0.0.1:5173");
     EXPECT_EQ(response->getHeader("Access-Control-Allow-Methods"), "GET, PUT, PATCH, POST, DELETE, OPTIONS");
+    // If-Match 承载来源草稿并发版本（设计 §8.0）。不在白名单里的话，预检就会把
+    // 手工新增请求挡在发出之前，前端只看得到一个笼统的网络错误。
     EXPECT_EQ(
         response->getHeader("Access-Control-Allow-Headers"),
-        "Content-Type, Authorization, X-Edit-Lock-Token"
+        "Content-Type, Authorization, X-Edit-Lock-Token, If-Match"
     );
+    // ETag 默认不暴露给脚本：不显式暴露，前端读不到新版本号，下一次写必然撞版本冲突。
+    EXPECT_EQ(response->getHeader("Access-Control-Expose-Headers"), "ETag");
 }

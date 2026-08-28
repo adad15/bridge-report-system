@@ -20,7 +20,7 @@ import {
 const minimalWireResult: BridgeAnnualInspectionData = {
   contract: {
     name: "BridgeAnnualInspectionData",
-    version: "4.0",
+    version: "5.0",
     generated_at: "2026-07-09T00:00:00+08:00",
     producer: "bridge-report-system",
     parser_name: "test-parser",
