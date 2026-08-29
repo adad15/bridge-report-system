@@ -118,3 +118,44 @@ describe("buildDefectIssueGroups", () => {
     expect(group.rangeSplitConfirmableRows.map((row) => row.candidateId)).toEqual(["defect-1"]);
   });
 });
+
+// 问题组的标题给规范名，不给报告原文（迁移 029）。
+//
+// 组本来就是按同一个来源身份、同一类问题归的，标题给规范名才说得清这一组是什么。报告
+// 原文是「失效」「破损」这种时，拿它当标题等于没说——实测这座桥 275 条自动匹配的病害里
+// 273 条的 defect_type 仍是原文。
+it("titles a group by the rating tree node rather than the report wording", () => {
+  const rows = [unmatchedRow("d1", "group-a", "indicator-a", "失效")];
+  rows[0].ratingTreeNode = {
+    id: "tree-node-joint",
+    node_key: "org.bridge.defect.10_2_1_4",
+    display_number: "10.2.1-4",
+    display_name: "伸缩缝失效",
+  } as unknown as DefectReviewRow["ratingTreeNode"];
+
+  const groups = buildDefectIssueGroups(rows);
+
+  expect(groups).toHaveLength(1);
+  expect(groups[0].title).toBe("10.2.1-4 伸缩缝失效");
+});
+
+// 一条都没定评定树时，报告原文是唯一能说的东西，仍要退回去。
+it("falls back to the report wording when no row has a node yet", () => {
+  const row = unmatchedRow("d1", "group-a", "indicator-a", "板底存在垂黑痕迹");
+  row.defect.defect_type = "渗水泛碱";
+
+  const groups = buildDefectIssueGroups([row]);
+
+  expect(groups).toHaveLength(1);
+  expect(groups[0].title).toBe("渗水泛碱");
+});
+
+// 病害名称也空着时才退到描述——报告里确实有整列留空的行。
+it("falls back to the description when even the wording is blank", () => {
+  const groups = buildDefectIssueGroups([
+    unmatchedRow("d1", "group-a", "indicator-a", "板底存在垂黑痕迹"),
+  ]);
+
+  expect(groups).toHaveLength(1);
+  expect(groups[0].title).toBe("板底存在垂黑痕迹");
+});

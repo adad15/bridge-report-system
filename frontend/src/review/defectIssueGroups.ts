@@ -1,3 +1,4 @@
+import { ratingTreeDisplayLabel } from "../rating-tree/ratingTreeLabels";
 import type { DefectReviewRow } from "./defectPhotoReviewModel";
 
 export type DefectIssueGroupKind = "unmatched" | "problem";
@@ -21,6 +22,13 @@ function clean(value: string | null | undefined): string | null {
 }
 
 function groupTitle(rows: DefectReviewRow[]): string {
+  // 规范名优先：问题组本来就是按同一个来源身份、同一类问题归的，标题给规范名才说得清
+  // 这一组是什么。都没定评定树时才退回报告原文——那时候原文是唯一能说的东西。
+  const nodeNames = [...new Set(rows
+    .map((row) => (row.ratingTreeNode ? ratingTreeDisplayLabel(row.ratingTreeNode) : null))
+    .filter((value): value is string => value !== null))];
+  if (nodeNames.length === 1) return nodeNames[0];
+
   const names = [...new Set(rows
     .map((row) => clean(row.defect.defect_type))
     .filter((value): value is string => value !== null))];

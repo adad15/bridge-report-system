@@ -3,9 +3,22 @@ import { useEffect, useMemo, useState } from "react";
 import { photoContentUrl } from "../../api/reviewApi";
 import type { DefectReviewRow } from "../defectPhotoReviewModel";
 import { reviewTargetId } from "../reviewNavigation";
+import { ratingTreeDisplayLabel as nodeLabel } from "../../rating-tree/ratingTreeLabels";
 import { displayDefectLocation } from "./displayHelpers";
 
 const PAGE_SIZE = 50;
+
+/// 已定评定树时给规范名（带条款号），未定时返回 null 由调用方兜底。
+function ratingTreeDisplayLabel(node: DefectReviewRow["ratingTreeNode"]): string | null {
+  return node ? nodeLabel(node) : null;
+}
+
+/// 报告原文；与规范名一致时返回空串，免得同一行写两遍。
+function sourceWording(row: DefectReviewRow): string {
+  const raw = row.defect.defect_type?.trim() ?? "";
+  if (!raw) return "";
+  return row.ratingTreeNode && row.ratingTreeNode.display_name === raw ? "" : raw;
+}
 
 interface DefectQuickReviewListProps {
   rows: DefectReviewRow[];
@@ -71,8 +84,12 @@ export function DefectQuickReviewList({
                 <small>{displayDefectLocation(row.defect.defect_location)}</small>
               ) : null}
             </span>
+            {/* 规范名与报告原文并列。校对这件事本身就是拿原文核对系统的判断，只给一个
+                都不够：只给原文看不出定成了哪种规范病害，只给规范名就没法对着纸质报告
+                逐行核。两者相同时不重复显示。 */}
             <span className="defect-quick-defect">
-              <strong>{row.defect.defect_type || "未确定规范病害"}</strong>
+              <strong>{ratingTreeDisplayLabel(row.ratingTreeNode) ?? "未确定规范病害"}</strong>
+              {sourceWording(row) ? <small>原文：{sourceWording(row)}</small> : null}
               <small>标度 {row.defect.defect_scale ?? "未填"}</small>
             </span>
             {/* 每行只留一个徽标：已忽略/已确认这类终态直接说终态，其余说匹配结论。
