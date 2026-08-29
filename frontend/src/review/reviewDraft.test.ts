@@ -499,11 +499,14 @@ describe("reviewDraftReducer", () => {
       matchEvidence: "用户按相同来源身份批量指定评定树病害",
     });
 
-    // 5.0：选中的节点写进评分树解析表，草稿只跟着改连带变化的**来源事实**：
-    // 病害名称与标度。节点 id、版本、匹配证据不再回写到这里。
+    // 5.0：选中的节点写进评分树解析表，节点 id、版本、匹配证据都不回写草稿。
+    //
+    // 迁移 029 之后连 defect_type 也不再改写：它是报告原文，选节点是解析结论，
+    // 用结论覆盖原文正是要分开的两件事；跨年身份已改按节点判定，不靠改写文字对齐。
+    // 标度仍要跟着改——节点不计分时旧标度不再适用。
     for (const defect of next.defects.slice(0, 2)) {
       expect(defect).toMatchObject({
-        defect_type: "其他病害",
+        defect_type: "裂缝",
         defect_scale: null,
         group_review_status: "待确认",
       });

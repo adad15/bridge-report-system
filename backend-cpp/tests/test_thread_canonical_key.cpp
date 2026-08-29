@@ -12,8 +12,10 @@ namespace {
 
 constexpr const char* kComponent = "11111111-1111-1111-1111-111111111111";
 
-ThreadCanonicalKey key_of(const std::string& defect_type, const std::string& location) {
-    return make_thread_canonical_key(kComponent, defect_type, location);
+constexpr const char* kNode = "org.bridge.defect.5_1_1_13";
+
+ThreadCanonicalKey key_of(const std::string& node_key, const std::string& location) {
+    return make_thread_canonical_key(kComponent, node_key, location);
 }
 
 }  // namespace
@@ -21,43 +23,50 @@ ThreadCanonicalKey key_of(const std::string& defect_type, const std::string& loc
 // 166 个铰缝的位置字段是空的。空位置必须落到同一个规范值上，否则那批会散成 166 个孤组，
 // 批量整理最大的一批直接没了。
 TEST(ThreadCanonicalKeyTest, TreatsNullEmptyAndBlankLocationAsOneValue) {
-    const auto empty = key_of("渗水泛碱", "");
-    const auto spaces = key_of("渗水泛碱", "   ");
-    const auto mixed_blank = key_of("渗水泛碱", " \t\r\n ");
+    const auto empty = key_of(kNode, "");
+    const auto spaces = key_of(kNode, "   ");
+    const auto mixed_blank = key_of(kNode, " \t\r\n ");
 
     EXPECT_TRUE(empty.normalized_defect_location.empty());
     EXPECT_EQ(empty, spaces);
     EXPECT_EQ(empty, mixed_blank);
 }
 
-// 候选算法一直对病害类型也做规范化；组键若只规范化位置，就会出现"候选说是同一处、
-// 批次说不是"的分裂。这条锁住类型同样走规范化。
-TEST(ThreadCanonicalKeyTest, NormalisesTheDefectTypeAsWellAsTheLocation) {
-    const auto plain = key_of("渗水泛碱", "大小里程侧");
-    const auto spaced = key_of(" 渗水泛碱 ", "大小里程侧");
-    const auto fullwidth = key_of("渗水泛碱（Ａ）", "大小里程侧");
-    const auto halfwidth_upper = key_of("渗水泛碱(A)", "大小里程侧");
+// 身份的病害那一维取评定树节点，不取病害名称文字（迁移 029）。
+//
+// 这正是换键要解决的问题：报告原文写「失效」「破损」时同一构件上分不出是哪种病害，
+// 而换个年度写成「渗水、泛碱」又会和「渗水泛碱」算成两条——归一化只管全角半角与标点，
+// 不认同义词，`、` 还是映射成 `,` 不是删掉。
+TEST(ThreadCanonicalKeyTest, KeepsDifferentRatingTreeNodesApart) {
+    const auto water = key_of("org.bridge.defect.5_1_1_13", "大小里程侧");
+    const auto spalling = key_of("org.bridge.defect.5_1_1_2", "大小里程侧");
 
-    EXPECT_EQ(plain, spaced);
-    EXPECT_EQ(fullwidth, halfwidth_upper) << "全角括号与大写字母都该被规范掉";
+    EXPECT_FALSE(water == spalling);
+}
+
+// 节点键是受控标识符，不做文本归一化——改动它只会把上游取错了键掩盖成"匹配不上"。
+TEST(ThreadCanonicalKeyTest, TakesTheNodeKeyVerbatim) {
+    EXPECT_EQ(key_of(kNode, "").node_key, kNode);
+    EXPECT_FALSE(key_of(kNode, "") == key_of(" org.bridge.defect.5_1_1_13 ", ""));
 }
 
 TEST(ThreadCanonicalKeyTest, KeepsDifferentComponentsApart) {
     const auto left = make_thread_canonical_key(
-        "11111111-1111-1111-1111-111111111111", "渗水泛碱", "");
+        "11111111-1111-1111-1111-111111111111", kNode, "");
     const auto right = make_thread_canonical_key(
-        "22222222-2222-2222-2222-222222222222", "渗水泛碱", "");
+        "22222222-2222-2222-2222-222222222222", kNode, "");
 
     EXPECT_FALSE(left == right);
 }
 
 // canonical_string 要拿去做 group_id 的哈希输入，必须确定、可分辨字段边界。
 TEST(ThreadCanonicalKeyTest, SerialisesDeterministicallyAndSeparatesFields) {
-    const auto key = key_of("渗水泛碱", "大小里程侧");
+    const auto key = key_of(kNode, "大小里程侧");
 
     EXPECT_EQ(key.canonical_string(), key.canonical_string());
-    EXPECT_NE(key.canonical_string(), key_of("渗水泛碱大小里程侧", "").canonical_string())
-        << "字段拼接不能让'类型+位置'与'类型、空位置'撞成同一串";
+    EXPECT_NE(key.canonical_string(),
+              key_of(std::string(kNode) + "大小里程侧", "").canonical_string())
+        << "字段拼接不能让'节点+位置'与'节点、空位置'撞成同一串";
 }
 
 TEST(LocationsOverlapTest, DetectsOneLocationContainingTheOther) {

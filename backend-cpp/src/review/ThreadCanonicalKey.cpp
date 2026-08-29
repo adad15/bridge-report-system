@@ -6,19 +6,19 @@ namespace bridge_report::review {
 
 namespace {
 
-// 字段分隔符取 US（0x1f）：病害类型和位置都是报告原文，不可能出现控制字符，
-// 因此"类型+位置"永远撞不上"类型、空位置"。
+// 字段分隔符取 US（0x1f）：节点键是受控标识符、位置是报告原文，都不可能出现控制字符，
+// 因此"节点+位置"永远撞不上"节点、空位置"。
 constexpr char kFieldSeparator = '\x1f';
 
 }  // namespace
 
 std::string ThreadCanonicalKey::canonical_string() const {
     std::string result;
-    result.reserve(bridge_component_id.size() + normalized_defect_type.size()
+    result.reserve(bridge_component_id.size() + node_key.size()
                    + normalized_defect_location.size() + 2);
     result += bridge_component_id;
     result += kFieldSeparator;
-    result += normalized_defect_type;
+    result += node_key;
     result += kFieldSeparator;
     result += normalized_defect_location;
     return result;
@@ -26,13 +26,15 @@ std::string ThreadCanonicalKey::canonical_string() const {
 
 ThreadCanonicalKey make_thread_canonical_key(
     const std::string& bridge_component_id,
-    const std::string& defect_type,
+    const std::string& node_key,
     const std::string& defect_location) {
-    // normalize_suggestion_text 已经去掉全部 ASCII 空白，所以纯空白位置在这里自然落到
-    // 空串——null 由调用方在取数时转成空串即可，三种"无位置"就此合一。
+    // 位置照旧归一化：normalize_suggestion_text 已经去掉全部 ASCII 空白，所以纯空白位置
+    // 自然落到空串——null 由调用方在取数时转成空串即可，三种"无位置"就此合一。
+    //
+    // 节点键原样带过：它是受控标识符，归一化只会把上游取错键的错误掩盖成"匹配不上"。
     return ThreadCanonicalKey{
         bridge_component_id,
-        normalize_suggestion_text(defect_type),
+        node_key,
         normalize_suggestion_text(defect_location),
     };
 }

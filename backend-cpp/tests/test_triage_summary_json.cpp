@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 #include <json/json.h>
 
+#include "bridge_report/review/ThreadSuggestions.hpp"
 #include "bridge_report/review/ThreadTriageGrouping.hpp"
 #include "bridge_report/review/TriageSummaryJson.hpp"
 
@@ -158,6 +159,10 @@ TEST(TriageSummaryJsonTest, KeepsTheLargestBatchDetailSmallEnoughToSkipPaging) {
         observation.component_type = item["component_type"].asString();
         observation.business_component_code = item["business_component_code"].asString();
         observation.defect_type = item["defect_type"].asString();
+        // 快照早于评定树解析，没有 node_key：用归一化后的病害名称顶替，一个名称当一个
+        // 节点。详见 test_thread_triage_fixture.cpp 的 node_key_of()。
+        observation.node_key =
+            bridge_report::review::normalize_suggestion_text(observation.defect_type);
         observation.defect_location = item["defect_location"].asString();
         observation.updated_at = item["updated_at"].asString();
         observation.inspection_year = item["inspection_year"].asInt();
@@ -218,6 +223,10 @@ TEST(TriageSummaryJsonTest, KeepsTheBaiguSummarySmall) {
         observation.component_type = item["component_type"].asString();
         observation.business_component_code = item["business_component_code"].asString();
         observation.defect_type = item["defect_type"].asString();
+        // 快照早于评定树解析，没有 node_key：用归一化后的病害名称顶替，一个名称当一个
+        // 节点。详见 test_thread_triage_fixture.cpp 的 node_key_of()。
+        observation.node_key =
+            bridge_report::review::normalize_suggestion_text(observation.defect_type);
         observation.defect_location = item["defect_location"].asString();
         observation.updated_at = item["updated_at"].asString();
         observation.inspection_year = item["inspection_year"].asInt();

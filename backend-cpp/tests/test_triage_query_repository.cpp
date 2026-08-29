@@ -9,6 +9,8 @@
 #include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/db/TriageQueryRepository.hpp"
 
+#include "RatingTreeFixture.hpp"
+
 namespace {
 
 // 一座桥、两个已确认年度，用来验取数口径。故意掺进三种**不该出现在整理台上**的观测：
@@ -34,6 +36,10 @@ protected:
             "values($1::uuid,'上部结构','铰缝','2#铰缝','triage-hinge-2','人工录入') returning id",
             bridge_id_);
 
+        // 跨年身份取自评定树节点（迁移 029），取数时按它内连接，所以观测必须挂一个节点。
+        // 这里只要 rating_tree_nodes 里有一行可指——整理台不看树的发布状态与规范档案。
+        seed_rating_tree_node();
+
         year_2025_ = insert_year(2025, "已确认", true);
         year_2026_ = insert_year(2026, "已确认", true);
         // 同年度的旧修订版：已被 v2 取代，其观测不该进整理台。
@@ -53,6 +59,20 @@ protected:
         client_->execSqlSync("delete from inspection_years where bridge_id=$1::uuid", bridge_id_);
         client_->execSqlSync("delete from bridge_components where bridge_id=$1::uuid", bridge_id_);
         client_->execSqlSync("delete from bridges where id=$1::uuid", bridge_id_);
+        if (!tree_.tree_version_id.empty()) {
+            bridge_report::testing::drop_rating_tree(client_, tree_);
+        }
+    }
+
+    void seed_rating_tree_node() {
+        const auto user_id = client_->execSqlSync(
+            "select id::text as id from users where username='admin'")[0]["id"]
+            .as<std::string>();
+        tree_ = bridge_report::testing::seed_rating_tree(client_, user_id, "triage-query");
+        node_id_ = tree_.node_id;
+        node_key_ = client_->execSqlSync(
+            "select node_key from rating_tree_nodes where id=$1::uuid",
+            node_id_)[0]["node_key"].as<std::string>();
     }
 
     template <typename... Args>
@@ -74,17 +94,21 @@ protected:
         const std::string& review_status) {
         return insert_id(
             "insert into defect_observations(inspection_year_id,bridge_id,bridge_component_id,"
-            "structure_part,defect_type,defect_description_raw,defect_location,review_status) "
-            "values($1::uuid,$2::uuid,$3::uuid,'上部结构',$4,$4,nullif($5,''),$6) returning id",
-            year_id, bridge_id_, component_id, defect_type, location, review_status);
+            "structure_part,defect_type,defect_description_raw,defect_location,review_status,"
+            "rating_tree_node_id) "
+            "values($1::uuid,$2::uuid,$3::uuid,'上部结构',$4,$4,nullif($5,''),$6,$7::uuid) "
+            "returning id",
+            year_id, bridge_id_, component_id, defect_type, location, review_status, node_id_);
     }
 
     std::string insert_thread(const std::string& component_id, const std::string& defect_type,
                               const std::string& location) {
         return insert_id(
-            "insert into defect_threads(bridge_id,bridge_component_id,thread_name,defect_type,"
-            "defect_location) values($1::uuid,$2::uuid,$3,$4,nullif($5,'')) returning id",
-            bridge_id_, component_id, defect_type + "｜" + location, defect_type, location);
+            "insert into defect_threads(bridge_id,bridge_component_id,thread_name,node_key,"
+            "defect_type,defect_location) "
+            "values($1::uuid,$2::uuid,$3,$4,$5,nullif($6,'')) returning id",
+            bridge_id_, component_id, defect_type + "｜" + location, node_key_,
+            defect_type, location);
     }
 
     drogon::orm::DbClientPtr client_;
@@ -94,6 +118,9 @@ protected:
     std::string year_2025_;
     std::string year_2026_;
     std::string superseded_year_;
+    bridge_report::testing::RatingTreeFixture tree_;
+    std::string node_id_;
+    std::string node_key_;
 };
 
 }  // namespace

@@ -186,13 +186,22 @@ function applyRatingTreeSelection(
   },
 ): DefectCandidate {
   // 5.0：节点本身写进评分树解析表，由调用方走
-  // `PUT /defect-instances/{id}/rating-resolution`。草稿这边只跟着改人选完节点后
-  // 连带变化的**来源事实**：病害名称与标度。
+  // `PUT /defect-instances/{id}/rating-resolution`。
+  //
+  // **不改 defect_type**（迁移 029）。它是报告原文，而选节点是解析结论——用结论覆盖原文
+  // 正是这次重构要分开的两件事。跨年身份也已经改按节点判定，不再需要靠改写文字来对齐
+  // 各年的写法。
+  //
+  // 顺带治好了一条误报：改写会让草稿里的 defect_type 与裁决当时数据库里的那个不一致，
+  // 而它进 match_input_hash（见 ResolutionHashes），保存后重算就与裁决时的哈希对不上，
+  // 界面报"人工裁决后内容发生变化，请复核"——而那个变化正是这次选择自己造成的。
+  //
+  // 标度还是要跟着改：节点不计分时旧标度不再适用，而它不进哈希，不会触发上面那条。
   void selection.versionId;
+  void selection.nodeName;
   void selection.matchEvidence;
   return {
     ...defect,
-    defect_type: selection.nodeName,
     defect_scale: selection.isScoring ? defect.defect_scale : null,
     review_status: nextStatusAfterContentEdit(defect.review_status),
     group_review_status: "待确认",

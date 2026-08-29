@@ -17,10 +17,15 @@ constexpr const char* kUnboundObservationsSql =
     "select o.id::text as id, o.bridge_component_id::text as bridge_component_id, "
     "bc.structure_part, bc.component_type, "
     "coalesce(bc.business_component_code, bc.system_number) as business_component_code, "
+    "n.node_key, "
     "o.defect_type, coalesce(o.defect_location, '') as defect_location, "
     "o.updated_at::text as updated_at, iy.inspection_year "
     "from defect_observations o "
     "join bridge_components bc on bc.id = o.bridge_component_id "
+    // 内连接是有意的：跨年身份取自评定树节点（迁移 029），没有节点的观测无从归并。
+    // 确认前校验要求每条已确认病害都有一个适用节点，所以正式观测不会走到这里被滤掉；
+    // 真出现了，说明是绕过确认写进来的数据，让它在整理台上不出现比错误归并安全。
+    "join rating_tree_nodes n on n.id = o.rating_tree_node_id "
     "join inspection_years iy on iy.id = o.inspection_year_id "
     "and iy.is_current and iy.status = '已确认' "
     "where o.bridge_id = $1::uuid and o.defect_thread_id is null "
@@ -30,6 +35,7 @@ constexpr const char* kUnboundObservationsSql =
 constexpr const char* kThreadsSql =
     "select t.id::text as id, t.system_number, t.thread_name, "
     "t.bridge_component_id::text as bridge_component_id, "
+    "coalesce(t.node_key, '') as node_key, "
     "t.defect_type, coalesce(t.defect_location, '') as defect_location, "
     "t.updated_at::text as updated_at "
     "from defect_threads t where t.bridge_id = $1::uuid order by t.id";
@@ -86,6 +92,7 @@ review::TriageModel TriageQueryRepository::load_model(const std::string& bridge_
         observation.structure_part = row["structure_part"].as<std::string>();
         observation.component_type = row["component_type"].as<std::string>();
         observation.business_component_code = row["business_component_code"].as<std::string>();
+        observation.node_key = row["node_key"].as<std::string>();
         observation.defect_type = row["defect_type"].as<std::string>();
         observation.defect_location = row["defect_location"].as<std::string>();
         observation.updated_at = row["updated_at"].as<std::string>();
@@ -105,6 +112,7 @@ std::vector<review::TriageThreadInput> TriageQueryRepository::load_threads(
         thread.system_number = row["system_number"].as<std::string>();
         thread.thread_name = row["thread_name"].as<std::string>();
         thread.bridge_component_id = row["bridge_component_id"].as<std::string>();
+        thread.node_key = row["node_key"].as<std::string>();
         thread.defect_type = row["defect_type"].as<std::string>();
         thread.defect_location = row["defect_location"].as<std::string>();
         thread.updated_at = row["updated_at"].as<std::string>();

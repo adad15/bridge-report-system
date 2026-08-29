@@ -74,7 +74,7 @@ std::string group_content_signature(const TriageGroup& group) {
 struct BatchKey {
     std::string structure_part;
     std::string component_type;
-    std::string normalized_defect_type;
+    std::string node_key;
     std::string normalized_defect_location;
     std::vector<int> year_set;
     TriageAction action{TriageAction::Create};
@@ -83,7 +83,7 @@ struct BatchKey {
         std::ostringstream output;
         output << structure_part << kFieldSeparator
                << component_type << kFieldSeparator
-               << normalized_defect_type << kFieldSeparator
+               << node_key << kFieldSeparator
                << normalized_defect_location << kFieldSeparator
                << join_years(year_set) << kFieldSeparator
                << to_string(action);
@@ -147,7 +147,7 @@ TriageModel build_triage_model(
     std::map<std::string, PendingGroup> groups_by_key;
     for (auto& observation : observations) {
         const auto key = make_thread_canonical_key(
-            observation.bridge_component_id, observation.defect_type, observation.defect_location);
+            observation.bridge_component_id, observation.node_key, observation.defect_location);
         auto& pending = groups_by_key[key.canonical_string()];
         if (pending.group.observations.empty()) {
             pending.group.key = key;
@@ -185,16 +185,16 @@ TriageModel build_triage_model(
     std::map<std::string, ComponentTypeScope> scopes;
     for (const auto& thread : existing_threads) {
         const auto key = make_thread_canonical_key(
-            thread.bridge_component_id, thread.defect_type, thread.defect_location);
+            thread.bridge_component_id, thread.node_key, thread.defect_location);
         threads_by_key[key.canonical_string()].push_back(&thread);
-        scopes[key.bridge_component_id + kFieldSeparator + key.normalized_defect_type]
+        scopes[key.bridge_component_id + kFieldSeparator + key.node_key]
             .threads.push_back(&thread);
     }
 
     for (std::size_t index = 0; index < pending_groups.size(); ++index) {
         auto& pending = pending_groups[index];
         const auto& key = pending.group.key;
-        scopes[key.bridge_component_id + kFieldSeparator + key.normalized_defect_type]
+        scopes[key.bridge_component_id + kFieldSeparator + key.node_key]
             .group_indexes.push_back(index);
 
         const auto found = threads_by_key.find(key.canonical_string());
@@ -235,7 +235,7 @@ TriageModel build_triage_model(
             // 与已有线索疑似重复的线索。
             for (const auto* thread : scope.threads) {
                 const auto thread_key = make_thread_canonical_key(
-                    thread->bridge_component_id, thread->defect_type, thread->defect_location);
+                    thread->bridge_component_id, thread->node_key, thread->defect_location);
                 if (!locations_overlap(location, thread_key.normalized_defect_location)) continue;
                 add_reason(pending, kReasonLocationOverlap);
                 pending.overlap_targets.push_back(TriageOverlapTarget{
@@ -261,7 +261,7 @@ TriageModel build_triage_model(
         BatchKey batch_key{
             pending.structure_part,
             pending.component_type,
-            pending.group.key.normalized_defect_type,
+            pending.group.key.node_key,
             pending.group.key.normalized_defect_location,
             pending.year_set,
             pending.group.matched_thread_id.has_value() ? TriageAction::Bind : TriageAction::Create,

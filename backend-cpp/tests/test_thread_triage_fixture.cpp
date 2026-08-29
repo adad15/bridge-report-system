@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <json/json.h>
 
+#include "bridge_report/review/ThreadSuggestions.hpp"
 #include "bridge_report/review/ThreadTriageGrouping.hpp"
 
 using bridge_report::review::build_triage_model;
@@ -41,6 +42,20 @@ std::string text(const Json::Value& value, const char* key) {
     return value[key].isString() ? value[key].asString() : std::string();
 }
 
+// 这份快照取自白谷桥的真实观测，早于评定树解析落地，因此没有 node_key。
+//
+// 跨年身份改按评定树节点判定之后（迁移 029），这里用归一化后的病害名称顶替节点键：
+// 一个病害名称当作一个节点。基线守的是构件 / 位置 / 年度那套归组逻辑，换键不该动它的
+// 数字——顶替之后 491 组、144 批这些数仍然成立，正说明归组逻辑没被这次改动碰坏。
+//
+// 真正的节点键要等这座桥按 5.0 重新导入并解析之后才拿得到；到时候快照重采一次，
+// 这个兜底就可以去掉。
+std::string node_key_of(const Json::Value& item) {
+    const auto declared = text(item, "node_key");
+    if (!declared.empty()) return declared;
+    return bridge_report::review::normalize_suggestion_text(text(item, "defect_type"));
+}
+
 TriageModel model_from_fixture(const Json::Value& root) {
     std::vector<TriageObservationInput> observations;
     observations.reserve(root["observations"].size());
@@ -52,6 +67,7 @@ TriageModel model_from_fixture(const Json::Value& root) {
         observation.component_type = text(item, "component_type");
         observation.business_component_code = text(item, "business_component_code");
         observation.defect_type = text(item, "defect_type");
+        observation.node_key = node_key_of(item);
         observation.defect_location = text(item, "defect_location");
         observation.updated_at = text(item, "updated_at");
         observation.inspection_year = item["inspection_year"].asInt();
@@ -67,6 +83,7 @@ TriageModel model_from_fixture(const Json::Value& root) {
         thread.thread_name = text(item, "thread_name");
         thread.bridge_component_id = text(item, "bridge_component_id");
         thread.defect_type = text(item, "defect_type");
+        thread.node_key = node_key_of(item);
         thread.defect_location = text(item, "defect_location");
         thread.updated_at = text(item, "updated_at");
         threads.push_back(std::move(thread));

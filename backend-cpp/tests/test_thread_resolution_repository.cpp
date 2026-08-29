@@ -11,6 +11,8 @@
 #include "bridge_report/db/ThreadResolutionRepository.hpp"
 #include "bridge_report/db/TriageQueryRepository.hpp"
 
+#include "RatingTreeFixture.hpp"
+
 namespace db = bridge_report::db;
 namespace review = bridge_report::review;
 
@@ -42,6 +44,31 @@ drogon::orm::DbClientPtr shared_test_client() {
     return *client;
 }
 
+/// 全套件共享的评定树节点，理由与上面共享 client 相同：只造一次。
+///
+/// 跨年身份取自评定树节点（迁移 029），取数按它内连接，所以观测必须挂一个节点。
+/// 树的编码带唯一约束，每个用例造一棵会撞键。
+struct SharedRatingNode {
+    std::string node_id;
+    std::string node_key;
+};
+
+const SharedRatingNode& shared_rating_node(const drogon::orm::DbClientPtr& client) {
+    // 同样故意泄漏：夹具对象活到进程结束，schema 在运行结束时整个删掉。
+    static auto* node = [&client] {
+        const auto user_id = client->execSqlSync(
+            "select id::text as id from users where username='admin'")[0]["id"]
+            .as<std::string>();
+        const auto fixture =
+            bridge_report::testing::seed_rating_tree(client, user_id, "thread-resolution");
+        const auto key = client->execSqlSync(
+            "select node_key from rating_tree_nodes where id=$1::uuid",
+            fixture.node_id)[0]["node_key"].as<std::string>();
+        return new SharedRatingNode{fixture.node_id, key};
+    }();
+    return *node;
+}
+
 // 两个铰缝各三年，长相相同 → 一个 create 批次两组。用来验三阶段事务与服务端重算。
 class ThreadResolutionRepositoryTest : public ::testing::Test {
 protected:
@@ -50,6 +77,9 @@ protected:
             GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置，跳过需要真实数据库的集成测试";
         }
         client_ = shared_test_client();
+        const auto& node = shared_rating_node(client_);
+        node_id_ = node.node_id;
+        node_key_ = node.node_key;
 
         bridge_id_ = insert_id("insert into bridges(bridge_name) values('线索落库测试桥') returning id");
         other_bridge_id_ = insert_id("insert into bridges(bridge_name) values('线索落库旁桥') returning id");
@@ -103,9 +133,11 @@ protected:
                                    const std::string& defect_type, const std::string& location) {
         return insert_id(
             "insert into defect_observations(inspection_year_id,bridge_id,bridge_component_id,"
-            "structure_part,defect_type,defect_description_raw,defect_location,review_status) "
-            "values($1::uuid,$2::uuid,$3::uuid,'上部结构',$4,$4,nullif($5,''),'已确认') returning id",
-            year_id, bridge, component_id, defect_type, location);
+            "structure_part,defect_type,defect_description_raw,defect_location,review_status,"
+            "rating_tree_node_id) "
+            "values($1::uuid,$2::uuid,$3::uuid,'上部结构',$4,$4,nullif($5,''),'已确认',$6::uuid) "
+            "returning id",
+            year_id, bridge, component_id, defect_type, location, node_id_);
     }
 
     /// 照工作台明细那样构造一份请求：批次里的全部组、全部观测、各自的并发令牌。
@@ -153,6 +185,8 @@ protected:
     }
 
     drogon::orm::DbClientPtr client_;
+    std::string node_id_;
+    std::string node_key_;
     std::string bridge_id_;
     std::string other_bridge_id_;
     std::string component_a_;
@@ -273,9 +307,10 @@ TEST_F(ThreadResolutionRepositoryTest, RejectsTheSameObservationInTwoGroups) {
 TEST_F(ThreadResolutionRepositoryTest, RefusesToCreateWhenAThreadAlreadyMatches) {
     const auto request = request_from_batch(only_batch());
     client_->execSqlSync(
-        "insert into defect_threads(bridge_id,bridge_component_id,thread_name,defect_type) "
-        "values($1::uuid,$2::uuid,'渗水泛碱','渗水泛碱')",
-        bridge_id_, component_a_);
+        // 规范键要与组一致才算"精确匹配"，而键取的是评定树节点（迁移 029）。
+        "insert into defect_threads(bridge_id,bridge_component_id,thread_name,defect_type,"
+        "node_key) values($1::uuid,$2::uuid,'渗水泛碱','渗水泛碱',$3)",
+        bridge_id_, component_a_, node_key_);
 
     const auto outcome = db::ThreadResolutionRepository(client_).apply(request);
 
@@ -378,9 +413,9 @@ TEST_F(ThreadResolutionRepositoryTest, RefusesToCallAPartiallyBoundGroupComplete
 TEST_F(ThreadResolutionRepositoryTest, TreatsASameKeyThreadAsCompletionForCreate) {
     const auto request = request_from_batch(only_batch());
     const auto other_thread = insert_id(
-        "insert into defect_threads(bridge_id,bridge_component_id,thread_name,defect_type) "
-        "values($1::uuid,$2::uuid,'别人建的渗水泛碱','渗水泛碱') returning id",
-        bridge_id_, component_a_);
+        "insert into defect_threads(bridge_id,bridge_component_id,thread_name,defect_type,"
+        "node_key) values($1::uuid,$2::uuid,'别人建的渗水泛碱','渗水泛碱',$3) returning id",
+        bridge_id_, component_a_, node_key_);
     for (const auto& observation : request.groups[0].observations) {
         client_->execSqlSync(
             "update defect_observations set defect_thread_id=$1::uuid, updated_at=now() "

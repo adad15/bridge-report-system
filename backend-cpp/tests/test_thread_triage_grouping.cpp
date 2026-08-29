@@ -23,6 +23,13 @@ constexpr const char* kHinge1 = "c-hinge-1";
 constexpr const char* kHinge2 = "c-hinge-2";
 constexpr const char* kCap16 = "c-cap-16";
 
+// 身份的病害那一维取评定树节点（迁移 029）。这里默认「一个病害名称当一个节点」，
+// 好让这个文件里既有的用例保持原意——它们本来就是拿不同的名称表示不同的病害。
+// 要显式区分"同名不同节点"或"异名同节点"的用例，走下面带 node_key 的重载。
+std::string node_key_for(const std::string& defect_type) {
+    return "org.bridge.defect." + defect_type;
+}
+
 TriageObservationInput obs(
     const std::string& id,
     const std::string& component_id,
@@ -31,13 +38,15 @@ TriageObservationInput obs(
     const std::string& location,
     const std::string& component_type = "铰缝",
     const std::string& structure_part = "上部结构",
-    const std::string& business_code = "1#铰缝") {
+    const std::string& business_code = "1#铰缝",
+    const std::string& node_key = "") {
     TriageObservationInput input;
     input.id = id;
     input.bridge_component_id = component_id;
     input.structure_part = structure_part;
     input.component_type = component_type;
     input.business_component_code = business_code;
+    input.node_key = node_key.empty() ? node_key_for(defect_type) : node_key;
     input.defect_type = defect_type;
     input.defect_location = location;
     input.updated_at = "2026-08-25 10:00:00+08";
@@ -56,6 +65,8 @@ TriageThreadInput thread_of(
     input.system_number = system_number;
     input.thread_name = defect_type + "｜" + location;
     input.bridge_component_id = component_id;
+    // 与 obs() 同一口径，线索才匹得上观测。
+    input.node_key = node_key_for(defect_type);
     input.defect_type = defect_type;
     input.defect_location = location;
     input.updated_at = "2026-08-25 09:00:00+08";
@@ -295,4 +306,40 @@ TEST(ThreadTriageGroupingTest, GroupsAcrossPunctuationAndSpacingDifferences) {
     ASSERT_EQ(model.batches.size(), 1u);
     ASSERT_EQ(model.batches[0].groups.size(), 1u);
     EXPECT_EQ(model.batches[0].groups[0].observations.size(), 2u);
+}
+
+// --- 迁移 029：身份取评定树节点，不取病害名称文字 -------------------------
+//
+// 换键要解决的正是这两件事，各钉一条：文字相同不代表同一种病害，文字不同也不代表不是。
+
+TEST(ThreadTriageGroupingTest, SplitsTheSameWordingIntoDifferentNodes) {
+    // 报告两年都写「失效」，但一年解析成伸缩缝失效、一年解析成混凝土碳化——按文字会被
+    // 并成一条跨年线索，按节点才分得开。「失效」「破损」这类写法在实测数据里很常见。
+    std::vector<TriageObservationInput> observations{
+        obs("o1", kHinge1, 2025, "失效", "", "铰缝", "上部结构", "1#铰缝",
+            "org.bridge.defect.10_2_1_4"),
+        obs("o2", kHinge1, 2026, "失效", "", "铰缝", "上部结构", "1#铰缝",
+            "org.bridge.defect.9_1_1_5"),
+    };
+
+    const auto model = build_triage_model(std::move(observations), {});
+
+    EXPECT_EQ(model.batchable_group_count + model.manual_group_count, 2)
+        << "同一个词落在两个评定树病害上，是两处病害";
+}
+
+TEST(ThreadTriageGroupingTest, JoinsDifferentWordingUnderOneNode) {
+    // 今年写「渗水、泛碱」明年写「渗水泛碱」。归一化把 `、` 映射成 `,` 而不是删掉，
+    // 按文字这是两条线索；按节点是同一条。
+    std::vector<TriageObservationInput> observations{
+        obs("o1", kHinge1, 2025, "渗水、泛碱", "", "铰缝", "上部结构", "1#铰缝",
+            "org.bridge.defect.5_1_1_13"),
+        obs("o2", kHinge1, 2026, "渗水泛碱", "", "铰缝", "上部结构", "1#铰缝",
+            "org.bridge.defect.5_1_1_13"),
+    };
+
+    const auto model = build_triage_model(std::move(observations), {});
+
+    EXPECT_EQ(model.batchable_group_count + model.manual_group_count, 1)
+        << "同一个评定树病害，写法不同也是同一处";
 }

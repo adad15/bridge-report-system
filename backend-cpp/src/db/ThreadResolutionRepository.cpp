@@ -26,6 +26,9 @@ struct LockedObservation {
     std::string id;
     std::string bridge_id;
     std::string bridge_component_id;
+    /// 跨年身份取它（迁移 029）。空表示这条观测没有评定树节点——正式观测不该如此，
+    /// 由 apply/resolve 显式拒掉，而不是让它去和别的空键凑成一组。
+    std::string node_key;
     std::string defect_type;
     std::string defect_location;
     std::string review_status;
@@ -51,10 +54,13 @@ std::map<std::string, LockedObservation> lock_observations(
     const auto rows = tx->execSqlSync(
         "select o.id::text as id, o.bridge_id::text as bridge_id, "
         "o.bridge_component_id::text as bridge_component_id, o.defect_type, "
+        "coalesce(n.node_key,'') as node_key, "
         "coalesce(o.defect_location,'') as defect_location, o.review_status, "
         "o.updated_at::text as updated_at, o.defect_thread_id::text as defect_thread_id, "
         "iy.is_current, iy.status as year_status "
         "from defect_observations o "
+        // 左连接：没有节点的观测取空键，由下面的校验显式拒掉，而不是在这里悄悄消失。
+        "left join rating_tree_nodes n on n.id = o.rating_tree_node_id "
         "join inspection_years iy on iy.id = o.inspection_year_id "
         "where o.id = any($1::uuid[]) order by o.id for update of o",
         literal);
@@ -65,6 +71,7 @@ std::map<std::string, LockedObservation> lock_observations(
         observation.bridge_id = row["bridge_id"].as<std::string>();
         observation.bridge_component_id = row["bridge_component_id"].as<std::string>();
         observation.defect_type = row["defect_type"].as<std::string>();
+        observation.node_key = row["node_key"].as<std::string>();
         observation.defect_location = row["defect_location"].as<std::string>();
         observation.review_status = row["review_status"].as<std::string>();
         observation.updated_at = row["updated_at"].as<std::string>();
@@ -103,6 +110,8 @@ struct ThreadRow {
     std::string id;
     std::string system_number;
     std::string bridge_component_id;
+    /// 跨年身份取它（迁移 029）；029 之前建的线索为空，匹不上任何观测。
+    std::string node_key;
     std::string defect_type;
     std::string defect_location;
 };
@@ -112,6 +121,7 @@ std::vector<ThreadRow> load_component_threads(
     std::vector<ThreadRow> threads;
     for (const auto& row : tx->execSqlSync(
              "select id::text as id, system_number, bridge_component_id::text as bridge_component_id, "
+             "coalesce(node_key,'') as node_key, "
              "defect_type, coalesce(defect_location,'') as defect_location "
              "from defect_threads where bridge_id = $1::uuid order by id",
              bridge_id)) {
@@ -119,6 +129,7 @@ std::vector<ThreadRow> load_component_threads(
             row["id"].as<std::string>(),
             row["system_number"].as<std::string>(),
             row["bridge_component_id"].as<std::string>(),
+            row["node_key"].as<std::string>(),
             row["defect_type"].as<std::string>(),
             row["defect_location"].as<std::string>(),
         });
@@ -312,7 +323,7 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
 
                 const auto& existing_thread_id = *bound_threads.begin();
                 const auto group_key = review::make_thread_canonical_key(
-                    first_locked.bridge_component_id, first_locked.defect_type,
+                    first_locked.bridge_component_id, first_locked.node_key,
                     first_locked.defect_location);
                 const auto thread = std::find_if(
                     threads.begin(), threads.end(),
@@ -321,7 +332,7 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
                     });
                 const bool key_matches = thread != threads.end()
                     && review::make_thread_canonical_key(
-                           thread->bridge_component_id, thread->defect_type,
+                           thread->bridge_component_id, thread->node_key,
                            thread->defect_location) == group_key;
                 // bind 还要求就是请求指定的那条：规范键相同不代表是同一条线索。
                 const bool target_matches = request.action != review::TriageAction::Bind
@@ -388,8 +399,16 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
                 }
 
                 components.insert(observation.bridge_component_id);
+                // 没有评定树节点就没有跨年身份。放它进去，所有缺节点的观测会因为空键
+                // 相等而被并成同一条线索——那比拒掉危险得多。
+                if (observation.node_key.empty()) {
+                    add_issue(outcome.issues, "observation_without_rating_tree_node",
+                              "该观测没有评定树节点，无法确定跨年身份。",
+                              group.group_id, observation.bridge_component_id, observation.id);
+                    group_ok = false;
+                }
                 const auto key = review::make_thread_canonical_key(
-                    observation.bridge_component_id, observation.defect_type,
+                    observation.bridge_component_id, observation.node_key,
                     observation.defect_location);
                 canonical_keys.insert(key.canonical_string());
                 resolved.key = key;
@@ -405,7 +424,7 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
             }
             if (canonical_keys.size() > 1) {
                 add_issue(outcome.issues, "group_key_mismatch",
-                          "同一组里的观测病害类型或位置不一致。", group.group_id);
+                          "同一组里的观测评定树病害或位置不一致。", group.group_id);
                 group_ok = false;
             }
 
@@ -434,7 +453,7 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
             std::vector<const ThreadRow*> matches;
             for (const auto& thread : threads) {
                 const auto thread_key = review::make_thread_canonical_key(
-                    thread.bridge_component_id, thread.defect_type, thread.defect_location);
+                    thread.bridge_component_id, thread.node_key, thread.defect_location);
                 if (thread_key == resolved.key) matches.push_back(&thread);
             }
             if (matches.size() > 1) {
@@ -524,11 +543,11 @@ TriageApplyOutcome ThreadResolutionRepository::apply(const TriageApplyRequest& r
                     : resolved.defect_type_raw + "｜" + location;
                 const auto inserted = tx->execSqlSync(
                     "insert into defect_threads(bridge_id,bridge_component_id,thread_name,"
-                    "defect_type,defect_location,confirmation_status) "
-                    "values($1::uuid,$2::uuid,$3,$4,nullif($5,''),'人工已确认') "
+                    "node_key,defect_type,defect_location,confirmation_status) "
+                    "values($1::uuid,$2::uuid,$3,$4,$5,nullif($6,''),'人工已确认') "
                     "returning id::text as id, system_number",
                     request.bridge_id, resolved.bridge_component_id, thread_name,
-                    resolved.defect_type_raw, location);
+                    resolved.key.node_key, resolved.defect_type_raw, location);
                 thread_id = inserted[0]["id"].as<std::string>();
                 system_number = inserted[0]["system_number"].as<std::string>();
                 result_outcome = "created";
@@ -618,6 +637,7 @@ TriageApplyOutcome ThreadResolutionRepository::resolve(
         const auto locked = lock_observations(tx, observation_ids);
 
         std::set<std::string> canonical_keys;
+        std::set<std::string> node_keys;
         for (const auto& requested : request.observations) {
             const auto found = locked.find(requested.id);
             if (found == locked.end()) {
@@ -659,8 +679,16 @@ TriageApplyOutcome ThreadResolutionRepository::resolve(
                           "该观测被模块 07 已确认的对比结论引用。", {},
                           observation.bridge_component_id, observation.id);
             }
+            // 没有评定树节点就没有跨年身份。放它进去，所有缺节点的观测会因为空键相等
+            // 而被并成同一条线索——那比拒掉危险得多。
+            if (observation.node_key.empty()) {
+                add_issue(outcome.issues, "observation_without_rating_tree_node",
+                          "该观测没有评定树节点，无法确定跨年身份。", {},
+                          observation.bridge_component_id, observation.id);
+            }
+            node_keys.insert(observation.node_key);
             canonical_keys.insert(review::make_thread_canonical_key(
-                observation.bridge_component_id, observation.defect_type,
+                observation.bridge_component_id, observation.node_key,
                 observation.defect_location).canonical_string());
         }
 
@@ -710,13 +738,22 @@ TriageApplyOutcome ThreadResolutionRepository::resolve(
             const auto thread_name = request.defect_location.empty()
                 ? request.defect_type
                 : request.defect_type + "｜" + request.defect_location;
+            // 节点键取自被锁定的观测，不取客户端请求：请求里只有展示用的病害名称。
+            // 非精确合并时观测可能跨多个节点，此时取哪个都是错的，只能拒。
+            if (node_keys.size() != 1) {
+                add_issue(outcome.issues, "ambiguous_thread_node_key",
+                          "选中的观测分属不同的评定树病害，无法新建一条线索。", {},
+                          request.bridge_component_id);
+                rollback();
+                return outcome;
+            }
             const auto inserted = tx->execSqlSync(
                 "insert into defect_threads(bridge_id,bridge_component_id,thread_name,"
-                "defect_type,defect_location,confirmation_status) "
-                "values($1::uuid,$2::uuid,$3,$4,nullif($5,''),'人工已确认') "
+                "node_key,defect_type,defect_location,confirmation_status) "
+                "values($1::uuid,$2::uuid,$3,$4,$5,nullif($6,''),'人工已确认') "
                 "returning id::text as id, system_number",
                 request.bridge_id, request.bridge_component_id, thread_name,
-                request.defect_type, request.defect_location);
+                *node_keys.begin(), request.defect_type, request.defect_location);
             thread_id = inserted[0]["id"].as<std::string>();
             system_number = inserted[0]["system_number"].as<std::string>();
             result_outcome = "created";

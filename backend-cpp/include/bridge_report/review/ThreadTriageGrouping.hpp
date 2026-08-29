@@ -25,6 +25,9 @@ struct TriageObservationInput {
     std::string structure_part;
     std::string component_type;
     std::string business_component_code;
+    /// 跨年身份取它（迁移 029）。观测入库时必定带一个适用的评定树节点。
+    std::string node_key;
+    /// 只作展示与线索命名，不参与身份判定。
     std::string defect_type;
     std::string defect_location;
     std::string updated_at;
@@ -36,6 +39,10 @@ struct TriageThreadInput {
     std::string system_number;
     std::string thread_name;
     std::string bridge_component_id;
+    /// 与观测同一口径；029 之前建的线索可能为空，那种线索匹不上任何观测，
+    /// 等人工在整理台上重新归并。
+    std::string node_key;
+    /// 只作展示，不参与身份判定。
     std::string defect_type;
     std::string defect_location;
     std::string updated_at;

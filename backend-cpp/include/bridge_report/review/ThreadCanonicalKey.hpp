@@ -14,10 +14,20 @@ namespace bridge_report::review {
  * 只负责去空白与字符归一，是这里显式规定 null / 空串 / 纯空白都落到同一个空值上。
  * 铰缝那类构件本来就不写更细的位置，全桥 166 个铰缝的渗水泛碱都是空位置；不认这条规则，
  * 它们会散成 166 个互不相干的孤组。
+ *
+ * 病害的那一维取**评定树节点**，不取病害名称文字（迁移 029）。文字来自报告原文：
+ * 「失效」「破损」这类写法在同一构件上分不出是哪种病害，而换个年度写成「渗水、泛碱」
+ * 又会和「渗水泛碱」算成两条——归一化只管全角半角与标点，不认同义词。节点是规范分类，
+ * 观测入库时必定带一个（确认前校验保证），跨年天然对齐。
+ *
+ * 取 `node_key` 而不是 `rating_tree_node_id`：后者每发布一版评定树就是一批新 UUID，
+ * 拿它做键，哪一年锁了新版树就全部断链。`node_key` 跨版本不变。
  */
 struct ThreadCanonicalKey {
     std::string bridge_component_id;
-    std::string normalized_defect_type;
+    /// 评定树节点的跨版本稳定键，形如 org.bridge.defect.5_1_1_1。不做文本归一化：
+    /// 它是标识符不是自然语言，改动它只会掩盖上游取错了键。
+    std::string node_key;
     /// 空字符串表示"无位置"，它是一个合法取值，不是缺失。
     std::string normalized_defect_location;
 
@@ -29,7 +39,7 @@ struct ThreadCanonicalKey {
 
 [[nodiscard]] ThreadCanonicalKey make_thread_canonical_key(
     const std::string& bridge_component_id,
-    const std::string& defect_type,
+    const std::string& node_key,
     const std::string& defect_location);
 
 /**
