@@ -16,6 +16,32 @@ namespace review = bridge_report::review;
 
 namespace {
 
+/// 全套件共用同一个 DbClient，而且**故意不销毁**。
+///
+/// 此前是每个用例在 SetUp 里建一个、随夹具析构，22 个用例就是建拆 22 次。DbClient 的
+/// 销毁与它那条后台事件循环线程的收尾之间有竞态：实测裸跑约一半的运行会在某一轮销毁
+/// **之后**直接 abort（exit 3）。当时排查了很久才定位，因为它把所有常规手段都躲开了：
+///
+///   - gtest 一个字都打印不出来——崩在后台线程，而 gtest 的 SEH 包装只裹主线程的用例体；
+///   - 崩溃用例随机，看的是哪一轮销毁撞上，与用例内容无关；
+///   - 调试器下 100% 不复现（cdb 跑 14 次全过，含关掉调试堆）；
+///   - `--gtest_catch_exceptions=0` 也不复现；Release 同样不复现（Debug 慢 4 倍，窗口大得多）。
+///
+/// 判定崩在销毁之后的依据：崩溃那几次日志的最后一行是套件区块的结束行，也就是
+/// `[ OK ]` 已打印、TearDown 已跑完、夹具连同 client_ 已经析构，之后才炸。
+///
+/// 生产不受影响：后端启动时建一个 DbClient，直到进程退出都不销毁，走不到这条路径。
+///
+/// 别改回"每个用例一个"——数据隔离靠的是 bridge_id（SetUp 建新桥、TearDown 按桥删），
+/// 从来不依赖每个用例有独立连接；每用例一个只买来了那个竞态。
+drogon::orm::DbClientPtr shared_test_client() {
+    // 故意泄漏，让它活到进程结束，彻底避开销毁竞态：测试进程紧接着就退出，
+    // 而放进 static shared_ptr 由静态析构去销毁，等于把同一个竞态挪到 main 之后。
+    static auto* client = new drogon::orm::DbClientPtr(
+        bridge_report::db::create_db_client(bridge_report::config::PostgresConfig{}, 1));
+    return *client;
+}
+
 // 两个铰缝各三年，长相相同 → 一个 create 批次两组。用来验三阶段事务与服务端重算。
 class ThreadResolutionRepositoryTest : public ::testing::Test {
 protected:
@@ -23,8 +49,7 @@ protected:
         if (std::getenv("BRIDGE_REPORT_TEST_DATABASE_URL") == nullptr) {
             GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置，跳过需要真实数据库的集成测试";
         }
-        const bridge_report::config::PostgresConfig config{};
-        client_ = bridge_report::db::create_db_client(config, 1);
+        client_ = shared_test_client();
 
         bridge_id_ = insert_id("insert into bridges(bridge_name) values('线索落库测试桥') returning id");
         other_bridge_id_ = insert_id("insert into bridges(bridge_name) values('线索落库旁桥') returning id");
