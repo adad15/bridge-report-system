@@ -411,8 +411,13 @@ std::optional<Json::Value> ComponentArchiveRepository::get_observation_evidence(
 
 std::optional<Json::Value> ComponentArchiveRepository::get_observation_summary(const std::string& observation_id) {
     const auto rows = db_client_->execSqlSync(
-        "select id, bridge_component_id, defect_type, defect_location "
-        "from defect_observations where id = $1::uuid",
+        // 左连接：029 之前的观测可能没有节点，取空键——推荐那边按空键不算"同一种病害"，
+        // 与归并对这类观测的处置一致。
+        "select o.id, o.bridge_component_id, coalesce(n.node_key,'') as node_key, "
+        "o.defect_type, o.defect_location "
+        "from defect_observations o "
+        "left join rating_tree_nodes n on n.id = o.rating_tree_node_id "
+        "where o.id = $1::uuid",
         observation_id
     );
     if (rows.empty()) {
@@ -422,6 +427,7 @@ std::optional<Json::Value> ComponentArchiveRepository::get_observation_summary(c
     Json::Value summary;
     summary["id"] = row["id"].as<std::string>();
     summary["bridge_component_id"] = row["bridge_component_id"].as<std::string>();
+    summary["node_key"] = row["node_key"].as<std::string>();
     summary["defect_type"] = row["defect_type"].as<std::string>();
     summary["defect_location"] = nullable_string(row, "defect_location");
     return summary;
@@ -429,7 +435,8 @@ std::optional<Json::Value> ComponentArchiveRepository::get_observation_summary(c
 
 Json::Value ComponentArchiveRepository::list_threads_for_component(const std::string& component_id) {
     const auto thread_rows = db_client_->execSqlSync(
-        "select t.id, t.system_number, t.thread_name, t.defect_type, t.defect_location, "
+        "select t.id, t.system_number, t.thread_name, coalesce(t.node_key,'') as node_key, "
+        "t.defect_type, t.defect_location, "
         "t.current_status, t.confirmation_status, "
         "fy.inspection_year as first_seen_year, ly.inspection_year as latest_seen_year "
         "from defect_threads t "
@@ -445,6 +452,7 @@ Json::Value ComponentArchiveRepository::list_threads_for_component(const std::st
         item["id"] = row["id"].as<std::string>();
         item["system_number"] = row["system_number"].as<std::string>();
         item["thread_name"] = row["thread_name"].as<std::string>();
+        item["node_key"] = row["node_key"].as<std::string>();
         item["defect_type"] = row["defect_type"].as<std::string>();
         item["defect_location"] = nullable_string(row, "defect_location");
         item["current_status"] = row["current_status"].as<std::string>();

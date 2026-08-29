@@ -119,6 +119,7 @@ void register_thread_suggestions_route(const drogon::orm::DbClientPtr& db_client
                 const auto threads =
                     repository.list_threads_for_component((*summary)["bridge_component_id"].asString());
                 review::ThreadSuggestionInput input;
+                input.node_key = (*summary)["node_key"].asString();
                 input.defect_type = (*summary)["defect_type"].asString();
                 input.defect_location =
                     (*summary)["defect_location"].isString() ? (*summary)["defect_location"].asString() : "";

@@ -113,7 +113,6 @@ Json::Value suggest_threads(const ThreadSuggestionInput& observation, const Json
         Json::Value payload;
     };
 
-    const auto observation_type = normalize_suggestion_text(observation.defect_type);
     const auto observation_location = normalize_suggestion_text(observation.defect_location);
 
     std::vector<Scored> scored;
@@ -122,12 +121,26 @@ Json::Value suggest_threads(const ThreadSuggestionInput& observation, const Json
             if (!thread.isObject()) {
                 continue;
             }
-            const auto thread_type =
-                normalize_suggestion_text(thread["defect_type"].isString() ? thread["defect_type"].asString() : "");
+            const auto thread_node_key =
+                thread["node_key"].isString() ? thread["node_key"].asString() : std::string();
             const auto thread_location = normalize_suggestion_text(
                 thread["defect_location"].isString() ? thread["defect_location"].asString() : "");
 
-            const bool same_type = !thread_type.empty() && thread_type == observation_type;
+            // "是不是同一种病害"比评定树节点，不比病害名称文字（迁移 029）。
+            //
+            // 比文字会让推荐与归并互相打架，而且方向都是错的：
+            //
+            //   报告两年都写「失效」，一年定成伸缩缝失效、一年定成支座失效——文字相同拿
+            //   满分排第一，用户点了绑，后端按节点判不是同一处，直接拒。推荐我绑的又不
+            //   让我绑。
+            //
+            //   反过来，「渗水、泛碱」与「渗水泛碱」是同一个节点，但归一化把顿号映射成
+            //   逗号而不是删掉，两串不相等——真正对的那条只拿位置分排到后面，反倒是文字
+            //   恰好撞上、节点不同的那条排第一。
+            //
+            // 空节点键不算相同：029 之前建的线索没有它，那种线索归并本来也匹不上。
+            const bool same_type =
+                !thread_node_key.empty() && thread_node_key == observation.node_key;
             // 空位置与空位置算全等：铰缝这类构件本来就不写更细的位置，全桥 166 个铰缝的
             // 渗水泛碱位置字段都是空的。旧实现要求双方非空，等于把它们排除在候选之外——
             // 明明同构件同类型的线索就在那儿，一条也推不出来。批量归组用的是同一条规则
