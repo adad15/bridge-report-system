@@ -37,6 +37,8 @@ import { DefectBatchAssignDialog } from "./DefectBatchAssignDialog";
 import { DefectBatchConfirmDialog } from "./DefectBatchConfirmDialog";
 import { DefectDetailEditor } from "./DefectDetailEditor";
 import { DefectIssueGroupConfirmDialog } from "./DefectIssueGroupConfirmDialog";
+import { ApiError } from "../../api/apiClient";
+import { applySourceRatingResolution } from "../../api/resolutionApi";
 import { applicableRatingTreeNodes } from "../applicableRatingTreeNodes";
 import { DefectIssueGroupList } from "./DefectIssueGroupList";
 import { DefectQuickReviewList } from "./DefectQuickReviewList";
@@ -399,11 +401,12 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
       setMatchSummary(report.summary);
       setMatchedAt(new Date());
       setMatchError(null);
-      // 5.0：自动匹配结果由后端直接写进评分树解析表，前端不再把它塞回草稿。
-      // 重新拉一次工作区就能看到最新状态。
-      const wroteAnyMatch = report.results.some((result) =>
-        !result.skipped && result.outcome === "auto_bound" && result.rating_tree_node_id);
-      if (wroteAnyMatch) void refreshResolution();
+      // 这个接口只算不写（DefectMatchingRoutes 用可确认视图做只读计算），所以算完不必
+      // 重取工作区——关系态不可能因为这次调用而变。此前这里按 auto_bound 触发一次整份
+      // 重取，取回来的必然与手上的一样。
+      //
+      // 权威的自动匹配结果由导入初始化与区间展开等写命令落库；页面这里拿到的是"按当前
+      // 草稿重算的话会是什么"，供人参考，不是已经生效的状态。
     } catch (error) {
       // 服务失败不能伪装成"这批病害都没有匹配结果"：清掉上一轮结果并显式报错。
       setMatchResults(new Map());
@@ -889,16 +892,66 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         onConfirm={() => {
           if (!pendingGroupAssignment || !ratingTree) return;
           const { group, node } = pendingGroupAssignment;
-          dispatch({
-            type: "select_rating_tree_nodes",
-            candidateIds: group.rows.map((row) => row.candidateId),
-            versionId: ratingTree.version_id,
-            nodeId: node.id,
-            nodeName: node.display_name,
-            isScoring: node.is_scoring,
-            matchEvidence: "用户按相同来源身份批量指定评定树病害",
-          });
           setPendingGroupAssignment(null);
+          if (!editLockToken) {
+            setTreeError("当前页面没有编辑权，批量应用未保存。");
+            return;
+          }
+          // 权威节点写关系表，草稿只跟着改连带的来源事实。此前这里只 dispatch 改草稿：
+          // 病害名字改了、节点没存，刷新后名字还在节点没了——比不生效更难发现。
+          //
+          // 先写后端、成功了再改本地。反过来的话，一次失败就留下一份"看着已应用、其实
+          // 没落库"的草稿，而用户还能把它保存进去。
+          void (async () => {
+            setTreeError("");
+            let applied = 0;
+            for (const row of group.rows) {
+              const instances = row.resolution.instances;
+              if (instances.length === 0) {
+                setTreeError(
+                  `已应用 ${applied} 条；“${row.defect.component_number ?? row.candidateId}”` +
+                  "还没绑定实际构件，本组其余病害未应用。");
+                if (applied > 0) void refreshResolution();
+                return;
+              }
+              try {
+                await applySourceRatingResolution(
+                  baseUrl,
+                  importRecordId,
+                  row.candidateId,
+                  {
+                    instances: instances.map((instance) => ({
+                      instance_id: instance.instanceId,
+                      expected_version: instance.ratingVersion,
+                    })),
+                    rating_tree_node_id: node.id,
+                    expected_rating_tree_version_id: ratingTree.version_id,
+                    ...(inventoryRevisionId
+                      ? { expected_inventory_revision_id: inventoryRevisionId } : {}),
+                  },
+                  editLockToken);
+              } catch (caught) {
+                // 一组里每一行是各自独立的一条来源病害，写到第几条就是第几条——这是
+                // 真实状态，不是半个写入。说清楚停在哪儿，让工作区重取把实情摆出来。
+                setTreeError(
+                  `已应用 ${applied} 条，第 ${applied + 1} 条失败：` +
+                  (caught instanceof ApiError ? caught.message : "请刷新后重试。"));
+                if (applied > 0) void refreshResolution();
+                return;
+              }
+              applied += 1;
+            }
+            dispatch({
+              type: "select_rating_tree_nodes",
+              candidateIds: group.rows.map((row) => row.candidateId),
+              versionId: ratingTree.version_id,
+              nodeId: node.id,
+              nodeName: node.display_name,
+              isScoring: node.is_scoring,
+              matchEvidence: "用户按相同来源身份批量指定评定树病害",
+            });
+            void refreshResolution();
+          })();
         }}
       />
       <DefectIssueGroupConfirmDialog

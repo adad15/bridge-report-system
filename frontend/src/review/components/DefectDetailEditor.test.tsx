@@ -238,3 +238,67 @@ it("persists a manual node choice to the rating resolution", async () => {
     "lock-1");
   await waitFor(() => expect(onRatingResolved).toHaveBeenCalled());
 });
+
+it("does not touch the draft when the rating write fails", async () => {
+  const node: RatingTreeNodeSummary = {
+    id: "tree-node-water",
+    node_key: "org.bridge.defect.water",
+    parent_node_id: "tree-group",
+    display_number: "5.1.1-13",
+    display_name: "水损",
+    node_type: "defect",
+    sort_order: 13,
+    bridge_type_ids: ["bridge-type-1"],
+    component_category_ids: ["h21.component.beam"],
+    scoring_mode: "inherit_h21",
+    h21_indicator_id: "h21.defect.water",
+    is_selectable: true,
+    is_scoring: true,
+    allowed_scales: [1, 2],
+    scale_descriptions: { "1": "轻微", "2": "明显" },
+  };
+  vi.mocked(applySourceRatingResolution).mockRejectedValueOnce(new Error("boom"));
+  const draft = data();
+  const resolution = new Map([["defect_0001", {
+    ...UNRESOLVED,
+    bridgeComponentId: "component-1",
+    componentIds: ["component-1"],
+    components: [{ componentId: "component-1", categoryId: "h21.component.beam" }],
+    standardComponentCategoryId: "h21.component.beam",
+    ratingTreeVersionId: "tree-version-1",
+    activeInstanceCount: 1,
+    instances: [{ instanceId: "instance-1", ratingVersion: 0 }],
+  }]]);
+  const row = buildDefectPhotoReviewModel({
+    draft,
+    ratingTreeVersionId: "tree-version-1",
+    ratingTreeNodes: [],
+    ratingTreeNodeSummaries: [node],
+    applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([node.id])]]),
+    treeRulesReady: true,
+    resolution,
+    assessmentIssues: [],
+  }).rows[0];
+  const dispatch = vi.fn();
+
+  render(
+    <DefectDetailEditor
+      draft={draft}
+      row={row}
+      ratingTreeVersionId="tree-version-1"
+      applicableNodes={[node]}
+      importRecordId="record-1"
+      baseUrl="http://backend"
+      dispatch={dispatch}
+      editLockToken="lock-1"
+      onConfirm={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  );
+
+  fireEvent.change(screen.getByRole("combobox", { name: "评定树病害" }), { target: { value: node.id } });
+
+  // 后端拒绝时草稿一个字不能动：错误提示看得见，脏草稿看不见，而用户还能把它保存进去。
+  await waitFor(() => expect(applySourceRatingResolution).toHaveBeenCalled());
+  expect(dispatch).not.toHaveBeenCalled();
+});

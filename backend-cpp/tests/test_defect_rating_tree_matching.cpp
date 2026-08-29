@@ -354,3 +354,34 @@ TEST(DefectRatingTreeMatchingTest, ReportsDisagreementInsteadOfPickingOneInstanc
     // 挑其中一个充数最危险：页面把这一行当成整条病害的结论，写谁都是错的。
     EXPECT_FALSE(report.records[0].node_id.has_value());
 }
+
+// 结论"一致"不能只看 outcome 和节点。两条实例都停在同一种结果、都没有节点，但失败
+// 原因不同时，采用第一条的原因等于把不适用于另一条的结论摆到整行上。
+TEST(DefectRatingTreeMatchingTest, DisagreesWhenTheReasonDiffersAtTheSameOutcome) {
+    const auto view = make_view({
+        // 这条解析得出类别，只是没有精确规则：no_matching_rule。
+        make_instance("d1", "inst-1", "component-1", "无此规范病害"),
+        // 这条的构件不在台账里：component_not_bound / 前提缺失，原因完全不同。
+        make_instance("d1", "inst-2", "component-elsewhere", "无此规范病害"),
+    });
+
+    const auto report = run(view);
+
+    ASSERT_EQ(report.records.size(), 1U);
+    EXPECT_EQ(report.records[0].outcome, RatingTreeMatchOutcome::unmatched);
+    EXPECT_EQ(report.records[0].reason_code, "instances_disagree");
+}
+
+// 反面：两条实例结论一模一样时不得误报分歧，否则每条区间病害都会挂上"需逐个处理"。
+TEST(DefectRatingTreeMatchingTest, AgreesWhenEveryFieldMatches) {
+    const auto view = make_view({
+        make_instance("d1", "inst-1", "component-1", "无此规范病害"),
+        make_instance("d1", "inst-2", "component-1", "无此规范病害"),
+    });
+
+    const auto report = run(view);
+
+    ASSERT_EQ(report.records.size(), 1U);
+    EXPECT_EQ(report.records[0].outcome, RatingTreeMatchOutcome::unmatched);
+    EXPECT_EQ(report.records[0].reason_code, "no_matching_rule");
+}

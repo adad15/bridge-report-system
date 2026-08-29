@@ -362,8 +362,6 @@ void register_import_resolution_routes(const drogon::orm::DbClientPtr& db_client
                 // 覆盖后的事实按哪一版算哈希），因此也要带版本。
                 command.context.expected_inventory_revision_id =
                     optional_body_string(*body, "expected_inventory_revision_id");
-                command.context.expected_inventory_revision_id =
-                    optional_body_string(*body, "expected_inventory_revision_id");
                 command.group_id = group_id;
                 command.action = optional_body_string(*body, "action");
                 if (!read_expected_version(*body, command.expected_version, callback)) {
@@ -463,6 +461,7 @@ void register_import_resolution_routes(const drogon::orm::DbClientPtr& db_client
                     return;
                 }
                 resolution::SourceRatingResolutionRequest command;
+                command.source_candidate_id = source_candidate_id;
                 command.context.import_record_id = import_id;
                 command.context.actor_user_id = actor->id;
                 command.context.edit_lock = edit_lock_from_request(request, *actor);

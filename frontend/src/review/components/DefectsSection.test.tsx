@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchInventorySummary, searchInventoryEntries } from "../../api/componentInventoryApi";
 import { ApiError } from "../../api/apiClient";
 import { matchDefectRatingTreeNodes } from "../../api/defectMatchingApi";
-import { addManualDefect, fetchResolutionWorkspace } from "../../api/resolutionApi";
+import {
+  applySourceRatingResolution, addManualDefect, fetchResolutionWorkspace } from "../../api/resolutionApi";
 import { fetchApplicableRatingTreeDefects, fetchRatingTreeNode } from "../../api/ratingTreeApi";
 import { data } from "../testFixtures";
 import { DefectsSection } from "./DefectsSection";
@@ -29,12 +30,18 @@ vi.mock("../../api/defectMatchingApi", async (importOriginal) => {
 
 vi.mock("../../api/resolutionApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/resolutionApi")>();
-  return { ...actual, fetchResolutionWorkspace: vi.fn(), addManualDefect: vi.fn() };
+  return {
+    ...actual,
+    fetchResolutionWorkspace: vi.fn(),
+    addManualDefect: vi.fn(),
+    applySourceRatingResolution: vi.fn().mockResolvedValue({}),
+  };
 });
 
 const mockedMatchDefects = vi.mocked(matchDefectRatingTreeNodes);
 const mockedFetchWorkspace = vi.mocked(fetchResolutionWorkspace);
 const mockedAddManualDefect = vi.mocked(addManualDefect);
+const mockedApplySourceRating = vi.mocked(applySourceRatingResolution);
 const mockedFetchSummary = vi.mocked(fetchInventorySummary);
 
 // 5.0：绑定与评分树结果住在关系表里，页面自己去 `GET /resolution-workspace` 取。
@@ -610,6 +617,7 @@ describe("DefectsSection", () => {
         selectedCandidateId: null,
         onSelect: vi.fn(),
         dispatch,
+        editLockToken: "lock-1",
         ratingTree: {
           version_id: "tree-version-1",
           tree_name: "单位桥梁评定树",
@@ -653,9 +661,11 @@ describe("DefectsSection", () => {
       render(<DefectsSection draft={boundDraft()} {...matchProps(dispatch)} />);
 
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(1));
-      // 5.0：自动结果由后端写进评分树解析表，页面重新拉一次工作区看结果，
-      // 而不是把它塞回草稿。草稿里再存一份就会与权威状态两头不一致。
-      await waitFor(() => expect(mockedFetchWorkspace).toHaveBeenCalledTimes(2));
+      // 匹配接口只算不写，所以算完不该再取一次工作区：关系态不可能因为这次调用而变，
+      // 取回来的必然与手上的一样。这里钉死"只有挂载那一次"——放宽成 >=1 的话，那次
+      // 无效的整份重取会悄悄长回来。
+      expect(mockedFetchWorkspace).toHaveBeenCalledTimes(1);
+      // 自动结果也不塞回草稿：草稿里再存一份就会与权威状态两头不一致。
       expect(dispatch).not.toHaveBeenCalledWith(
         expect.objectContaining({ type: "select_rating_tree_nodes" }),
       );
@@ -828,7 +838,18 @@ describe("DefectsSection", () => {
       fireEvent.click(screen.getByRole("button", { name: "应用到本组 2 条" }));
       fireEvent.click(screen.getByRole("button", { name: "应用到本组" }));
 
-      expect(dispatch).toHaveBeenCalledWith({
+      // 节点必须写进关系表。此前这里只 dispatch 改草稿：病害名字改了、节点没存，
+      // 刷新后名字还在节点没了——比不生效更难发现。每条来源病害各写一次，
+      // 各带自己那条的全部活动实例。
+      await waitFor(() => expect(mockedApplySourceRating).toHaveBeenCalledTimes(2));
+      expect(mockedApplySourceRating.mock.calls.map((call) => call[2]))
+        .toEqual(["defect_0001", "defect_0002"]);
+      expect(mockedApplySourceRating.mock.calls[0][3]).toMatchObject({
+        instances: [{ instance_id: "instance-1", expected_version: 0 }],
+        rating_tree_node_id: treeNode.id,
+      });
+
+      await waitFor(() => expect(dispatch).toHaveBeenCalledWith({
         type: "select_rating_tree_nodes",
         candidateIds: ["defect_0001", "defect_0002"],
         versionId: "tree-version-1",
@@ -836,7 +857,62 @@ describe("DefectsSection", () => {
         nodeName: treeNode.display_name,
         isScoring: true,
         matchEvidence: "用户按相同来源身份批量指定评定树病害",
+      }));
+    });
+
+    // 后端拒绝时不得改草稿：留下一份"看着已应用、其实没落库"的草稿，用户还能把它保存。
+    it("leaves the draft alone when the batch write is rejected", async () => {
+      mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+      mockedFetchTreeNode.mockResolvedValue(treeNode);
+      mockedApplySourceRating.mockRejectedValueOnce(new Error("boom"));
+      mockedMatchDefects.mockResolvedValue({
+        rating_tree_version_id: "tree-version-1",
+        summary: {
+          processed: 2, auto_bound: 0, candidates: 0, composite: 0,
+          unmatched: 2, prerequisite_missing: 0, failed: 0, skipped: 0,
+        },
+        results: ["defect_0001", "defect_0002"].map((candidateId) => ({
+          candidate_id: candidateId,
+          outcome: "unmatched" as const,
+          skipped: false,
+          rating_tree_node_id: null,
+          standard_defect_indicator_id: null,
+          match_method: null,
+          match_evidence: null,
+          reason_code: "no_matching_rule",
+          reason_message: "来源分组与指标没有精确对应关系。",
+          candidates: [],
+        })),
       });
+      mockedFetchWorkspace.mockResolvedValue(workspace([
+        { candidateId: "defect_0001", componentId: "component-1" },
+        { candidateId: "defect_0002", componentId: "component-2" },
+      ]) as never);
+      const draft = boundDraft();
+      draft.defects = ["component-1", "component-2"].map((_componentId, index) => ({
+        ...draft.defects[0],
+        candidate_id: `defect_000${index + 1}`,
+        component_number: `1-${index + 1}#板`,
+        defect_type: "",
+        defect_description: "存在黑点痕迹",
+        source_defect_group_id: "source-group-a",
+        source_defect_group_number: "5.1.1",
+        source_defect_indicator_id: "source-indicator-a",
+        source_defect_indicator_number: "5.1.1-8",
+      }));
+      const dispatch = vi.fn();
+
+      render(<DefectsSection draft={draft} {...matchProps(dispatch)} />);
+      await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole("button", { name: "问题分组（1）" }));
+      const picker = await screen.findByRole("combobox", { name: "为 存在黑点痕迹 选择评定树病害" });
+      fireEvent.change(picker, { target: { value: treeNode.id } });
+      fireEvent.click(screen.getByRole("button", { name: "应用到本组 2 条" }));
+      fireEvent.click(screen.getByRole("button", { name: "应用到本组" }));
+
+      await waitFor(() => expect(mockedApplySourceRating).toHaveBeenCalled());
+      expect(dispatch).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "select_rating_tree_nodes" }));
     });
 
     it("confirms all safe range-split defects in an issue group even when they have no photos", async () => {

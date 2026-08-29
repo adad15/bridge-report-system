@@ -94,10 +94,13 @@ struct RatingInstanceVersion {
  */
 struct SourceRatingResolutionRequest {
     ResolutionCommandContext context;
+    /// 这条命令作用于哪一条来源病害。服务端据此自行查出"整条病害是哪些活动实例"，
+    /// 不拿客户端的集合当权威——否则上面那句原子性承诺就无从兑现。
+    std::string source_candidate_id;
     /// 人工选定的节点；为空表示清除、退回未解析。
     std::string rating_tree_node_id;
     std::string expected_rating_tree_version_id;
-    /// 这条来源病害的全部活动实例，各带自己的解析版本。
+    /// 这条来源病害的全部活动实例，各带自己的解析版本。集合必须与服务端查到的一致。
     std::vector<RatingInstanceVersion> instances;
 };
 
@@ -216,12 +219,22 @@ public:
 private:
     /// 命令成功后组装"受影响对象 + 最新统计"。与工作区共用同一份组视图构建代码，
     /// 免得命令返回的组和刷新后看到的组对不上。
-    /// 上面两个评分树命令的共同实现：一次事务写完给定的全部实例。
+    /**
+     * @brief 上面两个评分树命令的共同实现：一次事务写完给定的全部实例。
+     *
+     * 给了 source_candidate_id 就按它查出该病害的全部**活动**实例，并要求客户端提交的
+     * 集合与之完全相等：多一条（含属于别条病害的、已忽略的）拒，少一条也拒。少了不拒
+     * 的话，区间展开之后拿着旧页面提交会只写第一条、另外 24 条留在未解析，而界面显示
+     * 的是整行已选好——写一半正是这个接口存在的理由要排除的情形。
+     *
+     * 不给（逐实例接口，§13.2）则只写点名的那一条，语义不变。
+     */
     [[nodiscard]] ResolutionOutcome write_rating_resolutions(
         const ResolutionCommandContext& context,
         const std::vector<RatingInstanceVersion>& instances,
         const std::string& rating_tree_node_id,
-        const std::string& expected_rating_tree_version_id) const;
+        const std::string& expected_rating_tree_version_id,
+        const std::optional<std::string>& source_candidate_id) const;
 
     [[nodiscard]] ResolutionOutcome build_command_result(
         const std::string& import_record_id,

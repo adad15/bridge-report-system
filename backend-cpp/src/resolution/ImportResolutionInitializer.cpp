@@ -24,8 +24,8 @@ std::string string_member_or_empty(const Json::Value& object, const char* key) {
                                                        : std::string{};
 }
 
-// 组身份：部件名称原文 + 权威归一化编号。与现网绑定面板的分组口径逐字一致
-// （ImportBindingRepository.cpp:78），拆表不改业务语义。
+// 组身份：部件名称原文 + 权威归一化编号。沿用 4.0 绑定面板的分组口径，拆表不改业务
+// 语义（当时的实现 ImportBindingRepository.cpp 已随 4.0 链路一并退役）。
 struct GroupKey {
     std::string source_component_name;
     std::string normalized_component_number;

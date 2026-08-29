@@ -88,7 +88,14 @@ public:
 
     void delete_instance(const std::string& instance_id) const;
 
-    /// 差量对齐时重刷序号与构件解析世代；不动覆盖、状态和实例自身版本（§9.1）。
+    /**
+     * @brief 差量对齐时重刷序号与构件解析世代；不动覆盖、状态和实例自身版本（§9.1）。
+     *
+     * **当前没有调用方**，这是刻意留着的：重绑定目前仍是"删掉全部目标、按旧内容重建"，
+     * 于是没变化的实例也会换掉 resolved_defect_instance_id。要改成真正的增量差分
+     * （未变化的目标复用 target 与 instance 行，只重刷这两个字段），需要的就是它。
+     * 那一轮做之前不要删，也不要以为它是忘了接线。
+     */
     void restamp_instance(
         const std::string& instance_id,
         int instance_order,

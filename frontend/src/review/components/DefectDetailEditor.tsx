@@ -105,17 +105,6 @@ export function DefectDetailEditor({
     const selected = applicableNodes.find((item) => item.id === nodeId);
     if (!selected || !ratingTreeVersionId) return;
 
-    // 草稿这边只跟着改连带变化的**来源事实**（病害名称与标度）。
-    dispatch({
-      type: "select_rating_tree_node",
-      candidateId: defect.candidate_id,
-      versionId: ratingTreeVersionId,
-      nodeId: selected.id,
-      nodeName: selected.display_name,
-      isScoring: selected.is_scoring,
-      matchEvidence: "用户在精细维护中从当前构件适用节点选择",
-    });
-
     // 节点本身写进评分树解析表（§9.2）。不写的话，用户的显式选择只活在这一次渲染里：
     // 刷新页面或下一次同步，这条病害要么被自动匹配重新盖掉，要么退回未解析——
     // 人工判断丢得无声无息。
@@ -150,6 +139,25 @@ export function DefectDetailEditor({
             ...(inventoryRevisionId ? { expected_inventory_revision_id: inventoryRevisionId } : {}),
           },
           editLockToken);
+        // 草稿这边只跟着改连带变化的**来源事实**（病害名称与标度），而且必须等服务端
+        // 写成之后再改。反过来（先 dispatch 后调接口）有两处坏处：
+        //
+        //   编辑锁失效、版本冲突或网络失败时，关系表没写，本地却已经把病害名称改成了
+        //   节点名——错误提示看得见，脏草稿看不见，而用户还能把它保存进去。
+        //
+        //   即便接口成功，服务端算 resolved_match_input_hash 用的是**数据库里**的来源
+        //   事实，那时 defect_type 还是旧的（它进哈希，见 ResolutionHashes）。随后保存
+        //   新名称，重算出的 match_input_hash 与裁决时的不等，界面就报"人工裁决后内容
+        //   发生变化，请复核"——而那个变化正是这次选择自己造成的。
+        dispatch({
+          type: "select_rating_tree_node",
+          candidateId: defect.candidate_id,
+          versionId: ratingTreeVersionId,
+          nodeId: selected.id,
+          nodeName: selected.display_name,
+          isScoring: selected.is_scoring,
+          matchEvidence: "用户在精细维护中从当前构件适用节点选择",
+        });
         onRatingResolved?.();
       } catch (caught) {
         setRatingError(caught instanceof ApiError

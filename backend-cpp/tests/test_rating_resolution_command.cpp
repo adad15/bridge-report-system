@@ -204,6 +204,15 @@ protected:
         return group.members[0].instances;
     }
 
+    std::string only_member_id() {
+        const auto group = only_group();
+        EXPECT_EQ(group.members.size(), 1u);
+        return group.members[0].member_id;
+    }
+
+    /// 夹具里唯一那条来源病害（见 make_draft 里的 candidate_id）。
+    static constexpr const char* kSourceCandidateId = "source_defect_0001";
+
     bridge_report::resolution::WorkspaceDefectInstance only_instance() {
         const auto group = only_group();
         EXPECT_EQ(group.members.size(), 1u);
@@ -524,6 +533,7 @@ TEST_F(RatingResolutionCommandTest, SourceCommandWritesEveryInstance) {
 
     SourceRatingResolutionRequest request;
     request.context = context();
+    request.source_candidate_id = kSourceCandidateId;
     request.rating_tree_node_id = node_id_;
     for (const auto& instance : before) {
         request.instances.push_back(
@@ -552,6 +562,7 @@ TEST_F(RatingResolutionCommandTest, SourceCommandRollsBackWhenOneVersionIsStale)
 
     SourceRatingResolutionRequest request;
     request.context = context();
+    request.source_candidate_id = kSourceCandidateId;
     request.rating_tree_node_id = node_id_;
     request.instances.push_back({before[0].instance_id, 0});
     // 第二条带一个过期版本。
@@ -578,14 +589,17 @@ TEST_F(RatingResolutionCommandTest, SourceCommandRejectsAnUnknownInstance) {
     bind_to_both();
     SourceRatingResolutionRequest request;
     request.context = context();
+    request.source_candidate_id = kSourceCandidateId;
     request.rating_tree_node_id = node_id_;
     request.instances.push_back({all_instances()[0].instance_id, 0});
     request.instances.push_back({"11111111-1111-4111-8111-111111111111", 0});
 
+    // 现在这条在集合校验就被拦下：一个不属于本病害活动实例的 id，无论存不存在都不该
+    // 出现在这条命令里。
     const auto outcome =
         ImportResolutionService(client_).apply_source_rating_resolution(request);
-    EXPECT_EQ(outcome.status, ResolutionStatus::NotFound);
-    EXPECT_EQ(outcome.error_code, "defect_instance_not_found");
+    EXPECT_EQ(outcome.status, ResolutionStatus::Invalid);
+    EXPECT_EQ(outcome.error_code, "invalid_resolution_request");
 }
 
 TEST_F(RatingResolutionCommandTest, SourceCommandClearsEveryInstance) {
@@ -593,6 +607,7 @@ TEST_F(RatingResolutionCommandTest, SourceCommandClearsEveryInstance) {
     {
         SourceRatingResolutionRequest select;
         select.context = context();
+        select.source_candidate_id = kSourceCandidateId;
         select.rating_tree_node_id = node_id_;
         for (const auto& instance : all_instances()) {
             select.instances.push_back(
@@ -604,6 +619,7 @@ TEST_F(RatingResolutionCommandTest, SourceCommandClearsEveryInstance) {
 
     SourceRatingResolutionRequest clear;
     clear.context = context();
+    clear.source_candidate_id = kSourceCandidateId;
     clear.rating_tree_node_id = "";
     for (const auto& instance : all_instances()) {
         clear.instances.push_back({instance.instance_id, instance.rating_version});
@@ -615,4 +631,102 @@ TEST_F(RatingResolutionCommandTest, SourceCommandClearsEveryInstance) {
         EXPECT_EQ(instance.rating_status, "unresolved");
         EXPECT_NE(instance.rating_match_method.value_or(""), "manual");
     }
+}
+
+// P1-1 回归：按来源病害整体写时，"整条病害是哪些实例"由服务端说了算。
+//
+// 只核对提交的 id 存不存在挡不住少提交。区间展开之后拿着旧页面提交，手里只有展开前
+// 那一条实例，数量自洽、每条都存在，于是写完返回成功——而库里另外那些还停在未解析，
+// 界面却显示整行已经选好。写一半正是这个接口存在的理由要排除的情形。
+
+TEST_F(RatingResolutionCommandTest, SourceCommandRejectsAMissingActiveInstance) {
+    bind_to_both();
+    const auto before = all_instances();
+    ASSERT_EQ(before.size(), 2u);
+
+    SourceRatingResolutionRequest request;
+    request.context = context();
+    request.source_candidate_id = kSourceCandidateId;
+    request.rating_tree_node_id = node_id_;
+    // 只交一条：模拟展开前打开、展开后才提交的旧页面。
+    request.instances.push_back({before[0].instance_id, 0});
+
+    const auto outcome =
+        ImportResolutionService(client_).apply_source_rating_resolution(request);
+    EXPECT_EQ(outcome.status, ResolutionStatus::Conflict);
+    EXPECT_EQ(outcome.error_code, "resolution_instance_set_stale");
+
+    for (const auto& instance : all_instances()) {
+        EXPECT_NE(instance.rating_match_method.value_or(""), "manual");
+    }
+}
+
+TEST_F(RatingResolutionCommandTest, SourceCommandRejectsAnInstanceFromAnotherDefect) {
+    bind_to_both();
+    const auto mine = all_instances();
+    ASSERT_EQ(mine.size(), 2u);
+    // 另一条来源病害的实例：库里存在，也属于本次导入，但不属于这条病害。
+    const auto stranger = client_->execSqlSync(
+        "insert into import_component_group_members(import_record_id, group_id, "
+        "  source_candidate_id, source_order) "
+        "select $1::uuid, m.group_id, 'source_defect_other', 99 "
+        "from import_component_group_members m where m.id=$2::uuid returning id::text",
+        import_id_, only_member_id())[0]["id"].as<std::string>();
+    const auto stranger_instance = client_->execSqlSync(
+        "insert into import_resolved_defect_instances(group_member_id, target_id, "
+        "  instance_order, instance_status, is_photo_owner, component_resolution_version) "
+        "select $1::uuid, i.target_id, 1, 'active', true, i.component_resolution_version "
+        "from import_resolved_defect_instances i where i.id=$2::uuid returning id::text",
+        stranger, mine[0].instance_id)[0]["id"].as<std::string>();
+
+    SourceRatingResolutionRequest request;
+    request.context = context();
+    request.source_candidate_id = kSourceCandidateId;
+    request.rating_tree_node_id = node_id_;
+    for (const auto& instance : mine) request.instances.push_back({instance.instance_id, 0});
+    request.instances.push_back({stranger_instance, 0});
+
+    const auto outcome =
+        ImportResolutionService(client_).apply_source_rating_resolution(request);
+    EXPECT_EQ(outcome.status, ResolutionStatus::Invalid);
+    EXPECT_EQ(outcome.error_code, "invalid_resolution_request");
+}
+
+// 已忽略的实例不入库，也就不该被算进"整条病害"。它出现在请求里只可能是页面陈旧或
+// 客户端算错，两种情况都不该照单写入。
+TEST_F(RatingResolutionCommandTest, SourceCommandRejectsAnIgnoredInstance) {
+    bind_to_both();
+    const auto before = all_instances();
+    ASSERT_EQ(before.size(), 2u);
+    client_->execSqlSync(
+        "update import_resolved_defect_instances set instance_status='ignored' "
+        "where id=$1::uuid", before[1].instance_id);
+
+    SourceRatingResolutionRequest request;
+    request.context = context();
+    request.source_candidate_id = kSourceCandidateId;
+    request.rating_tree_node_id = node_id_;
+    for (const auto& instance : before) request.instances.push_back({instance.instance_id, 0});
+
+    const auto outcome =
+        ImportResolutionService(client_).apply_source_rating_resolution(request);
+    EXPECT_EQ(outcome.status, ResolutionStatus::Invalid);
+    EXPECT_EQ(outcome.error_code, "invalid_resolution_request");
+}
+
+TEST_F(RatingResolutionCommandTest, SourceCommandRejectsADuplicateInstance) {
+    bind_to_both();
+    const auto before = all_instances();
+
+    SourceRatingResolutionRequest request;
+    request.context = context();
+    request.source_candidate_id = kSourceCandidateId;
+    request.rating_tree_node_id = node_id_;
+    request.instances.push_back({before[0].instance_id, 0});
+    request.instances.push_back({before[0].instance_id, 0});
+
+    const auto outcome =
+        ImportResolutionService(client_).apply_source_rating_resolution(request);
+    EXPECT_EQ(outcome.status, ResolutionStatus::Invalid);
+    EXPECT_EQ(outcome.error_code, "invalid_resolution_request");
 }

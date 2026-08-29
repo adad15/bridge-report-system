@@ -91,9 +91,8 @@ std::string component_match_method_name(ComponentMatchMethod method) {
     return "none";
 }
 
-// 本函数是编号归一化的**权威实现**。前端为批量替换的预览做了逐步镜像：
-// `frontend/src/review/binding/normalizeComponentNumber.ts`。改这里必须同步那边，
-// 否则会出现"前端预览说能绑、后端却判无此编号"，且只在含全角字符的行上复现。
+// 本函数是编号归一化的**唯一实现**。前端曾镜像过一份用于批量替换预览，5.0 之后预览
+// 一律由后端生成（设计 §13.3），镜像连同它带来的"前端说能绑、后端判无此编号"一并删掉。
 std::string normalize_component_number(const std::string& value) {
     auto normalized = trim_ascii(value);
     normalized = replace_all(std::move(normalized), "－", "-");

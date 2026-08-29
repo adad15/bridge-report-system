@@ -707,11 +707,12 @@ SaveReviewDraftOutcome ReviewRepository::save_review_draft(const SaveReviewDraft
 
         const auto stored_draft = parse_stored_draft(
             record_row["parsed_result_json"].as<std::string>());
-        // 存量草稿仍是旧版合同时拒绝保存，不能靠客户端伪造 4.0 请求绕过重新解析。
+        // 存量草稿仍是旧版合同时拒绝保存，不能靠客户端伪造请求绕过重新解析。
+        // 提示语不写死版本号：合同升一版就要跟着改一次，而它对用户没有增量信息。
         if (review::stored_contract_requires_reparse(stored_draft)) {
             return fail(
                 "contract_version_outdated",
-                "该导入记录的候选数据仍是旧版合同，请删除测试导入并重新解析为 4.0。");
+                "该导入记录的候选数据仍是旧版合同，请删除该导入并重新解析。");
         }
         const auto evidence_validation =
             review::validate_imported_defect_evidence(stored_draft, input.draft);
@@ -760,13 +761,15 @@ SaveReviewDraftOutcome ReviewRepository::save_review_draft(const SaveReviewDraft
         if (!rating_tree_version_id.has_value() || !technical_package_id.has_value()) {
             return fail("rating_tree_required", "本年度尚未锁定评定树，不能保存病害校对结果。");
         }
-        const auto rating_tree = RatingTreeRepository(tx).load_published_tree(*rating_tree_version_id);
-        if (!rating_tree.has_value()) {
+        // 只确认这一版树可用；解析本身由 DraftResolutionSynchronizer 装它自己那份做。
+        // 已发布的树在进程内有缓存（RatingTreeRepository），所以这里付的是一次拷贝而
+        // 不是一次查询——留着它换来的是一句明确的错误，而不是同步阶段一个含糊的失败。
+        if (!RatingTreeRepository(tx).load_published_tree(*rating_tree_version_id)
+                 .has_value()) {
             return fail("rating_tree_unavailable", "本年度锁定的评定树不可用。");
         }
         // 评分树解析同样住在关系表里；草稿不再携带节点，也就没有可规范化的引用。
         (void)technical_package_id;
-        (void)rating_tree;
 
         // 步骤 5：重开态的范围与角色校验（后端兜底，不依赖前端按钮显隐）：
         //   full 重开由管理员发起，其草稿保存同样只认管理员；

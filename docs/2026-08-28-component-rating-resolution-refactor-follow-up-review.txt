@@ -1,0 +1,389 @@
+桥梁报告系统代码复审报告
+========================================
+
+审查日期：2026-08-28
+审查主题：导入构件归属与评定归属分离重构复审
+当前分支：codex/06-7-interaction-redesign
+当前提交：1ba1284 fix(review): make the review page work under contract 5.0, and make it fast
+审查范围：0a81684..1ba1284
+审查方式：只读代码审查、调用链检查、构建与自动化测试验证
+
+说明：
+
+1. 本报告是上一轮审查后的复审，不覆盖旧报告。
+2. 已排除当前工作区中无关的设计系统、DOCX 和文档图片变更。
+3. 本轮审查没有修改任何业务代码。
+
+
+一、总体结论
+========================================
+
+上一轮发现的 4 个 P1 和多数 P2 已经得到修复，包括旧 4.0 JSON 写入、draft_version 草稿并发保护、库存重定向、人工评定树裁决、审计留存、预览计数等问题。
+
+当前仍确认存在：
+
+- P1 严重问题 2 项。
+- P2 中等问题 5 项。
+- P3 低影响问题 1 项。
+- 若干冗余、过时或尚未接线的代码。
+
+其中最需要优先处理的是：
+
+1. 按来源病害批量写评分解析时，后端没有验证实例范围和完整性。
+2. “应用到本组”仍然只修改前端草稿，没有把节点写入评分解析关系表。
+
+这两条都会造成界面显示与数据库权威状态不一致，建议在进入合并或发布流程前修复。
+
+
+二、P1 严重问题
+========================================
+
+[P1-1] 批量评分解析没有验证同一来源病害及全部活动实例
+
+主要位置：
+backend-cpp/src/http/ImportResolutionRoutes.cpp:446
+backend-cpp/src/http/ImportResolutionRoutes.cpp:465
+backend-cpp/include/bridge_report/resolution/ImportResolutionService.hpp:95
+backend-cpp/src/resolution/ImportResolutionService.cpp:1077
+
+问题说明：
+
+路由地址为：
+
+PUT /api/import-records/{import_id}/defects/{source_candidate_id}/rating-resolution
+
+虽然 URL 接收 source_candidate_id，但路由没有把它传入服务层，SourceRatingResolutionRequest 结构也没有 source_candidate_id 字段。服务层最终只信任客户端提交的 instances 数组。
+
+因此当前接口可以接受：
+
+1. 属于其他来源病害的实例。
+2. 来自多个来源病害的混合实例。
+3. 只包含当前来源病害一部分活动实例的请求。
+4. 已经处于 ignored 状态的实例。
+
+即使请求遗漏了一部分活动实例，服务仍可能返回成功。这破坏了该接口所承诺的“整条来源病害要么全部写入，要么全部回滚”。当旧页面在构件重绑定后继续提交时，尤其容易只更新旧实例而漏掉新实例。
+
+建议：
+
+1. 将 source_candidate_id 加入 SourceRatingResolutionRequest。
+2. 在事务中根据 import_record_id + source_candidate_id 查询全部活动实例。
+3. 校验客户端提交集合与数据库活动实例集合完全相等。
+4. 拒绝混入其他来源病害、ignored 实例、重复实例或遗漏实例的请求。
+5. 增加混合来源、缺失实例、额外实例和 ignored 实例测试。
+
+
+[P1-2] “应用到本组”没有持久化评定树节点
+
+主要位置：
+frontend/src/review/components/DefectsSection.tsx:892
+frontend/src/review/reviewDraft.ts:271
+
+问题说明：
+
+用户在问题组界面执行“应用到本组”后，代码只 dispatch select_rating_tree_nodes，修改本地草稿中的 defect_type 和 defect_scale，没有调用 applySourceRatingResolution()，也没有写 import_rating_resolutions。
+
+因此会出现：
+
+1. 界面看起来已经批量应用。
+2. 来源病害名称可能已经被修改。
+3. 权威评分解析关系表中仍然没有所选节点。
+4. 刷新页面后节点消失。
+5. 后续保存草稿时，自动同步可能重新匹配到其他节点。
+
+这属于用户操作表面成功但实际没有落库的问题。
+
+建议：
+
+按组收集每一条来源病害的全部活动实例及 expected_version，调用后端批量命令完成关系态写入。任意一条失败时整组回滚；成功后再更新本地来源事实并刷新 resolution workspace。
+
+
+三、P2 中等问题
+========================================
+
+[P2-1] 评分解析的 expected_version 检查不是原子操作
+
+主要位置：
+backend-cpp/src/resolution/ImportResolutionService.cpp:877
+backend-cpp/src/resolution/ImportResolutionService.cpp:891
+backend-cpp/src/resolution/ImportResolutionService.cpp:938
+backend-cpp/src/resolution/ImportResolutionService.cpp:1035
+backend-cpp/src/db/ImportResolutionRepository.cpp:458
+
+问题说明：
+
+服务先通过普通 SELECT 读取 rating_version，随后在内存中比较 expected_version，最后调用无版本条件的 UPSERT。
+
+查询没有使用 FOR UPDATE 锁定实例或评分解析行，UPSERT 也没有 WHERE version = expected。因此两个并发请求可以：
+
+1. 同时读取版本 N。
+2. 同时通过版本检查。
+3. 先后执行 UPSERT。
+4. 相互覆盖且都返回成功。
+
+详情页没有禁用连续选择，用户快速点击两个节点即可形成这种竞争。现有测试只覆盖顺序执行的过期版本，没有覆盖真正同时执行的请求。
+
+建议：
+
+使用以下任一方式保证原子性：
+
+1. 查询实例和评分行时使用 FOR UPDATE 串行化。
+2. 将 expected_version 放入 UPDATE/UPSERT 条件，并根据 affected rows 判断冲突。
+3. 对首次插入 version=0 的场景同时处理唯一键竞争。
+
+
+[P2-2] 重绑定仍然会改变未变化实例的 ID
+
+主要位置：
+backend-cpp/src/resolution/ResolutionTransition.cpp:240
+backend-cpp/src/resolution/ResolutionTransition.cpp:281
+backend-cpp/src/db/ImportResolutionRepository.cpp:408
+
+问题说明：
+
+当前实现会先删除全部 component resolution targets。数据库级联删除所有 resolved defect instances，然后代码根据旧内容重新插入实例。
+
+虽然实例状态、事实覆盖和人工评分结果会被复制回来，但 resolved_defect_instance_id 已经改变。当前 instances_kept 只表示内容被复制，并不代表原实例行被保留。
+
+可能造成：
+
+1. 正在执行的实例级命令因旧 ID 返回 404。
+2. 外部或前端缓存的实例引用失效。
+3. 审计记录只能保留 ID 快照，无法继续指向当前实体。
+4. 无实际变化的重绑定也产生大量删除和插入。
+
+仓储已经实现 restamp_instance()，但项目中没有调用方。
+
+建议：
+
+按 member_id + bridge_component_id 做真正的增量差分：
+
+1. 未变化目标复用 target 和 instance 行，只更新顺序及 component_resolution_version。
+2. 只删除确实移除的目标。
+3. 只创建确实新增的目标和实例。
+
+
+[P2-3] 事实覆盖没有验证合并后的完整 5.0 契约
+
+主要位置：
+backend-cpp/src/resolution/EffectiveDefectFacts.cpp:39
+backend-cpp/src/resolution/EffectiveDefectFacts.cpp:51
+backend-cpp/src/resolution/EffectiveDefectFacts.cpp:65
+backend-cpp/src/resolution/ImportResolutionService.cpp:1151
+
+问题说明：
+
+fact_overrides_are_valid() 目前只做浅层检查：
+
+1. 必填字段只检查是不是字符串，不检查是否为空。
+2. measurements 只检查是不是数组，不检查数组元素结构。
+3. 没有对 source defect 与 override 合并后的 effective defect 执行完整契约校验。
+
+因此可以写入空 defect_description 或 measurements=[{}] 等非法数据。原始草稿仍然合法时，现有草稿契约校验发现不了关系表中的覆盖问题，错误可能直到正式确认时才出现。
+
+建议：
+
+在 apply_fact_overrides() 事务内合并来源事实和覆盖值，然后执行完整 DefectCandidate 5.0 与 Measurement[] 校验，失败时返回 invalid_fact_override，而不是等到确认阶段暴露。
+
+
+[P2-4] 多实例匹配结果的一致性比较不完整
+
+主要位置：
+backend-cpp/src/review/DefectRatingTreeMatching.cpp:28
+backend-cpp/src/review/DefectRatingTreeMatching.cpp:38
+
+问题说明：
+
+same_result() 当前只比较：
+
+- outcome
+- skipped
+- node_id
+
+没有比较：
+
+- candidates 候选集合
+- reason_code
+- reason_message
+- match_method
+- match_evidence
+
+如果两个构件都返回 candidates，但候选集合不同，代码会把它们当成一致，并采用第一个实例的候选列表。如果两个实例都 prerequisite_missing，但缺少的前提不同，也只会展示第一个原因。
+
+这与新增 instances_disagree 的设计目标冲突，可能给整条来源病害展示不适用于所有实例的结论。
+
+建议：
+
+对所有影响用户判断和后续写入的字段做规范化比较。候选集合应按节点 ID 排序后比较；任意实例结果不同都返回 instances_disagree。
+
+
+[P2-5] 详情页在服务端保存成功前就修改本地来源事实
+
+主要位置：
+frontend/src/review/components/DefectDetailEditor.tsx:104
+frontend/src/review/components/DefectDetailEditor.tsx:109
+frontend/src/review/components/DefectDetailEditor.tsx:137
+
+问题说明：
+
+selectNode() 首先 dispatch 修改 defect_type、defect_scale 和复核状态，随后才检查编辑锁、实例列表并调用 applySourceRatingResolution()。
+
+如果出现编辑锁失效、版本冲突、后端拒绝或网络失败：
+
+1. 评分解析关系表没有更新。
+2. 本地病害名称和标度已经改变。
+3. 用户仍可能把这份本地草稿保存到数据库。
+
+即使 API 成功，评分命令计算 resolved_match_input_hash 时读取的仍是数据库中的旧来源事实；之后保存新 defect_type 时，系统可能错误提示“人工裁决后内容发生变化”。
+
+建议：
+
+将来源事实变更与人工评分裁决合并为一个原子服务端命令，或者至少等评分 API 成功后再 dispatch，并在失败时保留原草稿状态。
+
+
+四、P3 低影响问题
+========================================
+
+[P3-1] 只读匹配接口成功后仍执行无效的工作区刷新
+
+主要位置：
+frontend/src/review/components/DefectsSection.tsx:403
+backend-cpp/src/http/DefectMatchingRoutes.cpp:219
+
+问题说明：
+
+/defect-rating-tree-matches 已经改为只读计算，不写 parsed_result_json，也不写 import_rating_resolutions。但前端仍计算 wroteAnyMatch，并在出现 auto_bound 结果时刷新 resolution workspace。
+
+该刷新不可能取得新关系态，只会为每次自动匹配增加一次完整工作区查询。旁边“后端直接写进评分树解析表”的注释也已经过时。
+
+建议：
+
+删除 wroteAnyMatch 和对应 refreshResolution()；如果需要持久化自动结果，应通过明确的写接口完成，而不是依赖只读匹配接口。
+
+
+五、冗余、过时和未完成代码
+========================================
+
+1. 未使用的 restamp_instance()
+
+位置：
+backend-cpp/include/bridge_report/db/ImportResolutionRepository.hpp:92
+backend-cpp/src/db/ImportResolutionRepository.cpp:408
+
+该方法已声明并实现，但没有任何调用方。它看起来原本用于保留稳定实例 ID，却没有接入 ResolutionTransition。应在增量重绑定中使用，或者在确认不需要后删除。
+
+
+2. 过时的 4.0 提示语
+
+位置：
+backend-cpp/src/db/ReviewRepository.cpp:714
+
+当前仍提示“请删除测试导入并重新解析为 4.0”，与当前 5.0 契约不符。建议改为 5.0，或者使用不写死版本号的提示。
+
+
+3. 引用已删除文件的注释
+
+位置：
+backend-cpp/src/inventory/ComponentMatcher.cpp:95
+backend-cpp/src/resolution/ImportResolutionInitializer.cpp:28
+
+前者仍引用已删除的 frontend/src/review/binding/normalizeComponentNumber.ts，后者仍引用已删除的 ImportBindingRepository.cpp。这些注释会误导后续维护者判断真实实现位置。
+
+
+4. 重复赋值
+
+位置：
+backend-cpp/src/http/ImportResolutionRoutes.cpp:363-366
+
+ComponentResolutionRequest 的 expected_inventory_revision_id 被连续赋值两次，第二次完全覆盖相同值，可删除一组。
+
+
+5. 草稿保存重复加载评定树
+
+位置：
+backend-cpp/src/db/ReviewRepository.cpp:763
+
+普通草稿保存先完整加载评定树并只用于检查是否存在，随后 DraftResolutionSynchronizer 又会装载同一评定树进行重算。可以共享同一份 RatingContext，减少一次完整树查询和解析。
+
+
+6. 已实现但无前端调用方的 API
+
+位置：
+frontend/src/api/resolutionApi.ts:256
+frontend/src/api/resolutionApi.ts:276
+
+以下 API 当前没有前端调用方：
+
+- applyFactOverrides()
+- applyInstanceStatus()
+
+它们不是可以直接删除的普通死代码，而是尚未完成 UI 接线的 5.0 功能。应先决定是否仍要支持实例级事实修订和忽略，再选择接入或删除。
+
+
+六、验证结果
+========================================
+
+前端测试：
+
+- 67 个测试文件通过。
+- 470 个测试用例通过。
+
+前端生产构建：
+
+- TypeScript 编译通过。
+- Vite 生产构建通过。
+- 生成的主 JavaScript chunk 约 697 KB，存在大于 500 KB 的警告，但不影响构建结果。
+
+C++ 后端测试：
+
+- 808 个测试运行。
+- 806 个通过。
+- 2 个跳过。
+- 28 个迁移重复执行成功。
+- 15 个数据库 smoke tests 通过。
+- 隔离测试 schema bridge_report_test 已清理。
+
+Python 测试：
+
+- 本轮没有重新确认完整 Python 测试。
+- 当前沙箱外 Python 环境缺少 httpx，无法完成测试收集。
+
+
+七、现有测试缺口
+========================================
+
+当前绿灯没有覆盖以下场景：
+
+1. 批量评分请求混入其他 source_candidate_id 的实例。
+2. 批量评分请求遗漏当前来源病害的部分活动实例。
+3. 批量评分请求包含 ignored 实例。
+4. 两个评分写请求真正并发读取同一 expected_version。
+5. “应用到本组”后刷新页面仍保留所有人工节点。
+6. 评分 API 失败后本地 defect_type 和 defect_scale 自动回滚。
+7. 重绑定相同构件后 resolved_defect_instance_id 保持不变。
+8. 两个实例 outcome 相同但候选集合或失败原因不同。
+9. 空必填字符串和非法 Measurement[] 被事实覆盖接口拒绝。
+
+
+八、建议修复顺序
+========================================
+
+第一批：防止部分写入和假成功
+
+1. 校验 source_candidate_id 与全部活动实例集合。
+2. 接通“应用到本组”的关系态批量写入。
+3. 将 rating expected_version 检查改为原子写。
+
+第二批：保持身份和事实正确性
+
+4. 重绑定改为真正的目标和实例增量差分。
+5. 对 effective defect 执行完整 5.0 契约校验。
+6. 修正详情页本地状态与服务端命令的提交顺序。
+
+第三批：清理判断和历史残留
+
+7. 完整比较多实例匹配结果。
+8. 删除只读匹配后的无效刷新。
+9. 清理未使用函数、重复赋值、4.0 提示语和过时注释。
+
+
+报告结束

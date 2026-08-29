@@ -1,5 +1,6 @@
 #include "bridge_report/review/DefectRatingTreeMatching.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <map>
 #include <string>
@@ -25,9 +26,30 @@ std::string source_candidate_key(const Json::Value& defect) {
     return source_id.empty() ? string_member_or_empty(defect, "candidate_id") : source_id;
 }
 
+std::vector<std::string> sorted_candidate_ids(const DefectMatchRecord& record) {
+    std::vector<std::string> ids;
+    ids.reserve(record.candidates.size());
+    for (const auto& candidate : record.candidates) ids.push_back(candidate.node_id);
+    std::sort(ids.begin(), ids.end());
+    return ids;
+}
+
+// 两条实例的结论算不算"一致"。
+//
+// 比 outcome 和 node_id 不够：两条实例都停在 candidates 却给出不同候选集，或者都
+// prerequisite_missing 却缺的前提不同，按那个口径会被判成一致，于是整行采用第一条的
+// 候选与原因——而那份内容对另一条并不成立。凡是会影响用户判断的字段都要比，否则
+// instances_disagree 就挡不住它本来要挡的那类分歧。
+//
+// 候选集按节点 id 排序后比：解析器给出的顺序不进入语义。
 bool same_result(const DefectMatchRecord& a, const DefectMatchRecord& b) {
     return a.outcome == b.outcome && a.skipped == b.skipped &&
-        a.node_id.value_or(std::string{}) == b.node_id.value_or(std::string{});
+        a.node_id.value_or(std::string{}) == b.node_id.value_or(std::string{}) &&
+        a.match_method == b.match_method &&
+        a.match_evidence == b.match_evidence &&
+        a.reason_code == b.reason_code &&
+        a.reason_message == b.reason_message &&
+        sorted_candidate_ids(a) == sorted_candidate_ids(b);
 }
 
 // 一条来源病害的多个实例合成它那一行的结论。

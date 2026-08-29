@@ -823,7 +823,8 @@ ResolutionOutcome ImportResolutionService::write_rating_resolutions(
     const ResolutionCommandContext& context,
     const std::vector<RatingInstanceVersion>& instances,
     const std::string& rating_tree_node_id,
-    const std::string& expected_rating_tree_version_id) const {
+    const std::string& expected_rating_tree_version_id,
+    const std::optional<std::string>& source_candidate_id) const {
     ResolutionOutcome outcome;
     if (instances.empty()) {
         outcome.status = ResolutionStatus::Invalid;
@@ -871,11 +872,67 @@ ResolutionOutcome ImportResolutionService::write_rating_resolutions(
             return outcome;
         }
 
-        // 一次取回本次要写的全部实例（连同各自的构件、组、覆盖与现有解析版本），
-        // 而不是每条实例发一轮往返。
         std::vector<std::string> instance_ids;
         instance_ids.reserve(instances.size());
-        for (const auto& item : instances) instance_ids.push_back(item.instance_id);
+        std::set<std::string> submitted;
+        for (const auto& item : instances) {
+            if (!submitted.insert(item.instance_id).second) {
+                tx->rollback();
+                outcome.status = ResolutionStatus::Invalid;
+                outcome.error_code = "invalid_resolution_request";
+                outcome.error_message = "同一条病害解析实例重复提交。";
+                return outcome;
+            }
+            instance_ids.push_back(item.instance_id);
+        }
+
+        // 按来源病害整体写时，"整条病害是哪些实例"由服务端说了算。
+        //
+        // 只核对提交的 id 存不存在是不够的：那只能挡住多提交，挡不住少提交。区间展开
+        // 之后拿着旧页面提交，手里只有展开前那一条实例，数量自洽、每条都存在，于是写
+        // 完返回成功——而库里另外 24 条还停在未解析，界面却显示整行已经选好。
+        if (source_candidate_id.has_value()) {
+            const auto active_rows = tx->execSqlSync(
+                "select i.id::text as id from import_resolved_defect_instances i "
+                "join import_component_group_members m on m.id = i.group_member_id "
+                "where m.import_record_id = $1::uuid and m.source_candidate_id = $2 "
+                "  and i.instance_status = 'active'",
+                context.import_record_id, *source_candidate_id);
+            std::set<std::string> active;
+            for (const auto& row : active_rows) active.insert(row["id"].as<std::string>());
+            if (active.empty()) {
+                tx->rollback();
+                outcome.status = ResolutionStatus::NotFound;
+                outcome.error_code = "defect_instance_not_found";
+                outcome.error_message = "这条病害没有活动的解析实例。";
+                return outcome;
+            }
+            // 多出来的一律不是"过期"，而是不该发生：别条病害的实例、已忽略的实例，
+            // 客户端没有任何理由把它们放进这条命令。
+            for (const auto& id : submitted) {
+                if (!active.contains(id)) {
+                    tx->rollback();
+                    outcome.status = ResolutionStatus::Invalid;
+                    outcome.error_code = "invalid_resolution_request";
+                    outcome.error_message =
+                        "提交的解析实例不属于这条病害的活动实例。";
+                    return outcome;
+                }
+            }
+            // 少了则多半是页面陈旧（这期间发生过区间展开、多目标绑定或实例忽略），
+            // 让它刷新重来，而不是写一半。
+            if (submitted.size() != active.size()) {
+                tx->rollback();
+                outcome.status = ResolutionStatus::Conflict;
+                outcome.error_code = "resolution_instance_set_stale";
+                outcome.error_message =
+                    "这条病害的活动实例已变化，请刷新后重新选择。";
+                return outcome;
+            }
+        }
+
+        // 一次取回本次要写的全部实例（连同各自的构件、组、覆盖与现有解析版本），
+        // 而不是每条实例发一轮往返。
         const auto instance_rows = tx->execSqlSync(
             "select i.id::text as id, i.instance_status, "
             "  t.bridge_component_id::text as bridge_component_id, "
@@ -1067,11 +1124,13 @@ ResolutionOutcome ImportResolutionService::write_rating_resolutions(
 
 ResolutionOutcome ImportResolutionService::apply_rating_resolution(
     const RatingResolutionRequest& request) const {
+    // 逐实例接口只写点名的那一条，不做集合校验：它的语义就是"改这一条实例"。
     return write_rating_resolutions(
         request.context,
         {RatingInstanceVersion{request.instance_id, request.expected_version}},
         request.rating_tree_node_id,
-        request.expected_rating_tree_version_id);
+        request.expected_rating_tree_version_id,
+        std::nullopt);
 }
 
 ResolutionOutcome ImportResolutionService::apply_source_rating_resolution(
@@ -1083,9 +1142,15 @@ ResolutionOutcome ImportResolutionService::apply_source_rating_resolution(
         outcome.error_message = "这条病害没有可写入的活动实例。";
         return outcome;
     }
+    if (request.source_candidate_id.empty()) {
+        outcome.status = ResolutionStatus::Invalid;
+        outcome.error_code = "invalid_resolution_request";
+        outcome.error_message = "缺少来源病害标识。";
+        return outcome;
+    }
     return write_rating_resolutions(
         request.context, request.instances, request.rating_tree_node_id,
-        request.expected_rating_tree_version_id);
+        request.expected_rating_tree_version_id, request.source_candidate_id);
 }
 
 ResolutionOutcome ImportResolutionService::apply_fact_overrides(
