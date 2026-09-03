@@ -23,6 +23,13 @@ interface PanelOptions {
   allowUpload?: boolean;
 }
 
+/** AntD Dragger 内部的 input 没有独立可读名，按类型取。 */
+function pickFileInput(): HTMLInputElement {
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!input) throw new Error("弹窗里没有文件输入框");
+  return input;
+}
+
 function renderPanel(draft: BridgeAnnualInspectionData, options: PanelOptions = {}) {
   const dispatch = options.dispatch ?? vi.fn();
   const defect = draft.defects[0];
@@ -112,8 +119,9 @@ describe("DefectPhotoPanel", () => {
 
     expect(screen.getByRole("button", { name: "添加照片" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "添加照片" }));
-    expect(screen.getByText("本次导入没有未归属的照片。")).toBeInTheDocument();
-    expect(screen.getByLabelText("从电脑上传照片")).toBeInTheDocument();
+    expect(screen.getByText("本次导入没有未归属的照片，可从电脑上传一张。")).toBeInTheDocument();
+    // AntD Dragger 把 input 藏在拖拽区里，可读语义由拖拽区本身承担，测试按类型取它。
+    expect(pickFileInput()).toBeInTheDocument();
   });
 
   it("closes the upload entry when the review may not gain new candidates", () => {
@@ -179,9 +187,11 @@ describe("DefectPhotoPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "添加照片" }));
     fireEvent.change(screen.getByLabelText("照片说明"), { target: { value: "补拍" } });
-    fireEvent.change(screen.getByLabelText("从电脑上传照片"), {
+    // 选文件只是暂存，真正提交是底部的「上传」——顺序反过来也不会丢题注。
+    fireEvent.change(pickFileInput(), {
       target: { files: [new File(["x"], "IMG_2031.jpg", { type: "image/jpeg" })] },
     });
+    fireEvent.click(await screen.findByRole("button", { name: /上\s*传/ }));
 
     await waitFor(() => expect(dispatch).toHaveBeenCalledWith({ type: "add_photo", photo }));
     expect(mockedUpload).toHaveBeenCalledWith("http://backend", "record-1", "lock-1", {
@@ -196,9 +206,10 @@ describe("DefectPhotoPanel", () => {
     const dispatch = renderPanel(fixtureData());
 
     fireEvent.click(screen.getByRole("button", { name: "添加照片" }));
-    fireEvent.change(screen.getByLabelText("从电脑上传照片"), {
+    fireEvent.change(pickFileInput(), {
       target: { files: [new File(["x"], "evil.jpg", { type: "image/jpeg" })] },
     });
+    fireEvent.click(await screen.findByRole("button", { name: /上\s*传/ }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("不是受支持的图片");
     expect(dispatch).not.toHaveBeenCalled();

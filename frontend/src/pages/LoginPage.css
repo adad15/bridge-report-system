@@ -1,0 +1,116 @@
+.login-content {
+  width: 100%;
+  max-width: clamp(380px, 32vw, 560px);
+}
+
+.login-heading { margin-bottom: clamp(16px, 3vh, 30px); }
+
+.login-heading h2 {
+  margin: 0;
+  color: var(--auth-text);
+  font-size: clamp(22px, 2vw, 36px);
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.login-heading > p:last-child {
+  margin: 6px 0 0;
+  color: var(--auth-text-secondary);
+  font-size: clamp(12px, 0.8vw, 14px);
+}
+
+.login-eyebrow {
+  display: none;
+  margin: 0 0 10px;
+  color: var(--auth-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-mobile-mark {
+  display: none;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  margin-bottom: 20px;
+  border-radius: 13px;
+  color: white;
+  background: var(--auth-primary);
+}
+
+.login-mobile-mark svg {
+  width: 27px;
+  height: 27px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.6;
+}
+
+.login-error-alert { margin: -10px 0 22px; }
+.login-form { width: 100%; }
+
+.login-field-label {
+  color: var(--auth-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.login-caps-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  color: #9a5b00;
+  font-size: 11px;
+}
+
+.login-caps-hint svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+}
+
+.login-submit-button { font-weight: 600; }
+
+.login-input-control,
+.login-submit-button {
+  min-height: clamp(30px, 4.2vh, 44px);
+}
+
+.login-security-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 13px 0 0;
+  color: var(--auth-text-tertiary);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.login-loading-state {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  color: var(--auth-text-secondary);
+}
+
+.login-loading-state p { margin: 0; }
+
+@media (max-width: 767px) {
+  .login-mobile-mark { display: grid; }
+  .login-eyebrow { display: block; }
+  .login-input-control,
+  .login-submit-button { min-height: 42px; }
+}
+
+@media (max-width: 479px) {
+  .login-heading { margin-bottom: 28px; }
+  .login-heading h2 { font-size: 28px; }
+}

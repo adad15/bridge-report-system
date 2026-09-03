@@ -25,6 +25,8 @@ DIMENSION_TYPES = {
 #: 取 word 表示"来自导入"——写 manual 会让这些病害被当成人工新增的。
 SOURCE_TYPE = "word"
 SOURCE_REMARK = "由来源软件离线库导入"
+SYNTHETIC_OTHER_INDICATOR_ID = "judgeIndex_other"
+OTHER_DEFECT_TYPE = "其它病害"
 
 
 @dataclass(frozen=True)
@@ -192,6 +194,13 @@ def build_defect_candidates(
 
         group_number, _ = group_codes.get(defect.judge_tree_id, ("", ""))
         indicator_number, _ = indicator_codes.get(defect.judge_index_id, ("", ""))
+        # 来源软件用 judgeIndex_other 明确表示“其它”，但这类记录的 name 可以为空，
+        # 现场原文只写在 data（例如“存在熏黑痕迹”）。此时直接补齐业务类型，避免导入后
+        # 出现“描述有内容、defect_type 为空”的阻断项。其它空类型没有这个显式标记，
+        # 仍保持为空交给人工核对。
+        defect_type = defect.name
+        if not defect_type.strip() and defect.judge_index_id == SYNTHETIC_OTHER_INDICATOR_ID:
+            defect_type = OTHER_DEFECT_TYPE
 
         candidate_id = f"source_defect_{position:04d}"
         measurements, measurement_warnings = _measurements(defect, candidate_id)
@@ -201,7 +210,7 @@ def build_defect_candidates(
             "candidate_id": candidate_id,
             "component_name": component_name,
             "component_number": component_number,
-            "defect_type": defect.name,
+            "defect_type": defect_type,
             "defect_location": defect.position,
             "defect_description": defect.description,
             "defect_scale": defect.degree,

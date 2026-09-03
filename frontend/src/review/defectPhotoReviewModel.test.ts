@@ -191,6 +191,41 @@ describe("buildDefectPhotoReviewModel", () => {
     expect(model.rows.map((row) => row.candidateId)).toEqual(["d-unbound"]);
   });
 
+  it("counts a multi-component range under its bound part instead of unbound", () => {
+    const draft = safeDraft();
+    const candidateId = draft.defects[0].candidate_id;
+    setResolution(candidateId, {
+      bridgeComponentId: null,
+      componentIds: ["c-joint-3", "c-joint-4", "c-joint-5"],
+      components: [
+        { componentId: "c-joint-3", categoryId: "category-1" },
+        { componentId: "c-joint-4", categoryId: "category-1" },
+        { componentId: "c-joint-5", categoryId: "category-1" },
+      ],
+      activeInstanceCount: 3,
+    });
+    const componentPart = new Map([
+      ["c-joint-3", "铰缝"], ["c-joint-4", "铰缝"], ["c-joint-5", "铰缝"],
+    ]);
+    const componentOrder = new Map([
+      ["c-joint-3", 3], ["c-joint-4", 4], ["c-joint-5", 5],
+    ]);
+    const input = {
+      draft,
+      ...treeWiring(),
+      componentPart,
+      componentOrder,
+      assessmentIssues: [],
+    };
+
+    const all = buildDefectPhotoReviewModel(input);
+    expect(all.summary.parts).toEqual([{ name: "铰缝", count: 1 }]);
+    expect(buildDefectPhotoReviewModel({ ...input, partFilter: "铰缝" })
+      .rows.map((row) => row.candidateId)).toEqual([candidateId]);
+    expect(buildDefectPhotoReviewModel({ ...input, partFilter: "__unbound__" }).rows)
+      .toEqual([]);
+  });
+
   // 没绑构件的病害还不属于任何部件，插在中间会打断走查，排最后。
   it("puts defects without a component at the end", () => {
     const draft = orderingDraft();
@@ -262,6 +297,7 @@ describe("buildDefectPhotoReviewModel", () => {
     expect(model.summary).toEqual({
       // 没给 componentPart 时这条病害归不到任何部件，落进"未绑定构件"那一档。
       parts: [{ name: "__unbound__", count: 1 }],
+      defectTypes: [{ name: "裂缝", count: 1 }],
       all: 1,
       pending: 0,
       batchable: 1,
@@ -271,6 +307,48 @@ describe("buildDefectPhotoReviewModel", () => {
       unmatched: 0,
     });
     expect(model.safeCandidateIds.has("defect_0001")).toBe(true);
+  });
+
+  it("filters directly by the imported defect type", () => {
+    const draft = safeDraft();
+    const first = draft.defects[0];
+    draft.defects = [
+      first,
+      {
+        ...first,
+        candidate_id: "defect-soot",
+        defect_type: "其它病害",
+        defect_description: "存在熏黑痕迹",
+        source_defect_indicator_id: "judgeIndex_other",
+        component_number: "2-1#板~2-25#板",
+      },
+    ];
+    const firstResolution = fixtureResolution.get(first.candidate_id) ?? UNRESOLVED;
+    setResolution("defect-soot", {
+      ...firstResolution,
+      ratingTreeNodeId: null,
+      ratingTreeVersionId: null,
+      ratingMatchMethod: null,
+      hasRating: false,
+    });
+    const input = {
+      draft,
+      ...treeWiring(),
+      assessmentIssues: [],
+    };
+
+    const all = buildDefectPhotoReviewModel(input);
+    expect(all.summary.defectTypes).toEqual([
+      { name: "裂缝", count: 1 },
+      { name: "其它病害", count: 1 },
+    ]);
+    const other = buildDefectPhotoReviewModel({
+      ...input,
+      defectTypeFilter: "其它病害",
+    });
+    expect(other.rows.map((row) => row.candidateId)).toEqual(["defect-soot"]);
+    expect(other.rows[0].defect.defect_type).toBe("其它病害");
+    expect(other.rows[0].defect.defect_description).toBe("存在熏黑痕迹");
   });
 
   it("allows a non-scoring node to be confirmed from its applicable summary before details load", () => {

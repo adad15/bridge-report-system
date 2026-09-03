@@ -1,7 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
+import { fetchComponentArchive } from "../../api/componentArchiveApi";
 import { applySourceRatingResolution } from "../../api/resolutionApi";
+
+vi.mock("../../api/componentArchiveApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api/componentArchiveApi")>();
+  return { ...actual, fetchComponentArchive: vi.fn() };
+});
 
 vi.mock("../../api/resolutionApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/resolutionApi")>();
@@ -96,7 +102,12 @@ it("lets a range-split defect without photos be confirmed individually", () => {
 
   expect(screen.getByText("该病害由构件范围拆分，请人工核对构件、病害和照片关联。")).toBeInTheDocument();
   expect(screen.getByText("这条病害还没有照片，Word 原文也没有照片编号。")).toBeInTheDocument();
-  const confirm = screen.getByRole("button", { name: "确认本组" });
+  // 标度判定依据已撤下；校对完整度留在判定列，历年病害演变通栏落在字段区与操作栏之间。
+  expect(screen.getByLabelText("校对完整度 67%")).toBeInTheDocument();
+  expect(screen.getByLabelText("历年病害演变")).toBeInTheDocument();
+  expect(screen.queryByText("评定树路径")).not.toBeInTheDocument();
+  expect(screen.queryByText("评分规则")).not.toBeInTheDocument();
+  const confirm = screen.getByRole("button", { name: "确认" });
   expect(confirm).toBeEnabled();
   fireEvent.click(confirm);
   expect(onConfirm).toHaveBeenCalledTimes(1);
@@ -147,12 +158,102 @@ it("uses summary scale rules before the full node detail has loaded", () => {
     />,
   );
 
-  const scale = screen.getByRole("combobox", { name: "标度" });
+  const scale = screen.getByRole("combobox", { name: "幅度" });
   expect(scale).toBeEnabled();
   expect(scale).toHaveValue("1");
   expect(screen.getByRole("option", { name: "1 · 完好" })).toBeInTheDocument();
   expect(screen.getByRole("option", { name: "2 · 排水不畅" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "确认本组" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "确认" })).toBeEnabled();
+});
+
+it("shows real prior observations from the bound component archive", async () => {
+  const node: RatingTreeNodeSummary = {
+    id: "tree-node-crack",
+    node_key: "org.bridge.defect.crack",
+    parent_node_id: "tree-group",
+    display_number: "5.1.1-2",
+    display_name: "裂缝",
+    node_type: "defect",
+    sort_order: 2,
+    bridge_type_ids: ["bridge-type-1"],
+    component_category_ids: ["h21.component.beam"],
+    scoring_mode: "inherit_h21",
+    h21_indicator_id: "h21.defect.crack",
+    is_selectable: true,
+    is_scoring: true,
+    allowed_scales: [1, 2],
+    scale_descriptions: { "1": "轻微裂缝", "2": "裂缝发展" },
+  };
+  vi.mocked(fetchComponentArchive).mockResolvedValueOnce({
+    component: {
+      id: "component-1",
+      bridge_id: "bridge-1",
+      system_number: "BC-1",
+      structure_part: "上部结构",
+      component_type: "主梁",
+      business_component_code: "2-1#梁",
+      current_status: "active",
+    },
+    ratings: [],
+    threads: [{
+      id: "thread-1",
+      system_number: "DT-1",
+      thread_name: "主梁裂缝",
+      defect_type: "裂缝",
+      defect_location: "第二跨",
+      current_status: "active",
+      confirmation_status: "confirmed",
+      first_seen_year: 2025,
+      latest_seen_year: 2025,
+      observations: [{
+        id: "observation-1",
+        system_number: "DO-1",
+        inspection_year: 2025,
+        defect_thread_id: "thread-1",
+        defect_type: "裂缝",
+        defect_location: "第二跨",
+        scale: "1",
+        defect_description: "梁底轻微裂缝",
+        review_status: "已确认",
+        updated_at: "2025-08-01T00:00:00Z",
+        measurements: [],
+        photos: [],
+      }],
+    }],
+    unbound_observations: [],
+  });
+  const draft = data();
+  const row = buildDefectPhotoReviewModel({
+    draft,
+    ratingTreeVersionId: "tree-version-1",
+    ratingTreeNodeSummaries: [node],
+    applicableTreeNodeIdsByComponent: new Map([["component-1", new Set([node.id])]]),
+    treeRulesReady: true,
+    resolution: resolvedTo("defect_0001", node.id, "h21.component.beam"),
+    assessmentIssues: [],
+  }).rows[0];
+
+  render(
+    <DefectDetailEditor
+      draft={draft}
+      row={row}
+      ratingTreeVersionId="tree-version-1"
+      applicableNodes={[node]}
+      importRecordId="record-1"
+      baseUrl="http://backend"
+      bridgeId="bridge-1"
+      dispatch={vi.fn()}
+      onConfirm={vi.fn()}
+      onClose={vi.fn()}
+    />,
+  );
+
+  expect(await screen.findByText("标度上升，建议重点关注")).toBeInTheDocument();
+  expect(fetchComponentArchive).toHaveBeenCalledWith("http://backend", "component-1");
+  expect(screen.getByRole("link", { name: "查看构件完整病害档案 ›" })).toHaveAttribute(
+    "href",
+    "/bridges/bridge-1/components/component-1",
+  );
 });
 
 // P1-4 回归：人工选定的评定树节点必须写进评分树解析表。

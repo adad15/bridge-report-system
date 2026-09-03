@@ -92,14 +92,14 @@ describe("formatConfirmSuccess", () => {
         assessment_component_results: 16,
         assessment_part_results: 20,
         assessment_control_results: 1,
-        assessment_rule_traces: 48,
       },
     });
 
     expect(text).toContain("已确认系统评定");
     expect(text).toContain("系统评分投影 36");
     expect(text).toContain("构件结果 16");
-    expect(text).toContain("计算轨迹 48");
+    expect(text).toContain("控制项 1");
+    expect(text).not.toContain("计算轨迹");
     expect(text).toContain("年度版本 v2");
   });
 });

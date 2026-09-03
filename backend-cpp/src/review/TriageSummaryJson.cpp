@@ -25,8 +25,8 @@ Json::Value sample_group_json(const TriageGroup& group) {
     return item;
 }
 
-/// 异常簇里的组要给全：人靠历年观测的对照判断该合还是该分。
-Json::Value manual_group_json(const TriageGroup& group) {
+/// 异常簇里的组要给全：人靠历年观测的对照判断该合该分，判据是标度、尺寸与照片。
+Json::Value manual_group_json(const TriageGroup& group, const TriageDisplayLookup& display) {
     Json::Value item;
     item["group_id"] = group.group_id;
     item["bridge_component_id"] = group.key.bridge_component_id;
@@ -50,6 +50,23 @@ Json::Value manual_group_json(const TriageGroup& group) {
         entry["defect_type"] = observation.defect_type;
         entry["defect_location"] = nullable(observation.defect_location);
         entry["updated_at"] = observation.updated_at;
+        const auto found = display.find(observation.id);
+        if (found != display.end()) {
+            entry["system_number"] = found->second.system_number;
+            entry["scale"] = nullable(found->second.scale);
+            entry["defect_description"] = found->second.description;
+            entry["measurements"] = Json::Value(Json::arrayValue);
+            for (const auto& raw_text : found->second.measurements) {
+                entry["measurements"].append(raw_text);
+            }
+            entry["photos"] = Json::Value(Json::arrayValue);
+            for (const auto& photo : found->second.photos) {
+                Json::Value photo_json;
+                photo_json["id"] = photo.id;
+                photo_json["photo_number"] = photo.photo_number;
+                entry["photos"].append(photo_json);
+            }
+        }
         item["observations"].append(entry);
     }
     return item;
@@ -93,7 +110,8 @@ std::vector<const TriageGroup*> pick_sample_groups(const TriageBatch& batch) {
     return samples;
 }
 
-Json::Value triage_summary_json(const TriageModel& model) {
+Json::Value triage_summary_json(
+    const TriageModel& model, const TriageDisplayLookup& display) {
     Json::Value body;
     body["snapshot_id"] = model.snapshot_fingerprint;
     body["unbound_observation_count"] = model.unbound_observation_count;
@@ -132,7 +150,9 @@ Json::Value triage_summary_json(const TriageModel& model) {
         item["group_count"] = static_cast<int>(cluster.groups.size());
         item["observation_count"] = cluster.observation_count();
         item["groups"] = Json::Value(Json::arrayValue);
-        for (const auto& group : cluster.groups) item["groups"].append(manual_group_json(group));
+        for (const auto& group : cluster.groups) {
+            item["groups"].append(manual_group_json(group, display));
+        }
         item["overlap_targets"] = Json::Value(Json::arrayValue);
         for (const auto& target : cluster.overlap_targets) {
             item["overlap_targets"].append(overlap_target_json(target));

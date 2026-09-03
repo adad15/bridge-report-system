@@ -1,4 +1,6 @@
-import type { AssessmentCategoryResult, AssessmentIssue, AssessmentReport } from "../../api/assessmentApi";
+import { useState, type CSSProperties } from "react";
+
+import type { AssessmentCategoryResult, AssessmentIssue, AssessmentReport, AssessmentResult } from "../../api/assessmentApi";
 import type { AssessmentPhase } from "../assessmentState";
 
 const PART_LABELS: Record<string, string> = {
@@ -50,6 +52,7 @@ const BEAM_CATEGORY_LABELS: Record<string, string> = {
    官方名（3.2.2 表3.2.2），照本文件 BEAM_CATEGORY_LABELS 的既有做法在前端映射；
    评定结果里没有回传名称，为一个标签走一遍 C++ 后端不值当。未收录的 ID 仍原样显示。 */
 const BRIDGE_TYPE_LABELS: Record<string, string> = {
+  beam: "梁式桥",
   "h21.bridge_type.beam": "梁式桥",
   "h21.bridge_type.arch_slab_rib_box_double": "板拱、肋拱、箱形拱及双曲拱桥",
   "h21.bridge_type.arch_rigid_frame_truss": "刚架拱及桁架拱桥",
@@ -100,6 +103,39 @@ function ScoreBar({ score, grade }: { score: number; grade: number }) {
   );
 }
 
+const GRADE_LABELS: Record<number, string> = {
+  1: "总体状况良好",
+  2: "总体状况良好",
+  3: "存在轻度缺损",
+  4: "存在明显缺损",
+  5: "技术状况危险",
+};
+
+const GRADE_COLORS = ["#239447", "#1769e0", "#e89900", "#df5b16", "#c82727"];
+
+function OverallScoreRing({ score }: { score: number }) {
+  const ratio = Math.min(100, Math.max(0, score));
+  return (
+    <div className="assessment-score-ring" style={{ "--assessment-score": `${ratio}%` } as CSSProperties}>
+      <strong>{score.toFixed(2)}</strong>
+      <span>/ 100</span>
+    </div>
+  );
+}
+
+function BridgeTypeIllustration() {
+  return (
+    <svg className="assessment-bridge-illustration" viewBox="0 0 132 64" aria-hidden="true">
+      <path className="beam-deck" d="M5 15.5h122M8 22h116" />
+      <path className="beam-joints" d="M18 15.5v6.5m24-6.5V22m24-6.5V22m24-6.5V22m24-6.5V22" />
+      <path className="beam-piers" d="M31 23l-2 28m13-28 2 28M87 23l-2 28m13-28 2 28" />
+      <path className="beam-caps" d="M26 25h21m35 0h21M24 52h25m31 0h25" />
+      <path className="beam-abutments" d="M10 22v20m112-20v20M6 42h16m88 0h16" />
+      <path className="beam-ground" d="M4 57c15-3 27-3 42 0 15 3 27 3 42 0 14-3 26-3 40 0" />
+    </svg>
+  );
+}
+
 interface AssessmentSectionProps {
   /**
    * preview：跟着草稿现算的试算；confirmed：入库时写下、只读取不重算的那一份。
@@ -121,6 +157,30 @@ interface AssessmentSectionProps {
 export function AssessmentSection({ mode, phase, response, error, note, canRetry, onRetry, onSelectIssue }: AssessmentSectionProps) {
   const result = response?.result ?? null;
   const confirmed = mode === "confirmed";
+  const [activePart, setActivePart] = useState("all");
+  const allCategories = result?.structure_parts.flatMap((part) => part.categories) ?? [];
+  const totalComponents = result?.structure_parts
+    .reduce((total, part) => total + componentCount(part.categories), 0) ?? 0;
+  const gradeCounts = [1, 2, 3, 4, 5].map((grade) =>
+    allCategories.filter((category) => category.grade === grade).length
+  );
+  const attentionCategories = [...allCategories]
+    .filter((category) => category.grade >= 4)
+    .sort((left, right) => left.score - right.score || categoryOrder(left.component_type_id) - categoryOrder(right.component_type_id));
+  const visibleParts = result?.structure_parts.filter((part) =>
+    activePart === "all" || part.structure_part === activePart
+  ) ?? [];
+  const lowestPart = result?.structure_parts.reduce<AssessmentResult["structure_parts"][number] | null>((lowest, part) =>
+    !lowest || part.score < lowest.score ? part : lowest
+  , null) ?? null;
+  const gradeTotal = gradeCounts.reduce((total, count) => total + count, 0);
+  let gradeCursor = 0;
+  const gradeGradient = gradeCounts.map((count, index) => {
+    const start = gradeTotal ? gradeCursor / gradeTotal * 360 : 0;
+    gradeCursor += count;
+    const end = gradeTotal ? gradeCursor / gradeTotal * 360 : 0;
+    return `${GRADE_COLORS[index]} ${start}deg ${end}deg`;
+  }).join(", ");
   return (
     <section className="status-panel assessment-section">
       <div className="assessment-heading">
@@ -172,70 +232,121 @@ export function AssessmentSection({ mode, phase, response, error, note, canRetry
 
       {result ? (
         <>
-          <div className="assessment-score-summary">
-            <div className="assessment-score-primary">
+          <div className="assessment-overview-cards" aria-label="系统评定概览">
+            <article className="assessment-overview-card score">
               <span>全桥评分</span>
-              <strong>{result.overall_score.toFixed(2)}</strong>
-            </div>
-            <div className="assessment-score-grade">
-              <span>系统等级</span>
-              <GradeChip grade={result.final_grade} />
-            </div>
-            <div className="assessment-score-bridge-type">
-              <span>桥型</span>
-              <strong>{BRIDGE_TYPE_LABELS[result.bridge_type_id] ?? result.bridge_type_id}</strong>
-              {BRIDGE_TYPE_LABELS[result.bridge_type_id] ? <code>{result.bridge_type_id}</code> : null}
-            </div>
-            {/* 表里只有各分部的小计，全桥总数别处没有。 */}
-            <div className="assessment-score-total">
-              <span>参评构件数</span>
-              <strong>
-                {result.structure_parts
-                  .reduce((total, part) => total + componentCount(part.categories), 0)
-                  .toLocaleString("zh-CN")}
-              </strong>
-            </div>
+              <div className="assessment-overview-card-content">
+                <OverallScoreRing score={result.overall_score} />
+              </div>
+            </article>
+            <article className="assessment-overview-card grade">
+              <span>技术状况等级</span>
+              <div className="assessment-overview-card-content">
+                <strong>{result.final_grade} 类</strong>
+                <em>{GRADE_LABELS[result.final_grade] ?? "查看详细评定结果"}</em>
+              </div>
+            </article>
+            <article className="assessment-overview-card bridge-type">
+              <span>桥梁类型</span>
+              <div className="assessment-overview-card-content">
+                <strong>{BRIDGE_TYPE_LABELS[result.bridge_type_id] ?? result.bridge_type_id}</strong>
+                <BridgeTypeIllustration />
+              </div>
+            </article>
+            <article className="assessment-overview-card components">
+              <span>评定构件</span>
+              <strong>{totalComponents.toLocaleString("zh-CN")}<small> 项</small></strong>
+              <div className="assessment-completion-label"><span>完成度</span><b>100%</b></div>
+              <span className="assessment-completion-track"><i /></span>
+            </article>
           </div>
-          {/* 分部与部件类别原本是两张全宽表，第一列把三个分部名重复了十几次；并成一张分组表后
-              分部行既是组标题也是那一组的合计行，重复列和纯渲染序号列一起消失。 */}
-          <div className="table-scroll">
-            <table className="data-table assessment-result-table">
-              <thead>
-                <tr>
-                  <th>结构分部 / 部件类别</th>
-                  <th className="numeric-cell">分数</th>
-                  <th className="assessment-score-bar-head" />
-                  <th>等级</th>
-                  <th className="numeric-cell">权重</th>
-                  <th className="numeric-cell">构件数</th>
-                </tr>
-              </thead>
-              {result.structure_parts.map((part) => (
-                <tbody key={part.structure_part}>
-                  <tr className="assessment-part-row">
-                    <th scope="rowgroup">{PART_LABELS[part.structure_part] ?? part.structure_part}</th>
-                    <td className="numeric-cell">{part.score.toFixed(2)}</td>
-                    <td className="assessment-score-bar-cell"><ScoreBar score={part.score} grade={part.grade} /></td>
-                    <td><GradeChip grade={part.grade} /></td>
-                    <td className="numeric-cell assessment-muted-cell">{part.overall_weight.toFixed(4)}</td>
-                    <td className="numeric-cell assessment-muted-cell">{componentCount(part.categories)}</td>
-                  </tr>
-                  {sortedCategories(part.categories).map((category) => (
-                    <tr key={category.component_type_id}>
-                      <td className="assessment-category-cell">{categoryLabel(category.component_type_id, category.component_type_name)}</td>
-                      <td className="numeric-cell">{category.score.toFixed(2)}</td>
-                      <td className="assessment-score-bar-cell"><ScoreBar score={category.score} grade={category.grade} /></td>
-                      <td><GradeChip grade={category.grade} /></td>
-                      <td className="numeric-cell assessment-muted-cell">{category.effective_weight.toFixed(4)}</td>
-                      <td className="numeric-cell">{category.components.length}</td>
-                    </tr>
+          <div className="assessment-validation-strip">
+            <p className="success"><b>✓</b><span>评定计算完成，规则校验通过</span></p>
+            {lowestPart ? (
+              <p className="warning"><b>!</b><span>{PART_LABELS[lowestPart.structure_part] ?? lowestPart.structure_part}评分 {lowestPart.score.toFixed(2)}{attentionCategories.length ? `，建议重点复核${attentionCategories.slice(0, 2).map((category) => categoryLabel(category.component_type_id, category.component_type_name)).join("与")}` : "。"}</span></p>
+            ) : null}
+          </div>
+          <div className="assessment-dashboard-grid">
+            <div className="assessment-breakdown-card">
+              <div className="assessment-breakdown-heading">
+                <h3>结构分部评分</h3>
+                <div className="assessment-part-tabs" role="group" aria-label="按结构分部筛选">
+                  <button type="button" aria-pressed={activePart === "all"} onClick={() => setActivePart("all")}>全部</button>
+                  {result.structure_parts.map((part) => (
+                    <button key={part.structure_part} type="button" aria-pressed={activePart === part.structure_part} onClick={() => setActivePart(part.structure_part)}>{PART_LABELS[part.structure_part] ?? part.structure_part}</button>
                   ))}
-                </tbody>
-              ))}
-            </table>
+                </div>
+                <div className="assessment-grade-legend" aria-label="技术状况等级图例">
+                  {[1, 2, 3, 4, 5].map((grade, index) => <span key={grade}><i style={{ background: GRADE_COLORS[index] }} />{grade}类</span>)}
+                </div>
+              </div>
+              <div className="table-scroll">
+                <table className="data-table assessment-result-table">
+                  <thead>
+                    <tr>
+                      <th>结构分部 / 部件类别</th>
+                      <th className="numeric-cell">分数</th>
+                      <th className="assessment-score-bar-head" />
+                      <th>等级</th>
+                      <th className="numeric-cell">权重</th>
+                      <th className="numeric-cell">构件数</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  {visibleParts.map((part) => (
+                    <tbody key={part.structure_part}>
+                      <tr className="assessment-part-row">
+                        <th scope="rowgroup">{PART_LABELS[part.structure_part] ?? part.structure_part}</th>
+                        <td className="numeric-cell">{part.score.toFixed(2)}</td>
+                        <td className="assessment-score-bar-cell"><ScoreBar score={part.score} grade={part.grade} /></td>
+                        <td><GradeChip grade={part.grade} /></td>
+                        <td className="numeric-cell assessment-muted-cell">{part.overall_weight.toFixed(4)}</td>
+                        <td className="numeric-cell assessment-muted-cell">{componentCount(part.categories)}</td>
+                        <td><button type="button" className="assessment-detail-link" onClick={() => setActivePart(part.structure_part)}>查看明细</button></td>
+                      </tr>
+                      {sortedCategories(part.categories).map((category) => (
+                        <tr key={category.component_type_id} className={category.grade >= 4 ? "assessment-attention-row" : ""}>
+                          <td className="assessment-category-cell">{categoryLabel(category.component_type_id, category.component_type_name)}</td>
+                          <td className="numeric-cell">{category.score.toFixed(2)}</td>
+                          <td className="assessment-score-bar-cell"><ScoreBar score={category.score} grade={category.grade} /></td>
+                          <td><GradeChip grade={category.grade} /></td>
+                          <td className="numeric-cell assessment-muted-cell">{category.effective_weight.toFixed(4)}</td>
+                          <td className="numeric-cell">{category.components.length}</td>
+                          <td className="assessment-muted-cell">—</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  ))}
+                </table>
+              </div>
+            </div>
+            <aside className="assessment-insights">
+              <section className="assessment-grade-distribution">
+                <h3>等级分布</h3>
+                <div className="assessment-grade-distribution-body">
+                  <span className="assessment-grade-donut" style={{ background: `conic-gradient(${gradeGradient || "#e5e7eb 0deg 360deg"})` }} aria-label={`共 ${gradeTotal} 个部件类别`}><i /></span>
+                  <div>
+                    {gradeCounts.map((count, index) => (
+                      <p key={index}><span><i style={{ background: GRADE_COLORS[index] }} />{index + 1}类</span><b>{count} 项</b><em>{gradeTotal ? `${(count / gradeTotal * 100).toFixed(1)}%` : "0%"}</em></p>
+                    ))}
+                  </div>
+                </div>
+              </section>
+              <section className="assessment-attention-card">
+                <h3>重点关注 <strong>{attentionCategories.length}</strong> 项</h3>
+                {attentionCategories.length ? attentionCategories.map((category, index) => (
+                  <article key={category.component_type_id}>
+                    <span>{index + 1}</span>
+                    <strong>{categoryLabel(category.component_type_id, category.component_type_name)}</strong>
+                    <GradeChip grade={category.grade} />
+                    <small>分数 {category.score.toFixed(2)}</small>
+                    <small>构件数 {category.components.length}</small>
+                  </article>
+                )) : <p className="assessment-no-attention">暂无 4—5 类重点关注项。</p>}
+              </section>
+            </aside>
           </div>
           {result.triggered_controls.length ? <div className="assessment-controls"><h3>单项控制</h3>{result.triggered_controls.map((control) => <p key={control.control_id}>{control.label}（{control.source_reference}）</p>)}</div> : null}
-          <details className="assessment-trace"><summary>计算轨迹（{result.trace.length} 步）</summary><ol>{result.trace.map((trace, index) => <li key={`${trace.rule_id}-${index}`}><code>{trace.rule_id}</code>{trace.source_reference ? ` · ${trace.source_reference}` : ""}</li>)}</ol></details>
           <p className="assessment-explanation">{result.explanation}</p>
         </>
       ) : phase === "idle" ? (

@@ -1,3 +1,13 @@
+import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  FileWordOutlined,
+  ImportOutlined,
+  InboxOutlined,
+  LinkOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
+import { Steps } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -122,7 +132,7 @@ export function InspectionWorkspacePage() {
   return (
     <div className="inspection-layout">
       <aside className="inspection-year-rail">
-        <div className="rail-heading"><h2>年度检测</h2><button type="button" onClick={() => setShowCreate(true)}>＋ 新建</button></div>
+        <div className="rail-heading"><h2>检测年度</h2><button type="button" onClick={() => setShowCreate(true)}>＋ 新建</button></div>
         {years === null ? <p>加载年份…</p> : years.length === 0 ? <p className="empty-hint">暂无年度</p> : years.map((year) => (
           <Link key={year.id} className={year.id === inspectionYearId ? "year-link active" : "year-link"} to={inspectionWorkspacePath(bridgeId, year.id)}>
             <strong>{year.inspection_year}</strong><span>{year.status} · V{year.version_number}</span>
@@ -202,22 +212,99 @@ function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry, canDelete, on
   onDeleteImport: (item: WorkspaceImport) => void;
 }) {
   const progress = deriveInspectionProgress(workspace.inspection_year, workspace.imports);
+  const progressIndex: number = progress.stage === "completed" ? 4 : progress.stage === "review" ? 2 : 1;
+  const pendingItems = workspace.imports.reduce((total, item) => total + item.statistics.pending_count, 0);
+  const errorCount = workspace.imports.filter((item) => item.import_status === "解析失败").length;
   return (
     <>
-      <section className="workspace-card annual-heading">
-        <div><p className="section-kicker">{workspace.inspection_year.system_number}</p><h2>{workspace.inspection_year.inspection_year} 年度检测</h2><p>{workspace.inspection_year.status} · 当前版本 V{workspace.inspection_year.version_number}</p>{workspace.standard_profile ? <div className="inspection-standard-summary"><span>{workspace.standard_profile.technical_condition.standard_code} · {workspace.standard_profile.technical_condition.official_edition} · 规则包 {workspace.standard_profile.technical_condition.package_version}（{workspace.standard_profile.technical_condition.is_enabled ? workspace.standard_profile.technical_condition.sync_status : "已停用"}）</span><span>{workspace.standard_profile.maintenance.standard_code} · {workspace.standard_profile.maintenance.official_edition} · 规则包 {workspace.standard_profile.maintenance.package_version}（{workspace.standard_profile.maintenance.is_enabled ? workspace.standard_profile.maintenance.sync_status : "已停用"}）</span></div> : <p className="warning-text">历史年度未绑定规范组合。</p>}</div>
-        <div className="annual-actions"><span className={`progress-badge progress-${progress.stage}`}>{progress.label}</span>{workspace.inspection_year.is_current ? <button className="primary-button" type="button" onClick={onImport}>导入资料</button> : null}{canDelete ? <details className="more-actions"><summary>更多</summary><div><button type="button" className="danger-menu-item" onClick={onDelete}>删除年度</button></div></details> : null}</div>
+      <section className="workspace-card annual-heading annual-workflow-card">
+        <div className="annual-heading-main">
+          <p className="section-kicker">{workspace.inspection_year.system_number}</p>
+          <div className="annual-title-line">
+            <h2>{workspace.inspection_year.inspection_year} 年度检测</h2>
+            <span className={`progress-badge progress-${progress.stage}`}>{progress.label}</span>
+            <span>当前版本 V{workspace.inspection_year.version_number}</span>
+          </div>
+        </div>
+        <div className="annual-actions">{workspace.inspection_year.is_current ? <button className="primary-button" type="button" onClick={onImport}>导入资料</button> : null}{canDelete ? <details className="more-actions"><summary>更多</summary><div><button type="button" className="danger-menu-item" onClick={onDelete}>删除年度</button></div></details> : null}</div>
+        <Steps
+          className="annual-progress-steps"
+          current={progressIndex}
+          responsive={false}
+          titlePlacement="vertical"
+          items={[
+            { title: "创建检测", content: "已完成" },
+            { title: "导入资料", content: progressIndex === 1 ? "进行中" : "已完成" },
+            { title: "数据校对", content: progressIndex === 2 ? "进行中" : progressIndex > 2 ? "已完成" : "待开始" },
+            { title: "系统评定", content: progressIndex === 3 ? "进行中" : progressIndex > 3 ? "已完成" : "待开始" },
+            { title: "生成报告", content: progressIndex === 4 ? "已完成" : "待开始" },
+          ]}
+        />
+        {workspace.standard_profile ? <div className="inspection-standard-summary"><span><CheckCircleOutlined /> {workspace.standard_profile.technical_condition.standard_code} · 规则包 {workspace.standard_profile.technical_condition.package_version}（{workspace.standard_profile.technical_condition.is_enabled ? workspace.standard_profile.technical_condition.sync_status : "已停用"}）</span><span><CheckCircleOutlined /> {workspace.standard_profile.maintenance.standard_code} · 规则包 {workspace.standard_profile.maintenance.package_version}（{workspace.standard_profile.maintenance.is_enabled ? workspace.standard_profile.maintenance.sync_status : "已停用"}）</span></div> : <p className="warning-text">历史年度未绑定规范组合。</p>}
       </section>
-      <section className="workspace-card">
-        <div className="card-heading"><div><p className="section-kicker">资料与处理记录</p><h2>{workspace.imports.length} 条导入记录</h2></div></div>
-        {workspace.imports.length === 0 ? <p className="empty-hint">尚未导入资料。当前仅支持 Word，后续可扩展其他格式。</p> : (
+
+      <section className="annual-metrics" aria-label="年度检测概况">
+        {[
+          { label: "导入记录", value: workspace.imports.length, icon: <ImportOutlined />, tone: "blue" },
+          { label: "待绑定项", value: workspace.pending.unbound_observation_count, icon: <LinkOutlined />, tone: "orange" },
+          { label: "待校对项", value: pendingItems, icon: <CheckCircleOutlined />, tone: "violet" },
+          { label: "异常提醒", value: errorCount, icon: <WarningOutlined />, tone: "red" },
+        ].map((item) => <article key={item.label} className={`annual-metric is-${item.tone}`}><span>{item.icon}</span><div><small>{item.label}</small><strong>{item.value}</strong></div></article>)}
+      </section>
+
+      <div className="annual-record-layout">
+        <section className="workspace-card annual-record-card">
+          {/* 空态下 kicker 与标题原本都是「资料与处理记录」，同一句话印两遍。
+              有记录时 kicker 作分类、标题给条数；没有记录时标题自己就是分类。 */}
+          <div className="card-heading"><div>
+            {workspace.imports.length > 0 ? <p className="section-kicker">资料与处理记录</p> : null}
+            <h2>{workspace.imports.length > 0 ? `${workspace.imports.length} 条导入记录` : "资料与处理记录"}</h2>
+          </div></div>
+        {workspace.imports.length === 0 ? <div className="annual-upload-empty">
+            {/* 图标不再用 Word：来源已经有三种，点名其中一种会误导。 */}
+            <span className="annual-upload-empty-icon" aria-hidden="true"><InboxOutlined /></span>
+            <h3>尚未导入检测资料</h3>
+            <p>导入后可进行构件绑定与数据校对。</p>
+            {/* 三种来源摊开成一行三项：哪个能用、哪个还没做，一眼看完，
+                比塞进一句长句里让人自己挑要快。 */}
+            <ul className="annual-upload-sources">
+              <li>
+                <strong>博试云桥隧定检系统</strong>
+                <small>读取本机离线库</small>
+              </li>
+              <li>
+                <strong>Word 检测资料</strong>
+                <small>软件导出 Word 或正式报告</small>
+              </li>
+              <li className="is-pending">
+                <strong>移动端现场采集</strong>
+                <small>开发中</small>
+              </li>
+            </ul>
+            <div className="annual-upload-empty-actions">
+              <button className="primary-button" type="button" onClick={onImport}>导入检测资料</button>
+              <a href="#annual-next-step">查看导入说明</a>
+            </div>
+          </div> : (
           <div className="import-card-list">{workspace.imports.map((item) => {
             const label = actionLabel(item);
             const lockText = item.edit_lock ? `${item.edit_lock.owner_display_name} 正在编辑` : null;
-            return <article className="import-source-card" key={item.id}>
-              <div><div className="import-title-row"><h3>{item.import_name}</h3><span className={statusBadgeClass(item.import_status)}>{item.import_status}</span></div><p>{item.system_number} · {item.source_type}</p><p>病害 {item.statistics.defect_count} · 照片 {item.statistics.photo_count}</p>{item.import_status === "解析失败" && item.error_message ? <p className="error-text">解析失败：{item.error_message}</p> : null}{item.import_status === "解析失败" && item.temporary_source_expires_at ? <p className="muted-text">临时 Word 保留至 {new Date(item.temporary_source_expires_at).toLocaleString()}</p> : null}{item.available_action === "reupload" ? <p className="error-text">原临时 Word 已不可用，请重新上传。</p> : null}{lockText ? <p className="lock-note">{lockText}</p> : null}</div>
+            const importedAt = item.created_at ? new Date(item.created_at).toLocaleString("zh-CN", { hour12: false }) : "时间未知";
+            return <article className="import-source-card annual-import-record" key={item.id}>
+              <span className="annual-import-file-icon" aria-hidden="true"><FileWordOutlined /></span>
+              <div className="annual-import-record-body">
+                <div className="import-title-row"><h3>{item.import_name}</h3><span className={statusBadgeClass(item.import_status)}>{item.import_status}</span></div>
+                <div className="annual-import-meta"><span>{item.system_number}</span><span>{item.source_type}</span><span><ClockCircleOutlined /> {importedAt}</span>{item.importer_name ? <span>导入人：{item.importer_name}</span> : null}</div>
+                <div className="annual-import-statistics" aria-label={`${item.import_name} 处理统计`}>
+                  <span><small>病害</small><strong>{item.statistics.defect_count}</strong></span>
+                  <span><small>照片</small><strong>{item.statistics.photo_count}</strong></span>
+                  <span><small>待校对</small><strong>{item.statistics.pending_count}</strong></span>
+                  <span><small>已确认</small><strong>{item.statistics.confirmed_count}</strong></span>
+                </div>
+                {item.import_status === "解析失败" && item.error_message ? <p className="error-text">解析失败：{item.error_message}</p> : null}{item.import_status === "解析失败" && item.temporary_source_expires_at ? <p className="muted-text">临时 Word 保留至 {new Date(item.temporary_source_expires_at).toLocaleString()}</p> : null}{item.available_action === "reupload" ? <p className="error-text">原临时 Word 已不可用，请重新上传。</p> : null}{lockText ? <p className="lock-note">{lockText}</p> : null}
+              </div>
               <div className="import-card-actions">
-                {label ? item.available_action === "parse" ? <button type="button" onClick={() => onRetry(item)}>{label}</button> : item.available_action === "reupload" ? <button type="button" onClick={onImport}>{label}</button> : <Link to={reviewPath(bridgeId, workspace.inspection_year.id, item.id)}>{label}</Link> : <span className="muted-text">处理中</span>}
+                {label ? item.available_action === "parse" ? <button className="primary-button" type="button" onClick={() => onRetry(item)}>{label}</button> : item.available_action === "reupload" ? <button className="primary-button" type="button" onClick={onImport}>{label}</button> : <Link className="annual-import-primary-link" to={reviewPath(bridgeId, workspace.inspection_year.id, item.id)}>{label}</Link> : <span className="muted-text">处理中</span>}
                 {/* 删除原本和"继续校对"并排同权。破坏性操作不该走主流程视觉，收进"更多"，
                     和上面年度卡删除年度的做法保持一致。一页可能有多张导入卡，summary 要
                     带上记录名才区分得开。 */}
@@ -233,7 +320,16 @@ function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry, canDelete, on
             </article>;
           })}</div>
         )}
-      </section>
+        </section>
+        <aside id="annual-next-step" className="workspace-card annual-next-card">
+          <h2>下一步</h2>
+          <ol>
+            <li className={progressIndex === 1 ? "is-active" : ""}><span>2</span><div><strong>导入资料</strong><p>导入 Word 检测资料，系统将自动解析内容。</p></div></li>
+            <li className={progressIndex === 2 ? "is-active" : ""}><span>3</span><div><strong>数据校对</strong><p>对识别的数据进行校对，确认构件与指标信息。</p></div></li>
+            <li><span>4</span><div><strong>系统评定</strong><p>完成校对后，系统将执行评定并生成结果。</p></div></li>
+          </ol>
+        </aside>
+      </div>
     </>
   );
 }

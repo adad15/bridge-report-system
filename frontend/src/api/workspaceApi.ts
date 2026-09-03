@@ -80,6 +80,52 @@ export interface BridgeOverview {
     thread_count: number;
     unbound_observation_count: number;
   };
+  defect_comparison: BridgeDefectComparison;
+}
+
+export interface DefectTypeDelta {
+  defect_type: string;
+  previous_count: number;
+  latest_count: number;
+}
+
+/**
+ * 一类构件（结构分部 + 构件类型）在相邻两个年度的病害情况。
+ *
+ * 按类型汇总而不是逐构件：一座桥几百个构件，逐个成段会得到几十段几乎相同的话。
+ * 条数含该类型下的全部构件，包括与上年持平的那些。
+ */
+export interface DefectGroupDelta {
+  structure_part: string;
+  component_type: string;
+  previous_count: number;
+  latest_count: number;
+  component_count: number;
+  changed_component_count: number;
+  /** 病害类型构成：文字描述要写"横向裂缝 2 条"，光有合计写不出来。 */
+  defect_types: DefectTypeDelta[];
+}
+
+/**
+ * 最新年度与上一年度的病害对比。
+ *
+ * 统计的是**条数**，不是病害身份的匹配：未整理的观测没有跨年线索，而 defect_comparisons
+ * 是模块 07 的预留面、当前为空。所以文案只能说"多了多少条 / 少了多少条"，
+ * 不能说成"新增了 N 处病害"。
+ */
+export interface BridgeDefectComparison {
+  available: boolean;
+  previous_year: number;
+  latest_year: number;
+  previous_observation_count: number;
+  latest_observation_count: number;
+  /** 各构件正差值之和 / 负差值绝对值之和，两者不互相抵消。 */
+  increased_observation_count: number;
+  decreased_observation_count: number;
+  changed_component_count: number;
+  unchanged_component_count: number;
+  /** 按构件类型汇总，按最新年度条数降序。 */
+  groups: DefectGroupDelta[];
 }
 
 export interface InspectionWorkspace {
@@ -347,12 +393,12 @@ export function workspaceErrorMessage(error: unknown): string {
     inspection_year_not_found: "年度检测不存在或已被删除。",
     inspection_year_not_current: "该年度已不是当前版本，不能继续导入资料。",
     inspection_year_already_exists: "该年度已经存在，将进入已有年度。",
-    source_db_not_found: "找不到来源软件的离线库；请确认路径，并先在桌面程序里打开该桥。",
-    source_db_not_readable: "选中的文件不是来源软件的离线库。",
+    source_db_not_found: "找不到博试云桥隧定检系统的离线库；请确认路径，并先在桌面程序里打开该桥。",
+    source_db_not_readable: "选中的文件不是博试云桥隧定检系统的离线库。",
     source_task_id_required: "请填写要导入的检测任务 id。",
     source_task_not_found: "离线库里没有这个检测任务；请先在桌面程序里打开该桥并下载该年度。",
-    source_db_table_missing: "离线库的表结构与预期不符，来源软件版本可能已升级。",
-    source_db_column_missing: "离线库的表结构与预期不符，来源软件版本可能已升级。",
+    source_db_table_missing: "离线库的表结构与预期不符，博试云桥隧定检系统版本可能已升级。",
+    source_db_column_missing: "离线库的表结构与预期不符，博试云桥隧定检系统版本可能已升级。",
     source_reference_storage_failed: "来源引用保存失败，请稍后重试。",
     source_import_failed: "来源库导入登记失败，请稍后重试。",
     rating_tree_required: "请选择本年度使用的评定树。",

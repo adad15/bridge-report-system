@@ -1,4 +1,6 @@
-import { useRef, useState, type Dispatch } from "react";
+import { useState, type Dispatch } from "react";
+import { Button, Empty, Input, Modal, Upload } from "antd";
+import { InboxOutlined } from "@ant-design/icons";
 
 import { defectPhotoErrorMessage, deleteUploadedPhoto, uploadDefectPhoto } from "../../api/defectPhotoApi";
 import { photoContentUrl } from "../../api/reviewApi";
@@ -22,6 +24,10 @@ interface DefectPhotoPanelProps {
   allowUpload?: boolean;
 }
 
+const PICKER_DIALOG_WIDTH = 560;
+const PICKER_DIALOG_BODY_MAX_HEIGHT = "56vh";
+const PHOTO_ACCEPT = "image/jpeg,image/png,image/gif,image/bmp,image/webp,image/tiff";
+
 export function DefectPhotoPanel({
   draft,
   defect,
@@ -39,7 +45,15 @@ export function DefectPhotoPanel({
   const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  /* 选中的文件先暂存，由弹窗底部的「上传」提交。原来是选完文件立刻上传，于是
+     题注必须抢在选文件之前填——顺手先选图的人会把说明整个丢掉。 */
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  const closePicker = () => {
+    setPicking(false);
+    setCaption("");
+    setPendingFile(null);
+  };
   const active = cards.find((card) => card.key === activeKey)
     ?? cards.find((card) => card.kind === "photo")
     ?? null;
@@ -59,12 +73,12 @@ export function DefectPhotoPanel({
       // 服务端已经把候选写进 parsed_result_json，本地草稿照抄同一份，两边不会分叉。
       dispatch({ type: "add_photo", photo });
       setCaption("");
+      setPendingFile(null);
       setPicking(false);
     } catch (uploadError) {
       setError(defectPhotoErrorMessage(uploadError));
     } finally {
       setBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -111,75 +125,12 @@ export function DefectPhotoPanel({
   }
 
   return (
-    <section className="defect-photo-panel" aria-label="Word 引用的照片">
+    <section className="defect-photo-panel" aria-label="病害照片">
       <div className="defect-photo-panel-heading">
-        <h4>Word 引用的照片</h4>
-        <button
-          type="button"
-          disabled={disabled || busy || (unassigned.length === 0 && !canUpload)}
-          title={unassigned.length === 0 && !canUpload ? "本次导入没有未归属的照片，也无法上传" : undefined}
-          onClick={() => setPicking((open) => !open)}
-        >
-          添加照片
-        </button>
+        <h4>照片与证据</h4>
       </div>
 
       {error ? <p className="form-error" role="alert">{error}</p> : null}
-
-      {picking ? (
-        <div className="defect-photo-picker">
-          {unassigned.length > 0 ? (
-            <div className="defect-photo-picker-existing" aria-label="未归属的照片">
-              {unassigned.map((photo) => (
-                <button
-                  key={photo.candidate_id}
-                  type="button"
-                  disabled={disabled || busy}
-                  onClick={() => {
-                    dispatch({
-                      type: "link_photo_to_defect",
-                      photoCandidateId: photo.candidate_id,
-                      defectCandidateId: defect.candidate_id,
-                    });
-                    setPicking(false);
-                  }}
-                >
-                  <img loading="lazy" src={photoContentUrl(baseUrl, importRecordId, photo.candidate_id)} alt="" />
-                  <span>{photo.photo_number}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p>本次导入没有未归属的照片。</p>
-          )}
-
-          {canUpload ? (
-            <div className="defect-photo-upload">
-              <label htmlFor={`photo-caption-${defect.candidate_id}`}>照片说明</label>
-              <input
-                id={`photo-caption-${defect.candidate_id}`}
-                type="text"
-                value={caption}
-                disabled={busy}
-                placeholder="将作为报告里的照片题注"
-                onChange={(event) => setCaption(event.target.value)}
-              />
-              <input
-                ref={fileRef}
-                type="file"
-                aria-label="从电脑上传照片"
-                accept="image/jpeg,image/png,image/gif,image/bmp,image/webp,image/tiff"
-                disabled={busy}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void upload(file);
-                }}
-              />
-              {busy ? <span>正在上传…</span> : null}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
 
       {active?.photo ? (
         <div className="defect-photo-stage">
@@ -260,6 +211,107 @@ export function DefectPhotoPanel({
           </div>
         ))}
       </div>
+
+      <div className="defect-photo-panel-actions">
+        <button
+          type="button"
+          aria-label="添加照片"
+          disabled={disabled || busy || (unassigned.length === 0 && !canUpload)}
+          title={unassigned.length === 0 && !canUpload ? "本次导入没有未归属的照片，也无法上传" : undefined}
+          onClick={() => (picking ? closePicker() : setPicking(true))}
+        >
+          ＋ 添加照片
+        </button>
+        {active?.photo ? (
+          <a
+            href={photoContentUrl(baseUrl, importRecordId, active.photo.candidate_id)}
+            target="_blank"
+            rel="noreferrer"
+          >查看原图</a>
+        ) : <span className="defect-photo-original-disabled">查看原图</span>}
+      </div>
+
+      {/* 添加照片是操作类浮层：body 是唯一滚动区，底部主操作恒可见。 */}
+      <Modal
+        open={picking}
+        title="添加照片"
+        centered
+        width={PICKER_DIALOG_WIDTH}
+        maskClosable={!busy}
+        onCancel={closePicker}
+        footer={canUpload ? [
+          <Button key="cancel" disabled={busy} onClick={closePicker}>取消</Button>,
+          <Button
+            key="upload"
+            type="primary"
+            loading={busy}
+            disabled={!pendingFile}
+            onClick={() => { if (pendingFile) void upload(pendingFile); }}
+          >上传</Button>,
+        ] : [
+          <Button key="close" onClick={closePicker}>关闭</Button>,
+        ]}
+        styles={{ body: { maxHeight: PICKER_DIALOG_BODY_MAX_HEIGHT, overflowY: "auto" } }}
+      >
+        {unassigned.length > 0 ? (
+          <>
+            <p className="defect-photo-dialog-hint">从本次导入的未归属照片里选一张</p>
+            <div className="defect-photo-picker-existing" aria-label="未归属的照片">
+              {unassigned.map((photo) => (
+                <button
+                  key={photo.candidate_id}
+                  type="button"
+                  disabled={disabled || busy}
+                  onClick={() => {
+                    dispatch({
+                      type: "link_photo_to_defect",
+                      photoCandidateId: photo.candidate_id,
+                      defectCandidateId: defect.candidate_id,
+                    });
+                    closePicker();
+                  }}
+                >
+                  <img loading="lazy" src={photoContentUrl(baseUrl, importRecordId, photo.candidate_id)} alt="" />
+                  <span>{photo.photo_number}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={canUpload
+              ? "本次导入没有未归属的照片，可从电脑上传一张。"
+              : "本次导入没有未归属的照片。"}
+          />
+        )}
+
+        {canUpload ? (
+          <div className={unassigned.length > 0 ? "defect-photo-upload defect-photo-upload-divided" : "defect-photo-upload"}>
+            <Upload.Dragger
+              accept={PHOTO_ACCEPT}
+              maxCount={1}
+              disabled={busy}
+              beforeUpload={(file) => { setPendingFile(file); return false; }}
+              onRemove={() => { setPendingFile(null); return true; }}
+              fileList={pendingFile ? [{ uid: "pending", name: pendingFile.name, status: "done" as const }] : []}
+            >
+              <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+              <p className="ant-upload-text">点击或把照片拖到这里</p>
+              <p className="ant-upload-hint">一次一张，支持 JPG / PNG / GIF / BMP / WebP / TIFF</p>
+            </Upload.Dragger>
+            <label className="defect-photo-caption-field">
+              <span>照片说明</span>
+              <Input
+                value={caption}
+                disabled={busy}
+                placeholder="将作为报告里的照片题注"
+                onChange={(event) => setCaption(event.target.value)}
+              />
+            </label>
+          </div>
+        ) : null}
+      </Modal>
     </section>
   );
 }

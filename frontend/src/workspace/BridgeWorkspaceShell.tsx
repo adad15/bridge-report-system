@@ -1,16 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { Link, NavLink, Outlet, useParams } from "react-router-dom";
+import { Link, Outlet, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/apiClient";
 import { fetchBridgeOverview, type BridgeOverview } from "../api/workspaceApi";
 import { backendBaseUrl } from "../config";
-import {
-  bridgeOverviewPath,
-  componentArchivePath,
-  componentInventoryPath,
-  inspectionsPath,
-  statusBadgeClass,
-} from "./workspaceState";
+import { statusBadgeClass } from "./workspaceState";
 
 interface BridgeWorkspaceContextValue {
   overview: BridgeOverview;
@@ -77,12 +71,6 @@ export function BridgeWorkspaceShell() {
           <span className="bridge-title-rule" aria-hidden="true" />
           <p>{bridge.system_number} · {bridge.route_name ?? "路线未填写"}</p>
         </div>
-        <nav className="bridge-tabs" aria-label="桥梁工作区">
-          <NavLink end to={bridgeOverviewPath(bridge.id)}>桥梁概览</NavLink>
-          <NavLink to={componentInventoryPath(bridge.id)}>构件台账</NavLink>
-          <NavLink to={inspectionsPath(bridge.id)}>年度检测</NavLink>
-          <NavLink to={componentArchivePath(bridge.id)}>构件病害档案</NavLink>
-        </nav>
       </header>
       <BridgeWorkspaceContext.Provider value={context}>
         <Outlet />

@@ -185,6 +185,11 @@ const summary = () => ({
 const mockedFetchApplicableNodes = vi.mocked(fetchApplicableRatingTreeDefects);
 const mockedFetchTreeNode = vi.mocked(fetchRatingTreeNode);
 
+/** 关系表是异步取的；取回之前整页只有转圈，用例得先等它让位。 */
+async function sectionReady(): Promise<void> {
+  await waitFor(() => expect(document.querySelector(".defect-section-loading")).toBeNull());
+}
+
 describe("DefectsSection", () => {
   beforeEach(() => {
     mockedFetchWorkspace.mockReset();
@@ -223,21 +228,35 @@ describe("DefectsSection", () => {
     render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={vi.fn()} ratingTree={{ version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" }} allowStructureChanges />);
 
     // 规则还在路上：算不出来的筹码显示"—"且点不动。
-    const pending = await screen.findByRole("button", { name: "待处理 —" });
+    const pending = await screen.findByRole("option", { name: "待处理（—）" });
     expect(pending).toBeDisabled();
-    expect(screen.getByRole("button", { name: "可批量确认 —" })).toBeDisabled();
+    expect(screen.getByRole("option", { name: "可批量确认（—）" })).toBeDisabled();
     // 病害列表照常显示，一条不挡——草稿早就到了，错的只有派生计数。
-    expect(screen.getByRole("button", { name: /^全部 \d+$/ })).toBeEnabled();
+    expect(screen.getByRole("option", { name: /^全部状态（\d+）$/ })).toBeEnabled();
 
     releaseSummary(summary());
 
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /^待处理 \d+$/ })).toBeEnabled());
-    expect(screen.queryByRole("button", { name: "可批量确认 —" })).not.toBeInTheDocument();
+      expect(screen.getByRole("option", { name: /^待处理（\d+）$/ })).toBeEnabled());
+    expect(screen.queryByRole("option", { name: "可批量确认（—）" })).not.toBeInTheDocument();
   });
 
   // 这一段此前会下载整份台账（现网一座桥 5174 条构件、3.6 MB），只为两件事：
   // 拿修订版 id，以及知道每个构件属于哪个规范类别。两者分组汇总里都有。
+  /* 首屏取不回解析状态时，绝不能照常渲染：那会把每条病害都显示成"未绑定构件、未定
+     评定项"，看着像数据全丢了。必须说清楚是没取回来。 */
+  it("says the resolution could not be loaded instead of showing everything unresolved", async () => {
+    mockedFetchWorkspace.mockReset();
+    mockedFetchWorkspace.mockRejectedValue(
+      new ApiError("import_record_wrong_status", "导入记录不在待校对状态。"),
+    );
+
+    render(<DefectsSection draft={data()} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={vi.fn()} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("导入记录不在待校对状态。");
+    expect(screen.queryByText("尚未选择实际构件。")).not.toBeInTheDocument();
+  });
+
   it("never downloads the whole inventory", async () => {
     const draft = data();
     render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={vi.fn()} ratingTree={{ version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" }} allowStructureChanges />);
@@ -254,6 +273,45 @@ describe("DefectsSection", () => {
     expect(keyword).toBe("1-1");
     expect(limit).toBe(20);
     expect(bindingEligible).toBe(true);
+  });
+
+  // 同一个接口会被并发发好几次，而响应回来的顺序跟发出的顺序无关。先发的后到时，
+  // 旧快照会把新状态盖回去——刚导入完那一下就会整页显示成"一条都没绑"，刷新才好。
+  it("ignores a stale resolution response that lands after a newer one", async () => {
+    const draft = data();
+    // 第一次请求：解析还没写完，什么都没绑上；它故意最后才 resolve。
+    let releaseStale: () => void = () => {};
+    const stalePending = new Promise<void>((resolve) => { releaseStale = resolve; });
+    mockedFetchWorkspace.mockReset();
+    mockedFetchWorkspace
+      .mockImplementationOnce(async () => {
+        await stalePending;
+        return { ...workspace(), groups: [] } as never;
+      })
+      // 第二次请求：解析已完成，构件绑好了。它先回来。
+      .mockResolvedValue(workspace([
+        { candidateId: "defect_0001", componentId: "component-1", nodeId: "tree-node-crack" },
+      ]) as never);
+
+    const props = {
+      importRecordId: "record-1",
+      baseUrl: "http://backend",
+      bridgeId: "bridge-1",
+      selectedCandidateId: null,
+      onSelect: vi.fn(),
+      dispatch: vi.fn(),
+    };
+    const { rerender } = render(<DefectsSection draft={draft} {...props} />);
+    // 换一次 importRecordId 再换回来，逼出第二次请求；两次都还在飞。
+    rerender(<DefectsSection draft={draft} {...props} importRecordId="record-2" />);
+    rerender(<DefectsSection draft={draft} {...props} />);
+
+    await sectionReady();
+    // 迟到的空快照落地——它必须被丢弃，不能把已绑定的状态盖回"未绑定"。
+    releaseStale();
+    await waitFor(() => expect(mockedFetchWorkspace.mock.calls.length).toBeGreaterThan(1));
+
+    expect(screen.queryByText("尚未选择实际构件。")).not.toBeInTheDocument();
   });
 
   it("adds a manual defect from an actual mapped component and allows an empty scale", async () => {
@@ -309,6 +367,7 @@ describe("DefectsSection", () => {
     draft.defects = [];
 
     render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={dispatch} ratingTree={{ version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" }} editLockToken="lock-1" allowStructureChanges />);
+    await sectionReady();
     fireEvent.click(screen.getByRole("button", { name: "新增病害" }));
     // 构件按需检索：先搜，再从命中结果里选。此前是把整份台账灌进下拉并默认选中第一条。
     fireEvent.change(screen.getByLabelText("搜索构件"), { target: { value: "1-1#梁" } });
@@ -347,19 +406,19 @@ describe("DefectsSection", () => {
       data: { ...draft, defects: [created] },
     }));
   });
-  it("disables editable controls but keeps photo viewing available in a read-only review", () => {
+  it("disables editable controls but keeps photo viewing available in a read-only review", async () => {
     const draft = data();
     draft.photos[0] = { ...draft.photos[0], linked_defect_candidate_id: null };
     render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId="defect_0001" selectedPhotoCandidateId="photo_0001" onSelect={vi.fn()} dispatch={vi.fn()} disabled />);
+    await sectionReady();
 
     // 筛选仍可使用，详情内正式字段和业务动作被锁定。
     expect(screen.getByRole("textbox", { name: "搜索病害" })).toBeEnabled();
-    expect(screen.getByRole("textbox", { name: "位置" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "病害位置" })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: "评定树病害" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "添加照片" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "确认缺图" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "确认本组" })).toBeDisabled();
-    expect(screen.queryByRole("button", { name: "确认并查看下一条" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "确认" })).toBeDisabled();
 
     // 快速列表与缩略图查看不禁用：只读态仍能检查导入结果。
     expect(screen.getByRole("button", { name: /2-1#梁/ })).toBeEnabled();
@@ -367,7 +426,7 @@ describe("DefectsSection", () => {
   });
 
   // 无匹配的病害没有候选按钮可点，这个下拉是唯一能给它定规范病害的入口，必须常驻。
-  it("keeps the rating tree picker in reach whether or not a node is bound", () => {
+  it("keeps the rating tree picker in reach whether or not a node is bound", async () => {
     const node = {
       id: "tree-node-crack",
       node_key: "org.bridge.defect.crack",
@@ -415,6 +474,7 @@ describe("DefectsSection", () => {
     };
 
     const { rerender } = render(<DefectsSection draft={unbound} {...props} />);
+    await sectionReady();
     expect(screen.getByRole("combobox", { name: "评定树病害" })).toBeInTheDocument();
 
     // 定了之后下拉不消失：它同时是当前值的显示和改选的入口。
@@ -426,7 +486,7 @@ describe("DefectsSection", () => {
     expect(screen.getByRole("combobox", { name: "评定树病害" })).toBeInTheDocument();
   });
 
-  it("locks defects outside the reopen scope while keeping warning defects editable", () => {
+  it("locks defects outside the reopen scope while keeping warning defects editable", async () => {
     const draft = data();
     const [first] = draft.defects;
     // 第一条病害带警告（可编辑），克隆出第二条无警告（应锁定）。
@@ -451,12 +511,13 @@ describe("DefectsSection", () => {
       />
     );
 
-    expect(screen.getByRole("textbox", { name: "位置" })).toBeEnabled();
+    await sectionReady();
+    expect(screen.getByRole("textbox", { name: "病害位置" })).toBeEnabled();
     rerender(<DefectsSection selectedCandidateId="defect_0002" {...commonProps} />);
-    expect(screen.getByRole("textbox", { name: "位置" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "病害位置" })).toBeDisabled();
   });
 
-  it("paginates defect cards and jumps to the selected defect's page", () => {
+  it("paginates defect cards and jumps to the selected defect's page", async () => {
     const draft = data();
     const template = draft.defects[0];
     draft.defects = Array.from({ length: 60 }, (_, index) => ({
@@ -476,23 +537,25 @@ describe("DefectsSection", () => {
     const { rerender } = render(
       <DefectsSection draft={draft} selectedCandidateId={null} {...props} />
     );
+    await sectionReady();
     expect(screen.getByText("1#梁")).toBeInTheDocument();
     expect(screen.queryByText("51#梁")).not.toBeInTheDocument();
-    expect(screen.getByText(/第 1 \/ 2 页（共 60 条）/)).toBeInTheDocument();
+    expect(screen.getByText("共 60 条")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "下一页" }));
-    expect(screen.getByText("51#梁")).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle("2"));
+    expect(screen.getByText("21#梁")).toBeInTheDocument();
     expect(screen.queryByText("1#梁")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "上一页" }));
+    fireEvent.click(screen.getByTitle("1"));
 
-    // 待处理跳转选中第 55 条 -> 自动翻到它所在的第 2 页。
+    // 待处理跳转选中第 55 条 -> 自动翻到它所在的第 3 页。
     rerender(<DefectsSection draft={draft} selectedCandidateId="defect_0055" {...props} />);
+    await sectionReady();
     expect(screen.getAllByText("55#梁").length).toBeGreaterThan(0);
     expect(screen.queryByText("1#梁")).not.toBeInTheDocument();
   });
 
-  it("opens a resizable split detail pane and closes it explicitly", () => {
-    window.localStorage.removeItem("bridge-report:defect-detail-width-percent");
+  it("opens a resizable split detail pane and closes it explicitly", async () => {
+    window.localStorage.removeItem("bridge-report:defect-detail-width-percent-v2");
     const onCloseDetail = vi.fn();
     render(
       <DefectsSection
@@ -507,14 +570,87 @@ describe("DefectsSection", () => {
       />
     );
 
+    await sectionReady();
     const separator = screen.getByRole("separator", { name: "调整精细维护区域宽度" });
-    expect(separator).toHaveAttribute("aria-valuenow", "67");
+    expect(separator).toHaveAttribute("aria-valuenow", "73");
     fireEvent.keyDown(separator, { key: "ArrowLeft" });
-    expect(separator).toHaveAttribute("aria-valuenow", "69");
-    expect(Number(window.localStorage.getItem("bridge-report:defect-detail-width-percent"))).toBeCloseTo(68.67);
+    expect(separator).toHaveAttribute("aria-valuenow", "75");
+    expect(Number(window.localStorage.getItem("bridge-report:defect-detail-width-percent-v2"))).toBeCloseTo(75);
 
     fireEvent.click(screen.getByRole("button", { name: "关闭精细维护" }));
     expect(onCloseDetail).toHaveBeenCalledTimes(1);
+  });
+
+  /* 打开的那条一旦不再命中当前筛选（补完照片、选完评定项），列表会当场把它筛掉，
+     看上去就像"操作一下就自动确认了"。正在处理的这条必须留在原位。
+     用户主动换筛选时才放开——那是明确的离开动作，由 onFilterChange 清掉。 */
+  it("keeps the open row in the list after it stops matching the filter", async () => {
+    const treeNode = {
+      id: "tree-node-crack",
+      node_key: "org.bridge.defect.crack",
+      parent_node_id: "tree-group",
+      display_number: "5.1.1-1",
+      display_name: "裂缝",
+      node_type: "defect",
+      sort_order: 1,
+      bridge_type_ids: ["bridge-type-1"],
+      component_category_ids: ["h21.component.beam"],
+      scoring_mode: "inherit_h21" as const,
+      h21_indicator_id: "h21.defect.crack",
+      is_selectable: true,
+      is_scoring: true,
+      organization_note: "",
+      allowed_scales: [2],
+      h21_indicator_name: "裂缝",
+      h21_source_table: "表5.3.1",
+      scale_descriptions: { "2": "轻微裂缝" },
+      deduction_points: { "2": 15 },
+      path: [],
+      sources: [],
+    };
+    mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+    mockedFetchTreeNode.mockResolvedValue(treeNode);
+    mockedFetchWorkspace.mockResolvedValue(workspace([
+      { candidateId: "defect_0001", nodeId: treeNode.id },
+    ]) as never);
+
+    // 带一条阻断警告，这条先留在"待处理"。
+    const draft = data();
+    draft.defects[0] = {
+      ...draft.defects[0],
+      warnings: [{
+        code: "defect_measurement_unparsed",
+        message: "尺寸原文未能解析。",
+        severity: "warning" as const,
+        target_candidate_id: "defect_0001",
+      }],
+    };
+    const props = {
+      importRecordId: "record-1",
+      baseUrl: "http://backend",
+      bridgeId: "bridge-1",
+      onSelect: vi.fn(),
+      dispatch: vi.fn(),
+      ratingTree: { version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" },
+    };
+    const { rerender } = render(
+      <DefectsSection draft={draft} selectedCandidateId={null} {...props} />,
+    );
+    await sectionReady();
+
+    // 先筛到"待处理"（这一步会清掉上一次的钉），再打开这条。
+    fireEvent.change(screen.getByRole("combobox", { name: "按状态筛选" }), { target: { value: "status:needs_attention" } });
+    fireEvent.click(screen.getByRole("button", { name: /^2-1#梁/ }));
+    rerender(<DefectsSection draft={draft} selectedCandidateId="defect_0001" {...props} />);
+
+    // 警告消掉：它不再属于"待处理"，但正开着，必须还留在列表里。
+    const resolvedDraft = {
+      ...draft,
+      defects: [{ ...draft.defects[0], warnings: [] }],
+    };
+    rerender(<DefectsSection draft={resolvedDraft} selectedCandidateId="defect_0001" {...props} />);
+
+    expect(screen.getByRole("button", { name: /^2-1#梁/ })).toBeInTheDocument();
   });
 
   it("keeps the just-confirmed row pinned until the filter changes", async () => {
@@ -568,10 +704,13 @@ describe("DefectsSection", () => {
       ratingTree: { version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" },
     };
     const { rerender } = render(<DefectsSection draft={draft} {...props} />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "可批量确认 1" })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "可批量确认 1" }));
-    fireEvent.click(screen.getByRole("button", { name: "确认本组" }));
+    await sectionReady();
+    await waitFor(() => expect(screen.getByRole("option", { name: "可批量确认（1）" })).toBeInTheDocument());
+    fireEvent.change(screen.getByRole("combobox", { name: "按状态筛选" }), { target: { value: "status:batchable" } });
+    fireEvent.click(screen.getByRole("button", { name: "确认" }));
     expect(dispatch).toHaveBeenCalledWith({ type: "confirm_defect_groups", candidateIds: ["defect_0001"] });
+    // 确认后停在原地：不再自动切到下一条，所以不该有选中项变更。
+    expect(props.onSelect).not.toHaveBeenCalled();
 
     const confirmedDraft = {
       ...draft,
@@ -580,8 +719,73 @@ describe("DefectsSection", () => {
     rerender(<DefectsSection draft={confirmedDraft} {...props} />);
     expect(screen.getByRole("button", { name: /^2-1#梁/ })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "待处理 0" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "按状态筛选" }), { target: { value: "status:needs_attention" } });
     expect(screen.queryByRole("button", { name: /^2-1#梁/ })).not.toBeInTheDocument();
+  });
+
+  it("uses the overview entry without duplicating a pending shortcut row", async () => {
+    const treeNode = {
+      id: "tree-node-crack",
+      node_key: "org.bridge.defect.crack",
+      parent_node_id: "tree-group",
+      display_number: "5.1.1-1",
+      display_name: "裂缝",
+      node_type: "defect" as const,
+      sort_order: 1,
+      bridge_type_ids: ["bridge-type-1"],
+      component_category_ids: ["h21.component.beam"],
+      scoring_mode: "inherit_h21" as const,
+      h21_indicator_id: "h21.defect.crack",
+      is_selectable: true,
+      is_scoring: true,
+      organization_note: "",
+      allowed_scales: [2],
+      h21_indicator_name: "裂缝",
+      h21_source_table: "表5.3.1",
+      scale_descriptions: { "2": "轻微裂缝" },
+      deduction_points: { "2": 15 },
+      path: [],
+      sources: [],
+    };
+    mockedFetchApplicableNodes.mockResolvedValue([treeNode]);
+    mockedFetchTreeNode.mockResolvedValue(treeNode);
+    mockedFetchWorkspace.mockResolvedValue(workspace([
+      { candidateId: "defect_0001", nodeId: treeNode.id },
+    ]) as never);
+    const missingPhotoDraft = data();
+    missingPhotoDraft.photos = [];
+    const props = {
+      importRecordId: "record-1",
+      baseUrl: "http://backend",
+      bridgeId: "bridge-1",
+      selectedCandidateId: null,
+      onSelect: vi.fn(),
+      dispatch: vi.fn(),
+      ratingTree: { version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" },
+    };
+    const { rerender } = render(<DefectsSection draft={missingPhotoDraft} {...props} />);
+
+    const issueEntry = await screen.findByRole("button", { name: /待处理问题.*1.*条/ });
+    fireEvent.click(issueEntry);
+    expect(screen.getByRole("button", { name: /问题分组/ })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "逐条查看" }));
+    expect(screen.queryByLabelText("待处理问题快捷筛选")).not.toBeInTheDocument();
+
+    const cleanDraft = data();
+    cleanDraft.defects[0] = {
+      ...cleanDraft.defects[0],
+      photo_references: [{
+        photo_number: "2.1-1",
+        resolution: "matched",
+        photo_candidate_id: "photo_0001",
+        resolved_defect_candidate_id: "defect_0001",
+        review_note: null,
+      }],
+    };
+    rerender(<DefectsSection draft={cleanDraft} {...props} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: /校对通过.*0.*条/ })).toBeDisabled());
+    expect(screen.queryByLabelText("待处理问题快捷筛选")).not.toBeInTheDocument();
   });
 
   describe("批量匹配", () => {
@@ -673,10 +877,12 @@ describe("DefectsSection", () => {
       expect(dispatch).not.toHaveBeenCalledWith(
         expect.objectContaining({ type: "confirm_defect_groups" }),
       );
-      // 多个候选、疑似组合与无匹配的条数由统计筹码负责，汇总只说筹码说不出来的。
+      // 汇总条已从工具栏撤下，改用行上的匹配状态作为「结果已落到界面」的落点。
+      // 这个 await 不能省：上面几条 not.toHaveBeenCalled 若在响应落地前就跑完，
+      // 会变成永远为真的空断言。
       await waitFor(() => expect(
-        screen.getByText(/共 1 条 · 自动匹配 1 条 · 跳过 0 条/),
-      ).toBeInTheDocument());
+        screen.getAllByText("自动匹配待写入").length,
+      ).toBeGreaterThan(0));
     });
 
     it("shows composite and candidate results as their own states instead of plain unmatched", async () => {
@@ -707,10 +913,10 @@ describe("DefectsSection", () => {
 
       // 左侧列表不打开详情就能读出状态，顶部统计把组合病害与无结果分开计数。
       await waitFor(() => expect(
-        document.querySelector(".defect-quick-match.composite"),
+        document.querySelector(".defect-quick-status.needs_attention"),
       ).toHaveTextContent("疑似组合病害"));
-      expect(screen.getByRole("button", { name: "疑似组合病害 1" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "无匹配结果 0" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "疑似组合病害（1）" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "无匹配结果（0）" })).toBeInTheDocument();
     });
 
     // 三个头条问题只在顶部统计卡上有入口，下拉框不再重复一份；筛选生效时
@@ -743,7 +949,7 @@ describe("DefectsSection", () => {
       const alert = await screen.findByRole("alert");
       expect(alert).toHaveTextContent("评定树目录当前不可用");
       expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "无匹配结果 0" })).toBeInTheDocument();
+      expect(screen.getByRole("option", { name: "无匹配结果（0）" })).toBeInTheDocument();
     });
 
     it("waits for the description field to lose focus before rematching that defect", async () => {
@@ -780,7 +986,7 @@ describe("DefectsSection", () => {
       render(<DefectsSection draft={boundDraft()} {...matchProps()} />);
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(1));
 
-      fireEvent.click(screen.getByRole("button", { name: /^重新匹配（当前筛选 1）/ }));
+      fireEvent.click(screen.getByRole("button", { name: "重新匹配" }));
 
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalledTimes(2));
       // 第 4 个实参是解析索引，候选范围排在它后面。
@@ -832,7 +1038,7 @@ describe("DefectsSection", () => {
         />,
       );
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalled());
-      fireEvent.click(screen.getByRole("button", { name: "问题分组（1）" }));
+      fireEvent.click(screen.getByRole("button", { name: "问题分组 1" }));
       const picker = await screen.findByRole("combobox", { name: "为 存在黑点痕迹 选择评定树病害" });
       fireEvent.change(picker, { target: { value: treeNode.id } });
       fireEvent.click(screen.getByRole("button", { name: "应用到本组 2 条" }));
@@ -904,7 +1110,7 @@ describe("DefectsSection", () => {
 
       render(<DefectsSection draft={draft} {...matchProps(dispatch)} />);
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalled());
-      fireEvent.click(screen.getByRole("button", { name: "问题分组（1）" }));
+      fireEvent.click(screen.getByRole("button", { name: "问题分组 1" }));
       const picker = await screen.findByRole("combobox", { name: "为 存在黑点痕迹 选择评定树病害" });
       fireEvent.change(picker, { target: { value: treeNode.id } });
       fireEvent.click(screen.getByRole("button", { name: "应用到本组 2 条" }));
@@ -953,7 +1159,7 @@ describe("DefectsSection", () => {
         "tree-version-1",
         treeNode.id,
       ));
-      fireEvent.click(screen.getByRole("button", { name: "问题分组（1）" }));
+      fireEvent.click(screen.getByRole("button", { name: "问题分组 1" }));
       fireEvent.click(await screen.findByRole("button", { name: "确认本组可确认项（1）" }));
       expect(screen.getByText("无照片记录也会被确认；现有病害选择和照片关联保持不变。")).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "确认 1 条" }));

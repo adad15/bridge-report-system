@@ -157,7 +157,7 @@ export function ThreadTriagePage() {
     : 0;
 
   return (
-    <section className="status-panel triage-page">
+    <section className="status-panel triage-page triage-page-redesign">
       <header className="triage-page-head">
         <h1>病害线索整理</h1>
         <Link to={`/bridges/${bridgeId}/components`}>返回构件病害档案</Link>
@@ -203,7 +203,6 @@ export function ThreadTriagePage() {
                   return next;
                 })}
               />
-              {/* 没展开也能确认，所以处理量要在提交前明说，让人知道自己在批准多大范围。 */}
               <p className="triage-detail-summary">
                 将处理 {pendingCount} 组、
                 {detail.groups
@@ -226,9 +225,7 @@ export function ThreadTriagePage() {
           </p>
           {issues.length > 0 ? (
             <ul className="triage-detail-issues" role="alert">
-              {issues.map((issue, index) => (
-                <li key={`${issue.reason_code}-${index}`}>{issue.message}</li>
-              ))}
+              {issues.map((issue, index) => <li key={`${issue.reason_code}-${index}`}>{issue.message}</li>)}
             </ul>
           ) : null}
           {summary.manual_clusters
@@ -237,10 +234,10 @@ export function ThreadTriagePage() {
               <ManualClusterCard
                 key={cluster.cluster_id}
                 cluster={cluster}
+                bridgeId={bridgeId ?? ""}
                 busy={busy}
                 onResolve={(payload) => { void resolveCluster(payload); }}
-                onSkip={() => setSkippedClusterIds(
-                  (current) => new Set(current).add(cluster.cluster_id))}
+                onSkip={() => setSkippedClusterIds((current) => new Set(current).add(cluster.cluster_id))}
               />
             ))}
         </section>

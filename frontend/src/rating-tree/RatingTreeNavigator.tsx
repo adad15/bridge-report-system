@@ -84,10 +84,9 @@ export function RatingTreeNavigator({
                   className="rating-tree-toggle"
                   aria-label={expanded ? `收起${node.display_name}` : `展开${node.display_name}`}
                   aria-expanded={expanded}
+                  aria-busy={loading || undefined}
                   onClick={() => onToggle(node)}
-                >
-                  {loading ? "…" : expanded ? "▾" : "▸"}
-                </button>
+                />
               )}
               <button type="button" className="rating-tree-node-button" onClick={() => onSelect(node)}>
                 {nodeLabel(node)}

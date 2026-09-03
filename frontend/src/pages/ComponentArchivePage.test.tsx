@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -114,7 +114,7 @@ describe("ComponentArchivePage", () => {
   it("reports how many observations are still unbound without triaging them", async () => {
     renderPage();
 
-    expect(await screen.findByText(/有 2 条病害观测尚未归入跨年线索/)).toBeInTheDocument();
+    expect(await screen.findByText(/2 条病害观测尚未整理为跨年线索/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "绑定" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "创建新线索" })).not.toBeInTheDocument();
   });
@@ -123,7 +123,30 @@ describe("ComponentArchivePage", () => {
   it("never asks for per-observation thread candidates", async () => {
     renderPage();
 
-    await screen.findByRole("heading", { name: "铰缝", level: 2 });
+    await screen.findByRole("heading", { name: "1#铰缝", level: 2 });
     expect(mockedSuggestions).not.toHaveBeenCalled();
+  });
+  // 导入属于年度检测、台账是另一条业务线，都不该由这个页面发起。
+  it("offers no import or inventory action when nothing is selected", async () => {
+    renderPage("/bridges/bridge-1/components");
+
+    await screen.findByRole("heading", { name: "请选择一个构件" });
+    expect(screen.queryByRole("link", { name: /导入检测资料/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /导入检测资料/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/查看构件台账/)).not.toBeInTheDocument();
+  });
+
+  // 删掉那两个按钮后空态只剩空白。这一页的用途就是找有问题的构件，空态直接给答案。
+  it("offers the worst-scoring components as shortcuts instead", async () => {
+    renderPage("/bridges/bridge-1/components");
+
+    // 左栏列表里也有同名按钮，查询要限定在空态的快捷区内。
+    const picks = await screen.findByRole("heading", { name: "评分最低的构件" });
+    const pick = within(picks.parentElement as HTMLElement)
+      .getByRole("button", { name: /1#铰缝/ });
+    expect(pick).toHaveTextContent("82.5");
+    fireEvent.click(pick);
+
+    expect(await screen.findByRole("heading", { name: "1#铰缝", level: 2 })).toBeInTheDocument();
   });
 });

@@ -8,6 +8,17 @@ import { fetchStandardPackages } from "../api/standardsApi";
 import { useAuth } from "../auth/AuthContext";
 import { BridgesPage } from "./BridgesPage";
 
+class ResizeObserverMock implements ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+Object.defineProperty(globalThis, "ResizeObserver", {
+  writable: true,
+  value: ResizeObserverMock,
+});
+
 vi.mock("../api/navigationApi", async (importOriginal) => {
   const original = await importOriginal<typeof import("../api/navigationApi")>();
   return { ...original, fetchBridges: vi.fn() };

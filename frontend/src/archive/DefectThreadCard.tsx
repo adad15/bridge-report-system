@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 import type { ArchiveObservation, ArchiveThread } from "../api/componentArchiveApi";
 import { categoryColor } from "../review/categoryColor";
-import { ObservationYearRow } from "./ObservationYearRow";
+import { ObservationTable } from "./ObservationTable";
 
 interface DefectThreadCardProps {
   thread: ArchiveThread;
@@ -29,11 +29,7 @@ export function DefectThreadCard({ thread, componentType, onRebind }: DefectThre
         <span className="archive-thread-number">{thread.system_number}</span>
       </header>
       {thread.observations.length > 0 ? (
-        <div className="archive-thread-observations">
-          {thread.observations.map((observation) => (
-            <ObservationYearRow key={observation.id} observation={observation} onRebind={onRebind} />
-          ))}
-        </div>
+        <ObservationTable observations={thread.observations} onRebind={onRebind} />
       ) : (
         <p className="archive-empty-hint">该线索在当前有效版本中暂无观测记录。</p>
       )}

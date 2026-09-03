@@ -123,7 +123,6 @@ export interface ConfirmWrittenCounts {
   assessment_component_results: number;
   assessment_part_results: number;
   assessment_control_results: number;
-  assessment_rule_traces: number;
 }
 
 export interface ConfirmResponse {

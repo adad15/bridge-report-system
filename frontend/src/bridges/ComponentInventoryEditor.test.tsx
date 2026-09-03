@@ -83,7 +83,7 @@ const confirmedSummary: InventorySummary = {
 };
 
 const groupPage: InventoryGroupEntriesResponse = {
-  total: 1, page: 0, size: 100, entries: [entry],
+  total: 1, page: 0, size: 20, entries: [entry],
 };
 
 const catalogs = [{
@@ -117,34 +117,35 @@ describe("ComponentInventoryEditor", () => {
   // 而不是每次都从"加载中…"开始等几秒。
   it("renders from cache on remount while still revalidating", async () => {
     const first = render(<ComponentInventoryEditor bridgeId="bridge-1" />);
-    await screen.findByText("分组核对");
+    await screen.findByRole("heading", { name: "实际构件台账" });
     expect(fetchInventorySummary).toHaveBeenCalledTimes(1);
     first.unmount();
 
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     // 立即可见，无需等待，也不出现加载态。
-    expect(screen.getByText("分组核对")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "实际构件台账" })).toBeInTheDocument();
     expect(screen.queryByText("正在加载台账与规范映射…")).not.toBeInTheDocument();
     // 但仍然重新拉了一次，避免停留在过期数据上。
     await waitFor(() => expect(fetchInventorySummary).toHaveBeenCalledTimes(2));
   });
 
-  it("groups the review table by structure part and drops the redundant 现场名称 column", async () => {
+  it("renders the archive-oriented ledger columns while keeping compact edit mode", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
-    // 分部表头来自映射的 structure_part，顺序与向导一致。
-    expect(await screen.findByRole("columnheader", { name: "上部结构" })).toBeInTheDocument();
+    // 左侧分类来自映射的 structure_part，顺序与向导一致。
+    expect((await screen.findAllByText("上部结构")).length).toBeGreaterThan(0);
 
-    await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
+    const listPanel = screen.getByRole("heading", { name: "构件列表" }).closest("section") as HTMLElement;
+    expect(within(listPanel).getByRole("columnheader", { name: "现场名称" })).toBeInTheDocument();
+    expect(within(listPanel).getByRole("columnheader", { name: "规范映射" })).toBeInTheDocument();
+    expect(await within(listPanel).findByRole("link", { name: "查看档案" }))
+      .toHaveAttribute("href", "/bridges/bridge-1/components/internal-component-id");
+    expect(within(listPanel).getByText("JTG/T H21—2011 · 上部承重构件")).toBeInTheDocument();
+
     // 行默认只读，字段要进编辑态才出现。
     await userEvent.click(await screen.findByRole("button", { name: "编辑" }));
-    // 现场名称与构件类别生成时同值，页面只留构件类别。
+    // 编辑区仍保持紧凑：现场名称由构件类别同步，不增加重复表单项。
     expect(await screen.findByLabelText("构件类别 1-1#")).toBeInTheDocument();
     expect(screen.queryByLabelText("现场名称 1-1#")).not.toBeInTheDocument();
-
-    // 整组共用同一个映射：弹窗标题说明一次，不再逐行占一列。
-    const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText(/规范映射：/)).toBeInTheDocument();
-    expect(within(dialog).queryByRole("columnheader", { name: "规范映射" })).not.toBeInTheDocument();
   });
 
   // 规范目录是另一条请求。台账现在能瞬时渲染，目录还在路上的那段窗口里，
@@ -174,13 +175,13 @@ describe("ComponentInventoryEditor", () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
 
     expect(await screen.findByText("正在加载台账与规范映射…")).toBeInTheDocument();
-    expect(screen.queryByText("分组核对")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "实际构件台账" })).toBeInTheDocument();
     resolveCatalogs([{
       package: { id: "package-1", standard_code: "JTG/T H21—2011" },
       component_categories: [{ id: "girder", name: "上部承重构件" }],
     } as never]);
 
-    expect(await screen.findByText("JTG/T H21—2011 · 上部承重构件")).toBeInTheDocument();
+    expect(await screen.findByText(/JTG\/T H21—2011 · 上部承重构件/)).toBeInTheDocument();
     expect(screen.queryByText("—")).not.toBeInTheDocument();
     expect(fetchStandardMappingCatalogs).toHaveBeenCalledTimes(1);
   });
@@ -236,8 +237,8 @@ describe("ComponentInventoryEditor", () => {
     vi.mocked(confirmPendingComponentInventoryMappings).mockResolvedValue(confirmedSummary);
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
 
-    expect(await screen.findByText("分组核对")).toBeInTheDocument();
-    expect(screen.getByText(/1 个构件的规范映射待确认/)).toBeInTheDocument();
+    expect(await screen.findByText(/1 个构件的规范映射待确认/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "实际构件台账" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "确认该组映射" }));
     expect(confirmPendingComponentInventoryMappings).toHaveBeenCalledWith(
       expect.any(String), "revision-1", "主梁");
@@ -252,37 +253,33 @@ describe("ComponentInventoryEditor", () => {
       expect.any(String), "revision-1", undefined);
   });
 
-  it("shows entry rows in a dialog for the opened group or via number search", async () => {
+  it("shows entry rows inline for the selected group or via number search", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
-    await screen.findByText("分组核对");
+    await screen.findByRole("heading", { name: "实际构件台账" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByText(/在分组核对表中点击/)).toBeInTheDocument();
 
-    // 行现在是只读文本，按编号取单元格而不是输入框。
-    await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
-    const dialog = await screen.findByRole("dialog", { name: /主梁 构件（共 1 个）/ });
-    expect(within(dialog).getByText("1-1#")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "关闭" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // 第一类默认选中，构件直接显示在右侧列表中。
+    const listPanel = screen.getByRole("heading", { name: "构件列表" }).closest("section") as HTMLElement;
+    expect(await within(listPanel).findByText("1-1#")).toBeInTheDocument();
 
     vi.mocked(searchInventoryEntries).mockResolvedValue({ total: 1, entries: [entry] });
     await userEvent.type(screen.getByLabelText("搜索构件"), "1-1");
     const results = await screen.findByRole("heading", { name: "搜索结果" });
-    const section = results.closest("div") as HTMLElement;
+    const section = results.closest("section") as HTMLElement;
     // 搜索防抖 250ms 后才发请求，结果是异步到达的。
     expect(await within(section).findByText("1-1#")).toBeInTheDocument();
-    expect(await screen.findByText(/匹配 1 个构件/)).toBeInTheDocument();
+    expect(await screen.findByText(/匹配 1 条/)).toBeInTheDocument();
   });
 
   it("fetches one page at a time instead of slicing a full list", async () => {
     // 分页现在在服务端做：翻页要真的再发一次请求，而不是在本地切数组。
     const pageOf = (index: number): InventoryGroupEntriesResponse => ({
-      total: 120, page: index, size: 100,
-      entries: Array.from({ length: index === 0 ? 100 : 20 }, (_, offset) => ({
+      total: 120, page: index, size: 20,
+      entries: Array.from({ length: 20 }, (_, offset) => ({
         ...entry,
-        id: `entry-${index * 100 + offset + 1}`,
-        component_number: `${index * 100 + offset + 1}#`,
-        position: index * 100 + offset,
+        id: `entry-${index * 20 + offset + 1}`,
+        component_number: `${index * 20 + offset + 1}#`,
+        position: index * 20 + offset,
         mappings: [{ ...entry.mappings[0], confirmation_status: "已确认" }],
       })),
     });
@@ -290,19 +287,17 @@ describe("ComponentInventoryEditor", () => {
       async (_base, _revisionId, _group, page) => pageOf(page));
 
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
-    await userEvent.click(await screen.findByRole("button", { name: "查看构件 主梁" }));
+    const listPanel = (await screen.findByRole("heading", { name: "构件列表" })).closest("section") as HTMLElement;
+    expect(await within(listPanel).findByText("1#")).toBeInTheDocument();
+    expect(within(listPanel).queryByText("21#")).not.toBeInTheDocument();
+    expect(screen.getAllByText("共 120 条")).toHaveLength(2);
 
-    const dialog = await screen.findByRole("dialog", { name: /主梁 构件/ });
-    expect(await within(dialog).findByText("1#")).toBeInTheDocument();
-    expect(within(dialog).queryByText("101#")).not.toBeInTheDocument();
-    expect(screen.getByText("第 1 / 2 页")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "下一页" }));
-    expect(await within(dialog).findByText("101#")).toBeInTheDocument();
-    expect(within(dialog).queryByText("1#")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByTitle("2"));
+    expect(await within(listPanel).findByText("21#")).toBeInTheDocument();
+    expect(within(listPanel).queryByText("1#")).not.toBeInTheDocument();
     // 第二页是另一次请求，不是本地切片。
     expect(fetchInventoryGroupEntries).toHaveBeenCalledWith(
-      expect.any(String), "revision-1", "主梁", 1, 100, expect.anything());
+      expect.any(String), "revision-1", "主梁", 1, 20, expect.anything());
   });
 
   it("maps server group fields onto the review table shape", () => {
@@ -329,29 +324,24 @@ describe("ComponentInventoryEditor", () => {
   });
 
 
-  // 聚合改造的核心承诺：进页面只发一次汇总请求，构件明细要等用户真的点开某一组
-  // 才取。原来是一进来就把整份台账（这座桥五千多条）拉下来。
-  it("loads only the summary on mount and fetches entries on demand", async () => {
+  // 页面只发一次汇总请求，并仅预取默认分类的第一页；不会把整份五千多条台账拉下来。
+  it("loads the summary and only the first page of the default category", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
-    await screen.findByText("分组核对");
+    await screen.findByRole("heading", { name: "实际构件台账" });
+    await screen.findByText("1-1#");
 
     expect(fetchInventorySummary).toHaveBeenCalledTimes(1);
-    expect(fetchInventoryGroupEntries).not.toHaveBeenCalled();
-    expect(searchInventoryEntries).not.toHaveBeenCalled();
-
-    await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
-    await screen.findByRole("dialog", { name: /主梁 构件/ });
     expect(fetchInventoryGroupEntries).toHaveBeenCalledTimes(1);
-    // 打开分组不会再去拉一遍汇总。
-    expect(fetchInventorySummary).toHaveBeenCalledTimes(1);
+    expect(fetchInventoryGroupEntries).toHaveBeenCalledWith(
+      expect.any(String), "revision-1", "主梁", 0, 20, expect.anything());
+    expect(searchInventoryEntries).not.toHaveBeenCalled();
   });
 
   // 写操作的响应自带新汇总；拿到之后还要把当前打开的那一组重取一遍——只把响应里
   // 那条构件补进去是不够的，删除和批量确认根本不带构件，改类别还会让构件换组。
   it("replaces the summary from the write response and refetches the open group", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
-    await userEvent.click(await screen.findByRole("button", { name: "查看构件 主梁" }));
-    await screen.findByRole("dialog", { name: /主梁 构件/ });
+    await screen.findByText("1-1#");
     expect(fetchInventoryGroupEntries).toHaveBeenCalledTimes(1);
 
     await userEvent.click(await screen.findByRole("button", { name: "编辑" }));

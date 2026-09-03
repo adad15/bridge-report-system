@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatArchiveMeasurementValue } from "./ObservationYearRow";
+import { formatArchiveMeasurementValue } from "./observationFormatting";
 
 describe("formatArchiveMeasurementValue", () => {
   it("shows both formal range endpoints", () => {

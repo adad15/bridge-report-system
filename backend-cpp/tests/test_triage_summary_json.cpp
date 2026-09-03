@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <map>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -134,6 +135,52 @@ TEST(TriageSummaryJsonTest, GivesManualClustersTheirFullContext) {
         EXPECT_EQ(target["system_number"].asString(), "BHXS-000123");
     }
     EXPECT_TRUE(saw_thread_target) << "与已有线索重叠时必须标出是线索并带 BHXS 编号";
+}
+
+// 人要判断"这几条是不是同一处病害"，判据是标度、尺寸和照片——只给位置写法和病害类型，
+// 等于把系统已经判不了的那个信号原样还给人看一遍。异常簇的观测必须带上展示字段。
+TEST(TriageSummaryJsonTest, GivesManualClusterObservationsTheirEvidenceFields) {
+    std::vector<TriageObservationInput> observations{
+        obs("o-2024", "c-cap", 2024, "16#墩盖梁", "大小里程侧"),
+        obs("o-2025", "c-cap", 2025, "16#墩盖梁", "大小里程侧及左悬臂底部")};
+
+    bridge_report::review::TriageDisplayLookup display;
+    auto& first = display["o-2024"];
+    first.system_number = "BH-000412";
+    first.scale = "2";
+    first.description = "大小里程侧渗水泛碱";
+    first.measurements = {"0.3mm×2.0m"};
+    first.photos = {{"p-1", "2.3-14"}};
+    // 第二条没有尺寸也没有照片：缺证据是正常数据，不能让它整条消失。
+    auto& second = display["o-2025"];
+    second.system_number = "BH-000533";
+    second.scale = "3";
+    second.description = "渗水泛碱范围扩大";
+
+    const auto body = triage_summary_json(build_triage_model(observations, {}), display);
+
+    ASSERT_EQ(body["manual_clusters"].size(), 1u);
+    std::map<std::string, Json::Value> by_id;
+    for (const auto& group : body["manual_clusters"][0]["groups"]) {
+        for (const auto& observation : group["observations"]) {
+            by_id[observation["id"].asString()] = observation;
+        }
+    }
+    ASSERT_EQ(by_id.count("o-2024"), 1u);
+    ASSERT_EQ(by_id.count("o-2025"), 1u);
+
+    const auto& carrying = by_id["o-2024"];
+    EXPECT_EQ(carrying["system_number"].asString(), "BH-000412");
+    EXPECT_EQ(carrying["scale"].asString(), "2");
+    ASSERT_EQ(carrying["measurements"].size(), 1u);
+    EXPECT_EQ(carrying["measurements"][0].asString(), "0.3mm×2.0m");
+    ASSERT_EQ(carrying["photos"].size(), 1u);
+    EXPECT_EQ(carrying["photos"][0]["photo_number"].asString(), "2.3-14");
+
+    const auto& bare = by_id["o-2025"];
+    EXPECT_EQ(bare["scale"].asString(), "3");
+    EXPECT_TRUE(bare["measurements"].empty()) << "缺尺寸要给空数组，不是缺键";
+    EXPECT_TRUE(bare["photos"].empty());
 }
 
 // 明细不分页的前提是"它确实不大"。设计里那个 150–250 KB 是估算，这里量实的：

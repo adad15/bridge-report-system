@@ -26,7 +26,7 @@ function successfulResponse(): AssessmentPreviewResponse {
           categories: [category("h21.component.deck.pavement", "桥面铺装", "deck_system", 72.21, 0.2, 8)],
         },
       ],
-      triggered_controls: [], trace: [{ step: "component", rule_id: "rule-1", entity_id: "component-1", source_reference: "4.1.1", inputs: {}, output: {} }],
+      triggered_controls: [],
     },
     issues: [], assessment_run_id: "run-1",
   };
@@ -66,17 +66,20 @@ function category(
 }
 
 function rowOf(label: string): HTMLElement {
-  const row = screen.getByText(label).closest("tr");
+  const row = screen.getAllByText(label).map((element) => element.closest("tr")).find(Boolean);
   if (!row) throw new Error(`找不到 ${label} 所在的表格行`);
   return row;
 }
 
 describe("AssessmentSection", () => {
-  it("shows system standard identity, calculated results and trace", () => {
+  it("shows system standard identity and calculated results", () => {
     render(<AssessmentSection mode="preview" canRetry phase="ready" response={successfulResponse()} error={null} onRetry={vi.fn()} onSelectIssue={vi.fn()} />);
     expect(screen.getByText(/JTG\/T H21—2011/)).toBeInTheDocument();
     expect(screen.getByText(/规则包 1.0.1/)).toBeInTheDocument();
     expect(screen.getByText("87.25")).toBeInTheDocument();
+    expect(screen.getByText("技术状况等级")).toBeInTheDocument();
+    expect(screen.getByText("等级分布")).toBeInTheDocument();
+    expect(screen.getByText(/评定计算完成/)).toBeInTheDocument();
     expect(screen.getByText("桥墩")).toBeInTheDocument();
     expect(screen.getByText("桥面铺装")).toBeInTheDocument();
     // 分部行是那一组的合计行，单类别分部下合计与类别本身同值，断言要落到具体行上。
@@ -92,7 +95,10 @@ describe("AssessmentSection", () => {
     // 得分条按分数取宽度，等级决定填色档位。
     expect(bearingRow.querySelector(".assessment-score-bar-fill")).toHaveStyle({ width: "81.54%" });
     expect(bearingRow.querySelector(".assessment-score-bar-fill")).toHaveClass("assessment-score-bar-fill-2");
-    expect(screen.getByText(/4.1.1/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "上部结构" }));
+    expect(screen.getByText("上部承重构件")).toBeInTheDocument();
+    expect(screen.queryByText("桥面铺装")).not.toBeInTheDocument();
+    expect(screen.queryByText(/计算轨迹/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Word 评分/)).not.toBeInTheDocument();
   });
 

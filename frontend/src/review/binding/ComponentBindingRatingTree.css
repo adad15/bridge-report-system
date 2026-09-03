@@ -1,18 +1,19 @@
 .binding-rating-tree {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(280px, 440px) auto;
-  gap: 16px;
-  align-items: end;
-  margin: 10px 0 14px;
-  padding: 12px 14px;
-  border: 1px solid #d7e2f0;
-  border-radius: 8px;
-  background: #f8fbff;
+  grid-template-columns: minmax(300px, 1fr) minmax(320px, 520px) auto;
+  gap: 18px;
+  align-items: center;
+  margin: 10px 0 0;
+  padding: 15px 18px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 7px 22px rgba(36, 61, 109, 0.06);
 }
 
 .binding-rating-tree-current {
   display: grid;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -24,7 +25,7 @@
 
 .binding-rating-tree-current > strong {
   color: #172033;
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .binding-rating-tree-current > small {
@@ -40,8 +41,8 @@
 .binding-rating-tree select,
 .binding-rating-tree-action {
   box-sizing: border-box;
-  height: 34px;
-  border-radius: 6px;
+  height: 36px;
+  border-radius: 7px;
   font: inherit;
   font-size: 13px;
 }
@@ -49,27 +50,28 @@
 .binding-rating-tree select {
   width: 100%;
   padding: 0 9px;
-  border: 1px solid #cbd7e6;
+  border: 1px solid #cad5e4;
   background: #fff;
   color: #263449;
 }
 
 .binding-rating-tree-action {
   padding: 0 14px;
-  border: 1px solid #2456c9;
-  background: #2456c9;
-  color: #fff;
+  border: 1px solid #9db7f1;
+  background: #fff;
+  color: #2456c9;
   white-space: nowrap;
 }
 
 .binding-rating-tree-action:disabled {
-  border-color: #b9c8df;
-  background: #dce5f2;
-  color: #6f7f94;
+  border-color: #d7dfeb;
+  background: #f5f7fa;
+  color: #9aa6b6;
 }
 
 .binding-rating-tree-action:not(:disabled):hover {
-  background: #1d49ad;
+  border-color: #2f5bea;
+  background: #edf2ff;
 }
 
 .binding-rating-tree-success {
@@ -83,4 +85,26 @@
     grid-template-columns: 1fr;
     align-items: stretch;
   }
+}
+
+/* 已入库 / 已作废记录的绑定页：这一步已经过去了，不是出错，所以既不用红字也不用
+   警告色，按普通空状态处理。 */
+.binding-unavailable {
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.binding-unavailable h3 {
+  margin: 0 0 8px;
+  color: #17233b;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.binding-unavailable p {
+  max-width: 46em;
+  margin: 0 auto;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.7;
 }

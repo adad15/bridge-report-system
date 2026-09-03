@@ -31,14 +31,14 @@ interface DefectReviewToolbarProps {
   /** 当前只看哪个部件；null 表示全部。 */
   partFilter: string | null;
   onPartFilterChange: (partFilter: string | null) => void;
+  /** 当前只看哪个导入病害类型；null 表示全部。 */
+  defectTypeFilter: string | null;
+  onDefectTypeFilterChange: (defectTypeFilter: string | null) => void;
   /** 重新匹配的作用域说明与预计处理条数，按钮按下前就要能看清。 */
   rematchScopeLabel: string;
   rematchCount: number;
   rematching?: boolean;
   matchError?: string | null;
-  lastMatchSummary?: DefectMatchSummary | null;
-  /** 上次匹配完成的时刻；结果新不新只有它说得清。 */
-  lastMatchAt?: Date | null;
   /** 不传就不渲染“新增病害”——只读态和重开校对的仅警告范围没有这个入口。 */
   onAddDefect?: () => void;
   addDefectDisabled?: boolean;
@@ -51,8 +51,9 @@ interface DefectReviewToolbarProps {
   onRematch: () => void;
 }
 
-// 统计筹码只显示数字字段；parts 是给下拉用的数组，不能出现在这里。
-type SummaryCountKey = Exclude<keyof DefectPhotoReviewSummary, "parts">;
+// 状态与匹配问题共用一个筛选器：主界面只保留一个“全部状态”下拉，避免把同一维度
+// 同时做成七个统计按钮和一组筛选控件。完整计数仍放进选项文案，业务能力没有缩水。
+type SummaryCountKey = Exclude<keyof DefectPhotoReviewSummary, "parts" | "defectTypes">;
 
 const STATUS_FILTERS: Array<{
   value: DefectReviewFilter;
@@ -78,25 +79,19 @@ const ISSUE_FILTERS: Array<{
   { value: "unmatched", label: "无匹配结果", count: "unmatched" },
 ];
 
+// 构件、标度和照片问题的主入口在右侧“待处理问题”面板。点进去以后，组合筛选框仍要
+// 如实显示当前条件；否则数据已经筛过，控件却还写着“待处理”，用户会误以为入口失效。
+const QUALITY_ISSUE_LABELS: Partial<Record<DefectReviewIssueFilter, string>> = {
+  component_unbound: "构件绑定待处理",
+  scale_pending: "标度信息待补充",
+  photo_pending: "照片关联或编号异常",
+};
+
 // 算不出来的计数一律显示它，而不是 0——"还不知道"和"确定是 0"必须看得出区别。
 const UNKNOWN_COUNT = "—";
 const PENDING_COUNT_HINT = "正在加载评定树规则，这项统计稍后给出。";
 const PENDING_MATCH_HINT = "正在匹配评定树病害，这项统计稍后给出。";
 
-function matchSummaryText(summary: DefectMatchSummary, at: Date | null | undefined): string {
-  // 多个候选、疑似组合和无匹配的条数就是上一排那三个统计筹码，这里不再抄一遍；
-  // 只留统计筹码说不出来的：这轮算了多少、自动定了多少、跳过多少。
-  const parts = [
-    `共 ${summary.processed} 条`,
-    `自动匹配 ${summary.auto_bound} 条`,
-    `跳过 ${summary.skipped} 条`,
-  ];
-  // 依赖缺失和失败是服务侧的异常，条数不为零时必须留在明面上，不能塞进悬浮提示。
-  if (summary.prerequisite_missing > 0) parts.push(`依赖缺失 ${summary.prerequisite_missing} 条`);
-  if (summary.failed > 0) parts.push(`失败 ${summary.failed} 条`);
-  if (at) parts.push(`${at.getHours()}:${String(at.getMinutes()).padStart(2, "0")} 更新`);
-  return parts.join(" · ");
-}
 
 export function DefectReviewToolbar({
   summary,
@@ -114,12 +109,12 @@ export function DefectReviewToolbar({
   matchCountsPending = false,
   partFilter,
   onPartFilterChange,
+  defectTypeFilter,
+  onDefectTypeFilterChange,
   rematchScopeLabel,
   rematchCount,
   rematching = false,
   matchError = null,
-  lastMatchSummary = null,
-  lastMatchAt = null,
   onAddDefect,
   addDefectDisabled = false,
   onFilterChange,
@@ -142,59 +137,24 @@ export function DefectReviewToolbar({
     onFilterChange("all");
     onIssueFilterChange(null);
     onSearchChange("");
+    onPartFilterChange(null);
+    onDefectTypeFilterChange(null);
+  };
+
+  const activeFilterValue = issueFilter ? `issue:${issueFilter}` : `status:${filter}`;
+  const activeQualityIssueLabel = issueFilter ? QUALITY_ISSUE_LABELS[issueFilter] : undefined;
+  const handleCombinedFilterChange = (value: string) => {
+    if (value.startsWith("issue:")) {
+      onFilterChange("all");
+      onIssueFilterChange(value.slice("issue:".length) as DefectReviewIssueFilter);
+      return;
+    }
+    onIssueFilterChange(null);
+    onFilterChange(value.slice("status:".length) as DefectReviewFilter);
   };
 
   return (
     <div className="defect-review-toolbar">
-      {/* 第一行：分区标题、七个统计筹码、上一轮匹配的一句话。
-          三个主动作原本也挤在这一行，合计要 1566px，窗口略窄就整块换行；
-          现在移到第二行与"全选可确认项"同排——那一行本来右侧就空着。 */}
-      <div className="defect-review-toolbar-primary">
-        <h2>病害与照片</h2>
-        <div className="defect-review-summary" aria-label="病害校对汇总">
-          {STATUS_FILTERS.map((item) => {
-            const unknown = Boolean(item.needsTreeRules && countsPending);
-            return (
-              <button
-                key={item.value}
-                type="button"
-                // 算不出来的筹码同时禁用：留着能点的话，点进去是一屏空列表，
-                // 那和"确实一条都没有"又长得一样，等于换个地方继续误导。
-                disabled={unknown}
-                title={unknown ? PENDING_COUNT_HINT : undefined}
-                className={filter === item.value && !issueFilter ? "active" : ""}
-                onClick={() => { onIssueFilterChange(null); onFilterChange(item.value); }}
-              >
-                <span>{item.label}</span>
-                <strong>{unknown ? UNKNOWN_COUNT : summary[item.count]}</strong>
-              </button>
-            );
-          })}
-          <span className="defect-review-summary-divider" aria-hidden="true" />
-          {ISSUE_FILTERS.map((item) => {
-            const unknown = Boolean(matchCountsPending);
-            return (
-              <button
-                key={item.value}
-                type="button"
-                disabled={unknown}
-                title={unknown ? PENDING_MATCH_HINT : undefined}
-                className={`defect-review-issue-stat ${issueFilter === item.value ? "active" : ""}`}
-                onClick={() => {
-                  onFilterChange("all");
-                  onIssueFilterChange(issueFilter === item.value ? null : item.value);
-                }}
-              >
-                <span>{item.label}</span>
-                <strong>{unknown ? UNKNOWN_COUNT : summary[item.count]}</strong>
-              </button>
-            );
-          })}
-        </div>
-        {lastMatchSummary ? (
-          <p className="defect-match-summary">{matchSummaryText(lastMatchSummary, lastMatchAt)}</p>
-        ) : null}
-      </div>
       {matchError ? (
         <p className="form-error" role="alert">
           {matchError}
@@ -215,9 +175,44 @@ export function DefectReviewToolbar({
             aria-pressed={viewMode === "groups"}
             onClick={() => onViewModeChange("groups")}
           >
-            问题分组（{issueGroupCount}）
+            问题分组 <span>{issueGroupCount}</span>
           </button>
         </div>
+        <label
+          className="defect-review-select-all"
+          title={`选择当前筛选结果中可批量确认的 ${selectableCount} 条病害`}
+        >
+          <input
+            ref={selectAllRef}
+            type="checkbox"
+            checked={allSelectableSelected}
+            disabled={disabled || selectableCount === 0}
+            onChange={onToggleSelectAll}
+          />
+          <span>全选可确认项（{selectableCount}）</span>
+        </label>
+        <button
+          type="button"
+          className="defect-batch-confirm-button"
+          disabled={disabled || selectedCount === 0}
+          onClick={onBatchConfirm}
+        >
+          批量确认{selectedCount > 0 ? `（${selectedCount}）` : ""}
+        </button>
+        {/* 空白区域中的病害类型筛选：放在批量操作与搜索之间，保留右侧原有控件宽度。 */}
+        <select
+          className="defect-review-type-filter"
+          aria-label="按病害类型筛选"
+          value={defectTypeFilter ?? ""}
+          onChange={(event) => onDefectTypeFilterChange(event.target.value || null)}
+        >
+          <option value="">全部病害类型（{summary.all}）</option>
+          {summary.defectTypes.map((item) => (
+            <option key={item.name} value={item.name}>
+              {item.name}（{item.count}）
+            </option>
+          ))}
+        </select>
         <input
           className="defect-review-search"
           aria-label="搜索病害"
@@ -240,44 +235,49 @@ export function DefectReviewToolbar({
             </option>
           ))}
         </select>
-        <button type="button" onClick={clearFilters}>清除筛选</button>
-        {/* 全选是批量确认的前置动作，右对齐到与它同一条竖线上。 */}
-        <label
-          className="defect-review-select-all"
-          title={`选择当前筛选结果中可批量确认的 ${selectableCount} 条病害`}
+        <select
+          aria-label="按状态筛选"
+          value={activeFilterValue}
+          onChange={(event) => handleCombinedFilterChange(event.target.value)}
         >
-          <input
-            ref={selectAllRef}
-            type="checkbox"
-            checked={allSelectableSelected}
-            disabled={disabled || selectableCount === 0}
-            onChange={onToggleSelectAll}
-          />
-          {/* 文案短一截是为了让这一行在更窄的宽度下仍放得下三个主动作；
-              完整说明在上面的 title 里。 */}
-          <span>全选可确认项（{selectableCount}）</span>
-        </label>
-        {/* 三个主动作跟在"全选"后面：全选是批量确认的前置动作，两者相邻才顺。 */}
+          <optgroup label="处理状态">
+            {STATUS_FILTERS.map((item) => {
+              const unknown = Boolean(item.needsTreeRules && countsPending);
+              return (
+                <option key={item.value} value={`status:${item.value}`} disabled={unknown}>
+                  {item.value === "all" ? "全部状态" : item.label}（{unknown ? UNKNOWN_COUNT : summary[item.count]}）
+                </option>
+              );
+            })}
+          </optgroup>
+          <optgroup label="匹配问题">
+            {ISSUE_FILTERS.map((item) => (
+              <option key={item.value} value={`issue:${item.value}`} disabled={matchCountsPending}>
+                {item.label}（{matchCountsPending ? UNKNOWN_COUNT : summary[item.count]}）
+              </option>
+            ))}
+          </optgroup>
+          {activeQualityIssueLabel ? (
+            <optgroup label="当前校对问题">
+              <option value={`issue:${issueFilter}`}>{activeQualityIssueLabel}</option>
+            </optgroup>
+          ) : null}
+        </select>
+        {filter !== "all" || issueFilter || search || partFilter || defectTypeFilter ? (
+          <button type="button" onClick={clearFilters}>清除筛选</button>
+        ) : null}
         <div className="defect-review-toolbar-actions">
           {onAddDefect ? (
             <button type="button" disabled={addDefectDisabled} onClick={onAddDefect}>新增病害</button>
           ) : null}
           <button
             type="button"
+            aria-label="重新匹配"
+            className="defect-rematch-button"
             disabled={disabled || rematching}
             title={`将对${rematchScopeLabel}的 ${rematchCount} 条未确认病害重新匹配`}
             onClick={onRematch}
-          >
-            {rematching ? "匹配中…" : `重新匹配（${rematchScopeLabel} ${rematchCount}）`}
-          </button>
-          <button
-            type="button"
-            className="review-action-primary"
-            disabled={disabled || selectedCount === 0}
-            onClick={onBatchConfirm}
-          >
-            批量确认（{selectedCount}）
-          </button>
+          >{rematching ? "匹配中…" : "重新匹配"}</button>
         </div>
       </div>
     </div>

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Pagination } from "antd";
+import { PictureOutlined } from "@ant-design/icons";
 
 import { photoContentUrl } from "../../api/reviewApi";
 import type { DefectReviewRow } from "../defectPhotoReviewModel";
@@ -6,7 +8,7 @@ import { reviewTargetId } from "../reviewNavigation";
 import { ratingTreeDisplayLabel as nodeLabel } from "../../rating-tree/ratingTreeLabels";
 import { displayDefectLocation } from "./displayHelpers";
 
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 20;
 
 /// 已定评定树时给规范名（带条款号），未定时返回 null 由调用方兜底。
 function ratingTreeDisplayLabel(node: DefectReviewRow["ratingTreeNode"]): string | null {
@@ -43,24 +45,41 @@ export function DefectQuickReviewList({
   onPageChange,
   compact = false,
 }: DefectQuickReviewListProps) {
-  const [page, setPage] = useState(0);
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount - 1);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
 
   useEffect(() => {
     if (!activeCandidateId) return;
     const index = rows.findIndex((row) => row.candidateId === activeCandidateId);
-    if (index >= 0) setPage(Math.floor(index / PAGE_SIZE));
-  }, [activeCandidateId, rows]);
+    if (index >= 0) setPage(Math.floor(index / pageSize) + 1);
+  }, [activeCandidateId, pageSize, rows]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount));
+  }, [pageCount]);
 
   const pageRows = useMemo(
-    () => rows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE),
-    [currentPage, rows],
+    () => rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [currentPage, pageSize, rows],
   );
 
   return (
     <div className={`defect-quick-review ${compact ? "compact" : ""}`}>
+      {compact ? <h3 className="defect-quick-review-title">病害档案</h3> : null}
       {rows.length === 0 ? <p className="empty-review-result">当前筛选下没有病害。</p> : null}
+      {rows.length > 0 && !compact ? (
+        <div className="defect-review-table-head" aria-hidden="true">
+          <span />
+          <span>构件与位置</span>
+          <span>病害类型</span>
+          <span>标度</span>
+          <span>照片</span>
+          <span>状态</span>
+          <span>操作</span>
+        </div>
+      ) : null}
       {pageRows.map((row) => (
         <div
           id={reviewTargetId("defect", row.candidateId)}
@@ -90,11 +109,8 @@ export function DefectQuickReviewList({
             <span className="defect-quick-defect">
               <strong>{ratingTreeDisplayLabel(row.ratingTreeNode) ?? "未确定规范病害"}</strong>
               {sourceWording(row) ? <small>原文：{sourceWording(row)}</small> : null}
-              <small>标度 {row.defect.defect_scale ?? "未填"}</small>
             </span>
-            {/* 每行只留一个徽标：已忽略/已确认这类终态直接说终态，其余说匹配结论。
-                "可批量确认"由行首那个可勾选的复选框表达，不必再占一个徽标位。 */}
-            <span className={`defect-quick-match ${row.matchState}`}>{row.matchLabel}</span>
+            <span className="defect-quick-scale">{row.defect.defect_scale ? `${row.defect.defect_scale}级` : "—"}</span>
             <span className="defect-quick-problems">
               {row.problems.slice(0, 2).map((problem) => (
                 <small key={problem.code}>{problem.message}</small>
@@ -117,16 +133,52 @@ export function DefectQuickReviewList({
                 />
               </button>
             ))}
+            {row.photos.length === 0 ? <span className="defect-quick-photo-empty" aria-hidden="true"><PictureOutlined /></span> : null}
             <span>{row.photos.length} 张</span>
           </div>
+          {/* 匹配文案带规范病害名，窄栏会省略；完整内容交给悬停。 */}
+          {(() => {
+            const statusText = row.defect.group_review_status === "已确认"
+              ? "已确认"
+              : row.status === "ignored"
+                ? "已忽略"
+                : row.matchLabel;
+            return (
+              <span
+                className={`defect-quick-status ${row.defect.group_review_status === "已确认" ? "confirmed" : row.status}`}
+                title={statusText}
+              >
+                {statusText}
+              </span>
+            );
+          })()}
+          <span className="defect-quick-actions">
+            <button type="button" onClick={() => onOpen(row.candidateId)}>查看</button>
+            <i aria-hidden="true" />
+            <button type="button" onClick={() => onOpen(row.candidateId)}>编辑</button>
+          </span>
         </div>
       ))}
-      {pageCount > 1 ? (
-        <div className="defect-pagination">
-          <button type="button" disabled={currentPage === 0} onClick={() => { onPageChange?.(); setPage(currentPage - 1); }}>上一页</button>
-          <span>第 {currentPage + 1} / {pageCount} 页（共 {rows.length} 条）</span>
-          <button type="button" disabled={currentPage + 1 >= pageCount} onClick={() => { onPageChange?.(); setPage(currentPage + 1); }}>下一页</button>
-        </div>
+      {rows.length > 0 ? (
+        /* 拆分态下这一栏只有 ~350px：页码 + 每页条数 + 跳页 + 总数一行放不下，
+           溢出的宽度会在列表底部拉出一条横向滚动条。窄栏退成简洁分页。 */
+        <Pagination
+          className="defect-pagination"
+          current={currentPage}
+          pageSize={pageSize}
+          pageSizeOptions={[20, 50, 100]}
+          total={rows.length}
+          size={compact ? "small" : undefined}
+          simple={compact ? { readOnly: true } : undefined}
+          showSizeChanger={!compact}
+          showQuickJumper={!compact}
+          showTotal={compact ? undefined : (total) => `共 ${total} 条`}
+          onChange={(nextPage, nextPageSize) => {
+            onPageChange?.();
+            setPageSize(nextPageSize);
+            setPage(nextPageSize === pageSize ? nextPage : 1);
+          }}
+        />
       ) : null}
     </div>
   );

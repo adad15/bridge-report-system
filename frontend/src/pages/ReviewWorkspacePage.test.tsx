@@ -270,12 +270,14 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     vi.useRealTimers();
   });
 
-  it("keeps the edit-lock notice in its own row above the review body", async () => {
+  it("places the edit-lock notice inline after the details control", async () => {
     await renderEditableReview();
 
     const notice = screen.getByText("你正在编辑此导入记录。").closest(".review-edit-lock-banner");
-    expect(notice?.parentElement).toHaveClass("review-workspace-notices");
-    expect(notice?.parentElement?.nextElementSibling).toHaveClass("review-body");
+    const inlineNotice = notice?.closest(".review-header-inline-notice");
+    expect(inlineNotice).toBeInTheDocument();
+    expect(inlineNotice?.previousElementSibling).toHaveClass("review-header-details-toggle");
+    expect(inlineNotice?.closest(".review-header")).toBeInTheDocument();
   });
 
   it("clears a stale successful preflight message when confirmation fails", async () => {
@@ -636,7 +638,6 @@ function confirmedAssessmentResponse(): ConfirmedAssessmentResponse {
       explanation: "入库时写下的评定结论",
       structure_parts: [],
       triggered_controls: [],
-      trace: [],
     },
     assessment_run_id: "run-1",
     formal_revision_number: 1,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { ReviewResponse } from "../../api/reviewApi";
 import type { BridgeAnnualInspectionData } from "../../contracts/annualInspection";
@@ -8,6 +8,7 @@ interface OverviewHeaderProps {
   response: ReviewResponse;
   draft: BridgeAnnualInspectionData;
   counts: ReviewCounts;
+  statusNotice?: ReactNode;
 }
 
 function statusBadgeClass(importStatus: string): string {
@@ -20,7 +21,7 @@ function statusBadgeClass(importStatus: string): string {
 // 状态徽章 + 三个进度徽章，其余字段和顶层解析 warnings/errors 收进"详情"折叠区。
 // 计数用 counts（来自实时 draft 的 buildStatistics），不用 response.statistics
 // （那是拉取时的快照，编辑后会过期）。
-export function OverviewHeader({ response, draft, counts }: OverviewHeaderProps) {
+export function OverviewHeader({ response, draft, counts, statusNotice }: OverviewHeaderProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const { bridge, inspection_year, import_record } = response;
   // 折叠后解析问题不能被埋掉：详情按钮上挂红点计数提醒用户展开查看。
@@ -43,6 +44,7 @@ export function OverviewHeader({ response, draft, counts }: OverviewHeaderProps)
           详情 {detailsOpen ? "▴" : "▾"}
           {issueCount > 0 ? <span className="review-header-issue-dot">{issueCount}</span> : null}
         </button>
+        {statusNotice ? <div className="review-header-inline-notice">{statusNotice}</div> : null}
         <span className="review-header-spacer" />
         <span className="review-chip review-chip-warning">
           待确认 <b>{counts.pending_count}</b>

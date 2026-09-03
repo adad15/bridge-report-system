@@ -79,6 +79,8 @@ export interface DefectReviewRow {
 export interface DefectPhotoReviewSummary {
   /** 各部件的条数，按走查顺序。未绑定构件的归在 UNBOUND_PART_FILTER 名下。 */
   parts: Array<{ name: string; count: number }>;
+  /** 导入数据中的病害类型及条数，按当前列表首次出现顺序。 */
+  defectTypes: Array<{ name: string; count: number }>;
   all: number;
   /** 待处理 = 既不能批量确认也还没确认的记录。 */
   pending: number;
@@ -121,6 +123,8 @@ export interface DefectPhotoReviewModelInput {
   componentPart?: Map<string, string>;
   /** 只看某个部件；UNBOUND_PART_FILTER 表示只看还没绑定构件的。 */
   partFilter?: string | null;
+  /** 只看导入数据中 defect_type 等于指定值的病害。 */
+  defectTypeFilter?: string | null;
   assessmentIssues: AssessmentIssue[];
   /** 后端批量匹配的临时结果，按 candidate_id 索引；不进入正式病害档案。 */
   matchResults?: ReadonlyMap<string, DefectMatchResult>;
@@ -405,6 +409,7 @@ function analyzeDefect(
 
 // 还没绑定构件的病害不属于任何部件，但同样要能单独筛出来。
 export const UNBOUND_PART_FILTER = "__unbound__";
+export const MISSING_DEFECT_TYPE_FILTER = "未填写病害类型";
 
 // 默认优先级：先把必须人工判断的推到最前，可批量确认和已确认沉底。
 const SORT_RANK: Record<DefectMatchState, number> = {
@@ -529,11 +534,34 @@ export function buildDefectPhotoReviewModel(
   // 没绑定构件的排在最后：它们还不属于任何部件，插在中间会打断走查。顶部那几个
   // 统计页签本身就是筛选，要集中处理它们点一下就行，不必靠排序顶上来。
   const componentOrder = input.componentOrder;
+  const componentIdsOf = (row: DefectReviewRow): string[] => {
+    const resolved = resolutionOf(resolution, row.defect.candidate_id);
+    // 区间和多选组没有唯一 bridgeComponentId，但 componentIds 里的每一件都已绑定。
+    // 单构件的旧夹具和兼容读模型可能只给单一 id，因此保留它作为回退。
+    return resolved.componentIds.length > 0
+      ? resolved.componentIds
+      : resolved.bridgeComponentId ? [resolved.bridgeComponentId] : [];
+  };
+  const partKeysOf = (row: DefectReviewRow): string[] => {
+    const names = new Set(
+      componentIdsOf(row)
+        .map((componentId) => input.componentPart?.get(componentId))
+        .filter((name): name is string => Boolean(name)),
+    );
+    return names.size > 0 ? [...names] : [UNBOUND_PART_FILTER];
+  };
   const partRank = (row: DefectReviewRow): number => {
     if (!componentOrder) return 0;  // 顺序还没取到：整体退回优先级排序
-    const componentId = resolutionOf(resolution, row.defect.candidate_id).bridgeComponentId;
-    if (!componentId) return Number.MAX_SAFE_INTEGER;
-    return componentOrder.get(componentId) ?? Number.MAX_SAFE_INTEGER;
+    const ranks = componentIdsOf(row)
+      .map((componentId) => componentOrder.get(componentId))
+      .filter((rank): rank is number => rank !== undefined);
+    return ranks.length > 0 ? Math.min(...ranks) : Number.MAX_SAFE_INTEGER;
+  };
+  const defectTypeOf = (row: DefectReviewRow): string => {
+    // 下拉框只反映导入后的真实 defect_type，不在界面层重新解释评定树节点或匹配状态。
+    // 来源导入器负责把明确的 judgeIndex_other 写成“其它病害”。
+    const sourceName = row.defect.defect_type?.trim() ?? "";
+    return sourceName || MISSING_DEFECT_TYPE_FILTER;
   };
   const ordered = allRows
     .map((row, index) => ({ row, index }))
@@ -547,14 +575,17 @@ export function buildDefectPhotoReviewModel(
   // 各部件多少条，按走查顺序给（ordered 已经排好）。下拉直接照它渲染：
   // 只列这份草稿里真的出现过的部件，空部件不占位。
   const partCounts = new Map<string, number>();
+  const defectTypeCounts = new Map<string, number>();
   for (const row of ordered) {
-    const componentId = resolutionOf(resolution, row.defect.candidate_id).bridgeComponentId;
-    const name = componentId ? input.componentPart?.get(componentId) : undefined;
-    const key = name ?? UNBOUND_PART_FILTER;
-    partCounts.set(key, (partCounts.get(key) ?? 0) + 1);
+    for (const key of partKeysOf(row)) {
+      partCounts.set(key, (partCounts.get(key) ?? 0) + 1);
+    }
+    const defectType = defectTypeOf(row);
+    defectTypeCounts.set(defectType, (defectTypeCounts.get(defectType) ?? 0) + 1);
   }
   const summary = {
     parts: [...partCounts.entries()].map(([name, count]) => ({ name, count })),
+    defectTypes: [...defectTypeCounts.entries()].map(([name, count]) => ({ name, count })),
     all: allRows.length,
     pending: allRows.filter((row) => row.status === "needs_attention").length,
     batchable: allRows.filter((row) => row.status === "batchable").length,
@@ -577,9 +608,10 @@ export function buildDefectPhotoReviewModel(
       return false;
     }
     if (input.partFilter) {
-      const componentId = resolutionOf(resolution, row.defect.candidate_id).bridgeComponentId;
-      const name = componentId ? input.componentPart?.get(componentId) : undefined;
-      if ((name ?? UNBOUND_PART_FILTER) !== input.partFilter) return false;
+      if (!partKeysOf(row).includes(input.partFilter)) return false;
+    }
+    if (input.defectTypeFilter && defectTypeOf(row) !== input.defectTypeFilter) {
+      return false;
     }
     if (!search) return true;
     const haystack = [

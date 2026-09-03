@@ -138,202 +138,6 @@ body {
   border-color: #b9c4d0;
 }
 
-/* 登录页：单卡片整屏居中，表单纵向排布。未登录时不渲染 .app-header，
-   外壳自己就是整个 .app-frame，居中即整屏居中。 */
-.app-shell:has(> .app-content > .login-panel) {
-  align-items: center;
-  background: linear-gradient(180deg, #e9eef7 0%, #f3f5f8 340px);
-}
-
-/* padding 和圆角要压 .status-panel 的同名声明，而 .login-panel 写在它前面，
-   同权重时后来者赢——所以这里用两个类把权重提上去。 */
-.status-panel.login-panel {
-  max-width: 420px;
-  margin: 0 auto;
-  padding: 30px 28px 22px;
-  border-radius: 12px;
-}
-
-.login-brand {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.login-brand-badge {
-  flex: none;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: #e8effc;
-  color: #1d49ad;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* .status-panel h1 给的 24px / margin-bottom:24px 是给内容页标题定的，套在这里
-   会把品牌行和副标题撑散。 */
-.login-panel h1 {
-  margin: 0;
-  font-size: 20px;
-  line-height: 1.35;
-}
-
-.login-brand-sub {
-  margin: 3px 0 0;
-  font-size: 13px;
-  color: #5b6674;
-}
-
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 22px;
-}
-
-.login-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.login-field label {
-  font-weight: 600;
-  font-size: 13px;
-  color: #18202a;
-}
-
-/* 图标和"显示密码"按钮压在输入框内侧：外框负责边框和焦点环，input 自己去边框，
-   否则焦点态会画出两层框。 */
-.login-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #d9e0e8;
-  border-radius: 6px;
-  background: #ffffff;
-  padding: 0 10px;
-}
-
-.login-input-wrap:hover {
-  border-color: #b9c4d0;
-}
-
-.login-input-wrap:focus-within {
-  border-color: #2456c9;
-  box-shadow: 0 0 0 3px rgba(36, 86, 201, 0.14);
-}
-
-.login-field-icon {
-  flex: none;
-  color: #8a97a6;
-}
-
-.login-input-wrap input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: none;
-  padding: 9px 0;
-  font: inherit;
-  font-size: 14px;
-  color: #18202a;
-}
-
-.login-password-toggle {
-  flex: none;
-  display: flex;
-  align-items: center;
-  border: none;
-  background: none;
-  padding: 2px;
-  color: #8a97a6;
-  cursor: pointer;
-}
-
-.login-password-toggle:hover:not(:disabled) {
-  color: #2456c9;
-}
-
-.login-password-toggle:focus-visible {
-  outline: 2px solid #2456c9;
-  outline-offset: 1px;
-  border-radius: 4px;
-}
-
-.login-caps-hint {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  align-self: flex-start;
-  margin: 2px 0 0;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: #faeeda;
-  color: #854f0b;
-  font-size: 12px;
-}
-
-.login-error {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0;
-  padding: 8px 10px;
-  border: 1px solid #f0b5b5;
-  border-radius: 6px;
-  background: #fdeced;
-  color: #a32d2d;
-  font-size: 13px;
-}
-
-.login-error svg {
-  flex: none;
-}
-
-/* 这颗按钮原先挂的是 .review-action-primary，那时该类的蓝色规则都带父容器前缀，
-   登录页一条都命中不了，于是永远是浏览器默认灰底——可用态和禁用态长得一模一样，
-   所以改成了登录页自己的类。前缀限制现已取消（见 .review-action-primary），这里
-   保留独立类是因为登录页的间距和内距本来就跟评审页的按钮区不同。 */
-.login-submit {
-  margin-top: 4px;
-  border: 1px solid #2456c9;
-  border-radius: 6px;
-  background: #2456c9;
-  color: #ffffff;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  padding: 9px 12px;
-  cursor: pointer;
-}
-
-.login-submit:not(:disabled):hover {
-  background: #1d49ad;
-  border-color: #1d49ad;
-}
-
-.login-submit:disabled {
-  background: #a9bce7;
-  border-color: #a9bce7;
-  cursor: not-allowed;
-}
-
-.login-submit:focus-visible {
-  outline: 2px solid #2456c9;
-  outline-offset: 2px;
-}
-
-.login-foot {
-  margin: 18px 0 0;
-  text-align: center;
-  font-size: 12px;
-  color: #8a97a6;
-}
-
 .status-panel {
   width: 100%;
   box-sizing: border-box;
@@ -511,6 +315,7 @@ body {
 
 .review-workspace {
   flex: 1;
+  height: 100%;
   min-height: 0;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
@@ -584,6 +389,25 @@ body {
 
 .review-header-details-toggle:hover {
   background: #eaf0fd;
+}
+
+.review-header-inline-notice {
+  min-width: 0;
+  font-size: 13px;
+}
+
+.review-header-inline-notice .review-edit-lock-banner {
+  gap: 10px;
+  max-width: 100%;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.review-header-inline-notice .review-reopen-meta {
+  color: inherit;
+  opacity: 0.72;
 }
 
 .review-header-issue-dot {
@@ -1063,6 +887,8 @@ body {
   .review-workspace {
     display: flex;
     flex-direction: column;
+    height: auto;
+    min-height: 100%;
   }
 
   .review-main {
@@ -1115,6 +941,482 @@ body {
   }
 }
 
+/* ── 病害精细维护：最终确认渲染稿 ────────────────────────────────── */
+.defect-photo-section {
+  gap: 10px;
+}
+
+.defect-overview-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.defect-metric-card {
+  min-height: 80px;
+  height: 80px;
+  gap: 12px;
+  padding: 11px 18px;
+  border-radius: 9px;
+  box-shadow: 0 4px 14px rgb(28 53 84 / 4%);
+}
+
+.defect-metric-icon {
+  flex-basis: 42px;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  font-size: 23px;
+}
+
+.defect-metric-card small {
+  font-size: 12px;
+}
+
+.defect-metric-card strong {
+  font-size: 25px;
+}
+
+.defect-review-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.review-main .defect-review-toolbar {
+  position: relative;
+  min-height: 66px;
+  margin: 0;
+  padding: 0 14px;
+  border-bottom: 1px solid #dbe4ef;
+}
+
+.defect-review-filters {
+  min-width: 0;
+  min-height: 56px;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.defect-review-mode button {
+  min-height: 42px;
+  padding-inline: 12px;
+}
+
+.defect-review-mode button[aria-pressed="true"]::after {
+  bottom: -8px;
+}
+
+.defect-review-filters > .defect-review-select-all {
+  flex: 0 0 auto;
+  min-height: 32px;
+  margin-left: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+}
+
+.defect-review-filters > .defect-batch-confirm-button {
+  flex: 0 0 auto;
+}
+
+.defect-review-filters .defect-review-search {
+  flex: 1 1 230px;
+  min-width: 190px;
+  max-width: 300px;
+  margin-left: auto;
+}
+
+.defect-review-filters select {
+  flex: 0 1 160px;
+  min-width: 118px;
+  max-width: 180px;
+}
+
+.defect-review-toolbar-actions {
+  flex: 0 0 auto;
+}
+
+.defect-match-summary {
+  position: absolute;
+  right: 16px;
+  bottom: 3px;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.defect-review-workspace {
+  height: clamp(520px, calc(100vh - 370px), 700px);
+}
+
+.defect-review-workspace.detail-open {
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+
+.defect-review-workspace.detail-open .defect-review-list-pane {
+  flex-basis: clamp(330px, calc(100% - var(--defect-detail-width)), 430px);
+  background: #fff;
+}
+
+.defect-detail-resize-handle {
+  flex-basis: 6px;
+  border: 0;
+  background: linear-gradient(to right, transparent 2px, #dbe4ef 2px, #dbe4ef 3px, transparent 3px);
+}
+
+.defect-detail-resize-handle::after {
+  display: none;
+}
+
+.defect-quick-review.compact {
+  gap: 0;
+  padding: 0;
+}
+
+.defect-quick-review-title {
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  margin: 0;
+  padding: 0 16px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #17233b;
+  font-size: 15px;
+}
+
+.defect-quick-review.compact .defect-quick-row {
+  grid-template-columns: 30px minmax(0, 1fr) 76px 68px;
+  min-height: 58px;
+  border-bottom: 1px solid #e7ecf2;
+  background: #fff;
+}
+
+.defect-quick-review.compact .defect-quick-row:hover {
+  background: #f8fbff;
+}
+
+.defect-quick-review.compact .defect-quick-row.active {
+  border-color: #dbeafe;
+  background: #eff6ff;
+  box-shadow: inset 3px 0 #2f5bea;
+}
+
+.defect-quick-review.compact .defect-quick-select {
+  background: transparent;
+}
+
+.defect-quick-review.compact .defect-quick-main {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 8px 6px;
+}
+
+.defect-quick-review.compact .defect-quick-component strong {
+  color: #17233b;
+  font-size: 13px;
+}
+
+.defect-quick-review.compact .defect-quick-component small {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.defect-quick-review.compact .defect-quick-photos {
+  grid-column: 3;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 7px 4px;
+  background: transparent;
+}
+
+.defect-quick-review.compact .defect-quick-photos img {
+  width: 28px;
+  height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+}
+
+.defect-quick-review.compact .defect-quick-photos > span:last-child {
+  padding: 0;
+  background: transparent;
+  color: #2456c9;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.defect-quick-photo-empty {
+  display: grid;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  padding: 0 !important;
+  place-items: center;
+  border-radius: 4px;
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+  font-size: 13px;
+}
+
+.defect-quick-review.compact .defect-quick-actions,
+.defect-quick-review.compact .defect-quick-scale {
+  display: none;
+}
+
+.defect-quick-review.compact .defect-quick-status {
+  display: inline-flex;
+  grid-column: 4;
+  justify-self: center;
+  align-self: center;
+  padding: 3px 7px;
+  font-size: 11px;
+}
+
+.defect-quick-review.compact > .defect-pagination {
+  padding: 8px 10px;
+}
+
+.defect-detail-pane .defect-detail-editor {
+  display: flex;
+  min-height: 100%;
+  padding: 14px 16px 16px;
+  flex-direction: column;
+}
+
+.defect-detail-heading {
+  flex: 0 0 auto;
+}
+
+.defect-detail-body {
+  flex: 1 1 auto;
+  gap: 16px 22px;
+  margin: 12px 0 14px;
+}
+
+@container (min-width: 900px) {
+  .defect-detail-body {
+    grid-template-columns: minmax(390px, 1.08fr) minmax(350px, .92fr);
+  }
+}
+
+.defect-rating-tree-result.resolved {
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.defect-rating-tree-result.resolved > select {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  background: transparent;
+  color: #17233b;
+  font-weight: 600;
+}
+
+.defect-detail-fields {
+  gap: 9px 12px;
+  margin-top: 10px;
+}
+
+.defect-scale-guidance,
+.defect-completeness {
+  padding: 9px 10px;
+}
+
+.defect-completeness {
+  margin-top: 12px;
+}
+
+.defect-completeness ul {
+  gap: 6px;
+}
+
+.defect-detail-actions {
+  position: sticky;
+  bottom: -16px;
+  flex: 0 0 auto;
+  justify-content: center;
+  gap: 18px;
+  margin: auto -16px -16px;
+  padding: 12px 16px;
+}
+
+.defect-detail-actions button {
+  min-width: 130px;
+}
+
+.defect-detail-actions button:nth-child(2) {
+  border-color: #f0a15f;
+  color: #ea580c;
+}
+
+.defect-detail-actions .review-action-primary {
+  min-width: 180px;
+}
+
+.defect-photo-panel {
+  gap: 8px;
+}
+
+.defect-photo-panel-heading {
+  min-height: 28px;
+}
+
+.defect-photo-panel-heading h4 {
+  color: #17233b;
+  font-size: 15px;
+}
+
+.defect-photo-stage {
+  overflow: hidden;
+  padding: 0;
+  border-radius: 7px;
+}
+
+.defect-photo-panel .defect-photo-stage img {
+  height: clamp(200px, 23vh, 250px);
+  border-radius: 0;
+  object-fit: cover;
+}
+
+.defect-photo-stage .photo-relation-caption {
+  min-height: 30px;
+  margin: 0;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.defect-photo-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.defect-photo-card {
+  position: relative;
+  width: auto;
+  min-width: 0;
+  padding: 3px;
+  border-radius: 6px;
+}
+
+.defect-photo-card-main,
+.defect-detail-editor .defect-photo-card-main {
+  width: 100%;
+  padding: 0;
+}
+
+.defect-photo-card-main img,
+.defect-photo-card-empty {
+  width: 100%;
+  height: 66px;
+  border-radius: 4px;
+}
+
+.defect-photo-card-main > strong,
+.defect-photo-card-main > small {
+  display: none;
+}
+
+.defect-photo-card-actions {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  left: 4px;
+  display: none;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 4px;
+  background: rgb(15 23 42 / 72%);
+}
+
+.defect-photo-card:hover .defect-photo-card-actions,
+.defect-photo-card:focus-within .defect-photo-card-actions {
+  display: flex;
+}
+
+.defect-photo-card-actions button {
+  height: 22px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #fff !important;
+  font-size: 10px;
+}
+
+.defect-photo-panel-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.defect-photo-panel-actions > button,
+.defect-photo-panel-actions > a,
+.defect-photo-original-disabled {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #d9e0e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #2456c9;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.defect-photo-original-disabled {
+  color: #94a3b8;
+}
+
+.defect-history-card {
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.defect-history-list li {
+  min-height: 40px;
+}
+
+.defect-history-empty,
+.defect-history-trend {
+  padding: 6px 8px;
+}
+
+@media (max-width: 1100px) {
+  .defect-overview-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .defect-review-filters {
+    min-height: auto;
+    padding: 10px 0 18px;
+    flex-wrap: wrap;
+  }
+
+  .defect-review-filters .defect-review-search {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .defect-overview-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
 .review-action-bar button,
 .defect-pagination button {
   font: inherit;
@@ -1139,6 +1441,11 @@ body {
 
 /* ---------- 底部操作栏 ---------- */
 .review-action-bar {
+  /* 病害详情的底栏是 sticky + z-index:1；本栏不定位就只有 auto，定位元素的
+     z-index:1 恒压过 auto，于是入库前检查明细会被那三个按钮盖住。这里建一个
+     更高的层叠上下文，把浮层一并抬上来。 */
+  position: relative;
+  z-index: 30;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1149,9 +1456,19 @@ body {
   box-shadow: 0 -2px 8px rgba(24, 32, 42, 0.06);
 }
 
+/* 右侧收口动作组：margin-left:auto 保证它永远贴右——中间的检查结论或未保存提示
+   缺席时也不会滑回左边挨着「返回」。 */
+.review-action-bar-right {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
 .review-action-dirty {
-  flex: 1;
-  min-width: 40px;
+  flex: 0 1 auto;
+  min-width: 0;
   text-align: center;
   color: #8a6d1c;
   font-size: 13px;
@@ -1253,6 +1570,107 @@ body {
 
 .review-dock-body .review-warning-list {
   margin-top: 8px;
+}
+
+/* 入库前检查的结论坐在底部操作栏中部——它跟右侧「入库前检查」「确认年度事实入库」
+   两个按钮是同一件事，另起一行反而要来回找。明细浮在本栏上方，不顶高操作栏。 */
+.review-preflight-slot {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+}
+
+.review-preflight-detail {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 10px 16px;
+  border: 1px solid #e7ecf2;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgb(24 32 42 / 12%);
+  text-align: left;
+}
+
+.review-preflight-detail .review-warning-list {
+  margin: 0;
+}
+
+/* 结论做成一枚胶囊：语义色只落在浅底、细描边和图标上，正文仍是常规深色，
+   免得整句话被染成警告色而盖过右侧真正的操作按钮。 */
+.review-preflight-line {
+  display: inline-flex;
+  box-sizing: border-box;
+  align-items: center;
+  height: 32px;
+  gap: 8px;
+  margin: 0;
+  padding: 0 6px 0 12px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  font-size: 13px;
+}
+
+.is-block .review-preflight-line {
+  border-color: #ffe58f;
+  background: #fffbe6;
+}
+
+.is-pass .review-preflight-line {
+  border-color: #b7eb8f;
+  background: #f6ffed;
+}
+
+.review-preflight-line b {
+  color: #17233b;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.review-preflight-icon {
+  display: inline-flex;
+  align-items: center;
+  color: #faad14;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.is-pass .review-preflight-icon {
+  color: #52c41a;
+}
+
+/* 展开键是个 20px 的圆——原来是一枚裸箭头，既没有可点范围也没对齐基线。
+   必须带上 .review-action-bar：同文件的 `.review-action-bar button` 是 (0,1,1)，
+   单靠类名 (0,1,0) 压不住它的 padding / border / border-radius。 */
+.review-action-bar .review-preflight-toggle {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 4%);
+  color: rgb(0 0 0 / 45%);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.review-action-bar .review-preflight-toggle:hover {
+  background: rgb(0 0 0 / 8%);
+  color: rgb(0 0 0 / 65%);
+}
+
+.review-action-bar .review-preflight-toggle:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 1px;
 }
 
 .review-dock-close,
@@ -3405,13 +3823,22 @@ body {
    剩余空间，而已处理行默认收起，不会留下大片空白。 */
 .component-binding-workspace {
   display: grid;
-  gap: 0.9rem;
+  gap: 16px;
 }
 
 /* 页头吸顶：数百行滚动时筛选按钮始终可用。高度用变量给分组表头做偏移，
    否则两层 sticky 都停在 top:0，分组表头会盖住页头。 */
 .component-binding-workspace {
-  --binding-heading-height: 3.25rem;
+  --binding-heading-height: 5.25rem;
+}
+
+.binding-work-card {
+  min-width: 0;
+  padding: 0 14px 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 7px 22px rgba(36, 61, 109, 0.07);
 }
 
 .binding-heading {
@@ -3425,49 +3852,105 @@ body {
   flex-wrap: wrap;
   min-height: var(--binding-heading-height);
   box-sizing: border-box;
-  padding: 0.35rem 0;
+  padding: 12px 2px;
   /* 必须不透明，否则滚动时下方行会透上来。 */
   background: #fff;
-  border-bottom: 1px solid #e5ebf1;
+  border-bottom: 1px solid #e6ebf3;
 }
 
 .binding-heading h3 {
   margin: 0;
+  color: #172033;
+  font-size: 18px;
+}
+
+.review-main .binding-heading h3 { font-size: 18px; }
+
+.binding-heading-title {
+  display: grid;
+  gap: 7px;
+  min-width: 260px;
+}
+
+.binding-title-line,
+.binding-progress {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.binding-edit-state {
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #6f7d90;
+  background: #eff2f6;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.binding-edit-state.is-editing {
+  color: #16724b;
+  background: #e8f7ef;
+}
+
+.binding-inventory-state {
+  color: #77859a;
+  font-size: 12px;
 }
 
 .binding-heading-tools {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .binding-filters {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 7px;
   flex-wrap: wrap;
 }
 
 /* 动作按钮与筛选页签同宽同高，只用竖线与配色区分职责。 */
-.binding-heading-tools > .binding-split-selected + .binding-filters {
-  padding-left: 0.7rem;
-  border-left: 1px solid #e0e6ee;
+.binding-progress {
+  color: #65758a;
+  font-size: 12px;
 }
 
-.binding-progress {
-  color: #5a6b7b;
-  font-size: 0.9rem;
+.binding-progress-track {
+  display: block;
+  width: 94px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9edf4;
+}
+
+.binding-progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2f5bea;
+}
+
+.binding-progress strong {
+  color: #2f5bea;
+  font-size: 12px;
 }
 
 .binding-filter {
-  font: inherit;
-  font-size: 0.85rem;
-  padding: 0.3rem 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 4px 11px;
   border: 1px solid #d9e0e8;
-  border-radius: 6px;
+  border-radius: 7px;
   background: #fff;
-  color: #5a6b7b;
+  color: #65758a;
+  font: inherit;
+  font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -3477,11 +3960,13 @@ body {
 }
 
 .binding-filter.active {
-  border-color: #2456c9;
-  background: #eaf0fd;
-  color: #1d47a8;
+  border-color: #2f5bea;
+  background: #edf2ff;
+  color: #2453ce;
   font-weight: 600;
 }
+
+.binding-filter strong { color: inherit; font-size: 13px; }
 
 .binding-bulk-replace {
   font: inherit;
@@ -3538,6 +4023,13 @@ body {
   font: inherit;
 }
 
+/* 「生成预览」按钮撤掉后，取计划变成输入停下就自动发；这行是它唯一的进行中反馈。 */
+.bulk-replace-status {
+  margin: 0 0 0.75rem;
+  color: #5a6b7b;
+  font-size: 0.85rem;
+}
+
 /* 预览可能有几十行，限高滚动，避免对话框把页面撑穿。 */
 .bulk-replace-preview {
   max-height: 22rem;
@@ -3565,20 +4057,59 @@ body {
 }
 
 .binding-all-done {
-  margin: 0;
-  padding: 0.9rem 1rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin: 14px 0 0;
+  padding: 18px 20px;
   border: 1px solid #cfe6d5;
-  border-radius: 9px;
+  border-radius: 10px;
   background: #f2fbf4;
   color: #1f6b34;
+}
+
+.binding-all-done-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #20a464;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.binding-all-done strong { display: block; font-size: 16px; }
+.binding-all-done p { margin: 3px 0 0; color: #557062; font-size: 12px; }
+.binding-all-done button {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid #acd4ba;
+  border-radius: 7px;
+  color: #177245;
+  background: #fff;
+  cursor: pointer;
+}
+
+.binding-split-guidance {
+  margin: 10px 0 0;
+  padding: 8px 11px;
+  border: 1px solid #f0d18d;
+  border-radius: 7px;
+  color: #79561b;
+  background: #fff8e7;
+  font-size: 12px;
 }
 
 /* 不能用 overflow:hidden 裁圆角：它会让内部的 sticky 分组表头失效（祖先一旦
    overflow 非 visible，sticky 就以该盒为容器，滚动到底即随之滚走）。
    改用 isolation + 子元素各自圆角。 */
 .binding-group {
+  margin-top: 12px;
   border: 1px solid #dce3ea;
-  border-radius: 9px;
+  border-radius: 10px;
   background: #fff;
   isolation: isolate;
 }
@@ -3598,12 +4129,15 @@ body {
   top: var(--binding-heading-height);
   z-index: 1;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.75rem;
-  padding: 0.6rem 0.9rem;
+  min-height: 42px;
+  padding: 7px 12px;
   border-bottom: 1px solid #e5ebf1;
-  background: #f4f7fa;
+  background: #f7f9fd;
 }
+
+.binding-group-heading > strong { color: #233149; font-size: 14px; }
 
 .binding-group-counts {
   color: #5a6b7b;
@@ -3615,6 +4149,20 @@ body {
   align-items: center;
   gap: 0.65rem;
   margin-left: auto;
+}
+
+.binding-table-head {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(7.5rem, 10rem) 5.5rem 5.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-bottom: 1px solid #e8edf4;
+  color: #6b788c;
+  background: #fbfcfe;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .binding-group-split-select {
@@ -3642,10 +4190,11 @@ body {
    最右，宽屏上中间会空出一大片，行首行尾相距过远难以对应。 */
 .binding-row {
   display: grid;
-  grid-template-columns: 1.25rem minmax(6rem, 9rem) 5.5rem 5.5rem minmax(0, 1fr);
+  grid-template-columns: 1.25rem minmax(7.5rem, 10rem) 5.5rem 5.5rem minmax(0, 1fr);
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.35rem 0.9rem;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 12px;
   border-top: 1px solid #f0f4f8;
 }
 
@@ -3662,10 +4211,10 @@ body {
   align-items: center;
   gap: 0.35rem;
   font: inherit;
-  font-size: 0.85rem;
-  padding: 0.3rem 0.7rem;
+  min-height: 34px;
+  padding: 4px 11px;
   border: 1px solid #c3d2ea;
-  border-radius: 6px;
+  border-radius: 7px;
   background: #fff;
   color: #93a2b5;
   white-space: nowrap;
@@ -3752,8 +4301,16 @@ body {
 }
 
 .binding-row-number {
+  display: grid;
+  gap: 2px;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.binding-row-number small {
+  color: #7f8da1;
+  font-size: 10px;
+  font-weight: 400;
 }
 
 .binding-row-refs {
@@ -3763,9 +4320,9 @@ body {
 
 .binding-status {
   justify-self: start;
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -3778,7 +4335,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 7px;
   min-width: 0;
 }
 
@@ -3790,38 +4347,93 @@ body {
 }
 
 .binding-row-action input {
-  flex: 1 1 10rem;
+  flex: 0.75 1 9rem;
   min-width: 0;
 }
 
 .binding-row-action select {
-  flex: 1 1 14rem;
+  flex: 1.4 1 15rem;
   min-width: 0;
 }
 
 .binding-row-action input,
 .binding-row-action select {
   box-sizing: border-box;
-  padding: 0.3rem 0.5rem;
+  height: 32px;
+  padding: 0 9px;
   border: 1px solid #c9d2dc;
   border-radius: 6px;
   background: #fff;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 12px;
+}
+
+.binding-row-error {
+  flex-basis: 100%;
+  color: #cf3f3f;
+  font-size: 11px;
 }
 
 /* 这些按钮此前没有任何样式，呈现为浏览器默认外观，与页面其余部分不一致。 */
 .binding-row-action button,
 .binding-footer button {
   font: inherit;
-  font-size: 0.85rem;
-  padding: 0.3rem 0.7rem;
+  min-height: 32px;
+  padding: 4px 11px;
   border: 1px solid #d9e0e8;
-  border-radius: 6px;
+  border-radius: 7px;
   background: #fff;
   color: #18202a;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.binding-row-unmatched .binding-row-action button,
+.binding-row-ambiguous .binding-row-action button {
+  color: #2456c9;
+  border-color: #c4d3f5;
+}
+
+.binding-selection-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid #bfd0f6;
+  border-radius: 9px;
+  color: #304567;
+  background: rgba(245, 248, 255, 0.97);
+  box-shadow: 0 -4px 14px rgba(36, 86, 201, 0.07);
+  font-size: 12px;
+  backdrop-filter: blur(8px);
+}
+
+.binding-selection-bar button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid #2f5bea;
+  border-radius: 7px;
+  color: #2f5bea;
+  background: #fff;
+  cursor: pointer;
+}
+
+.binding-selection-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.binding-pagination {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin: 14px -14px -14px;
+  padding: 11px 14px;
+  border-top: 1px solid #e7ebf1;
+  box-sizing: border-box;
 }
 
 .binding-row-action button:not(:disabled):hover,
@@ -3848,14 +4460,24 @@ body {
 }
 
 @media (max-width: 900px) {
+  .binding-work-card { padding-inline: 10px; }
+  .binding-heading { position: static; }
+  .component-binding-workspace { --binding-heading-height: 0px; }
+  .binding-heading-tools { width: 100%; justify-content: space-between; }
+  .binding-table-head { display: none; }
+  .binding-all-done { grid-template-columns: auto minmax(0, 1fr); }
+  .binding-all-done button { grid-column: 1 / -1; }
+
   /* 窄屏放弃列对齐，改为编号一行、操作一行，避免列被挤到不可用。 */
   .binding-row {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: 1.25rem minmax(0, 1fr) auto auto;
   }
 
   .binding-row-action {
     grid-column: 1 / -1;
   }
+
+  .binding-selection-bar { position: static; align-items: flex-start; flex-direction: column; }
 }
 
 .inventory-blockers {
@@ -4176,6 +4798,469 @@ body {
   white-space: nowrap;
 }
 
+/* 系统评定采用“总览—校验—明细”的信息层级。概览卡只放结论，评分表承载计算细节，
+   右栏集中展示分布和风险项，避免把所有数字压成一条没有视觉重点的汇总栏。 */
+.assessment-overview-cards {
+  display: grid;
+  grid-template-columns: 1.05fr 0.9fr 0.95fr 1.45fr;
+  gap: 14px;
+}
+
+.assessment-overview-card {
+  min-width: 0;
+  min-height: 142px;
+  padding: 18px 20px;
+  border: 1px solid #dce5f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(27, 51, 91, 0.05);
+}
+
+.assessment-overview-card > span:first-child {
+  display: block;
+  color: #66758c;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.assessment-overview-card.score {
+  display: flex;
+  flex-direction: column;
+}
+
+.assessment-overview-card-content {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.assessment-overview-card.grade .assessment-overview-card-content,
+.assessment-overview-card.bridge-type .assessment-overview-card-content {
+  flex-direction: column;
+}
+
+.assessment-score-ring {
+  --assessment-score: 0%;
+  position: relative;
+  display: grid;
+  flex: none;
+  width: 108px;
+  height: 108px;
+  place-content: center;
+  border-radius: 50%;
+  background: conic-gradient(#1769e0 var(--assessment-score), #e6edf7 0);
+  color: #10213d;
+  text-align: center;
+}
+
+.assessment-score-ring::before {
+  position: absolute;
+  inset: 9px;
+  border-radius: inherit;
+  background: #ffffff;
+  content: "";
+}
+
+.assessment-score-ring strong,
+.assessment-score-ring span {
+  position: relative;
+  z-index: 1;
+}
+
+.assessment-score-ring strong {
+  display: block;
+  font-size: 27px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.assessment-score-ring span {
+  margin-top: 2px;
+  color: #8290a5;
+  font-size: 11px;
+}
+
+.assessment-overview-card.grade,
+.assessment-overview-card.bridge-type,
+.assessment-overview-card.components {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.assessment-overview-card.grade strong,
+.assessment-overview-card.bridge-type strong {
+  margin-top: 0;
+  color: #10213d;
+  font-size: 28px;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.assessment-overview-card.grade strong {
+  color: #1769e0;
+}
+
+.assessment-overview-card.grade em {
+  margin-top: 8px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: #eaf2ff;
+  color: #2761bc;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.assessment-overview-card.bridge-type {
+  overflow: hidden;
+}
+
+.assessment-overview-card.bridge-type strong {
+  max-width: 100%;
+  font-size: 20px;
+}
+
+.assessment-bridge-illustration {
+  flex: none;
+  width: 118px;
+  height: 54px;
+  margin-top: 4px;
+  overflow: visible;
+  fill: none;
+  stroke: #77a0ed;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}
+
+.assessment-bridge-illustration .beam-deck {
+  stroke: #3268dd;
+  stroke-width: 4;
+}
+
+.assessment-bridge-illustration .beam-joints,
+.assessment-bridge-illustration .beam-caps,
+.assessment-bridge-illustration .beam-abutments {
+  stroke-width: 2.2;
+}
+
+.assessment-bridge-illustration .beam-piers {
+  stroke: #4e7ee4;
+  stroke-width: 3;
+}
+
+.assessment-bridge-illustration .beam-ground {
+  stroke: #afc6f4;
+  stroke-width: 1.5;
+}
+
+.assessment-overview-card.components strong {
+  margin-top: 16px;
+  color: #10213d;
+  font-size: 29px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.assessment-overview-card.components strong small {
+  color: #65748a;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.assessment-completion-label {
+  display: flex;
+  justify-content: space-between;
+  margin-top: auto;
+  color: #66758c;
+  font-size: 12px;
+}
+
+.assessment-completion-label b {
+  color: #1769e0;
+}
+
+.assessment-completion-track {
+  height: 7px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #e7edf5;
+}
+
+.assessment-completion-track i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #4c82ef, #1769e0);
+}
+
+.assessment-validation-strip {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.5fr);
+  gap: 12px;
+}
+
+.assessment-validation-strip p {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.assessment-validation-strip p b {
+  display: grid;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  place-content: center;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.assessment-validation-strip .success {
+  border-color: #b9e2c4;
+  background: #effaf2;
+  color: #226838;
+}
+
+.assessment-validation-strip .success b { background: #25a45b; }
+
+.assessment-validation-strip .warning {
+  border-color: #f1d6a5;
+  background: #fff8ea;
+  color: #8b5a0d;
+}
+
+.assessment-validation-strip .warning b { background: #e59a16; }
+
+.assessment-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 326px;
+  gap: 14px;
+  align-items: start;
+}
+
+.assessment-breakdown-card,
+.assessment-grade-distribution,
+.assessment-attention-card {
+  border: 1px solid #dce5f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(27, 51, 91, 0.05);
+}
+
+.assessment-breakdown-card {
+  min-width: 0;
+  padding: 16px 18px 12px;
+}
+
+.assessment-breakdown-heading {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 34px;
+  margin-bottom: 10px;
+}
+
+.assessment-breakdown-heading h3,
+.assessment-grade-distribution h3,
+.assessment-attention-card h3 {
+  margin: 0;
+  color: #14233c;
+  font-size: 16px;
+}
+
+.assessment-part-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.assessment-part-tabs button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #5f6f85;
+  font-size: 13px;
+}
+
+.assessment-part-tabs button:hover,
+.assessment-part-tabs button[aria-pressed="true"] {
+  background: #eaf2ff;
+  color: #1769e0;
+}
+
+.assessment-grade-legend {
+  display: flex;
+  gap: 9px;
+  color: #748196;
+  font-size: 11px;
+}
+
+.assessment-grade-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.assessment-grade-legend i,
+.assessment-grade-distribution-body p i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.assessment-insights {
+  display: grid;
+  gap: 14px;
+}
+
+.assessment-grade-distribution,
+.assessment-attention-card {
+  padding: 16px;
+}
+
+.assessment-grade-distribution-body {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  margin-top: 17px;
+}
+
+.assessment-grade-donut {
+  position: relative;
+  display: block;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+}
+
+.assessment-grade-donut > i {
+  position: absolute;
+  inset: 19px;
+  border-radius: inherit;
+  background: #ffffff;
+}
+
+.assessment-grade-distribution-body > div {
+  display: grid;
+  gap: 8px;
+}
+
+.assessment-grade-distribution-body p {
+  display: grid;
+  grid-template-columns: minmax(52px, 1fr) auto 42px;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #77849a;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.assessment-grade-distribution-body p > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.assessment-grade-distribution-body p b {
+  color: #27364e;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.assessment-grade-distribution-body p em {
+  font-style: normal;
+  text-align: right;
+}
+
+.assessment-attention-card h3 strong {
+  color: #df5b16;
+}
+
+.assessment-attention-card article {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 12px;
+  padding: 11px;
+  border: 1px solid #f0dfc5;
+  border-radius: 8px;
+  background: #fffaf2;
+}
+
+.assessment-attention-card article > span {
+  display: grid;
+  grid-row: span 2;
+  width: 22px;
+  height: 22px;
+  place-content: center;
+  border-radius: 50%;
+  background: #ffe9cd;
+  color: #a25713;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.assessment-attention-card article > strong {
+  overflow: hidden;
+  color: #29364b;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assessment-attention-card article > small {
+  color: #7a8799;
+  font-size: 11px;
+}
+
+.assessment-attention-card article > small:last-child {
+  grid-column: 3;
+  text-align: right;
+}
+
+.assessment-no-attention {
+  margin: 14px 0 0;
+  padding: 18px 10px;
+  border-radius: 8px;
+  background: #f5f8fc;
+  color: #708096;
+  font-size: 12px;
+  text-align: center;
+}
+
+.assessment-detail-link {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: #1769e0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.assessment-detail-link:hover { text-decoration: underline; }
+
+.assessment-attention-row {
+  background: #fffaf4;
+}
+
 /* 与表格同宽，右边缘对齐到"构件数"列。全宽横条不能只在两头钉两个小项——中间会空出
    一千多像素；改成四格等分，多宽都由这四格自己分掉，全桥评分仍靠字号取得主次。 */
 .assessment-score-summary {
@@ -4290,6 +5375,10 @@ body {
   width: 96px;
 }
 
+.assessment-result-table thead th:nth-child(7) {
+  width: 76px;
+}
+
 .assessment-score-bar-cell {
   padding-right: 20px;
 }
@@ -4384,16 +5473,6 @@ body {
   text-decoration: underline;
 }
 
-.assessment-trace summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.assessment-trace ol {
-  max-height: 240px;
-  overflow: auto;
-}
-
 .assessment-explanation {
   margin: 0;
   color: #475569;
@@ -4415,6 +5494,43 @@ body {
 
   .assessment-score-summary > div:first-child {
     border-top: 0;
+  }
+}
+
+@media (max-width: 1480px) {
+  .assessment-overview-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .assessment-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .assessment-insights {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .assessment-breakdown-heading {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .assessment-grade-legend {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 760px) {
+  .assessment-overview-cards,
+  .assessment-validation-strip,
+  .assessment-insights {
+    grid-template-columns: 1fr;
+  }
+
+  .assessment-part-tabs {
+    flex-wrap: wrap;
   }
 }
 
@@ -4964,12 +6080,19 @@ body {
   color: #64748b;
 }
 
+/* 状态文案是"自动匹配：<规范病害名>"，长度随病害名变化。nowrap 不给它省略的话，
+   超出的部分会直接压到「操作」列上；完整文案交给悬停。 */
 .defect-quick-status {
   display: inline-flex;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
   justify-content: center;
+  overflow: hidden;
   padding: 3px 8px;
   border-radius: 999px;
   font-size: 12px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -5398,6 +6521,73 @@ body {
   justify-content: flex-end;
 }
 
+/* 添加照片弹窗内部。外壳、分段与遮罩由 AntD Modal 负责，这里只排内容。 */
+.defect-photo-dialog-hint {
+  margin: 0 0 10px;
+  color: rgb(0 0 0 / 45%);
+  font-size: 14px;
+}
+
+.ant-modal .defect-photo-picker-existing {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+/* 网格项默认 min-width:auto，缩不到内容宽度以下——缩略图会顶破轨道把整个
+   网格撑得比弹窗还宽，于是 body 长出一条横向滚动条。 */
+.ant-modal .defect-photo-picker-existing button {
+  min-width: 0;
+  padding: 0;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.ant-modal .defect-photo-picker-existing button:not(:disabled):hover {
+  border-color: #1677ff;
+}
+
+.ant-modal .defect-photo-picker-existing img {
+  display: block;
+  width: 100%;
+  height: 64px;
+  max-width: 100%;
+  object-fit: cover;
+}
+
+.ant-modal .defect-photo-picker-existing span {
+  display: block;
+  padding: 4px 6px;
+  color: rgb(0 0 0 / 65%);
+  font-size: 12px;
+}
+
+/* 上传区在弹窗里是竖排的两段：拖拽框 + 题注，不再沿用面板里的两列网格。 */
+.ant-modal .defect-photo-upload {
+  display: block;
+}
+
+.ant-modal .defect-photo-upload-divided {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.defect-photo-caption-field {
+  display: block;
+  margin-top: 16px;
+}
+
+.defect-photo-caption-field > span {
+  display: block;
+  margin-bottom: 8px;
+  color: rgb(0 0 0 / 88%);
+  font-size: 14px;
+}
+
 @media (max-width: 900px) {
   .defect-review-workspace,
   .defect-review-workspace.detail-open {
@@ -5818,48 +7008,6 @@ body {
     grid-template-columns: 1fr;
   }
 }
-/* 路径与评分规则现在长在评定树结果卡里，说的就是卡里那个下拉选中的节点。
-   卡本身已经有底色和边框，这里只留一条分隔线收口。 */
-.defect-rating-tree-context {
-  display: grid;
-  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 8px;
-  margin: 4px 0 0;
-  padding: 10px 0 0;
-  border-top: 1px solid #e2e8f0;
-}
-
-.defect-rating-tree-context > div {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.defect-rating-tree-context span {
-  color: #64748b;
-  font-size: 12px;
-}
-
-.defect-rating-tree-context strong {
-  overflow-wrap: anywhere;
-  color: #1e293b;
-  font-size: 13px;
-}
-
-.defect-rating-tree-context a {
-  align-self: center;
-  color: #2456c9;
-  font-size: 13px;
-  white-space: nowrap;
-}
-
-@media (max-width: 1100px) {
-  .defect-rating-tree-context {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
 /* ── 病害与评定树分层匹配 ───────────────────────────────────────────── */
 
 /* 构件 / 病害 / 匹配状态 / 问题四列。状态文字必须始终可见，颜色只是辅助。
@@ -6029,6 +7177,122 @@ body {
   font-size: 14px;
 }
 
+.defect-scale-guidance {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: -2px;
+  padding: 10px 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 7px;
+  background: #f5f8ff;
+}
+
+.defect-scale-guidance span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.defect-scale-guidance strong {
+  min-width: 0;
+  color: #1e3a5f;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.defect-scale-guidance em {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e0ecff;
+  color: #2456c9;
+  font-size: 12px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.defect-completeness {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.defect-completeness-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.defect-completeness-head span {
+  color: #2456c9;
+  font-weight: 700;
+}
+
+.defect-completeness-track {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8edf4;
+}
+
+.defect-completeness-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #2f5bea;
+}
+
+.defect-completeness ul {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.defect-completeness li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.defect-completeness li > span {
+  display: grid;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 50%;
+  background: #f1f5f9;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.defect-completeness li.complete {
+  color: #047857;
+}
+
+.defect-completeness li.complete > span {
+  background: #dcfce7;
+}
+
+.defect-completeness li.pending {
+  color: #b45309;
+}
+
+.defect-completeness li.pending > span {
+  background: #fef3c7;
+}
+
 .defect-batch-distribution {
   display: grid;
   gap: 4px;
@@ -6064,6 +7328,28 @@ body {
 
 .defect-photo-panel-heading h4 {
   margin: 0;
+}
+
+.defect-photo-panel-heading > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.defect-photo-panel-heading small {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.defect-photo-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.defect-photo-panel-actions a {
+  color: #2456c9;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .defect-photo-picker {
@@ -6195,11 +7481,150 @@ body {
    面板再宽也只是图更清楚，不会再把下面的内容推走。 */
 .defect-photo-panel .defect-photo-stage img {
   display: block;
-  max-width: 100%;
-  max-height: min(46vh, 480px);
-  height: auto;
+  width: 100%;
+  height: min(38vh, 380px);
   object-fit: contain;
   border-radius: 8px;
+  background: #f8fafc;
+}
+
+.defect-detail-photo-column .defect-photo-panel {
+  margin-top: 0;
+}
+
+.defect-photo-stage {
+  padding: 8px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.defect-history-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.defect-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.defect-history-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.defect-history-heading span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.defect-history-heading strong {
+  font-size: 14px;
+}
+
+.defect-history-heading a {
+  color: #2456c9;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.defect-history-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.defect-history-list li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 12px 44px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 48px;
+  color: #475569;
+}
+
+.defect-history-list li:not(:last-child)::after {
+  position: absolute;
+  top: 16px;
+  bottom: 0;
+  left: 5px;
+  width: 1px;
+  background: #dbe4ef;
+  content: "";
+}
+
+.defect-history-dot {
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #94a3b8;
+  box-shadow: 0 0 0 1px #cbd5e1;
+}
+
+.defect-history-list li.current .defect-history-dot {
+  background: #2f5bea;
+  box-shadow: 0 0 0 1px #2f5bea;
+}
+
+.defect-history-list time {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.defect-history-list li > div {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+
+.defect-history-list li strong {
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.defect-history-list li small {
+  overflow-wrap: anywhere;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.defect-history-empty,
+.defect-history-trend {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.defect-history-empty {
+  background: #f8fafc;
+}
+
+.defect-history-trend {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+@container (max-width: 700px) {
+  .defect-scale-guidance,
+  .defect-completeness ul {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* 离线库路径与"重新读取"按钮同排：路径通常是后端填好的，按钮只在改了路径后才用。 */
@@ -6569,9 +7994,14 @@ body {
   color: #5a6472;
 }
 
+.triage-cluster-table-scroll {
+  margin-bottom: 10px;
+  overflow-x: auto;
+}
+
 .triage-cluster-table {
   width: 100%;
-  margin-bottom: 10px;
+  min-width: 640px;
 }
 
 .triage-cluster-table th[scope="row"] {
@@ -6590,20 +8020,161 @@ body {
 /* 同年多条并排：换行会让"并排比着看"这件事失效。 */
 .triage-cluster-year-cell {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
   flex-wrap: wrap;
 }
 
+/* 证据块：勾选框 + 类型 + 照片 + 标度 + 尺寸 + 编号，判据同屏可见。 */
 .triage-cluster-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 150px;
+  max-width: 190px;
+  padding: 6px 8px;
   border: 1px solid #d0d7e2;
-  border-radius: 12px;
-  padding: 2px 8px;
+  border-radius: 6px;
   font-size: 12px;
   background: #fff;
   cursor: pointer;
+}
+
+.triage-cluster-chip.is-checked {
+  border-color: #2f54eb;
+  background: #f4f7ff;
+}
+
+.triage-chip-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.triage-chip-type {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.triage-chip-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.triage-chip-photo {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.triage-chip-photo .ant-image {
+  display: block;
+}
+
+.triage-chip-photo img {
+  display: block;
+  width: 64px;
+  height: 48px;
+  border: 1px solid #d8dee6;
+  border-radius: 3px;
+  object-fit: cover;
+  background: #eef1f5;
+  cursor: zoom-in;
+}
+
+/* antd 的遮罩默认铺满 .ant-image，这里对齐到缩略图的圆角与尺寸。 */
+.triage-chip-photo .ant-image-mask {
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+/* 放大后的说明条：年度、标度、尺寸是比对基准，放大了更不能丢。 */
+.triage-preview-frame {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.triage-preview-caption {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  max-width: 92vw;
+  padding: 8px 16px;
+  border-radius: 6px;
+  color: #f2f5fa;
+  background: rgb(0 0 0 / 55%);
+  font-size: 13px;
+}
+
+.triage-preview-caption strong {
+  font-size: 15px;
+}
+
+.triage-preview-number {
+  color: #b9c2d0;
+  font-size: 12px;
+}
+
+.triage-chip-photo em {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 1;
+  padding: 0 3px;
+  border-radius: 2px;
+  color: #fff;
+  background: rgb(0 0 0 / 55%);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.triage-chip-facts {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  font-size: 11px;
+  color: #3f4b5d;
+}
+
+.triage-chip-facts > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.triage-chip-number {
+  color: #8691a5;
+  font-size: 11px;
+}
+
+/* 为什么归到一起：说清是哪几种写法、哪一年挤了多条。 */
+.triage-cluster-why {
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  border-radius: 5px;
+  color: #4a5568;
+  background: #f4f6fa;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.triage-cluster-prefill {
+  align-self: flex-end;
+  padding-bottom: 6px;
+  color: #8691a5;
+  font-size: 11px;
+}
+
+.triage-cluster-archive-link {
+  margin-left: auto;
+  color: #2f54eb;
+  font-size: 12px;
 }
 
 .triage-cluster-threads h4 {
@@ -6683,4 +8254,660 @@ body {
   margin: 6px 0 0;
   font-size: 12px;
   color: #6b7480;
+}
+
+/* ---- 病害与照片：统计、校对列表与提示栏 ---- */
+.defect-photo-section {
+  --defect-card-border: #dbe4ef;
+  display: grid;
+  gap: 18px;
+}
+
+.defect-overview-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.defect-metric-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  min-height: 108px;
+  box-sizing: border-box;
+  padding: 20px 24px;
+  border: 1px solid var(--defect-card-border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(28 53 84 / 5%);
+}
+
+button.defect-metric-card {
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.defect-metric-card.issue-entry:not(:disabled) {
+  cursor: pointer;
+}
+
+button.defect-metric-card.issue-entry:not(:disabled):hover {
+  border-color: #f0bd7a;
+  box-shadow: 0 10px 26px rgb(124 72 12 / 10%);
+}
+
+button.defect-metric-card.issue-entry:focus-visible {
+  outline: 2px solid #2f66ed;
+  outline-offset: 2px;
+}
+
+button.defect-metric-card.issue-entry:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.defect-metric-card > span:last-child {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.defect-metric-card small {
+  flex-basis: 100%;
+  color: #3f4d61;
+  font-size: 14px;
+}
+
+.defect-metric-card strong {
+  color: #14213a;
+  font-size: 30px;
+  line-height: 1.05;
+}
+
+.defect-metric-card em {
+  color: #64748b;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.defect-metric-icon {
+  display: grid;
+  flex: 0 0 54px;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 29px;
+}
+
+.defect-metric-card.blue .defect-metric-icon {
+  background: #eaf1ff;
+  color: #2f66ed;
+}
+
+.defect-metric-card.green .defect-metric-icon {
+  background: #e8f8ef;
+  color: #15945e;
+}
+
+.defect-metric-card.orange .defect-metric-icon {
+  background: #fff3e6;
+  color: #f27a16;
+}
+
+.defect-review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+
+.defect-review-card {
+  min-width: 0;
+  border: 1px solid var(--defect-card-border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(28 53 84 / 5%);
+}
+
+.defect-review-card {
+  padding: 16px 18px 12px;
+}
+
+.review-main .defect-review-toolbar {
+  position: static;
+  margin: 0;
+  padding: 0 0 10px;
+  background: transparent;
+}
+
+.review-main .defect-review-toolbar::before {
+  display: none;
+}
+
+.defect-review-filters {
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.defect-review-mode {
+  flex: 0 0 auto;
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.defect-review-mode button {
+  position: relative;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 0;
+  font-size: 14px;
+}
+
+.defect-review-mode button[aria-pressed="true"] {
+  background: transparent;
+  box-shadow: none;
+}
+
+.defect-review-mode button[aria-pressed="true"]::after {
+  position: absolute;
+  right: 4px;
+  bottom: -11px;
+  left: 4px;
+  height: 2px;
+  border-radius: 999px;
+  background: #2f5bea;
+  content: "";
+}
+
+.defect-review-mode button span {
+  display: inline-grid;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 5px;
+  place-items: center;
+  border-radius: 999px;
+  background: #f1f4f8;
+  color: #7b8797;
+  font-size: 12px;
+}
+
+.defect-review-filters .defect-review-search {
+  height: 36px;
+  margin-left: auto;
+  flex: 1 1 270px;
+  max-width: 320px;
+  border-color: #d5deea;
+}
+
+.defect-review-filters select,
+.defect-review-filters button,
+.defect-review-toolbar-actions button {
+  height: 36px;
+}
+
+.defect-review-filters select {
+  min-width: 112px;
+}
+
+.defect-review-toolbar-actions {
+  gap: 8px;
+  margin-left: 2px;
+}
+
+.defect-review-toolbar-actions button:first-child,
+.defect-review-toolbar-actions .defect-rematch-button {
+  position: relative;
+  min-width: 90px;
+  padding-inline: 15px;
+  white-space: nowrap;
+}
+
+.defect-review-toolbar-actions button:first-child {
+  border-color: #2f5bea;
+  background: #2f5bea;
+  color: #fff;
+}
+
+.defect-review-toolbar-actions button:first-child::before {
+  margin-right: 6px;
+  content: "+";
+}
+
+.defect-review-toolbar-actions .defect-rematch-button {
+  border-color: #8bafff;
+  color: #2456c9;
+}
+
+.defect-review-toolbar-actions .defect-rematch-button::before {
+  margin-right: 6px;
+  content: "↻";
+}
+
+.defect-review-batch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 6px 2px;
+}
+
+.defect-review-batch-row .defect-review-select-all {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.defect-batch-confirm-button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #7ca2ff;
+  border-radius: 6px;
+  background: #fff;
+  color: #2456c9;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.defect-match-summary {
+  margin: 0 0 0 auto;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.defect-review-workspace:not(.detail-open) {
+  height: auto;
+}
+
+.defect-review-table-head,
+.defect-quick-row:not(.compact *) {
+  display: grid;
+  grid-template-columns: 34px minmax(360px, 1fr) minmax(150px, 200px) 170px 96px;
+  align-items: center;
+}
+
+.defect-review-table-head {
+  grid-template-columns: 34px minmax(120px, .9fr) minmax(140px, 1fr) 72px minmax(150px, 200px) 170px 96px;
+  min-height: 38px;
+  border-block: 1px solid #e1e7ef;
+  background: #f7f9fc;
+  color: #344256;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.defect-review-table-head span {
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.defect-quick-row {
+  min-height: 60px;
+  border: 0;
+  border-bottom: 1px solid #e7ecf2;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.defect-quick-row:hover {
+  background: #f8fbff;
+}
+
+.defect-quick-row.active {
+  background: #eff6ff;
+  box-shadow: inset 3px 0 #2f5bea;
+}
+
+.defect-quick-row > .defect-quick-main {
+  display: grid;
+  grid-template-columns: minmax(120px, .9fr) minmax(140px, 1fr) 72px;
+  grid-column: 2 / 3;
+  gap: 0;
+  min-width: 0;
+  padding: 8px 0;
+}
+
+.defect-quick-row > .defect-quick-main > span {
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.defect-quick-component strong,
+.defect-quick-defect strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.defect-quick-component small,
+.defect-quick-defect small {
+  overflow: hidden;
+  color: #7b8797;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.defect-quick-scale {
+  color: #334155;
+  font-size: 13px;
+}
+
+.defect-quick-row:not(.active) .defect-quick-problems {
+  display: none;
+}
+
+.defect-quick-photos {
+  grid-column: 3;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 7px 8px;
+  background: transparent;
+}
+
+.defect-quick-photos img {
+  width: 38px;
+  height: 30px;
+  border-radius: 3px;
+}
+
+.defect-quick-photos span {
+  flex: none;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: #edf3ff;
+  color: #2456c9;
+  font-size: 12px;
+}
+
+.defect-quick-status,
+.defect-quick-actions {
+  padding: 0 8px;
+}
+
+.defect-quick-status {
+  grid-column: 4;
+  justify-self: start;
+}
+
+.defect-quick-actions {
+  display: flex;
+  grid-column: 5;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.defect-quick-actions button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2456c9;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.defect-quick-actions i {
+  width: 1px;
+  height: 14px;
+  background: #dce4ee;
+}
+
+.defect-quick-status {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.defect-quick-review > .defect-pagination {
+  justify-content: flex-end;
+  min-height: 48px;
+  margin: 4px 0 0;
+}
+
+.defect-quick-review > .defect-pagination .ant-pagination-total-text {
+  margin-right: auto;
+}
+
+/* 以下旧规则留给尚未热更新的页面实例；当前组件已不再渲染固定右侧问题卡。 */
+.defect-review-quality {
+  overflow: hidden;
+}
+
+.defect-review-quality > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 13px;
+  border-bottom: 1px solid #e7ecf3;
+}
+
+.defect-review-quality > header > span,
+.defect-review-quality-state > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.defect-review-quality > header strong,
+.defect-review-quality-state strong {
+  color: #17233b;
+  font-size: 16px;
+}
+
+.defect-review-quality > header small,
+.defect-review-quality-state small {
+  color: #758195;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.defect-review-quality > header > b {
+  display: grid;
+  flex: none;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 7px;
+  place-items: center;
+  border-radius: 15px;
+  background: #fff1de;
+  color: #b45b00;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.defect-quality-issue-list {
+  display: grid;
+  padding: 4px 0;
+}
+
+.defect-quality-issue-list > button {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 3px 9px;
+  align-items: center;
+  min-height: 76px;
+  padding: 12px 17px;
+  border: 0;
+  border-bottom: 1px solid #edf1f5;
+  border-radius: 0;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.defect-quality-issue-list > button:last-child {
+  border-bottom: 0;
+}
+
+.defect-quality-issue-list > button:hover {
+  background: #fffaf3;
+}
+
+.defect-quality-issue-list > button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid #2f66ed;
+  outline-offset: -2px;
+}
+
+.defect-quality-issue-list > button > svg {
+  grid-row: 1 / 3;
+  color: #e28a15;
+  font-size: 18px;
+}
+
+.defect-quality-issue-list > button > span {
+  display: grid;
+  grid-row: 1 / 3;
+  gap: 4px;
+  min-width: 0;
+}
+
+.defect-quality-issue-list strong {
+  overflow: hidden;
+  color: #26354b;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.defect-quality-issue-list small {
+  color: #788599;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.defect-quality-issue-list > button > b {
+  align-self: end;
+  color: #b45b00;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.defect-quality-issue-list > button > em {
+  align-self: start;
+  color: #2f5bea;
+  font-size: 11px;
+  font-style: normal;
+  text-align: right;
+}
+
+.defect-review-quality-state {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding: 18px;
+}
+
+.defect-review-quality-state > svg {
+  color: #18a064;
+  font-size: 24px;
+}
+
+.defect-review-quality-state.success {
+  background: #f2fbf6;
+}
+
+.defect-review-quality.all-clear {
+  border-color: #bde5ce;
+}
+
+.defect-quality-pulse {
+  width: 14px;
+  height: 14px;
+  margin-left: 5px;
+  border: 3px solid #d8e5ff;
+  border-top-color: #2f66ed;
+  border-radius: 50%;
+  animation: defect-quality-spin 0.9s linear infinite;
+}
+
+@keyframes defect-quality-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .defect-quality-pulse {
+    animation: none;
+  }
+}
+
+/* 拆分详情仍沿用高密度导航列表，表格专用的来源、状态和操作列在窄栏隐藏。 */
+.defect-quick-review.compact .defect-quick-status,
+.defect-quick-review.compact .defect-quick-actions,
+.defect-quick-review.compact .defect-quick-scale {
+  display: none;
+}
+
+@media (max-width: 1500px) {
+  .defect-review-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .defect-review-filters {
+    flex-wrap: wrap;
+  }
+
+  .defect-review-filters .defect-review-search {
+    max-width: none;
+  }
+}
+
+@media (max-width: 1500px) {
+  .defect-overview-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .defect-review-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .defect-review-quality {
+    order: -1;
+  }
+
+  .defect-quality-issue-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .defect-quality-issue-list > button {
+    border-right: 1px solid #edf1f5;
+  }
+
+  .defect-review-card {
+    overflow-x: auto;
+  }
+
+  .defect-quick-review:not(.compact) {
+    min-width: 900px;
+  }
+}
+
+@media (max-width: 720px) {
+  .defect-overview-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .defect-quality-issue-list {
+    grid-template-columns: 1fr;
+  }
+
+  .defect-quality-issue-list > button {
+    border-right: 0;
+  }
 }

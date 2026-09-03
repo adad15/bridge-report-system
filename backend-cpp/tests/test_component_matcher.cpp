@@ -42,6 +42,26 @@ InventoryRevision revision(std::vector<InventoryEntry> entries, std::string stat
 const char* kGirderCategory = "h21.component.beam.upper_bearing";
 const char* kGeneralCategory = "h21.component.beam.upper_general";
 
+TEST(ComponentMatcherTest, SourceDrainageCategoryPlusNumberBinds) {
+    const auto result = match_defect_component(
+        {"排水系统", "防排水系统"},
+        revision({entry("drainage", "排水系统", "排水系统",
+                        "h21.component.deck.drainage")}), {});
+    ASSERT_TRUE(result.matched_entry.has_value());
+    EXPECT_EQ(result.method, ComponentMatchMethod::Exact);
+    EXPECT_EQ(result.matched_entry->bridge_component_id, "drainage");
+}
+
+TEST(ComponentMatcherTest, RiverbedCategoryPlusNumberBinds) {
+    const auto result = match_defect_component(
+        {"河床", "河床"},
+        revision({entry("riverbed", "河床", "河床",
+                        "h21.component.lower.riverbed")}), {});
+    ASSERT_TRUE(result.matched_entry.has_value());
+    EXPECT_EQ(result.method, ComponentMatchMethod::Exact);
+    EXPECT_EQ(result.matched_entry->bridge_component_id, "riverbed");
+}
+
 TEST(ComponentMatcherTest, CategoryPlusNumberUniqueMatchBinds) {
     const auto result = match_defect_component(
         {"1-1#梁", "上部承重构件"},

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -59,6 +59,7 @@ function plan(overrides: Partial<ResolutionPlanPreview> = {}): ResolutionPlanPre
 
 function renderDialog(overrides: Partial<Parameters<typeof BulkReplaceDialog>[0]> = {}) {
   const onPreview = vi.fn().mockResolvedValue(undefined);
+  const onClearPlan = vi.fn();
   const onApply = vi.fn().mockResolvedValue(undefined);
   const onClose = vi.fn();
   render(
@@ -68,12 +69,13 @@ function renderDialog(overrides: Partial<Parameters<typeof BulkReplaceDialog>[0]
       previewing={false}
       busy={false}
       onPreview={onPreview}
+      onClearPlan={onClearPlan}
       onApply={onApply}
       onClose={onClose}
       {...overrides}
     />
   );
-  return { onPreview, onApply, onClose };
+  return { onPreview, onClearPlan, onApply, onClose };
 }
 
 describe("BulkReplaceDialog", () => {
@@ -81,9 +83,10 @@ describe("BulkReplaceDialog", () => {
     const { onPreview } = renderDialog();
     await userEvent.type(screen.getByLabelText("查找"), "第*孔桥面");
     await userEvent.type(screen.getByLabelText("替换为"), "*#跨桥面铺装");
-    await userEvent.click(screen.getByRole("button", { name: "生成预览" }));
 
-    expect(onPreview).toHaveBeenCalledWith("第*孔桥面", "*#跨桥面铺装");
+    // 不再有「生成预览」按钮：输入停下后自动去取，取的是当下这一组查找/替换。
+    await waitFor(() => expect(onPreview)
+      .toHaveBeenLastCalledWith("第*孔桥面", "*#跨桥面铺装"));
   });
 
   it("renders the backend rows with their own reasons and totals", () => {
@@ -97,10 +100,19 @@ describe("BulkReplaceDialog", () => {
     expect(screen.getByText(/跳过 1 行/)).toBeInTheDocument();
   });
 
-  it("disables previewing until a pattern is entered", () => {
-    renderDialog();
-    expect(screen.getByRole("button", { name: "生成预览" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
+  it("does not preview an empty pattern, and drops any plan left from before", async () => {
+    const { onPreview, onClearPlan } = renderDialog({ plan: plan() });
+
+    // 空查找串不该发请求：那等于让后端把整个分区都算一遍。
+    await waitFor(() => expect(onClearPlan).toHaveBeenCalled());
+    expect(onPreview).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "应用" })).toBeEnabled();
+
+    // 填了又清空，同样要把上一份计划丢掉。
+    onClearPlan.mockClear();
+    await userEvent.type(screen.getByLabelText("查找"), "第*孔");
+    await userEvent.clear(screen.getByLabelText("查找"));
+    await waitFor(() => expect(onClearPlan).toHaveBeenCalled());
   });
 
   it("disables applying when the plan would bind nothing", () => {

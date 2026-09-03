@@ -20,15 +20,6 @@ export interface AssessmentIssue {
   rule_id: string;
 }
 
-export interface AssessmentTrace {
-  step: string;
-  rule_id: string;
-  entity_id: string;
-  source_reference: string;
-  inputs: Record<string, unknown>;
-  output: Record<string, unknown>;
-}
-
 export interface AssessmentCategoryResult {
   component_type_id: string;
   component_type_name?: string;
@@ -80,7 +71,6 @@ export interface AssessmentResult {
     label: string;
     result_grade: number | null;
   }>;
-  trace: AssessmentTrace[];
 }
 
 /**

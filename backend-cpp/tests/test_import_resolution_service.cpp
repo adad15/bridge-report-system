@@ -160,6 +160,28 @@ protected:
 
 }  // namespace
 
+/*
+ * 读模型不按 import_status 拦截：已入库的记录仍要能打开校对页浏览绑定与评定结果。
+ *
+ * 此前这里跟写命令共用同一条 `!= "待校对"` 守卫，于是已确认记录取不回工作区，前端
+ * 把每条病害都渲染成"未绑定构件、未定评定项"——279 条全成了待处理，而库里都绑好了。
+ */
+TEST_F(ImportResolutionServiceTest, WorkspaceStaysReadableAfterTheRecordIsCommitted) {
+    seed_confirmed_inventory({{"1-1#梁", "空心板"}});
+    import_defects({{"上部承重构件", "1-1#梁"}});
+
+    client_->execSqlSync(
+        "update import_records set import_status = '已确认' where id = $1::uuid",
+        import_id_);
+
+    const auto outcome = ImportResolutionService(client_).load_workspace(import_id_);
+    ASSERT_EQ(outcome.status, ResolutionStatus::Ok) << outcome.error_message;
+    ASSERT_EQ(outcome.workspace->groups.size(), 1u);
+    // 绑定结果照常回来，不是空壳。
+    EXPECT_EQ(outcome.workspace->groups[0].status, "bound");
+    EXPECT_FALSE(outcome.workspace->groups[0].targets.empty());
+}
+
 TEST_F(ImportResolutionServiceTest, BoundGroupCarriesTargetsInstancesAndProgress) {
     seed_confirmed_inventory({{"1-1#梁", "空心板"}});
     import_defects({{"上部承重构件", "1-1#梁"}});

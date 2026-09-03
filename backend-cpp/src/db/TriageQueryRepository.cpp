@@ -70,13 +70,30 @@ Json::Value nullable(const std::string& value) {
     return value.empty() ? Json::Value(Json::nullValue) : Json::Value(value);
 }
 
-struct ObservationDisplay {
-    std::string system_number;
-    std::string scale;
-    std::string description;
-    Json::Value measurements{Json::arrayValue};
-    Json::Value photos{Json::arrayValue};
-};
+/// 三条批量语句取完展示字段。按观测循环就是服务端版的 N+1——正是旧整理页的死法。
+/// 摘要（异常簇）与批次明细共用这一条路径，免得两边各写一份、各漏一个字段。
+review::TriageDisplayLookup load_display_fields(
+    const drogon::orm::DbClientPtr& db_client, const std::vector<std::string>& observation_ids) {
+    review::TriageDisplayLookup display_by_observation;
+    if (observation_ids.empty()) return display_by_observation;
+
+    const auto ids = uuid_array_literal(observation_ids);
+    for (const auto& row : db_client->execSqlSync(kDisplayFieldsSql, ids)) {
+        auto& display = display_by_observation[row["id"].as<std::string>()];
+        display.system_number = row["system_number"].as<std::string>();
+        display.scale = row["scale"].isNull() ? std::string() : row["scale"].as<std::string>();
+        display.description = row["defect_description_raw"].as<std::string>();
+    }
+    for (const auto& row : db_client->execSqlSync(kMeasurementsSql, ids)) {
+        display_by_observation[row["observation_id"].as<std::string>()]
+            .measurements.push_back(row["raw_text"].as<std::string>());
+    }
+    for (const auto& row : db_client->execSqlSync(kPhotosSql, ids)) {
+        display_by_observation[row["observation_id"].as<std::string>()].photos.push_back(
+            {row["id"].as<std::string>(), row["photo_number"].as<std::string>()});
+    }
+    return display_by_observation;
+}
 
 }  // namespace
 
@@ -122,7 +139,19 @@ std::vector<review::TriageThreadInput> TriageQueryRepository::load_threads(
 }
 
 Json::Value TriageQueryRepository::summary(const std::string& bridge_id) const {
-    return review::triage_summary_json(load_model(bridge_id));
+    const auto model = load_model(bridge_id);
+
+    // 只给异常簇取展示字段：批次那边摘要本来就只给样例组，明细接口自己会取。
+    // 异常簇总共十来组，一次取完让人不必逐张卡再发请求。
+    std::vector<std::string> observation_ids;
+    for (const auto& cluster : model.manual_clusters) {
+        for (const auto& group : cluster.groups) {
+            for (const auto& observation : group.observations) {
+                observation_ids.push_back(observation.id);
+            }
+        }
+    }
+    return review::triage_summary_json(model, load_display_fields(db_client_, observation_ids));
 }
 
 std::optional<Json::Value> TriageQueryRepository::batch_detail(
@@ -139,27 +168,7 @@ std::optional<Json::Value> TriageQueryRepository::batch_detail(
         for (const auto& observation : group.observations) observation_ids.push_back(observation.id);
     }
 
-    // 三条语句取完全部展示字段。按观测循环就是服务端版的 N+1——正是现有整理页的死法。
-    std::map<std::string, ObservationDisplay> display_by_observation;
-    if (!observation_ids.empty()) {
-        const auto ids = uuid_array_literal(observation_ids);
-        for (const auto& row : db_client_->execSqlSync(kDisplayFieldsSql, ids)) {
-            auto& display = display_by_observation[row["id"].as<std::string>()];
-            display.system_number = row["system_number"].as<std::string>();
-            display.scale = row["scale"].isNull() ? std::string() : row["scale"].as<std::string>();
-            display.description = row["defect_description_raw"].as<std::string>();
-        }
-        for (const auto& row : db_client_->execSqlSync(kMeasurementsSql, ids)) {
-            display_by_observation[row["observation_id"].as<std::string>()]
-                .measurements.append(row["raw_text"].as<std::string>());
-        }
-        for (const auto& row : db_client_->execSqlSync(kPhotosSql, ids)) {
-            Json::Value photo;
-            photo["id"] = row["id"].as<std::string>();
-            photo["photo_number"] = row["photo_number"].as<std::string>();
-            display_by_observation[row["observation_id"].as<std::string>()].photos.append(photo);
-        }
-    }
+    const auto display_by_observation = load_display_fields(db_client_, observation_ids);
 
     // bind 批次里每个组绑各自构件的那条线索，不存在批次级单一线索，目标摘要必须逐组给。
     std::map<std::string, review::TriageThreadInput> thread_by_id;
@@ -217,8 +226,17 @@ std::optional<Json::Value> TriageQueryRepository::batch_detail(
                 entry["system_number"] = display->second.system_number;
                 entry["scale"] = nullable(display->second.scale);
                 entry["defect_description"] = display->second.description;
-                entry["measurements"] = display->second.measurements;
-                entry["photos"] = display->second.photos;
+                entry["measurements"] = Json::Value(Json::arrayValue);
+                for (const auto& raw_text : display->second.measurements) {
+                    entry["measurements"].append(raw_text);
+                }
+                entry["photos"] = Json::Value(Json::arrayValue);
+                for (const auto& photo : display->second.photos) {
+                    Json::Value photo_json;
+                    photo_json["id"] = photo.id;
+                    photo_json["photo_number"] = photo.photo_number;
+                    entry["photos"].append(photo_json);
+                }
             }
             group_json["observations"].append(entry);
         }

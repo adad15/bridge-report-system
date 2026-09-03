@@ -1,3 +1,4 @@
+import { Spin } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   EMPTY_RESOLUTION_INDEX,
@@ -7,6 +8,13 @@ import {
   type ResolutionIndex,
 } from "../resolutionIndex";
 import { addManualDefect, fetchResolutionWorkspace } from "../../api/resolutionApi";
+import {
+  CheckCircleOutlined,
+  FileProtectOutlined,
+  FileSearchOutlined,
+  PictureOutlined,
+  SafetyCertificateOutlined,
+} from "@ant-design/icons";
 
 import type { AssessmentIssue } from "../../api/assessmentApi";
 import { componentInventoryErrorMessage, fetchComponentReviewOrder, fetchInventorySummary, searchInventoryEntries, type ComponentInventoryEntry, type InventorySummary, type StructurePart as InventoryStructurePart } from "../../api/componentInventoryApi";
@@ -53,6 +61,7 @@ interface DefectsSectionProps {
   selectedCandidateId: string | null;
   onSelect: (candidateId: string, photoCandidateId?: string) => void;
   onCloseDetail?: () => void;
+  onSave?: () => void;
   dispatch: Dispatch<ReviewDraftAction>;
   ratingTree?: ReviewRatingTree | null;
   assessmentIssues?: AssessmentIssue[];
@@ -69,9 +78,9 @@ interface DefectsSectionProps {
 }
 
 const EMPTY_ASSESSMENT_ISSUES: AssessmentIssue[] = [];
-const DETAIL_WIDTH_STORAGE_KEY = "bridge-report:defect-detail-width-percent";
-const DEFAULT_DETAIL_WIDTH = 66.67;
-const MIN_DETAIL_WIDTH = 45;
+const DETAIL_WIDTH_STORAGE_KEY = "bridge-report:defect-detail-width-percent-v2";
+const DEFAULT_DETAIL_WIDTH = 73;
+const MIN_DETAIL_WIDTH = 58;
 const MAX_DETAIL_WIDTH = 85;
 
 function readStoredDetailWidth(): number {
@@ -110,24 +119,52 @@ const EMPTY_MANUAL_DEFECT: ManualDefectFormState = {
 
 // 禁用策略按详情控件处理，不用 fieldset disabled 一揽子禁用；
 // 筛选、翻页、缩略图等只读动作在已确认记录中仍可使用。
-export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, onCloseDetail, dispatch, ratingTree = null, assessmentIssues = EMPTY_ASSESSMENT_ISSUES, disabled = false, allowStructureChanges = false, editLockToken = null, isDefectEditable }: DefectsSectionProps) {
+export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selectedCandidateId, selectedPhotoCandidateId, onSelect, onCloseDetail, onSave, dispatch, ratingTree = null, assessmentIssues = EMPTY_ASSESSMENT_ISSUES, disabled = false, allowStructureChanges = false, editLockToken = null, isDefectEditable }: DefectsSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   // 构件绑定与评分树节点 5.0 起住在关系表里，由工作区读模型提供；草稿版本供手工新增
   // 的 If-Match 使用。两者一起来自同一个响应，不会各自过期。
   const [resolution, setResolution] = useState<ResolutionIndex>(EMPTY_RESOLUTION_INDEX);
+  const [resolutionReady, setResolutionReady] = useState(false);
+  /** 首屏取不回解析状态时的原因。留空表示正常。 */
+  const [resolutionError, setResolutionError] = useState<string | null>(null);
   const [draftVersion, setDraftVersion] = useState(1);
   const [inventoryRevisionId, setInventoryRevisionId] = useState<string | null>(null);
+
+  /* 这一份重取会被并发发起好几次（挂载、绑定、评分树裁决、批量应用各一次），
+     而单次要 0.6~3 秒。响应回来的顺序跟发出的顺序无关：先发的后到，就会把新状态
+     盖回旧的。刚导入完那一下最明显——最早那次取到的是后端还没写完解析的快照，
+     它要是最后落地，整页就显示成"一条都没绑"，刷新（只发一次）又好了。
+     所以按发起序号只认最后一次，迟到的旧响应直接丢弃。 */
+  const resolutionRequest = useRef(0);
+  /* 是否成功取回过一次。用 ref 而不是读 resolution.size：refreshResolution 的依赖里
+     没有 resolution，闭包会把它永远捕获成初始的空 Map，后续失败就会误报成首屏失败。 */
+  const resolutionLoadedOnce = useRef(false);
 
   // 解析状态的唯一来源。绑定、评分树选择、批量应用之后都重新拉一次——写操作只回
   // 受影响对象，整份重取才是这一页保持一致的最省心做法（几百个组一次请求）。
   const refreshResolution = useCallback(async () => {
+    const seq = ++resolutionRequest.current;
     try {
       const workspace = await fetchResolutionWorkspace(baseUrl, importRecordId);
+      if (seq !== resolutionRequest.current) return;
+      resolutionLoadedOnce.current = true;
+      setResolutionError(null);
       setResolution(buildResolutionIndex(workspace));
       setDraftVersion(workspace.draft_version);
       setInventoryRevisionId(workspace.inventory_revision_id);
-    } catch {
-      // 工作区取不回来时保持上一份：清空会让整页突然显示成"一条都没绑"。
+    } catch (caught) {
+      if (seq !== resolutionRequest.current) return;
+      /* 保持上一份：清空会让整页突然显示成"一条都没绑"。
+         但首屏那次失败时"上一份"本来就是空的，静默吞掉等于把 279 条全渲染成未绑定
+         ——看着像数据丢了，其实只是没取回来。所以第一次失败必须说出来。 */
+      if (!resolutionLoadedOnce.current) {
+        setResolutionError(caught instanceof ApiError
+          ? caught.message
+          : "取不到构件绑定与评定结果，请刷新重试。");
+      }
+    } finally {
+      // 已被更新的请求接替时不动 ready：那一次会自己负责收尾。
+      if (seq === resolutionRequest.current) setResolutionReady(true);
     }
   }, [baseUrl, importRecordId]);
 
@@ -153,8 +190,9 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const [componentOrder, setComponentOrder] = useState<Map<string, number> | null>(null);
   const [componentPart, setComponentPart] = useState<Map<string, string>>(new Map());
   const [partFilter, setPartFilter] = useState<string | null>(null);
+  const [defectTypeFilter, setDefectTypeFilter] = useState<string | null>(null);
   const [treeError, setTreeError] = useState("");
-  const [filter, setFilter] = useState<DefectReviewFilter>("needs_attention");
+  const [filter, setFilter] = useState<DefectReviewFilter>("all");
   const [issueFilter, setIssueFilter] = useState<DefectReviewIssueFilter | null>(null);
   const [search, setSearch] = useState("");
   const [matchResults, setMatchResults] = useState<Map<string, DefectMatchResult>>(new Map());
@@ -171,7 +209,11 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   } | null>(null);
   const [pendingGroupConfirmationKey, setPendingGroupConfirmationKey] = useState<string | null>(null);
   const [detailWidth, setDetailWidth] = useState(readStoredDetailWidth);
-  const [pinnedConfirmedId, setPinnedConfirmedId] = useState<string | null>(null);
+  /* 正在详情栏里打开的那一条，钉在列表里不随筛选消失。
+     选完评定树节点、补完照片、确认之后，这条就不再命中"待处理"了；不钉住的话它会
+     当场从列表里消失，看起来像"选一下就自动确认了"。用户主动换筛选 / 搜索 / 翻页 /
+     切视图时才放开——那是明确的离开动作。 */
+  const [pinnedRowId, setPinnedRowId] = useState<string | null>(null);
   const seenSafeIds = useRef(new Set<string>());
   const splitWorkspaceRef = useRef<HTMLDivElement>(null);
   const selectedTreeNodeIds = useMemo(
@@ -416,7 +458,11 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     } finally {
       setRematching(false);
     }
-  }, [baseUrl, draft.defects, importRecordId, ratingTree, refreshResolution, resolution]);
+    /* refreshResolution 不在依赖里：上面那段注释说明了这个接口只算不写，算完不必重取
+       工作区，函数体早已不用它。留着它会让 refreshResolution 每变一次就重建 runMatch，
+       进而触发下面那个自动匹配 effect——而 refreshResolution 一完成就 setResolution，
+       又反过来重建 runMatch。这条自激链正是同一个接口被连发好几次的来源之一。 */
+  }, [baseUrl, draft.defects, importRecordId, ratingTree, resolution]);
 
   // 自动触发：导入、构件绑定、评定树绑定完成，或未确认病害的构件/类型/描述改动后
   // 各触发一次。输入过程中不请求，短时间内的重复变化合并成一次。
@@ -460,7 +506,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     issueFilter,
     search,
     partFilter,
-  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, issueFilter, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, resolution, search, treeNodeDetails, treeRulesReady, componentOrder, componentPart, partFilter]);
+    defectTypeFilter,
+  }), [applicableTreeNodeIdsByComponent, assessmentIssues, draft, filter, issueFilter, matchResults, ratingTree?.version_id, ratingTreeNodeSummaries, resolution, search, treeNodeDetails, treeRulesReady, componentOrder, componentPart, partFilter, defectTypeFilter]);
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -478,7 +525,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     ? allModel.rows.find((row) => row.candidateId === selectedCandidateId) ?? null
     : null;
   const displayedRows = useMemo(() => {
-    if (!currentRow || pinnedConfirmedId !== currentRow.candidateId) return visibleModel.rows;
+    if (!currentRow || pinnedRowId !== currentRow.candidateId) return visibleModel.rows;
     if (visibleModel.rows.some((row) => row.candidateId === currentRow.candidateId)) return visibleModel.rows;
     const order = new Map(allModel.rows.map((row, index) => [row.candidateId, index]));
     const currentIndex = order.get(currentRow.candidateId) ?? Number.MAX_SAFE_INTEGER;
@@ -488,7 +535,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     const rows = [...visibleModel.rows];
     rows.splice(insertionIndex < 0 ? rows.length : insertionIndex, 0, currentRow);
     return rows;
-  }, [allModel.rows, currentRow, pinnedConfirmedId, visibleModel.rows]);
+  }, [allModel.rows, currentRow, pinnedRowId, visibleModel.rows]);
   // 重新匹配默认作用于当前筛选范围内的未确认记录；人工与已确认结果由后端跳过。
   const rematchCandidateIds = useMemo(
     () => visibleModel.rows
@@ -497,7 +544,9 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     [visibleModel.rows],
   );
   const rematchScopeLabel =
-    filter === "all" && !issueFilter && !search ? "全部" : "当前筛选";
+    filter === "all" && !issueFilter && !search && !partFilter && !defectTypeFilter
+      ? "全部"
+      : "当前筛选";
   const currentlySafeSelection = [...selectedIds].filter((id) => allModel.safeCandidateIds.has(id));
   const selectableCandidateIds = useMemo(
     () => visibleModel.rows
@@ -534,6 +583,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const selectedPhotoCount = draft.photos.filter(
     (photo) => photo.linked_defect_candidate_id && currentlySafeSelection.includes(photo.linked_defect_candidate_id),
   ).length;
+  const linkedPhotoCount = draft.photos.filter((photo) => photo.linked_defect_candidate_id).length;
+  const qualityChecksPending = !resolutionReady || Boolean(ratingTree && !treeRulesReady) || rematching;
   const selectedEntry = inventoryEntries.find((entry) => entry.id === form.componentEntryId);
   const selectedMapping = selectedEntry?.mappings.find((item) => item.is_active);
   const manualDefectNodes = useMemo(
@@ -544,7 +595,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   );
 
   const closeDetail = () => {
-    setPinnedConfirmedId(null);
+    setPinnedRowId(null);
     onCloseDetail?.();
   };
 
@@ -594,7 +645,16 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     updateDetailWidth(detailWidth + (event.key === "ArrowLeft" ? 2 : -2));
   };
 
-  const clearPinnedResult = () => setPinnedConfirmedId(null);
+  const clearPinnedResult = () => setPinnedRowId(null);
+  const openIssueGroups = () => {
+    clearPinnedResult();
+    setFilter("needs_attention");
+    setIssueFilter(null);
+    setSearch("");
+    setPartFilter(null);
+    setReviewMode("groups");
+    onCloseDetail?.();
+  };
 
   const openAddForm = async () => {
     setShowAddForm(true);
@@ -718,56 +778,109 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     })();
   };
 
+  /* 关系表没回来时，每条病害都会渲染成"未绑定构件、未定评定项"——那不是校对结论，
+     是数据还没到。整页在此之前不出，免得把加载中态读成"匹配全掉了"。
+
+     只等 resolutionReady，不等 treeRulesReady：评定树规则迟到是另一回事，那时页面
+     照常出，计数显示「—」表示"还不知道"（见工具栏 countsPending）。把规则也纳进闸门
+     会让那套刻意的表达再也走不到，而且取规则失败时 treeRulesReady 永远为 false，
+     界面会卡在转圈上连错误都看不到。 */
+  /* 解析状态一条都没取回来时，不能照常渲染：那会把每条病害都显示成"未绑定构件、
+     未定评定项"，看着像数据丢了。说清楚是没取回来，而不是真的没绑。 */
+  if (resolutionError && resolution.size === 0) {
+    return (
+      <section className="status-panel defect-photo-section">
+        <p className="error-text" role="alert">未能取到构件绑定与评定结果：{resolutionError}</p>
+        <p>页面上的病害条目暂时无法显示绑定与评定状态。请刷新页面重试。</p>
+      </section>
+    );
+  }
+
+  if (!resolutionReady) {
+    return (
+      <section className="status-panel defect-photo-section defect-section-loading" aria-busy="true">
+        <Spin size="large" />
+        <p>正在载入病害与照片…</p>
+      </section>
+    );
+  }
+
   return (
     <section className="status-panel defect-photo-section">
-      {/* 分区标题现在长在工具条里：两者本来就要一起吸顶，拆成两个 sticky 元素只会
-          在中间留一道能透出滚动内容的缝，还得拿伪元素去补。 */}
-      <DefectReviewToolbar
-        summary={allModel.summary}
-        filter={filter}
-        issueFilter={issueFilter}
-        search={search}
-        selectedCount={currentlySafeSelection.length}
-        selectableCount={selectableCandidateIds.length}
-        allSelectableSelected={allSelectableSelected}
-        someSelectableSelected={someSelectableSelected}
-        viewMode={reviewMode}
-        issueGroupCount={issueGroups.length}
-        disabled={disabled}
-        countsPending={!treeRulesReady}
-        matchCountsPending={matchSummary === null && matchError === null
-          && draft.defects.length > 0}
-        partFilter={partFilter}
-        onPartFilterChange={setPartFilter}
-        rematchScopeLabel={rematchScopeLabel}
-        rematchCount={rematchCandidateIds.length}
-        rematching={rematching}
-        matchError={matchError}
-        lastMatchSummary={matchSummary}
-        lastMatchAt={matchedAt}
-        onAddDefect={openAddForm}
-        addDefectDisabled={!allowStructureChanges || loadingInventory}
-        onFilterChange={(nextFilter) => { clearPinnedResult(); setFilter(nextFilter); }}
-        onIssueFilterChange={(nextIssueFilter) => { clearPinnedResult(); setIssueFilter(nextIssueFilter); }}
-        onSearchChange={(nextSearch) => { clearPinnedResult(); setSearch(nextSearch); }}
-        onToggleSelectAll={() => setSelectedIds((current) => {
-          const next = new Set(current);
-          if (allSelectableSelected) {
-            for (const id of selectableCandidateIds) next.delete(id);
-          } else {
-            for (const id of selectableCandidateIds) next.add(id);
-          }
-          return next;
-        })}
-        onViewModeChange={(mode) => {
-          clearPinnedResult();
-          setReviewMode(mode);
-          if (mode === "groups") onCloseDetail?.();
-        }}
-        onBatchConfirm={() => setBatchDialogOpen(true)}
-        onRematch={() => { void runMatch(rematchCandidateIds); }}
-      />
-      {showAddForm ? (
+      <div className="defect-overview-metrics" aria-label="病害与照片汇总">
+        <article className="defect-metric-card blue">
+          <span className="defect-metric-icon"><FileProtectOutlined /></span>
+          <span><small>病害总数</small><strong>{allModel.summary.all}</strong><em>条</em></span>
+        </article>
+        <article className="defect-metric-card green">
+          <span className="defect-metric-icon"><SafetyCertificateOutlined /></span>
+          <span><small>已确认</small><strong>{allModel.rows.filter((row) => row.defect.group_review_status === "已确认").length}</strong><em>条</em></span>
+        </article>
+        <article className="defect-metric-card blue">
+          <span className="defect-metric-icon"><PictureOutlined /></span>
+          <span><small>关联照片</small><strong>{linkedPhotoCount}</strong><em>张</em></span>
+        </article>
+        <button
+          type="button"
+          className={`defect-metric-card issue-entry ${qualityChecksPending ? "blue" : allModel.summary.pending > 0 ? "orange" : "green"}`}
+          disabled={qualityChecksPending || allModel.summary.pending === 0}
+          onClick={openIssueGroups}
+        >
+          <span className="defect-metric-icon">{qualityChecksPending || allModel.summary.pending > 0 ? <FileSearchOutlined /> : <CheckCircleOutlined />}</span>
+          <span>
+            <small>{qualityChecksPending ? "正在检查" : allModel.summary.pending > 0 ? "待处理问题" : "校对通过"}</small>
+            <strong>{qualityChecksPending ? "—" : allModel.summary.pending}</strong><em>条</em>
+          </span>
+        </button>
+      </div>
+      <div className={`defect-review-layout ${currentRow ? "has-detail" : ""}`}>
+        <div className="defect-review-card">
+          <DefectReviewToolbar
+            summary={allModel.summary}
+            filter={filter}
+            issueFilter={issueFilter}
+            search={search}
+            selectedCount={currentlySafeSelection.length}
+            selectableCount={selectableCandidateIds.length}
+            allSelectableSelected={allSelectableSelected}
+            someSelectableSelected={someSelectableSelected}
+            viewMode={reviewMode}
+            issueGroupCount={issueGroups.length}
+            disabled={disabled}
+            countsPending={!treeRulesReady}
+            matchCountsPending={matchSummary === null && matchError === null
+              && draft.defects.length > 0}
+            partFilter={partFilter}
+            onPartFilterChange={setPartFilter}
+            defectTypeFilter={defectTypeFilter}
+            onDefectTypeFilterChange={setDefectTypeFilter}
+            rematchScopeLabel={rematchScopeLabel}
+            rematchCount={rematchCandidateIds.length}
+            rematching={rematching}
+            matchError={matchError}
+            onAddDefect={openAddForm}
+            addDefectDisabled={!allowStructureChanges || loadingInventory}
+            onFilterChange={(nextFilter) => { clearPinnedResult(); setFilter(nextFilter); }}
+            onIssueFilterChange={(nextIssueFilter) => { clearPinnedResult(); setIssueFilter(nextIssueFilter); }}
+            onSearchChange={(nextSearch) => { clearPinnedResult(); setSearch(nextSearch); }}
+            onToggleSelectAll={() => setSelectedIds((current) => {
+              const next = new Set(current);
+              if (allSelectableSelected) {
+                for (const id of selectableCandidateIds) next.delete(id);
+              } else {
+                for (const id of selectableCandidateIds) next.add(id);
+              }
+              return next;
+            })}
+            onViewModeChange={(mode) => {
+              clearPinnedResult();
+              setReviewMode(mode);
+              if (mode === "groups") onCloseDetail?.();
+            }}
+            onBatchConfirm={() => setBatchDialogOpen(true)}
+            onRematch={() => { void runMatch(rematchCandidateIds); }}
+          />
+          {showAddForm ? (
         <form className="manual-defect-form" onSubmit={submitManualDefect}>
           <label>搜索构件<input aria-label="搜索构件" placeholder="编号、类别或现场名，如 3#墩盖梁" disabled={loadingInventory} value={componentSearch} onChange={(event) => setComponentSearch(event.target.value)} /></label>
           <label>实际构件<select aria-label="实际构件" disabled={loadingInventory || inventoryEntries.length === 0} required value={form.componentEntryId} onChange={(event) => setForm({ ...form, componentEntryId: event.target.value, ratingTreeNodeId: "" })}><option value="">{componentSearching ? "正在搜索…" : inventoryEntries.length === 0 ? "先在上方搜索构件" : "请选择构件"}</option>{inventoryEntries.map((entry) => <option key={entry.id} value={entry.id}>{entry.component_number} / {entry.site_component_type} / {entry.site_name}</option>)}</select></label>
@@ -780,10 +893,10 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
           {formError ? <p className="form-error" role="alert">{formError}</p> : null}
           <div className="manual-defect-form-actions"><button type="button" onClick={() => { setShowAddForm(false); setFormError(""); }}>取消</button><button type="submit" disabled={loadingInventory || !form.componentEntryId}>添加病害</button></div>
         </form>
-      ) : null}
+          ) : null}
       {/* 原来这里是一个 fieldset：它曾经用 disabled 一揽子关掉整片区域，禁用改成
           逐控件处理后就只剩一个空壳，还带着 fieldset 自己的 min-width:min-content。 */}
-      <div className="defect-review-body">
+          <div className="defect-review-body">
         {draft.defects.length === 0 ? <p>暂无病害候选，可使用“新增病害”手动添加。</p> : null}
         {treeError ? <p className="form-error" role="alert">{treeError}</p> : null}
         {!ratingTree ? <p className="warning-text">当前检测年度未锁定评定树，无法确定病害评分节点。</p> : null}
@@ -796,7 +909,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
             onConfirmGroup={(group) => setPendingGroupConfirmationKey(group.key)}
             onOpenDefect={(candidateId) => {
               setReviewMode("records");
-              clearPinnedResult();
+              setPinnedRowId(candidateId);
               onSelect(candidateId);
             }}
           />
@@ -822,7 +935,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
                 return next;
               })}
               onOpen={(candidateId, photoCandidateId) => {
-                clearPinnedResult();
+                setPinnedRowId(candidateId);
                 onSelect(candidateId, photoCandidateId);
               }}
             />
@@ -849,17 +962,21 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
                   applicableNodes={applicableRatingTreeNodes(currentRow.resolution.componentIds, treeNodesByComponent)}
                   importRecordId={importRecordId}
                   baseUrl={baseUrl}
+                  bridgeId={bridgeId}
                   initialPhotoCandidateId={selectedPhotoCandidateId}
                   dispatch={dispatch}
                   disabled={disabled || (isDefectEditable !== undefined && !isDefectEditable(currentRow.defect))}
                   allowDelete={allowStructureChanges}
                   editLockToken={editLockToken}
+                  onSave={onSave}
                   onClose={closeDetail}
                   onDefectTextCommitted={(candidateId) => { void runMatch([candidateId]); }}
                   onRatingResolved={() => { void refreshResolution(); }}
                   inventoryRevisionId={inventoryRevisionId}
                   onConfirm={() => {
-                    setPinnedConfirmedId(currentRow.candidateId);
+                    // 确认后停在原地：自动跳下一条会让人来不及看确认结果，
+                    // 想回头核对还得自己找回来。要看下一条由用户自己点。
+                    setPinnedRowId(currentRow.candidateId);
                     dispatch({ type: "confirm_defect_groups", candidateIds: [currentRow.candidateId] });
                   }}
                 />
@@ -869,6 +986,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
           </div>
         )}
         <UnlinkedPhotosPanel draft={draft} importRecordId={importRecordId} baseUrl={baseUrl} selectedPhotoCandidateId={selectedPhotoCandidateId} />
+          </div>
+        </div>
       </div>
       <DefectBatchConfirmDialog
         open={batchDialogOpen}
@@ -880,7 +999,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         onConfirm={() => {
           const validIds = [...selectedIds].filter((id) => allModel.safeCandidateIds.has(id));
           if (selectedCandidateId && validIds.includes(selectedCandidateId)) {
-            setPinnedConfirmedId(selectedCandidateId);
+            setPinnedRowId(selectedCandidateId);
           }
           if (validIds.length > 0) dispatch({ type: "confirm_defect_groups", candidateIds: validIds });
           setBatchDialogOpen(false);

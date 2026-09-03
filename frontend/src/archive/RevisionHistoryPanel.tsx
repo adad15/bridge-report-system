@@ -1,5 +1,5 @@
 import type { RevisionGroup } from "../api/componentArchiveApi";
-import { ObservationYearRow } from "./ObservationYearRow";
+import { ObservationTable } from "./ObservationTable";
 
 // 历史修订入口（模块 06 §7.4）：旧修订版按 年份+版本号 分组独立只读展示，
 // 明确标注被当前版本替代的关系；不提供任何绑定操作，也不计入主档案统计。
@@ -21,9 +21,7 @@ export function RevisionHistoryPanel({ revisions }: { revisions: RevisionGroup[]
               <span className="archive-legacy-hint">已被修订，当前有效版本为 v{group.superseded_by_version}</span>
             ) : null}
           </header>
-          {group.observations.map((observation) => (
-            <ObservationYearRow key={observation.id} observation={observation} />
-          ))}
+          <ObservationTable observations={group.observations} />
         </section>
       ))}
     </div>

@@ -1,3 +1,5 @@
+import { Button, Tag } from "antd";
+
 import type { TriageBatchSummary, TriageSampleGroup } from "../api/threadTriageApi";
 
 /**
@@ -41,9 +43,9 @@ export function TriageBatchCard({
           </strong>
           <p className="triage-batch-years">{yearSpan(batch.year_set)}</p>
         </div>
-        <span className={`triage-batch-action triage-batch-action-${batch.action}`}>
+        <Tag color={batch.action === "create" ? "blue" : "green"} variant="filled">
           {batch.action === "create" ? "批量新建" : "批量绑定"}
-        </span>
+        </Tag>
       </header>
 
       <p className="triage-batch-scale">
@@ -51,7 +53,6 @@ export function TriageBatchCard({
       </p>
 
       {batch.action === "bind" ? (
-        // 线索属于具体构件：一个跨多构件的批次会绑到多条不同的线索，批次层面没有唯一编号。
         <p className="triage-batch-bind-note">将分别绑定到各构件中精确命中的已有线索</p>
       ) : null}
 
@@ -63,22 +64,20 @@ export function TriageBatchCard({
           </li>
         ))}
         {batch.group_count > batch.sample_groups.length ? (
-          <li className="triage-sample-more">
-            …还有 {batch.group_count - batch.sample_groups.length} 个
-          </li>
+          <li className="triage-sample-more">…还有 {batch.group_count - batch.sample_groups.length} 个</li>
         ) : null}
       </ul>
 
       {expanded ? children : null}
 
       <div className="triage-batch-actions">
-        <button type="button" className="primary-button" disabled={busy} onClick={onConfirm}>
+        <Button type="primary" disabled={busy} aria-label={`确认这 ${batch.group_count} 组`} onClick={onConfirm}>
           确认这 {batch.group_count} 组
-        </button>
-        <button type="button" disabled={busy} onClick={onToggleExpand}>
+        </Button>
+        <Button disabled={busy} aria-label="展开逐组核对" onClick={onToggleExpand}>
           {expanded ? "收起" : "展开逐组核对"}
-        </button>
-        <button type="button" disabled={busy} onClick={onSkip}>暂不处理</button>
+        </Button>
+        <Button disabled={busy} aria-label="暂不处理" onClick={onSkip}>暂不处理</Button>
       </div>
     </section>
   );

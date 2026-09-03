@@ -1,0 +1,724 @@
+/*
+ * 模块 06 构件病害档案（A1 布局）。
+ *
+ * 这份样式表是该页面唯一的视觉层：它覆盖 BridgeWorkspacePages.css 里的通用
+ * .archive-* 基线，因此所有规则都挂在 .archive-page-redesign 下保证优先级。
+ * 色值取自 design-system/theme/tokens.ts，不要在这里另起一套主色。
+ */
+
+.archive-page-redesign {
+  --archive-primary: #2f54eb;
+  --archive-primary-bg: #e8edff;
+  --archive-text: #172033;
+  --archive-muted: #59677d;
+  --archive-faint: #8691a5;
+  --archive-border: #e3e8f0;
+  --archive-hairline: #eef1f6;
+  /* 分栏线要比卡片描边重：它承担的是"这两列是两回事"，浅了等于没画。 */
+  --archive-divider: #b3c0d2;
+  --archive-card-shadow: 0 1px 2px rgb(16 24 40 / 4%), 0 4px 12px rgb(16 24 40 / 4%);
+
+  gap: 16px;
+}
+
+/* ---------- 概况指标 ---------- */
+
+.archive-page-redesign .archive-metrics {
+  gap: 16px;
+}
+
+.archive-page-redesign .archive-metric {
+  box-sizing: border-box;
+  min-height: 88px;
+  gap: 14px;
+  padding: 16px 20px;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: var(--archive-card-shadow);
+}
+
+.archive-page-redesign .archive-metric > span {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 20px;
+}
+
+.archive-page-redesign .archive-metric > div {
+  gap: 6px;
+}
+
+.archive-page-redesign .archive-metric small {
+  color: var(--archive-muted);
+  font-size: 13px;
+}
+
+.archive-page-redesign .archive-metric strong {
+  color: var(--archive-text);
+  font-size: 26px;
+  font-weight: 600;
+}
+
+/* ---------- 整理提示条 ---------- */
+
+.archive-page-redesign .archive-guidance-alert {
+  align-items: center;
+  padding: 10px 16px;
+  border-color: #c9d6ff;
+  border-radius: 8px;
+  background: #f2f6ff;
+}
+
+.archive-page-redesign .archive-guidance-alert .ant-alert-message {
+  color: var(--archive-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.archive-page-redesign .archive-guidance-alert .ant-alert-description {
+  margin-top: 1px;
+  color: var(--archive-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.archive-page-redesign .archive-guidance-alert .ant-alert-action {
+  margin-inline-start: 16px;
+}
+
+/* ---------- 两栏骨架 ---------- */
+
+.archive-page-redesign .archive-layout {
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.archive-page-redesign .archive-filter-card,
+.archive-page-redesign .archive-detail-slot {
+  min-height: 560px;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--archive-card-shadow);
+}
+
+.archive-page-redesign .archive-filter-card {
+  padding: 16px;
+}
+
+/* ---------- 左侧构件列表 ---------- */
+
+.archive-page-redesign .archive-list-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 12px;
+}
+
+.archive-page-redesign .archive-list-title h2 {
+  margin: 0;
+  color: var(--archive-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.archive-page-redesign .archive-list-title strong {
+  color: var(--archive-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.archive-page-redesign .archive-list-panel {
+  padding: 0;
+  border: 0;
+}
+
+.archive-page-redesign .archive-list-filters {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.archive-page-redesign .archive-list-filters .ant-input-affix-wrapper {
+  height: 36px;
+  border-radius: 6px;
+}
+
+.archive-page-redesign .archive-list-search-icon {
+  color: var(--archive-faint);
+}
+
+.archive-page-redesign .archive-list-select {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 30px 0 11px;
+  border: 1px solid #d5deea;
+  border-radius: 6px;
+  color: var(--archive-text);
+  /* 原生 select 的箭头各浏览器不一，这里画一个与 antd 一致的 chevron。 */
+  background:
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%238691a5' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round' d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E")
+    no-repeat right 11px center / 12px 12px #fff;
+  font: inherit;
+  font-size: 14px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.archive-page-redesign .archive-list-select:hover {
+  border-color: #7f9cf5;
+}
+
+.archive-page-redesign .archive-list-select:focus {
+  border-color: var(--archive-primary);
+  outline: 0;
+  box-shadow: 0 0 0 2px rgb(47 84 235 / 10%);
+}
+
+.archive-page-redesign .archive-unbound-filter {
+  color: var(--archive-muted);
+  font-size: 13px;
+}
+
+.archive-page-redesign .archive-list-filter-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.archive-page-redesign .archive-component-list {
+  max-height: 60vh;
+  margin: 0;
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+}
+
+/*
+ * 分栏定为两列（侧栏 340px，本来也只放得下两列），列间画一条细分隔线。
+ *
+ * 格内是"编号靠左、评分靠右"，中间隔着近 90px；若只靠列间距做区分，间距得比 90px
+ * 还大才压得住，那就没有分栏的意义了。所以用一条线显式切开，让配对关系回到格内。
+ */
+.archive-page-redesign .archive-group-items {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 17px;
+  row-gap: 1px;
+  margin: 0;
+  padding: 2px 0 6px;
+  list-style: none;
+}
+
+.archive-page-redesign .archive-group-items > li:nth-child(even) {
+  position: relative;
+}
+
+/* 线画在列间空隙正中，用伪元素所以不参与布局，末行落单时自然不画。 */
+.archive-page-redesign .archive-group-items > li:nth-child(even)::before {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: -9px;
+  width: 1px;
+  background: var(--archive-divider);
+  content: "";
+}
+
+/* 粘性分组标题：滚到哪都知道当前在看哪一类构件。 */
+.archive-page-redesign .archive-group-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--archive-hairline);
+  background: #fff;
+  color: var(--archive-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.archive-page-redesign .archive-group-head .anticon {
+  color: var(--archive-faint);
+  font-size: 10px;
+}
+
+.archive-page-redesign .archive-group-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-page-redesign .archive-group-count {
+  color: var(--archive-faint);
+  font-size: 11px;
+}
+
+.archive-page-redesign .archive-group-unbound {
+  color: #ad6800;
+  font-size: 11px;
+}
+
+.archive-page-redesign .archive-group-worst {
+  margin-left: auto;
+  color: var(--archive-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* 单行行高：编号 + 偏离跨度 + 评分，一行放得下。 */
+.archive-page-redesign .archive-component-item {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: background .18s ease;
+}
+
+/* hover 走中性灰而不是更浅的蓝：选中是蓝色，光标所在只是"当前指着"，
+   两者用不同色相区分比用同色深浅区分更不容易看混。 */
+.archive-page-redesign .archive-component-item:hover {
+  background: #e6eaf1;
+}
+
+.archive-page-redesign .archive-component-item.active {
+  background: #f0f4ff;
+  box-shadow: inset 3px 0 0 var(--archive-primary);
+}
+
+.archive-page-redesign .archive-component-code {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  color: var(--archive-text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-page-redesign .archive-component-item.active .archive-component-code {
+  color: var(--archive-primary);
+}
+
+.archive-page-redesign .archive-component-unbound {
+  flex: 0 0 auto;
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: #ad6800;
+  background: #fff7e6;
+  font-size: 10px;
+  text-align: center;
+}
+
+/* 右对齐 + 等宽数字：纵向一扫就能挑出差的。 */
+.archive-page-redesign .archive-component-score {
+  flex: 0 0 auto;
+  min-width: 26px;
+  color: var(--archive-text);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* 满分是"没问题"，压成灰色让有问题的跳出来。 */
+.archive-page-redesign .archive-component-score.is-full {
+  color: var(--archive-faint);
+  font-weight: 400;
+}
+
+.archive-page-redesign .archive-filter-empty {
+  min-height: 220px;
+}
+
+/* ---------- 右侧档案详情 ---------- */
+
+.archive-page-redesign .archive-detail-slot {
+  padding: 0;
+  overflow: hidden;
+}
+
+.archive-page-redesign .archive-detail-slot > p {
+  margin: 0;
+  padding: 24px;
+  color: var(--archive-muted);
+}
+
+.archive-page-redesign .archive-detail-panel {
+  display: grid;
+  gap: 20px;
+  margin: 0;
+  padding: 20px 24px 24px;
+  border: 0;
+  border-radius: 0;
+}
+
+.archive-page-redesign .archive-detail-head {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+
+.archive-page-redesign .archive-component-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.archive-page-redesign .archive-component-heading h2 {
+  margin: 0 2px 0 0;
+  color: var(--archive-text);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.archive-page-redesign .archive-detail-head p {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0 0;
+  color: var(--archive-muted);
+  font-size: 13px;
+}
+
+.archive-page-redesign .archive-history-inline {
+  padding: 0;
+  border: 0;
+  color: var(--archive-primary);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+
+.archive-page-redesign .archive-detail-section {
+  padding: 0;
+}
+
+.archive-page-redesign .archive-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.archive-page-redesign .archive-section-title h3 {
+  margin: 0;
+  color: var(--archive-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.archive-page-redesign .archive-section-count {
+  color: var(--archive-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------- 年度评分：年份—评分折线图 ---------- */
+
+.archive-page-redesign .archive-rating-chart {
+  padding: 8px 4px 0;
+  border: 1px solid var(--archive-border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* ---------- 跨年病害线索：空态 ---------- */
+
+.archive-page-redesign .archive-thread-empty {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid #dfe7f8;
+  border-radius: 8px;
+  background: #f7faff;
+}
+
+.archive-page-redesign .archive-thread-empty-art {
+  width: 56px;
+  height: 42px;
+}
+
+.archive-page-redesign .archive-thread-empty-copy strong {
+  color: var(--archive-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.archive-page-redesign .archive-thread-empty-copy p {
+  margin: 4px 0 0;
+  color: var(--archive-muted);
+  font-size: 13px;
+}
+
+/* ---------- 年度观测表 ---------- */
+
+.archive-page-redesign .archive-observation-table .ant-table {
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.archive-page-redesign .archive-observation-table .ant-table-thead > tr > th {
+  height: 44px;
+  padding: 0 12px;
+  color: var(--archive-muted);
+  background: #fafbfd;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.archive-page-redesign .archive-observation-table .ant-table-tbody > tr > td {
+  height: 44px;
+  padding: 0 12px;
+  color: var(--archive-text);
+}
+
+.archive-page-redesign .archive-observation-table .ant-table-tbody > tr.ant-table-row {
+  cursor: pointer;
+}
+
+/*
+ * 表格线与左栏分栏线同一浓度：同一屏里"分隔"这件事只该有一种视觉重量。
+ *
+ * antd 6 的表格边框走 `--ant-table-border-color`，且 bordered 的竖线是
+ * `border-inline-end` 的简写——跟它拼选择器权重会漏掉一半，直接改 token 才全覆盖。
+ * 内层 .ant-table 也带 ant-table-css-var 并重新声明了同一批变量，会遮蔽外层的值，
+ * 所以两层都要设，只设 wrapper 只能改到最外那圈框。
+ */
+.archive-page-redesign .archive-observation-table,
+.archive-page-redesign .archive-observation-table .ant-table {
+  --ant-table-border-color: var(--archive-divider);
+}
+
+.archive-page-redesign .archive-thread-card {
+  border-color: var(--archive-divider);
+}
+
+.archive-page-redesign .archive-thread-head {
+  border-bottom-color: var(--archive-divider);
+}
+
+.archive-page-redesign .archive-observation-evidence-link {
+  height: auto;
+  padding: 0;
+  font-size: 13px;
+}
+
+.archive-page-redesign .archive-observation-detail-row > td {
+  padding: 16px 20px !important;
+  background: #f8fafc;
+  cursor: default;
+}
+
+/* 展开行的内边距由 td 提供，清掉 styles.css 里那份基线缩进避免叠加。 */
+.archive-page-redesign .archive-observation-detail {
+  padding: 0;
+}
+
+.archive-page-redesign .archive-observation-detail p {
+  margin: 0 0 8px;
+  color: var(--archive-text);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.archive-page-redesign .archive-observation-detail p strong {
+  color: var(--archive-muted);
+  font-weight: 600;
+}
+
+.archive-page-redesign .archive-observation-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.archive-page-redesign .archive-observation-number {
+  color: var(--archive-faint);
+  font-size: 12px;
+}
+
+/* ---------- 空档案态 ---------- */
+
+.archive-page-redesign .archive-zero-state {
+  min-height: 420px;
+  padding: 40px 24px;
+}
+
+.archive-page-redesign .archive-zero-state h2 {
+  margin: 12px 0 6px;
+  color: var(--archive-text);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.archive-page-redesign .archive-zero-state > p {
+  margin: 0 0 24px;
+  color: var(--archive-muted);
+  font-size: 13px;
+}
+
+/* 空态不摆无关动作，改摆"最该先看的构件"：这一页的用途就是找有问题的构件。 */
+.archive-page-redesign .archive-zero-picks {
+  width: 100%;
+  max-width: 560px;
+}
+
+.archive-page-redesign .archive-zero-picks h3 {
+  margin: 0 0 10px;
+  color: var(--archive-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.archive-page-redesign .archive-zero-pick-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 8px;
+}
+
+.archive-page-redesign .archive-zero-pick {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--archive-border);
+  border-radius: 6px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease;
+}
+
+.archive-page-redesign .archive-zero-pick:hover {
+  border-color: #adbdf5;
+  background: #f7f9ff;
+}
+
+.archive-page-redesign .archive-zero-pick-code {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  color: var(--archive-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-page-redesign .archive-zero-pick-part {
+  flex: 0 0 auto;
+  color: var(--archive-faint);
+  font-size: 11px;
+}
+
+.archive-page-redesign .archive-zero-pick-score {
+  flex: 0 0 auto;
+  color: var(--archive-text);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.archive-page-redesign .archive-zero-state > aside {
+  margin-top: 28px;
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 1180px) {
+  .archive-page-redesign .archive-layout { grid-template-columns: 300px minmax(0, 1fr); }
+}
+
+/* 右侧档案要放下 6 列观测表，容器窄于约 1080px 时改为上下排布而不是继续压缩。 */
+@media (max-width: 1080px) {
+  .archive-page-redesign .archive-layout { grid-template-columns: 1fr; }
+
+  /* 上下排布时侧栏是整幅宽度，固定两列会把格子拉得很空，改回按内容自适应。 */
+  .archive-page-redesign .archive-group-items {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .archive-page-redesign .archive-group-items > li:nth-child(even)::before {
+    display: none;
+  }
+
+  .archive-page-redesign .archive-filter-card,
+  .archive-page-redesign .archive-detail-slot { min-height: auto; }
+  .archive-page-redesign .archive-component-list { max-height: 320px; }
+}
+
+@media (max-width: 640px) {
+  .archive-page-redesign .archive-thread-empty { grid-template-columns: 56px minmax(0, 1fr); }
+  .archive-page-redesign .archive-thread-empty-action { grid-column: 1 / -1; justify-self: start; }
+}
+
+/* ---------- 线索卡 / 历史修订：与新版白卡语言对齐 ---------- */
+
+.archive-page-redesign .archive-thread-card {
+  margin: 0 0 12px;
+  border: 1px solid var(--archive-border);
+  border-left: 3px solid var(--defect-category-color, var(--archive-primary));
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.archive-page-redesign .archive-thread-card:last-child {
+  margin-bottom: 0;
+}
+
+.archive-page-redesign .archive-thread-head {
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom-color: var(--archive-hairline);
+  background: #fafbfd;
+  font-size: 13px;
+}
+
+.archive-page-redesign .archive-thread-head strong {
+  color: var(--archive-text);
+  font-size: 14px;
+}
+
+.archive-page-redesign .archive-thread-card .archive-observation-table .ant-table {
+  border-radius: 0;
+}
+
+.archive-page-redesign .archive-revision-group {
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--archive-border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.archive-page-redesign .archive-revision-group:last-child {
+  margin-bottom: 0;
+}

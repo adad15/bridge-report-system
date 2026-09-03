@@ -87,6 +87,113 @@ int pending_import_count(const drogon::orm::DbClientPtr& client, const std::stri
     return rows[0]["count"].as<int>();
 }
 
+/// 当前有效且已确认的最近两个年度。少于两个就没有可比对象。
+constexpr const char* kRecentConfirmedYearsSql =
+    "select id::text as id, inspection_year from inspection_years "
+    "where bridge_id = $1::uuid and is_current and status = '已确认' "
+    "order by inspection_year desc limit 2";
+
+
+/// 逐构件两年条数：只用来算"多少构件有变化、增减各多少条"这类汇总，不直接出现在界面上。
+constexpr const char* kComponentDefectDeltaSql =
+    "select o.bridge_component_id::text as bridge_component_id, "
+    "count(*) filter (where o.inspection_year_id = $2::uuid) as previous_count, "
+    "count(*) filter (where o.inspection_year_id = $1::uuid) as latest_count "
+    "from defect_observations o "
+    "where o.inspection_year_id in ($1::uuid, $2::uuid) "
+    "and o.review_status in ('已确认', '已修改') "
+    "group by o.bridge_component_id";
+
+/// 按「结构分部 + 构件类型」汇总的两年条数与构件数。
+constexpr const char* kDefectGroupSql =
+    "with per_component as ("
+    "  select bc.structure_part, bc.component_type, o.bridge_component_id, "
+    "         count(*) filter (where o.inspection_year_id = $2::uuid) as previous_count, "
+    "         count(*) filter (where o.inspection_year_id = $1::uuid) as latest_count "
+    "  from defect_observations o "
+    "  join bridge_components bc on bc.id = o.bridge_component_id "
+    "  where o.inspection_year_id in ($1::uuid, $2::uuid) "
+    "  and o.review_status in ('已确认', '已修改') "
+    "  group by bc.structure_part, bc.component_type, o.bridge_component_id"
+    ") "
+    "select structure_part, component_type, "
+    "sum(previous_count)::int as previous_count, sum(latest_count)::int as latest_count, "
+    "count(*)::int as component_count, "
+    "count(*) filter (where previous_count <> latest_count)::int as changed_component_count "
+    "from per_component group by structure_part, component_type "
+    "order by sum(latest_count) desc, structure_part, component_type";
+
+/// 每个类型分组下的病害类型构成。文字描述要写"横向裂缝 2 条"，光有合计写不出来。
+constexpr const char* kDefectGroupTypeSql =
+    "select bc.structure_part, bc.component_type, o.defect_type, "
+    "count(*) filter (where o.inspection_year_id = $2::uuid) as previous_count, "
+    "count(*) filter (where o.inspection_year_id = $1::uuid) as latest_count "
+    "from defect_observations o "
+    "join bridge_components bc on bc.id = o.bridge_component_id "
+    "where o.inspection_year_id in ($1::uuid, $2::uuid) "
+    "and o.review_status in ('已确认', '已修改') "
+    "group by bc.structure_part, bc.component_type, o.defect_type "
+    "order by bc.structure_part, bc.component_type, "
+    "count(*) filter (where o.inspection_year_id = $1::uuid) desc, o.defect_type";
+
+/// 最新年度与上一年度的病害对比，按构件类型汇总。
+review::WorkspaceDefectComparison load_defect_comparison(
+    const drogon::orm::DbClientPtr& db_client, const std::string& bridge_id) {
+    review::WorkspaceDefectComparison comparison;
+    const auto years = db_client->execSqlSync(kRecentConfirmedYearsSql, bridge_id);
+    if (years.size() < 2) return comparison;
+
+    const auto latest_id = years[0]["id"].as<std::string>();
+    const auto previous_id = years[1]["id"].as<std::string>();
+    comparison.available = true;
+    comparison.latest_year = years[0]["inspection_year"].as<int>();
+    comparison.previous_year = years[1]["inspection_year"].as<int>();
+
+    // 增减在**构件**这一层统计：按类型统计会让同类型里"这个多两条、那个少两条"互相抵消，
+    // 报出来就成了"没有变化"。
+    for (const auto& row : db_client->execSqlSync(kComponentDefectDeltaSql, latest_id, previous_id)) {
+        const auto change = row["latest_count"].as<int>() - row["previous_count"].as<int>();
+        if (change == 0) {
+            ++comparison.unchanged_component_count;
+            continue;
+        }
+        ++comparison.changed_component_count;
+        if (change > 0) comparison.increased_observation_count += change;
+        else comparison.decreased_observation_count += -change;
+    }
+
+    for (const auto& row : db_client->execSqlSync(kDefectGroupSql, latest_id, previous_id)) {
+        review::WorkspaceDefectGroupDelta group;
+        group.structure_part = row["structure_part"].as<std::string>();
+        group.component_type = row["component_type"].as<std::string>();
+        group.previous_count = row["previous_count"].as<int>();
+        group.latest_count = row["latest_count"].as<int>();
+        group.component_count = row["component_count"].as<int>();
+        group.changed_component_count = row["changed_component_count"].as<int>();
+        comparison.previous_observation_count += group.previous_count;
+        comparison.latest_observation_count += group.latest_count;
+        comparison.groups.push_back(std::move(group));
+    }
+
+    // 类型构成单独取一遍再挂回去：和分组汇总合成一条语句会让每个分组重复多行，
+    // 汇总数字得在应用层去重，反而更容易错。
+    std::map<std::pair<std::string, std::string>,
+             std::vector<review::WorkspaceDefectTypeDelta>> types_by_group;
+    for (const auto& row : db_client->execSqlSync(kDefectGroupTypeSql, latest_id, previous_id)) {
+        review::WorkspaceDefectTypeDelta type_delta;
+        type_delta.defect_type = row["defect_type"].as<std::string>();
+        type_delta.previous_count = row["previous_count"].as<int>();
+        type_delta.latest_count = row["latest_count"].as<int>();
+        types_by_group[{row["structure_part"].as<std::string>(),
+                        row["component_type"].as<std::string>()}].push_back(std::move(type_delta));
+    }
+    for (auto& group : comparison.groups) {
+        const auto found = types_by_group.find({group.structure_part, group.component_type});
+        if (found != types_by_group.end()) group.defect_types = std::move(found->second);
+    }
+    return comparison;
+}
+
 }  // namespace
 
 WorkspaceRepository::WorkspaceRepository(drogon::orm::DbClientPtr db_client) : db_client_(std::move(db_client)) {}
@@ -137,6 +244,7 @@ std::optional<review::BridgeOverview> WorkspaceRepository::get_bridge_overview(c
             overview.defect_archive.unbound_observation_count += component["unbound_count"].asInt();
         }
     }
+    overview.defect_comparison = load_defect_comparison(db_client_, bridge_id);
     overview.pending.import_count = pending_import_count(db_client_, bridge_id);
     overview.pending.unbound_observation_count = overview.defect_archive.unbound_observation_count;
     return overview;

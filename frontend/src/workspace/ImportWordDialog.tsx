@@ -110,7 +110,7 @@ export function ImportWordDialog({
     setError(null);
     if (fromSourceDb) {
       if (!sourceDbPath.trim()) {
-        setError("请填写来源软件离线库的完整路径。");
+        setError("请填写博试云桥隧定检系统离线库的完整路径。");
         sourceDbPathRef.current?.focus();
         return;
       }
@@ -209,7 +209,8 @@ export function ImportWordDialog({
                 disabled={busy}
                 onChange={(event) => setDataSource(event.target.value as typeof dataSource)}
               >
-                <option value="来源软件">来源软件离线库</option>
+                {/* value 是本地分支用的判别值，不发给后端；这里只改显示名。 */}
+                <option value="来源软件">博试云桥隧定检系统</option>
                 <option value="Word">Word 文件</option>
               </select>
             </div>
@@ -246,7 +247,7 @@ export function ImportWordDialog({
         {fromSourceDb ? (
           <>
             <p className="dialog-note">
-              请先在来源软件的桌面程序里打开该桥并下载对应年度——数据要在那一步才会落到本机离线库里。
+              请先在博试云桥隧定检系统的桌面程序里打开该桥并下载对应年度——数据要在那一步才会落到本机离线库里。
             </p>
             <div className="import-field required">
               <label htmlFor="import-source-db-path">离线库路径</label>
@@ -257,7 +258,7 @@ export function ImportWordDialog({
                   required
                   disabled={busy || loadingTasks}
                   value={sourceDbPath}
-                  placeholder={loadingTasks ? "正在查找来源软件的离线库…" : "离线库的完整路径"}
+                  placeholder={loadingTasks ? "正在查找博试云桥隧定检系统的离线库…" : "离线库的完整路径"}
                   onChange={(event) => setSourceDbPath(event.target.value)}
                 />
                 <button
@@ -269,7 +270,7 @@ export function ImportWordDialog({
                 </button>
               </div>
               <p className="import-field-hint">
-                已按来源软件的默认位置填好，一般不用改。离线库只会被只读打开，不会被复制或修改。
+                已按博试云桥隧定检系统的默认位置填好，一般不用改。离线库只会被只读打开，不会被复制或修改。
               </p>
               {taskError ? <p className="import-field-warn">{taskError}</p> : null}
             </div>

@@ -1,3 +1,5 @@
+import { FileTextOutlined, InfoCircleOutlined, SearchOutlined } from "@ant-design/icons";
+import { Button } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -19,7 +21,7 @@ import {
 } from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
 import { RatingTreeNavigator } from "../rating-tree/RatingTreeNavigator";
-import { RatingTreeNodeDetail } from "../rating-tree/RatingTreeNodeDetail";
+import { RatingTreeNodeDetailView } from "./RatingTreeNodeDetailView";
 import {
   readLastRatingTreeVersionId,
   readRatingTreeViewState,
@@ -57,6 +59,9 @@ export function RatingTreePage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const h21PackageVersion = version?.h21_package_version ?? version?.sources.find(
+    (source) => source.source_type === "technical_condition",
+  )?.package_version;
 
   useEffect(() => {
     if (versionId !== undefined) return;
@@ -202,7 +207,7 @@ export function RatingTreePage() {
   }, [linkedNodeId, versionId]);
 
   useEffect(() => {
-    if (!version?.h21_package_version) {
+    if (!h21PackageVersion) {
       setScopeCatalog(null);
       return;
     }
@@ -212,7 +217,7 @@ export function RatingTreePage() {
         (item) =>
           item.family === "technical_condition" &&
           item.algorithm_id === "jtg-h21-2011" &&
-          item.package_version === version.h21_package_version &&
+          item.package_version === h21PackageVersion &&
           item.sync_status === "正常",
       ))
       .then((standardPackage) =>
@@ -230,7 +235,7 @@ export function RatingTreePage() {
     return () => {
       active = false;
     };
-  }, [version?.h21_package_version]);
+  }, [h21PackageVersion]);
 
   useEffect(() => {
     if (!versionId) return;
@@ -345,14 +350,15 @@ export function RatingTreePage() {
     return (
       <section className="rating-tree-page rating-tree-page-skeleton" aria-busy="true">
         <header className="rating-tree-page-header">
-          <div>
-            <p className="section-kicker">桥梁评定规则</p>
+          <div className="rating-tree-title-line">
             <span className="rating-tree-skeleton-line rating-tree-skeleton-title" />
+            <span className="workspace-heading-divider" aria-hidden="true" />
             <span className="rating-tree-skeleton-line rating-tree-skeleton-meta" />
           </div>
         </header>
         <div className="rating-tree-workspace">
           <aside className="rating-tree-sidebar">
+            <div className="rating-tree-sidebar-title"><h2>规则目录</h2></div>
             <div className="rating-tree-search">
               <span>搜索节点或病害</span>
               <span className="rating-tree-skeleton-line rating-tree-skeleton-input" />
@@ -382,28 +388,38 @@ export function RatingTreePage() {
   return (
     <section className="rating-tree-page">
       <header className="rating-tree-page-header">
-        <div>
-          <p className="section-kicker">桥梁评定规则</p>
-          <h1>{version.tree_name}</h1>
-          <p>
-            版本 {version.package_version} · {version.node_count} 个节点 · 已发布只读
-          </p>
+        <div className="rating-tree-page-heading">
+          <div className="rating-tree-title-line">
+            <h1>{version.tree_name}</h1>
+            <span className="workspace-heading-divider" aria-hidden="true" />
+            <p>版本 {version.package_version} <span>·</span> {version.node_count} 个节点 <span>·</span> 已发布只读</p>
+          </div>
         </div>
-        <div className="rating-tree-version-chip" title={version.tree_content_checksum}>
-          规则版本不可编辑
+        <div className="rating-tree-header-actions">
+          <div className="rating-tree-version-chip" title={version.tree_content_checksum}>
+            <InfoCircleOutlined aria-hidden="true" /> 规则版本不可编辑
+          </div>
+          <Button icon={<FileTextOutlined />} onClick={() => navigate("/bridges?standards=1")}>查看规范信息</Button>
         </div>
       </header>
       {error && <div className="rating-tree-inline-error">{error}</div>}
       <div className="rating-tree-workspace">
         <aside className="rating-tree-sidebar">
+          <div className="rating-tree-sidebar-title">
+            <h2>规则目录</h2>
+            <span>{version.node_count} 个节点</span>
+          </div>
           <label className="rating-tree-search">
             <span>搜索节点或病害</span>
-            <input
-              type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="例如：渗水、裂缝、支座"
-            />
+            <span className="rating-tree-search-control">
+              <SearchOutlined aria-hidden="true" />
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="例如：渗水、裂缝、支座"
+              />
+            </span>
           </label>
           <div className="rating-tree-navigation-scroll">
             <RatingTreeNavigator
@@ -419,7 +435,7 @@ export function RatingTreePage() {
           </div>
         </aside>
         <main className="rating-tree-detail-pane">
-          <RatingTreeNodeDetail
+          <RatingTreeNodeDetailView
             version={version}
             node={selectedNode}
             children={selectedChildren}

@@ -383,6 +383,18 @@ Json::Value load_source_defect(
 ImportResolutionService::ImportResolutionService(drogon::orm::DbClientPtr db_client)
     : db_client_(std::move(db_client)) {}
 
+/**
+ * 解析工作区读模型。
+ *
+ * 这里**不**按 import_status 拦截。读模型回答的是"这条导入记录的构件绑定与评定树
+ * 结果是什么"，那与"现在还能不能改"是两件事：已确认的记录仍然要能打开校对页浏览
+ * （页面按 effectiveReadOnly 关掉写入口）。
+ *
+ * 此前这里跟写命令共用同一条 `!= "待校对"` 守卫，于是已入库记录取不回工作区，
+ * 前端拿不到解析结果就把每条病害都渲染成"未绑定构件、未定评定项"——279 条全成了
+ * 待处理，而库里其实都绑好了。状态守卫留在写路径上（见 load_command_preconditions
+ * 与 ResolutionPlanService），读路径放开。
+ */
 ResolutionOutcome ImportResolutionService::load_workspace(
     const std::string& import_record_id) const {
     ResolutionOutcome outcome;
@@ -403,12 +415,6 @@ ResolutionOutcome ImportResolutionService::load_workspace(
             import_record_id);
         if (rows.empty()) {
             outcome.status = ResolutionStatus::NotFound;
-            return outcome;
-        }
-        if (rows[0]["import_status"].as<std::string>() != "待校对") {
-            outcome.status = ResolutionStatus::Conflict;
-            outcome.error_code = "import_record_wrong_status";
-            outcome.error_message = "导入记录不在待校对状态。";
             return outcome;
         }
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Pagination } from "antd";
 import {
   applyComponentResolution,
   applyResolutionPlan,
@@ -38,6 +39,7 @@ import { backendBaseUrl } from "../../config";
 import "./ComponentBindingRatingTree.css";
 
 const MAX_SEARCH_RESULTS = 20;
+const DEFAULT_PAGE_SIZE = 20;
 
 const STATUS_LABELS: Record<string, string> = {
   bound: "已绑定",
@@ -264,13 +266,6 @@ function RowAction(
 
   return (
     <div className="binding-row-action">
-      <input
-        aria-label={`搜索实际构件 ${row.component_number}`}
-        placeholder="编号、类别或现场名"
-        value={search}
-        disabled={busy}
-        onChange={(event) => setSearch(event.target.value)}
-      />
       <select
         aria-label={`为 ${row.component_number} 选择实际构件`}
         value=""
@@ -303,6 +298,13 @@ function RowAction(
           </option>
         ))}
       </select>
+      <input
+        aria-label={`搜索实际构件 ${row.component_number}`}
+        placeholder="编号、类别或现场名"
+        value={search}
+        disabled={busy}
+        onChange={(event) => setSearch(event.target.value)}
+      />
       {/* 搜索失败只报在行内，概览带来的候选项照常可用。 */}
       {searchError ? <span className="binding-row-error">{searchError}</span> : null}
       <button type="button" disabled={busy} aria-label={`标记缺失 ${row.component_number}`} onClick={onMarkMissing}>
@@ -315,6 +317,7 @@ function RowAction(
 export function ComponentBindingWorkspace({
   importId,
   bridgeId,
+  importStatus,
   lockToken,
   onEnterReview,
   onOverviewChange,
@@ -323,6 +326,12 @@ export function ComponentBindingWorkspace({
 }: {
   importId: string;
   bridgeId: string;
+  /**
+   * 导入记录状态。只有「待校对」的记录才有构件绑定工作区——后端对其余状态一律拒绝。
+   * 传进来是为了让本组件自己把这件事说清楚，而不是发一次注定失败的请求、再把后端的
+   * 拒绝原文当报错打在页面上。
+   */
+  importStatus?: string;
   /**
    * 编辑锁令牌，未持有编辑权时为 null。后端六个绑定写接口现在都要求持锁——
    * 它们改的是 import_records.parsed_result_json，与校对草稿保存写的是同一份数据，
@@ -356,6 +365,8 @@ export function ComponentBindingWorkspace({
   // 已处理的行占绝大多数（本例 257 中有 213），默认只看待处理。
   // 四态互不重叠：把"已绑定"与"已标记缺失"分开，后者常需单独核对是否真的台账没有。
   const [filter, setFilter] = useState<BindingFilter>("pending");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   // 正在批量替换的分组名；null 表示对话框未打开。
   const [replaceGroup, setReplaceGroup] = useState<string | null>(null);
   // 批量应用被后端整批拒绝时的提示，显示在对话框内而非页面上——用户正对着预览表。
@@ -371,7 +382,14 @@ export function ComponentBindingWorkspace({
   const [ratingTreeMessage, setRatingTreeMessage] = useState<string | null>(null);
   const [ratingTreeError, setRatingTreeError] = useState<string | null>(null);
 
+  // 只有「待校对」的记录有绑定工作区；其余状态不发这一趟，省掉一次注定 4xx 的请求。
+  const bindingAvailable = importStatus === undefined || importStatus === "待校对";
+
   useEffect(() => {
+    if (!bindingAvailable) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     // 首屏只等概览。此前还并排拉一份完整台账（约 3.4 MB），两个都回来才渲染。
@@ -403,7 +421,7 @@ export function ComponentBindingWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [importId, bridgeId]);
+  }, [importId, bridgeId, bindingAvailable]);
 
   useEffect(() => {
     if (overview?.rating_tree?.version_id) {
@@ -507,6 +525,35 @@ export function ComponentBindingWorkspace({
       .map((group) => ({ ...group, rows: group.rows.filter(keep) }))
       .filter((group) => group.rows.length > 0);
   }, [overview, filter]);
+
+  const visibleRowTotal = useMemo(
+    () => visibleGroups.reduce((sum, group) => sum + group.rows.length, 0),
+    [visibleGroups]
+  );
+
+  // 与构件台账一致：跨分组按行分页，每页只挂载当前页数据。一个分组跨页时，
+  // 当前页仍保留分组标题，避免用户失去部件类别上下文。
+  const pagedGroups = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    let cursor = 0;
+    return visibleGroups.flatMap((group) => {
+      const groupStart = cursor;
+      const groupEnd = cursor + group.rows.length;
+      cursor = groupEnd;
+      if (groupEnd <= start || groupStart >= end) return [];
+      const rows = group.rows.slice(
+        Math.max(0, start - groupStart),
+        Math.min(group.rows.length, end - groupStart)
+      );
+      return [{ ...group, rows }];
+    });
+  }, [visibleGroups, page, pageSize]);
+
+  useEffect(() => {
+    const lastPage = Math.max(1, Math.ceil(visibleRowTotal / pageSize));
+    if (page > lastPage) setPage(lastPage);
+  }, [page, pageSize, visibleRowTotal]);
 
   useEffect(() => {
     const eligible = new Set<string>();
@@ -645,61 +692,36 @@ export function ComponentBindingWorkspace({
     }
   }
 
+  /* 已入库 / 已作废的记录没有绑定工作区，这不是错误，是这一步已经过去了。
+     原来在这里打一行后端拒绝原文的红字，既像出了故障，也没说清还能去哪儿看。 */
+  if (!bindingAvailable) {
+    return (
+      <div className="binding-unavailable">
+        <h3>构件绑定已完成</h3>
+        <p>
+          这条导入记录状态为「{importStatus}」，构件绑定只在校对阶段开放。
+          绑定结果仍可在「病害与照片」里逐条查看，评定结论见「系统技术状况评定」。
+        </p>
+      </div>
+    );
+  }
+
   if (loading) return <p>正在加载构件绑定…</p>;
   if (error && !overview) return <p className="error-text" role="alert">{error}</p>;
   if (!overview) return <p>没有可绑定的病害。</p>;
   const allResolved = progress.total > 0 && progress.settled === progress.total;
+  const progressPercent = progress.total > 0
+    ? Math.round((progress.settled / progress.total) * 100)
+    : 0;
+
+  function openSelectedSplitPreview() {
+    const targets = [...splitSelection.values()];
+    setSplitDialogTargets(targets);
+    void loadSplitPreview(targets);
+  }
 
   return (
     <section className="component-binding-workspace" aria-labelledby="component-binding-title">
-      <div className="binding-heading">
-        <h3 id="component-binding-title">构件绑定</h3>
-        <div className="binding-heading-tools">
-          {/* 拆分是动作而非筛选，故留在筛选组外，靠竖线隔开，免得看成第五个页签。 */}
-          {splitEligibleCount > 0 ? (
-            <button
-              type="button"
-              className="binding-split-selected"
-              disabled={writeDisabled || splitSelection.size === 0}
-              title={splitSelection.size === 0 ? "先勾选待拆分的构件行" : undefined}
-              onClick={() => {
-                const targets = [...splitSelection.values()];
-                setSplitDialogTargets(targets);
-                void loadSplitPreview(targets);
-              }}
-            >
-              拆分构件
-              {splitSelection.size > 0 ? (
-                <span className="binding-split-count">{splitSelection.size}</span>
-              ) : null}
-              {splitProjection > 0 ? (
-                <span className="binding-split-projection">约 {splitProjection} 条</span>
-              ) : null}
-            </button>
-          ) : null}
-          <div className="binding-filters" role="group" aria-label="按状态筛选">
-            {([
-              ["pending", "待处理", counts.pending],
-              ["bound", "已绑定", counts.bound],
-              ["missing", "已标记缺失", counts.missing],
-              ["all", "全部", counts.total],
-            ] as const).map(([key, label, count]) => (
-              <button
-                key={key}
-                type="button"
-                className={filter === key ? "binding-filter active" : "binding-filter"}
-                aria-pressed={filter === key}
-                onClick={() => {
-                  setFilter(key);
-                  if (key !== "pending" && key !== "all") setSplitSelection(new Map());
-                }}
-              >
-                {label} {count}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
       <div className="binding-rating-tree" aria-label="年度评定树绑定">
         <div className="binding-rating-tree-current">
           <span>年度评定树</span>
@@ -764,6 +786,75 @@ export function ComponentBindingWorkspace({
       {ratingTreeError ? (
         <p className="error-text" role="alert">{ratingTreeError}</p>
       ) : null}
+      <div className="binding-work-card">
+        <div className="binding-heading">
+          <div className="binding-heading-title">
+            <div className="binding-title-line">
+              <h3 id="component-binding-title">构件绑定</h3>
+              <span className={canEdit ? "binding-edit-state is-editing" : "binding-edit-state"}>
+                {canEdit ? "编辑中" : "只读"}
+              </span>
+              <span className="binding-inventory-state">
+                台账版本 · {overview.inventory_confirmed ? "已确认" : "未确认"}
+              </span>
+            </div>
+            <div className="binding-progress" aria-label={`已处理 ${progress.settled} / ${progress.total}`}>
+              <span>已处理 {progress.settled} / {progress.total}</span>
+              <span className="binding-progress-track" aria-hidden="true">
+                <i style={{ width: `${progressPercent}%` }} />
+              </span>
+              <strong>{progressPercent}%</strong>
+            </div>
+          </div>
+          <div className="binding-heading-tools">
+            <div className="binding-filters" role="group" aria-label="按状态筛选">
+              {([
+                ["pending", "待处理", counts.pending],
+                ["bound", "已绑定", counts.bound],
+                ["missing", "已标记缺失", counts.missing],
+                ["all", "全部", counts.total],
+              ] as const).map(([key, label, count]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={filter === key ? "binding-filter active" : "binding-filter"}
+                  aria-label={`${label} ${count}`}
+                  aria-pressed={filter === key}
+                  onClick={() => {
+                    setFilter(key);
+                    setPage(1);
+                    if (key !== "pending" && key !== "all") setSplitSelection(new Map());
+                  }}
+                >
+                  <span>{label}</span>
+                  <strong>{count}</strong>
+                </button>
+              ))}
+            </div>
+            {splitEligibleCount > 0 ? (
+              <button
+                type="button"
+                className="binding-split-selected"
+                disabled={writeDisabled || splitSelection.size === 0}
+                title={splitSelection.size === 0 ? "先勾选待拆分的构件行" : undefined}
+                onClick={openSelectedSplitPreview}
+              >
+                拆分构件
+                {splitSelection.size > 0 ? (
+                  <span className="binding-split-count">{splitSelection.size}</span>
+                ) : null}
+                {splitProjection > 0 ? (
+                  <span className="binding-split-projection">约 {splitProjection} 条</span>
+                ) : null}
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {splitEligibleCount > 0 ? (
+          <p className="binding-split-guidance">
+            区间拆分会增加解析实例并重新计算评分；照片需要在拆分后人工核对归属。
+          </p>
+        ) : null}
       {error ? <p className="error-text" role="alert">{error}</p> : null}
       {/* 控件已经按 canEdit 全部禁用了，但灰掉不解释等于让人猜。 */}
       {!canEdit ? (
@@ -781,11 +872,20 @@ export function ComponentBindingWorkspace({
       {overview.groups.length === 0 ? <p>本次导入没有需要绑定的病害。</p> : null}
       {overview.groups.length > 0 && visibleGroups.length === 0 ? (
         // "全部处理完毕"只在待处理筛选下成立；其余筛选为空只是该状态没有行。
-        <p className={filter === "pending" ? "binding-all-done" : "empty-hint"}>
-          {filter === "pending" ? "全部构件已处理完毕。" : "该状态下没有构件。"}
-        </p>
+        filter === "pending" ? (
+          <div className="binding-all-done">
+            <span className="binding-all-done-mark" aria-hidden="true">✓</span>
+            <div>
+              <strong>全部构件已处理完毕。</strong>
+              <p>{counts.bound} 个已绑定，{counts.missing} 个已标记缺失，可进入下一分区继续校对。</p>
+            </div>
+            <button type="button" onClick={() => { setFilter("all"); setPage(1); }}>
+              查看全部 {counts.total}
+            </button>
+          </div>
+        ) : <p className="empty-hint">该状态下没有构件。</p>
       ) : null}
-      {visibleGroups.map((group) => (
+      {pagedGroups.map((group) => (
         <div className="binding-group" key={group.part_name}>
           <div className="binding-group-heading">
             <strong>{group.part_name}</strong>
@@ -836,8 +936,15 @@ export function ComponentBindingWorkspace({
               ) : null}
             </div>
           </div>
+          <div className="binding-table-head" aria-hidden="true">
+            <span />
+            <span>报告构件</span>
+            <span>引用病害</span>
+            <span>状态</span>
+            <span>候选与实际构件 / 操作</span>
+          </div>
           {group.rows.map((row) => (
-            <div className="binding-row" key={row.component_number}>
+            <div className={`binding-row binding-row-${row.status}`} key={row.component_number}>
               {row.split_eligible ? (
                 <input
                   type="checkbox"
@@ -861,7 +968,12 @@ export function ComponentBindingWorkspace({
                   }}
                 />
               ) : <span className="binding-row-split-placeholder" aria-hidden="true" />}
-              <span className="binding-row-number">{row.component_number}</span>
+              <span className="binding-row-number">
+                {row.component_number}
+                {row.split_eligible && row.split_expanded_count ? (
+                  <small>可展开到 {row.split_expanded_count} 件</small>
+                ) : null}
+              </span>
               <span className="binding-row-refs">引用 {row.defect_count} 条</span>
               <span className={`binding-status binding-status-${row.status}`}>
                 {STATUS_LABELS[row.status] ?? row.status}
@@ -879,6 +991,41 @@ export function ComponentBindingWorkspace({
           ))}
         </div>
       ))}
+      {visibleRowTotal > 0 ? (
+        <footer className="binding-pagination">
+          <Pagination
+            align="end"
+            current={page}
+            pageSize={pageSize}
+            total={visibleRowTotal}
+            pageSizeOptions={[20, 50, 100]}
+            showSizeChanger
+            showQuickJumper
+            showTotal={(total) => `共 ${total.toLocaleString()} 条`}
+            disabled={busy}
+            size="small"
+            onChange={(nextPage, nextPageSize) => {
+              setPage(nextPageSize === pageSize ? nextPage : 1);
+              setPageSize(nextPageSize);
+            }}
+          />
+        </footer>
+      ) : null}
+      {splitSelection.size > 0 ? (
+        <div className="binding-selection-bar" role="status">
+          <span>
+            已选择 <strong>{splitSelection.size}</strong> 个范围
+            {splitProjection > 0 ? ` · 预计生成约 ${splitProjection} 条解析实例` : ""}
+          </span>
+          <button
+            type="button"
+            disabled={writeDisabled}
+            onClick={openSelectedSplitPreview}
+          >
+            预览拆分影响
+          </button>
+        </div>
+      ) : null}
       {replaceGroup !== null ? (
         <BulkReplaceDialog
           partName={replaceGroup}
@@ -891,8 +1038,14 @@ export function ComponentBindingWorkspace({
             setReplaceError(null);
             setReplaceGroup(null);
           }}
+          onClearPlan={() => {
+            setReplacePlan(null);
+            setReplaceError(null);
+          }}
           onPreview={async (find, replace) => {
             // 预览由后端生成：前端不再拿一份台账自己算一遍。
+            // 自动预览会连着发几次；只认最后一次的结果，否则先发后到的旧计划会盖掉新的。
+            const seq = ++replaceRequest.current;
             setReplaceLoading(true);
             try {
               const plan = await createResolutionPlan(
@@ -905,13 +1058,15 @@ export function ComponentBindingWorkspace({
                   expected_inventory_revision_id: requireRevisionId(overview),
                 },
                 requireLockToken());
+              if (seq !== replaceRequest.current) return;
               setReplacePlan(plan);
               setReplaceError(null);
             } catch (caught) {
+              if (seq !== replaceRequest.current) return;
               setReplacePlan(null);
               setReplaceError(errorMessage(caught));
             } finally {
-              setReplaceLoading(false);
+              if (seq === replaceRequest.current) setReplaceLoading(false);
             }
           }}
           onApply={async (planToken) => {
@@ -986,6 +1141,7 @@ export function ComponentBindingWorkspace({
       ) : null}
         </>
       ) : null}
+      </div>
     </section>
   );
 }

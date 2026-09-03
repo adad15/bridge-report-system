@@ -1,5 +1,5 @@
+import { Button, Tag } from "antd";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 
 import type { ArchiveObservation, ComponentDefectArchive, RevisionGroup } from "../api/componentArchiveApi";
 import { fetchComponentRevisions } from "../api/componentArchiveApi";
@@ -7,8 +7,20 @@ import { ApiError } from "../api/apiClient";
 import { backendBaseUrl } from "../config";
 import { ComponentRatingSummary } from "./ComponentRatingSummary";
 import { DefectThreadCard } from "./DefectThreadCard";
-import { ObservationYearRow } from "./ObservationYearRow";
+import { ObservationTable } from "./ObservationTable";
 import { RevisionHistoryPanel } from "./RevisionHistoryPanel";
+
+// 空线索插画：antd Empty 会带出"暂无数据"文案，这里用固定插画避免多一行无关文字。
+function EmptyThreadArt() {
+  return (
+    <svg className="archive-thread-empty-art" viewBox="0 0 64 48" aria-hidden="true">
+      <path d="M14 7l3 4M50 7l-3 4M32 4v5" stroke="#c3d6f7" strokeWidth="2" strokeLinecap="round" fill="none" />
+      <path d="M6 15h52v9H6z" fill="#f2f7ff" stroke="#a8c1f2" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M10 24h44v16a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V24Z" fill="#eaf1fe" stroke="#a8c1f2" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M26 32h12" stroke="#a8c1f2" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 interface ComponentDetailPanelProps {
   archive: ComponentDefectArchive;
@@ -47,15 +59,19 @@ export function ComponentDetailPanel({ archive, bridgeId, onRebind }: ComponentD
   return (
     <section className="archive-detail-panel">
       <header className="archive-detail-head">
-        <div>
-          <h2>{component.component_type}</h2>
+        <div className="archive-detail-identity">
+          <div className="archive-component-heading">
+            <h2>{component.business_component_code}</h2>
+            <Tag color="blue">{component.structure_part}</Tag>
+            <Tag>{component.component_type}</Tag>
+          </div>
           <p>
-            {component.structure_part}｜{component.business_component_code}｜{component.system_number}
+            构件编号：{component.system_number}
+            <button type="button" className="archive-history-inline" onClick={() => void toggleRevisions()}>
+              {revisionsOpen ? "返回当前档案" : "历史修订"}
+            </button>
           </p>
         </div>
-        <button type="button" onClick={() => void toggleRevisions()}>
-          {revisionsOpen ? "返回当前档案" : "历史修订"}
-        </button>
       </header>
 
       {revisionsOpen ? (
@@ -65,38 +81,55 @@ export function ComponentDetailPanel({ archive, bridgeId, onRebind }: ComponentD
         </>
       ) : (
         <>
-          <h3>构件年度评分</h3>
-          <ComponentRatingSummary ratings={archive.ratings} />
-
-          <h3>病害线索</h3>
-          {archive.threads.length === 0 ? (
-            <p className="archive-empty-hint">该构件尚无病害线索，可在线索整理页创建。</p>
-          ) : (
-            archive.threads.map((thread) => (
-              <DefectThreadCard
-                key={thread.id}
-                thread={thread}
-                componentType={component.component_type}
-                onRebind={onRebind}
-              />
-            ))
-          )}
-
-          <h3>未绑定观测</h3>
-          {archive.unbound_observations.length === 0 ? (
-            <p className="archive-empty-hint">当前有效观测均已绑定病害线索。</p>
-          ) : (
-            <div className="archive-unbound-block">
-              <p className="archive-empty-hint">
-                以下观测尚未归入病害线索（未绑定不是错误状态），可前往
-                <Link to={`/bridges/${bridgeId}/defect-threads/triage`}>线索整理页</Link>
-                统一处理。
-              </p>
-              {archive.unbound_observations.map((observation) => (
-                <ObservationYearRow key={observation.id} observation={observation} onRebind={onRebind} />
-              ))}
+          <section className="archive-detail-section">
+            <div className="archive-section-title">
+              <h3>年度评分</h3>
             </div>
-          )}
+            <ComponentRatingSummary ratings={archive.ratings} />
+          </section>
+
+          <section className="archive-detail-section">
+            <div className="archive-section-title">
+              <h3>跨年病害线索</h3>
+            </div>
+            {archive.threads.length === 0 ? (
+              <div className="archive-thread-empty">
+                <EmptyThreadArt />
+                <div className="archive-thread-empty-copy">
+                  <strong>尚未形成跨年线索</strong>
+                  <p>下方 {archive.unbound_observations.length} 条年度观测待确认是否属于同一处病害。</p>
+                </div>
+                <Button
+                  className="archive-thread-empty-action"
+                  type="primary"
+                  href={`/bridges/${bridgeId}/defect-threads/triage`}
+                >
+                  整理该构件
+                </Button>
+              </div>
+            ) : (
+              archive.threads.map((thread) => (
+                <DefectThreadCard
+                  key={thread.id}
+                  thread={thread}
+                  componentType={component.component_type}
+                  onRebind={onRebind}
+                />
+              ))
+            )}
+          </section>
+
+          <section className="archive-detail-section">
+            <div className="archive-section-title">
+              <h3>待整理的年度观测</h3>
+              <span className="archive-section-count">{archive.unbound_observations.length}</span>
+            </div>
+            {archive.unbound_observations.length === 0 ? (
+              <p className="archive-empty-hint">当前有效观测均已整理到跨年病害线索。</p>
+            ) : (
+              <ObservationTable observations={archive.unbound_observations} onRebind={onRebind} />
+            )}
+          </section>
         </>
       )}
     </section>

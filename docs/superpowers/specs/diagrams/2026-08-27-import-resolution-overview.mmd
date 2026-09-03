@@ -1,0 +1,100 @@
+flowchart TB
+  subgraph FRAME["一、框架图：从大 JSON 混存改为职责分离"]
+    direction LR
+    F1["当前：来源事实<br/>构件绑定<br/>评分树绑定<br/>区间复制病害"]
+    F2["parsed_result_json"]
+    F3["绑定一次<br/>重写整份 JSON<br/>前端整页重载"]
+    F4["目标：来源 JSON<br/>只保存原始资料和普通校对"]
+    F5["构件解析关系表"]
+    F6["病害解析实例表"]
+    F7["评分树解析表"]
+    F8["后端 ImportResolutionService"]
+    F9["轻量前端"]
+
+    F1 --> F2 --> F3
+    F3 -->|"本次重构"| F4
+    F4 --> F5 --> F6 --> F7
+    F9 -->|"提交选择"| F8
+    F8 -->|"候选、预览、执行结果"| F9
+    F8 --> F5
+    F8 --> F6
+    F8 --> F7
+  end
+
+  subgraph FLOW["二、业务流程图：导入到正式病害档案"]
+    direction LR
+    P1["接口同步导入"]
+    P2["按来源构件分组"]
+    P3{"唯一匹配台账构件？"}
+    P4["自动绑定"]
+    P5["后端给候选<br/>人工选择"]
+    P6["区间展开预览<br/>例如 1~3#伸缩缝"]
+    P7["生成具体病害实例"]
+    P8{"评分树唯一匹配？"}
+    P9["自动保存评分树节点"]
+    P10["人工选择评分树节点"]
+    P11["预检"]
+    P12{"全部有效？"}
+    P13["写入正式年度病害<br/>进入构件病害档案"]
+    P14["指出具体阻断项"]
+
+    P1 --> P2 --> P3
+    P3 -->|"是"| P4
+    P3 -->|"否，有候选"| P5
+    P3 -->|"区间或多目标"| P6
+    P4 --> P7
+    P5 --> P7
+    P6 --> P7
+    P7 --> P8
+    P8 -->|"是"| P9
+    P8 -->|"否"| P10
+    P9 --> P11
+    P10 --> P11
+    P11 --> P12
+    P12 -->|"是"| P13
+    P12 -->|"否"| P14
+    P14 --> P5
+  end
+
+  subgraph DATA["三、数据关系图：一条来源病害如何落到具体构件"]
+    direction LR
+    D1["parsed_result_json<br/>来源病害事实"]
+    D2["来源构件组<br/>例如 25-1#板"]
+    D3["构件组成员<br/>裂缝、渗水、剥落"]
+    D4["解析目标<br/>台账中的 25-1#板"]
+    D5["病害解析实例<br/>来源病害 × 目标构件"]
+    D6["评分树解析<br/>每个实例一个当前节点"]
+    D7["批量预览计划<br/>plan token"]
+    D8["解析审计事件"]
+    D9["重开校对快照"]
+
+    D1 --> D3
+    D2 --> D3
+    D2 --> D4
+    D3 --> D5
+    D4 --> D5
+    D5 --> D6
+    D7 -.->|"原子执行"| D2
+    D2 -.-> D8
+    D6 -.-> D8
+    D2 -.-> D9
+    D6 -.-> D9
+  end
+
+  FRAME --> FLOW --> DATA
+
+  classDef current fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+  classDef source fill:#f1f5f9,stroke:#475569,color:#0f172a
+  classDef resolution fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+  classDef rating fill:#ede9fe,stroke:#7c3aed,color:#4c1d95
+  classDef service fill:#dcfce7,stroke:#059669,color:#064e3b
+  classDef user fill:#fef3c7,stroke:#d97706,color:#78350f
+  classDef blocker fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+
+  class F1,F2,F3 current
+  class F4,D1 source
+  class F5,F6,D2,D3,D4,D5 resolution
+  class F7,D6 rating
+  class F8,F9,P1,P2,P4,P7,P9,P11,P13,D7,D8,D9 service
+  class P5,P6,P10 user
+  class P14 blocker

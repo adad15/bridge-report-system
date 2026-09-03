@@ -42,6 +42,15 @@ export interface TriageManualObservation {
   defect_type: string;
   defect_location: string | null;
   updated_at: string;
+  /**
+   * 展示字段：判断"这几条是不是同一处病害"的实际依据——标度看恶化趋势、尺寸看连续性、
+   * 照片是最终判据。后端随异常簇一起给；标成可选是为了让旧后端也能降级渲染。
+   */
+  system_number?: string;
+  scale?: string | null;
+  defect_description?: string;
+  measurements?: string[];
+  photos?: Array<{ id: string; photo_number: string }>;
 }
 
 export interface TriageManualGroup {
@@ -82,13 +91,8 @@ export interface TriageSummary {
   manual_clusters: TriageManualCluster[];
 }
 
-export interface TriageDetailObservation extends TriageManualObservation {
-  system_number?: string;
-  scale?: string | null;
-  defect_description?: string;
-  measurements?: string[];
-  photos?: Array<{ id: string; photo_number: string }>;
-}
+/** 批次明细与异常簇现在是同一份形状：展示字段由同一条后端取数路径供给。 */
+export type TriageDetailObservation = TriageManualObservation;
 
 export interface TriageDetailGroup {
   group_id: string;

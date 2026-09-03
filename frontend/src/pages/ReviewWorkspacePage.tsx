@@ -254,6 +254,21 @@ function ReviewWorkspaceLoaded({
 
   const [saveMessage, setSaveMessage] = useState<SaveMessageState | null>(null);
   const [preflight, setPreflight] = useState<PreflightResponse | null>(null);
+  const preflightTargetLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const defect of draft.defects) {
+      const component = defect.component_number?.trim() || defect.component_name.trim();
+      const defectName = defect.defect_type.trim() || defect.defect_description.trim();
+      const location = defect.defect_location.trim();
+      const parts = [component, defectName, location].filter((part) => part.length > 0);
+      if (parts.length > 0) labels.set(defect.candidate_id, `【${parts.join("｜")}】`);
+    }
+    for (const photo of draft.photos) {
+      const photoNumber = photo.photo_number.trim();
+      if (photoNumber) labels.set(photo.candidate_id, `【照片 ${photoNumber}】`);
+    }
+    return labels;
+  }, [draft.defects, draft.photos]);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [revisionChecked, setRevisionChecked] = useState(false);
   const [revisionNote, setRevisionNote] = useState("");
@@ -898,9 +913,11 @@ function ReviewWorkspaceLoaded({
 
   return (
     <div className="review-workspace">
-      <OverviewHeader response={response} draft={draft} counts={counts} />
-      <div className="review-workspace-notices">
-        {lockNotice ? (
+      <OverviewHeader
+        response={response}
+        draft={draft}
+        counts={counts}
+        statusNotice={lockNotice ? (
           <div className={`review-edit-lock-banner review-edit-lock-${lockPhase}`}>
             <span>{lockNotice}</span>
             {lockSummary ? <span className="review-reopen-meta">开始时间：{lockSummary.acquired_at}</span> : null}
@@ -909,6 +926,8 @@ function ReviewWorkspaceLoaded({
             ) : null}
           </div>
         ) : null}
+      />
+      <div className="review-workspace-notices">
         {/* 重开校对态横幅：可编辑态下 bannerText 非空即重开中，提示范围与后续流程。 */}
         {!readOnly && reviewSession.bannerText ? (
           <div className="review-reopen-banner">
@@ -935,6 +954,7 @@ function ReviewWorkspaceLoaded({
             <ComponentBindingWorkspace
               importId={importRecordId}
               bridgeId={response.bridge.id}
+              importStatus={sessionImportStatus}
               lockToken={lockToken}
               onRatingTreeChange={onReload}
               onDraftInvalidated={() => setDraftStaleFromBinding(true)}
@@ -968,6 +988,7 @@ function ReviewWorkspaceLoaded({
                 setExpandedDefectId(null);
                 setActivePhotoCandidateId(null);
               }}
+              onSave={actionsDisabled ? undefined : () => void handleSaveDraft(draft)}
               dispatch={sectionDispatch}
               disabled={actionsDisabled}
               allowStructureChanges={canModifyDefectStructure(actionsDisabled, reopenState?.scope, isAdmin)}
@@ -1003,8 +1024,13 @@ function ReviewWorkspaceLoaded({
         </div>
       </div>
       <div className="review-footer">
-        <ReviewMessageDock saveMessage={saveMessage} preflight={preflight} onDismissSaveMessage={() => setSaveMessage(null)} />
+        <ReviewMessageDock
+          saveMessage={saveMessage}
+          onDismissSaveMessage={() => setSaveMessage(null)}
+        />
         <ReviewActionBar
+          preflight={preflight}
+          preflightTargetLabels={preflightTargetLabels}
           dirty={dirty}
           readOnlyNotice={readOnlyNotice}
           onBackToBridge={() => void handleBackToBridge()}

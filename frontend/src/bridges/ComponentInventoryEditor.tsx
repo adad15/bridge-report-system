@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { EditOutlined } from "@ant-design/icons";
+import { Pagination } from "antd";
 
 import { ApiError } from "../api/apiClient";
 import {
@@ -128,7 +130,7 @@ export function groupAnomalyText(group: InventoryGroupSummary): string | null {
 }
 
 const kSearchDebounceMs = 250;
-const kEntriesPageSize = 100;
+const kDefaultEntriesPageSize = 20;
 const kMaxSearchResults = 50;
 
 export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
@@ -163,7 +165,11 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   });
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [groupPage, setGroupPage] = useState(0);
+  const [groupPageSize, setGroupPageSize] = useState(kDefaultEntriesPageSize);
   const [search, setSearch] = useState("");
+  const [structureFilter, setStructureFilter] = useState("全部部位");
+  const [categoryFilter, setCategoryFilter] = useState("全部类别");
+  const [mappingFilter, setMappingFilter] = useState("全部状态");
   // 一次只编辑一行。构件动辄上千个，绝大多数只是被翻阅，不该整页都摆成输入框。
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   // 停用原因只在真要停用时才问，不再每行常驻一个空输入框。
@@ -225,13 +231,13 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     const controller = new AbortController();
     setGroupEntriesLoading(true);
     fetchInventoryGroupEntries(
-      backendBaseUrl, revision.id, expandedGroup, groupPage, kEntriesPageSize, controller.signal)
+      backendBaseUrl, revision.id, expandedGroup, groupPage, groupPageSize, controller.signal)
       .then((next) => {
         if (controller.signal.aborted) return;
         setGroupEntries(next);
         // 删构件后该组可能变短甚至清空：按新 total 夹取页码，归零则关掉弹窗。
         if (next.total === 0) { setExpandedGroup(null); return; }
-        const lastPage = Math.max(0, Math.ceil(next.total / kEntriesPageSize) - 1);
+        const lastPage = Math.max(0, Math.ceil(next.total / groupPageSize) - 1);
         if (groupPage > lastPage) setGroupPage(lastPage);
       })
       .catch((caught) => {
@@ -240,7 +246,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       })
       .finally(() => { if (!controller.signal.aborted) setGroupEntriesLoading(false); });
     return () => controller.abort();
-  }, [revision?.id, expandedGroup, groupPage, refreshToken]);
+  }, [revision?.id, expandedGroup, groupPage, groupPageSize, refreshToken]);
 
   // 编号搜索：防抖 250ms，同样用 AbortController 防乱序。
   useEffect(() => {
@@ -305,6 +311,21 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
         .filter((section) => section.groups.length > 0),
     [groupSummaries]
   );
+  const visibleGroupSections = useMemo(
+    () => groupSections
+      .map((section) => ({
+        ...section,
+        groups: section.groups.filter((group) => {
+          if (structureFilter !== "全部部位" && structurePartLabel(section.key) !== structureFilter) return false;
+          if (categoryFilter !== "全部类别" && group.siteComponentType !== categoryFilter) return false;
+          if (mappingFilter === "已映射" && (group.unmappedCount > 0 || group.pendingCount > 0)) return false;
+          if (mappingFilter === "待核对" && group.pendingCount === 0 && group.unmappedCount === 0) return false;
+          return true;
+        }),
+      }))
+      .filter((section) => section.groups.length > 0),
+    [categoryFilter, groupSections, mappingFilter, structureFilter],
+  );
   const blockerTotal = summary?.blockers.total ?? 0;
   const pendingMappingCount = useMemo(
     () => groupSummaries.reduce((total, group) => total + group.pendingCount, 0),
@@ -319,14 +340,23 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     (summary?.blockers.individual_total ?? 0) - individualBlockers.length;
   const searchTerm = search.trim();
   const searchMatches = searchResults?.entries ?? [];
-  const expandedGroupMapping = useMemo(
-    () => groupSummaries.find((group) => group.siteComponentType === expandedGroup)?.mappingLabel ?? "",
+  const expandedGroupSummary = useMemo(
+    () => groupSummaries.find((group) => group.siteComponentType === expandedGroup) ?? null,
     [groupSummaries, expandedGroup]
   );
   const groupTotal = groupEntries?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(groupTotal / kEntriesPageSize));
+  const pageCount = Math.max(1, Math.ceil(groupTotal / groupPageSize));
   const page = Math.min(groupPage, pageCount - 1);
   const pageEntries = groupEntries?.entries ?? [];
+
+  useEffect(() => {
+    const firstVisible = visibleGroupSections[0]?.groups[0]?.siteComponentType ?? null;
+    const currentVisible = visibleGroupSections.some((section) =>
+      section.groups.some((group) => group.siteComponentType === expandedGroup));
+    if (expandedGroup && currentVisible) return;
+    setExpandedGroup(firstVisible);
+    setGroupPage(0);
+  }, [expandedGroup, visibleGroupSections]);
 
   useEffect(() => {
     if (!pendingFocusId) return;
@@ -386,7 +416,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     if (sample.site_component_type === null || sample.position === null) return;
     setSearch("");
     setExpandedGroup(sample.site_component_type);
-    setGroupPage(Math.floor(sample.position / kEntriesPageSize));
+    setGroupPage(Math.floor(sample.position / groupPageSize));
     setPendingFocusId(sample.entity_id);
     // 从"确认前还需处理"跳过来就是奔着改这一行去的，直接开编辑态，省一次点击。
     setEditingEntryId(sample.entity_id);
@@ -490,13 +520,25 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     if (ok) setMappingDrafts((current) => { const next = { ...current }; delete next[entryId]; return next; });
   }
 
-  /* 只读是常态、编辑是例外：一组构件动辄上百上千，原先每行常驻三个输入框加一整列
-     按钮，行高被撑到 123px，翻一页要滚一万多像素。现在平时只渲染文本，点"编辑"才把
-     那一行展开成编辑区。showType 给搜索结果用——那里跨类别混排，类别列有信息量；
-     分组弹窗里整组同一个类别，825 行印 825 遍没有意义。 */
-  function renderEntryRow(entry: ComponentInventoryEntry, options?: { showType?: boolean }) {
+  function mappingLabelForEntry(entry: ComponentInventoryEntry) {
+    const activeMapping = entry.mappings.find((item) => item.is_active);
+    if (!activeMapping) return "—";
+    const catalog = catalogs.find((item) => item.package.id === activeMapping.standard_package_id)
+      ?? catalogs.find((item) => item.component_categories.some(
+        (category) => category.id === activeMapping.standard_component_category_id
+      ));
+    const category = catalog?.component_categories.find(
+      (item) => item.id === activeMapping.standard_component_category_id
+    );
+    return `${catalog?.package.standard_code ?? "技术评定规范"} · ${
+      category?.name ?? activeMapping.standard_component_category_id
+    }`;
+  }
+
+  /* 只读是常态、编辑是例外。主列表按档案台账的阅读顺序固定为六列；编辑入口保留为
+     行级次要动作，避免与更常用的“查看档案”争夺视觉焦点。 */
+  function renderEntryRow(entry: ComponentInventoryEntry) {
     if (!revision) return null;
-    const showType = options?.showType ?? false;
     const draft = drafts[entry.id] ?? entryDraft(entry);
     /* 一个构件可以按规范包挂多个生效映射（唯一索引是 entry + package）。状态要按
        "存在任一已确认"判断，和汇总、confirm 是同一套口径；只看首个映射的话，
@@ -516,21 +558,26 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     };
 
     if (editingEntryId !== entry.id) {
-      const reason = !entry.is_active ? "已停用"
+      const stateLabel = !entry.is_active ? "已停用"
         : !activeMapping ? "无映射"
-        : !hasConfirmedMapping ? "待确认映射"
-        : null;
+        : !hasConfirmedMapping ? "待确认"
+        : "已映射";
+      const stateClass = !entry.is_active ? "is-neutral"
+        : !activeMapping || !hasConfirmedMapping ? "is-warning"
+        : "is-confirmed";
       return (
         <tr key={entry.id} {...rowProps} className={!entry.is_active ? "inventory-entry-inactive" : undefined}>
           <td>{entry.component_number}</td>
-          {showType ? <td>{entry.site_component_type}</td> : null}
-          <td>{entry.span_or_location || "—"}</td>
+          <td>{entry.site_name || "—"}</td>
+          <td>{entry.site_component_type || "—"}</td>
+          <td className="inventory-entry-mapping">{mappingLabelForEntry(entry)}</td>
+          <td><span className={`inventory-mapping-state ${stateClass}`}>{stateLabel}</span></td>
           <td className="inventory-entry-rowend">
-            {reason ? (
-              <span className={`status-badge ${entry.is_active ? "status-badge-warn" : "status-badge-neutral"}`}>{reason}</span>
-            ) : null}
-            <button type="button" disabled={busy} onClick={() => beginEdit(entry)}>
-              编辑
+            <a className="inventory-view-archive" href={`/bridges/${bridgeId}/components/${entry.bridge_component_id}`}>
+              查看档案
+            </a>
+            <button className="inventory-row-edit-button" type="button" aria-label="编辑" title="编辑构件" disabled={busy} onClick={() => beginEdit(entry)}>
+              <EditOutlined />
             </button>
           </td>
         </tr>
@@ -542,7 +589,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     const reasonText = deactivationReasons[entry.id] ?? "";
     return (
       <tr key={entry.id} {...rowProps} className="inventory-entry-editing">
-        <td colSpan={showType ? 4 : 3}>
+        <td colSpan={6}>
           <div className="inventory-entry-editor">
             <label>
               构件编号
@@ -637,132 +684,122 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   }
 
   return (
-    <section className="workspace-card component-inventory-panel">
-      <div className="inventory-section-heading">
+    <section className="workspace-card component-inventory-panel inventory-ledger">
+      <header className="inventory-ledger-head">
         <div>
           <p className="section-kicker">版本 {revision.revision_number}</p>
-          <h1>实际构件台账</h1>
+          <div className="inventory-ledger-title"><h1>实际构件台账</h1><span className={`inventory-status-badge ${revision.status === "已确认" ? "confirmed" : ""}`}>{inventoryStatus(revision.status)}</span></div>
         </div>
-        <span className={`inventory-status-badge ${revision.status === "已确认" ? "confirmed" : ""}`}>
-          {inventoryStatus(revision.status)}
-        </span>
-      </div>
-      {/* 这两句是读一次就够的规则说明，不是状态，却常驻在表格上方吃掉约 100px 首屏。
-          折进来，需要时再展开。 */}
-      <details className="inventory-rules">
-        <summary>关于编号与版本的说明</summary>
-        <div>
-          <p>构件编号和现场名称可修改。内部实际构件 ID 不在页面显示，修改编号不会改变其身份。</p>
-          {revision.status === "已确认" ? <p>修改已确认台账时，系统会自动创建下一版草稿，原确认版本保持不变。</p> : null}
+        <div className="inventory-panel-actions inventory-ledger-actions">
+          <details className="inventory-rules">
+            <summary>版本说明</summary>
+            <div>
+              <p>构件编号和现场名称可修改，修改编号不会改变构件身份。</p>
+              {revision.status === "已确认" ? <p>修改已确认台账时，系统会自动创建下一版草稿。</p> : null}
+            </div>
+          </details>
+          <button type="button" disabled={busy} onClick={() => setAdding(true)}>＋ 手动添加构件</button>
+          {revision.status !== "已确认" ? <button type="button" className="is-primary-action" disabled={busy || blockerTotal > 0} onClick={() => void mutate(() => confirmComponentInventory(backendBaseUrl, revision.id))}>确认本版台账</button> : null}
         </div>
-      </details>
+      </header>
 
-      {/* 搜索是进入数据的入口，原先却排在分组核对表和确认摘要之后——要找一个构件得先
-          翻过整张表。入口挪到表格前面，结果也就紧挨着输入框显示。底部只留"手动添加
-          构件"和"确认本版台账"：确认是看完表格才做的终点动作，不能排在被确认的内容前面。 */}
-      <div className="inventory-entry-tools">
-        <label>
-          搜索构件
-          <input
-            aria-label="搜索构件"
-            placeholder="编号、类别或现场名，如 3-5# 或 支座"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-        {/* 提示语和搜索框是一件事，拆成两条横带只会让卡片显得散。搜索时让位给结果计数。 */}
-        {/* 搜"支座"会得到"匹配 3300 个，显示前 50 个"，不点破的话用户会以为这座桥
-            只有 50 个支座。整组浏览要走分组表，那里能完整分页。 */}
-        {searchTerm ? null : (
-          <p className="inventory-entry-hint">按编号、构件类别或现场名称搜索；结果只显示前若干条，要完整查看整组构件请在分组核对表中点击“查看构件”，在弹窗中分页浏览并编辑。</p>
-        )}
+      <section className="inventory-ledger-metrics" aria-label="构件台账概况">
+        <div><span>构件总数</span><strong>{revision.active_entry_count.toLocaleString()}</strong></div>
+        <div><span>构件类别</span><strong>{groupSummaries.length}</strong></div>
+        <div><span>已映射</span><strong>{Math.max(0, revision.active_entry_count - (summary?.blockers.individual_total ?? 0)).toLocaleString()}</strong></div>
+        <div><span>待核对</span><strong>{blockerTotal}</strong></div>
+      </section>
+
+      <div className="inventory-ledger-toolbar">
+        <input aria-label="搜索构件" placeholder="搜索编号、类别或现场名" value={search} onChange={(event) => setSearch(event.target.value)} />
+        <select aria-label="按部位筛选" value={structureFilter} onChange={(event) => setStructureFilter(event.target.value)}>
+          <option>全部部位</option>
+          {groupSections.map((section) => <option key={section.key}>{structurePartLabel(section.key)}</option>)}
+        </select>
+        <select aria-label="按类别筛选" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+          <option>全部类别</option>
+          {groupSummaries.map((group) => <option key={group.siteComponentType}>{group.siteComponentType}</option>)}
+        </select>
+        <select aria-label="按映射状态筛选" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)}>
+          <option>全部状态</option><option>已映射</option><option>待核对</option>
+        </select>
+        <button type="button" onClick={() => { setSearch(""); setStructureFilter("全部部位"); setCategoryFilter("全部类别"); setMappingFilter("全部状态"); }}>重置</button>
       </div>
-      {searchTerm ? (
-        <div className="inventory-entry-section">
-          <h2>搜索结果</h2>
-          <p>
-            匹配 {searchMatches.length} 个构件
-            {searchMatches.length > kMaxSearchResults ? `，显示前 ${kMaxSearchResults} 个` : ""}。
-          </p>
+
+      {catalogError ? <p className="inventory-standard-notice" role="status">规范映射名称暂时取不到（{catalogError}）；构件与编号不受影响，可稍后重试。</p> : null}
+
+      <div className="inventory-ledger-body">
+        <aside className="inventory-category-panel">
+          <h2>构件分类</h2>
+          {visibleGroupSections.map((section) => (
+            <section key={section.key}>
+              <h3><span>⌄</span>{structurePartLabel(section.key)}<em>{section.groups.reduce((total, group) => total + group.activeCount, 0).toLocaleString()}</em></h3>
+              {section.groups.map((group) => (
+                <button
+                  key={group.siteComponentType}
+                  type="button"
+                  aria-label={`查看构件 ${group.siteComponentType}`}
+                  className={expandedGroup === group.siteComponentType ? "is-active" : ""}
+                  onClick={() => openGroup(group.siteComponentType)}
+                >
+                  <span>{group.siteComponentType}</span><em>{group.activeCount.toLocaleString()}</em>
+                </button>
+              ))}
+            </section>
+          ))}
+        </aside>
+
+        <section className="inventory-list-panel">
+          <header>
+            <div><h2>{searchTerm ? "搜索结果" : "构件列表"}</h2></div>
+            <div className="inventory-list-summary">
+              <span>{searchTerm ? `匹配 ${searchMatches.length} 条` : `共 ${groupTotal.toLocaleString()} 条`}</span>
+              {!searchTerm && expandedGroup && (expandedGroupSummary?.pendingCount ?? 0) > 0 ? (
+                <button type="button" disabled={busy} onClick={() => void confirmPendingMappings(expandedGroup)}>确认该组映射</button>
+              ) : null}
+            </div>
+          </header>
           <div className="inventory-table-scroll">
             <table className="data-table component-inventory-table">
-              {/* 搜索跨类别混排，类别列在这里有信息量，保留。 */}
-              <thead><tr><th>构件编号</th><th>构件类别</th><th>所属跨或位置</th><th></th></tr></thead>
-              <tbody>{searchMatches.slice(0, kMaxSearchResults).map((entry) => renderEntryRow(entry, { showType: true }))}</tbody>
+              <thead><tr><th>构件编号</th><th>现场名称</th><th>构件类别</th><th>规范映射</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                {searchTerm
+                  ? searchMatches.slice(0, kMaxSearchResults).map((entry) => renderEntryRow(entry))
+                  : groupEntriesLoading
+                    ? <tr><td colSpan={6}>正在加载构件…</td></tr>
+                    : pageEntries.map((entry) => renderEntryRow(entry))}
+              </tbody>
             </table>
           </div>
-        </div>
-      ) : null}
-
-      {groupSummaries.length > 0 ? (
-        <div className="inventory-group-summary">
-          <h2>分组核对</h2>
-          {catalogError ? (
-            <p className="inventory-standard-notice" role="status">
-              规范映射名称暂时取不到（{catalogError}）；构件与编号不受影响，可稍后重试。
-            </p>
+          {!searchTerm ? (
+            <footer className="inventory-inline-pagination">
+              <Pagination
+                align="end"
+                current={page + 1}
+                pageSize={groupPageSize}
+                total={groupTotal}
+                pageSizeOptions={[20, 50, 100]}
+                showSizeChanger
+                showQuickJumper
+                showTotal={(total) => `共 ${total.toLocaleString()} 条`}
+                disabled={busy}
+                size="small"
+                onChange={(nextPage, nextPageSize) => {
+                  setGroupPageSize(nextPageSize);
+                  setGroupPage(nextPage - 1);
+                }}
+              />
+            </footer>
           ) : null}
-          <div className="inventory-table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr><th>构件类别</th><th className="numeric-cell">数量</th><th>编号范围</th><th>规范映射</th><th>操作</th></tr>
-              </thead>
-              {groupSections.map((section) => (
-                <tbody key={section.key}>
-                  <tr className="inventory-structure-row">
-                    <th scope="colgroup" colSpan={5}>{structurePartLabel(section.key)}</th>
-                  </tr>
-                  {section.groups.map((group) => {
-                  const anomaly = groupAnomalyText(group);
-                  return (
-                  <tr key={group.siteComponentType}>
-                    <td>{group.siteComponentType}</td>
-                    <td className="numeric-cell">{group.activeCount}</td>
-                    <td>
-                      {group.firstNumber}
-                      {group.activeCount > 1 ? ` … ${group.lastNumber}` : ""}
-                    </td>
-                    {/* 异常挂在映射本身旁边，比单开一列更好读——那列在正常情况下是一竖排 ✓。 */}
-                    <td>
-                      {group.mappingLabel || "—"}
-                      {anomaly ? <span className="inventory-mapping-flag">{anomaly}</span> : null}
-                    </td>
-                    <td>
-                      <div className="inventory-row-actions">
-                        <button
-                          type="button"
-                          aria-label={`查看构件 ${group.siteComponentType}`}
-                          onClick={() => openGroup(group.siteComponentType)}
-                        >
-                          查看构件
-                        </button>
-                        {group.pendingCount > 0 && revision.status === "草稿" ? (
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void confirmPendingMappings(group.siteComponentType)}
-                          >
-                            确认该组映射
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                  );
-                  })}
-                </tbody>
-              ))}
-            </table>
-          </div>
-        </div>
-      ) : null}
+        </section>
+      </div>
       {blockerTotal > 0 ? (
         <div className="inventory-blockers" role="status">
           <strong>确认前还需处理 {blockerTotal} 项</strong>
           <ul>
             {pendingMappingCount > 0 ? (
               <li>
-                {pendingMappingCount} 个构件的规范映射待确认；可在分组核对表按组确认，或
+                {pendingMappingCount} 个构件的规范映射待确认；可在构件列表按组确认，或
                 <button
                   type="button"
                   disabled={busy || revision.status !== "草稿"}
@@ -789,47 +826,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       ) : (
         <p className="inventory-confirmation-summary">共 {revision.active_entry_count} 个启用构件，规范映射均已确认。</p>
       )}
-      {error && !expandedGroup ? <p className="error-text" role="alert">{error}</p> : null}
-      {expandedGroup ? (
-        <div className="dialog-backdrop" role="presentation">
-          <section
-            className="workspace-dialog inventory-group-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="inventory-group-dialog-title"
-          >
-            <div className="inventory-group-dialog-header">
-              <h2 id="inventory-group-dialog-title">
-                {expandedGroup} 构件（共 {groupTotal} 个）
-              </h2>
-              {/* 整组共用同一个规范映射，在标题处说明一次，不再逐行重复。 */}
-              {expandedGroupMapping ? (
-                <p className="inventory-group-dialog-mapping">规范映射：{expandedGroupMapping}</p>
-              ) : null}
-              {error ? <p className="error-text" role="alert">{error}</p> : null}
-            </div>
-            <div className="inventory-table-scroll inventory-group-dialog-body">
-              <table className="data-table component-inventory-table">
-                {/* 整组共用同一个类别（标题已写明），不再逐行重复；改类别在编辑态里做。 */}
-                <thead><tr><th>构件编号</th><th>所属跨或位置</th><th></th></tr></thead>
-                <tbody>{pageEntries.map((entry) => renderEntryRow(entry))}</tbody>
-              </table>
-            </div>
-            <div className="inventory-group-dialog-footer">
-              {pageCount > 1 ? (
-                <div className="inventory-pagination">
-                  <button type="button" disabled={busy || page === 0} onClick={() => setGroupPage(page - 1)}>上一页</button>
-                  <span>第 {page + 1} / {pageCount} 页</span>
-                  <button type="button" disabled={busy || page + 1 >= pageCount} onClick={() => setGroupPage(page + 1)}>下一页</button>
-                </div>
-              ) : <span />}
-              <div className="dialog-actions">
-                <button type="button" disabled={busy} onClick={() => setExpandedGroup(null)}>关闭</button>
-              </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
+      {error ? <p className="error-text" role="alert">{error}</p> : null}
       {adding ? (
         <div className="inventory-add-form">
           <label>构件编号<input value={newEntry.component_number} onChange={(event) => setNewEntry((current) => ({ ...current, component_number: event.target.value }))} /></label>
@@ -839,12 +836,6 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
           <button type="button" disabled={busy} onClick={() => setAdding(false)}>取消</button>
         </div>
       ) : null}
-      <div className="inventory-panel-actions">
-        <button type="button" disabled={busy} onClick={() => setAdding(true)}>＋ 手动添加构件</button>
-        <button type="button" className="is-primary-action" disabled={busy || revision.status === "已确认" || blockerTotal > 0} onClick={() => void mutate(() => confirmComponentInventory(backendBaseUrl, revision.id))}>
-          {busy ? "正在处理…" : "确认本版台账"}
-        </button>
-      </div>
     </section>
   );
 }

@@ -4,13 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setAuthToken, setUnauthorizedHandler } from "../api/apiClient";
 import { AuthProvider } from "../auth/AuthContext";
-import { LoginPage } from "./LoginPage";
+import { DesignSystemProvider } from "../design-system";
+import { LoginPage, LoginRestoringPage } from "./LoginPage";
 
 function renderLoginPage() {
   return render(
-    <AuthProvider>
-      <LoginPage />
-    </AuthProvider>
+    <DesignSystemProvider>
+      <AuthProvider>
+        <LoginPage />
+      </AuthProvider>
+    </DesignSystemProvider>
   );
 }
 
@@ -71,5 +74,26 @@ describe("LoginPage", () => {
     vi.stubGlobal("fetch", vi.fn());
     renderLoginPage();
     expect(screen.getByRole("button", { name: "登录" })).toBeDisabled();
+  });
+
+  it("renders the shared authentication layout and approved security copy", () => {
+    vi.stubGlobal("fetch", vi.fn());
+    renderLoginPage();
+
+    expect(screen.getByText("桥梁档案统一管理")).toBeInTheDocument();
+    expect(screen.getByText("年度检测资料校对")).toBeInTheDocument();
+    expect(screen.getByText("跨年度病害追踪")).toBeInTheDocument();
+    expect(screen.getByText("仅限获得授权的工作人员使用")).toBeInTheDocument();
+  });
+
+  it("uses the authentication layout while restoring a saved session", () => {
+    render(
+      <DesignSystemProvider>
+        <LoginRestoringPage />
+      </DesignSystemProvider>
+    );
+
+    expect(screen.getByText("正在恢复登录会话…")).toBeInTheDocument();
+    expect(screen.getByLabelText("产品介绍")).toBeInTheDocument();
   });
 });

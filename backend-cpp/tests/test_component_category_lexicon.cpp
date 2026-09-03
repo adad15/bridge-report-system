@@ -16,6 +16,17 @@ TEST(CategoryLexiconTest, MapsRegulationNamesToCategory) {
               (std::vector<std::string>{"h21.component.cable_stayed.main_girder"}));
 }
 
+TEST(CategoryLexiconTest, MapsSourceDrainageAndRiverbedNamesToCategory) {
+    // 来源离线库把具体构件“排水系统”的父级类别写成“防排水系统”；
+    // 两种名称都必须落到同一个 H21 类别，才能与台账编号继续做精确匹配。
+    EXPECT_EQ(nt::resolve_component_categories("防排水系统"),
+              (std::vector<std::string>{"h21.component.deck.drainage"}));
+    EXPECT_EQ(nt::resolve_component_categories("排水系统"),
+              (std::vector<std::string>{"h21.component.deck.drainage"}));
+    EXPECT_EQ(nt::resolve_component_categories("河床"),
+              (std::vector<std::string>{"h21.component.lower.riverbed"}));
+}
+
 TEST(CategoryLexiconTest, CrossBridgeTypeDuplicateNamesReturnCandidates) {
     EXPECT_EQ(nt::resolve_component_categories("横向联结系"),
               (std::vector<std::string>{"h21.component.arch.transverse_link",

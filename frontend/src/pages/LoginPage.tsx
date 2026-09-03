@@ -1,26 +1,37 @@
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  LockOutlined,
+  SafetyCertificateOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
+import { Alert, Button, Form, Input, Spin } from "antd";
+import { useState, type KeyboardEvent } from "react";
 
 import { ApiError } from "../api/apiClient";
 import { useAuth } from "../auth/AuthContext";
+import { AuthLayout } from "../layouts/AuthLayout";
+import "./LoginPage.css";
 
-// 登录页：未登录时由 AppShell 直接渲染（不占路由），登录成功后 AuthContext
-// 的 user 变化会让 AppShell 自动切回正常页面，无需跳转逻辑。
+interface LoginFormValues {
+  username: string;
+  password: string;
+}
+
+// 登录页仍由 AuthContext 负责会话写入；此处只迁移视觉层与表单交互。
 export function LoginPage() {
   const { login } = useAuth();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [form] = Form.useForm<LoginFormValues>();
+  const username = Form.useWatch("username", form) ?? "";
+  const password = Form.useWatch("password", form) ?? "";
   const [capsLockOn, setCapsLockOn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+  async function handleSubmit(values: LoginFormValues): Promise<void> {
     if (busy) return;
     setBusy(true);
     setError(null);
     try {
-      await login(username.trim(), password);
+      await login(values.username.trim(), values.password);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "登录失败，请稍后重试。");
     } finally {
@@ -28,159 +39,136 @@ export function LoginPage() {
     }
   }
 
-  // 大写锁定是密码输错最常见的原因，而后端只会回一句"用户名或密码不正确"。
-  // 在密码框旁边就地提示，省掉用户反复重试才想起来看键盘的那几轮。
+  // 后端不会区分密码错误与大小写锁定，提前给出键盘状态提示能减少无效重试。
   function trackCapsLock(event: KeyboardEvent<HTMLInputElement>): void {
     setCapsLockOn(event.getModifierState("CapsLock"));
   }
 
   return (
-    <section className="status-panel login-panel">
-      <div className="login-brand">
-        <span className="login-brand-badge" aria-hidden="true">
-          <BridgeMark />
-        </span>
-        <div>
-          <h1>桥梁检测报告系统</h1>
-          <p className="login-brand-sub">公路桥梁定期检查与报告编制平台</p>
-        </div>
-      </div>
+    <AuthLayout>
+      <section className="login-content" aria-labelledby="login-title">
+        <header className="login-heading">
+          <span className="login-mobile-mark" aria-hidden="true">
+            <BridgeMark />
+          </span>
+          <p className="login-eyebrow">桥梁检测报告系统</p>
+          <h2 id="login-title">欢迎登录</h2>
+          <p>登录桥梁检测报告编制平台</p>
+        </header>
 
-      <form className="login-form" onSubmit={handleSubmit}>
         {error ? (
-          <p className="login-error" role="alert">
-            <AlertIcon />
-            {error}
-          </p>
+          <Alert
+            className="login-error-alert"
+            type="error"
+            showIcon
+            title={error}
+          />
         ) : null}
 
-        <div className="login-field">
-          <label htmlFor="login-username">用户名</label>
-          <div className="login-input-wrap">
-            <UserIcon />
-            <input
-              id="login-username"
+        <Form<LoginFormValues>
+          className="login-form"
+          form={form}
+          layout="vertical"
+          requiredMark={false}
+          size="small"
+          styles={{
+            label: { height: 14, paddingBottom: 0, fontSize: 12, lineHeight: "14px" },
+            content: { minHeight: 0 },
+          }}
+          initialValues={{ username: "", password: "" }}
+          disabled={busy}
+          onFinish={(values) => void handleSubmit(values)}
+        >
+          <Form.Item
+            name="username"
+            label={<span className="login-field-label">用户名</span>}
+            rules={[
+              { required: true, message: "请输入用户名" },
+              { whitespace: true, message: "用户名不能只包含空格" },
+            ]}
+            style={{ marginBottom: 16 }}
+          >
+            <Input
+              className="login-input-control"
               autoComplete="username"
-              // 未登录时整个应用只有这一张表单，光标不落在这里也没有别处可去。
               autoFocus
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              disabled={busy}
+              prefix={<UserOutlined aria-hidden="true" />}
+              placeholder="请输入用户名"
             />
-          </div>
-        </div>
+          </Form.Item>
 
-        <div className="login-field">
-          <label htmlFor="login-password">密码</label>
-          <div className="login-input-wrap">
-            <LockIcon />
-            <input
-              id="login-password"
-              type={passwordVisible ? "text" : "password"}
+          <Form.Item
+            name="password"
+            label={<span className="login-field-label">密码</span>}
+            rules={[{ required: true, message: "请输入密码" }]}
+            extra={
+              capsLockOn ? (
+                <span className="login-caps-hint">
+                  <CapsLockIcon />
+                  大写锁定已开启
+                </span>
+              ) : null
+            }
+            style={{ marginBottom: 18 }}
+          >
+            <Input.Password
+              className="login-input-control"
               autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              prefix={<LockOutlined aria-hidden="true" />}
+              placeholder="请输入密码"
               onKeyDown={trackCapsLock}
               onKeyUp={trackCapsLock}
-              disabled={busy}
             />
-            <button
-              type="button"
-              className="login-password-toggle"
-              aria-label={passwordVisible ? "隐藏密码" : "显示密码"}
-              aria-pressed={passwordVisible}
-              onClick={() => setPasswordVisible((visible) => !visible)}
-              disabled={busy}
+          </Form.Item>
+
+          <Form.Item style={{ marginBottom: 0 }}>
+            <Button
+              className="login-submit-button"
+              type="primary"
+              htmlType="submit"
+              size="small"
+              block
+              autoInsertSpace={false}
+              loading={busy}
+              disabled={busy || username.trim() === "" || password === ""}
             >
-              {passwordVisible ? <EyeOffIcon /> : <EyeIcon />}
-            </button>
-          </div>
-          {capsLockOn ? (
-            <p className="login-caps-hint">
-              <CapsIcon />
-              大写锁定已开启
-            </p>
-          ) : null}
-        </div>
+              {busy ? "登录中…" : "登录"}
+            </Button>
+          </Form.Item>
+        </Form>
 
-        <button
-          type="submit"
-          className="login-submit"
-          disabled={busy || username.trim() === "" || password === ""}
-        >
-          {busy ? "登录中…" : "登录"}
-        </button>
-      </form>
-
-      <p className="login-foot">管理员账号可解锁已确认记录的全部修改</p>
-    </section>
+        <p className="login-security-note">
+          <SafetyCertificateOutlined aria-hidden="true" />
+          仅限获得授权的工作人员使用
+        </p>
+      </section>
+    </AuthLayout>
   );
 }
 
-// 项目没引图标库，这几个只在登录页用一次，直接写成内联 SVG，比为它装一个依赖划算。
-// 统一 currentColor + 无填充，颜色跟着外层文字走。
+export function LoginRestoringPage() {
+  return (
+    <AuthLayout>
+      <section className="login-loading-state" aria-live="polite">
+        <Spin size="large" />
+        <p>正在恢复登录会话…</p>
+      </section>
+    </AuthLayout>
+  );
+}
+
 function BridgeMark() {
   return (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-      <path d="M2 15h20" />
-      <path d="M2 15v6M22 15v6" />
-      <path d="M2 15Q12 -1 22 15" />
-      <path d="M8 8.3v6.7M12 7v8M16 8.3v6.7" />
+    <svg viewBox="0 0 32 32">
+      <path d="M4 20h24M4 20v7M28 20v7M4 20C7.6 8.7 24.4 8.7 28 20M11 13.4V20M16 11.6V20M21 13.4V20" />
     </svg>
   );
 }
 
-function UserIcon() {
+function CapsLockIcon() {
   return (
-    <svg className="login-field-icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
-      <circle cx="8" cy="5.4" r="2.7" />
-      <path d="M2.9 13.4c0-2.5 2.3-4.1 5.1-4.1s5.1 1.6 5.1 4.1" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg className="login-field-icon" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
-      <rect x="3.2" y="7" width="9.6" height="6.6" rx="1.6" />
-      <path d="M5.6 7V5.1a2.4 2.4 0 0 1 4.8 0V7" />
-    </svg>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
-      <path d="M1.4 8s2.6-4.4 6.6-4.4S14.6 8 14.6 8s-2.6 4.4-6.6 4.4S1.4 8 1.4 8Z" />
-      <circle cx="8" cy="8" r="1.9" />
-    </svg>
-  );
-}
-
-function EyeOffIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
-      <path d="M1.4 8s2.6-4.4 6.6-4.4S14.6 8 14.6 8s-2.6 4.4-6.6 4.4S1.4 8 1.4 8Z" />
-      <circle cx="8" cy="8" r="1.9" />
-      <path d="M2.6 13.4 13.4 2.6" />
-    </svg>
-  );
-}
-
-function AlertIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
-      <circle cx="8" cy="8" r="6.4" />
-      <path d="M8 4.7v3.8M8 11.2h.01" />
-    </svg>
-  );
-}
-
-function CapsIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M8 2.6 3.2 7.8h2.6v3.1h4.4V7.8h2.6z" />
-      <path d="M5.8 13.4h4.4" />
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M8 2.5 3.1 7.8h2.6v3h4.6v-3h2.6L8 2.5ZM5.7 13.4h4.6" />
     </svg>
   );
 }

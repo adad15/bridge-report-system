@@ -17,6 +17,7 @@ CODES = {
     "idx-spall": ("5.1.1-2", "剥落、掉角"),
     "idx-water": ("5.1.1-13", "水损（参照混凝土碳化执行）"),
     "idx-other": ("11", "其他"),
+    "judgeIndex_other": ("11", "其他"),
 }
 GROUP_CODES = {"jt-1": ("5.1.1", "板式构件")}
 
@@ -104,12 +105,21 @@ def test_uses_the_member_type_when_the_parent_has_no_name() -> None:
     assert candidate["component_name"] == "空心板"
 
 
-def test_keeps_a_blank_defect_type() -> None:
-    """来源软件允许病害不选类型，空串是合法值。"""
-    candidate = build([defect(name="", description="存在熏黑痕迹", judge_index_id="idx-other")])[0]
+def test_fills_an_explicit_source_other_indicator_as_other_disease() -> None:
+    candidate = build([defect(
+        name="", description="存在熏黑痕迹", judge_index_id="judgeIndex_other")])[0]
+
+    assert candidate["defect_type"] == "其它病害"
+    assert candidate["defect_description"] == "存在熏黑痕迹"
+
+
+def test_keeps_an_unclassified_blank_defect_type_for_manual_review() -> None:
+    """没有明确“其它”来源指标时，不能把所有空类型都吞进其它病害。"""
+    candidate = build([defect(
+        name="", description="待人工判断", judge_index_id="idx-unknown")])[0]
 
     assert candidate["defect_type"] == ""
-    assert candidate["defect_description"] == "存在熏黑痕迹"
+    assert candidate["defect_description"] == "待人工判断"
 
 
 def test_builds_measurements_from_the_split_columns() -> None:

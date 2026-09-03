@@ -235,6 +235,70 @@ function ambiguousCluster(): TriageManualCluster {
   };
 }
 
+// 用户手上那张卡的形状：5 条里 4 条横向裂缝，2026 年多出一条纵向裂缝。
+// 旧预填取"最新年度排序后第一条"，在这里会填出"纵向裂缝"。
+function mixedTypeCluster(): TriageManualCluster {
+  return {
+    cluster_id: "cl-4",
+    reason_codes: ["location_overlap", "multiple_in_year"],
+    group_count: 3,
+    observation_count: 5,
+    overlap_targets: [{
+      kind: "group", id: "cg-6", display_name: null,
+      system_number: null, normalized_location: "0#台顶",
+    }],
+    related_threads: [],
+    groups: [
+      {
+        group_id: "cg-4", bridge_component_id: "c-deck", business_component_code: "1#跨桥面铺装",
+        defect_type: "横向裂缝", defect_location: "0#台顶", target_thread_id: null,
+        observations: [
+          {
+            id: "mo-1", inspection_year: 2024, defect_type: "横向裂缝",
+            defect_location: "0#台顶", updated_at: "2026-08-26 10:00:00+08",
+            system_number: "BH-000412", scale: "2", defect_description: "0#台顶横向裂缝",
+            measurements: ["0.3mm×2.0m"], photos: [{ id: "ph-1", photo_number: "2.3-14" }],
+          },
+          {
+            id: "mo-2", inspection_year: 2025, defect_type: "横向裂缝",
+            defect_location: "0#台顶", updated_at: "2026-08-26 10:01:00+08",
+            system_number: "BH-000533", scale: "2", defect_description: "裂缝略有发展",
+            measurements: ["0.35mm×2.2m"], photos: [],
+          },
+        ],
+      },
+      {
+        group_id: "cg-5", bridge_component_id: "c-deck", business_component_code: "1#跨桥面铺装",
+        defect_type: "横向裂缝", defect_location: "0#台顶，右侧行车道", target_thread_id: null,
+        observations: [{
+          id: "mo-3", inspection_year: 2025, defect_type: "横向裂缝",
+          defect_location: "0#台顶，右侧行车道", updated_at: "2026-08-26 10:02:00+08",
+          system_number: "BH-000534", scale: "2", defect_description: "同处裂缝",
+          measurements: [], photos: [],
+        }],
+      },
+      {
+        group_id: "cg-6", bridge_component_id: "c-deck", business_component_code: "1#跨桥面铺装",
+        defect_type: "横向裂缝", defect_location: "右侧行车道", target_thread_id: null,
+        observations: [
+          {
+            id: "mo-4", inspection_year: 2026, defect_type: "纵向裂缝",
+            defect_location: "右侧行车道", updated_at: "2026-08-26 10:03:00+08",
+            system_number: "BH-000701", scale: "2", defect_description: "另一处纵向裂缝",
+            measurements: ["0.4mm×3.1m"], photos: [],
+          },
+          {
+            id: "mo-5", inspection_year: 2026, defect_type: "横向裂缝",
+            defect_location: "右侧行车道", updated_at: "2026-08-26 10:04:00+08",
+            system_number: "BH-000702", scale: "2", defect_description: "横向裂缝延续",
+            measurements: ["0.35mm×2.3m"], photos: [],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function withClusters(clusters: TriageManualCluster[]): TriageSummary {
   return { ...summary(), manual_clusters: clusters };
 }
@@ -545,5 +609,144 @@ describe("ThreadTriagePage 异常簇", () => {
 
     await waitFor(() => expect(mockedResolve).toHaveBeenCalledTimes(1));
     expect(mockedResolve.mock.calls[0][2].target_thread_id).toBe("t-b");
+  });
+
+  // 只给位置写法和病害类型，等于把系统已经判不了的那个信号原样还给人再看一遍。
+  // 判据是标度、尺寸和照片，必须同屏可见。
+  it("puts scale, measurement and observation number on every year cell", async () => {
+    mockedSummary.mockResolvedValue(withClusters([mixedTypeCluster()]));
+    renderPage();
+
+    const table = await screen.findByLabelText("簇内各位置历年观测");
+    expect(within(table).getByText("0.3mm×2.0m")).toBeInTheDocument();
+    expect(within(table).getByText("0.35mm×2.2m")).toBeInTheDocument();
+    expect(within(table).getByText("BH-000412")).toBeInTheDocument();
+    expect(within(table).getAllByText("标度 2").length).toBe(5);
+    // 缺尺寸是正常数据，要写出来而不是留白。
+    expect(within(table).getByText("无尺寸")).toBeInTheDocument();
+  });
+
+  // 5 条里 4 条横向裂缝，预填必须是多数那个；取"最新年度第一条"会填出纵向裂缝，
+  // 照着提交就建出一条名不副实的线索。
+  it("prefills the defect type by majority rather than by newest observation", async () => {
+    mockedSummary.mockResolvedValue(withClusters([mixedTypeCluster()]));
+    renderPage();
+
+    const typeField = await screen.findByLabelText("病害类型");
+    expect(typeField).toHaveValue("横向裂缝");
+  });
+
+  // 簇是按位置聚的，类型不同的病害会被顺带卷进来。默认全勾等于主动提议一次错误合并：
+  // 3 条横向裂缝 + 2 条网状裂缝并成一条线索，显然不是同一处病害。
+  it("leaves observations of a different defect type unchecked by default", async () => {
+    mockedSummary.mockResolvedValue(withClusters([mixedTypeCluster()]));
+    renderPage();
+
+    // 占多数的横向裂缝默认勾上。
+    expect(await screen.findByLabelText("0#台顶 2024 第 1 条")).toBeChecked();
+    expect(screen.getByLabelText("右侧行车道 2026 第 2 条")).toBeChecked();
+    // 那条纵向裂缝是另一种损伤形态，默认不并入。
+    expect(screen.getByLabelText("右侧行车道 2026 第 1 条")).not.toBeChecked();
+    expect(screen.getByText(/把勾选的 4 条观测/)).toBeInTheDocument();
+  });
+
+  // 类型一致的簇不受影响：默认仍是全勾，跨位置写法合并本来就是这张卡的用途。
+  it("still checks everything when the cluster has one defect type", async () => {
+    mockedSummary.mockResolvedValue(withClusters([overlapCluster()]));
+    renderPage();
+
+    expect(await screen.findByLabelText("梁底 2024 第 1 条")).toBeChecked();
+    expect(screen.getByLabelText("梁底部 2025 第 1 条")).toBeChecked();
+  });
+
+  // 预填跟着勾选走：把那条纵向裂缝也勾进来后，位置多数从 0#台顶 独大变成 2-2 平局
+  // （平局取最新年度），字段要跟着变，否则人得自己回去改。
+  it("re-derives the prefill as the selection changes", async () => {
+    mockedSummary.mockResolvedValue(withClusters([mixedTypeCluster()]));
+    renderPage();
+
+    expect(await screen.findByLabelText("位置（可留空）")).toHaveValue("0#台顶");
+
+    fireEvent.click(screen.getByLabelText("右侧行车道 2026 第 1 条"));
+
+    expect(screen.getByLabelText("位置（可留空）")).toHaveValue("右侧行车道");
+  });
+
+  // 人改过的字段不能再被勾选变化冲掉。
+  it("stops re-deriving once the field has been edited", async () => {
+    mockedSummary.mockResolvedValue(withClusters([mixedTypeCluster()]));
+    renderPage();
+
+    const location = await screen.findByLabelText("位置（可留空）");
+    fireEvent.change(location, { target: { value: "0#台顶靠护栏侧" } });
+    fireEvent.click(screen.getByLabelText("右侧行车道 2026 第 1 条"));
+
+    expect(screen.getByLabelText("位置（可留空）")).toHaveValue("0#台顶靠护栏侧");
+  });
+
+  // 落选的是哪几条要点名，还要说清为什么没勾——不然人会以为是漏了。
+  it("names what it left out and why", async () => {
+    mockedSummary.mockResolvedValue(withClusters([mixedTypeCluster()]));
+    renderPage();
+
+    const hint = await screen.findByText(/余下 1 条这次不处理/);
+    expect(hint).toHaveTextContent("2026 年 纵向裂缝");
+    expect(hint).toHaveTextContent("BH-000701");
+    expect(hint).toHaveTextContent("病害类型与上面那组不同，默认不并入");
+  });
+
+  // "写法不一致"太笼统，人还得自己回表里数一遍。差在哪要讲具体。
+  it("spells out which wordings differ before asking for confirmation", async () => {
+    mockedSummary.mockResolvedValue(withClusters([mixedTypeCluster()]));
+    renderPage();
+
+    const confirm = await screen.findByLabelText(/我确认它们是同一处病害/);
+    const row = confirm.closest("label");
+    expect(row).toHaveTextContent("3 种位置写法");
+    expect(row).toHaveTextContent("0#台顶（2）");
+    // 默认这 4 条同为横向裂缝，不该谎报类型也不一致。
+    expect(row).not.toHaveTextContent("种病害类型");
+
+    // 人主动把那条纵向裂缝勾进来，才该出现跨类型的警告。
+    fireEvent.click(screen.getByLabelText("右侧行车道 2026 第 1 条"));
+    expect(screen.getByLabelText(/我确认它们是同一处病害/).closest("label"))
+      .toHaveTextContent("2 种病害类型：横向裂缝（4） · 纵向裂缝（1）");
+  });
+
+  // 缩略图看不出裂缝走向，放大是判断的最后一步。点照片只放大，不能顺手改变勾选——
+  // 勾选表达的是"属于同一处病害"，两件事不能挤在同一个点击上。
+  it("opens the photo without changing the selection", async () => {
+    mockedSummary.mockResolvedValue(withClusters([mixedTypeCluster()]));
+    renderPage();
+
+    const checkbox = await screen.findByLabelText("0#台顶 2024 第 1 条");
+    expect(checkbox).toBeChecked();
+
+    fireEvent.click(screen.getByRole("img", { name: /2024 年 横向裂缝 照片 2.3-14/ }));
+
+    expect(await screen.findByText("2024 年")).toBeInTheDocument();
+    expect(checkbox).toBeChecked();
+  });
+
+  // 放大后说明条要跟着走：年度、标度、尺寸是比对基准，丢了就只剩两张看不出来源的图。
+  it("keeps scale and measurement visible while the photo is enlarged", async () => {
+    mockedSummary.mockResolvedValue(withClusters([mixedTypeCluster()]));
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("img", { name: /2024 年 横向裂缝 照片 2.3-14/ }));
+
+    const caption = (await screen.findByText("2024 年")).closest("div");
+    expect(caption).toHaveTextContent("标度 2");
+    expect(caption).toHaveTextContent("0.3mm×2.0m");
+    expect(caption).toHaveTextContent("BH-000412");
+  });
+
+  // 笼统一句"可能指同一处"帮不了判断：说清是哪几种写法、哪一年挤了多条。
+  it("explains why the groups were clustered together", async () => {
+    mockedSummary.mockResolvedValue(withClusters([mixedTypeCluster()]));
+    renderPage();
+
+    expect(await screen.findByText(/3 种位置写法归一化后互相重叠/)).toBeInTheDocument();
+    expect(screen.getByText(/2026 年同一位置有多条记录/)).toBeInTheDocument();
   });
 });

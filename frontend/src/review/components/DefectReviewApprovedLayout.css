@@ -1,0 +1,188 @@
+/* 最终确认的“病害与照片”精细维护布局。单独后置加载，避免旧工作台样式覆盖。 */
+.defect-photo-section { gap: 10px; }
+
+.defect-overview-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.defect-metric-card { min-height: 80px; height: 80px; gap: 12px; padding: 11px 18px; border-radius: 9px; box-shadow: 0 4px 14px rgb(28 53 84 / 4%); }
+.defect-metric-icon { flex-basis: 42px; width: 42px; height: 42px; border-radius: 10px; font-size: 23px; }
+.defect-metric-card small { font-size: 12px; }
+.defect-metric-card strong { font-size: 25px; }
+
+.defect-review-card { padding: 0; overflow: hidden; }
+.review-main .defect-review-toolbar { position: relative; min-height: 66px; margin: 0; padding: 0 14px; border-bottom: 1px solid #dbe4ef; }
+.defect-review-filters { min-width: 0; min-height: 56px; flex-wrap: nowrap; gap: 8px; }
+.defect-review-mode button { min-height: 42px; padding-inline: 12px; }
+.defect-review-mode button[aria-pressed="true"]::after { bottom: -8px; }
+.defect-review-filters > .defect-review-select-all { flex: 0 0 auto; min-height: 32px; margin-left: 10px; padding: 0; border: 0; background: transparent; font-size: 12px; }
+.defect-review-filters > .defect-batch-confirm-button { flex: 0 0 auto; }
+.defect-review-filters .defect-review-search { flex: 1 1 230px; min-width: 190px; max-width: 300px; margin-left: auto; }
+.defect-review-filters select { flex: 0 1 160px; min-width: 118px; max-width: 180px; }
+.defect-review-toolbar-actions { flex: 0 0 auto; }
+.defect-match-summary { position: absolute; right: 16px; bottom: 3px; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.defect-review-workspace { height: clamp(520px, calc(100vh - 370px), 700px); }
+.defect-review-workspace.detail-open { border: 0; border-radius: 0; background: #fff; }
+.defect-review-workspace.detail-open .defect-review-list-pane { flex-basis: clamp(330px, calc(100% - var(--defect-detail-width)), 430px); background: #fff; }
+.defect-detail-resize-handle { flex-basis: 6px; border: 0; background: linear-gradient(to right, transparent 2px, #dbe4ef 2px, #dbe4ef 3px, transparent 3px); }
+.defect-detail-resize-handle::after { display: none; }
+
+.defect-quick-review.compact { gap: 0; padding: 0; }
+.defect-quick-review-title { display: flex; align-items: center; min-height: 46px; margin: 0; padding: 0 16px; border-bottom: 1px solid #e2e8f0; color: #17233b; font-size: 15px; }
+.defect-quick-review.compact .defect-quick-row { grid-template-columns: 30px minmax(0, 1fr) 76px 68px; min-height: 58px; border-bottom: 1px solid #e7ecf2; background: #fff; }
+.defect-quick-review.compact .defect-quick-row:hover { background: #f8fbff; }
+.defect-quick-review.compact .defect-quick-row.active { border-color: #dbeafe; background: #eff6ff; box-shadow: inset 3px 0 #2f5bea; }
+.defect-quick-review.compact .defect-quick-select { background: transparent; }
+.defect-quick-review.compact .defect-quick-main { grid-template-columns: minmax(0, 1fr); padding: 8px 6px; }
+.defect-quick-review.compact .defect-quick-component strong { color: #17233b; font-size: 13px; }
+.defect-quick-review.compact .defect-quick-component small { color: #64748b; font-size: 11px; }
+.defect-quick-review.compact .defect-quick-photos { grid-column: 3; justify-content: flex-start; gap: 4px; padding: 7px 4px; background: transparent; }
+.defect-quick-review.compact .defect-quick-photos img { width: 28px; height: 34px; border: 1px solid #cbd5e1; border-radius: 3px; }
+.defect-quick-review.compact .defect-quick-photos > span:last-child { padding: 0; background: transparent; color: #2456c9; font-size: 11px; white-space: nowrap; }
+.defect-quick-photo-empty { display: grid; flex: 0 0 22px; width: 22px; height: 22px; padding: 0 !important; place-items: center; border-radius: 4px; background: #f1f5f9 !important; color: #64748b !important; font-size: 13px; }
+.defect-quick-review.compact .defect-quick-actions,
+.defect-quick-review.compact .defect-quick-scale { display: none; }
+.defect-quick-review.compact .defect-quick-status { display: inline-flex; grid-column: 4; justify-self: center; align-self: center; padding: 3px 7px; font-size: 11px; }
+.defect-quick-review.compact > .defect-pagination { min-height: 40px; padding: 8px 10px; }
+
+/* overflow-y:auto 会把另一轴的 visible 计算成 auto（CSS overflow 规范），于是任何
+   超宽子元素都在列表底部拉出一条横向滚动条。这一栏的内容已全部单行省略，横向
+   一律不滚。 */
+.defect-review-list-pane .defect-quick-review { overflow-x: hidden; }
+.defect-quick-review.compact .defect-quick-component strong,
+.defect-quick-review.compact .defect-quick-component small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 维护栏与照片栏并排，两栏都从内容区顶端起排：照片栏不再被维护栏的标题区压低。 */
+.defect-detail-pane .defect-detail-editor { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 0 22px; align-items: start; min-height: 100%; padding: 14px 16px 16px; }
+.defect-detail-main { display: flex; min-width: 0; min-height: 100%; flex-direction: column; }
+.defect-detail-photo-column { position: relative; min-width: 0; align-self: start; }
+.defect-detail-photo-column > .defect-detail-close { position: absolute; top: -2px; right: 0; z-index: 2; }
+.defect-detail-heading { flex: 0 0 auto; }
+/* 照片栏移出后这里只剩字段区，不再是两栏容器。 */
+.defect-detail-body { display: block; flex: 1 1 auto; margin: 12px 0 14px; }
+/* 历年演变是通栏参考块，不进两列字段网格；它上面的富余高度由字段区吸收。 */
+.defect-detail-main > .defect-history-card { flex: 0 0 auto; margin-top: auto; }
+.defect-rating-tree-result.resolved { gap: 2px; padding: 0; border: 0; background: transparent; }
+/* 92px 原本是给「重新选择」按钮让位的；按钮已撤，宽度收回来。
+   select 不会自己省略，窄栏里长标签只会被拦腰截断，补 ellipsis。 */
+.defect-rating-tree-result.resolved > select { width: 100%; height: 26px; padding: 0; border: 0; appearance: none;
+  background: transparent; color: #17233b; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 左列录入链路、右列判定链路，各自竖排。两列条目数（4 / 3）与行高都不等，
+   所以是两个独立的栏，不靠 grid 自动流排——自动流会让「病害描述」和
+   「标度判定依据」错位。 */
+.defect-detail-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 18px; align-items: start; margin-top: 10px; }
+.defect-detail-field-col { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
+.defect-detail-field-col > label { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.defect-detail-field-col > label > input,
+.defect-detail-field-col > label > select { width: 100%; box-sizing: border-box; }
+.defect-detail-field-col > label > input[readonly] { background: #f8fafc; color: #334155; }
+.defect-scale-guidance, .defect-completeness { padding: 9px 10px; }
+.defect-completeness { margin-top: 0; }
+.defect-detail-actions { position: sticky; bottom: -16px; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 12px; margin: 0 0 -16px -16px; padding: 12px 16px; }
+.defect-detail-action-buttons { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; flex-wrap: nowrap; }
+.defect-detail-actions button { min-width: 0; padding-inline: 14px; white-space: nowrap; }
+
+/* 三项检查回答的是「这条现在能不能确认」，跟右侧的确认按钮是同一个决定，
+   所以同处一行：左侧检查、右侧按钮，中间由 margin-right:auto 撑开。 */
+/* 完整度卡：表头「校对完整度 + 百分比」，其下三项检查竖排。 */
+.defect-completeness { border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; padding: 10px 12px; }
+.defect-completeness-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.defect-completeness-head strong { color: #17233b; font-size: 13px; font-weight: 600; }
+.defect-completeness-head span { color: #16a34a; font-size: 13px; font-weight: 600; }
+/* styles.css:7068 的 `.defect-completeness ul` 是 (0,1,1) 的三列网格，单靠类名
+   (0,1,0) 压不住——必须带上父级才能翻过去。三项检查竖排，一行一项。 */
+.defect-completeness ul.defect-detail-checks {
+  display: flex; grid-template-columns: none; flex-direction: column;
+  margin: 0; padding: 0; gap: 10px; list-style: none;
+}
+.defect-completeness ul.defect-detail-checks > li {
+  display: flex; align-items: center; gap: 8px;
+  color: #334155; font-size: 13px; line-height: 20px;
+}
+.defect-completeness ul.defect-detail-checks > li > span {
+  display: inline-flex; flex: 0 0 18px; width: 18px; height: 18px;
+  align-items: center; justify-content: center;
+  border-radius: 50%; background: #16a34a; color: #fff; font-size: 11px; line-height: 1;
+}
+.defect-completeness ul.defect-detail-checks > li.pending > span { background: #f59e0b; }
+.defect-completeness ul.defect-detail-checks > li.pending { color: #b45309; }
+.defect-detail-checks li { display: inline-flex; align-items: center; gap: 5px; color: #475569; font-size: 12px; white-space: nowrap; }
+.defect-detail-checks li > span { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%; color: #fff; font-size: 10px; line-height: 1; }
+.defect-detail-checks li.complete > span { background: #16a34a; }
+.defect-detail-checks li.pending > span { background: #f59e0b; }
+.defect-detail-checks li.pending { color: #b45309; }
+/* 检查列表插进这一行后，nth-child(2) 会落到「保存修改」上；只在 button 之间计数。 */
+.defect-detail-action-buttons button:nth-of-type(2) { border-color: #f0a15f; color: #ea580c; }
+.defect-detail-actions .review-action-primary { min-width: 0; }
+
+/* 历年演变搬走后照片栏只剩图 + 缩略 + 两个按钮，整块上移顶到内容区起点，
+   腾出来的高度全给主图——校对靠的就是看图，图越大判得越准。 */
+.defect-photo-panel { gap: 8px; margin-top: 0; }
+.defect-photo-panel-heading { min-height: 28px; }
+.defect-photo-panel-heading h4 { color: #17233b; font-size: 15px; }
+.defect-photo-stage { overflow: hidden; padding: 0; border-radius: 7px; }
+.defect-photo-panel .defect-photo-stage img { height: clamp(280px, 38vh, 460px); border-radius: 0; object-fit: cover; }
+.defect-photo-stage .photo-relation-caption { min-height: 30px; margin: 0; padding: 6px 10px; box-sizing: border-box; text-align: center; }
+.defect-photo-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.defect-photo-card { position: relative; width: auto; min-width: 0; padding: 3px; border-radius: 6px; }
+.defect-photo-card-main, .defect-detail-editor .defect-photo-card-main { width: 100%; padding: 0; }
+.defect-photo-card-main img, .defect-photo-card-empty { width: 100%; height: 66px; border-radius: 4px; }
+.defect-photo-card-main > strong, .defect-photo-card-main > small { display: none; }
+.defect-photo-card-actions { position: absolute; right: 4px; bottom: 4px; left: 4px; display: none; gap: 3px; padding: 3px; border-radius: 4px; background: rgb(15 23 42 / 72%); }
+.defect-photo-card:hover .defect-photo-card-actions, .defect-photo-card:focus-within .defect-photo-card-actions { display: flex; }
+.defect-photo-card-actions button { height: 22px; padding: 0 4px; border: 0; background: transparent; color: #fff !important; font-size: 10px; }
+.defect-photo-panel-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.defect-photo-panel-actions > button, .defect-photo-panel-actions > a, .defect-photo-original-disabled { display: flex; align-items: center; justify-content: center; box-sizing: border-box; height: 34px; padding: 0 12px; border: 1px solid #d9e0e8; border-radius: 6px; background: #fff; color: #2456c9; font-size: 12px; text-decoration: none; }
+.defect-photo-original-disabled { color: #94a3b8; }
+/* 演变卡：标题 + 紧凑时间轴（连接线贯穿圆点）+ 结论 + 底部入口。
+   年份与标签靠左，标度/尺寸靠右，两行的右缘对齐才好横向比。 */
+.defect-history-card { display: block; margin: 0 0 12px; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; }
+.defect-history-heading { display: block; margin-bottom: 8px; }
+.defect-history-heading span { color: #17233b; font-size: 13px; font-weight: 600; }
+.defect-history-list { display: flex; flex-direction: column; margin: 0; padding: 0; gap: 0; list-style: none; }
+.defect-history-list li { position: relative; display: grid; grid-template-columns: 18px 42px auto 1fr; align-items: center; min-height: 30px; gap: 0 8px; padding: 0; border: 0; background: none; }
+/* 连接线只在相邻两点之间，末点之后不再拖一截。 */
+.defect-history-list li:not(:last-child)::before { position: absolute; top: 50%; bottom: -50%; left: 8px; width: 1px; background: #cbd5e1; content: ""; }
+.defect-history-dot { position: relative; z-index: 1; width: 9px; height: 9px; margin: 0; border: 2px solid #94a3b8; border-radius: 50%; background: #fff; }
+.defect-history-list li.current .defect-history-dot { border-color: #2456c9; }
+.defect-history-list time { color: #17233b; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.defect-history-list strong { color: #475569; font-size: 12px; font-weight: 500; }
+.defect-history-list small { justify-self: end; color: #475569; font-size: 12px; white-space: nowrap; }
+.defect-history-empty { margin: 8px 0 0; padding: 6px 8px; border-radius: 6px; background: #f1f5f9; color: #64748b; font-size: 12px; }
+.defect-history-trend { display: flex; align-items: center; margin: 8px 0 0; padding: 0; gap: 5px; background: none; color: #b45309; font-size: 12px; }
+.defect-history-trend > span { color: #f59e0b; }
+.defect-history-archive-link { display: inline-block; margin-top: 8px; color: #2456c9; font-size: 12px; text-decoration: none; }
+
+/* 中间维护栏与右侧照片栏原来都是 fr，宽屏上照片栏跟着一起长，挤掉了字段栏。
+   照片栏的内容（图 + 三张缩略 + 演变卡）宽度需求是固定的，钉死 440px，
+   富余全部流进「精细化维护病害档案」，比例回到 344 / 520 / 440。 */
+
+
+/* 三栏各自的栏名同级：病害档案 / 精细维护病害档案 / 照片与证据。
+   栏名是次级信息，主标题是下面那行病害编号，别让两者抢层级。 */
+.defect-detail-kicker { margin: 0 0 4px; color: #475569; font-size: 14px; font-weight: 500; }
+
+@media (max-width: 1100px) {
+  .defect-overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .defect-review-filters { min-height: auto; padding: 10px 0 18px; flex-wrap: wrap; }
+  .defect-review-filters .defect-review-search { margin-left: 0; }
+}
+
+@media (max-width: 720px) {
+  .defect-overview-metrics { grid-template-columns: 1fr; }
+}
+
+/* 加载态：整页只留一枚转圈和一句说明，高度贴近载入后的工作区，
+   免得数据到位时页面猛地跳一下。 */
+.defect-section-loading {
+  display: flex;
+  min-height: 420px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.defect-section-loading p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}

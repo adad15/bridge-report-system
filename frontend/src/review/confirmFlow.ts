@@ -56,5 +56,5 @@ export function formatConfirmSuccess(result: ConfirmResponse): string {
   return `已确认系统评定：病害 ${result.written.defect_observations}、尺寸 ${result.written.defect_measurements}、` +
     `照片 ${result.written.defect_photos}；系统评分投影 ${result.written.condition_ratings}、` +
     `构件结果 ${result.written.assessment_component_results}、评定层级 ${result.written.assessment_part_results}、` +
-    `计算轨迹 ${result.written.assessment_rule_traces}；年度版本 v${result.version_number}。`;
+    `控制项 ${result.written.assessment_control_results}；年度版本 v${result.version_number}。`;
 }

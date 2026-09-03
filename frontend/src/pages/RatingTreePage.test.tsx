@@ -17,9 +17,8 @@ const version: ratingTreeApi.RatingTreeVersion = {
   published_at: "2026-07-28",
   contract_version: 1,
   node_count: 440,
-  h21_package_version: "1.0.2",
   is_default: true,
-  sources: [],
+  sources: [{ source_type: "technical_condition", package_version: "1.0.2" }],
 };
 
 const root: ratingTreeApi.RatingTreeNodeSummary = {
@@ -64,6 +63,25 @@ const group511: ratingTreeApi.RatingTreeNodeSummary = {
   parent_node_id: group51.id,
   display_name: "上部承重构件、上部一般构件",
   node_type: "component_group",
+  component_category_ids: [
+    "h21.component.beam.upper_bearing",
+    "h21.component.beam.upper_general",
+  ],
+};
+
+const defect5111: ratingTreeApi.RatingTreeNodeSummary = {
+  ...group511,
+  id: "defect-5-1-1-1",
+  node_key: "org.bridge.defect.5_1_1_1",
+  parent_node_id: group511.id,
+  display_number: "5.1.1-1",
+  display_name: "蜂窝、麻面",
+  node_type: "defect",
+  scoring_mode: "inherit_h21",
+  h21_indicator_id: "h21.indicator.honeycomb",
+  is_selectable: true,
+  is_scoring: true,
+  allowed_scales: [1, 2, 3],
 };
 
 function detailFor(node: ratingTreeApi.RatingTreeNodeSummary): ratingTreeApi.RatingTreeNode {
@@ -100,14 +118,24 @@ const children = new Map<string, ratingTreeApi.RatingTreeNodeSummary[]>([
   [root.id, [group5]],
   [group5.id, [group51]],
   [group51.id, [group511]],
-  [group511.id, []],
+  [group511.id, [defect5111]],
 ]);
+
+const defectDetail: ratingTreeApi.RatingTreeNode = {
+  ...detailFor(defect5111),
+  allowed_scales: [1, 2, 3],
+  h21_indicator_name: "蜂窝、麻面",
+  h21_source_table: "表 4.2.1",
+  scale_descriptions: { "1": "局部轻微", "2": "较大范围", "3": "大面积严重" },
+  deduction_points: { "1": 5, "2": 15, "3": 25 },
+};
 
 const details = new Map<string, ratingTreeApi.RatingTreeNode>([
   [root.id, detailFor(root)],
   [group5.id, detailFor(group5)],
   [group51.id, detailFor(group51)],
   [group511.id, detailFor(group511)],
+  [defect5111.id, defectDetail],
 ]);
 
 function renderPage() {
@@ -155,7 +183,10 @@ describe("RatingTreePage", () => {
     } as never]);
     vi.spyOn(standardsApi, "fetchStandardCatalog").mockResolvedValue({
       bridge_types: [{ id: "h21.bridge_type.beam", name: "梁式桥" }],
-      component_categories: [],
+      component_categories: [
+        { id: "h21.component.beam.upper_bearing", name: "上部承重构件（主梁、挂梁）" },
+        { id: "h21.component.beam.upper_general", name: "上部一般构件（湿接缝、横隔板等）" },
+      ],
     } as never);
   });
 
@@ -165,18 +196,35 @@ describe("RatingTreePage", () => {
     expect(await screen.findByRole("heading", { name: "单位桥梁评定树" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "5 梁式桥上部结构" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "桥梁有效评定树" })).not.toBeInTheDocument();
-    expect(await screen.findByText("梁式桥上部结构说明。")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "单位说明" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "5.1 混凝土梁式桥" })).toHaveLength(2);
     fireEvent.click(screen.getAllByRole("button", { name: "5.1 混凝土梁式桥" })[0]);
     expect(await screen.findByRole("heading", { name: "5.1 混凝土梁式桥" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", {
       name: "5.1.1 上部承重构件、上部一般构件",
     })).toHaveLength(2);
-    expect(await screen.findByText("全部桥型（1 类）")).toBeInTheDocument();
+    expect(await screen.findByText("梁式桥")).toBeInTheDocument();
     expect(screen.queryByText("h21.bridge_type.beam")).not.toBeInTheDocument();
     expect(screen.queryByText("org.bridge.root")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "规则来源" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /新增|编辑|发布|停用|删除/ })).not.toBeInTheDocument();
+  });
+
+  it("shows named component scopes and scale rules for defect nodes", async () => {
+    renderPage();
+
+    await screen.findByRole("heading", { name: "单位桥梁评定树" });
+    fireEvent.click((await screen.findAllByRole("button", { name: "5.1 混凝土梁式桥" }))[0]);
+    fireEvent.click((await screen.findAllByRole("button", { name: "5.1.1 上部承重构件、上部一般构件" }))[0]);
+    fireEvent.click((await screen.findAllByRole("button", { name: "5.1.1-1 蜂窝、麻面" }))[0]);
+
+    expect(await screen.findByRole("heading", { name: "5.1.1-1 蜂窝、麻面" })).toBeInTheDocument();
+    expect(await screen.findByText("上部承重构件（主梁、挂梁）")).toBeInTheDocument();
+    expect(screen.getByText("上部一般构件（湿接缝、横隔板等）")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "标度判定与扣分" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "下级评定项目" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "单位说明" })).not.toBeInTheDocument();
+    expect(screen.getByText("大面积严重")).toBeInTheDocument();
   });
 
   it("skips the version lookup when returning to the tree in the same session", async () => {
@@ -230,7 +278,7 @@ describe("RatingTreePage", () => {
     await screen.findByRole("heading", { name: "单位桥梁评定树" });
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "裂缝" } });
     fireEvent.click(screen.getByRole("button", { name: "5 梁式桥上部结构" }));
-    await screen.findByText("梁式桥上部结构说明。");
+    await screen.findByRole("heading", { name: "5 梁式桥上部结构" });
     first.unmount();
 
     renderPage();

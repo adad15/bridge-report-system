@@ -181,11 +181,30 @@ function locked(method: string, body: unknown, lockToken: string): RequestInit {
   };
 }
 
+/* 在途请求去重。
+ *
+ * 这份工作区被三个互不相干的调用方各取一次（页面壳、构件绑定面板、病害与照片面板），
+ * 加载时几乎同时发出，同一份 71.6 kB 就下了三遍。它们要的是同一个导入记录的同一份
+ * 快照，没有理由各发各的。
+ *
+ * 已经有一次在飞时，后来者搭同一趟车。请求结束（无论成败）立刻从表里摘掉——留着会
+ * 让下一次"绑定完成后重取"拿到过期结果，那正是这份数据最不能出错的时刻。
+ *
+ * 注意：这里只合并**同时在飞**的请求，不做任何缓存。 */
+const inFlightWorkspace = new Map<string, Promise<ResolutionWorkspace>>();
+
 export async function fetchResolutionWorkspace(
   baseUrl: string,
   importId: string
 ): Promise<ResolutionWorkspace> {
-  return request<ResolutionWorkspace>(`${base(baseUrl, importId)}/resolution-workspace`);
+  const url = `${base(baseUrl, importId)}/resolution-workspace`;
+  const pending = inFlightWorkspace.get(url);
+  if (pending) return pending;
+
+  const started = request<ResolutionWorkspace>(url)
+    .finally(() => { inFlightWorkspace.delete(url); });
+  inFlightWorkspace.set(url, started);
+  return started;
 }
 
 export async function applyComponentResolution(

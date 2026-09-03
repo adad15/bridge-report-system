@@ -194,6 +194,25 @@ describe("ComponentBindingWorkspace", () => {
     expect(screen.getByRole("button", { name: "待处理 1" })).toBeInTheDocument();
   });
 
+  /* 已入库的记录没有绑定工作区，后端一律拒绝。那不是故障，是这一步已经过去了，
+     所以既不该发那一趟请求，也不该把后端的拒绝原文当红字打在页面上。 */
+  it("explains that binding is closed for a committed record instead of erroring", async () => {
+    render(
+      <ComponentBindingWorkspace
+        importId="i1"
+        bridgeId="bridge-1"
+        importStatus="已确认"
+        lockToken={null}
+      />,
+    );
+
+    expect(await screen.findByText("构件绑定已完成")).toBeInTheDocument();
+    expect(screen.getByText(/「已确认」/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // 注定被拒的请求不该发出去。
+    expect(vi.mocked(fetchResolutionWorkspace)).not.toHaveBeenCalled();
+  });
+
   it("binds the selected published rating tree for the inspection year", async () => {
     // 绑评定树仍走既有接口；页面只看它成功与否，随后重取工作区拿新的树信息。
     vi.mocked(bindInspectionRatingTree).mockResolvedValue({} as never);
@@ -239,10 +258,10 @@ describe("ComponentBindingWorkspace", () => {
 
     // 默认只看待处理，已标记缺失的行不在其中。
     expect(await screen.findByText("全部构件已处理完毕。")).toBeInTheDocument();
-    expect(screen.queryByText("已标记缺失")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "取消标记 1-1#梁" })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "已标记缺失 1" }));
-    expect(screen.getByText("已标记缺失")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "取消标记 1-1#梁" })).toBeInTheDocument();
 
     // 切到"已绑定"应为空，且不得再说"全部处理完毕"。
     await userEvent.click(screen.getByRole("button", { name: "已绑定 0" }));
@@ -274,10 +293,35 @@ describe("ComponentBindingWorkspace", () => {
 
     // 绑定后该行从默认视图消失，只剩"全部已处理"提示。
     expect(await screen.findByText("全部构件已处理完毕。")).toBeInTheDocument();
-    expect(screen.queryByText("已绑定")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "取消绑定 1-1#梁" })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "已绑定 1" }));
-    expect(screen.getByText("已绑定")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "取消绑定 1-1#梁" })).toBeInTheDocument();
+  });
+
+  it("paginates resolved rows instead of mounting the complete ledger", async () => {
+    const groups = Array.from({ length: 25 }, (_, index) => {
+      const number = `${index + 1}-1#梁`;
+      return group({
+        group_id: `g${index + 1}`,
+        source_component_number: number,
+        normalized_component_number: number,
+        status: "bound",
+        targets: [summary(`c${index + 1}`, number)],
+        match_method: "manual",
+      });
+    });
+    vi.mocked(fetchResolutionWorkspace).mockResolvedValue(workspaceOf(groups));
+    render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "已绑定 25" }));
+    expect(screen.getByText("共 25 条")).toBeInTheDocument();
+    expect(screen.getByText("1-1#梁")).toBeInTheDocument();
+    expect(screen.queryByText("21-1#梁")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("img", { name: "right" }));
+    expect(screen.getByText("21-1#梁")).toBeInTheDocument();
+    expect(screen.queryByText("1-1#梁")).not.toBeInTheDocument();
   });
 
   it("marks a row missing and enables entering review when all resolved", async () => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { ResolutionPlanPreview } from "../../api/resolutionApi";
 
@@ -27,6 +27,10 @@ const REASON_LABELS: Record<string, string> = {
   not_a_range: "该编号不是可展开的构件范围",
 };
 
+/* 查找串停顿多久就去取一次预览。太短会把每个按键都打成一次后端请求，
+   太长又会让人以为没反应；400ms 是"手停下来"的常见阈值。 */
+const PREVIEW_DEBOUNCE_MS = 400;
+
 function outcomeLabel(row: ResolutionPlanPreview["rows"][number]): string {
   if (row.outcome === "will_bind") return OUTCOME_LABELS.will_bind;
   return REASON_LABELS[row.reason_code] ?? row.reason_message ??
@@ -40,6 +44,7 @@ export function BulkReplaceDialog({
   busy,
   error,
   onPreview,
+  onClearPlan,
   onApply,
   onClose,
 }: {
@@ -50,13 +55,33 @@ export function BulkReplaceDialog({
   busy: boolean;
   error?: string | null;
   onPreview: (find: string, replace: string) => void | Promise<void>;
+  /** 查找串清空时丢掉上一份计划，免得空条件下还挂着旧预览。 */
+  onClearPlan: () => void;
   onApply: (planToken: string) => void | Promise<void>;
   onClose: () => void;
 }) {
   const [find, setFind] = useState("");
   const [replace, setReplace] = useState("");
 
-  const canPreview = find.trim() !== "" && !previewing && !busy;
+  /* 回调每次渲染都是新的匿名函数，放进依赖会让 effect 每帧重跑；用 ref 取最新的一份，
+     依赖里只留真正的输入。 */
+  const previewRef = useRef(onPreview);
+  const clearRef = useRef(onClearPlan);
+  previewRef.current = onPreview;
+  clearRef.current = onClearPlan;
+
+  // 不再要求先点一次「生成预览」：输入停下就自动去取计划。
+  useEffect(() => {
+    if (find.trim() === "") {
+      clearRef.current();
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void previewRef.current(find, replace);
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [find, replace]);
+
   const canApply = plan !== null && plan.will_apply_count > 0 && !busy && !previewing;
 
   return (
@@ -90,14 +115,9 @@ export function BulkReplaceDialog({
               onChange={(event) => setReplace(event.target.value)}
             />
           </label>
-          <button
-            type="button"
-            disabled={!canPreview}
-            onClick={() => void onPreview(find, replace)}
-          >
-            {previewing ? "正在生成预览…" : "生成预览"}
-          </button>
         </div>
+
+        {previewing ? <p className="bulk-replace-status" role="status">正在生成预览…</p> : null}
 
         {error ? <p className="error-text" role="alert">{error}</p> : null}
 

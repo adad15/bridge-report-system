@@ -171,6 +171,41 @@ Json::Value WorkspaceImport::to_json() const {
     return json;
 }
 
+Json::Value WorkspaceDefectTypeDelta::to_json() const {
+    Json::Value json;
+    json["defect_type"] = defect_type;
+    json["previous_count"] = previous_count;
+    json["latest_count"] = latest_count;
+    return json;
+}
+
+Json::Value WorkspaceDefectGroupDelta::to_json() const {
+    Json::Value json;
+    json["structure_part"] = structure_part;
+    json["component_type"] = component_type;
+    json["previous_count"] = previous_count;
+    json["latest_count"] = latest_count;
+    json["component_count"] = component_count;
+    json["changed_component_count"] = changed_component_count;
+    json["defect_types"] = array_json(defect_types);
+    return json;
+}
+
+Json::Value WorkspaceDefectComparison::to_json() const {
+    Json::Value json;
+    json["available"] = available;
+    json["previous_year"] = previous_year;
+    json["latest_year"] = latest_year;
+    json["previous_observation_count"] = previous_observation_count;
+    json["latest_observation_count"] = latest_observation_count;
+    json["increased_observation_count"] = increased_observation_count;
+    json["decreased_observation_count"] = decreased_observation_count;
+    json["changed_component_count"] = changed_component_count;
+    json["unchanged_component_count"] = unchanged_component_count;
+    json["groups"] = array_json(groups);
+    return json;
+}
+
 Json::Value BridgeOverview::to_json() const {
     Json::Value json;
     json["bridge"] = bridge.to_json();
@@ -181,6 +216,7 @@ Json::Value BridgeOverview::to_json() const {
     json["structure_ratings"] = array_json(structure_ratings);
     json["pending"] = pending.to_json();
     json["defect_archive"] = defect_archive.to_json();
+    json["defect_comparison"] = defect_comparison.to_json();
     return json;
 }
 
