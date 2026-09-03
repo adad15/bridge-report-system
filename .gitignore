@@ -35,3 +35,9 @@ archive/*
 *.pdb
 *.ilk
 *.exe
+
+# 编码代理的临时目录：每次会话都会重新生成，进版本库只会是噪音。
+.codex-temp/
+
+# 散在源码目录里的草稿（_old_pin_test.txt 之类），不是源文件。
+frontend/src/_*.txt
