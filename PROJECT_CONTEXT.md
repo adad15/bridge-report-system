@@ -1,361 +1,221 @@
 # PROJECT_CONTEXT
 
-更新时间：2026-08-14
+更新时间：2026-09-04
 
 ## 项目一句话
 
-`bridge-report-system` 是一个独立的本地网页系统，用于按桥梁、按年份沉淀定期检测报告、病害、构件和维修记录，并自动生成正式桥梁检测 Word 报告。
+`bridge-report-system` 是一个本地网页系统，用于维护桥梁及完整构件档案、导入并确认年度病害事实、执行可追溯的系统技术状况评定、整理跨年病害线索，并最终按可管理模板即时生成正式 Word 报告。
 
 ## 新窗口启动提示
 
-在新的 Codex 窗口开始工作时，先读取本文件和设计文档：
+开始工作时优先读取：
 
-- `PROJECT_CONTEXT.md`
-- `docs/superpowers/specs/2026-07-01-bridge-report-system-design.md`
-- `docs/superpowers/specs/2026-07-01-modular-technical-doc-review-design.md`
-- `docs/superpowers/specs/modules/01-tech-stack-and-project-skeleton.md`
-- `docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md`
-- `docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md`
-- `docs/superpowers/specs/2026-08-14-riverbed-inventory-generation-design.md`
+1. `PROJECT_CONTEXT.md`
+2. `docs/superpowers/specs/2026-09-04-report-template-word-generation-design.md`
+3. 与当前任务直接相关的 `docs/superpowers/specs/modules/` 模块规格
+4. 当前任务对应的较新日期设计文档
 
 推荐首条提示：
 
 ```text
 继续 bridge-report-system 项目。仓库路径：D:\vs2022 code\bridge-report-system。
-当前应该在分支 codex/06-6-interaction-redesign。
-模块 01～06.5 已完成；下一步先由用户决定是否开始模块 07，不要自动进入模块 07 编码。
-请先读取 PROJECT_CONTEXT.md、docs/superpowers/specs/modules/06-5-bridge-centric-interaction-redesign.md、docs/superpowers/specs/2026-07-16-import-record-deletion-and-review-navigation-design.md、docs/superpowers/plans/2026-07-17-import-record-deletion-and-review-navigation-implementation-plan.md，以及模块 05、06 规格。模块 07 未完成需求确认前不要大规模编码。
+当前分支应为 07-begin-word。运行时 BridgeAnnualInspectionData 合同为 5.0。
+模块 01～06 主体和后续构件台账、系统评定、导入解析关系化、批量病害线索整理、UI 统一已经实施。
+当前已确认“报告模板管理与 Word 即时生成”设计，但尚未写实施计划、尚未编码。
+先读取 PROJECT_CONTEXT.md 和 docs/superpowers/specs/2026-09-04-report-template-word-generation-design.md；
+不要恢复旧的 Word 评分导入、报告版本管理或生成报告永久归档方案。
 ```
 
-## 当前进度
+## 当前分支与进度
 
-- 模块 1 `01-tech-stack-and-project-skeleton` 已完成实施并提交到 GitHub。
-- 模块 2 `02-postgresql-schema-and-file-archive` 已完成实施：数据库迁移、系统编号工具、归档路径工具和数据库 smoke test 已通过。
-- 模块 2 设计文档提交号：`52ee0ab docs: add module 02 schema and archive design`。
-- 模块 3 `03-bridge-annual-inspection-data-contract` 已完成实施并推送到 GitHub。
-- 模块 3 最初建立了 `BridgeAnnualInspectionData` 跨端契约；当前运行时已统一升级为 4.0，仅保留导入和校对候选，删除 Word 扣分、导入评分、人工二选一状态以及照片级 `match_status` / `review_status`，Python/C++/TypeScript 均严格拒绝旧版本。
-- 当前分支为 `codex/06-6-interaction-redesign`。
-- 模块 4 `04-word-importer-prototype` 已完成并推送到 GitHub：支持 `.docx`、`rule_profile="辽宁国省干线"`、第二章三张病害检查表、病害照片抽取匹配和模块 3 契约输出；评分表解析现已删除。
-- 绕阳河二号桥真实软件报告基线为：病害候选 25 条、病害照片候选 31 条、临时图片 36 个、可归档照片 31 张；Word 中原有评分不再进入导入 JSON。
-- 模块 5 `05-review-workspace` 已完成实施：后端确认入库事务（C++）与前端校对工作台（React）已落地，读取 `import_records.parsed_result_json`，按 warning/error 分组人工校对，保存草稿，五个操作按钮（保存草稿/批量确认普通候选/入库前检查/确认年度事实入库/取消导入）全部接后端，修订版确认弹窗和确认后只读态已实现。已完成端到端手工验收：编辑保存、批量确认、入库前检查解锁确认、首次确认入库写入四张事实表、同桥同年二次导入的修订版确认路径（含 409 拒绝校验）、取消导入均通过。
-- 模块 5 已推送到 GitHub；分支 `feature/05-review-workspace` 与远端同步，提交 `52b9772` 为模块 05 当前末端。
-- 模块 6 `06-component-defect-archive` 的病害档案、线索建议和绑定/重绑事务继续保留；其中早期 Word 评分解析、三端重复评分公式和评分差异校对已经由系统自主评定架构取代。
-- 现行评定架构将 JTG/T H21—2011 与 JTG 5120—2021 分为独立、版本化规范包；桥梁锁定项目规范组合和已确认构件台账，H21 evaluator 负责试算与正式评定，正式运行保存输入摘要、包校验和、台账版本、各级结果和结构化轨迹。
-- 2026-08-14 发布 H21 1.0.4 与单位桥梁评定树 2.0.3：河床正式设为 `generatable=true`，可在全部六种适用桥型中作为默认不勾选的全桥级单一台账条目生成；评分权重、指标、扣分与等级边界未变。产品目录的 `manually_selectable` 临时例外已经删除，taxonomy 重新成为生成准入唯一真值。新建桥梁默认选择最新可用技术状况包，存在历史版本时下拉项显示版本号。
-- 用户创建桥梁时录入构件数量，系统生成实际构件编号并允许修改；病害必须填写构件类别、构件编号、病害位置、病害类型和病害描述，正式确认前必须关联最新已确认台账中的实际构件。结构部位不在校对页面显示。
-- 合同 1.2 和模块 6 早期评分方案仅保留在历史规格/迁移记录中；运行时代码、当前样例和数据库最终态均以 4.0 与系统评分为准。
-- 2026-08-10 已取消照片级确认状态：照片候选只保存编号、关联病害、归档文件、来源、置信度和警告；病害组确认是照片关系的唯一确认动作。正式入库时，与确认病害关联且归档完整的照片写入 `defect_photos`，未关联照片跳过并保留提示；数据库 `defect_photos.match_status` 已由迁移 025 删除。
-- 变更 002 已实施（2026-07-15，见 `docs/superpowers/specs/changes/2026-07-15-change-002-accounts-and-post-confirm-reopen.md`）：轻量账号体系（users/user_sessions、登录页、会话 token、写端点鉴权，默认账号 admin/admin123 与 user/user123 由后端启动播种）；已确认导入记录支持"重开校对 + 修订版入库"（warnings_only=任何登录用户仅改带警告病害，full=仅管理员全改；放弃修改可还原重开快照；重开态禁止取消导入）；校对页只读态照片查看不再被禁用（逐控件禁用取代 fieldset 一揽子禁用）；迁移 004。
-- 模块 06 验收修复中的独占租约编辑锁、重开范围控制和异常关闭策略继续有效；早期 Word 扣分复算及“接受 Word 值/采用复算值”路径已删除，评分完全由系统 evaluator 生成。
-- 模块 06.5 已完成实施（2026-07-15）：系统入口改为桥梁档案列表；进入桥梁默认显示“最新正式结论 → 待办 → 历年技术状况 → 病害概况”；年度检测采用左侧年份栏和右侧年度工作台；支持桥梁内并发安全创建年度、受控上传/归档 Word、调用现有解析并进入模块 05 全屏校对；校对退出返回原年度；构件档案保留线索整理但不作为一级导航。当前仍只有 Word 格式，不实现多来源合并。2026-08-10 起，解析或契约校验失败会自动删除本次导入记录、来源引用和独占归档，不再留下“解析失败”卡片；错误仍在导入弹窗中显示，用户修正后重新发起导入。
-- 模块 06.5 管理员年度删除已实施（2026-07-15，见 `docs/superpowers/specs/modules/06-5-admin-delete-inspection-year.md`）：采用 C1 语义永久删除同桥同年的 V1/V2 等全部版本；前端实时影响预览、原因和精确确认文字三重确认；普通用户无入口且后端强制管理员鉴权；活动编辑锁阻断；影响令牌防止预览后数据变化；事务内删除年度事实并重算跨年病害线索；共享归档文件保留，独占文件经可重试队列物理清理；永久保存删除审计。
-- 模块 06.5 管理员桥梁维护已实施（2026-07-16，见 `docs/superpowers/specs/2026-07-16-bridge-administration-design.md`）：管理员可在桥梁档案页精简新增桥梁，也可用复选框批量预览并逐座永久删除整桥档案；普通用户无入口且后端 403；活动编辑锁、逐桥影响令牌和独立事务保证批量部分成功；永久审计保留桥梁/操作者/原因/数量快照；独占文件进入持久清理队列，共享文件保留；清理器支持立即、启动、每 5 分钟重试、`SKIP LOCKED` 领取、退避和陈旧领取恢复。
-- 模块 06.5 导入删除、无照片语义与校对定位补充已实施（2026-07-17，见 `docs/superpowers/specs/2026-07-16-import-record-deletion-and-review-navigation-design.md`）：管理员可在年度资料卡片永久删除尚未形成正式事实的单条导入记录，删除前预览影响并填写原因和精确确认文字；已确认/正式事实引用/活动编辑锁/陈旧影响令牌阻断；删除审计永久保存，独占归档照片、临时 Word 和解析工作目录进入可重试清理队列，共享文件保留；解析中删除后迟到结果不会复活记录。无照片编号病害不再告警，实际引用缺图仍告警；病害显示导入内序号，“需要处理”可按业务标签跳转并高亮病害、字段、照片和评分。
-- 2026-07-17 至 2026-07-20 已完成版本化规范、实际构件台账、合同 2.0、全账号新增/删除病害、范围尺寸、H21 试算与正式系统评定。Task 18 也已完成：旧评分解析、三端重复公式、评分校对 UI 和旧数据库字段已删除，迁移 014 要求评分投影必须关联正式 assessment run；仍未开始模块 07。
-- Task 18 最终验证：Python 96 项通过、1 项环境门控跳过；真实 Word 回归 1 项通过（25 条病害、31 个照片候选、36 个 Word 图片、31 张可归档照片，导入评分为 0）；前端 218 项通过且生产构建通过；C++ + PostgreSQL 354 项通过且 Debug 全量链接通过；数据库 14 个迁移连续应用两遍、10 个 smoke 全部通过。管理员和普通账号界面验收均可新增/删除病害、不显示结构部位，完整心跳周期内聚焦字段保持稳定。
+- 当前分支：`07-begin-word`
+- 报告设计初稿提交：`a6dbbe6 docs: design report template word generation`
+- 数据库迁移：`001`～`029`
+- 运行时合同：`BridgeAnnualInspectionData 5.0`
+- 已完成主体：模块 01～06，以及 06 之后的构件台账、版本化规范、系统自主评定、导入解析关系化、批量病害线索整理和 UI 统一工作
+- 当前下一步：编写报告模块实施计划；先完成模板契约和 Word/WPS 字段更新原型阶段门，再进入数据表和业务编码
 
-## 已确认方向
+## 已完成能力
 
-- 新建独立项目，不放进 `auto_cad`。
-- 第一版是本地网页系统，先单机使用，数据和服务边界按以后多人协作预留。
-- 最终目标是生成完整正式 Word 报告，不只是生成片段。
-- 第一阶段主流程：
-  1. 创建或选择桥梁。
-  2. 创建年度检测任务。
-  3. 导入第 N 年 Word 数据源。
-  4. 抽取第 N 年病害表、照片和第四章综合评定。
-  5. 人工校对第 N 年病害事实。
-  6. C++ 主服务写入第 N 年正式事实。
-  7. 从 PostgreSQL 读取第 N-1 年事实，生成历史病害对比候选。
-  8. 人工确认历史病害对比。
-  9. 生成章节草稿。
-  10. 生成完整正式 Word。
-  11. 归档第 N 年资料，作为下一年历史数据。
+### 工程底座
+
+- C++20 + Drogon 主后端，默认 `127.0.0.1:18080`
+- Python 3.11+ + FastAPI 工具服务，默认 `127.0.0.1:18081`
+- React 18 + TypeScript + Vite + Ant Design 6，默认 `127.0.0.1:5173`
+- PostgreSQL 事实主库
+- SQL 文件迁移和数据库 smoke test
+- 本地归档文件系统，数据库保存受控相对路径
+
+### 桥梁与年度工作流
+
+- 登录、普通用户与管理员权限
+- 工作台、桥梁档案、桥梁概览、构件台账、年度检测、构件病害档案和评定树页面
+- 管理员新增和批量删除桥梁
+- 创建年度检查、管理员永久删除年度及其所有修订版
+- Word 或来源数据库导入、解析、草稿校对、入库前检查和正式确认
+- 导入记录删除、临时 Word 生命周期和可重试文件清理
+
+### 构件档案
+
+- 每座桥维护版本化完整构件档案，不再只沉淀出现病害的构件
+- 用户按桥型和数量生成实际构件编号，可修改、停用并确认修订版
+- 正式病害必须绑定所选已确认构件档案中的实际构件
+- 正式评定运行锁定构件档案修订版
+
+### 导入和校对
+
+- 当前合同 5.0 只承载来源事实和一般校对事实
+- 构件解析、解析目标、展开实例和评分树解析保存在关系表中
+- Python Word 导入只抽取可信的第二章病害表及病害照片，不读取或保存 Word 评分
+- 导入支持手工新增/删除病害、照片关联、构件绑定、区间展开、两侧构件绑定和评分树选择
+- C++ 是唯一正式事实写入入口；Python 不连接 PostgreSQL
+
+### 系统自主评定
+
+- JTG/T H21—2011 技术状况规范包和 JTG 5120—2021 养护规范包独立版本化
+- 桥梁锁定规范组合、评定树版本和构件档案修订版
+- H21 evaluator 提供试算和正式评定
+- 正式运行保存输入摘要、规范校验值、各级结果和结构化计算轨迹
+- `condition_ratings` 的正式结果必须关联成功的 `assessment_run`
+- Word 中的评分、扣分和所谓“来源分/复算分二选一”均不再进入运行时合同
+
+### 构件病害档案与跨年线索
+
+- 构件档案默认只读，按线索纵向展示各年度正式观测
+- 支持正式照片和来源证据查看
+- 批量线索整理工作台处理大规模未绑定观测，并保留异常簇人工判断
+- 线索身份以评分树节点等正式语义为基础，不只依赖原始病害文字
+- 已确认对比引用保护仍保留，但模块 07 尚未提供对比确认和撤销入口
+
+### 已有年度条数对比
+
+桥梁概览已经能够读取最近两个已确认年度，按构件、构件类型和病害类型统计病害观测条数差，并明确说明该结果不代表逐条病害身份关系。
+
+报告复用这项“只写增加、减少或持平”的展示能力，但不能直接复用其 `count(defect_observations)` 口径：范围拆分会把一条来源病害展开成多条观测。报告第一版使用 `source_defect_count_delta_v1`，按来源病害去重，并允许用户手动选择 `inspection_years.previous_inspection_id`；相应通用查询仍需新增。
+
+## 尚未完成或明确延期
+
+### 模块 07：病害语义对比
+
+尚未实现：
+
+- 跨年病害身份候选；
+- 新增、持续、发展、减轻、消失、修复等语义；
+- 人工确认、修改、驳回和撤销；
+- `defect_comparisons` 写入 API 和确认页面。
+
+`defect_comparisons` 当前只有基础表结构、引用保护和删除清理逻辑。
+
+### 报告模板与 Word 即时生成
+
+设计已确认，尚未实施：
+
+- 报告模板管理；
+- 报告人员库、检测设备库；
+- 年度报告配置；
+- 临时报告生成任务；
+- `ReportContext`；
+- Python Docx Builder；
+- Word/WPS 字段更新器；
+- 生成前检查、下载和过期清理页面。
+
+当前设计文档：
+
+`docs/superpowers/specs/2026-09-04-report-template-word-generation-design.md`
+
+### 后续扩展
+
+- 第一章需要的更多桥梁档案字段
+- 第三章业务数据
+- 第五章业务数据
+- 附录二桥梁基本状况卡片
+- 维修养护记录及维修效果确认
+- 电子签名
+- Milvus、AI 润色和事实校验
+
+## 当前报告生成决策
+
+1. 管理员维护多套当前模板，并设置一个默认模板。
+2. 用户生成时可选择任意已启用模板。
+3. 新建干净模板；正式旧报告只作为参考，不直接反复修改。
+4. 模板用语义锚点控制内容位置和章节顺序，生成器不写死章节号。
+5. 只保留 `TOC`、`PAGE`、`NUMPAGES` 等必要字段；不使用业务 `SEQ`、`REF`、`STYLEREF`。
+6. 病害表只输出有病害的实际构件。
+7. 病害照片沿用随病害组确认入库的编号和标题，固定两栏、等框、按比例完整显示、不裁剪。
+8. 历史对比第一版按来源病害去重，只写记录条数增加、减少或持平；禁止解释为病害新增、消失或修复。
+9. 第六章由正式评定和受控规则确定性生成，不使用 AI 自由写作。
+10. 第一版标准模板的第三章、第五章和附录二保留标题及版式，正文为空。
+11. 生成结果只是临时下载文件；系统不保存报告版本或永久归档 Word。
+12. Microsoft Word 和 WPS Writer 均需通过字段更新和交叉打开验收。
+
+## 当前主流程
+
+```text
+创建桥梁并确认完整构件档案
+  -> 创建年度检查
+  -> 导入 Word 或来源数据库
+  -> 校对来源事实、构件解析和评分树解析
+  -> 确认正式病害与照片
+  -> 系统执行正式技术状况评定
+  -> 整理跨年病害线索（按需）
+  -> 配置模板、历史检查、人员和设备（待实施）
+  -> 即时生成并下载 Word（待实施）
+```
+
+完整模块 07 的语义对比不是报告第一版的前置条件。报告先使用条数差，后续通过 `confirmed_defect_comparison_v2` 替换对比数据提供器。
 
 ## 关键架构原则
 
-- 输入形式可以换，年度结构化数据模型要稳定。
-- 今年数据导入必须通过 `Importers` 适配器抽象。
-- 第一版实现 `SoftwareWordReportImporter` 和 `FormalWordReportImporter`。
-- 模块 4 第一版重点实现 Word 导入原型，不直接写 PostgreSQL，只输出模块 3 的 `BridgeAnnualInspectionData` 候选 JSON。
-- 以后可扩展 `ExcelInspectionImporter`、`ApiInspectionImporter`、`StructuredJsonImporter`、`DatabaseSyncImporter`、`ManualEntryImporter`。
-- PostgreSQL 是事实主库。
-- Word、图片、模板、附件和生成报告放在文件归档目录。
-- C++ 主服务是唯一事实写入入口，Python 工具服务不直接写 PostgreSQL。
-- Python 工具服务通过本地 HTTP JSON API 被 C++ 调用。
-- 前端只直接调用 C++ 主服务，不直接调用 Python 工具服务。
-- Milvus 只做相似报告段落、相似病害和历史写法检索，不存事实。
-- AI 只能润色文字或给出参考写法，不能创造、修改或判断病害事实。
-- 所有自动抽取和生成内容都要保留来源与置信度；需要业务决策的病害等对象保留人工确认状态。照片关系不再维护独立确认状态，由所属病害组统一确认。
+- PostgreSQL 是结构化事实主库。
+- C++ 主服务是唯一事实写入和业务编排入口。
+- Python 工具服务通过本地 HTTP 被 C++ 调用，不直接写数据库。
+- 前端只调用 C++ 主服务。
+- 输入格式通过 importer 适配；当前支持 Word 和来源数据库导入。
+- 候选、解析状态、正式事实和正式评定分层存储。
+- 构件存在性只来自已确认构件档案，报告生成不得猜测构件。
+- AI 不能创建、修改或判定病害事实。
+- 当前生成报告不进入永久文件归档。
 
-## 模块 1 已确认工程底座
+## 本地运行与验证
 
-- C++ 主后端：Drogon。
-- C++ 构建：CMake + Visual Studio 2022 生成器。
-- C++ 依赖管理：vcpkg，当前使用 `D:\vcpkg`。
-- Python 工具服务：FastAPI。
-- Python 依赖管理：uv + `pyproject.toml`。
-- 前端：React + TypeScript + Vite。
-- 数据库：PostgreSQL。
-- 数据库迁移：第一版使用明确 SQL 文件，不引入 SQLAlchemy/Alembic。
-- 本地端口默认：
-  - C++ 主服务：`127.0.0.1:18080`
-  - Python 工具服务：`127.0.0.1:18081`
-  - Vite 前端：`127.0.0.1:5173`
-  - PostgreSQL：`127.0.0.1:5432`
-- 前端开发服务跨端口调用 C++ 主服务时，需要 C++ 返回本地开发 CORS 头。
+从仓库根目录执行：
 
-## 模块 2 已确认数据原则
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/dev/start-all.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/check-health.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/check-database.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1
+```
 
-- PostgreSQL 核心表第一期共 14 张：
-  - 桥梁表
-  - 桥梁别名表
-  - 年度检测表
-  - 归档文件表
-  - 导入记录表
-  - 导入文件关联表
-  - 桥梁构件表
-  - 构件别名表
-  - 病害观测表
-  - 病害尺寸表
-  - 病害照片表
-  - 技术状况评定表
-  - 病害线索表
-  - 病害对比表
-- 桥梁基本信息以系统数据库为准，Word 不作为桥梁基础档案来源。
-- 第一期导入流程必须先选择已有桥梁，再上传 Word。
-- 桥梁构件表是正式表，但第一期不要求导入前录完整全桥构件清单；Word 中出现病害的构件，经人工确认后逐步沉淀。
-- 第一阶段不单独建候选表，Word 解析结果先存 `导入记录表.解析结果JSON`。
-- 人工校对确认后，C++ 主服务再把候选 JSON 写入正式业务表。
-- 用户导入 Word 前手动全选并按 F9 刷新照片编号域。
-- 病害检查表中的照片编号列作为照片关联主依据，后面照片区编号作为校验依据。
-- 同一座桥同一个检测年度可以有多条导入记录，但只能有一份当前有效的年度检测数据。
-- 同桥同年已确认后再次导入，不自动覆盖；确认修订版后新版本号递增，旧版标为 `已被修订`。
-- 文件归档默认根目录为 `archive/`，后续可配置到项目外路径。
-- 数据库存归档相对路径，不存写死绝对路径。
-- 正式报告文件名可保留科室要求格式，例如 `Q202604001-JZ-019黑山县S213库盘线袁海亮桥定期检测报告-2类.docx`。
-- 第一阶段暂不单独设计维护记录表、章节草稿表、报告模板表、生成报告表。
+前端：
 
-## 模块 3 已确认数据契约原则
+```powershell
+Set-Location frontend
+npm run test
+npm run build
+```
 
-- `BridgeAnnualInspectionData` 是候选数据，不是事实数据。
-- Python 工具服务负责从 Word 可信区域抽取候选 JSON。
-- C++ 主服务保存候选 JSON，前端校对候选 JSON，用户确认后 C++ 再写入正式业务表。
-- 顶层结构包含 `contract`、`import_context`、`bridge_check`、`inspection`、`defects`、`photos`、`comparison_candidates`、`report_text_candidates`、`warnings`、`errors`；不存在 `ratings`。
-- JSON key 使用英文 `snake_case`，业务值和报告原文保留中文。
-- 第一版只读取 Word 中可信结构化病害区域：第二章结构病害检查表及病害照片；不读取第四章评分。
-- 非正式软件报告中的其他正文多为模板文字，第一版不抽取、不作为事实来源，也不作为报告生成参考。
-- 正式报告第一版也先聚焦第二章病害检查表和第四章评定表。
-- 后续可能从正式报告抽取特定章节文本，统一预留在 `report_text_candidates`，但文本候选不能直接创建病害事实、不能覆盖数据库事实。
-- 病害尺寸必须保留原文 `measurement_text`，结构化尺寸 `measurements[]` 尽量解析，解析不稳时写 warning。
-- 照片编号以病害检查表中的照片编号列为主依据，图片区标题或说明作为校验依据。
-- 技术状况评定不属于导入契约。病害事实确认后，系统按桥梁锁定的技术状况评定规范包和构件台账自主计算构件、部件、结构分部及全桥结果。
-- 病害标度可来自 Word 或用户手工录入；规范包把病害类型和标度映射为扣分值，H21 evaluator 再按规范规则计算并保存可追溯轨迹。
-- 用户自行将系统评定结果与原报告对比；程序不读取、存储或确认 Word 评分。
-- 等级最小单元是结构分部，即上部结构、下部结构、桥面系；`evaluation_parts[]` 不设置等级。
-- 对比候选不是 Python 从 Word 抽取的结果，而是在第 N 年事实确认入库后，由 C++ 读取数据库第 N-1 年事实生成。
+Python：
 
-## 模块 4 已完成状态
+```powershell
+Set-Location tools-python
+uv run pytest
+```
 
-- 模块 4 名称：`04-word-importer-prototype`。
-- 完成分支：`feature/04-word-importer-prototype`。
-- 第一版放在 Python 工具层，实现 Word 病害表格和图片解析原型；旧评分解析已删除。
-- 第一版只支持 `.docx`。
-- Python 接收 C++ 传入的 `rule_profile`，不自动识别模板；当前已实现 `辽宁国省干线`。
-- 软件生成 Word 和正式 Word 当前只抽取第二章结构病害检查表及病害照片；第四章评分表不识别、不告警。
-- 辽宁国省干线规则从 `表2.1-1`、`表2.2-1`、`表2.3-1` 抽取构件类别、构件编号、病害位置、病害类型、描述、标度、尺寸和照片编号。
-- 真实样例中的 `表4.1-2` 矩阵布局、图片下方表格题注、`照片2.11` 紧凑编号、`S=0.6×0.1m²` 与 `长度：5m` 等尺寸表达已纳入规则。
-- 输出必须是模块 3 的 `BridgeAnnualInspectionData` JSON 契约。
-- 模块 4 不直接写数据库，不负责人工校对页面，不负责历史病害对比算法。
-- 年度常规流程不要求上传上一年正式 Word；上一年事实优先来自 PostgreSQL。
-- 正式 Word 在第一版中的主要用途是首次建档或历史补录：当数据库没有上一年度事实时，从正式报告第二章抽取历史基线病害候选，人工确认后入库。
+## 当前有效文档优先级
 
-## 模块 5 已实现状态
+出现冲突时按以下顺序判断：
 
-- 模块 5 名称：`05-review-workspace`。
-- 模块 05 完成分支：`feature/05-review-workspace`，已推送并与远端同步。
-- 第一版采用“完整校对入库闭环”：桥梁 -> 年度检测任务 -> 导入记录 -> 校对工作台 -> 保存草稿 -> 入库前检查 -> 确认年度事实入库。
-- 页面入口按桥梁年度组织，不单独做全系统待校对任务中心。
-- 页面按“需要处理 / 病害与照片 / 技术状况评定 / 原始 JSON”组织；来源证据通过按钮弹窗查看。
-- 病害按构件类别分色，每条病害保留构件类别、构件编号、位置、类型、数量、尺寸原文、照片编号和校对状态。
-- 照片由 C++ 归档到文件系统并写入 `archived_files/import_record_files`，前端只通过受控内容接口读取。
-- 病害与照片按组校对，支持添加、删除、上传和重新关联照片；照片不再逐张确认，整组确认同时确认当前病害与照片关系。
-- 导入记录确认时在同一数据库事务内锁定并读取最新草稿，执行校验、预检、归档文件解析和正式事实写入。
-- 已确认、已取消和旧版终态记录为只读；保存草稿使用 revision 防止旧请求覆盖新编辑状态。
-- 辽宁国省干线真实 Word 基线：25 条病害、31 个照片候选、36 个临时图片、31 个归档照片；原 15 个评分项不再输出。
-- 用户校对核心业务字段，不直接编辑全量 JSON。
-- 普通候选允许批量确认，但确认入库前必须由 C++ 后端重新校验。
-- 同桥同年已有当前有效事实时，必须显式作为修订版确认，不允许静默覆盖。
-- 模块 5 不生成历史病害对比候选；对比算法和对比确认页放到后续模块。
+1. 当前代码、数据库迁移和自动化测试
+2. `PROJECT_CONTEXT.md`
+3. 已经用户确认的最新日期设计或变更文档
+4. `docs/superpowers/specs/modules/` 中已同步到当前版本的模块规格
+5. 早期总设计和历史实施计划
 
-## 模块 6 已确认设计
+早期总设计与实施计划保留决策历史，不再自动覆盖后续已经确认并实施的变更。
 
-- 模块名称：`06-component-defect-archive`。
-- 当前分支：`feature/06-component-defect-archive`。
-- 主页面只读优先：左侧构件列表，右侧构件档案详情。
-- 构件只要在任一年度当前有效版本中存在正式病害，就进入默认列表；最新年度未出现也不能消失。
-- 默认只读各年度当前有效版本，旧修订版从独立历史入口查看且不参与统计。
-- 详情以病害为一级单位，以年度为二级单位；例如 `2-1#板 -> 蜂窝、麻面 -> 2025 / 2024`。
-- 病害线索保存标准详细位置，年度观测保留当年实际位置原文；如 `0#台顶处`、`小桩号立面`、`左侧端部`。
-- 系统可按同构件、病害类型、详细位置给出候选，但只能由用户绑定已有线索、创建新线索或保持不确定。
-- 模块 06 只写病害线索和绑定关系，不修改年度病害事实，不生成对比结论。
-- 构件年度评分只显示系统正式结果、对应 assessment run 和计算证据。
-- 模块 07 `07-defect-comparison-engine` 再基于已整理线索判断发展、减轻、修复、新增等变化。
+## 文档维护提醒
 
-## 核心模块
-
-- `Importers`：数据源适配器，把 Word、Excel、API、JSON 等输入转换为统一年度检测数据。
-- `BridgeAnnualInspectionData`：稳定中间模型，后续校对、对比和报告生成只依赖它。
-- `Review Workspace`：人工校对工作台。
-- `PostgreSQL`：结构化事实主库。
-- `File Archive`：文件归档。
-- `Comparison Engine`：历史病害对比引擎。
-- `Text Rule Engine`：规则文本生成引擎。
-- `Section Drafts`：章节草稿层。
-- `Milvus + AI Assistant`：相似写法检索和可控润色。
-- `Template Manager`：统一模板和桥级模板管理。
-- `Docx Builder`：正式 Word 装配引擎。
-
-## 核心页面
-
-- 桥梁档案
-- 构件病害档案
-- 年度检测任务
-- 导入任务
-- 病害校对
-- 历史对比确认
-- 章节草稿
-- 报告生成
-- 模板管理
-
-## 构件病害档案页
-
-这是核心页面，不是附加功能。
-
-选中一座桥后，模块 06 第一版展示所有曾在当前有效年度版本中出现正式病害的构件。维护记录和“已经修复”的结论待后续模块接入。点选构件后展示：
-
-- 按病害线索组织的历年观测记录
-- 线索标准详细位置和年度实际位置
-- 照片
-- 尺寸变化
-- 构件年度系统评分与计算证据
-- 报告引用
-- 原始来源
-
-第一阶段只维护“出现过病害或维护记录的构件”，不强行建立完整构件树。
-
-## 重要数据模型
-
-- `Bridge`
-- `BridgeAlias`
-- `InspectionYear`
-- `ReportSource`
-- `BridgeComponent`
-- `ComponentAlias`
-- `DefectObservation`
-- `DefectMeasurement`
-- `DefectPhoto`
-- `DefectThread`
-- `DefectComparison`
-- `MaintenanceRecord`
-- `ConditionRating`
-- `SectionDraft`
-- `Template`
-- `GeneratedReport`
-
-特别注意：
-
-- `DefectObservation` 是某一年报告里的一条病害观测。
-- `DefectThread` 是跨年份追踪的同一处或同一类持续病害。
-- `DefectComparison` 是上一年和今年病害之间的对比关系。
-- `MaintenanceRecord` 是后续扩展模型，模块 2 第一阶段不单独建维护记录表。
-
-## 第一阶段必须生成的章节
-
-- `1.4.1 历年检测情况`
-- `本桥上次检测时主要存在以下病害`
-- `2.1.2 上部结构与最近一次检查结果对比`
-- `2.2.2 下部结构与最近一次检查结果对比`
-- `2.3.2 桥面系与最近一次检查结果对比`
-- `5.1.1 桥梁外观检查结论`
-
-## 第一阶段不做
-
-- 完整多人账号权限和审签流。
-- 手机端外业采集。
-- 外部桥检系统 API 正式对接。
-- 自动签章 PDF。
-- 不经人工确认的一键终稿。
-- AI 自动决定病害对比关系。
-- 完整桥梁全构件台账自动生成。
-
-## 样例资料
-
-设计讨论中使用的样例桥梁为 `绕阳河二号桥`。
-
-已分析过两份 Word：
-
-- 软件自动生成报告：`绕阳河二号桥报告b8e246e8-cd4d-4202-8d4d-49c56dd34389.docx`
-- 正式报告：`Q202605001-JZ-024-S319辽小线绕阳河二号桥定期检测报告（2类）.docx`
-
-关键发现：
-
-- 软件报告可用内容主要是第二章病害检查表/图片、第四章全桥技术状况综合评定。
-- 正式报告包含完整报告结构、历史检测情况、与最近一次检查结果对比、结论和正式措辞。
-- 目前最耗时的是人工统计今年与去年的病害变化，并更新历史、对比和外观检查结论。
-
-## 下一步建议
-
-推荐下一步：
-
-1. 完成分支 `codex/06-6-interaction-redesign` 的全量自动回归与界面验收；河床版本化发布的针对性回归已纳入该分支。
-2. 用户明确同意后再进入模块 07 `07-defect-comparison-engine`：基于已整理的病害线索与相邻年度观测生成对比候选，人工确认后写入 `defect_comparisons`。
-3. 模块 07 设计时注意：模块 06 的绑定事务已在数据库层拦截“重新绑定被人工已确认对比引用的观测”，撤销对比结论的入口应由模块 07 提供。
-
-## 设计文档
-
-完整规格见：
-
-`docs/superpowers/specs/2026-07-01-bridge-report-system-design.md`
-
-分块开发与技术文档评审机制见：
-
-`docs/superpowers/specs/2026-07-01-modular-technical-doc-review-design.md`
-
-模块 1 技术栈与项目骨架见：
-
-`docs/superpowers/specs/modules/01-tech-stack-and-project-skeleton.md`
-
-模块 2 PostgreSQL 核心表与文件归档见：
-
-`docs/superpowers/specs/modules/02-postgresql-schema-and-file-archive.md`
-
-模块 3 桥梁年度检测数据 JSON 契约见：
-
-`docs/superpowers/specs/modules/03-bridge-annual-inspection-data-contract.md`
-
-模块 4 Word 导入原型见：
-
-`docs/superpowers/specs/modules/04-word-importer-prototype.md`
-
-模块 5 人工校对工作台见：
-
-`docs/superpowers/specs/modules/05-review-workspace.md`
-
-构件评分与病害详细位置跨模块变更提案见：
-
-`docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md`
-
-模块 6 构件病害档案与病害线索整理见：
-
-`docs/superpowers/specs/modules/06-component-defect-archive.md`
-
-模块 5 本次讨论设计记录见：
-
-`docs/superpowers/specs/2026-07-07-review-workspace-design.md`
-
-辽宁国省干线规则与真实样例适配见：
-
-`docs/superpowers/specs/2026-07-07-liaoning-trunk-word-rules-design.md`
-
-`docs/superpowers/specs/2026-07-07-liaoning-trunk-real-sample-adaptation-design.md`
+- 运行时合同升级时，同时更新 Schema、Python、C++、TypeScript、样例、`contracts/README.md`、`README.md` 和模块 03。
+- 跨模块设计实施后，把结论归并回对应模块规格，并更新状态栏。
+- 报告生成实施后，补充本文件的迁移编号、API、页面入口、测试基线和 Word/WPS 验收结果。

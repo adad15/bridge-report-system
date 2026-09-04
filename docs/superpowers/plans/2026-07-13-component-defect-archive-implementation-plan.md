@@ -2,7 +2,7 @@
 
 > 日期：2026-07-13
 >
-> 状态：计划已确认，待实施
+> 状态：已实施（2026-07-14）；任务清单保留为历史执行记录
 >
 > 依据：`docs/superpowers/specs/changes/2026-07-13-change-001-component-rating-and-defect-location.md`、`docs/superpowers/specs/modules/03/04/05/06`
 >

@@ -1,104 +1,101 @@
 # Bridge Report System
 
-Local web system for bridge inspection report archiving, defect review, historical comparison, and formal Word report generation.
+本地部署的桥梁定期检测业务系统。当前已经支持完整构件档案、年度资料导入与校对、正式病害和照片入库、系统自主技术状况评定、构件病害档案及跨年病害线索整理。
 
-## First Module Scope
+报告模板管理与 Word 即时生成已经完成设计，尚未进入实施。
 
-This skeleton proves the local service shape:
+## 当前技术栈
 
-- C++ Drogon main service on `127.0.0.1:18080`
-- Python FastAPI tool service on `127.0.0.1:18081`
-- React/Vite frontend on `127.0.0.1:5173`
-- PostgreSQL reserved as the future fact database
-- `archive/` reserved as the local binary file archive
+- C++20 + Drogon：主服务，默认 `127.0.0.1:18080`
+- Python 3.11+ + FastAPI：Word/来源数据库导入工具，默认 `127.0.0.1:18081`
+- React 18 + TypeScript + Vite + Ant Design 6：前端，默认 `127.0.0.1:5173`
+- PostgreSQL：结构化事实主库
+- 本地文件归档：原始 Word、病害照片及其他受控输入文件
 
-## Development Order
+前端只调用 C++ 主服务。C++ 负责权限、业务编排和正式事实写入；Python 工具不直接连接 PostgreSQL。
 
-Read these documents first:
+## 当前业务能力
 
-- `PROJECT_CONTEXT.md`
-- `docs/superpowers/specs/2026-07-01-bridge-report-system-design.md`
-- `docs/superpowers/specs/2026-07-01-modular-technical-doc-review-design.md`
-- `docs/superpowers/specs/modules/01-tech-stack-and-project-skeleton.md`
+- 登录、普通用户与管理员权限
+- 工作台和桥梁档案
+- 版本化完整构件档案及构件编号生成
+- 年度检查创建、Word 导入和来源数据库导入
+- 合同 5.0 候选数据校对
+- 关系化构件解析、区间展开、两侧构件绑定和评分树解析
+- 正式病害、尺寸和照片确认入库
+- 版本化 JTG/T H21—2011、JTG 5120—2021 规范和评定树
+- 系统试算及正式技术状况评定
+- 构件病害档案、跨年病害线索和批量整理工作台
+- 最近两个正式年度的病害记录条数对比
+- 管理员桥梁、年度和导入记录删除及可重试文件清理
 
-## Module 02 Database Check
+尚未实现：病害语义对比确认、报告模板管理、人员设备管理、Word 生成、维修记录和 AI/Milvus 能力。
 
-Module 02 creates the PostgreSQL core schema and archive metadata foundation.
+## 首次阅读
 
-Set `BRIDGE_REPORT_DATABASE_URL` if your local database differs from the default:
+按顺序阅读：
+
+1. `PROJECT_CONTEXT.md`
+2. `docs/superpowers/specs/2026-09-04-report-template-word-generation-design.md`
+3. 当前任务对应的 `docs/superpowers/specs/modules/` 规格
+4. 当前任务对应的较新日期设计或实施计划
+
+`docs/superpowers/specs/2026-07-01-bridge-report-system-design.md` 是早期总体设想。与较新的已确认设计冲突时，以 `PROJECT_CONTEXT.md` 和较新设计为准。
+
+## 快速启动
+
+先确保 PostgreSQL 已启动并配置数据库连接。默认开发连接由脚本和本地配置说明提供；自定义连接可设置：
 
 ```powershell
 $env:BRIDGE_REPORT_DATABASE_URL = "postgresql://bridge_report:bridge_report_dev@127.0.0.1:5432/bridge_report_system"
 ```
 
-If `psql` is not on `PATH`, point `PSQL_EXE` to the local PostgreSQL client:
+从仓库根目录启动：
 
 ```powershell
-$env:PSQL_EXE = "D:\PostgreSQL\18\bin\psql.exe"
+powershell -ExecutionPolicy Bypass -File scripts/dev/start-all.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/check-health.ps1
 ```
 
-Run:
+也可以分别启动：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/dev/check-module02-db.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/start-python-tools.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/start-cpp-backend.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/start-frontend.ps1
 ```
 
-The check applies `database/migrations/002_core_schema_and_archive.sql` and runs the rollback-only smoke test in `database/tests/002_core_schema_smoke.sql`.
+## 数据库
 
-For the current schema, run the complete check. It applies every migration in
-name order twice (including `014_remove_imported_rating_legacy.sql`) and then
-runs every database smoke test:
+当前迁移范围为 `database/migrations/001_*.sql` 至 `029_*.sql`。完整检查会按名称顺序应用全部迁移两遍，再运行数据库 smoke tests：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/dev/check-database.ps1
 ```
 
-Migration `014_remove_imported_rating_legacy.sql` is the final cutover to
-system-owned assessment. It refuses to run while legacy Word ratings or imported
-deductions still contain business data, removes their old columns, and requires
-every `condition_ratings` row to reference a successful formal
-`assessment_run`.
+`002_core_schema_and_archive.sql` 只是最初基础结构，不代表当前完整数据库。后续迁移已经增加账号、编辑锁、删除审计、临时 Word、版本化规范、构件档案修订、系统评定、评分树、导入解析关系表和线索身份等能力。
 
-## Module 03 Annual Inspection Contract
+## BridgeAnnualInspectionData 5.0
 
-Module 03 defines the shared `BridgeAnnualInspectionData` candidate JSON used by the Python Word-import tools, C++ backend, and React review workspace.
+跨 Python、C++ 和 TypeScript 的唯一运行时合同是 `5.0`：
 
-Artifacts:
+- Schema：`contracts/bridge_annual_inspection_data.schema.json`
+- Python：`tools-python/bridge_report_tools/contracts/annual_inspection.py`
+- C++：`backend-cpp/src/contracts/AnnualInspectionContract.cpp`
+- TypeScript：`frontend/src/contracts/annualInspection.ts`
+- 样例：`samples/contracts/bridge_annual_inspection_data.v5.valid.json`
 
-- JSON Schema: `contracts/bridge_annual_inspection_data.schema.json`
-- Shared samples: `samples/contracts/`
-- Python model: `tools-python/bridge_report_tools/contracts/annual_inspection.py`
-- C++ validator: `backend-cpp/include/bridge_report/contracts/AnnualInspectionContract.hpp`
-- Frontend types and guard: `frontend/src/contracts/annualInspection.ts`
+合同 5.0 只承载来源事实和一般校对事实。构件解析、展开实例及评分树解析保存在 PostgreSQL 关系表中；Word 评分和扣分不进入合同。正式评分由系统 evaluator 根据锁定规范、评定树和构件档案计算。
 
-The only accepted runtime contract is version 2.0. It represents candidate data
-stored in `import_records.parsed_result_json` and intentionally contains no
-imported ratings or Word deductions. Confirmed bridge facts live in PostgreSQL;
-scores are calculated by the selected versioned technical-condition standard.
+## Word 导入
 
-## Module 04 Word Importer Prototype
-
-Module 04 adds the Python `.docx` importer prototype.
-
-The C++ backend remains responsible for browser upload, file archive records,
-import records, database writes, and revision/version decisions. The Python
-tool service reads an already archived `.docx` path and writes extracted images
-to a temporary directory provided by C++.
-
-Endpoint:
+Python 工具入口：
 
 ```text
 POST http://127.0.0.1:18081/imports/word/parse
 ```
 
-The endpoint returns a module 03 `BridgeAnnualInspectionData` candidate JSON and
-a list of temporary image file names.
-
-Current rule profile support:
-
-- `辽宁国省干线`
-
-The parse request must include:
+当前 Word 规则配置：
 
 ```json
 {
@@ -106,262 +103,70 @@ The parse request must include:
 }
 ```
 
-The rule profile is selected by the user workflow and passed by C++; Python
-does not auto-detect report templates. Under the `辽宁国省干线` profile,
-extraction is limited to:
+当前只抽取可信的第二章病害检查表及病害照片。第四章 Word 评分不读取、不保存，也不会因为缺少评分表导致解析失败。
 
-- defect tables `表2.1-1`、`表2.2-1`、`表2.3-1`
-- defect photos `照片2.1-x`、`照片2.2-x`、`照片2.3-x` matched by photo number
-- rating tables `表4.1-1`、`表4.1-2` (no fallback to `附录1` or body text)
+来源数据库导入也输出同一份 5.0 候选合同。所有正式事实仍由 C++ 在校对和预检后写入。
 
-It does not parse formal report body text, generate comparison candidates, write
-PostgreSQL, or decide same-year revision behavior.
-
-## Module 05 Review Workspace
-
-Module 05 adds the human review workbench that turns a module 03
-`BridgeAnnualInspectionData` candidate JSON (already saved by the C++ backend into
-`import_records.parsed_result_json`) into confirmed annual facts in PostgreSQL. The
-frontend never talks to the Python tool service directly; it only calls the C++
-main backend.
-
-Page entry (React Router path, reached from the selected annual workspace):
+## 主要前端入口
 
 ```text
+/workbench
+/bridges
+/rating-trees
+/bridges/:bridgeId
+/bridges/:bridgeId/inventory
+/bridges/:bridgeId/inspections
+/bridges/:bridgeId/inspections/:inspectionYearId
+/bridges/:bridgeId/components
+/bridges/:bridgeId/components/:componentId
+/bridges/:bridgeId/defect-threads/triage
 /bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review
 ```
 
-C++ API endpoints used by the review workspace:
+旧 `/defect-threads/review` 地址仅保留显式重定向，不再是实际工作台。
 
-```text
-GET  /api/import-records/{import_record_id}/review              # load candidate JSON + statistics
-POST /api/import-records/{import_record_id}/parse-word          # call Python, archive photos, persist draft
-GET  /api/import-records/{import_record_id}/photos/{candidate_id}/content # controlled archived photo content
-PUT  /api/import-records/{import_record_id}/review-draft         # save edited draft (stays 待校对)
-POST /api/import-records/{import_record_id}/preflight-confirm    # blocking-error/warning check before import
-POST /api/import-records/{import_record_id}/confirm              # write defect/measurement/photo/rating facts
-POST /api/import-records/{import_record_id}/cancel               # cancel a pending import record
-GET  /api/bridges                                                # bridge list (navigation)
-GET  /api/bridges/{bridge_id}/inspection-years                   # inspection years for a bridge
-GET  /api/bridges/{bridge_id}/import-records                     # import records for a bridge
-GET  /api/bridges/{bridge_id}/overview                           # bridge archive overview
-GET  /api/inspection-years/{inspection_year_id}/workspace        # annual workspace summary
-POST /api/bridges/{bridge_id}/inspection-years                   # create a current annual inspection
-POST /api/inspection-years/{inspection_year_id}/import-records/word # archive one Word source
-```
+## 测试与构建
 
-The five action buttons on the review page map onto these endpoints:
-
-```text
-保存草稿           -> PUT  .../review-draft
-批量确认普通候选   -> reducer batch_confirm_normal, then PUT .../review-draft with the updated draft
-入库前检查         -> POST .../preflight-confirm (unlocks 确认年度事实入库 when can_confirm=true)
-确认年度事实入库   -> POST .../confirm (opens a revision-confirmation dialog first when the latest
-                      preflight reports requires_revision_confirmation=true)
-取消导入           -> POST .../cancel, then navigate back to the selected annual workspace
-```
-
-Seed sample data (idempotent; deletes and reinserts the sample bridge/year/import
-record by bridge name):
+前端：
 
 ```powershell
-$env:PSQL_EXE = "D:\PostgreSQL\18\bin\psql.exe"   # only if psql is not on PATH
-powershell -ExecutionPolicy Bypass -File scripts/dev/seed-module05-review-sample.ps1
+Set-Location frontend
+npm run test
+npm run build
 ```
 
-The seed also creates a deterministic PNG, its `archived_files` row, and the
-`import_record_files` attachment link. Override the default archive root with
-`BRIDGE_REPORT_ARCHIVE_ROOT` when the C++ service uses a different local path.
-
-Start the complete local stack in this order, from the repository root, using a
-separate PowerShell window for each long-running service:
+Python：
 
 ```powershell
-# 1. PostgreSQL must already be running and migrations applied.
-powershell -ExecutionPolicy Bypass -File scripts/dev/start-python-tools.ps1
-powershell -ExecutionPolicy Bypass -File scripts/dev/start-cpp-backend.ps1
-powershell -ExecutionPolicy Bypass -File scripts/dev/start-frontend.ps1
-powershell -ExecutionPolicy Bypass -File scripts/dev/check-health.ps1
-```
-
-Default URLs are Python `127.0.0.1:18081`, C++ `127.0.0.1:18080`, and frontend
-`127.0.0.1:5173`.
-
-### Manual end-to-end verification performed
-
-The Liaoning trunk-road real Word fixture was verified through the production
-C++ -> Python -> archive -> PostgreSQL path. Baseline results: 25 defects, 31
-photo candidates, 36 temporary Word images, 31 archived photos, and 15 rating
-items. The first controlled photo-content request returned HTTP 200. The fixture
-under `test-inputs/` and runtime archive files are intentionally not committed.
-
-Run the environment-gated real Word parser regression with:
-
-```powershell
-$env:BRIDGE_REPORT_REAL_WORD_PATH = "D:\path\to\liaoning-report.docx"
 Set-Location tools-python
-uv run pytest -q tests/importers/test_real_word_regression.py
+uv run pytest
 ```
 
-Without the variable, the test is reported as skipped and does not require the
-private report fixture.
+C++ 与 PostgreSQL：
 
-With PostgreSQL, the C++ backend (`127.0.0.1:18080`), and the Vite dev server
-(`127.0.0.1:5173`) running:
-
-1. Seeded the sample bridge/year/import record with the script above, then opened
-   the review page for that import record.
-2. Edited a defect's `defect_location` field (its `review_status` auto-flipped to
-   `已修改`) and clicked 保存草稿; confirmed via `psql` that
-   `import_records.parsed_result_json` reflected the new text and status.
-3. Clicked 批量确认普通候选; confirmed via `psql` that the still-`待确认` photo and
-   rating candidates flipped to `已确认` while the manually edited (`已修改`) defect
-   was left untouched (batch confirm only targets `待确认` candidates by design).
-4. Clicked 入库前检查; the result panel reported `can_confirm=true` with no blocking
-   errors, and the 确认年度事实入库 button unlocked.
-5. Clicked 确认年度事实入库; the page switched to read-only and showed the written
-   counts. Confirmed via `psql` that `defect_observations`, `defect_measurements`,
-   `defect_photos`, and `condition_ratings` were populated and that
-   `inspection_years.status = '已确认'` with `version_number = 1`.
-6. Seeded a second import record for the same bridge and year (its own placeholder
-   `inspection_years` row, `is_current=false`). After 批量确认普通候选 and 入库前检查,
-   the panel reported `requires_revision_confirmation=true`. Clicking 确认年度事实入库
-   opened the revision dialog instead of confirming directly; submitting with the
-   checkbox unchecked was blocked client-side, and a direct `POST .../confirm` with
-   `confirm_revision:false` was independently rejected by the backend with
-   `409 revision_confirmation_required`. Checking 作为修订版确认, filling in a note,
-   and submitting succeeded: `psql` showed the original `inspection_years` row
-   transitioned to `已被修订` (`is_current=false`) and a new row was created with
-   `version_number = 2`, `is_current=true`, `revision_source_inspection_id` pointing
-   at the old row, and the placeholder row removed.
-7. Seeded a third throwaway import record and verified 取消导入: after confirming the
-   browser prompt, `psql` showed `import_records.import_status = '已取消'` and the
-   page navigated back to the selected `/bridges/:bridgeId/inspections/:inspectionYearId` workspace.
-8. Re-ran the seed script to restore the sample bridge to a single clean pending
-   import record for the next developer.
-
-## Module 06.5 Bridge-centered Workspace
-
-Module 06.5 reorganizes the existing review and archive capabilities around a
-bridge archive. After login, `/` redirects to `/bridges`; selecting a bridge
-opens its overview rather than a database-oriented detail page.
-
-Frontend routes:
-
-```text
-/bridges                                            # searchable bridge archive list
-/bridges/:bridgeId                                  # latest conclusion, pending work, history, defect summary
-/bridges/:bridgeId/inspections                      # redirects to the latest current annual inspection
-/bridges/:bridgeId/inspections/:inspectionYearId    # year rail + annual workspace
-/bridges/:bridgeId/components                       # read-first component defect archive
-/bridges/:bridgeId/defect-threads/review            # nested thread cleanup action, not a top-level tab
-/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review
-                                                    # existing full-width review workbench
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1
+powershell -ExecutionPolicy Bypass -File scripts/dev/check-database.ps1
 ```
 
-An annual workspace can create a non-conflicting year, upload one `.docx`
-source (`软件导出Word` or `正式Word`), call the existing Python parse endpoint,
-and then enter the full-width review workbench. The selected bridge and year
-come from PostgreSQL context, not from the Word file. Failed parsing keeps the
-archived Word and exposes a retry action without another upload. Word uploads
-default to a 256 MiB limit (`archive.word_upload_max_bytes`) and responses never
-expose archive paths.
+布局检查：
 
-Administrators can also use `更多 → 删除年度` in the annual workspace. This is
-an irreversible C1 deletion: selecting any revision permanently removes every
-version for the same bridge and year. The warning dialog first loads a live
-impact preview, shows affected facts/files, requires a reason and the exact
-confirmation text, and remains disabled while an import record has an active
-edit lock. Shared archive files are retained; exclusive files are removed after
-the database transaction through a retryable cleanup queue, while the deletion
-audit is kept permanently.
-
-```text
-GET    /api/inspection-years/{inspection_year_id}/deletion-impact  # admin-only live preview
-DELETE /api/inspection-years/{inspection_year_id}                  # admin-only C1 permanent deletion
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/dev/check-layout.ps1
 ```
 
-The bridge archive list also provides administrator-only bridge maintenance.
-Administrators can create a bridge with its name and optional route/location
-identity, or select up to 100 bridges for a live whole-archive deletion preview.
-Batch deletion commits each bridge independently, blocks only bridges with an
-active edit lock or changed impact token, and permanently retains a compact
-audit snapshot. Exclusive files are processed immediately and by a durable
-cleanup coordinator at startup and every five minutes; shared files remain.
+## 当前开发方向
 
-```text
-POST   /api/bridges                    # admin-only bridge creation
-POST   /api/bridges/deletion-impact    # admin-only batch impact preview
-DELETE /api/bridges                    # admin-only per-bridge atomic batch deletion
-```
+下一阶段是报告模板管理与 Word 即时生成：
 
-Each import card in the annual workspace now also has an administrator-only
-`删除导入记录` action. It permanently deletes only an unconfirmed import in
-`已上传`, `解析中`, `解析失败`, `待校对`, or `已取消`; it never cascades into formal
-annual facts. The dialog previews candidate counts and file impact, requires a
-reason plus the exact `永久删除 DRJL-xxxxxx` text, and is blocked by an active
-edit lock, a formal-fact reference, a read-only status, or a stale impact token.
-The deletion audit keeps actor/reason/impact snapshots. Exclusive archived
-photos, the temporary Word, and a registered parse work directory enter a
-durable cleanup queue; shared files remain. A late Python result observes
-`import_record_deleted` and cannot recreate the record.
+- 多模板管理和默认模板
+- 模板语义锚点及模板自定义章节顺序
+- 报告人员、检测设备和年度报告配置
+- 只输出有病害构件的病害表
+- 保留入库照片编号的两栏照片布局
+- `source_defect_count_delta_v1` 来源病害去重后的条数对比
+- 正式评定、附录一和确定性第六章
+- Microsoft Word/WPS 字段更新
+- 临时生成和下载，不保存报告版本或永久报告文件
 
-```text
-GET    /api/import-records/{import_record_id}/deletion-impact  # admin-only live preview
-DELETE /api/import-records/{import_record_id}                  # admin-only permanent deletion
-```
-
-Review candidates display an import-local disease sequence number. Items in
-`需要处理` use business labels and navigate to the exact disease, linked or
-unlinked photo, field, or rating with a temporary highlight. A disease row with
-no photo number is normal and produces no warning; a referenced photo number
-that cannot be matched remains a missing-photo warning.
-
-## Module 06 Component Defect Archive
-
-Module 06 organizes confirmed annual facts into a read-only component defect
-archive with human-curated defect threads. The main pages are read-first: the
-only writes are creating a defect thread and binding/rebinding an observation
-to one — annual defect facts themselves are never modified here, and no
-progress/repair conclusions are produced (those belong to module 07).
-
-Contract 2.0 (see `contracts/README.md`) carries reviewed defects, imported
-scales, photos, and actual-component associations, but no imported score or
-deduction. After formal fact confirmation, the backend runs the bridge's locked
-technical-condition standard package. Formal scores and structured calculation
-traces are immutable system results linked to the exact standard profile and
-component-inventory revision used for that run.
-
-Frontend routes:
-
-```text
-/bridges/:bridgeId/components                      # A1 layout: component list + archive detail
-/bridges/:bridgeId/components/:componentId         # same page with a component selected
-/bridges/:bridgeId/defect-threads/review           # unbound observations, thread suggestions, bind/create
-```
-
-C++ API endpoints:
-
-```text
-GET /api/bridges/{bridge_id}/components                          # components with current-valid formal defects
-GET /api/bridge-components/{component_id}/defect-archive         # thread-first archive (threads > yearly observations)
-GET /api/bridge-components/{component_id}/defect-archive/revisions # superseded revisions, read-only
-GET /api/bridges/{bridge_id}/unbound-defect-observations         # thread review page data source
-GET /api/defect-observations/{observation_id}/thread-suggestions # same-component suggestions (never auto-bind)
-GET /api/defect-observations/{observation_id}/evidence           # raw row, table, import/file numbers
-GET /api/defect-photos/{defect_photo_id}/content                 # controlled formal photo content
-POST /api/defect-threads                                          # create thread + bind first observation
-PUT  /api/defect-observations/{observation_id}/defect-thread      # bind / rebind / unbind (confirm_rebind + token)
-```
-
-Binding requests carry the observation's `updated_at` text as an optimistic
-concurrency token; changing an existing binding requires `confirm_rebind=true`,
-and observations referenced by a manually confirmed comparison are rejected
-until module 07 revokes the conclusion. Default queries only read current-valid
-inspection versions (`is_current` and `已确认`); superseded revisions are shown
-through the separate revisions entry and never inherit thread bindings.
-
-Legacy data policy: runtime services accept only contract 2.0 and do not
-normalize 1.x drafts. Existing legacy bridge/year data must be removed using the
-controlled deletion workflow before migration 014; the migration blocks rather
-than silently dropping non-empty imported ratings or deductions.
+设计依据：`docs/superpowers/specs/2026-09-04-report-template-word-generation-design.md`。

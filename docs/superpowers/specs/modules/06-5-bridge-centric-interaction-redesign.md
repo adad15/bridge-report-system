@@ -6,6 +6,29 @@
 >
 > 基线：模块 01～06 已完成；模块 05 校对工作台与模块 06 构件病害档案继续作为业务能力基础
 
+> 2026-09-04 现行基线：后续 UI 统一已把系统默认入口调整为 `/workbench`，主导航为工作台、
+> 桥梁档案和评定树；进入桥梁后仍按桥梁概览、构件台账、年度检测和构件病害档案组织。
+> 运行时合同为 5.0，评分来自系统正式评定，线索整理入口为
+> `/bridges/:bridgeId/defect-threads/triage`。下文关于首页直接进入 `/bridges`、合同 1.2、Word
+> 评分校对和旧 `/defect-threads/review` 工作台的内容只描述 06.5 初始版本。
+
+## 0. 当前导航基线
+
+```text
+/workbench
+/bridges
+/rating-trees
+/bridges/:bridgeId
+/bridges/:bridgeId/inventory
+/bridges/:bridgeId/inspections/:inspectionYearId
+/bridges/:bridgeId/components/:componentId
+/bridges/:bridgeId/defect-threads/triage
+/bridges/:bridgeId/inspections/:inspectionYearId/imports/:importRecordId/review
+```
+
+`/defect-threads/review` 仅保留兼容重定向。当前视觉、布局、权限和交互规范以
+`docs/ui-design-system.md` 为准。
+
 ## 1. 背景
 
 当前系统按模块逐步生长，已经具备 Word 解析、年度事实校对入库、构件病害档案和跨年线索整理能力，但页面仍保留明显的开发阶段结构：
@@ -440,3 +463,10 @@ POST /api/inspection-years/{inspection_year_id}/import-records/word
 - 个性化最近访问和收藏；
 - 自动保存或异常关闭后的未保存草稿恢复；
 - 模块 07 病害发展结论。
+
+## 17. 后续实施更新
+
+- 2026-08-28：导入校对升级到合同 5.0，构件和评分树解析状态关系化。
+- 2026-08-26：病害线索整理迁移到批量 `/defect-threads/triage` 工作台。
+- 2026-09-03：统一 UI 设计体系，系统首页改为 `/workbench`，模块 06 档案与整理边界重构。
+- 2026-09-04：补充当前导航和运行时基线；报告生成仍处于设计阶段。
