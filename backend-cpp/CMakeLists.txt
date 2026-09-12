@@ -24,14 +24,21 @@ add_library(bridge_report_backend_core
     src/db/AuthRepository.cpp
     src/db/BridgeAdministrationRepository.cpp
     src/db/BridgeDeletionRepository.cpp
+    src/db/BridgeProfileRepository.cpp
     src/db/ComponentArchiveRepository.cpp
     src/db/ComponentInventoryRepository.cpp
     src/db/DbClientFactory.cpp
     src/db/CommitLatch.cpp
     src/db/DefectThreadRepository.cpp
     src/db/EditLockRepository.cpp
+    src/db/InspectionReportSettingsRepository.cpp
     src/db/InspectionYearDeletionRepository.cpp
     src/db/ImportRecordDeletionRepository.cpp
+    src/db/ReportContextRepository.cpp
+    src/db/ReportDirectoryRepository.cpp
+    src/db/ReportGenerationJobRepository.cpp
+    src/db/ReportPreflightRepository.cpp
+    src/db/ReportTemplateRepository.cpp
     src/db/ReviewRepository.cpp
     src/db/RatingTreeRepository.cpp
     src/db/StandardRepository.cpp
@@ -51,6 +58,7 @@ add_library(bridge_report_backend_core
     src/http/AuthRoutes.cpp
     src/http/AssessmentRoutes.cpp
     src/http/BridgeAdministrationRoutes.cpp
+    src/http/BridgeProfileRoutes.cpp
     src/http/ComponentArchiveRoutes.cpp
     src/http/ComponentInventoryRoutes.cpp
     src/http/Cors.cpp
@@ -60,6 +68,10 @@ add_library(bridge_report_backend_core
     src/http/EditLockRoutes.cpp
     src/http/InspectionRatingTreeRoutes.cpp
     src/http/ImportResolutionRoutes.cpp
+    src/http/InspectionReportSettingsRoutes.cpp
+    src/http/ReportDirectoryRoutes.cpp
+    src/http/ReportGenerationRoutes.cpp
+    src/http/ReportTemplateRoutes.cpp
     src/http/RoutePreflightAudit.cpp
     src/http/ImportConfirmRoutes.cpp
     src/http/ImportRecordDeletionRoutes.cpp
@@ -84,6 +96,14 @@ add_library(bridge_report_backend_core
     src/rating_tree/RatingTreeModels.cpp
     src/rating_tree/RatingTreePackageLoader.cpp
     src/rating_tree/RatingTreeResolver.cpp
+    src/report/BridgeProfileModels.cpp
+    src/report/InspectionReportSettingsModels.cpp
+    src/report/ReportContextModels.cpp
+    src/report/ReportDirectoryModels.cpp
+    src/report/ReportGenerationJobModels.cpp
+    src/report/ReportGenerationRunner.cpp
+    src/report/ReportPreflightModels.cpp
+    src/report/ReportTemplateModels.cpp
     src/resolution/ConfirmResolutionReader.cpp
     src/resolution/EffectiveDefectFacts.cpp
     src/resolution/DraftResolutionSynchronizer.cpp
@@ -108,6 +128,7 @@ add_library(bridge_report_backend_core
     src/runtime/RuntimePaths.cpp
     src/standards/StandardModels.cpp
     src/standards/AssessmentModels.cpp
+    src/standards/ComponentWeightTable.cpp
     src/standards/DefectIndicatorResolver.cpp
     src/standards/H21Evaluator.cpp
     src/standards/Jtg5120MaintenanceStandard.cpp
@@ -145,6 +166,22 @@ if(MSVC)
     target_compile_options(bridge-report-backend PRIVATE /utf-8)
 endif()
 
+# 诊断工具：把某个年度的 ReportContext 导成 JSON。报告任务的 HTTP 出口尚未建立，
+# 这个小程序让上下文组装可以拿真实数据单独跑起来（真实规模验收也用它）。
+add_executable(report-context-dump
+    tools/report_context_dump.cpp
+)
+
+target_link_libraries(report-context-dump
+    PRIVATE
+        bridge_report_backend_core
+        Drogon::Drogon
+)
+
+if(MSVC)
+    target_compile_options(report-context-dump PRIVATE /utf-8)
+endif()
+
 enable_testing()
 
 add_executable(bridge_report_backend_tests
@@ -162,6 +199,7 @@ add_executable(bridge_report_backend_tests
     tests/test_bridge_administration_repository.cpp
     tests/test_bridge_administration_routes.cpp
     tests/test_bridge_deletion_repository.cpp
+    tests/test_bridge_profile_repository.cpp
     tests/test_component_archive_repository.cpp
     tests/test_component_archive_routes.cpp
     tests/test_component_inventory_generator.cpp
@@ -189,6 +227,15 @@ add_executable(bridge_report_backend_tests
     tests/test_effective_defect_facts.cpp
     tests/test_extracted_photo_archive.cpp
     tests/bench_defect_matching_chain.cpp
+    tests/test_inspection_report_settings_repository.cpp
+    tests/test_component_weight_table.cpp
+    tests/test_report_context_models.cpp
+    tests/test_report_context_repository.cpp
+    tests/test_report_directory_repository.cpp
+    tests/test_report_generation_job_models.cpp
+    tests/test_report_generation_job_repository.cpp
+    tests/test_report_preflight_repository.cpp
+    tests/test_report_template_repository.cpp
     tests/test_route_preflight_audit.cpp
     tests/test_side_component_pair.cpp
     tests/test_source_db_reference.cpp

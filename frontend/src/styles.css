@@ -2521,6 +2521,22 @@ body {
   justify-content: flex-end;
 }
 
+/* 「生成报告」是次要动作：主按钮留给当前阶段该做的事（导入资料）。 */
+.annual-action-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 14px;
+  border: 1px solid #d5deea;
+  border-radius: 7px;
+  background: #fff;
+  color: #2456c9;
+  text-decoration: none;
+}
+
+.annual-action-link:hover {
+  border-color: #2456c9;
+}
+
 .progress-parse_failed {
   background: #fbe3e3;
   color: #a43333;

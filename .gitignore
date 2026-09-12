@@ -41,3 +41,13 @@ archive/*
 
 # 散在源码目录里的草稿（_old_pin_test.txt 之类），不是源文件。
 frontend/src/_*.txt
+
+# 运行期生成物：报告任务与 Word 导入的临时文件，每跑一次就重来一批。
+runtime/
+
+# 参考报告与项目文书：几十兆的二进制，留在本地，不进版本库。
+/docs/*.docx
+/*.docx
+
+# 模板迁移脚本留下的自动备份。
+*.bak.docx

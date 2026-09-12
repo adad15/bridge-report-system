@@ -119,9 +119,21 @@ class Measurement(ContractModel):
 
 
 class PhotoReference(ContractModel):
-    """Word 照片编号及其人工核对结论。"""
+    """病害对一张照片的引用，以及人工核对结论。
 
-    photo_number: str = Field(min_length=1)
+    `photo_number` 只是 Word 导入路的匹配键：Word 病害表的「照片编号」列和图片题注
+    靠这个字符串对上，除它之外没有别的线索。来源软件导入没有这个概念——照片用外键
+    直接绑在病害上（`images.ForeignKey`），所以编号为空，配对一律走
+    `photo_candidate_id`。
+
+    唯一的例外是 `pending` 和 `missing`：这两种状态下照片实体还不存在，
+    `photo_candidate_id` 必为空，编号是这条引用仅有的标识，不能省。
+
+    放宽为可空没有提高契约版本：5.0 下合法的文档现在依然合法，只是新文档允许省略
+    该字段。升版会让库里已存的 5.0 草稿在重新打开时被拒。
+    """
+
+    photo_number: str | None = None
     resolution: Literal["pending", "matched", "relinked", "missing", "unrelated"]
     photo_candidate_id: str | None = None
     resolved_defect_candidate_id: str | None = None
@@ -141,6 +153,13 @@ class PhotoReference(ContractModel):
         if not valid_targets[self.resolution]:
             raise ValueError(
                 f"photo reference targets are invalid for resolution {self.resolution}"
+            )
+        if self.photo_number is not None and not self.photo_number.strip():
+            raise ValueError("photo_number must be omitted rather than left blank")
+        if self.resolution in ("pending", "missing") and self.photo_number is None:
+            raise ValueError(
+                f"photo reference with resolution {self.resolution} has no photo to point at,"
+                " so photo_number is required"
             )
         return self
 
@@ -180,9 +199,21 @@ class DefectCandidate(ContractModel):
     def require_unique_photo_references(
         cls, value: list[PhotoReference]
     ) -> list[PhotoReference]:
-        photo_numbers = [reference.photo_number for reference in value]
+        # 只比对有编号的引用：来源软件那条路整条链都没有编号，若把 None 也算进去，
+        # 一条病害挂两张图就会被误判成重复。
+        photo_numbers = [
+            reference.photo_number for reference in value if reference.photo_number is not None
+        ]
         if len(photo_numbers) != len(set(photo_numbers)):
             raise ValueError("photo_references.photo_number must be unique")
+        # 没有编号时，photo_candidate_id 才是这条引用的身份，同样不许重复。
+        candidate_ids = [
+            reference.photo_candidate_id
+            for reference in value
+            if reference.photo_candidate_id is not None
+        ]
+        if len(candidate_ids) != len(set(candidate_ids)):
+            raise ValueError("photo_references.photo_candidate_id must be unique")
         return value
 
     @field_validator(
@@ -206,7 +237,8 @@ class ExtractedPhotoFile(ContractModel):
 
 class PhotoCandidate(ContractModel):
     candidate_id: str
-    photo_number: str
+    #: Word 路是图片题注里的编号；来源软件路没有编号，为空。见 PhotoReference 的说明。
+    photo_number: str | None = None
     linked_defect_candidate_id: str | None = None
     extracted_file: ExtractedPhotoFile
     source_ref: SourceRef

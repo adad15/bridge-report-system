@@ -8,6 +8,9 @@ import { ComponentArchivePage } from "./pages/ComponentArchivePage";
 import { ComponentInventoryPage } from "./pages/ComponentInventoryPage";
 import { ThreadTriagePage } from "./pages/ThreadTriagePage";
 import { LoginPage, LoginRestoringPage } from "./pages/LoginPage";
+import { ReportDirectoryPage } from "./pages/ReportDirectoryPage";
+import { ReportGenerationPage } from "./pages/ReportGenerationPage";
+import { ReportTemplatesPage } from "./pages/ReportTemplatesPage";
 import { ReviewWorkspacePage } from "./pages/ReviewWorkspacePage";
 import { RatingTreePage } from "./pages/RatingTreePage";
 import { WorkbenchPage } from "./pages/WorkbenchPage";
@@ -52,12 +55,18 @@ function AppShell() {
         <Route path="/workbench" element={<WorkbenchPage />} />
         <Route path="/bridges" element={<BridgesPage />} />
         <Route path="/rating-trees" element={<RatingTreePage />} />
+        <Route path="/settings/report-templates" element={<ReportTemplatesPage />} />
+        <Route path="/settings/report-directory" element={<ReportDirectoryPage />} />
         <Route path="/rating-trees/:versionId" element={<RatingTreePage />} />
         <Route path="/bridges/:bridgeId" element={<BridgeWorkspaceShell />}>
           <Route index element={<BridgeOverviewPage />} />
           <Route path="inventory" element={<ComponentInventoryPage />} />
           <Route path="inspections" element={<InspectionWorkspacePage />} />
           <Route path="inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
+          <Route
+            path="inspections/:inspectionYearId/report"
+            element={<ReportGenerationPage />}
+          />
           <Route path="components" element={<ComponentArchivePage />} />
           <Route path="components/:componentId" element={<ComponentArchivePage />} />
           <Route path="defect-threads/triage" element={<ThreadTriagePage />} />

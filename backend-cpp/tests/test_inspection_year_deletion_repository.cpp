@@ -67,7 +67,7 @@ protected:
         client_->execSqlSync("delete from defect_observations where bridge_id=$1::uuid", bridge_id_);
         client_->execSqlSync("delete from condition_ratings where inspection_year_id in(select id from inspection_years where bridge_id=$1::uuid)", bridge_id_);
         client_->execSqlSync("delete from defect_threads where bridge_id=$1::uuid", bridge_id_);
-        client_->execSqlSync("update inspection_years set revision_source_inspection_id=null,previous_inspection_id=null where bridge_id=$1::uuid", bridge_id_);
+        client_->execSqlSync("update inspection_years set revision_source_inspection_id=null,report_comparison_inspection_id=null where bridge_id=$1::uuid", bridge_id_);
         client_->execSqlSync("delete from inspection_years where bridge_id=$1::uuid", bridge_id_);
         client_->execSqlSync("delete from bridges where id=$1::uuid", bridge_id_);
         if (!exclusive_file_id_.empty() && !shared_file_id_.empty())

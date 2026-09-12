@@ -4,7 +4,6 @@ import sqlite3
 import pytest
 
 from bridge_report_tools.importers.source_db.photos import (
-    DEFAULT_SECTION_MAP,
     build_photo_candidates,
     photo_caption,
 )
@@ -50,7 +49,8 @@ def source_db(tmp_path):
     return sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
 
 
-def test_numbers_photos_per_structure_section(source_db, tmp_path):
+def test_source_photos_carry_no_photo_number(source_db, tmp_path):
+    """来源库靠外键绑定，编号既不是来源事实也没人用，不再凭空编一个出来。"""
     photos = [SourcePhoto("i-1", "d-1", "image/jpeg", 1600, 1200, "25-1#板"),
               SourcePhoto("i-2", "d-2", "image/jpeg", 1600, 1200, "3#墩盖梁"),
               SourcePhoto("i-3", "d-3", "image/jpeg", 1600, 1200, "第3孔桥面")]
@@ -58,26 +58,10 @@ def test_numbers_photos_per_structure_section(source_db, tmp_path):
 
     built, _ = build_photo_candidates(source_db, photos, defects, TREE_IDS, TREE, tmp_path)
 
-    assert [p["photo_number"] for p in built] == ["2.1-1", "2.2-1", "2.3-1"]
-
-
-def test_numbers_run_consecutively_inside_a_section(source_db, tmp_path):
-    photos = [SourcePhoto(f"i-{n}", f"d-{n}", "image/jpeg", 1600, 1200, "25-1#板") for n in (1, 2, 3)]
-    defects = [candidate(f"d-{n}", "t-a") for n in (1, 2, 3)]
-
-    built, _ = build_photo_candidates(source_db, photos, defects, TREE_IDS, TREE, tmp_path)
-
-    assert [p["photo_number"] for p in built] == ["2.1-1", "2.1-2", "2.1-3"]
-
-
-def test_section_map_is_configurable(source_db, tmp_path):
-    photos = [SourcePhoto("i-1", "d-1", "image/jpeg", 1600, 1200, "25-1#板")]
-    defects = [candidate("d-1", "t-a")]
-
-    built, _ = build_photo_candidates(
-        source_db, photos, defects, TREE_IDS, TREE, tmp_path, section_map={"001": "3.5"})
-
-    assert built[0]["photo_number"] == "3.5-1"
+    assert len(built) == 3
+    assert all("photo_number" not in photo for photo in built)
+    for defect in defects:
+        assert all("photo_number" not in ref for ref in defect["photo_references"])
 
 
 def test_composes_the_caption_from_component_and_defect_type():
@@ -123,7 +107,8 @@ def test_binds_the_photo_to_its_defect_on_both_sides(source_db, tmp_path):
     assert "match_status" not in built[0]
     assert "review_status" not in built[0]
     reference = defects[0]["photo_references"][0]
-    assert reference["photo_number"] == built[0]["photo_number"]
+    # 配对键是 photo_candidate_id，不是编号——编号这条路上压根没有。
+    assert reference["photo_candidate_id"] == built[0]["candidate_id"]
     assert reference["resolution"] == "matched"
     assert reference["resolved_defect_candidate_id"] == "source_defect_1"
 
@@ -147,7 +132,7 @@ def test_skips_a_photo_whose_defect_is_not_in_this_import(source_db, tmp_path):
     assert files == []
 
 
-def test_numbering_is_stable_across_runs(source_db, tmp_path):
+def test_candidate_ids_are_stable_across_runs(source_db, tmp_path):
     photos = [SourcePhoto(f"i-{n}", f"d-{n}", "image/jpeg", 1600, 1200, "25-1#板") for n in (1, 2, 3)]
 
     first, _ = build_photo_candidates(
@@ -155,9 +140,4 @@ def test_numbering_is_stable_across_runs(source_db, tmp_path):
     second, _ = build_photo_candidates(
         source_db, photos, [candidate(f"d-{n}", "t-a") for n in (1, 2, 3)], TREE_IDS, TREE, tmp_path / "b")
 
-    assert [p["photo_number"] for p in first] == [p["photo_number"] for p in second]
     assert [p["candidate_id"] for p in first] == [p["candidate_id"] for p in second]
-
-
-def test_default_section_map_covers_the_three_structure_parts():
-    assert DEFAULT_SECTION_MAP == {"001": "2.1", "002": "2.2", "003": "2.3"}

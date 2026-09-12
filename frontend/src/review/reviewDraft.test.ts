@@ -226,6 +226,7 @@ describe("reviewDraftReducer", () => {
         type: "set_photo_reference_missing",
         defectCandidateId: "defect_0001",
         photoNumber: "2.1-9",
+        photoCandidateId: null,
         missing: true,
       });
       expect(missing.defects[0].photo_references[0].resolution).toBe("missing");
@@ -234,6 +235,7 @@ describe("reviewDraftReducer", () => {
         type: "set_photo_reference_missing",
         defectCandidateId: "defect_0001",
         photoNumber: "2.1-9",
+        photoCandidateId: null,
         missing: false,
       });
       expect(undone.defects[0].photo_references[0].resolution).toBe("pending");
@@ -258,6 +260,7 @@ describe("reviewDraftReducer", () => {
         type: "set_photo_reference_missing",
         defectCandidateId: "defect_0001",
         photoNumber: "2.1-1",
+        photoCandidateId: null,
         missing: true,
       })).toBe(state);
     });
@@ -308,6 +311,7 @@ describe("reviewDraftReducer", () => {
           type: "remove_photo_reference",
           defectCandidateId: "defect_0001",
           photoNumber: "2.1-2",
+          photoCandidateId: null,
         });
 
         expect(next.defects[0].photo_references.map((item) => item.photo_number)).toEqual(["2.1-1"]);
@@ -328,6 +332,7 @@ describe("reviewDraftReducer", () => {
           type: "remove_photo_reference",
           defectCandidateId: "defect_0001",
           photoNumber: "2.1-1",
+          photoCandidateId: null,
         })).toBe(state);
       });
 
@@ -339,11 +344,13 @@ describe("reviewDraftReducer", () => {
           type: "remove_photo_reference",
           defectCandidateId: "missing",
           photoNumber: "2.1-2",
+          photoCandidateId: null,
         })).toBe(state);
         expect(reducer(state, {
           type: "remove_photo_reference",
           defectCandidateId: "defect_0001",
           photoNumber: "2.9-9",
+          photoCandidateId: null,
         })).toBe(state);
       });
     });

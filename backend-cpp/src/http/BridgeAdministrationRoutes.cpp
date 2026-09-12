@@ -240,6 +240,11 @@ void register_bridge_administration_routes(
                         result["message"] = "该桥梁存在已完成的正式评定，不能删除。"
                             "正式评定是不可变的业务记录，如确需删除请先处理该评定。";
                         break;
+                    case deletion::DeleteBridgeStatus::ReportGenerationJobRunning:
+                        result["status"] = "report_job_running";
+                        result["message"] = "该桥梁有正在运行的报告生成任务，暂时不能删除。"
+                            "请等待任务结束或先取消它，再重新预览。";
+                        break;
                     case deletion::DeleteBridgeStatus::Failed: result["status"] = "failed"; result["message"] = "该桥梁删除失败，数据库已回滚（详细原因见服务端日志）。"; break;
                 }
                 response["results"].append(std::move(result));

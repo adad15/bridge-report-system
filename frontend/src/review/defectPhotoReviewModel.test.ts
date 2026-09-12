@@ -991,6 +991,7 @@ describe("buildDefectPhotoReviewModel", () => {
         type: "remove_photo_reference",
         defectCandidateId: "defect_0002",
         photoNumber: "2.1-1",
+        photoCandidateId: null,
       });
 
       expect(hasProblem(conflictModel(cleaned), "photo_number_conflict")).toBe(false);

@@ -155,6 +155,9 @@ PersistParseOutcome WordImportRepository::persist_parse_result(
                 "and not exists (select 1 from defect_observations x where x.source_file_id = af.id) "
                 "and not exists (select 1 from defect_photos x where x.archived_file_id = af.id or x.source_file_id = af.id) "
                 "and not exists (select 1 from condition_ratings x where x.source_file_id = af.id) "
+                // 报告模板当前文件也是一份业务引用（报告设计 §17.4）。外键是 RESTRICT，
+                // 不在这里排除的话删除会撞外键失败，而不是安静地跳过。
+                "and not exists (select 1 from report_templates t where t.file_id = af.id) "
                 "returning storage_relative_path", row["id"].as<std::string>());
             if (!deleted.empty()) {
                 outcome.obsolete_storage_paths.emplace_back(deleted[0]["storage_relative_path"].as<std::string>());
@@ -310,7 +313,9 @@ DiscardFailedImportOutcome WordImportRepository::discard_failed_import(
             " exists(select 1 from component_aliases x where x.source_file_id=af.id) or"
             " exists(select 1 from defect_observations x where x.source_file_id=af.id) or"
             " exists(select 1 from defect_photos x where x.archived_file_id=af.id or x.source_file_id=af.id) or"
-            " exists(select 1 from condition_ratings x where x.source_file_id=af.id)"
+            " exists(select 1 from condition_ratings x where x.source_file_id=af.id) or"
+            // 报告模板当前文件（报告设计 §17.4）。
+            " exists(select 1 from report_templates t where t.file_id=af.id)"
             ") as deletable from archived_files af join candidates c on c.id=af.id order by af.id",
             import_record_id);
         std::vector<std::string> archived_file_ids;

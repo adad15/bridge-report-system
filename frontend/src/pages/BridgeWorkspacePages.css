@@ -29,23 +29,26 @@
   line-height: 1.15;
 }
 
-/* Overview */
+/* Overview
+   四张卡片要在一屏里全见到，所以这一段的尺寸都是压过的：指标行只是四个数，
+   给它 108px 高纯属浪费；两张长卡片的正文区改为按视口取高（`vh`），屏幕高就多给
+   几行，屏幕矮就自己收，不会把页面顶出竖滚动条。 */
 .bridge-overview-dashboard {
-  gap: 16px;
+  gap: 10px;
 }
 
 .bridge-dashboard-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .bridge-dashboard-metric {
-  min-height: 108px;
+  min-height: 74px;
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 18px 22px;
+  gap: 14px;
+  padding: 12px 18px;
   border: 1px solid #dfe5ee;
   border-radius: 11px;
   background: #fff;
@@ -53,20 +56,20 @@
 }
 
 .bridge-dashboard-metric-icon {
-  width: 56px;
-  height: 56px;
+  width: 42px;
+  height: 42px;
   display: grid;
   place-items: center;
   flex: none;
   border-radius: 50%;
   color: #2f5bea;
   background: #edf2ff;
-  font-size: 27px;
+  font-size: 21px;
 }
 
 .bridge-dashboard-metric > div {
   display: grid;
-  gap: 5px;
+  gap: 2px;
 }
 
 .bridge-dashboard-metric span {
@@ -76,7 +79,7 @@
 
 .bridge-dashboard-metric strong {
   color: #2357d7;
-  font-size: 26px;
+  font-size: 22px;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
@@ -91,12 +94,12 @@
 .bridge-overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.06fr) minmax(0, .94fr);
-  gap: 16px;
+  gap: 10px;
 }
 
 .bridge-overview-grid .workspace-card {
   min-height: 0;
-  padding: 20px 22px;
+  padding: 14px 18px;
   border-radius: 11px;
   box-shadow: 0 5px 16px rgba(24, 46, 91, 0.055);
 }
@@ -108,12 +111,12 @@
 }
 
 .bridge-overview-grid h2 {
-  margin-bottom: 14px;
-  font-size: 17px;
+  margin-bottom: 10px;
+  font-size: 16px;
 }
 
 .bridge-latest-empty {
-  min-height: 220px;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -122,12 +125,12 @@
 }
 
 .bridge-latest-empty h3 {
-  margin: 10px 0 6px;
-  font-size: 21px;
+  margin: 6px 0 4px;
+  font-size: 19px;
 }
 
 .bridge-latest-empty p {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   color: #718096;
   font-size: 13px;
 }
@@ -135,16 +138,16 @@
 .bridge-latest-illustration {
   position: relative;
   color: #9db1da;
-  font-size: 60px;
+  font-size: 44px;
 }
 
 .bridge-latest-illustration i {
   position: absolute;
-  right: -9px;
-  bottom: 6px;
-  width: 25px;
-  height: 25px;
-  border: 4px solid #9db1da;
+  right: -7px;
+  bottom: 4px;
+  width: 19px;
+  height: 19px;
+  border: 3px solid #9db1da;
   border-radius: 50%;
 }
 
@@ -162,20 +165,19 @@
 
 .bridge-completeness-body {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-columns: 116px minmax(0, 1fr);
   align-items: center;
-  gap: 20px;
+  gap: 16px;
 }
 
-.bridge-completeness-body ul,
-.bridge-activity-card ul {
+.bridge-completeness-body ul {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .bridge-completeness-body li {
-  min-height: 42px;
+  min-height: 27px;
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
@@ -195,73 +197,159 @@
   font-size: 11px;
 }
 
+.bridge-completeness-body li:last-child { border-bottom: none; }
 .bridge-completeness-body li.is-complete > span { color: #fff; background: #35a36c; }
 .bridge-completeness-body li strong { color: #4b596d; font-size: 13px; }
 .bridge-completeness-body li em { font-size: 12px; font-style: normal; }
 .bridge-completeness-body li.is-complete em { color: #2f9a65; }
 
 .bridge-card-footnote {
-  margin: 12px 0 0;
+  margin: 14px 0 0;
   color: #8290a4;
   font-size: 12px;
 }
 
-.bridge-progress-card .ant-steps {
-  margin: 22px 0 18px;
+/* 上面那条 `.bridge-overview-grid p` 的 `margin-top: 0` 比类选择器更具体，
+   脚注要跟正文拉开距离，就得写得一样具体，不然这 14px 根本不生效。 */
+.bridge-overview-grid .bridge-card-footnote {
+  margin-top: 14px;
 }
 
-.bridge-progress-note {
-  padding: 10px 12px;
-  border-radius: 7px;
-  color: #42689b;
-  background: #edf4ff;
+/* 桥梁概况：报告 §1.1 与附录2 卡片的数据来源。只显示已经录了的项。 */
+.bridge-profile-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.bridge-profile-head h2 { margin: 0; }
+
+.bridge-profile-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bridge-profile-progress {
+  color: #8290a4;
   font-size: 12px;
 }
 
-.bridge-activity-card {
-  display: flex;
-  flex-direction: column;
+.bridge-profile-edit {
+  padding: 3px 12px;
+  border: 1px solid #d5dbe6;
+  border-radius: 6px;
+  color: #2f5bea;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
 }
 
-.bridge-activity-card li {
-  position: relative;
-  min-height: 52px;
+.bridge-profile-edit:hover { border-color: #2f5bea; }
+
+.bridge-profile-note {
+  color: #8290a4;
+  font-size: 13px;
+}
+
+/* 录满时有二十几项，卡片不跟着长——超出的部分在卡片内滚动。 */
+.bridge-profile-body {
+  max-height: clamp(118px, calc(100vh - 744px), 380px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.bridge-profile-section + .bridge-profile-section {
+  margin-top: 12px;
+}
+
+.bridge-profile-section h3 {
+  margin: 0 0 6px;
+  color: #8290a4;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bridge-profile-section dl {
+  margin: 0;
   display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 16px;
 }
 
-.bridge-activity-card li > span,
-.bridge-activity-empty > span {
-  width: 9px;
-  height: 9px;
-  margin-top: 5px;
-  border-radius: 50%;
-  background: #2f5bea;
+.bridge-profile-section dl > div {
+  min-height: 26px;
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+  border-bottom: 1px solid #f1f3f7;
 }
 
-.bridge-activity-card li p,
-.bridge-activity-empty p {
-  margin: 3px 0 0;
+.bridge-profile-section dt {
   color: #8290a4;
   font-size: 12px;
 }
 
-.bridge-activity-card time {
-  color: #8c98aa;
-  font-size: 12px;
+.bridge-profile-section dd {
+  margin: 0;
+  color: #37415a;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
-.bridge-activity-empty {
-  display: flex;
-  gap: 10px;
+/* 版式照搬「添加桥梁」向导：头/体/脚三段，体内滚动，弹窗本身不跟着长。 */
+.bridge-profile-dialog {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0;
+  width: min(940px, calc(100vw - 2rem));
+  max-height: calc(100vh - 40px);
+  padding: 0;
+  overflow: hidden;
 }
 
-.bridge-card-more {
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid #edf0f5;
-  text-decoration: none;
+/* 说明写在标题下面，不跟标题挤一行。 */
+.bridge-profile-dialog .wizard-head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.bridge-profile-dialog .wizard-standard-note {
+  margin: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.bridge-profile-dialog .bridge-form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.bridge-profile-dialog .field-label {
+  color: #48586a;
+  font-size: 13px;
+}
+
+.bridge-profile-dialog input {
+  height: 36px;
+  padding: 0 11px;
+}
+
+.bridge-profile-fieldset {
+  margin: 0 0 14px;
+  padding: 12px 14px 4px;
+  border: 1px solid #e6eaf1;
+  border-radius: 8px;
+}
+
+.bridge-profile-fieldset legend {
+  padding: 0 6px;
+  color: #4b596d;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 /* Inventory */
@@ -961,10 +1049,11 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 89 个构件逐条成文会把概览页撑爆，限高滚动。 */
+/* 89 个构件逐条成文会把概览页撑爆，限高滚动。高度跟着视口走：
+   屏幕高就多给几行，屏幕矮就自己收，不把整页顶出竖滚动条。 */
 .bridge-comparison-body {
-  max-height: 320px;
-  margin: 14px 0 0;
+  max-height: clamp(118px, calc(100vh - 744px), 420px);
+  margin: 10px 0 0;
   padding-right: 6px;
   overflow-y: auto;
 }
@@ -985,8 +1074,8 @@
 }
 
 .bridge-comparison-summary {
-  margin: 14px 0 0;
-  padding-top: 12px;
+  margin: 10px 0 0;
+  padding-top: 9px;
   border-top: 1px solid #b3c0d2;
   color: #172033;
   font-size: 13px;

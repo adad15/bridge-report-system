@@ -28,8 +28,20 @@ struct AppConfig {
     std::filesystem::path standards_root{"standards"};
     std::filesystem::path temporary_word_root{"runtime/temp/word-imports"};
     int failed_word_retention_hours{24};
+    // 报告生成任务的临时目录。每个任务一个子目录，装模板副本、上下文 JSON 和成品。
+    // 系统不保存报告版本（设计 §17.1），这里的一切都会被清理掉。
+    std::filesystem::path temporary_report_root{"runtime/temp/report-jobs"};
+    // 成品可下载的时长。到期删文件、任务转 expired 并清空路径与诊断正文。
+    int report_retention_hours{24};
+    // 终态任务行再保留多久用于界面说明和排障，随后物理删除。
+    int report_job_history_days{7};
+    // 单次刷域在 Word/WPS 里的上限，不含排队等待。
+    int report_field_update_timeout_seconds{900};
     std::size_t word_upload_max_bytes{256ULL * 1024ULL * 1024ULL};
     std::size_t photo_upload_max_bytes{20ULL * 1024ULL * 1024ULL};
+    // 模板是骨架文档，不含病害数据和照片；与 Python 侧 PackageLimits 的
+    // max_archive_bytes 保持一致，越界在两层都会被拒。
+    std::size_t template_upload_max_bytes{20ULL * 1024ULL * 1024ULL};
     int cleanup_interval_seconds{300};
     int cleanup_batch_size{25};
     int cleanup_claim_timeout_seconds{900};

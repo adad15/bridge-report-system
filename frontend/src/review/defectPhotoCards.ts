@@ -2,6 +2,7 @@ import type {
   BridgeAnnualInspectionData,
   DefectCandidate,
   PhotoCandidate,
+  PhotoReference,
 } from "../contracts/annualInspection";
 
 /**
@@ -14,7 +15,8 @@ export interface DefectPhotoCard {
   /** 稳定的渲染 key；照片用候选 ID，缺图用编号，两者不会撞。 */
   key: string;
   kind: DefectPhotoCardKind;
-  photoNumber: string;
+  /** Word 导入才有；来源软件导入靠外键绑定，没有编号。 */
+  photoNumber: string | null;
   /** 照片卡才有。 */
   photo: PhotoCandidate | null;
   /** 照片来自 Word 抽取还是人工上传——决定"删除"是退回未归属还是永久删除。 */
@@ -25,6 +27,37 @@ export interface DefectPhotoCard {
 
 function photoSource(photo: PhotoCandidate): "word" | "manual" {
   return photo.source_ref.source_type === "manual" ? "manual" : "word";
+}
+
+/**
+ * 把一条引用落到具体照片上。
+ *
+ * 两条导入路的身份键不同：来源软件导入没有编号，引用直接带 photo_candidate_id；
+ * Word 导入的 pending / missing 引用还没有照片实体，只能按编号找。候选 ID 更强，
+ * 优先用它——按编号配对在编号为空时会退化成"每张图都匹配第一个引用"。
+ */
+function findPhotoForReference(
+  linked: PhotoCandidate[],
+  reference: PhotoReference,
+  usedPhotoIds: Set<string>,
+): PhotoCandidate | null {
+  const available = (candidate: PhotoCandidate) => !usedPhotoIds.has(candidate.candidate_id);
+  if (reference.photo_candidate_id !== null) {
+    return (
+      linked.find(
+        (candidate) =>
+          candidate.candidate_id === reference.photo_candidate_id && available(candidate),
+      ) ?? null
+    );
+  }
+  if (reference.photo_number === null) {
+    return null;
+  }
+  return (
+    linked.find(
+      (candidate) => candidate.photo_number === reference.photo_number && available(candidate),
+    ) ?? null
+  );
 }
 
 /**
@@ -49,12 +82,8 @@ export function buildDefectPhotoCards(
   const cards: DefectPhotoCard[] = [];
   const usedPhotoIds = new Set<string>();
 
-  for (const reference of defect.photo_references) {
-    const photo = linked.find(
-      (candidate) =>
-        candidate.photo_number === reference.photo_number &&
-        !usedPhotoIds.has(candidate.candidate_id),
-    );
+  for (const [index, reference] of defect.photo_references.entries()) {
+    const photo = findPhotoForReference(linked, reference, usedPhotoIds);
     if (photo) {
       usedPhotoIds.add(photo.candidate_id);
       cards.push({
@@ -67,8 +96,10 @@ export function buildDefectPhotoCards(
       });
       continue;
     }
+    // 缺图卡按契约一定有编号（pending / missing 都要求它）；候选 ID 与下标是兜底，
+    // 保证 key 在任何畸形数据下都不会重复。
     cards.push({
-      key: `reference:${reference.photo_number}`,
+      key: `reference:${reference.photo_number ?? reference.photo_candidate_id ?? index}`,
       kind: "missing",
       photoNumber: reference.photo_number,
       photo: null,

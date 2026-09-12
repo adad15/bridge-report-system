@@ -33,6 +33,13 @@ struct BridgeDeletionCounts {
     int archived_files_to_delete{0};
     int temporary_source_files_to_delete{0};
     int shared_files_retained{0};
+    // 报告配置与生成任务，见 InspectionYearDeletionModels.hpp 里同名字段的说明。
+    int report_settings{0};
+    int report_personnel_assignments{0};
+    int report_equipment_assignments{0};
+    int report_generation_jobs{0};
+    int running_report_generation_jobs{0};
+    int report_comparison_references{0};
 
     Json::Value to_json() const;
     BridgeDeletionCounts& operator+=(const BridgeDeletionCounts& other);
@@ -69,6 +76,8 @@ enum class DeleteBridgeStatus {
     ImpactChanged,
     /// 该桥存在已完成的正式评定，见 DeleteInspectionYearStatus 同名值。
     FormalAssessmentPresent,
+    /// 该桥有正在运行的报告生成任务，见 DeleteInspectionYearStatus 同名值。
+    ReportGenerationJobRunning,
     Failed,
 };
 

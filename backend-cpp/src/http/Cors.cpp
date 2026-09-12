@@ -13,7 +13,10 @@ void apply_local_dev_cors_headers(const drogon::HttpResponsePtr& response) {
         "Content-Type, Authorization, X-Edit-Lock-Token, If-Match");
     // ETag 默认不暴露给脚本：跨域下 fetch 只能读到少数几个"安全"响应头，
     // 不显式暴露的话前端拿不到新版本号，下一次写就必然撞版本冲突。
-    response->addHeader("Access-Control-Expose-Headers", "ETag");
+    //
+    // Content-Disposition 同理：报告下载的文件名由后端按 §20 的规则拼定，前端用
+    // fetch 取 blob 时读不到这个头，存下来的就只能是一个由 URL 猜出来的名字。
+    response->addHeader("Access-Control-Expose-Headers", "ETag, Content-Disposition");
 }
 
 }  // 命名空间 bridge_report::http

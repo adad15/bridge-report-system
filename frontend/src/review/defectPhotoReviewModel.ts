@@ -315,19 +315,21 @@ function analyzeDefect(
 
   // 照片关系随病害组一起确认；这里只检查引用结论和归档文件是否完整。
   for (const card of photoCards) {
-    if (repeatedPhotoNumbers.has(card.photoNumber)) {
-      addProblem(problems, "photo_number_conflict", "photo", `照片编号 ${card.photoNumber} 被多条病害引用。`);
+    // 来源软件导入没有照片编号（照片靠外键绑定），提示里就不提编号。
+    const label = card.photoNumber ? `照片编号 ${card.photoNumber}` : "这张照片";
+    if (card.photoNumber !== null && repeatedPhotoNumbers.has(card.photoNumber)) {
+      addProblem(problems, "photo_number_conflict", "photo", `${label} 被多条病害引用。`);
     }
     if (card.kind === "missing") {
       if (!card.acknowledgedMissing) {
-        addProblem(problems, "photo_reference_pending", "photo", `照片编号 ${card.photoNumber} 尚未核对。`);
+        addProblem(problems, "photo_reference_pending", "photo", `${label} 尚未核对。`);
       }
       continue;
     }
     const photo = card.photo!;
     const archived = Boolean(photo.extracted_file.archive_relative_path);
     if (!archived) {
-      addProblem(problems, "photo_archive_missing", "photo", `照片 ${card.photoNumber} 的归档文件缺失。`);
+      addProblem(problems, "photo_archive_missing", "photo", `${label} 的归档文件缺失。`);
     }
   }
 
@@ -474,10 +476,12 @@ function matchesIssueFilter(
  * 看不见这种重号。
  */
 function countPhotoNumberClaims(draft: BridgeAnnualInspectionData): Map<string, number> {
+  // 只统计有编号的：这个冲突是 Word 路特有的——同一个编号被两条病害同时声明。
+  // 来源软件导入靠外键绑定，一张照片只可能属于一条病害，构造不出这种冲突。
   const linkedNumbers = new Map<string, Set<string>>();
   for (const photo of draft.photos) {
     const defectId = photo.linked_defect_candidate_id;
-    if (!defectId) continue;
+    if (!defectId || photo.photo_number === null) continue;
     const numbers = linkedNumbers.get(defectId);
     if (numbers) numbers.add(photo.photo_number);
     else linkedNumbers.set(defectId, new Set([photo.photo_number]));
@@ -487,7 +491,7 @@ function countPhotoNumberClaims(draft: BridgeAnnualInspectionData): Map<string, 
     if (defect.review_status === "已忽略") continue;
     const claimed = new Set(linkedNumbers.get(defect.candidate_id) ?? []);
     for (const reference of defect.photo_references) {
-      if (reference.resolution === "missing") continue;
+      if (reference.resolution === "missing" || reference.photo_number === null) continue;
       claimed.add(reference.photo_number);
     }
     for (const number of claimed) {

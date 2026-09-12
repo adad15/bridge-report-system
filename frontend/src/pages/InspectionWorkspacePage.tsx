@@ -226,7 +226,7 @@ function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry, canDelete, on
             <span>当前版本 V{workspace.inspection_year.version_number}</span>
           </div>
         </div>
-        <div className="annual-actions">{workspace.inspection_year.is_current ? <button className="primary-button" type="button" onClick={onImport}>导入资料</button> : null}{canDelete ? <details className="more-actions"><summary>更多</summary><div><button type="button" className="danger-menu-item" onClick={onDelete}>删除年度</button></div></details> : null}</div>
+        <div className="annual-actions">{workspace.inspection_year.is_current ? <button className="primary-button" type="button" onClick={onImport}>导入资料</button> : null}<Link className="annual-action-link" to={`${inspectionWorkspacePath(bridgeId, workspace.inspection_year.id)}/report`}>生成报告</Link>{canDelete ? <details className="more-actions"><summary>更多</summary><div><button type="button" className="danger-menu-item" onClick={onDelete}>删除年度</button></div></details> : null}</div>
         <Steps
           className="annual-progress-steps"
           current={progressIndex}

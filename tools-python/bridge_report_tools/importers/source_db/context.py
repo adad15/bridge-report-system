@@ -56,8 +56,6 @@ class SourceImportRequest(BaseModel):
     project_name: str = Field(min_length=1)
     archived_file_system_number: str = Field(min_length=1)
     import_record_system_number: str = Field(min_length=1)
-    #: 部位层级码 → 报告章节号。不填用默认值；章节结构因桥而异，留出口。
-    section_map: dict[str, str] | None = None
 
 
 def parse_source_import(request: SourceImportRequest) -> WordImportResponse:
@@ -72,7 +70,7 @@ def parse_source_import(request: SourceImportRequest) -> WordImportResponse:
         )
         photos, temporary_photo_files = build_photo_candidates(
             db, load_photos(db, request.task_id), defects, links, tree,
-            request.temporary_photo_output_dir, request.section_map)
+            request.temporary_photo_output_dir)
 
     try:
         data = BridgeAnnualInspectionData(

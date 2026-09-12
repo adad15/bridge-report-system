@@ -7,17 +7,16 @@ import {
 import { Progress } from "antd";
 import { Link } from "react-router-dom";
 
+import { useAuth } from "../auth/AuthContext";
+import { BridgeProfileCard } from "../bridges/BridgeProfileCard";
+
 import type {
   BridgeDefectComparison,
   DefectGroupDelta,
   DefectTypeDelta,
 } from "../api/workspaceApi";
 import { useBridgeWorkspace } from "../workspace/BridgeWorkspaceShell";
-import {
-  componentArchivePath,
-  inspectionsPath,
-  inspectionWorkspacePath,
-} from "../workspace/workspaceState";
+import { inspectionsPath } from "../workspace/workspaceState";
 
 const show = (value: string | number | null | undefined) => value ?? "—";
 
@@ -116,6 +115,7 @@ function DefectComparisonCard({ comparison }: DefectComparisonCardProps) {
 
 export function BridgeOverviewPage() {
   const { overview } = useBridgeWorkspace();
+  const { user } = useAuth();
   const { bridge, latest_inspection: latest } = overview;
   const completeness = [
     { label: "基础信息", complete: Boolean(bridge.system_number && bridge.bridge_name) },
@@ -163,7 +163,7 @@ export function BridgeOverviewPage() {
         <section className="workspace-card bridge-completeness-card">
           <h2>档案完整度</h2>
           <div className="bridge-completeness-body">
-            <Progress type="circle" percent={completenessPercent} size={146} strokeWidth={8} />
+            <Progress type="circle" percent={completenessPercent} size={104} strokeWidth={9} />
             <ul>
               {completeness.map((item) => (
                 <li key={item.label} className={item.complete ? "is-complete" : ""}>
@@ -179,23 +179,7 @@ export function BridgeOverviewPage() {
 
         <DefectComparisonCard comparison={overview.defect_comparison} />
 
-        <section className="workspace-card bridge-activity-card">
-          <h2>最近动态</h2>
-          {overview.recent_inspections.length > 0 ? (
-            <ul>
-              {overview.recent_inspections.slice(0, 3).map((item) => (
-                <li key={item.id}>
-                  <span aria-hidden="true" />
-                  <div><Link to={inspectionWorkspacePath(bridge.id, item.id)}>{item.inspection_year} 年度检测</Link><p>{item.status} · V{item.version_number}</p></div>
-                  <time>{item.updated_at ? new Date(item.updated_at).toLocaleDateString("zh-CN") : ""}</time>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="bridge-activity-empty"><span aria-hidden="true" /><div><strong>桥梁档案已建立</strong><p>新的年度检测与档案更新会记录在这里。</p></div></div>
-          )}
-          <Link className="bridge-card-more" to={componentArchivePath(bridge.id)}>查看构件病害档案</Link>
-        </section>
+        <BridgeProfileCard bridgeId={bridge.id} canEdit={user?.role === "admin"} />
       </div>
     </div>
   );

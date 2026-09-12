@@ -277,13 +277,17 @@ void validate_photo_reference(
         result.add_issue(path, "must be an object");
         return;
     }
-    require_non_empty_string(reference, path, "photo_number", result);
+    // photo_number 只是 Word 导入路的匹配键：Word 病害表的「照片编号」列与图片题注
+    // 靠它对上。来源软件导入用外键直绑照片，没有这个概念，因此允许缺省。
+    require_optional_nullable_non_blank_string(
+        reference, path, "photo_number", result);
     require_enum(
         reference,
         path,
         "resolution",
         {"pending", "matched", "relinked", "missing", "unrelated"},
         result);
+
     require_optional_nullable_string(
         reference, path, "photo_candidate_id", result);
     require_optional_nullable_string(
@@ -307,6 +311,16 @@ void validate_photo_reference(
         (resolution == "unrelated" && has_photo && !has_defect);
     if (!resolution.empty() && !valid_targets) {
         result.add_issue(path, "has invalid targets for its resolution");
+    }
+
+    // pending 与 missing 下没有 photo_candidate_id 可指，编号是这条引用仅有的标识，
+    // 不能省。其余状态都带候选 ID，配对不依赖编号。
+    if ((resolution == "pending" || resolution == "missing") &&
+        !(reference["photo_number"].isString() &&
+          !reference["photo_number"].asString().empty())) {
+        result.add_issue(
+            member_path(path, "photo_number"),
+            "is required when the reference points at no photo");
     }
 }
 
@@ -379,6 +393,7 @@ void validate_defect(
     }
     if (require_array_member(defect, path, "photo_references", result)) {
         std::unordered_set<std::string> photo_numbers;
+        std::unordered_set<std::string> photo_candidate_ids;
         for (Json::ArrayIndex index = 0;
              index < defect["photo_references"].size();
              ++index) {
@@ -386,10 +401,21 @@ void validate_defect(
                 indexed_path(member_path(path, "photo_references"), index);
             const auto& reference = defect["photo_references"][index];
             validate_photo_reference(reference, reference_path, result);
+            // 只比对有编号的引用：来源软件那条路整条链都没有编号，把缺省也算进去，
+            // 一条病害挂两张图就会被误判成重复。
             if (reference["photo_number"].isString() &&
                 !photo_numbers.insert(reference["photo_number"].asString()).second) {
                 result.add_issue(
                     member_path(reference_path, "photo_number"),
+                    "must be unique within the defect");
+            }
+            // 没有编号时，photo_candidate_id 才是这条引用的身份。
+            if (reference["photo_candidate_id"].isString() &&
+                !photo_candidate_ids
+                     .insert(reference["photo_candidate_id"].asString())
+                     .second) {
+                result.add_issue(
+                    member_path(reference_path, "photo_candidate_id"),
                     "must be unique within the defect");
             }
         }
@@ -408,7 +434,8 @@ void validate_photo(
         return;
     }
     require_non_empty_string(photo, path, "candidate_id", result);
-    require_non_empty_string(photo, path, "photo_number", result);
+    // Word 路是图片题注里的编号；来源软件路没有编号。见 validate_photo_reference。
+    require_optional_nullable_non_blank_string(photo, path, "photo_number", result);
     reject_member(photo, path, "match_status", result);
     reject_member(photo, path, "review_status", result);
     if (require_object_member(photo, path, "extracted_file", result)) {

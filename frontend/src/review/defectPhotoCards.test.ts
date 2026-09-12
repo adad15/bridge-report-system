@@ -141,4 +141,49 @@ describe("buildDefectPhotoCards", () => {
     expect(buildDefectPhotoCards(draft, defect).map((card) => card.photoNumber))
       .toEqual(["2.1-5", "2.1-6", "补-1"]);
   });
+
+  it("pairs unnumbered source-software photos by candidate id", () => {
+    // 来源软件导入没有照片编号：照片靠外键绑在病害上，引用带的是 photo_candidate_id。
+    // 若仍按编号配对，null === null 会让三条引用全部命中第一张图。
+    const draft = data();
+    draft.defects[0] = {
+      ...draft.defects[0],
+      photo_references: [
+        reference({ photo_number: null, resolution: "matched", photo_candidate_id: "src_1", resolved_defect_candidate_id: "defect_0001" }),
+        reference({ photo_number: null, resolution: "matched", photo_candidate_id: "src_2", resolved_defect_candidate_id: "defect_0001" }),
+        reference({ photo_number: null, resolution: "matched", photo_candidate_id: "src_3", resolved_defect_candidate_id: "defect_0001" }),
+      ],
+    };
+    draft.photos = [
+      photo({ candidate_id: "src_1", photo_number: null }),
+      photo({ candidate_id: "src_2", photo_number: null }),
+      photo({ candidate_id: "src_3", photo_number: null }),
+    ];
+
+    const cards = buildDefectPhotoCards(draft, draft.defects[0]);
+
+    expect(cards.map((card) => card.kind)).toEqual(["photo", "photo", "photo"]);
+    expect(cards.map((card) => card.photo?.candidate_id)).toEqual(["src_1", "src_2", "src_3"]);
+    expect(cards.map((card) => card.photoNumber)).toEqual([null, null, null]);
+    // 渲染 key 必须互不相同，否则 React 会把三张图当成同一张。
+    expect(new Set(cards.map((card) => card.key)).size).toBe(3);
+  });
+
+  it("keeps distinct keys when unnumbered references lose their photo", () => {
+    // 照片被摘除后引用还在：来源软件路这时既没编号也找不到图，key 仍要互不相同。
+    const draft = data();
+    draft.defects[0] = {
+      ...draft.defects[0],
+      photo_references: [
+        reference({ photo_number: null, resolution: "matched", photo_candidate_id: "src_1", resolved_defect_candidate_id: "defect_0001" }),
+        reference({ photo_number: null, resolution: "matched", photo_candidate_id: "src_2", resolved_defect_candidate_id: "defect_0001" }),
+      ],
+    };
+    draft.photos = [];
+
+    const cards = buildDefectPhotoCards(draft, draft.defects[0]);
+
+    expect(cards.map((card) => card.kind)).toEqual(["missing", "missing"]);
+    expect(new Set(cards.map((card) => card.key)).size).toBe(2);
+  });
 });

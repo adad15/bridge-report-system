@@ -1,0 +1,20 @@
+{
+  "contract_type": "periodic_inspection_v1",
+  "table_number_formats": {
+    "DEFECT_TABLES:SUPERSTRUCTURE": "表2.1-{n}",
+    "DEFECT_TABLES:SUBSTRUCTURE": "表2.2-{n}",
+    "DEFECT_TABLES:DECK": "表2.3-{n}",
+    "DEFECT_PHOTOS:SUPERSTRUCTURE": "照片2.1-{n}",
+    "DEFECT_PHOTOS:SUBSTRUCTURE": "照片2.2-{n}",
+    "DEFECT_PHOTOS:DECK": "照片2.3-{n}",
+    "COMPONENT_WEIGHTS": "表4.1-{n}",
+    "ASSESSMENT_RESULT": "表4.1-{n}",
+    "ASSESSMENT_APPENDIX": "附表1-{n}"
+  },
+  "required_personnel_roles": [
+    "approver",
+    "reviewer",
+    "lead_inspector",
+    "compiler"
+  ]
+}

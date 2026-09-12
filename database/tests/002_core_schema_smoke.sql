@@ -365,7 +365,6 @@ begin
     is_current,
     revision_source_inspection_id,
     status,
-    previous_inspection_id,
     report_number,
     overall_score,
     overall_grade
@@ -377,7 +376,6 @@ begin
     true,
     v_inspection_id,
     '已确认',
-    null,
     'Q202605001-JZ-024-REV2',
     89.00,
     '2类'

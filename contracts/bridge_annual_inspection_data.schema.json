@@ -676,8 +676,16 @@
           "type": "string"
         },
         "photo_number": {
-          "title": "Photo Number",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Number"
         },
         "linked_defect_candidate_id": {
           "anyOf": [
@@ -713,7 +721,6 @@
       },
       "required": [
         "candidate_id",
-        "photo_number",
         "extracted_file",
         "source_ref",
         "confidence",
@@ -724,12 +731,19 @@
     },
     "PhotoReference": {
       "additionalProperties": false,
-      "description": "Word 照片编号及其人工核对结论。",
+      "description": "病害对一张照片的引用，以及人工核对结论。\n\n`photo_number` 只是 Word 导入路的匹配键：Word 病害表的「照片编号」列和图片题注\n靠这个字符串对上，除它之外没有别的线索。来源软件导入没有这个概念——照片用外键\n直接绑在病害上（`images.ForeignKey`），所以编号为空，配对一律走\n`photo_candidate_id`。\n\n唯一的例外是 `pending` 和 `missing`：这两种状态下照片实体还不存在，\n`photo_candidate_id` 必为空，编号是这条引用仅有的标识，不能省。\n\n放宽为可空没有提高契约版本：5.0 下合法的文档现在依然合法，只是新文档允许省略\n该字段。升版会让库里已存的 5.0 草稿在重新打开时被拒。",
       "properties": {
         "photo_number": {
-          "minLength": 1,
-          "title": "Photo Number",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Photo Number"
         },
         "resolution": {
           "enum": [
@@ -780,7 +794,6 @@
         }
       },
       "required": [
-        "photo_number",
         "resolution"
       ],
       "title": "PhotoReference",

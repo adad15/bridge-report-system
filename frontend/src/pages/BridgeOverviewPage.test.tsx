@@ -47,6 +47,15 @@ vi.mock("../bridges/ComponentInventoryEditor", () => ({
   ComponentInventoryEditor: ({ bridgeId }: { bridgeId: string }) => <div>台账桥梁：{bridgeId}</div>,
 }));
 
+vi.mock("../auth/AuthContext", () => ({
+  useAuth: () => ({ user: { username: "admin", display_name: "管理员", role: "admin" } }),
+}));
+
+// 桥梁概况卡片自己取数，它有自己的用例。
+vi.mock("../bridges/BridgeProfileCard", () => ({
+  BridgeProfileCard: ({ bridgeId }: { bridgeId: string }) => <div>桥梁概况：{bridgeId}</div>,
+}));
+
 describe("BridgeOverviewPage", () => {
   // 台账构件可达数千条，挂在总览页会让每次进桥、每次切回都先等它整份加载完。
   // 台账在 /bridges/:id/inventory，入口由工作区标签导航提供，总览页不碰它。

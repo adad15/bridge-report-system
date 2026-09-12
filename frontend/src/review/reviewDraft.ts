@@ -2,6 +2,7 @@ import type {
   BridgeAnnualInspectionData,
   DefectCandidate,
   PhotoCandidate,
+  PhotoReference,
   ReviewStatus,
   StructurePart,
 } from "../contracts/annualInspection";
@@ -78,7 +79,8 @@ export type ReviewDraftAction =
   | {
       type: "set_photo_reference_missing";
       defectCandidateId: string;
-      photoNumber: string;
+      photoNumber: string | null;
+      photoCandidateId: string | null;
       missing: boolean;
     }
   // 范围拆分把 Word 引用整条复制给了每一侧，其中大半根本不是自己的图。这个 action
@@ -87,7 +89,8 @@ export type ReviewDraftAction =
   | {
       type: "remove_photo_reference";
       defectCandidateId: string;
-      photoNumber: string;
+      photoNumber: string | null;
+      photoCandidateId: string | null;
     }
   // 人工上传/删除已经在服务端落库；这两个 action 只是把结果同步进本地草稿。
   | { type: "add_photo"; photo: PhotoCandidate }
@@ -104,6 +107,34 @@ type EditDefectContentFieldAction = Exclude<EditDefectFieldAction, { field: "rev
 
 // 编辑内容字段后的状态流转规则（模块 05 §8.1）：处于 待确认/已确认 的候选，内容一改就自动
 // 流转为 已修改；已忽略 的候选不会因为内容编辑被“复活”，仍留在 已忽略；已修改 编辑后还是 已修改。
+/**
+ * 定位一条照片引用。
+ *
+ * 两条导入路的身份键不同：来源软件导入没有照片编号，引用只带 photo_candidate_id；
+ * Word 导入的 pending / missing 引用还没有照片实体，只有编号。候选 ID 更强，优先用它
+ * ——按编号定位在编号为空时会退化成"每条引用都命中"。
+ */
+function isTargetReference(
+  reference: PhotoReference,
+  target: { photoNumber: string | null; photoCandidateId: string | null },
+): boolean {
+  if (target.photoCandidateId !== null) {
+    return reference.photo_candidate_id === target.photoCandidateId;
+  }
+  return target.photoNumber !== null && reference.photo_number === target.photoNumber;
+}
+
+/** 这条引用指向的照片是否还在本次导入里（可能只是没挂在这条病害上）。 */
+function photoIsPresent(state: BridgeAnnualInspectionData, reference: PhotoReference): boolean {
+  if (reference.photo_candidate_id !== null) {
+    return state.photos.some((item) => item.candidate_id === reference.photo_candidate_id);
+  }
+  return (
+    reference.photo_number !== null &&
+    state.photos.some((item) => item.photo_number === reference.photo_number)
+  );
+}
+
 function nextStatusAfterContentEdit(current: ReviewStatus): ReviewStatus {
   return current === "已忽略" ? current : "已修改";
 }
@@ -380,12 +411,10 @@ function reduceReviewDraft(
 
     case "set_photo_reference_missing": {
       const defect = state.defects.find((item) => item.candidate_id === action.defectCandidateId);
-      const reference = defect?.photo_references.find(
-        (item) => item.photo_number === action.photoNumber,
-      );
+      const reference = defect?.photo_references.find((item) => isTargetReference(item, action));
       if (!defect || !reference) return state;
       // 这张图明明在本次导入里（只是没挂上）时，"原报告缺图"就是假话。
-      if (action.missing && state.photos.some((item) => item.photo_number === action.photoNumber)) {
+      if (action.missing && photoIsPresent(state, reference)) {
         return state;
       }
       return {
@@ -394,7 +423,7 @@ function reduceReviewDraft(
           ...item,
           group_review_status: "待确认",
           photo_references: item.photo_references.map((itemReference) =>
-            itemReference.photo_number === action.photoNumber
+            isTargetReference(itemReference, action)
               ? {
                   ...itemReference,
                   resolution: action.missing ? ("missing" as const) : ("pending" as const),
@@ -410,7 +439,7 @@ function reduceReviewDraft(
     case "remove_photo_reference": {
       const defect = state.defects.find((item) => item.candidate_id === action.defectCandidateId);
       if (!defect) return state;
-      if (!defect.photo_references.some((item) => item.photo_number === action.photoNumber)) {
+      if (!defect.photo_references.some((item) => isTargetReference(item, action))) {
         return state;
       }
       // 这个编号的图还挂在本病害上时，摘掉引用并不会让卡片消失（照片本身照样成卡），
@@ -419,7 +448,9 @@ function reduceReviewDraft(
       const stillLinked = state.photos.some(
         (item) =>
           item.linked_defect_candidate_id === action.defectCandidateId &&
-          item.photo_number === action.photoNumber,
+          (action.photoCandidateId !== null
+            ? item.candidate_id === action.photoCandidateId
+            : action.photoNumber !== null && item.photo_number === action.photoNumber),
       );
       if (stillLinked) return state;
       return {
@@ -428,7 +459,7 @@ function reduceReviewDraft(
           ...item,
           group_review_status: "待确认",
           photo_references: item.photo_references.filter(
-            (reference) => reference.photo_number !== action.photoNumber,
+            (reference) => !isTargetReference(reference, action),
           ),
         })),
       };

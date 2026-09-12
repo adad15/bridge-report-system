@@ -144,6 +144,7 @@ describe("DefectPhotoPanel", () => {
       type: "set_photo_reference_missing",
       defectCandidateId: "defect_0001",
       photoNumber: "2.1-1",
+      photoCandidateId: null,
       missing: true,
     });
   });
@@ -168,6 +169,7 @@ describe("DefectPhotoPanel", () => {
       type: "remove_photo_reference",
       defectCandidateId: "defect_0001",
       photoNumber: "2.1-1",
+      photoCandidateId: null,
     });
   });
 

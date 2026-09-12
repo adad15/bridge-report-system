@@ -112,8 +112,9 @@ export function DefectPhotoPanel({
   function detachReference(card: DefectPhotoCard): void {
     // 引用条目删掉就没有回头路——"撤销缺图"只能把 resolution 翻回 pending，翻不回
     // 一条已经不在清单里的条目。所以这里要二次确认，措辞说清是"引用"不是"照片"。
+    const subject = card.photoNumber ? `照片编号 ${card.photoNumber} 的` : "这张照片的";
     if (!window.confirm(
-      `确定移除照片编号 ${card.photoNumber} 的引用？本条病害将不再声明这张照片，且无法撤销。`,
+      `确定移除${subject}引用？本条病害将不再声明这张照片，且无法撤销。`,
     )) {
       return;
     }
@@ -121,6 +122,7 @@ export function DefectPhotoPanel({
       type: "remove_photo_reference",
       defectCandidateId: defect.candidate_id,
       photoNumber: card.photoNumber,
+      photoCandidateId: card.photo?.candidate_id ?? null,
     });
   }
 
@@ -156,7 +158,7 @@ export function DefectPhotoPanel({
             <button
               type="button"
               className="defect-photo-card-main"
-              aria-label={`查看照片 ${card.photoNumber}`}
+              aria-label={card.photoNumber ? `查看照片 ${card.photoNumber}` : "查看照片"}
               onClick={() => setActiveKey(card.key)}
             >
               {card.photo ? (
@@ -164,7 +166,8 @@ export function DefectPhotoPanel({
               ) : (
                 <span className="defect-photo-card-empty">无图</span>
               )}
-              <strong>{card.photoNumber}</strong>
+              {/* 来源软件导入没有照片编号（靠外键绑定），这里不显示占位文字。 */}
+              {card.photoNumber ? <strong>{card.photoNumber}</strong> : null}
               {card.kind === "missing" ? (
                 <small>{card.acknowledgedMissing ? "原报告缺图" : "待核对"}</small>
               ) : null}
@@ -180,6 +183,7 @@ export function DefectPhotoPanel({
                       type: "set_photo_reference_missing",
                       defectCandidateId: defect.candidate_id,
                       photoNumber: card.photoNumber,
+                      photoCandidateId: card.photo?.candidate_id ?? null,
                       missing: !card.acknowledgedMissing,
                     })}
                   >

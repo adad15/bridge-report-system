@@ -3,11 +3,13 @@ import {
   BellOutlined,
   DashboardOutlined,
   DatabaseOutlined,
+  FileWordOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
+  TeamOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { Avatar, Badge, Button, Tag, Tooltip } from "antd";
@@ -27,6 +29,12 @@ const navigation = [
   { to: "/rating-trees", label: "评定树", icon: <ApartmentOutlined /> },
 ];
 
+/** 系统管理里的报告相关维护页。只有管理员看得到（设计 §22）。 */
+const systemNavigation = [
+  { to: "/settings/report-templates", label: "报告模板", icon: <FileWordOutlined /> },
+  { to: "/settings/report-directory", label: "报告人员与设备", icon: <TeamOutlined /> },
+];
+
 function BridgeBrandMark() {
   return (
     <span className="application-brand-mark" aria-hidden="true">
@@ -39,6 +47,8 @@ function BridgeBrandMark() {
 }
 
 function currentPageName(pathname: string): string {
+  if (pathname.startsWith("/settings/report-templates")) return "报告模板";
+  if (pathname.startsWith("/settings/report-directory")) return "报告人员与设备";
   if (pathname.startsWith("/rating-trees")) return "评定树";
   if (pathname.startsWith("/bridges/")) return "桥梁业务空间";
   if (pathname === "/bridges") return "桥梁档案";
@@ -150,6 +160,19 @@ export function AppLayout({ children, reviewWorkspace = false }: AppLayoutProps)
                 <span className="application-navigation-icon"><SettingOutlined /></span>
                 <span className="application-navigation-text">规范管理</span>
               </NavLink>
+              {systemNavigation.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  aria-label={item.label}
+                  className={({ isActive }) =>
+                    `application-navigation-item${isActive ? " is-active" : ""}`
+                  }
+                >
+                  <span className="application-navigation-icon">{item.icon}</span>
+                  <span className="application-navigation-text">{item.label}</span>
+                </NavLink>
+              ))}
             </>
           ) : null}
         </nav>

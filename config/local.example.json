@@ -32,7 +32,11 @@
   },
   "temporary_storage": {
     "root": "runtime/temp/word-imports",
-    "failed_word_retention_hours": 24
+    "failed_word_retention_hours": 24,
+    "report_root": "runtime/temp/report-jobs",
+    "report_retention_hours": 24,
+    "report_job_history_days": 7,
+    "report_field_update_timeout_seconds": 900
   },
   "standards": {
     "root": "standards"

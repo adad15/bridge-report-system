@@ -182,6 +182,9 @@ TEST(CorsTest, AppliesLocalFrontendCorsHeaders) {
         response->getHeader("Access-Control-Allow-Headers"),
         "Content-Type, Authorization, X-Edit-Lock-Token, If-Match"
     );
-    // ETag 默认不暴露给脚本：不显式暴露，前端读不到新版本号，下一次写必然撞版本冲突。
-    EXPECT_EQ(response->getHeader("Access-Control-Expose-Headers"), "ETag");
+    // 跨域下 fetch 只能读到少数几个"安全"响应头，这两个都得显式暴露：
+    // ETag 不暴露，前端读不到新版本号，下一次写必然撞版本冲突；
+    // Content-Disposition 不暴露，报告下载取到 blob 也拿不到按 §20 拼好的文件名。
+    EXPECT_EQ(
+        response->getHeader("Access-Control-Expose-Headers"), "ETag, Content-Disposition");
 }

@@ -32,6 +32,11 @@
 #include "bridge_report/http/ImportRecordDeletionRoutes.hpp"
 #include "bridge_report/http/InspectionYearDeletionRoutes.hpp"
 #include "bridge_report/http/RatingTreeRoutes.hpp"
+#include "bridge_report/http/ReportDirectoryRoutes.hpp"
+#include "bridge_report/http/InspectionReportSettingsRoutes.hpp"
+#include "bridge_report/http/BridgeProfileRoutes.hpp"
+#include "bridge_report/http/ReportGenerationRoutes.hpp"
+#include "bridge_report/http/ReportTemplateRoutes.hpp"
 #include "bridge_report/http/ReviewRoutes.hpp"
 #include "bridge_report/http/StandardRoutes.hpp"
 #include "bridge_report/http/WordImportRoutes.hpp"
@@ -467,23 +472,46 @@ int main(int argc, char* argv[]) {
         std::make_shared<bridge_report::deletion::TemporaryWordCleanupCoordinator>(
             db_client, config.temporary_word_root, temporary_cleanup_policy);
 
+    // 报告生成执行器。它在自己的线程里跑流水线：一次生成要装配几百行病害表、
+    // 重采样几百张照片、再等 Word 刷完域，放在事件循环上会把整个服务卡住。
+    const auto report_runner =
+        std::make_shared<bridge_report::report::ReportGenerationRunner>(
+            db_client, config, standards.registry);
+
     // 启动时处理遗留项，并在运行期间持续有界重试。异常不得阻断 HTTP 服务。
     drogon::app().registerBeginningAdvice(
-        [cleanup_coordinator, temporary_word_cleanup, interval = config.cleanup_interval_seconds]() {
+        [cleanup_coordinator, temporary_word_cleanup, report_runner,
+         interval = config.cleanup_interval_seconds]() {
             try {
                 cleanup_coordinator->process_pending();
                 temporary_word_cleanup->process_pending();
             } catch (const std::exception& error) {
                 std::cout << "归档文件启动清理失败：" << error.what() << "\n";
             }
+            // 上次进程里没跑完的生成任务必须作废：没人会接着跑它们，留着会永远占住
+            // "同一用户同一年度只允许一个进行中任务"的名额，用户再也点不了生成。
+            try {
+                const auto interrupted = report_runner->fail_interrupted_jobs();
+                if (interrupted > 0) {
+                    std::cout << "作废了 " << interrupted << " 个上次未跑完的报告生成任务。\n";
+                }
+                report_runner->start();
+            } catch (const std::exception& error) {
+                std::cout << "报告生成执行器启动失败：" << error.what() << "\n";
+            }
             drogon::app().getLoop()->runEvery(
                 static_cast<double>(interval),
-                [cleanup_coordinator, temporary_word_cleanup]() {
+                [cleanup_coordinator, temporary_word_cleanup, report_runner]() {
                     try {
                         cleanup_coordinator->process_pending();
                         temporary_word_cleanup->process_pending();
                     } catch (const std::exception& error) {
                         std::cout << "归档文件定时清理失败：" << error.what() << "\n";
+                    }
+                    try {
+                        report_runner->cleanup();
+                    } catch (const std::exception& error) {
+                        std::cout << "报告任务定时清理失败：" << error.what() << "\n";
                     }
                 }
             );
@@ -515,6 +543,11 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_defect_thread_routes(db_client);
     bridge_report::http::register_inspection_year_deletion_routes(db_client, cleanup_coordinator);
     bridge_report::http::register_rating_tree_routes(db_client);
+    bridge_report::http::register_report_directory_routes(db_client);
+    bridge_report::http::register_report_template_routes(db_client, config);
+    bridge_report::http::register_inspection_report_settings_routes(db_client);
+    bridge_report::http::register_report_generation_routes(db_client, report_runner);
+    bridge_report::http::register_bridge_profile_routes(db_client);
 
     // 路由自检：能改数据的接口必须同时注册 OPTIONS 预检。
     //

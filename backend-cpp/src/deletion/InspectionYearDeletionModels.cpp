@@ -52,6 +52,12 @@ Json::Value DeletionCounts::to_json() const {
     json["defect_comparisons"] = defect_comparisons;
     json["assessment_runs"] = assessment_runs;
     json["formal_assessment_runs"] = formal_assessment_runs;
+    json["report_settings"] = report_settings;
+    json["report_personnel_assignments"] = report_personnel_assignments;
+    json["report_equipment_assignments"] = report_equipment_assignments;
+    json["report_generation_jobs"] = report_generation_jobs;
+    json["running_report_generation_jobs"] = running_report_generation_jobs;
+    json["report_comparison_references"] = report_comparison_references;
     return json;
 }
 

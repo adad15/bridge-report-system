@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, request, setAuthToken, setUnauthorizedHandler } from "./apiClient";
+import {
+  ApiError,
+  filenameFromDisposition,
+  request,
+  setAuthToken,
+  setUnauthorizedHandler,
+} from "./apiClient";
 
 describe("apiClient request/parseError", () => {
   afterEach(() => {
@@ -127,5 +133,32 @@ describe("apiClient request/parseError", () => {
     setAuthToken("token-1");
     await request("http://127.0.0.1:18080/api/thing").catch(() => undefined);
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("filenameFromDisposition", () => {
+  // 报告文件名是中文，后端按 RFC 5987 写 filename*；只读 filename= 会拿到 latin-1
+  // 解出来的乱码，存下来的文件名就不是用户在界面上看到的那个。
+  it("prefers the RFC 5987 filename* over the ASCII placeholder", () => {
+    const header =
+      "attachment; filename=\"report.docx\"; filename*=UTF-8''" +
+      "%E7%99%BE%E8%82%A1%E5%A4%A7%E6%A1%A5.docx";
+
+    expect(filenameFromDisposition(header)).toBe("百股大桥.docx");
+  });
+
+  it("falls back to the plain filename when there is no filename*", () => {
+    expect(filenameFromDisposition('attachment; filename="template.docx"')).toBe("template.docx");
+  });
+
+  it("returns null when the header is missing or unparsable", () => {
+    expect(filenameFromDisposition(null)).toBeNull();
+    expect(filenameFromDisposition("attachment")).toBeNull();
+  });
+
+  it("ignores a broken percent-encoding and falls back", () => {
+    expect(
+      filenameFromDisposition("attachment; filename=\"a.docx\"; filename*=UTF-8''%E4%B"),
+    ).toBe("a.docx");
   });
 });

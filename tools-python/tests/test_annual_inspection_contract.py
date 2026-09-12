@@ -289,6 +289,84 @@ def test_duplicate_photo_reference_numbers_are_rejected() -> None:
     assert "defects.0.photo_references" in str(exc_info.value)
 
 
+def test_photo_number_may_be_omitted_when_the_photo_is_already_bound() -> None:
+    """来源软件导入没有照片编号：照片用外键直绑，配对走 photo_candidate_id。"""
+    data = valid_payload()
+    defect_id = data["defects"][0]["candidate_id"]
+    reference = data["defects"][0]["photo_references"][0]
+    reference["resolution"] = "matched"
+    reference["photo_candidate_id"] = data["photos"][0]["candidate_id"]
+    reference["resolved_defect_candidate_id"] = defect_id
+    reference.pop("photo_number", None)
+
+    parsed = BridgeAnnualInspectionData.model_validate(data)
+
+    assert parsed.defects[0].photo_references[0].photo_number is None
+
+
+@pytest.mark.parametrize("resolution", ["pending", "missing"])
+def test_photo_number_is_required_when_no_photo_is_bound(resolution: str) -> None:
+    """待核对和原报告缺图这两种状态下没有照片实体可指，编号是唯一标识。"""
+    data = valid_payload()
+    reference = data["defects"][0]["photo_references"][0]
+    reference["resolution"] = resolution
+    reference["photo_candidate_id"] = None
+    reference["resolved_defect_candidate_id"] = None
+    reference.pop("photo_number", None)
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "defects.0.photo_references.0" in str(exc_info.value)
+
+
+def test_blank_photo_number_is_rejected_rather_than_treated_as_absent() -> None:
+    data = valid_payload()
+    data["defects"][0]["photo_references"][0]["photo_number"] = "   "
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "defects.0.photo_references.0" in str(exc_info.value)
+
+
+def test_two_unnumbered_references_are_not_treated_as_duplicates() -> None:
+    """一条病害挂多张来源库照片时，编号全为空不能被当成重复引用。"""
+    data = valid_payload()
+    defect_id = data["defects"][0]["candidate_id"]
+    first = data["defects"][0]["photo_references"][0]
+    first["resolution"] = "matched"
+    first["photo_candidate_id"] = data["photos"][0]["candidate_id"]
+    first["resolved_defect_candidate_id"] = defect_id
+    first.pop("photo_number", None)
+
+    second = copy.deepcopy(first)
+    second["photo_candidate_id"] = "photo_0002"
+    data["defects"][0]["photo_references"].append(second)
+
+    extra_photo = copy.deepcopy(data["photos"][0])
+    extra_photo["candidate_id"] = "photo_0002"
+    extra_photo.pop("photo_number", None)
+    data["photos"].append(extra_photo)
+
+    parsed = BridgeAnnualInspectionData.model_validate(data)
+
+    assert len(parsed.defects[0].photo_references) == 2
+
+
+def test_duplicate_photo_candidate_ids_are_rejected() -> None:
+    data = valid_payload()
+    reference = data["defects"][0]["photo_references"][0]
+    reference["resolution"] = "matched"
+    reference.pop("photo_number", None)
+    data["defects"][0]["photo_references"].append(copy.deepcopy(reference))
+
+    with pytest.raises(ValidationError) as exc_info:
+        BridgeAnnualInspectionData.model_validate(data)
+
+    assert "defects.0.photo_references" in str(exc_info.value)
+
+
 @pytest.mark.parametrize(
     ("resolution", "photo_candidate_id", "resolved_defect_candidate_id"),
     [

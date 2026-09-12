@@ -15,7 +15,7 @@ namespace {
 constexpr const char* kPending = "待确认";
 constexpr const char* kIgnored = "已忽略";
 
-bool photo_number_has_confirmed_link(const Json::Value& data, const std::string& defect_id, const std::string& photo_number);
+bool reference_has_confirmed_link(const Json::Value& data, const std::string& defect_id, const Json::Value& reference);
 
 void add_issue(std::vector<PreflightIssue>& target, std::string code, std::string message, std::string candidate_id = std::string()) {
     target.push_back(PreflightIssue{std::move(code), std::move(message), std::move(candidate_id)});
@@ -255,18 +255,25 @@ void check_defect_photo_groups(const Json::Value& data, std::vector<PreflightIss
             continue;
         }
         for (const auto& reference : defect["photo_references"]) {
-            if (!reference.isObject() || !reference["photo_number"].isString()) {
+            if (!reference.isObject()) {
                 continue;
             }
-            const auto number = reference["photo_number"].asString();
+            // 没有编号时（来源软件导入）用候选 ID 指人，消息里总得说清是哪一张。
+            const auto number = string_member_or_empty(reference, "photo_number");
+            const auto label = !number.empty()
+                ? number
+                : string_member_or_empty(reference, "photo_candidate_id");
+            if (label.empty()) {
+                continue;
+            }
             const auto resolution = string_member_or_empty(reference, "resolution");
             if (resolution == "pending") {
                 add_issue(blocking, "missing_photo_confirmation_required",
-                          "病害候选 " + defect_id + " 引用的照片 " + number + " 尚未处理。", defect_id);
+                          "病害候选 " + defect_id + " 引用的照片 " + label + " 尚未处理。", defect_id);
             } else if (resolution == "matched"
-                       && !photo_number_has_confirmed_link(data, defect_id, number)) {
+                       && !reference_has_confirmed_link(data, defect_id, reference)) {
                 add_issue(blocking, "photo_link_unresolved",
-                          "病害候选 " + defect_id + " 引用的照片 " + number + " 与实际关联不一致。", defect_id);
+                          "病害候选 " + defect_id + " 引用的照片 " + label + " 与实际关联不一致。", defect_id);
             }
         }
     }
@@ -291,12 +298,28 @@ void check_photo_archives(const Json::Value& data, std::vector<PreflightIssue>& 
 // 警告：已确认/已修改病害未关联任何已确认照片
 // -----------------------------------------------------------------------
 
-bool photo_number_has_confirmed_link(const Json::Value& data, const std::string& defect_id, const std::string& photo_number) {
+// 这条引用是否真的落在一张挂在本病害上的照片上。
+//
+// 两条导入路的身份键不同：Word 路只有照片编号（题注和病害表那一列靠它对上），
+// 来源软件路没有编号、但引用直接带着 photo_candidate_id。优先用候选 ID——它更强，
+// 且是来源库那条路唯一可用的键。
+bool reference_has_confirmed_link(const Json::Value& data, const std::string& defect_id, const Json::Value& reference) {
     if (!data["photos"].isArray()) {
+        return false;
+    }
+    const auto candidate_id = string_member_or_empty(reference, "photo_candidate_id");
+    const auto photo_number = string_member_or_empty(reference, "photo_number");
+    if (candidate_id.empty() && photo_number.empty()) {
         return false;
     }
     for (const auto& photo : data["photos"]) {
         if (string_member_or_empty(photo, "linked_defect_candidate_id") != defect_id) {
+            continue;
+        }
+        if (!candidate_id.empty()) {
+            if (string_member_or_empty(photo, "candidate_id") == candidate_id) {
+                return true;
+            }
             continue;
         }
         if (string_member_or_empty(photo, "photo_number") == photo_number) {
@@ -328,11 +351,10 @@ void check_defect_without_photo(const Json::Value& data, std::vector<PreflightIs
         bool missing = false;
         const auto defect_id = candidate_id_of(defect);
         for (const auto& reference : defect["photo_references"]) {
-            if (!reference.isObject() || !reference["photo_number"].isString()) {
+            if (!reference.isObject()) {
                 continue;
             }
-            if (!photo_number_has_confirmed_link(
-                    data, defect_id, reference["photo_number"].asString())) {
+            if (!reference_has_confirmed_link(data, defect_id, reference)) {
                 missing = true;
                 break;
             }

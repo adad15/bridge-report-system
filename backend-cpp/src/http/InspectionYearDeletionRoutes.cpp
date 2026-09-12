@@ -125,6 +125,15 @@ void register_inspection_year_deletion_routes(
                         respond_json(callback, error, drogon::k409Conflict);
                         return;
                     }
+                    case deletion::DeleteInspectionYearStatus::ReportGenerationJobRunning: {
+                        auto error = make_error_body("inspection_year_report_job_running",
+                            "该年度有正在运行的报告生成任务，暂时不能删除。"
+                            "请等待任务结束或先取消它，再重新预览。");
+                        if (outcome.current_plan.has_value())
+                            error["current_impact"] = outcome.current_plan->to_public_json();
+                        respond_json(callback, error, drogon::k409Conflict);
+                        return;
+                    }
                     case deletion::DeleteInspectionYearStatus::Failed:
                         respond_db_unavailable(callback);
                         return;

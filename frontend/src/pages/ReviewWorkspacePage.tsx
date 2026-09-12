@@ -264,7 +264,8 @@ function ReviewWorkspaceLoaded({
       if (parts.length > 0) labels.set(defect.candidate_id, `【${parts.join("｜")}】`);
     }
     for (const photo of draft.photos) {
-      const photoNumber = photo.photo_number.trim();
+      // 来源软件导入没有照片编号，这类照片不进标签表，调用方自会回退到默认写法。
+      const photoNumber = photo.photo_number?.trim();
       if (photoNumber) labels.set(photo.candidate_id, `【照片 ${photoNumber}】`);
     }
     return labels;

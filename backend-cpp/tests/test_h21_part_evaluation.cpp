@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include <gtest/gtest.h>
 
 #include "support/h21_fixtures.hpp"
@@ -124,6 +126,68 @@ TEST(H21PartEvaluationTest, StructurePartUsesConfiguredCategoryWeights) {
     EXPECT_NEAR(super.score, 79.0 * 0.70 + 100.0 * 0.18 + 100.0 * 0.12, 1e-12);
 }
 
+
+// ---------- 缺部件时的权重重分配 ----------
+//
+// 报告的「部件权重计算表」（表4.1-1）有一列"重新分配后权重"。下面两条锁的是：
+// 那一列印出来的数就是评定算分时用的那个数，不是报告层另算的一份。桥上没有的
+// 部件（本例：调治构造物）不参与，它的权重按比例摊给同部位其余部件。
+
+TEST(H21PartEvaluationTest, MissingCategoryWeightIsRedistributedProportionally) {
+    const auto package = bridge_report::tests::h21::load_package();
+    auto input = bridge_report::tests::h21::complete_beam_input(package);
+    // 拿掉调治构造物（规范权重 0.02），下部结构其余六项按 0.98 归一。
+    std::erase_if(input.components, [](const auto& item) {
+        return item.component_type_id == "h21.component.lower.regulation_structure";
+    });
+    bridge_report::standards::H21Evaluator evaluator(package);
+
+    const auto outcome = evaluator.evaluate(input);
+
+    ASSERT_TRUE(outcome.ok());
+    const auto& lower = part(*outcome.result, StructurePart::substructure);
+    ASSERT_EQ(lower.categories.size(), 6u);
+
+    double total = 0.0;
+    for (const auto& category : lower.categories) {
+        EXPECT_NEAR(category.effective_weight, category.configured_weight / 0.98, 1e-12);
+        total += category.effective_weight;
+    }
+    // 重分配后必须归一；报告里那一列显示成两位小数，合计可能是 1.01，
+    // 但算分用的是这里的全精度值。
+    EXPECT_NEAR(total, 1.0, 1e-12);
+
+    // 桥墩：规范 0.30 -> 0.30612…，报告印成 0.31。
+    const auto& pier = *std::find_if(
+        lower.categories.begin(), lower.categories.end(), [](const auto& category) {
+            return category.component_type_id == "h21.component.lower.pier";
+        });
+    EXPECT_NEAR(pier.configured_weight, 0.30, 1e-12);
+    EXPECT_NEAR(pier.effective_weight, 0.30 / 0.98, 1e-12);
+}
+
+TEST(H21PartEvaluationTest, PartScoreIsTheSumOfCategoryScoresTimesEffectiveWeight) {
+    const auto package = bridge_report::tests::h21::load_package();
+    auto input = bridge_report::tests::h21::complete_beam_input(package);
+    std::erase_if(input.components, [](const auto& item) {
+        return item.component_type_id == "h21.component.lower.regulation_structure";
+    });
+    // 给桥墩挂一条病害，免得所有部件都是 100 分而看不出权重的作用。
+    component(input, "h21.component.lower.pier").defects = {{"h21.defect.9_1_1_2", 3}};
+    bridge_report::standards::H21Evaluator evaluator(package);
+
+    const auto outcome = evaluator.evaluate(input);
+
+    ASSERT_TRUE(outcome.ok());
+    const auto& lower = part(*outcome.result, StructurePart::substructure);
+    double expected = 0.0;
+    for (const auto& category : lower.categories) {
+        expected += category.score * category.effective_weight;
+    }
+    // 结构评分就是各部件分乘重分配后权重之和——报告表里那一列与这一步是同一个变量。
+    EXPECT_NEAR(lower.score, expected, 1e-12);
+    EXPECT_LT(lower.score, 100.0);
+}
 
 // ---------- 两侧护栏：绑一侧与绑两侧的分差 ----------
 //

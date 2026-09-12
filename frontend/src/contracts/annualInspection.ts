@@ -82,7 +82,12 @@ export interface Measurement {
 export type PhotoReferenceResolution = "pending" | "matched" | "relinked" | "missing" | "unrelated";
 
 export interface PhotoReference {
-  photo_number: string;
+  /**
+   * Word 导入路的匹配键：Word 病害表的「照片编号」列与图片题注靠它对上。
+   * 来源软件导入用外键直绑照片，没有这个概念，为 null。
+   * 例外：pending 与 missing 下没有 photo_candidate_id 可指，编号是唯一标识，必有值。
+   */
+  photo_number: string | null;
   resolution: PhotoReferenceResolution;
   photo_candidate_id: string | null;
   resolved_defect_candidate_id: string | null;
@@ -127,7 +132,8 @@ export interface ExtractedPhotoFile {
 
 export interface PhotoCandidate {
   candidate_id: string;
-  photo_number: string;
+  /** Word 路是图片题注里的编号；来源软件路没有编号，为 null。 */
+  photo_number: string | null;
   linked_defect_candidate_id?: string | null;
   extracted_file: ExtractedPhotoFile;
   source_ref: SourceRef;
@@ -281,10 +287,13 @@ const RESOLUTION_FIELDS_REMOVED_IN_V5 = [
 function isValidPhotoReference(value: unknown): value is PhotoReference {
   if (
     !isRecord(value) ||
-    typeof value.photo_number !== "string" ||
-    value.photo_number.length === 0 ||
     !["pending", "matched", "relinked", "missing", "unrelated"].includes(String(value.resolution))
   ) {
+    return false;
+  }
+  // 编号可以缺省（来源软件导入），但给了就不能是空串——空串会被当成一个真编号参与配对。
+  const hasNumber = typeof value.photo_number === "string" && value.photo_number.length > 0;
+  if (value.photo_number !== undefined && value.photo_number !== null && !hasNumber) {
     return false;
   }
   const hasPhoto = typeof value.photo_candidate_id === "string";
@@ -296,7 +305,8 @@ function isValidPhotoReference(value: unknown): value is PhotoReference {
     return false;
   }
   if (value.resolution === "pending" || value.resolution === "missing") {
-    return !hasPhoto && !hasDefect;
+    // 这两种状态没有照片实体可指，编号是这条引用仅有的标识。
+    return hasNumber && !hasPhoto && !hasDefect;
   }
   if (value.resolution === "matched" || value.resolution === "relinked") {
     return hasPhoto && hasDefect;
@@ -349,9 +359,21 @@ function isValidDefectCandidate(value: unknown): boolean {
         value.source_defect_indicator_number.trim().length > 0)) &&
     photoReferences !== null &&
     photoReferences.every(isValidPhotoReference) &&
-    new Set(photoReferences.map((item) => (item as PhotoReference).photo_number)).size ===
-      photoReferences.length
+    // 只比对有编号的引用：来源软件那条路整条链都没有编号，把 null 也算进去，
+    // 一条病害挂两张图就会被误判成重复。没有编号时 photo_candidate_id 才是身份。
+    isUniqueIgnoringNull(photoReferences, (item) => item.photo_number) &&
+    isUniqueIgnoringNull(photoReferences, (item) => item.photo_candidate_id)
   );
+}
+
+function isUniqueIgnoringNull(
+  references: unknown[],
+  pick: (item: PhotoReference) => string | null,
+): boolean {
+  const values = references
+    .map((item) => pick(item as PhotoReference))
+    .filter((value): value is string => typeof value === "string");
+  return new Set(values).size === values.length;
 }
 
 function isValidPhotoCandidate(value: unknown): boolean {

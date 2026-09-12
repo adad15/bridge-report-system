@@ -1,8 +1,15 @@
 """把来源库的照片组装成契约里的照片候选。
 
-来源库用外键把照片直接绑在病害上，归属是确定的，不需要像 Word 那样按编号去猜。
-缺的是两样：照片编号和题注——来源库两者都没有（`noteContent` 与 `oriFileName` 全空），
-只能按规则生成。
+来源库用外键（`images.ForeignKey` → `outerCheckData.id`）把照片直接绑在病害上，
+归属是确定的，不需要像 Word 那样按编号去猜。
+
+因此这条路**不产生照片编号**。早先为了填满契约的必填字段，这里按结构部位造过
+"2.1-1"这样的号，但来源库的 `photoNum` 列 887 张全空——那个号不是来源事实，是我们
+凭空编的，而且按病害 UUID 顺序发放，与构件台账顺序完全无关。它既不能当来源证据，
+也不该展示给用户，更不该进报告：报告里的图号在生成时按模板结构重排。
+
+题注仍然要生成：来源库的 `noteContent` 与 `oriFileName` 同样全空，而报告的图题需要
+一句说明，只能按构件编号和病害类型拼。
 """
 
 from __future__ import annotations
@@ -13,10 +20,6 @@ from typing import Any
 
 from bridge_report_tools.importers.source_db.reader import (
     ComponentNode, SourcePhoto, load_photo_content)
-
-#: 部位层级码 → 报告章节号。做成参数而不是写死：章节结构因桥而异，写死会在遇到
-#: 没有桥面系、或章节从别的号起排的桥时静默出错。
-DEFAULT_SECTION_MAP = {"001": "2.1", "002": "2.2", "003": "2.3"}
 
 EXTENSIONS = {
     "image/jpeg": ".jpg",
@@ -31,8 +34,8 @@ EXTENSIONS = {
 def photo_caption(component_number: str, defect_type: str, description: str) -> str:
     """题注 = 构件编号 + 病害类型；类型为空时退回用描述。
 
-    题注允许重复——报告里靠前面的照片编号区分（现有报告中「两侧护栏破损露筋」连续
-    出现三次，编号分别是 2.3-63/64/65），所以不加序号后缀。
+    题注允许重复——报告里靠生成时排的图号区分（现有报告中「两侧护栏破损露筋」连续
+    出现三次），所以不加序号后缀。
     """
     tail = (defect_type or "").strip() or (description or "").strip()
     return f"{component_number} {tail}".strip()
@@ -49,14 +52,12 @@ def build_photo_candidates(
     links: dict[str, Any],
     tree: list[ComponentNode],
     output_dir: str | Path,
-    section_map: dict[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """产出照片候选，并把照片本体写进临时目录。
 
-    同时就地给对应病害补上 `photo_references`，让照片与病害的关联在契约层面与
-    Word 那条路完全一致，后端不需要为来源库单开一套。
+    同时就地给对应病害补上 `photo_references`。引用一律是 `matched` 且带
+    `photo_candidate_id`，配对不依赖编号——契约允许这条路省略 `photo_number`。
     """
-    sections = dict(DEFAULT_SECTION_MAP if section_map is None else section_map)
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
     by_id = {node.id: node for node in tree}
@@ -64,7 +65,6 @@ def build_photo_candidates(
 
     candidates: list[dict[str, Any]] = []
     written: list[str] = []
-    counters: dict[str, int] = {}
     for position, photo in enumerate(photos, start=1):
         link = links.get(photo.defect_id)
         defect = defects_by_id.get(link.candidate_id) if link else None
@@ -72,10 +72,6 @@ def build_photo_candidates(
             # 照片指向的病害不在本次导入里，跳过——宁可少一张图，也不产生悬空引用。
             continue
         component = by_id.get(link.tree_id)
-        level_code = component.level_code if component else ""
-        section = sections.get(level_code[:3], "")
-        counters[section] = counters.get(section, 0) + 1
-        number = f"{section}-{counters[section]}" if section else str(counters[section])
 
         content_type, payload = load_photo_content(db, photo.id)
         suffix = EXTENSIONS.get(content_type, ".jpg")
@@ -93,7 +89,6 @@ def build_photo_candidates(
         candidate_id = f"source_photo_{position:04d}"
         candidates.append({
             "candidate_id": candidate_id,
-            "photo_number": number,
             "linked_defect_candidate_id": defect["candidate_id"],
             "extracted_file": {
                 "temporary_file_name": file_name,
@@ -106,7 +101,6 @@ def build_photo_candidates(
             "warnings": warnings,
         })
         defect["photo_references"].append({
-            "photo_number": number,
             "resolution": "matched",
             "photo_candidate_id": candidate_id,
             "resolved_defect_candidate_id": defect["candidate_id"],

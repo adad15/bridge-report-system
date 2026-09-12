@@ -96,7 +96,18 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
         "(select count(*) from defect_measurements m join defect_observations o on o.id=m.defect_observation_id where o.bridge_id=$1::uuid) as measurements,"
         "(select count(*) from defect_photos p join defect_observations o on o.id=p.defect_observation_id where o.bridge_id=$1::uuid) as photos,"
         "(select count(*) from condition_ratings r join inspection_years y on y.id=r.inspection_year_id where y.bridge_id=$1::uuid) as ratings,"
-        "(select count(*) from defect_comparisons where bridge_id=$1::uuid) as comparisons",
+        "(select count(*) from defect_comparisons where bridge_id=$1::uuid) as comparisons,"
+        // 报告配置与生成任务（报告设计 §17.4）。整桥删除要经过每一个年度，
+        // 这些行都会随之消失，预览必须先把数量摆出来。
+        "(select count(*) from inspection_report_settings s join inspection_years y on y.id=s.inspection_year_id where y.bridge_id=$1::uuid) as report_settings,"
+        "(select count(*) from inspection_report_personnel p join inspection_years y on y.id=p.inspection_year_id where y.bridge_id=$1::uuid) as report_personnel,"
+        "(select count(*) from inspection_report_equipment e join inspection_years y on y.id=e.inspection_year_id where y.bridge_id=$1::uuid) as report_equipment,"
+        "(select count(*) from report_generation_jobs j join inspection_years y on y.id=j.inspection_year_id where y.bridge_id=$1::uuid) as report_jobs,"
+        "(select count(*) from report_generation_jobs j join inspection_years y on y.id=j.inspection_year_id where y.bridge_id=$1::uuid"
+        " and j.status in ('queued','validating_data','assembling_docx','updating_fields','validating_docx')) as running_report_jobs,"
+        // 别的桥可能把本桥的年度选作历史对比；on delete set null 会静默清空它们。
+        "(select count(*) from inspection_years other join inspection_years mine on mine.id=other.report_comparison_inspection_id"
+        " where mine.bridge_id=$1::uuid and other.bridge_id<>$1::uuid) as report_comparison_refs",
         bridge_id
     )[0];
     plan.counts.inspection_years = counts["years"].as<int>();
@@ -115,6 +126,12 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
     plan.counts.defect_photos = counts["photos"].as<int>();
     plan.counts.condition_ratings = counts["ratings"].as<int>();
     plan.counts.defect_comparisons = counts["comparisons"].as<int>();
+    plan.counts.report_settings = counts["report_settings"].as<int>();
+    plan.counts.report_personnel_assignments = counts["report_personnel"].as<int>();
+    plan.counts.report_equipment_assignments = counts["report_equipment"].as<int>();
+    plan.counts.report_generation_jobs = counts["report_jobs"].as<int>();
+    plan.counts.running_report_generation_jobs = counts["running_report_jobs"].as<int>();
+    plan.counts.report_comparison_references = counts["report_comparison_refs"].as<int>();
 
     // assessment_runs.inspection_year_id 是 on delete restrict：不先删它就删不掉年度，
     // 而删年度是整桥删除的必经一步。这段此前完全缺失，任何做过评定（哪怕只是试算）的
@@ -215,7 +232,9 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
         "exists(select 1 from import_record_files f join import_records i on i.id=f.import_record_id where f.archived_file_id=af.id and i.bridge_id<>$1::uuid) or "
         "exists(select 1 from defect_observations o where o.source_file_id=af.id and o.bridge_id<>$1::uuid) or "
         "exists(select 1 from defect_photos p join defect_observations o on o.id=p.defect_observation_id where (p.archived_file_id=af.id or p.source_file_id=af.id) and o.bridge_id<>$1::uuid) or "
-        "exists(select 1 from condition_ratings r join inspection_years y on y.id=r.inspection_year_id where r.source_file_id=af.id and y.bridge_id<>$1::uuid)"
+        "exists(select 1 from condition_ratings r join inspection_years y on y.id=r.inspection_year_id where r.source_file_id=af.id and y.bridge_id<>$1::uuid) or "
+        // 报告模板当前文件（报告设计 §17.4）：模板不属于任何桥梁，永远算外部引用。
+        "exists(select 1 from report_templates t where t.file_id=af.id)"
         ") as deletable from archived_files af join candidate c on c.id=af.id) "
         "select id::text as id,storage_relative_path,deletable from classified order by id";
     const auto files = client->execSqlSync(file_sql, bridge_id);
@@ -280,6 +299,12 @@ deletion::DeleteBridgeOutcome BridgeDeletionRepository::delete_bridge(
         if (plan->counts.formal_assessment_runs > 0) {
             rollback();
             outcome.status = deletion::DeleteBridgeStatus::FormalAssessmentPresent;
+            return outcome;
+        }
+        // 进行中的报告生成任务正拿着模板副本和临时文件（报告设计 §17.4）。
+        if (plan->counts.running_report_generation_jobs > 0) {
+            rollback();
+            outcome.status = deletion::DeleteBridgeStatus::ReportGenerationJobRunning;
             return outcome;
         }
         const auto audit = tx->execSqlSync(

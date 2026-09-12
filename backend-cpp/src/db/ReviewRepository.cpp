@@ -294,9 +294,11 @@ void insert_defect_photo(
     const review::PhotoPlan& photo
 ) {
     tx->execSqlSync(
+        // 来源软件导入没有照片编号（照片靠外键绑定），草稿里该字段缺省，
+        // 到这里是空串；写成 null 而不是 ''，免得下游把空串当成一个真编号。
         "insert into defect_photos "
         "(defect_observation_id, archived_file_id, source_import_record_id, photo_number, photo_title) "
-        "values ($1::uuid, $2::uuid, $3::uuid, $4, $5)",
+        "values ($1::uuid, $2::uuid, $3::uuid, nullif($4,''), $5)",
         defect_observation_id,
         archived_file_id,
         import_record_id,

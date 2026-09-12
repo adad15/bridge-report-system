@@ -91,6 +91,11 @@ AppConfig load_app_config(const std::filesystem::path& path) {
         "photo_upload_max_bytes",
         config.photo_upload_max_bytes
     );
+    config.template_upload_max_bytes = get_size_or_default(
+        archive,
+        "template_upload_max_bytes",
+        config.template_upload_max_bytes
+    );
     config.cleanup_interval_seconds = get_positive_int_or_default(
         archive, "cleanup_interval_seconds", config.cleanup_interval_seconds);
     config.cleanup_batch_size = get_positive_int_or_default(
@@ -115,6 +120,26 @@ AppConfig load_app_config(const std::filesystem::path& path) {
         temporary_storage,
         "failed_word_retention_hours",
         config.failed_word_retention_hours
+    );
+    config.temporary_report_root = get_string_or_default(
+        temporary_storage,
+        "report_root",
+        config.temporary_report_root.generic_string()
+    );
+    config.report_retention_hours = get_positive_int_or_default(
+        temporary_storage,
+        "report_retention_hours",
+        config.report_retention_hours
+    );
+    config.report_job_history_days = get_positive_int_or_default(
+        temporary_storage,
+        "report_job_history_days",
+        config.report_job_history_days
+    );
+    config.report_field_update_timeout_seconds = get_positive_int_or_default(
+        temporary_storage,
+        "report_field_update_timeout_seconds",
+        config.report_field_update_timeout_seconds
     );
 
     const auto& standards = root["standards"];

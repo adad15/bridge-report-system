@@ -5,9 +5,13 @@ description = "Local Python tool service for the bridge report system."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",
+  # 报告里的照片要按版面尺寸重新采样后再嵌入：归档原图是 1600×1200，
+  # 而版面上只有 6.9cm 宽，455 张原样嵌进去会做出一份 126MB 的报告。
+  "pillow>=10.0.0",
   "pydantic>=2.8.0",
   "python-docx>=1.1.2",
-  "uvicorn[standard]>=0.30.0"
+  "pywin32>=306 ; sys_platform == 'win32'",
+  "uvicorn[standard]>=0.30.0",
 ]
 
 [project.optional-dependencies]

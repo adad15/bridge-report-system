@@ -85,6 +85,53 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
  * 成功响应体解析失败（例如后端返回了非 JSON）也抛 ApiError（code "invalid_response_body"），
  * 而不是把裸 SyntaxError 抛给调用方——与 readJsonBody 的 try/catch 对称。
  */
+/**
+ * 下载一个需要登录才能取的文件。
+ *
+ * **不能用 `<a href>` 直接指过去。** 会话令牌在 localStorage 里，由这个模块挂到
+ * Authorization 头上；浏览器导航不会带这个头，后端只会回一个 401 的 JSON，用户看到
+ * 的是一屏 `{"code":"auth_required"}`，而不是文件。所以必须走 fetch 取回内容再存。
+ *
+ * 文件名优先取响应的 Content-Disposition（后端按 RFC 5987 写了 filename*，并在 CORS
+ * 里显式暴露了这个头）；取不到才退回调用方给的名字。
+ */
+export async function downloadFile(url: string, fallbackName: string): Promise<void> {
+  const headers = new Headers();
+  if (authToken !== null) headers.set("Authorization", `Bearer ${authToken}`);
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    if (response.status === 401 && authToken !== null) unauthorizedHandler?.();
+    throw await parseError(response);
+  }
+
+  const name = filenameFromDisposition(response.headers.get("Content-Disposition")) ?? fallbackName;
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = name;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  // 立刻撤销会让 Chrome 来不及取走内容；下一拍再放，二十多兆的报告不能一直占着。
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+/** 解析 `attachment; filename="x"; filename*=UTF-8''%E2%80%A6`，优先取 filename*。 */
+export function filenameFromDisposition(value: string | null): string | null {
+  if (!value) return null;
+  const encoded = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(value);
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded[1].trim());
+    } catch {
+      // 编码坏了就当没有这一段，往下退回普通 filename。
+    }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(value);
+  return plain ? plain[1].trim() : null;
+}
+
 export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const hadToken = authToken !== null;
   let effectiveInit = init;

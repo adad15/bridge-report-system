@@ -186,6 +186,30 @@ std::optional<deletion::InspectionYearDeletionPlan> build_plan(
     plan.counts.defect_measurements = detail_counts[0]["measurements"].as<int>();
     plan.counts.defect_photos = detail_counts[0]["photos"].as<int>();
 
+    // 报告配置与生成任务（报告设计 §17.4）。三张配置表和任务表都随年度级联删除，
+    // 必须进入预览计数；进行中的任务另算一份，用于整单拒绝。
+    // report_comparison_inspection_id 是 on delete set null：删掉本年度会静默清空
+    // 其他年度的对比选择，用户有权在点确认之前知道这件事。
+    const auto report_counts = client->execSqlSync(
+        "with target as ("
+        " select id from inspection_years where bridge_id=$1::uuid and inspection_year=$2"
+        ") select "
+        "(select count(*) from inspection_report_settings s where s.inspection_year_id in (select id from target)) as settings, "
+        "(select count(*) from inspection_report_personnel p where p.inspection_year_id in (select id from target)) as personnel, "
+        "(select count(*) from inspection_report_equipment e where e.inspection_year_id in (select id from target)) as equipment, "
+        "(select count(*) from report_generation_jobs j where j.inspection_year_id in (select id from target)) as jobs, "
+        "(select count(*) from report_generation_jobs j where j.inspection_year_id in (select id from target) "
+        " and j.status in ('queued','validating_data','assembling_docx','updating_fields','validating_docx')) as running_jobs, "
+        "(select count(*) from inspection_years other where other.report_comparison_inspection_id in (select id from target)) as comparison_refs",
+        plan.bridge_id, plan.inspection_year
+    );
+    plan.counts.report_settings = report_counts[0]["settings"].as<int>();
+    plan.counts.report_personnel_assignments = report_counts[0]["personnel"].as<int>();
+    plan.counts.report_equipment_assignments = report_counts[0]["equipment"].as<int>();
+    plan.counts.report_generation_jobs = report_counts[0]["jobs"].as<int>();
+    plan.counts.running_report_generation_jobs = report_counts[0]["running_jobs"].as<int>();
+    plan.counts.report_comparison_references = report_counts[0]["comparison_refs"].as<int>();
+
     // assessment_runs.inspection_year_id 是 on delete restrict：不先删它就删不掉年度。
     // 这段此前完全缺失，任何做过评定（哪怕只是试算）的年度都删不掉，而 catch (...)
     // 把真实异常吞了，用户只看到一句"删除失败，数据库已回滚"。
@@ -293,7 +317,9 @@ std::optional<deletion::InspectionYearDeletionPlan> build_plan(
         " exists(select 1 from defect_observations x where x.source_file_id=af.id and x.id not in (select id from target_obs)) or "
         " exists(select 1 from defect_photos x join defect_observations o on o.id=x.defect_observation_id "
         "        where (x.archived_file_id=af.id or x.source_file_id=af.id) and o.id not in (select id from target_obs)) or "
-        " exists(select 1 from condition_ratings x where x.source_file_id=af.id and x.inspection_year_id not in (select id from target_years))"
+        " exists(select 1 from condition_ratings x where x.source_file_id=af.id and x.inspection_year_id not in (select id from target_years)) or"
+        // 报告模板当前文件（报告设计 §17.4）：模板不属于任何年度，永远算外部引用。
+        " exists(select 1 from report_templates t where t.file_id=af.id)"
         ") as deletable from archived_files af join candidate c on c.id=af.id) "
         "select id::text as id, storage_relative_path, deletable from classified order by id",
         plan.bridge_id, plan.inspection_year
@@ -384,6 +410,13 @@ deletion::DeleteInspectionYearOutcome InspectionYearDeletionRepository::delete_y
         if (plan->counts.formal_assessment_runs > 0) {
             rollback();
             outcome.status = deletion::DeleteInspectionYearStatus::FormalAssessmentPresent;
+            return outcome;
+        }
+        // 进行中的报告生成任务正拿着模板副本和临时文件；底下的年度被删掉只会让它
+        // 以看不懂的方式失败（报告设计 §17.4）。让用户先取消或等它结束。
+        if (plan->counts.running_report_generation_jobs > 0) {
+            rollback();
+            outcome.status = deletion::DeleteInspectionYearStatus::ReportGenerationJobRunning;
             return outcome;
         }
 
