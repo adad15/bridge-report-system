@@ -1,4 +1,18 @@
-import { useCallback, useState, type FormEvent } from "react";
+import {
+  Alert,
+  Button,
+  Col,
+  Flex,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Row,
+  Select,
+  Steps,
+  Typography,
+} from "antd";
+import { useCallback, useState } from "react";
 
 import { bridgeAdministrationError, createBridge, type BridgeAdminSummary } from "../api/bridgeAdministrationApi";
 import {
@@ -83,8 +97,7 @@ export function CreateBridgeDialog({
   const baseReady =
     name.trim() !== "" && packageId !== "" && bridgeTypeId !== "" && validSpanCount(spanCount);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     if (step === "base") {
       if (!baseReady) return;
       setStep("inventory");
@@ -128,150 +141,169 @@ export function CreateBridgeDialog({
     return `将生成 ${summary.total} 个构件 · ${summary.partCount} 个部件`;
   }
 
+  const primaryText = step === "base"
+    ? "下一步：构件台账"
+    : createdBridge ? "重试生成台账" : "创建桥梁并生成台账";
+
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <form
-        className="workspace-dialog create-bridge-wizard-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-bridge-title"
-        onSubmit={(event) => void submit(event)}
-      >
-        <div className="wizard-head">
-          <h2 id="create-bridge-title">添加桥梁</h2>
-          <ol className="wizard-steps">
-            <li className={step === "base" ? "is-current" : ""}>
-              <span className="wizard-step-dot">1</span>基本信息
-            </li>
-            <li className={step === "inventory" ? "is-current" : ""}>
-              <span className="wizard-step-dot">2</span>构件台账
-            </li>
-          </ol>
-        </div>
-
-        <div className="wizard-body">
-          {step === "base" ? (
-            <>
-              <div className="bridge-form-grid">
-                {/* 有多个规范包时才出现，且必须排在桥型前面——桥型的可选项由它决定。 */}
-                {catalogs.length > 1 ? (
-                  <label className="span-2">
-                    <span className="field-label">初始台账规范来源</span>
-                    <select value={packageId} onChange={(event) => changePackage(event.target.value)}>
-                      <option value="">请选择规范</option>
-                      {catalogs.map((item) => (
-                        <option key={item.package.id} value={item.package.id}>
-                          {item.package.standard_code} · {item.package.standard_name} · v{item.package.package_version}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-                <label className="is-required">
-                  <span className="field-label">桥梁名称</span>
-                  <input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} />
-                </label>
-                <label>
-                  <span className="field-label">桥梁规模</span>
-                  <select aria-label="桥梁规模" value={scale} onChange={(event) => setScale(event.target.value)}>
-                    <option value="">未填写</option>
-                    <option value="大桥">大桥</option>
-                    <option value="中桥">中桥</option>
-                    <option value="小桥">小桥</option>
-                  </select>
-                </label>
-                <label>
-                  <span className="field-label">路线编号</span>
-                  <input maxLength={100} value={routeNumber} onChange={(event) => setRouteNumber(event.target.value)} />
-                </label>
-                <label>
-                  <span className="field-label">路线名称</span>
-                  <input maxLength={200} value={routeName} onChange={(event) => setRouteName(event.target.value)} />
-                </label>
-                <label>
-                  <span className="field-label">行政区划</span>
-                  <input maxLength={200} value={region} onChange={(event) => setRegion(event.target.value)} />
-                </label>
-                <label>
-                  <span className="field-label">桩号</span>
-                  <input maxLength={100} value={station} onChange={(event) => setStation(event.target.value)} />
-                </label>
-                <label className="is-required">
-                  <span className="field-label">桥型</span>
-                  <select
-                    value={bridgeTypeId}
-                    disabled={!catalog}
-                    onChange={(event) => changeBridgeType(event.target.value)}
-                  >
-                    <option value="">请选择桥型</option>
-                    {catalog?.bridge_types.map((item) => (
-                      <option key={item.id} value={item.id}>{item.name}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="is-required">
-                  <span className="field-label">跨数</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={1000}
-                    step={1}
-                    value={spanCount}
-                    onChange={(event) => setSpanCount(event.target.value)}
-                  />
-                </label>
-                <label>
-                  <span className="field-label">状态</span>
-                  <select value={status} onChange={(event) => setStatus(event.target.value)}>
-                    <option>在用</option><option>停用</option><option>拆除</option>
-                  </select>
-                </label>
-              </div>
-
-              {standardsLoading ? <p className="wizard-standard-note">正在加载规范…</p> : null}
-              {standardsError ? <p className="error-text" role="alert">{standardsError}</p> : null}
-              {!standardsLoading && !standardsError && catalogs.length === 0 ? (
-                <p className="wizard-standard-note">当前没有可用的技术评定规范包。</p>
-              ) : null}
-              {catalog ? (
-                <p className="wizard-standard-note">
-                  初始台账规范 <b>{catalog.package.standard_code} · {catalog.package.standard_name}</b>
-                  ——这里选择的规范只用于生成初始构件台账，不会绑定或限制以后检测项目采用的评分规范。
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <BridgeInventoryWizard
-              packageId={packageId}
-              bridgeTypeId={bridgeTypeId}
-              spanCount={Number(spanCount)}
-              selection={selection}
-              onSelectionChange={setSelection}
-              onPlanChange={handlePlanChange}
-            />
-          )}
-        </div>
-
-        <div className="wizard-foot">
-          {error ? <p className="error-text" role="alert">{error}</p> : null}
-          <div className="wizard-foot-row">
-            <p className="wizard-status">{statusText()}</p>
-            <div className="dialog-actions">
-              <button type="button" disabled={busy} onClick={onClose}>取消</button>
+    <Modal
+      open
+      centered
+      width={980}
+      mask={{ closable: false }}
+      // 右上角的叉会和标题栏右侧的步骤条挤在一起；底部已有「取消」，Esc 也能关。
+      closable={false}
+      onCancel={onClose}
+      title={
+        <Flex align="center" justify="space-between" gap={16} wrap>
+          添加桥梁
+          <Steps
+            size="small"
+            current={step === "base" ? 0 : 1}
+            items={[{ title: "基本信息" }, { title: "构件台账" }]}
+            style={{ width: 320 }}
+          />
+        </Flex>
+      }
+      styles={{ body: { maxHeight: "calc(100vh - 240px)", overflowY: "auto", overflowX: "hidden" } }}
+      footer={
+        <Flex vertical gap={8}>
+          {error ? <Alert type="error" showIcon title={error} /> : null}
+          <Flex align="center" justify="space-between" gap={14}>
+            <Typography.Text type="secondary">{statusText()}</Typography.Text>
+            <Flex gap={8}>
+              <Button disabled={busy} onClick={onClose}>取消</Button>
               {step === "inventory" && !createdBridge ? (
-                <button type="button" disabled={busy} onClick={() => setStep("base")}>上一步</button>
+                <Button disabled={busy} onClick={() => setStep("base")}>上一步</Button>
               ) : null}
-              <button
-                type="submit"
-                className="primary-button"
-                disabled={busy || (step === "base" ? !baseReady : !plan)}
+              <Button
+                type="primary"
+                loading={busy}
+                disabled={step === "base" ? !baseReady : !plan}
+                onClick={() => void submit()}
               >
-                {step === "base" ? "下一步：构件台账" : busy ? "正在创建…" : createdBridge ? "重试生成台账" : "创建桥梁并生成台账"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </form>
-    </div>
+                {primaryText}
+              </Button>
+            </Flex>
+          </Flex>
+        </Flex>
+      }
+    >
+      {step === "base" ? (
+        <Form layout="vertical" onFinish={() => void submit()}>
+          <Row gutter={14}>
+            {/* 有多个规范包时才出现，且必须排在桥型前面——桥型的可选项由它决定。 */}
+            {catalogs.length > 1 ? (
+              <Col span={16}>
+                <Form.Item label="初始台账规范来源" htmlFor="create-bridge-package">
+                  <Select
+                    id="create-bridge-package"
+                    placeholder="请选择规范"
+                    value={packageId || undefined}
+                    onChange={changePackage}
+                    options={catalogs.map((item) => ({
+                      value: item.package.id,
+                      label: `${item.package.standard_code} · ${item.package.standard_name} · v${item.package.package_version}`,
+                    }))}
+                  />
+                </Form.Item>
+              </Col>
+            ) : null}
+            <Col span={8}>
+              <Form.Item label="桥梁名称" htmlFor="create-bridge-name" required>
+                <Input id="create-bridge-name" maxLength={200} value={name} onChange={(event) => setName(event.target.value)} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="桥梁规模" htmlFor="create-bridge-scale">
+                <Select
+                  id="create-bridge-scale"
+                  placeholder="未填写"
+                  allowClear
+                  value={scale || undefined}
+                  onChange={(value) => setScale(value ?? "")}
+                  options={["大桥", "中桥", "小桥"].map((value) => ({ value, label: value }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="路线编号" htmlFor="create-bridge-route-number">
+                <Input id="create-bridge-route-number" maxLength={100} value={routeNumber} onChange={(event) => setRouteNumber(event.target.value)} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="路线名称" htmlFor="create-bridge-route-name">
+                <Input id="create-bridge-route-name" maxLength={200} value={routeName} onChange={(event) => setRouteName(event.target.value)} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="行政区划" htmlFor="create-bridge-region">
+                <Input id="create-bridge-region" maxLength={200} value={region} onChange={(event) => setRegion(event.target.value)} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="桩号" htmlFor="create-bridge-station">
+                <Input id="create-bridge-station" maxLength={100} value={station} onChange={(event) => setStation(event.target.value)} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="桥型" htmlFor="create-bridge-type" required>
+                <Select
+                  id="create-bridge-type"
+                  placeholder="请选择桥型"
+                  value={bridgeTypeId || undefined}
+                  disabled={!catalog}
+                  onChange={changeBridgeType}
+                  options={catalog?.bridge_types.map((item) => ({ value: item.id, label: item.name }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="跨数" htmlFor="create-bridge-spans" required>
+                {/* 不设 min/max：越界时由「下一步」保持禁用，不在失焦时悄悄改成边界值。 */}
+                <InputNumber
+                  id="create-bridge-spans"
+                  style={{ width: "100%" }}
+                  precision={0}
+                  value={spanCount === "" ? null : Number(spanCount)}
+                  onChange={(value) => setSpanCount(value === null ? "" : String(value))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="状态" htmlFor="create-bridge-status">
+                <Select
+                  id="create-bridge-status"
+                  value={status}
+                  onChange={setStatus}
+                  options={["在用", "停用", "拆除"].map((value) => ({ value, label: value }))}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {standardsLoading ? <Typography.Text type="secondary">正在加载规范…</Typography.Text> : null}
+          {standardsError ? <Alert type="error" showIcon title={standardsError} /> : null}
+          {!standardsLoading && !standardsError && catalogs.length === 0 ? (
+            <Typography.Text type="secondary">当前没有可用的技术评定规范包。</Typography.Text>
+          ) : null}
+          {catalog ? (
+            <Typography.Text type="secondary">
+              初始台账规范 <Typography.Text strong>{catalog.package.standard_code} · {catalog.package.standard_name}</Typography.Text>
+              ——这里选择的规范只用于生成初始构件台账，不会绑定或限制以后检测项目采用的评分规范。
+            </Typography.Text>
+          ) : null}
+        </Form>
+      ) : (
+        <BridgeInventoryWizard
+          packageId={packageId}
+          bridgeTypeId={bridgeTypeId}
+          spanCount={Number(spanCount)}
+          selection={selection}
+          onSelectionChange={setSelection}
+          onPlanChange={handlePlanChange}
+        />
+      )}
+    </Modal>
   );
 }

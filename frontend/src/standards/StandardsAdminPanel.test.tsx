@@ -34,7 +34,7 @@ describe("StandardsAdminPanel", () => {
   it("lets an administrator disable a healthy package", async () => {
     vi.mocked(setStandardPackageEnabled).mockResolvedValue({ ...technical, is_enabled: false });
     render(<StandardsAdminPanel onClose={vi.fn()} />);
-    await userEvent.click(await screen.findByRole("button", { name: "停用" }));
+    await userEvent.click(await screen.findByRole("button", { name: /^停\s?用$/ }));
     expect(setStandardPackageEnabled).toHaveBeenCalledWith(expect.any(String), "technical-1", false);
     expect(await screen.findByText("已停用")).toBeInTheDocument();
   });

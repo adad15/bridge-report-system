@@ -1,3 +1,6 @@
+import { Button, Empty, Flex, Spin, Tag, Tree, Typography, theme, type TreeDataNode } from "antd";
+import { useMemo } from "react";
+
 import type { RatingTreeNodeSummary } from "../api/ratingTreeApi";
 import { ratingTreeDisplayLabel } from "./ratingTreeLabels";
 
@@ -12,23 +15,17 @@ interface RatingTreeNavigatorProps {
   onSelect: (node: RatingTreeNodeSummary) => void;
 }
 
-function isLeaf(node: RatingTreeNodeSummary): boolean {
-  return node.node_type === "defect";
+function ScoringTag({ node }: { node: RatingTreeNodeSummary }) {
+  if (!node.is_selectable) return null;
+  return node.is_scoring ? <Tag color="green">计分</Tag> : <Tag color="gold">暂不计分</Tag>;
 }
 
-function nodeLabel(node: RatingTreeNodeSummary) {
-  return (
-    <>
-      <span>{ratingTreeDisplayLabel(node)}</span>
-      {node.is_selectable && (
-        <span className={node.is_scoring ? "rating-tree-score-badge" : "rating-tree-placeholder-badge"}>
-          {node.is_scoring ? "计分" : "暂不计分"}
-        </span>
-      )}
-    </>
-  );
-}
-
+/**
+ * 评定树目录。
+ *
+ * 子节点按需加载：展开时由页面去取下一层，取回来之前这一层先空着。树本身只管显示和
+ * 回调，展开、选中、加载中的状态都在页面上，换页回来才能原样恢复。
+ */
 export function RatingTreeNavigator({
   roots,
   childrenByParent,
@@ -39,67 +36,96 @@ export function RatingTreeNavigator({
   onToggle,
   onSelect,
 }: RatingTreeNavigatorProps) {
+  const { token } = theme.useToken();
+
+  const nodeById = useMemo(() => {
+    const map = new Map<string, RatingTreeNodeSummary>();
+    for (const node of roots) map.set(node.id, node);
+    for (const children of childrenByParent.values()) {
+      for (const node of children) map.set(node.id, node);
+    }
+    return map;
+  }, [roots, childrenByParent]);
+
+  const treeData = useMemo(() => {
+    const build = (nodes: RatingTreeNodeSummary[]): TreeDataNode[] =>
+      nodes.map((node) => {
+        const children = childrenByParent.get(node.id);
+        return {
+          key: node.id,
+          // 字符串标题会落到节点的 title 属性上，悬停能看到完整名称。
+          title: ratingTreeDisplayLabel(node),
+          isLeaf: node.node_type === "defect",
+          children: expandedNodeIds.has(node.id) && children ? build(children) : undefined,
+        };
+      });
+    return build(roots);
+  }, [roots, childrenByParent, expandedNodeIds]);
+
   if (searchResults !== null) {
     if (searchResults.length === 0) {
-      return <p className="rating-tree-empty">没有找到匹配节点。</p>;
+      return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到匹配节点。" />;
     }
     return (
-      <ul className="rating-tree-search-results" aria-label="评定树搜索结果">
+      <Flex vertical gap={2} role="list" aria-label="评定树搜索结果">
         {searchResults.map((node) => (
-          <li key={node.id}>
-            <button
-              type="button"
-              className={node.id === selectedNodeId ? "rating-tree-search-item selected" : "rating-tree-search-item"}
+          <div role="listitem" key={node.id}>
+            <Button
+              type="text"
+              block
               onClick={() => onSelect(node)}
+              style={{
+                height: "auto",
+                padding: "6px 10px",
+                textAlign: "left",
+                background: node.id === selectedNodeId ? token.controlItemBgActive : undefined,
+              }}
             >
-              <span className="rating-tree-search-path">
-                {node.path?.map((item) => ratingTreeDisplayLabel(item)).join(" / ") ??
-                  ratingTreeDisplayLabel(node)}
-              </span>
-              <span className="rating-tree-search-name">{nodeLabel(node)}</span>
-            </button>
-          </li>
+              <Flex vertical align="start" style={{ width: "100%", minWidth: 0 }}>
+                <Typography.Text type="secondary" ellipsis style={{ maxWidth: "100%" }}>
+                  {node.path?.map((item) => ratingTreeDisplayLabel(item)).join(" / ") ??
+                    ratingTreeDisplayLabel(node)}
+                </Typography.Text>
+                <Flex align="center" gap={6}>
+                  <span>{ratingTreeDisplayLabel(node)}</span>
+                  <ScoringTag node={node} />
+                </Flex>
+              </Flex>
+            </Button>
+          </div>
         ))}
-      </ul>
+      </Flex>
     );
   }
 
-  const renderNodes = (nodes: RatingTreeNodeSummary[], depth: number) => (
-    <ul className={depth === 0 ? "rating-tree-list root" : "rating-tree-list"}>
-      {nodes.map((node) => {
-        const expanded = expandedNodeIds.has(node.id);
-        const loading = loadingNodeIds.has(node.id);
-        const children = childrenByParent.get(node.id);
-        return (
-          <li key={node.id}>
-            <div
-              className={node.id === selectedNodeId ? "rating-tree-row selected" : "rating-tree-row"}
-              style={{ paddingInlineStart: `${10 + depth * 18}px` }}
-            >
-              {isLeaf(node) ? (
-                <span className="rating-tree-leaf-marker" aria-hidden="true">•</span>
-              ) : (
-                <button
-                  type="button"
-                  className="rating-tree-toggle"
-                  aria-label={expanded ? `收起${node.display_name}` : `展开${node.display_name}`}
-                  aria-expanded={expanded}
-                  aria-busy={loading || undefined}
-                  onClick={() => onToggle(node)}
-                />
-              )}
-              <button type="button" className="rating-tree-node-button" onClick={() => onSelect(node)}>
-                {nodeLabel(node)}
-              </button>
-            </div>
-            {expanded && children !== undefined && renderNodes(children, depth + 1)}
-          </li>
-        );
-      })}
-    </ul>
-  );
+  if (roots.length === 0) {
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前版本没有可显示的节点。" />;
+  }
 
-  return roots.length === 0
-    ? <p className="rating-tree-empty">当前版本没有可显示的节点。</p>
-    : renderNodes(roots, 0);
+  return (
+    <Tree
+      blockNode
+      treeData={treeData}
+      expandedKeys={[...expandedNodeIds]}
+      selectedKeys={selectedNodeId ? [selectedNodeId] : []}
+      onExpand={(_keys, { node }) => {
+        const summary = nodeById.get(String(node.key));
+        if (summary) onToggle(summary);
+      }}
+      onSelect={(_keys, { node }) => {
+        const summary = nodeById.get(String(node.key));
+        if (summary) onSelect(summary);
+      }}
+      titleRender={(data) => {
+        const summary = nodeById.get(String(data.key));
+        return (
+          <Flex align="center" gap={6} component="span">
+            <span>{String(data.title)}</span>
+            {summary ? <ScoringTag node={summary} /> : null}
+            {loadingNodeIds.has(String(data.key)) ? <Spin size="small" /> : null}
+          </Flex>
+        );
+      }}
+    />
+  );
 }

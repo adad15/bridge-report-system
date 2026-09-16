@@ -1,3 +1,4 @@
+import { Alert, Button, Card, Flex, Form, Input, Modal, Progress, Typography } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -133,78 +134,109 @@ export function DeleteBridgesDialog({ bridgeIds, onClose, onSelectionChanged, on
   }
 
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <section className="workspace-dialog delete-bridges-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-bridges-title">
-        <h2 id="delete-bridges-title">永久删除桥梁档案</h2>
-        {!preview && !error && !result ? <p>正在核对删除影响…</p> : null}
+    <Modal
+      open
+      centered
+      width={760}
+      title="永久删除桥梁档案"
+      mask={{ closable: false }}
+      onCancel={onClose}
+      styles={{ body: { maxHeight: "calc(100vh - 220px)", overflowY: "auto", overflowX: "hidden" } }}
+      footer={[
+        <Button key="close" disabled={busy} onClick={onClose}>{result ? "关闭" : "取消"}</Button>,
+        !result ? (
+          <Button key="delete" type="primary" danger loading={busy} disabled={!canDelete} onClick={() => void submit()}>
+            永久删除
+          </Button>
+        ) : null,
+      ]}
+    >
+      <Flex vertical gap={12}>
+        {!preview && !error && !result ? <Typography.Text type="secondary">正在核对删除影响…</Typography.Text> : null}
         {preview && !result ? (
           <>
-            <div className="danger-callout">
-              <strong>此操作不可撤销</strong>
-              <p>将逐座永久删除所选桥梁的全部年度、导入、病害、评分、独占归档文件和临时来源文件。</p>
-            </div>
+            <Alert
+              type="error"
+              role="note"
+              title="此操作不可撤销"
+              description="将逐座永久删除所选桥梁的全部年度、导入、病害、评分、独占归档文件和临时来源文件。"
+            />
             {preview.bridges.map((item) => (
-              <article className="bridge-delete-impact" key={item.bridge.id}>
-                <h3>{item.bridge.system_number}　{item.bridge.bridge_name}</h3>
-                <p>
-                  年度 {item.counts.inspection_years} · 版本 {item.counts.inspection_versions} ·
-                  导入 {item.counts.import_records} · 构件 {item.counts.bridge_components} ·
-                  病害 {item.counts.defect_observations} · 正式文件 {item.counts.archived_files_to_delete} ·
-                  临时文件 {item.counts.temporary_source_files_to_delete}
-                </p>
-                {item.active_edit_locks.map((lock) => (
-                  <p className="lock-warning" key={lock.import_record_id}>{lock.owner_display_name} 正在编辑，本次不能删除</p>
-                ))}
-              </article>
+              <Card key={item.bridge.id} size="small" title={`${item.bridge.system_number}　${item.bridge.bridge_name}`}>
+                <Flex vertical gap={8}>
+                  <Typography.Text>
+                    年度 {item.counts.inspection_years} · 版本 {item.counts.inspection_versions} ·
+                    导入 {item.counts.import_records} · 构件 {item.counts.bridge_components} ·
+                    病害 {item.counts.defect_observations} · 正式文件 {item.counts.archived_files_to_delete} ·
+                    临时文件 {item.counts.temporary_source_files_to_delete}
+                  </Typography.Text>
+                  {item.active_edit_locks.map((lock) => (
+                    <Alert
+                      key={lock.import_record_id}
+                      type="warning"
+                      showIcon
+                      title={`${lock.owner_display_name} 正在编辑，本次不能删除`}
+                    />
+                  ))}
+                </Flex>
+              </Card>
             ))}
-            <label>删除原因<textarea maxLength={4000} value={reason} onChange={(event) => setReason(event.target.value)} /></label>
-            <label>请输入“{preview.confirmation_text}”确认<input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></label>
+            <Form layout="vertical" requiredMark={false}>
+              <Form.Item label="删除原因" htmlFor="delete-bridges-reason">
+                <Input.TextArea
+                  id="delete-bridges-reason"
+                  maxLength={4000}
+                  autoSize={{ minRows: 2, maxRows: 5 }}
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                />
+              </Form.Item>
+              <Form.Item label={`请输入“${preview.confirmation_text}”确认`} htmlFor="delete-bridges-confirmation">
+                <Input
+                  id="delete-bridges-confirmation"
+                  autoComplete="off"
+                  value={confirmation}
+                  onChange={(event) => setConfirmation(event.target.value)}
+                />
+              </Form.Item>
+            </Form>
           </>
         ) : null}
         {result ? (
-          <div>
-            <h3>已处理</h3>
+          <Flex vertical gap={8}>
+            <Typography.Title level={5}>已处理</Typography.Title>
             {result.results.map((item) => {
               const bar = item.status === "deleted" && item.audit_id ? progress[item.audit_id] : undefined;
               return (
-                <div className="bridge-delete-result" key={item.bridge_id}>
-                  <p>
+                <Flex vertical gap={4} key={item.bridge_id}>
+                  <Typography.Text type={item.status === "deleted" ? "success" : "danger"}>
                     {item.status === "deleted" ? "✓" : "✗"} {item.system_number} {item.bridge_name}：
                     {item.status === "deleted" ? "业务档案已完整删除" : item.message}
-                  </p>
+                  </Typography.Text>
                   {bar && bar.total > 0 ? (
-                    <div className="cleanup-progress">
-                      <div
-                        className="cleanup-progress-track"
-                        role="progressbar"
+                    <>
+                      <Progress
+                        size="small"
+                        showInfo={false}
+                        percent={Math.round((bar.completed / bar.total) * 100)}
                         aria-label={`${item.bridge_name} 归档文件清理进度`}
-                        aria-valuemin={0}
                         aria-valuemax={bar.total}
                         aria-valuenow={bar.completed}
-                      >
-                        <div
-                          className="cleanup-progress-fill"
-                          style={{ width: `${Math.round((bar.completed / bar.total) * 100)}%` }}
-                        />
-                      </div>
-                      <span className="cleanup-progress-label">
+                      />
+                      <Typography.Text type="secondary">
                         {bar.done
                           ? `归档文件已全部清理（共 ${bar.total} 个）`
                           : `已清理 ${bar.completed} / ${bar.total}，剩余 ${bar.pending} 个由后台继续清理`}
-                      </span>
-                    </div>
+                      </Typography.Text>
+                    </>
                   ) : null}
-                </div>
+                </Flex>
               );
             })}
-          </div>
+          </Flex>
         ) : null}
-        {error ? <p className="error-text" role="alert">{error}</p> : null}
-        <div className="dialog-actions">
-          <button type="button" disabled={busy} onClick={onClose}>{result ? "关闭" : "取消"}</button>
-          {!result ? <button className="danger-button" type="button" disabled={!canDelete} onClick={() => void submit()}>{busy ? "正在删除…" : "永久删除"}</button> : null}
-        </div>
-      </section>
-    </div>
+        {error ? <Alert type="error" showIcon title={error} /> : null}
+      </Flex>
+    </Modal>
   );
 }

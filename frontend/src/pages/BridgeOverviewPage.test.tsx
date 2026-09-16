@@ -68,7 +68,7 @@ describe("BridgeOverviewPage", () => {
     render(<MemoryRouter><BridgeOverviewPage /></MemoryRouter>);
 
     // findByText 命中的是 <strong>，整句在它的父段落上。
-    const line = (await screen.findByText(/桥面系·桥面铺装/)).closest("p");
+    const line = (await screen.findByText(/桥面系·桥面铺装/)).parentElement;
     expect(line).toHaveTextContent(
       "2025 年记录病害 4 条，为横向裂缝 3 条、网状裂缝 1 条；"
       + "2026 年记录 7 条，为横向裂缝 4 条、坑槽 2 条、网状裂缝 1 条。"
@@ -84,7 +84,7 @@ describe("BridgeOverviewPage", () => {
     expect(summary).toHaveTextContent("增加 3 条、减少 0 条，净增 3 条");
     expect(summary).toHaveTextContent("2 个构件与上年持平");
     // 类型汇总必须含持平构件，否则"桥面铺装 2026 年 7 条"这句话本身就是错的。
-    expect((await screen.findByText(/桥面系·桥面铺装/)).closest("p")).toHaveTextContent("3 个构件");
+    expect((await screen.findByText(/桥面系·桥面铺装/)).parentElement).toHaveTextContent("3 个构件");
   });
 
   // 条数统计不等于病害身份匹配，口径必须写在界面上。

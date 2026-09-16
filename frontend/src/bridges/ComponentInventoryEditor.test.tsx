@@ -134,7 +134,7 @@ describe("ComponentInventoryEditor", () => {
     // 左侧分类来自映射的 structure_part，顺序与向导一致。
     expect((await screen.findAllByText("上部结构")).length).toBeGreaterThan(0);
 
-    const listPanel = screen.getByRole("heading", { name: "构件列表" }).closest("section") as HTMLElement;
+    const listPanel = screen.getByRole("region", { name: "构件列表" });
     expect(within(listPanel).getByRole("columnheader", { name: "现场名称" })).toBeInTheDocument();
     expect(within(listPanel).getByRole("columnheader", { name: "规范映射" })).toBeInTheDocument();
     expect(await within(listPanel).findByRole("link", { name: "查看档案" }))
@@ -200,7 +200,7 @@ describe("ComponentInventoryEditor", () => {
 
   it("keeps internal component ids hidden and referenced entries deactivate-only", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
-    await userEvent.click(await screen.findByRole("button", { name: "查看构件 主梁" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: /^主梁/ }));
     await userEvent.click(await screen.findByRole("button", { name: "编辑" }));
     const numberInput = await screen.findByLabelText("构件编号 1-1#");
     const row = numberInput.closest("tr") as HTMLElement;
@@ -208,10 +208,11 @@ describe("ComponentInventoryEditor", () => {
 
     // 被引用的构件只能停用、不能删除；停用与删除都收在"更多"里。
     await userEvent.click(within(row).getByLabelText("更多操作 1-1#"));
-    expect(within(row).queryByRole("button", { name: "删除" })).not.toBeInTheDocument();
+    const deactivate = await screen.findByRole("menuitem", { name: "停用" });
+    expect(screen.queryByRole("menuitem", { name: "删除" })).not.toBeInTheDocument();
     // 停用原因不再每行常驻，点了"停用"才问。
     expect(within(row).queryByLabelText("停用原因 1-1#")).not.toBeInTheDocument();
-    await userEvent.click(within(row).getByRole("button", { name: "停用" }));
+    await userEvent.click(deactivate);
 
     expect(within(row).getByRole("button", { name: "确认停用" })).toBeDisabled();
     await userEvent.type(within(row).getByLabelText("停用原因 1-1#"), "构件已拆换");
@@ -221,16 +222,16 @@ describe("ComponentInventoryEditor", () => {
   it("centralizes unresolved mappings and confirms an existing generated mapping", async () => {
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
     expect(await screen.findByText(/确认前还需处理 1 项/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "查看构件 主梁" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /^主梁/ }));
     // 映射相关动作收进了编辑态的"更多"。
     await userEvent.click(await screen.findByRole("button", { name: "编辑" }));
     await userEvent.click(await screen.findByLabelText("更多操作 1-1#"));
-    await userEvent.click(await screen.findByRole("button", { name: "确认映射" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "确认映射" }));
     expect(setComponentInventoryMapping).toHaveBeenCalledWith(expect.any(String), "revision-1", "entry-1", expect.objectContaining({
       standard_component_category_id: "girder",
       mapping_source: "用户确认",
     }));
-    expect(await screen.findByText(/规范映射均已确认/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText(/确认前还需处理/)).not.toBeInTheDocument());
   });
 
   it("confirms pending mappings by group and in one click", async () => {
@@ -242,7 +243,7 @@ describe("ComponentInventoryEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: "确认该组映射" }));
     expect(confirmPendingComponentInventoryMappings).toHaveBeenCalledWith(
       expect.any(String), "revision-1", "主梁");
-    expect(await screen.findByText(/规范映射均已确认/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText(/确认前还需处理/)).not.toBeInTheDocument());
 
     vi.mocked(fetchInventorySummary).mockResolvedValue(summary);
     vi.mocked(confirmPendingComponentInventoryMappings).mockClear();
@@ -259,13 +260,12 @@ describe("ComponentInventoryEditor", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     // 第一类默认选中，构件直接显示在右侧列表中。
-    const listPanel = screen.getByRole("heading", { name: "构件列表" }).closest("section") as HTMLElement;
+    const listPanel = screen.getByRole("region", { name: "构件列表" });
     expect(await within(listPanel).findByText("1-1#")).toBeInTheDocument();
 
     vi.mocked(searchInventoryEntries).mockResolvedValue({ total: 1, entries: [entry] });
     await userEvent.type(screen.getByLabelText("搜索构件"), "1-1");
-    const results = await screen.findByRole("heading", { name: "搜索结果" });
-    const section = results.closest("section") as HTMLElement;
+    const section = await screen.findByRole("region", { name: "搜索结果" });
     // 搜索防抖 250ms 后才发请求，结果是异步到达的。
     expect(await within(section).findByText("1-1#")).toBeInTheDocument();
     expect(await screen.findByText(/匹配 1 条/)).toBeInTheDocument();
@@ -287,7 +287,7 @@ describe("ComponentInventoryEditor", () => {
       async (_base, _revisionId, _group, page) => pageOf(page));
 
     render(<ComponentInventoryEditor bridgeId="bridge-1" />);
-    const listPanel = (await screen.findByRole("heading", { name: "构件列表" })).closest("section") as HTMLElement;
+    const listPanel = await screen.findByRole("region", { name: "构件列表" });
     expect(await within(listPanel).findByText("1#")).toBeInTheDocument();
     expect(within(listPanel).queryByText("21#")).not.toBeInTheDocument();
     expect(screen.getAllByText("共 120 条")).toHaveLength(2);
@@ -345,10 +345,11 @@ describe("ComponentInventoryEditor", () => {
     expect(fetchInventoryGroupEntries).toHaveBeenCalledTimes(1);
 
     await userEvent.click(await screen.findByRole("button", { name: "编辑" }));
-    await userEvent.click(await screen.findByRole("button", { name: "确认映射" }));
+    await userEvent.click(await screen.findByLabelText("更多操作 1-1#"));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "确认映射" }));
 
     // 汇总换成写响应里的那份，界面立刻反映"全部已确认"。
-    expect(await screen.findByText(/规范映射均已确认/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText(/确认前还需处理/)).not.toBeInTheDocument());
     // 当前分组被重取，而不是靠本地打补丁。
     await waitFor(() => expect(fetchInventoryGroupEntries).toHaveBeenCalledTimes(2));
     // 全程没有再拉一遍汇总——它是随写响应回来的。

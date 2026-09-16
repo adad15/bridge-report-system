@@ -1,5 +1,5 @@
 import { FileTextOutlined, InfoCircleOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button } from "antd";
+import { Alert, Button, Card, Col, Flex, Grid, Input, Result, Row, Skeleton, Spin, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -20,6 +20,7 @@ import {
   type StandardCatalog,
 } from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
+import { PageHeader } from "../design-system";
 import { RatingTreeNavigator } from "../rating-tree/RatingTreeNavigator";
 import { RatingTreeNodeDetailView } from "./RatingTreeNodeDetailView";
 import {
@@ -28,10 +29,19 @@ import {
   writeLastRatingTreeVersionId,
   writeRatingTreeViewState,
 } from "../rating-tree/ratingTreeViewState";
-import "../rating-tree/ratingTreePage.css";
+
+/*
+ * 宽屏上两栏吃满顶栏以下的视口，目录和详情各自滚动，页面本身不滚。
+ * 196px = 顶栏 68 + 内容区上下留白 30 与 44 + 页头 40 + 页头下间距 14，改外壳尺寸时一起核对。
+ */
+const kPanelHeight = "max(520px, calc(100dvh - 196px))";
 
 export function RatingTreePage() {
   const { versionId } = useParams<{ versionId: string }>();
+  // 窄屏两栏上下叠放，交还给整页滚动。
+  const stacked = Grid.useBreakpoint().lg === false;
+  const panelRowStyle = stacked ? undefined : { height: kPanelHeight };
+  const panelColStyle = stacked ? undefined : { height: "100%" };
   const [searchParams] = useSearchParams();
   const linkedNodeId = searchParams.get("node");
   const navigate = useNavigate();
@@ -343,111 +353,104 @@ export function RatingTreePage() {
     ? []
     : childrenByParent.get(selectedNode.id) ?? [];
 
-  // 骨架和真正的树共用 .rating-tree-page / .rating-tree-workspace 这套外框类，
-  // 加载完成时只有内容换掉，页头、分栏、圆角都在原地——原来这里是一张 status-panel
-  // 小卡片，尺寸和树差着一整屏。
+  // 骨架和真正的树共用同一套两栏卡片，加载完成时只有内容换掉，页头、分栏都在原地。
   if (loading) {
     return (
-      <section className="rating-tree-page rating-tree-page-skeleton" aria-busy="true">
-        <header className="rating-tree-page-header">
-          <div className="rating-tree-title-line">
-            <span className="rating-tree-skeleton-line rating-tree-skeleton-title" />
-            <span className="workspace-heading-divider" aria-hidden="true" />
-            <span className="rating-tree-skeleton-line rating-tree-skeleton-meta" />
-          </div>
-        </header>
-        <div className="rating-tree-workspace">
-          <aside className="rating-tree-sidebar">
-            <div className="rating-tree-sidebar-title"><h2>规则目录</h2></div>
-            <div className="rating-tree-search">
-              <span>搜索节点或病害</span>
-              <span className="rating-tree-skeleton-line rating-tree-skeleton-input" />
-            </div>
-            <div className="rating-tree-navigation-scroll">
-              <ul className="rating-tree-list">
-                {Array.from({ length: 9 }, (_, index) => (
-                  <li key={index} className="rating-tree-row">
-                    <span className="rating-tree-skeleton-line" />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </aside>
-          <main className="rating-tree-detail-pane">
-            <p className="rating-tree-detail-state">正在加载评定树…</p>
-          </main>
-        </div>
-      </section>
+      <Flex vertical gap={14} aria-busy="true">
+        <Skeleton.Input active size="large" style={{ width: 320 }} />
+        <Row gutter={[14, 14]} style={panelRowStyle}>
+          <Col xs={24} lg={9} xxl={7} style={panelColStyle}>
+            <Card title="规则目录" style={{ height: "100%" }}><Skeleton active paragraph={{ rows: 9 }} /></Card>
+          </Col>
+          <Col xs={24} lg={15} xxl={17} style={panelColStyle}>
+            <Card style={{ height: "100%" }}>
+              <Flex align="center" gap={8}>
+                <Spin />
+                <Typography.Text type="secondary">正在加载评定树…</Typography.Text>
+              </Flex>
+            </Card>
+          </Col>
+        </Row>
+      </Flex>
     );
   }
   if (error && version === null) {
-    return <section className="status-panel"><p className="error-text">{error}</p></section>;
+    return <Card><Result status="error" title="评定树加载失败" subTitle={error} /></Card>;
   }
   if (version === null) return null;
 
   return (
-    <section className="rating-tree-page">
-      <header className="rating-tree-page-header">
-        <div className="rating-tree-page-heading">
-          <div className="rating-tree-title-line">
-            <h1>{version.tree_name}</h1>
-            <span className="workspace-heading-divider" aria-hidden="true" />
-            <p>版本 {version.package_version} <span>·</span> {version.node_count} 个节点 <span>·</span> 已发布只读</p>
-          </div>
-        </div>
-        <div className="rating-tree-header-actions">
-          <div className="rating-tree-version-chip" title={version.tree_content_checksum}>
-            <InfoCircleOutlined aria-hidden="true" /> 规则版本不可编辑
-          </div>
-          <Button icon={<FileTextOutlined />} onClick={() => navigate("/bridges?standards=1")}>查看规范信息</Button>
-        </div>
-      </header>
-      {error && <div className="rating-tree-inline-error">{error}</div>}
-      <div className="rating-tree-workspace">
-        <aside className="rating-tree-sidebar">
-          <div className="rating-tree-sidebar-title">
-            <h2>规则目录</h2>
-            <span>{version.node_count} 个节点</span>
-          </div>
-          <label className="rating-tree-search">
-            <span>搜索节点或病害</span>
-            <span className="rating-tree-search-control">
-              <SearchOutlined aria-hidden="true" />
-              <input
+    <Flex vertical gap={14}>
+      <PageHeader
+        title={version.tree_name}
+        description={`版本 ${version.package_version} · ${version.node_count} 个节点 · 已发布只读`}
+        extra={
+          <>
+            <Tag icon={<InfoCircleOutlined />} color="blue" title={version.tree_content_checksum}>规则版本不可编辑</Tag>
+            <Button icon={<FileTextOutlined />} onClick={() => navigate("/bridges?standards=1")}>查看规范信息</Button>
+          </>
+        }
+      />
+      {error ? <Alert type="error" showIcon title={error} /> : null}
+      <Row gutter={[14, 14]} style={panelRowStyle}>
+        <Col xs={24} lg={9} xxl={7} style={panelColStyle}>
+          <Card
+            title="规则目录"
+            extra={<Typography.Text type="secondary">{version.node_count} 个节点</Typography.Text>}
+            style={{ height: "100%" }}
+            styles={{
+              root: { display: "flex", flexDirection: "column" },
+              body: { flex: 1, minHeight: 0 },
+            }}
+          >
+            <Flex vertical gap={12} style={{ height: "100%" }}>
+              <Input
                 type="search"
+                allowClear
+                aria-label="搜索节点或病害"
+                prefix={<SearchOutlined aria-hidden="true" />}
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="例如：渗水、裂缝、支座"
               />
-            </span>
-          </label>
-          <div className="rating-tree-navigation-scroll">
-            <RatingTreeNavigator
-              roots={navigationRoots}
-              childrenByParent={childrenByParent}
-              expandedNodeIds={expandedNodeIds}
-              selectedNodeId={selectedNodeId}
-              loadingNodeIds={loadingNodeIds}
-              searchResults={searchResults}
-              onToggle={(node) => void toggleNode(node)}
-              onSelect={selectNode}
+              {/* 目录独立滚动，右侧详情不跟着一起跑。 */}
+              <div style={stacked ? { maxHeight: 480, overflow: "auto" } : { flex: 1, minHeight: 0, overflow: "auto" }}>
+                <RatingTreeNavigator
+                  roots={navigationRoots}
+                  childrenByParent={childrenByParent}
+                  expandedNodeIds={expandedNodeIds}
+                  selectedNodeId={selectedNodeId}
+                  loadingNodeIds={loadingNodeIds}
+                  searchResults={searchResults}
+                  onToggle={(node) => void toggleNode(node)}
+                  onSelect={selectNode}
+                />
+              </div>
+            </Flex>
+          </Card>
+        </Col>
+        <Col xs={24} lg={15} xxl={17} style={panelColStyle}>
+          <Card
+            style={{ height: "100%" }}
+            styles={{
+              root: { display: "flex", flexDirection: "column" },
+              body: { flex: 1, minHeight: 0, overflowY: "auto" },
+            }}
+          >
+            <RatingTreeNodeDetailView
+              version={version}
+              node={selectedNode}
+              children={selectedChildren}
+              catalog={scopeCatalog}
+              loading={detailLoading}
+              childrenLoading={
+                selectedNodeId !== null && loadingNodeIds.has(selectedNodeId)
+              }
+              onSelectChild={selectNode}
             />
-          </div>
-        </aside>
-        <main className="rating-tree-detail-pane">
-          <RatingTreeNodeDetailView
-            version={version}
-            node={selectedNode}
-            children={selectedChildren}
-            catalog={scopeCatalog}
-            loading={detailLoading}
-            childrenLoading={
-              selectedNodeId !== null && loadingNodeIds.has(selectedNodeId)
-            }
-            onSelectChild={selectNode}
-          />
-        </main>
-      </div>
-    </section>
+          </Card>
+        </Col>
+      </Row>
+    </Flex>
   );
 }

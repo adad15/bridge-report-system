@@ -17,6 +17,9 @@ export interface BridgeProfile {
   route_name: string | null;
   administrative_region: string | null;
   station_mark: string | null;
+  /** 桥位经度，WGS-84。地图底图用的 GCJ-02 在画图前转，接口上一律是 WGS-84。 */
+  longitude: number | null;
+  latitude: number | null;
 
   bridge_type: string | null;
   bridge_scale: string | null;
@@ -80,8 +83,6 @@ export function bridgeProfileError(error: unknown): string {
   if (!(error instanceof ApiError)) return "操作失败，请稍后重试。";
   const messages: Record<string, string> = {
     bridge_not_found: "桥梁不存在，可能已经被删除。",
-    bridge_profile_measure_out_of_range:
-      "梁片数、梁高和宽度必须大于 0，斜交角要在 0 到 180 度之间。",
     forbidden: "只有管理员可以修改桥梁档案。",
   };
   return messages[error.code] ?? error.message;

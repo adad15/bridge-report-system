@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ArchiveObservation } from "../api/componentArchiveApi";
+import { chooseOption } from "../test/antd";
 import { RebindDialog } from "./RebindDialog";
 
 function makeObservation(overrides: Partial<ArchiveObservation> = {}): ArchiveObservation {
@@ -65,7 +66,7 @@ describe("RebindDialog", () => {
       <RebindDialog observation={makeObservation()} threads={threads} onClose={vi.fn()} onSuccess={onSuccess} />
     );
 
-    fireEvent.change(screen.getByLabelText("目标线索"), { target: { value: "thread-2" } });
+    await chooseOption(screen.getByLabelText("目标线索"), "横向裂缝｜底板跨中");
     const submit = screen.getByRole("button", { name: "确认绑定" });
     expect(submit).toBeDisabled();
 
@@ -82,12 +83,12 @@ describe("RebindDialog", () => {
     });
   });
 
-  it("supports explicit unbinding through the empty option", () => {
+  it("supports explicit unbinding through the empty option", async () => {
     render(
       <RebindDialog observation={makeObservation()} threads={threads} onClose={vi.fn()} onSuccess={vi.fn()} />
     );
 
-    fireEvent.change(screen.getByLabelText("目标线索"), { target: { value: "" } });
+    await chooseOption(screen.getByLabelText("目标线索"), "（解绑，保持未绑定）");
     // 解绑同样属于改变既有绑定，需要显式确认。
     expect(screen.getByRole("button", { name: "确认绑定" })).toBeDisabled();
     expect(screen.getByRole("checkbox")).toBeInTheDocument();

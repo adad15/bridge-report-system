@@ -1,3 +1,5 @@
+import { InfoCircleOutlined } from "@ant-design/icons";
+import { Alert, Card, Checkbox, Flex, Input, InputNumber, Tag, Typography, theme } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -75,6 +77,7 @@ export function BridgeInventoryWizard({
 }) {
   const [parts, setParts] = useState<CatalogPart[]>([]);
   const [partsError, setPartsError] = useState<string | null>(null);
+  const { token } = theme.useToken();
   const [filter, setFilter] = useState("");
   const [onlySelected, setOnlySelected] = useState(false);
 
@@ -230,53 +233,50 @@ export function BridgeInventoryWizard({
     if (numbers.length === 0) return null;
     const dropped = excludedIndexes[part.part_key] ?? [];
     return (
-      <span className="inventory-instance-list" role="group" aria-label={`${part.default_name} 位置`}>
+      <Flex wrap gap={6} role="group" aria-label={`${part.default_name} 位置`}>
         {numbers.map((item, index) => (
-          <label className="inventory-instance-option" key={item.number}>
-            <input
-              type="checkbox"
-              aria-label={item.number}
-              checked={!dropped.includes(index)}
-              onChange={(event) => toggleInstance(part, index, event.target.checked)}
-            />
-            <span>{item.number}</span>
-          </label>
+          <Checkbox
+            key={item.number}
+            checked={!dropped.includes(index)}
+            onChange={(event) => toggleInstance(part, index, event.target.checked)}
+          >
+            {item.number}
+          </Checkbox>
         ))}
-      </span>
+      </Flex>
     );
   }
 
   function renderCounts(part: CatalogPart) {
     return part.count_inputs.map((countInput, index) => (
-      <label className="inventory-count-field" key={countInput.key}>
-        <span className="inventory-count-label">
+      <Flex align="center" gap={6} key={countInput.key}>
+        <Typography.Text type="secondary">
           {countInput.label}
+          {/* 口径说明（"只数一个孔落在这个墩上的支座"）挂成 title，行内不再多占一行。 */}
           {countInput.hint ? (
-            <abbr className="inventory-count-hint" title={countInput.hint}>
-              ⓘ
+            <abbr title={countInput.hint} style={{ cursor: "help", textDecoration: "none" }}>
+              {" "}<InfoCircleOutlined />
             </abbr>
           ) : null}
-        </span>
-        <input
+        </Typography.Text>
+        {/* 不设 min/max：越界由「请填数量」提示，不在失焦时悄悄改成边界值。 */}
+        <InputNumber
+          size="small"
+          precision={0}
           aria-label={`${part.default_name} ${countInput.label}`}
-          type="number"
-          min={0}
-          max={10000}
-          step={1}
-          value={partCounts(part)[index] ?? ""}
-          onChange={(event) => setCount(part, index, event.target.value)}
+          value={partCounts(part)[index] ? Number(partCounts(part)[index]) : null}
+          onChange={(value) => setCount(part, index, value === null ? "" : String(value))}
           onKeyDown={blockEnter}
         />
-      </label>
+      </Flex>
     ));
   }
 
   function renderOutput(part: CatalogPart, total: number | null) {
+    // 生成数靠右排成一列，扫一眼就知道哪个部件撑爆了。
     if (total === null) {
       return (
-        <span className="inventory-part-output">
-          <span className="inventory-part-missing">请填数量</span>
-        </span>
+        <Typography.Text type="warning" strong style={{ marginLeft: "auto" }}>请填数量</Typography.Text>
       );
     }
     const parsed = parseCounts(partCounts(part)) ?? [];
@@ -284,10 +284,10 @@ export function BridgeInventoryWizard({
       ? null
       : firstNumber(part.number_template, resolvedName(part), parsed, spanCount);
     return (
-      <span className="inventory-part-output">
-        <span className="inventory-part-total">共 {total} 个</span>
-        {sample ? <span className="inventory-part-sample">{sample}…</span> : null}
-      </span>
+      <Flex align="baseline" gap={6} style={{ marginLeft: "auto", whiteSpace: "nowrap" }}>
+        <Typography.Text strong type={total >= LARGE_PART_TOTAL ? "warning" : undefined}>共 {total} 个</Typography.Text>
+        {sample ? <Typography.Text type="secondary">{sample}…</Typography.Text> : null}
+      </Flex>
     );
   }
 
@@ -296,86 +296,89 @@ export function BridgeInventoryWizard({
     const total = on ? partTotal(part) : null;
     const large = total !== null && total >= LARGE_PART_TOTAL;
     return (
-      <div
-        className={`inventory-part-row${on ? " is-on" : ""}${large ? " is-large" : ""}`}
+      <Flex
         key={part.part_key}
+        align="center"
+        gap="small"
+        wrap
+        style={{
+          minHeight: 40,
+          padding: "3px 8px",
+          borderBottom: `1px solid ${token.colorSplit}`,
+          background: large ? token.colorWarningBg : undefined,
+        }}
       >
-        {/* 定宽的头一格：勾没勾都占同样宽度，后面的类别、数量、生成数才对得成列。 */}
-        <div className="inventory-part-head">
-          <label className="inventory-part-toggle">
-            <input
-              type="checkbox"
-              aria-label={`启用 ${part.default_name}`}
-              checked={on}
-              onChange={(event) => toggle(part, event.target.checked)}
-            />
-            {on ? null : <span className="inventory-part-name">{part.default_name}</span>}
-          </label>
+        {/* 定宽的头一格：勾没勾都占同样宽度，后面的类别、数量、生成数才对得成列。
+            未勾时整格是可点的标签，点部件名就能勾上；勾上后名字换成可改的输入框。 */}
+        <Flex align="center" gap={8} style={{ flex: "none", width: "9rem" }}>
+          <Checkbox
+            aria-label={`启用 ${part.default_name}`}
+            checked={on}
+            onChange={(event) => toggle(part, event.target.checked)}
+          >
+            {on ? null : part.default_name}
+          </Checkbox>
           {on ? (
-            <input
-              className="inventory-part-rename"
+            <Input
+              size="small"
               aria-label={`${part.default_name} 名称`}
               value={partName(part)}
               onChange={(event) => setName(part, event.target.value)}
               onKeyDown={blockEnter}
             />
           ) : null}
-        </div>
-        <span className="inventory-part-category">{part.standard_component_category_name}</span>
-        {part.provisional ? (
-          <span className="inventory-provisional-badge">临时编号（待校准）</span>
-        ) : null}
+        </Flex>
+        <Typography.Text type="secondary" style={{ flex: "none", width: "8rem" }}>
+          {part.standard_component_category_name}
+        </Typography.Text>
+        {part.provisional ? <Tag color="gold">临时编号（待校准）</Tag> : null}
         {on ? (part.instance_selectable ? renderInstances(part) : renderCounts(part)) : null}
         {on ? renderOutput(part, total) : null}
-      </div>
+      </Flex>
     );
   }
 
   const chosen = parts.filter((part) => enabled[part.part_key]).length;
 
   return (
-    <section className="inventory-wizard" aria-labelledby="inventory-wizard-title">
-      <div className="inventory-part-toolbar">
-        <h3 id="inventory-wizard-title">勾选桥上有的部件</h3>
-        <input
-          className="inventory-part-filter"
-          aria-label="筛选部件"
-          placeholder="筛选部件"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          onKeyDown={blockEnter}
-        />
-        <label className="inventory-only-selected">
-          <input
-            type="checkbox"
-            checked={onlySelected}
-            onChange={(event) => setOnlySelected(event.target.checked)}
+    <Flex component="section" vertical gap={8} aria-labelledby="inventory-wizard-title">
+      {/* 工具栏钉在滚动区顶部：部件清单二十行起步，筛选框不能跟着滚走。 */}
+      <Card size="small" style={{ position: "sticky", top: 0, zIndex: 1 }}>
+        <Flex align="center" gap={12}>
+          <Typography.Text strong id="inventory-wizard-title" style={{ whiteSpace: "nowrap" }}>
+            勾选桥上有的部件
+          </Typography.Text>
+          <Input
+            size="small"
+            allowClear
+            aria-label="筛选部件"
+            placeholder="筛选部件"
+            style={{ flex: 1, minWidth: 0 }}
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            onKeyDown={blockEnter}
           />
-          只看已选
-        </label>
-        <span className="inventory-chosen-count">
-          已选 {chosen} / {parts.length}
-        </span>
-      </div>
-      {partsError ? (
-        <p className="error-text" role="alert">
-          {partsError}
-        </p>
-      ) : null}
-      {parts.length > 0 && groups.length === 0 ? <p>没有匹配的部件。</p> : null}
-      <div className="inventory-part-list">
-        {groups.map((group) => (
-          <div className="inventory-part-group" key={group.key}>
-            <div className="inventory-structure-heading">
-              <h4>{structurePartLabel(group.key)}</h4>
-              <span className="inventory-structure-count">
-                {group.parts.filter((part) => enabled[part.part_key]).length} / {group.parts.length}
-              </span>
-            </div>
-            {group.parts.map((part) => renderRow(part))}
-          </div>
-        ))}
-      </div>
-    </section>
+          <Checkbox checked={onlySelected} onChange={(event) => setOnlySelected(event.target.checked)}>
+            只看已选
+          </Checkbox>
+          <Typography.Text type="secondary" style={{ whiteSpace: "nowrap" }}>
+            已选 {chosen} / {parts.length}
+          </Typography.Text>
+        </Flex>
+      </Card>
+      {partsError ? <Alert type="error" showIcon title={partsError} /> : null}
+      {parts.length > 0 && groups.length === 0 ? <Typography.Text type="secondary">没有匹配的部件。</Typography.Text> : null}
+      {groups.map((group) => (
+        <Flex vertical key={group.key}>
+          <Flex align="baseline" gap={8} style={{ paddingTop: 8 }}>
+            <Typography.Title level={5} style={{ margin: 0 }}>{structurePartLabel(group.key)}</Typography.Title>
+            <Typography.Text type="secondary">
+              {group.parts.filter((part) => enabled[part.part_key]).length} / {group.parts.length}
+            </Typography.Text>
+          </Flex>
+          {group.parts.map((part) => renderRow(part))}
+        </Flex>
+      ))}
+    </Flex>
   );
 }

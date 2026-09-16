@@ -3,15 +3,20 @@ import {
   Alert,
   Button,
   Card,
+  Col,
   Empty,
+  Flex,
+  Form,
   Input,
   Modal,
   Popconfirm,
+  Row,
   Space,
   Table,
   Tabs,
   Tag,
   Tooltip,
+  Typography,
   type TableProps,
 } from "antd";
 import { useCallback, useEffect, useState } from "react";
@@ -33,8 +38,8 @@ import {
   type ReportPersonnelInput,
 } from "../api/reportApi";
 import { useAuth } from "../auth/AuthContext";
+import { PageHeader } from "../design-system";
 import { reportErrorMessage } from "../report/reportErrors";
-import "./ReportAdminPages.css";
 
 /**
  * 系统管理 · 报告人员与检测设备（设计 §21.2、§21.3）。
@@ -49,13 +54,11 @@ export function ReportDirectoryPage() {
   const [tab, setTab] = useState("personnel");
 
   return (
-    <section className="report-admin-page">
-      <header className="workspace-page-header">
-        <div>
-          <h1>报告人员与设备</h1>
-          <p>签字人员与检测设备的公共库。年度报告配置从这里挑，不在每个年度各录一份。</p>
-        </div>
-      </header>
+    <Flex vertical gap={16}>
+      <PageHeader
+        title="报告人员与设备"
+        description="签字人员与检测设备的公共库。年度报告配置从这里挑，不在每个年度各录一份。"
+      />
 
       <Tabs
         activeKey={tab}
@@ -65,7 +68,7 @@ export function ReportDirectoryPage() {
           { key: "equipment", label: "检测设备", children: <EquipmentTab isAdmin={isAdmin} /> },
         ]}
       />
-    </section>
+    </Flex>
   );
 }
 
@@ -134,7 +137,7 @@ function PersonnelTab({ isAdmin }: { isAdmin: boolean }) {
           width: 180,
           fixed: "right" as const,
           render: (_value: unknown, item: ReportPersonnel) => (
-            <Space size={2} className="report-table-actions">
+            <Space size={2} wrap={false}>
               <Button type="link" size="small" onClick={() => setEditing(item)}>编辑</Button>
               <Button type="link" size="small" disabled={busy}
                 onClick={() => void run(() => setReportPersonnelEnabled(item.id, !item.is_enabled))}>
@@ -157,7 +160,6 @@ function PersonnelTab({ isAdmin }: { isAdmin: boolean }) {
     <>
       {error ? <Alert type="error" showIcon title={error} closable onClose={() => setError(null)} /> : null}
       <Card
-        className="report-admin-card"
         title={`人员（${items?.length ?? 0}）`}
         extra={
           <Space>
@@ -223,14 +225,16 @@ function PersonnelModal({
   }, [target, existing]);
 
   const field = (key: keyof ReportPersonnelInput, label: string, placeholder?: string) => (
-    <label key={key}>
-      <span>{label}</span>
-      <Input
-        value={form[key] ?? ""}
-        placeholder={placeholder}
-        onChange={(event) => setForm({ ...form, [key]: event.target.value })}
-      />
-    </label>
+    <Col xs={24} sm={12} key={key}>
+      <Form.Item label={label} htmlFor={`report-directory-${key}`}>
+        <Input
+          id={`report-directory-${key}`}
+          value={form[key] ?? ""}
+          placeholder={placeholder}
+          onChange={(event) => setForm({ ...form, [key]: event.target.value })}
+        />
+      </Form.Item>
+    </Col>
   );
 
   async function submit() {
@@ -263,7 +267,8 @@ function PersonnelModal({
       onOk={() => void submit()}
       onCancel={onClose}
     >
-      <div className="report-form-grid">
+      <Form layout="vertical">
+        <Row gutter={16}>
         {field("full_name", "姓名")}
         {field("organization", "单位")}
         {field("job_title", "岗位")}
@@ -272,8 +277,9 @@ function PersonnelModal({
         {field("phone", "电话")}
         {field("email", "邮箱")}
         {field("remarks", "备注")}
-      </div>
-      {error ? <Alert className="report-form-alert" type="error" showIcon title={error} /> : null}
+        </Row>
+      </Form>
+      {error ? <Alert type="error" showIcon title={error} /> : null}
     </Modal>
   );
 }
@@ -338,7 +344,7 @@ function EquipmentTab({ isAdmin }: { isAdmin: boolean }) {
           width: 180,
           fixed: "right" as const,
           render: (_value: unknown, item: ReportEquipment) => (
-            <Space size={2} className="report-table-actions">
+            <Space size={2} wrap={false}>
               <Button type="link" size="small" onClick={() => setEditing(item)}>编辑</Button>
               <Button type="link" size="small" disabled={busy}
                 onClick={() => void run(() => setReportEquipmentEnabled(item.id, !item.is_enabled))}>
@@ -361,7 +367,6 @@ function EquipmentTab({ isAdmin }: { isAdmin: boolean }) {
     <>
       {error ? <Alert type="error" showIcon title={error} closable onClose={() => setError(null)} /> : null}
       <Card
-        className="report-admin-card"
         title={`设备（${items?.length ?? 0}）`}
         extra={
           <Space>
@@ -395,7 +400,7 @@ function EquipmentTab({ isAdmin }: { isAdmin: boolean }) {
 
 /** 检定有效期：过期要显眼。设备过期不阻断保存，但报告里会如实印出来。 */
 function CalibrationCell({ item }: { item: ReportEquipment }) {
-  if (!item.calibration_valid_until) return <span className="report-muted">—</span>;
+  if (!item.calibration_valid_until) return <Typography.Text type="secondary">—</Typography.Text>;
   const expired = new Date(item.calibration_valid_until) < new Date();
   return (
     <Space size={4}>
@@ -439,14 +444,16 @@ function EquipmentModal({
   }, [target, existing]);
 
   const field = (key: keyof ReportEquipmentInput, label: string, placeholder?: string) => (
-    <label key={key}>
-      <span>{label}</span>
-      <Input
-        value={form[key] ?? ""}
-        placeholder={placeholder}
-        onChange={(event) => setForm({ ...form, [key]: event.target.value })}
-      />
-    </label>
+    <Col xs={24} sm={12} key={key}>
+      <Form.Item label={label} htmlFor={`report-directory-${key}`}>
+        <Input
+          id={`report-directory-${key}`}
+          value={form[key] ?? ""}
+          placeholder={placeholder}
+          onChange={(event) => setForm({ ...form, [key]: event.target.value })}
+        />
+      </Form.Item>
+    </Col>
   );
 
   async function submit() {
@@ -479,7 +486,8 @@ function EquipmentModal({
       onOk={() => void submit()}
       onCancel={onClose}
     >
-      <div className="report-form-grid">
+      <Form layout="vertical">
+        <Row gutter={16}>
         {field("equipment_name", "设备名称", "裂缝观测仪")}
         {field("model_spec", "型号规格", "ZBL-F130")}
         {field("asset_number", "资产编号")}
@@ -488,8 +496,9 @@ function EquipmentModal({
         {field("calibration_certificate_no", "检定证书编号")}
         {field("calibration_valid_until", "检定有效期", "2027-01-31")}
         {field("remarks", "备注")}
-      </div>
-      {error ? <Alert className="report-form-alert" type="error" showIcon title={error} /> : null}
+        </Row>
+      </Form>
+      {error ? <Alert type="error" showIcon title={error} /> : null}
     </Modal>
   );
 }

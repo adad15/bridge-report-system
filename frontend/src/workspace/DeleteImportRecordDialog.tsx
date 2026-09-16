@@ -1,3 +1,4 @@
+import { Alert, Button, Descriptions, Flex, Form, Input, Modal, Typography } from "antd";
 import { useEffect, useState } from "react";
 
 import { ApiError } from "../api/apiClient";
@@ -76,40 +77,92 @@ export function DeleteImportRecordDialog({ importRecordId, onClose, onDeleted }:
     && confirmation === impact.confirmation_text && !submitting;
 
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <section className="workspace-dialog delete-import-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-import-title">
-        <h2 id="delete-import-title">永久删除导入记录</h2>
-        {loading ? <p>正在核对删除影响…</p> : null}
-        {impact ? <>
-          <div className="danger-callout">
-            <strong>此操作不可撤销</strong>
-            <p>只删除“{impact.import_record.import_name}”（{impact.import_record.system_number}），不会删除 {impact.inspection_year.year} 年度检测或其他导入记录。</p>
-          </div>
-          <p className="muted-text">{impact.bridge.bridge_name} · {impact.inspection_year.year} 年 V{impact.inspection_year.version_number} · {impact.import_record.status}</p>
-          <dl className="deletion-impact-grid">
-            <div><dt>候选病害</dt><dd>{impact.counts.defects}</dd></div>
-            <div><dt>照片候选</dt><dd>{impact.counts.photos}</dd></div>
-            <div><dt>归档文件</dt><dd>{impact.counts.archived_files_to_delete}</dd></div>
-            <div><dt>临时 Word</dt><dd>{impact.counts.temporary_word_files_to_delete}</dd></div>
-            <div><dt>解析工作目录</dt><dd>{impact.counts.parse_work_directories_to_delete}</dd></div>
-          </dl>
-          {impact.counts.shared_files_retained > 0 ? <p className="muted-text">另有 {impact.counts.shared_files_retained} 个共享文件仍被其他资料引用，将保留。</p> : null}
-          {blocked ? <div className="lock-warning" role="alert">
-            <strong>当前不能删除</strong><p>{blocked}</p>
-            {impact.active_edit_locks.map((lock) => <p key={lock.import_record_id}>{lock.owner_display_name}（{lock.owner_username}）正在编辑。</p>)}
-          </div> : null}
-          <label>删除原因<textarea value={reason} maxLength={1000} onChange={(event) => setReason(event.target.value)} placeholder="例如：重复上传、误选报告" /></label>
-          <label>请输入“{impact.confirmation_text}”确认<input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" /></label>
-        </> : null}
-        {error ? <p className="error-text" role="alert">{error}</p> : null}
-        <div className="dialog-actions">
-          <button type="button" onClick={onClose} disabled={submitting}>取消</button>
-          {error && !impact ? <button type="button" onClick={loadImpact}>重新加载</button> : null}
-          <button type="button" className="danger-button" onClick={() => void submit()} disabled={!canDelete}>
-            {submitting ? "正在永久删除…" : "永久删除此导入记录"}
-          </button>
-        </div>
-      </section>
-    </div>
+    <Modal
+      open
+      centered
+      width={560}
+      title="永久删除导入记录"
+      mask={{ closable: false }}
+      onCancel={onClose}
+      footer={[
+        <Button key="cancel" onClick={onClose} disabled={submitting}>取消</Button>,
+        error && !impact ? <Button key="reload" onClick={loadImpact}>重新加载</Button> : null,
+        <Button key="delete" type="primary" danger loading={submitting} disabled={!canDelete} onClick={() => void submit()}>
+          永久删除此导入记录
+        </Button>,
+      ]}
+    >
+      <Flex vertical gap={12}>
+        {loading ? <Typography.Text type="secondary">正在核对删除影响…</Typography.Text> : null}
+        {impact ? (
+          <>
+            <Alert
+              type="error"
+              role="note"
+              title="此操作不可撤销"
+              description={`只删除“${impact.import_record.import_name}”（${impact.import_record.system_number}），不会删除 ${impact.inspection_year.year} 年度检测或其他导入记录。`}
+            />
+            <Typography.Text type="secondary">
+              {impact.bridge.bridge_name} · {impact.inspection_year.year} 年 V{impact.inspection_year.version_number} · {impact.import_record.status}
+            </Typography.Text>
+            <Descriptions
+              size="small"
+              bordered
+              column={2}
+              items={[
+                { key: "defects", label: "候选病害", children: impact.counts.defects },
+                { key: "photos", label: "照片候选", children: impact.counts.photos },
+                { key: "archived", label: "归档文件", children: impact.counts.archived_files_to_delete },
+                { key: "word", label: "临时 Word", children: impact.counts.temporary_word_files_to_delete },
+                { key: "workdirs", label: "解析工作目录", children: impact.counts.parse_work_directories_to_delete },
+              ]}
+            />
+            {impact.counts.shared_files_retained > 0 ? (
+              <Typography.Text type="secondary">
+                另有 {impact.counts.shared_files_retained} 个共享文件仍被其他资料引用，将保留。
+              </Typography.Text>
+            ) : null}
+            {blocked ? (
+              <Alert
+                type="warning"
+                showIcon
+                title="当前不能删除"
+                description={
+                  <>
+                    <div>{blocked}</div>
+                    {impact.active_edit_locks.map((lock) => (
+                      <div key={lock.import_record_id}>
+                        {lock.owner_display_name}（{lock.owner_username}）正在编辑。
+                      </div>
+                    ))}
+                  </>
+                }
+              />
+            ) : null}
+            <Form layout="vertical" requiredMark={false}>
+              <Form.Item label="删除原因" htmlFor="delete-import-reason">
+                <Input.TextArea
+                  id="delete-import-reason"
+                  value={reason}
+                  maxLength={1000}
+                  autoSize={{ minRows: 2, maxRows: 5 }}
+                  placeholder="例如：重复上传、误选报告"
+                  onChange={(event) => setReason(event.target.value)}
+                />
+              </Form.Item>
+              <Form.Item label={`请输入“${impact.confirmation_text}”确认`} htmlFor="delete-import-confirmation">
+                <Input
+                  id="delete-import-confirmation"
+                  value={confirmation}
+                  autoComplete="off"
+                  onChange={(event) => setConfirmation(event.target.value)}
+                />
+              </Form.Item>
+            </Form>
+          </>
+        ) : null}
+        {error ? <Alert type="error" showIcon title={error} /> : null}
+      </Flex>
+    </Modal>
   );
 }

@@ -1,3 +1,4 @@
+import { Alert, Button, Checkbox, Flex, Form, Modal, Select, Typography } from "antd";
 import { useState } from "react";
 
 import type { ArchiveObservation, ArchiveThread } from "../api/componentArchiveApi";
@@ -46,47 +47,51 @@ export function RebindDialog({ observation, threads, onClose, onSuccess }: Rebin
     observation.defect_thread_id !== null && (targetThreadId === "" ? null : targetThreadId) !== observation.defect_thread_id;
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-label="重新绑定病害线索" onClick={onClose}>
-      <div className="modal-panel" onClick={(event) => event.stopPropagation()}>
-        <h3>重新绑定病害线索</h3>
-        <p>
+    <Modal
+      open
+      centered
+      title="重新绑定病害线索"
+      onCancel={onClose}
+      footer={[
+        <Button key="cancel" disabled={busy} onClick={onClose}>取消</Button>,
+        <Button
+          key="submit"
+          type="primary"
+          loading={busy}
+          disabled={changingExistingBinding && !confirmed}
+          onClick={() => void submit()}
+        >
+          确认绑定
+        </Button>,
+      ]}
+    >
+      <Flex vertical gap={12}>
+        <Typography.Text type="secondary">
           {observation.inspection_year} 年｜{observation.defect_type}｜{observation.defect_location || "未记录"}
-        </p>
-        <label className="archive-rebind-select">
-          目标线索
-          <select
-            aria-label="目标线索"
-            value={targetThreadId}
-            onChange={(event) => setTargetThreadId(event.target.value)}
-          >
-            <option value="">（解绑，保持未绑定）</option>
-            {threads.map((thread) => (
-              <option key={thread.id} value={thread.id}>
-                {thread.defect_type}｜{thread.defect_location || "未记录"}
-              </option>
-            ))}
-          </select>
-        </label>
-        {changingExistingBinding ? (
-          <label className="archive-rebind-confirm">
-            <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-            我确认改变该观测的既有线索绑定
-          </label>
-        ) : null}
-        {error ? <p className="error-text">{error}</p> : null}
-        <div className="archive-binding-actions">
-          <button
-            type="button"
-            disabled={busy || (changingExistingBinding && !confirmed)}
-            onClick={() => void submit()}
-          >
-            确认绑定
-          </button>
-          <button type="button" disabled={busy} onClick={onClose}>
-            取消
-          </button>
-        </div>
-      </div>
-    </div>
+        </Typography.Text>
+        <Form layout="vertical">
+          <Form.Item label="目标线索" htmlFor="rebind-target-thread">
+            <Select
+              id="rebind-target-thread"
+              value={targetThreadId}
+              onChange={setTargetThreadId}
+              options={[
+                { value: "", label: "（解绑，保持未绑定）" },
+                ...threads.map((thread) => ({
+                  value: thread.id,
+                  label: `${thread.defect_type}｜${thread.defect_location || "未记录"}`,
+                })),
+              ]}
+            />
+          </Form.Item>
+          {changingExistingBinding ? (
+            <Checkbox checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)}>
+              我确认改变该观测的既有线索绑定
+            </Checkbox>
+          ) : null}
+        </Form>
+        {error ? <Alert type="error" showIcon title={error} /> : null}
+      </Flex>
+    </Modal>
   );
 }

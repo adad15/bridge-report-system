@@ -1,6 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EditOutlined } from "@ant-design/icons";
-import { Pagination } from "antd";
+import { EditOutlined, MoreOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Divider,
+  Drawer,
+  Dropdown,
+  Flex,
+  Form,
+  Grid,
+  Input,
+  Menu,
+  Modal,
+  Pagination,
+  Popover,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+  theme,
+  type MenuProps,
+  type TableProps,
+} from "antd";
 
 import { ApiError } from "../api/apiClient";
 import {
@@ -39,6 +64,7 @@ import {
   type StandardCatalog,
 } from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
+import { StatusTag } from "../workspace/StatusTag";
 import { InventoryPlanPanel } from "./InventoryPlanPanel";
 import { structurePartLabel, structurePartOrder } from "./structureParts";
 
@@ -160,6 +186,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   // 规范目录取不到时，规范映射列会全是"—"；单独记错误并提示，避免无从判断。
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [blockersOpen, setBlockersOpen] = useState(false);
   const [newEntry, setNewEntry] = useState<InventoryEntryInput>({
     component_number: "", site_name: "", site_component_type: "", span_or_location: "", remarks: "",
   });
@@ -175,7 +202,10 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   // 停用原因只在真要停用时才问，不再每行常驻一个空输入框。
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
-  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  // 定位某一行时按行键在表格里找它：antd 表格的行元素不经过我们手里的 ref。
+  const tableRef = useRef<HTMLDivElement | null>(null);
+  const { token } = theme.useToken();
+  const stacked = Grid.useBreakpoint().lg === false;
 
   const load = useCallback(async () => {
     // 有上次的结果就先渲染它、不显示"加载中"，再在后台重新校验：
@@ -360,7 +390,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
 
   useEffect(() => {
     if (!pendingFocusId) return;
-    const row = rowRefs.current[pendingFocusId];
+    const row = tableRef.current?.querySelector<HTMLTableRowElement>(`tr[data-row-key="${pendingFocusId}"]`);
     if (row) {
       row.scrollIntoView({ behavior: "smooth", block: "center" });
       row.focus();
@@ -536,306 +566,514 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   }
 
   /* 只读是常态、编辑是例外。主列表按档案台账的阅读顺序固定为六列；编辑入口保留为
-     行级次要动作，避免与更常用的“查看档案”争夺视觉焦点。 */
-  function renderEntryRow(entry: ComponentInventoryEntry) {
-    if (!revision) return null;
-    const draft = drafts[entry.id] ?? entryDraft(entry);
+     行级次要动作，避免与更常用的“查看档案”争夺视觉焦点。编辑中的那一行整行让给编辑区。 */
+  function entryMappingState(entry: ComponentInventoryEntry) {
     /* 一个构件可以按规范包挂多个生效映射（唯一索引是 entry + package）。状态要按
        "存在任一已确认"判断，和汇总、confirm 是同一套口径；只看首个映射的话，
        [待确认(包A)、已确认(包B)] 会在一个"全部已确认"的分组里显示成待确认，
        还允许再确认一次 A。 */
     const activeMappings = entry.mappings.filter((item) => item.is_active);
-    const activeMapping = activeMappings[0];
-    const hasConfirmedMapping = activeMappings.some((item) => item.confirmation_status === "已确认");
+    return {
+      activeMapping: activeMappings[0],
+      hasConfirmedMapping: activeMappings.some((item) => item.confirmation_status === "已确认"),
+    };
+  }
+
+  function renderEntryEditor(entry: ComponentInventoryEntry) {
+    if (!revision) return null;
+    const draft = drafts[entry.id] ?? entryDraft(entry);
+    const { activeMapping, hasConfirmedMapping } = entryMappingState(entry);
     const mappingDraft = mappingDrafts[entry.id];
     const mappingCatalog = catalogs.find((item) => item.package.id === mappingDraft?.packageId);
     const mappingCategories = mappingCatalog?.component_categories.filter(
       (item) => item.bridge_type_ids.includes(mappingDraft?.bridgeTypeId ?? "")
     ) ?? [];
-    const rowProps = {
-      ref: (node: HTMLTableRowElement | null) => { rowRefs.current[entry.id] = node; },
-      tabIndex: -1,
-    };
-
-    if (editingEntryId !== entry.id) {
-      const stateLabel = !entry.is_active ? "已停用"
-        : !activeMapping ? "无映射"
-        : !hasConfirmedMapping ? "待确认"
-        : "已映射";
-      const stateClass = !entry.is_active ? "is-neutral"
-        : !activeMapping || !hasConfirmedMapping ? "is-warning"
-        : "is-confirmed";
-      return (
-        <tr key={entry.id} {...rowProps} className={!entry.is_active ? "inventory-entry-inactive" : undefined}>
-          <td>{entry.component_number}</td>
-          <td>{entry.site_name || "—"}</td>
-          <td>{entry.site_component_type || "—"}</td>
-          <td className="inventory-entry-mapping">{mappingLabelForEntry(entry)}</td>
-          <td><span className={`inventory-mapping-state ${stateClass}`}>{stateLabel}</span></td>
-          <td className="inventory-entry-rowend">
-            <a className="inventory-view-archive" href={`/bridges/${bridgeId}/components/${entry.bridge_component_id}`}>
-              查看档案
-            </a>
-            <button className="inventory-row-edit-button" type="button" aria-label="编辑" title="编辑构件" disabled={busy} onClick={() => beginEdit(entry)}>
-              <EditOutlined />
-            </button>
-          </td>
-        </tr>
-      );
-    }
-
     const dirty = draftIsDirty(entry, draft);
     const deactivating = deactivatingId === entry.id;
     const reasonText = deactivationReasons[entry.id] ?? "";
+    const moreActions: MenuProps["items"] = [
+      // 已确认的映射整组一致、分组核对表已经显示，这里只在需要处理时才出现。
+      ...(activeMapping && !hasConfirmedMapping
+        ? [{ key: "confirm-mapping", label: "确认映射", onClick: () => void confirmExistingMapping(entry) }]
+        : []),
+      ...(!activeMapping && !mappingDraft
+        ? [{ key: "set-mapping", label: "设置规范映射", disabled: catalogs.length === 0, onClick: () => beginMapping(entry.id) }]
+        : []),
+      ...(entry.is_active && entry.is_referenced
+        ? [{ key: "deactivate", label: "停用", onClick: () => setDeactivatingId(entry.id) }]
+        : []),
+      ...(entry.is_active && !entry.is_referenced
+        ? [{
+            key: "delete",
+            label: "删除",
+            danger: true,
+            onClick: () => void mutate(() => deleteComponentInventoryEntry(backendBaseUrl, revision.id, entry.id)),
+          }]
+        : []),
+    ];
     return (
-      <tr key={entry.id} {...rowProps} className="inventory-entry-editing">
-        <td colSpan={6}>
-          <div className="inventory-entry-editor">
-            <label>
-              构件编号
-              <input aria-label={`构件编号 ${entry.component_number}`} value={draft.component_number} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, component_number: event.target.value } }))} />
-            </label>
+      <Flex vertical gap={10}>
+        <Flex align="end" justify="space-between" gap={12} wrap>
+          <Flex align="end" gap={12} wrap>
+            <Flex vertical gap={4} component="label">
+              <Typography.Text type="secondary">构件编号</Typography.Text>
+              <Input aria-label={`构件编号 ${entry.component_number}`} value={draft.component_number} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, component_number: event.target.value } }))} />
+            </Flex>
             {/* 现场名称与构件类别在生成时就是同一个值，页面不再单列，改类别时同步跟随。 */}
-            <label>
-              构件类别
-              <input aria-label={`构件类别 ${entry.component_number}`} value={draft.site_component_type} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, site_component_type: event.target.value, site_name: event.target.value } }))} />
-            </label>
-            <label>
-              所属跨或位置
-              <input aria-label={`所属跨或位置 ${entry.component_number}`} value={draft.span_or_location ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, span_or_location: event.target.value } }))} />
-            </label>
-            <div className="inventory-row-actions inventory-entry-editor-actions">
-              <button type="button" className="primary-button" disabled={busy || !entry.is_active || !dirty} onClick={() => void saveEntry(entry)}>保存</button>
-              <button type="button" disabled={busy} onClick={cancelEdit}>取消</button>
-              {/* 低频且不可逆的动作收进菜单，不和保存抢视觉权重。 */}
-              <details className="more-actions">
-                <summary aria-label={`更多操作 ${entry.component_number}`}>更多</summary>
-                <div>
-                  {/* 已确认的映射整组一致、分组核对表已经显示，这里只在需要处理时才出现。 */}
-                  {activeMapping && !hasConfirmedMapping ? (
-                    <button type="button" disabled={busy} onClick={() => void confirmExistingMapping(entry)}>确认映射</button>
-                  ) : null}
-                  {!activeMapping && !mappingDraft ? (
-                    <button type="button" disabled={busy || catalogs.length === 0} onClick={() => beginMapping(entry.id)}>设置规范映射</button>
-                  ) : null}
-                  {entry.is_active && entry.is_referenced ? (
-                    <button type="button" disabled={busy} onClick={() => setDeactivatingId(entry.id)}>停用</button>
-                  ) : null}
-                  {entry.is_active && !entry.is_referenced ? (
-                    <button type="button" className="danger-menu-item" disabled={busy} onClick={() => void mutate(() => deleteComponentInventoryEntry(backendBaseUrl, revision.id, entry.id))}>删除</button>
-                  ) : null}
-                </div>
-              </details>
-            </div>
-          </div>
+            <Flex vertical gap={4} component="label">
+              <Typography.Text type="secondary">构件类别</Typography.Text>
+              <Input aria-label={`构件类别 ${entry.component_number}`} value={draft.site_component_type} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, site_component_type: event.target.value, site_name: event.target.value } }))} />
+            </Flex>
+            <Flex vertical gap={4} component="label">
+              <Typography.Text type="secondary">所属跨或位置</Typography.Text>
+              <Input aria-label={`所属跨或位置 ${entry.component_number}`} value={draft.span_or_location ?? ""} onChange={(event) => setDrafts((current) => ({ ...current, [entry.id]: { ...draft, span_or_location: event.target.value } }))} />
+            </Flex>
+          </Flex>
+          <Flex gap={8}>
+            <Button type="primary" disabled={busy || !entry.is_active || !dirty} onClick={() => void saveEntry(entry)}>保存</Button>
+            <Button disabled={busy} onClick={cancelEdit}>取消</Button>
+            {/* 低频且不可逆的动作收进菜单，不和保存抢视觉权重。 */}
+            <Dropdown trigger={["click"]} disabled={busy} menu={{ items: moreActions }}>
+              <Button icon={<MoreOutlined />} aria-label={`更多操作 ${entry.component_number}`}>更多</Button>
+            </Dropdown>
+          </Flex>
+        </Flex>
 
-          {!activeMapping && mappingDraft ? (
-            <div className="inventory-mapping-editor">
-              <select aria-label={`映射规范 ${entry.component_number}`} value={mappingDraft.packageId} onChange={(event) => {
-                const nextCatalog = catalogs.find((item) => item.package.id === event.target.value);
-                updateMappingDraft(entry.id, { packageId: event.target.value, bridgeTypeId: nextCatalog?.bridge_types[0]?.id ?? "", categoryId: "" });
-              }}>
-                {catalogs.map((item) => <option key={item.package.id} value={item.package.id}>{item.package.standard_code}</option>)}
-              </select>
-              <select aria-label={`映射桥型 ${entry.component_number}`} value={mappingDraft.bridgeTypeId} onChange={(event) => updateMappingDraft(entry.id, { bridgeTypeId: event.target.value, categoryId: "" })}>
-                {mappingCatalog?.bridge_types.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-              <select aria-label={`映射类别 ${entry.component_number}`} value={mappingDraft.categoryId} onChange={(event) => updateMappingDraft(entry.id, { categoryId: event.target.value })}>
-                <option value="">请选择类别</option>
-                {mappingCategories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-              <button type="button" disabled={busy || !mappingDraft.categoryId} onClick={() => void saveMapping(entry.id)}>保存映射</button>
-            </div>
-          ) : null}
+        {!activeMapping && mappingDraft ? (
+          <Flex gap={8} wrap>
+            <Select
+              aria-label={`映射规范 ${entry.component_number}`}
+              value={mappingDraft.packageId}
+              style={{ width: 180 }}
+              onChange={(packageId) => {
+                const nextCatalog = catalogs.find((item) => item.package.id === packageId);
+                updateMappingDraft(entry.id, { packageId, bridgeTypeId: nextCatalog?.bridge_types[0]?.id ?? "", categoryId: "" });
+              }}
+              options={catalogs.map((item) => ({ value: item.package.id, label: item.package.standard_code }))}
+            />
+            <Select
+              aria-label={`映射桥型 ${entry.component_number}`}
+              value={mappingDraft.bridgeTypeId}
+              style={{ width: 160 }}
+              onChange={(bridgeTypeId) => updateMappingDraft(entry.id, { bridgeTypeId, categoryId: "" })}
+              options={mappingCatalog?.bridge_types.map((item) => ({ value: item.id, label: item.name }))}
+            />
+            <Select
+              aria-label={`映射类别 ${entry.component_number}`}
+              placeholder="请选择类别"
+              value={mappingDraft.categoryId || undefined}
+              style={{ width: 200 }}
+              onChange={(categoryId) => updateMappingDraft(entry.id, { categoryId })}
+              options={mappingCategories.map((item) => ({ value: item.id, label: item.name }))}
+            />
+            <Button disabled={busy || !mappingDraft.categoryId} onClick={() => void saveMapping(entry.id)}>保存映射</Button>
+          </Flex>
+        ) : null}
 
-          {deactivating ? (
-            <div className="inventory-deactivate-row">
-              <input aria-label={`停用原因 ${entry.component_number}`} placeholder="停用原因" value={reasonText} onChange={(event) => setDeactivationReasons((current) => ({ ...current, [entry.id]: event.target.value }))} />
-              <button type="button" className="danger-button" disabled={busy || !reasonText.trim()} onClick={() => void mutate(() => deactivateComponentInventoryEntry(backendBaseUrl, revision.id, entry.id, reasonText.trim()))}>确认停用</button>
-              <button type="button" disabled={busy} onClick={() => setDeactivatingId(null)}>取消停用</button>
-            </div>
-          ) : null}
-        </td>
-      </tr>
+        {deactivating ? (
+          <>
+            <Divider dashed size="small" />
+            <Flex align="center" gap={8} wrap>
+              <Input
+                aria-label={`停用原因 ${entry.component_number}`}
+                placeholder="停用原因"
+                value={reasonText}
+                style={{ width: 288 }}
+                onChange={(event) => setDeactivationReasons((current) => ({ ...current, [entry.id]: event.target.value }))}
+              />
+              <Button danger disabled={busy || !reasonText.trim()} onClick={() => void mutate(() => deactivateComponentInventoryEntry(backendBaseUrl, revision.id, entry.id, reasonText.trim()))}>确认停用</Button>
+              <Button disabled={busy} onClick={() => setDeactivatingId(null)}>取消停用</Button>
+            </Flex>
+          </>
+        ) : null}
+      </Flex>
     );
   }
 
-  if (loading || (revision !== null && catalogLoading))
-    return <section className="workspace-card"><h1>实际构件台账</h1><p>正在加载台账与规范映射…</p></section>;
+  // 编辑中的那一行：第一格横跨六列放编辑区，其余格让位。
+  const editingCell = (entry: ComponentInventoryEntry) => ({
+    colSpan: editingEntryId === entry.id ? 6 : 1,
+    style: editingEntryId === entry.id ? { background: token.colorPrimaryBg } : undefined,
+  });
+  const yieldToEditor = (entry: ComponentInventoryEntry) => ({ colSpan: editingEntryId === entry.id ? 0 : 1 });
+
+  const entryColumns: TableProps<ComponentInventoryEntry>["columns"] = [
+    {
+      title: "构件编号",
+      key: "component_number",
+      width: "13%",
+      onCell: editingCell,
+      render: (_, entry) => (editingEntryId === entry.id ? renderEntryEditor(entry) : entry.component_number),
+    },
+    { title: "现场名称", key: "site_name", width: "18%", onCell: yieldToEditor, render: (_, entry) => entry.site_name || "—" },
+    { title: "构件类别", key: "site_component_type", width: "14%", onCell: yieldToEditor, render: (_, entry) => entry.site_component_type || "—" },
+    { title: "规范映射", key: "mapping", width: "34%", onCell: yieldToEditor, render: (_, entry) => mappingLabelForEntry(entry) },
+    {
+      title: "状态",
+      key: "state",
+      width: "10%",
+      onCell: yieldToEditor,
+      render: (_, entry) => {
+        const { activeMapping, hasConfirmedMapping } = entryMappingState(entry);
+        if (!entry.is_active) return <Tag>已停用</Tag>;
+        if (!activeMapping) return <Tag color="warning">无映射</Tag>;
+        if (!hasConfirmedMapping) return <Tag color="warning">待确认</Tag>;
+        return <Tag color="success">已映射</Tag>;
+      },
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: "11%",
+      align: "right",
+      onCell: yieldToEditor,
+      render: (_, entry) => (
+        <Flex align="center" justify="end" gap={4}>
+          <Typography.Link href={`/bridges/${bridgeId}/components/${entry.bridge_component_id}`}>
+            查看档案
+          </Typography.Link>
+          <Button
+            type="text"
+            size="small"
+            icon={<EditOutlined />}
+            aria-label="编辑"
+            title="编辑构件"
+            disabled={busy}
+            onClick={() => beginEdit(entry)}
+          />
+        </Flex>
+      ),
+    },
+  ];
+
+  const heading = <Typography.Title level={3} style={{ margin: 0 }}>实际构件台账</Typography.Title>;
+
+  if (loading || (revision !== null && catalogLoading)) {
+    return (
+      <Card>
+        <Flex vertical gap={8}>
+          {heading}
+          <Typography.Text type="secondary">正在加载台账与规范映射…</Typography.Text>
+        </Flex>
+      </Card>
+    );
+  }
 
   if (notCreated) {
     return (
-      <section className="workspace-card component-inventory-panel">
-        <h1>实际构件台账</h1>
-        <p>这座桥还没有构件台账。填写数量后，系统会生成每一个实际构件编号。</p>
-        <InventoryPlanPanel onPlanChange={setPlan} />
-        {error ? <p className="error-text" role="alert">{error}</p> : null}
-        <div className="inventory-panel-actions">
-          <button type="button" disabled={busy || !plan} onClick={() => void generate()}>
-            {busy ? "正在生成…" : "生成初始构件台账"}
-          </button>
-        </div>
-      </section>
+      <Card>
+        <Flex vertical gap={12}>
+          {heading}
+          <Typography.Text type="secondary">这座桥还没有构件台账。填写数量后，系统会生成每一个实际构件编号。</Typography.Text>
+          <InventoryPlanPanel onPlanChange={setPlan} />
+          {error ? <Alert type="error" showIcon title={error} /> : null}
+          <Flex gap={8}>
+            <Button type="primary" loading={busy} disabled={!plan} onClick={() => void generate()}>
+              生成初始构件台账
+            </Button>
+          </Flex>
+        </Flex>
+      </Card>
     );
   }
 
   if (!revision) {
-    return <section className="workspace-card"><h1>实际构件台账</h1><p className="error-text">{error ?? "加载构件台账失败。"}</p><button type="button" onClick={() => void load()}>重试</button></section>;
+    return (
+      <Card>
+        <Flex vertical gap={12} align="start">
+          {heading}
+          <Alert type="error" showIcon title={error ?? "加载构件台账失败。"} />
+          <Button onClick={() => void load()}>重试</Button>
+        </Flex>
+      </Card>
+    );
   }
 
+  /*
+   * 台账要一屏放下：卡片高度吃满顶栏以下的视口，标题行、工具栏、底部提示都是固定的一行，
+   * 剩下的高度全给左右两栏，两栏各自滚动。142px = 顶栏 68 + 内容区上下留白 30 与 44。
+   * 窄屏上下叠放时交还给整页滚动。
+   */
+  const ledgerHeight = stacked ? undefined : "max(560px, calc(100dvh - 142px))";
+  const listTitle = searchTerm ? "搜索结果" : "构件列表";
+  const confirmedCount = Math.max(0, revision.active_entry_count - (summary?.blockers.individual_total ?? 0));
+  const stats = [
+    { title: "构件总数", value: revision.active_entry_count, color: token.colorPrimary },
+    { title: "构件类别", value: groupSummaries.length, color: token.colorPrimary },
+    { title: "已映射", value: confirmedCount, color: token.colorSuccess },
+    { title: "待核对", value: blockerTotal, color: token.colorWarning },
+  ];
+
   return (
-    <section className="workspace-card component-inventory-panel inventory-ledger">
-      <header className="inventory-ledger-head">
-        <div>
-          <p className="section-kicker">版本 {revision.revision_number}</p>
-          <div className="inventory-ledger-title"><h1>实际构件台账</h1><span className={`inventory-status-badge ${revision.status === "已确认" ? "confirmed" : ""}`}>{inventoryStatus(revision.status)}</span></div>
-        </div>
-        <div className="inventory-panel-actions inventory-ledger-actions">
-          <details className="inventory-rules">
-            <summary>版本说明</summary>
-            <div>
-              <p>构件编号和现场名称可修改，修改编号不会改变构件身份。</p>
-              {revision.status === "已确认" ? <p>修改已确认台账时，系统会自动创建下一版草稿。</p> : null}
-            </div>
-          </details>
-          <button type="button" disabled={busy} onClick={() => setAdding(true)}>＋ 手动添加构件</button>
-          {revision.status !== "已确认" ? <button type="button" className="is-primary-action" disabled={busy || blockerTotal > 0} onClick={() => void mutate(() => confirmComponentInventory(backendBaseUrl, revision.id))}>确认本版台账</button> : null}
-        </div>
-      </header>
+    <Card
+      style={{ height: ledgerHeight }}
+      styles={{
+        root: { display: "flex", flexDirection: "column" },
+        body: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 14 },
+      }}
+    >
+      <Flex align="center" justify="space-between" gap={16} wrap>
+        <Flex vertical gap={2}>
+          <Typography.Text type="secondary">版本 {revision.revision_number}</Typography.Text>
+          <Flex align="center" gap={12}>
+            {heading}
+            <StatusTag status={inventoryStatus(revision.status)} />
+          </Flex>
+        </Flex>
 
-      <section className="inventory-ledger-metrics" aria-label="构件台账概况">
-        <div><span>构件总数</span><strong>{revision.active_entry_count.toLocaleString()}</strong></div>
-        <div><span>构件类别</span><strong>{groupSummaries.length}</strong></div>
-        <div><span>已映射</span><strong>{Math.max(0, revision.active_entry_count - (summary?.blockers.individual_total ?? 0)).toLocaleString()}</strong></div>
-        <div><span>待核对</span><strong>{blockerTotal}</strong></div>
-      </section>
-
-      <div className="inventory-ledger-toolbar">
-        <input aria-label="搜索构件" placeholder="搜索编号、类别或现场名" value={search} onChange={(event) => setSearch(event.target.value)} />
-        <select aria-label="按部位筛选" value={structureFilter} onChange={(event) => setStructureFilter(event.target.value)}>
-          <option>全部部位</option>
-          {groupSections.map((section) => <option key={section.key}>{structurePartLabel(section.key)}</option>)}
-        </select>
-        <select aria-label="按类别筛选" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-          <option>全部类别</option>
-          {groupSummaries.map((group) => <option key={group.siteComponentType}>{group.siteComponentType}</option>)}
-        </select>
-        <select aria-label="按映射状态筛选" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)}>
-          <option>全部状态</option><option>已映射</option><option>待核对</option>
-        </select>
-        <button type="button" onClick={() => { setSearch(""); setStructureFilter("全部部位"); setCategoryFilter("全部类别"); setMappingFilter("全部状态"); }}>重置</button>
-      </div>
-
-      {catalogError ? <p className="inventory-standard-notice" role="status">规范映射名称暂时取不到（{catalogError}）；构件与编号不受影响，可稍后重试。</p> : null}
-
-      <div className="inventory-ledger-body">
-        <aside className="inventory-category-panel">
-          <h2>构件分类</h2>
-          {visibleGroupSections.map((section) => (
-            <section key={section.key}>
-              <h3><span>⌄</span>{structurePartLabel(section.key)}<em>{section.groups.reduce((total, group) => total + group.activeCount, 0).toLocaleString()}</em></h3>
-              {section.groups.map((group) => (
-                <button
-                  key={group.siteComponentType}
-                  type="button"
-                  aria-label={`查看构件 ${group.siteComponentType}`}
-                  className={expandedGroup === group.siteComponentType ? "is-active" : ""}
-                  onClick={() => openGroup(group.siteComponentType)}
-                >
-                  <span>{group.siteComponentType}</span><em>{group.activeCount.toLocaleString()}</em>
-                </button>
-              ))}
-            </section>
+        {/* 四个数原本单占一张卡片，并进标题行，给下面的列表腾出一行高度。 */}
+        <Flex align="center" gap={20} wrap role="group" aria-label="构件台账概况">
+          {stats.map((item, index) => (
+            <Flex key={item.title} align="center" gap={20}>
+              {index > 0 ? <Divider vertical /> : null}
+              <Flex vertical>
+                <Typography.Text type="secondary">{item.title}</Typography.Text>
+                <Typography.Title level={4} style={{ margin: 0, color: item.color }}>
+                  {item.value.toLocaleString()}
+                </Typography.Title>
+              </Flex>
+            </Flex>
           ))}
-        </aside>
+        </Flex>
 
-        <section className="inventory-list-panel">
-          <header>
-            <div><h2>{searchTerm ? "搜索结果" : "构件列表"}</h2></div>
-            <div className="inventory-list-summary">
-              <span>{searchTerm ? `匹配 ${searchMatches.length} 条` : `共 ${groupTotal.toLocaleString()} 条`}</span>
-              {!searchTerm && expandedGroup && (expandedGroupSummary?.pendingCount ?? 0) > 0 ? (
-                <button type="button" disabled={busy} onClick={() => void confirmPendingMappings(expandedGroup)}>确认该组映射</button>
-              ) : null}
-            </div>
-          </header>
-          <div className="inventory-table-scroll">
-            <table className="data-table component-inventory-table">
-              <thead><tr><th>构件编号</th><th>现场名称</th><th>构件类别</th><th>规范映射</th><th>状态</th><th>操作</th></tr></thead>
-              <tbody>
-                {searchTerm
-                  ? searchMatches.slice(0, kMaxSearchResults).map((entry) => renderEntryRow(entry))
-                  : groupEntriesLoading
-                    ? <tr><td colSpan={6}>正在加载构件…</td></tr>
-                    : pageEntries.map((entry) => renderEntryRow(entry))}
-              </tbody>
-            </table>
-          </div>
-          {!searchTerm ? (
-            <footer className="inventory-inline-pagination">
-              <Pagination
-                align="end"
-                current={page + 1}
-                pageSize={groupPageSize}
-                total={groupTotal}
-                pageSizeOptions={[20, 50, 100]}
-                showSizeChanger
-                showQuickJumper
-                showTotal={(total) => `共 ${total.toLocaleString()} 条`}
-                disabled={busy}
+        <Flex align="center" justify="end" gap={8} wrap>
+          <Popover
+            trigger="click"
+            placement="bottomRight"
+            content={
+              <Flex vertical gap={6}>
+                <Typography.Text>构件编号和现场名称可修改，修改编号不会改变构件身份。</Typography.Text>
+                {revision.status === "已确认" ? <Typography.Text>修改已确认台账时，系统会自动创建下一版草稿。</Typography.Text> : null}
+              </Flex>
+            }
+          >
+            <Button>版本说明</Button>
+          </Popover>
+          <Button icon={<PlusOutlined />} disabled={busy} onClick={() => setAdding(true)}>手动添加构件</Button>
+          {revision.status !== "已确认" ? <Button type="primary" disabled={busy || blockerTotal > 0} onClick={() => void mutate(() => confirmComponentInventory(backendBaseUrl, revision.id))}>确认本版台账</Button> : null}
+        </Flex>
+      </Flex>
+
+      <Row gutter={[12, 12]}>
+        <Col xs={24} lg={8}>
+          <Input aria-label="搜索构件" placeholder="搜索编号、类别或现场名" allowClear value={search} onChange={(event) => setSearch(event.target.value)} />
+        </Col>
+        <Col xs={12} lg={4}>
+          <Select
+            aria-label="按部位筛选"
+            value={structureFilter}
+            style={{ width: "100%" }}
+            onChange={setStructureFilter}
+            options={["全部部位", ...groupSections.map((section) => structurePartLabel(section.key))].map((value) => ({ value, label: value }))}
+          />
+        </Col>
+        <Col xs={12} lg={4}>
+          <Select
+            aria-label="按类别筛选"
+            value={categoryFilter}
+            style={{ width: "100%" }}
+            onChange={setCategoryFilter}
+            options={["全部类别", ...groupSummaries.map((group) => group.siteComponentType)].map((value) => ({ value, label: value }))}
+          />
+        </Col>
+        <Col xs={12} lg={4}>
+          <Select
+            aria-label="按映射状态筛选"
+            value={mappingFilter}
+            style={{ width: "100%" }}
+            onChange={setMappingFilter}
+            options={["全部状态", "已映射", "待核对"].map((value) => ({ value, label: value }))}
+          />
+        </Col>
+        <Col xs={12} lg={4}>
+          <Button block onClick={() => { setSearch(""); setStructureFilter("全部部位"); setCategoryFilter("全部类别"); setMappingFilter("全部状态"); }}>重置</Button>
+        </Col>
+      </Row>
+
+      {catalogError ? (
+        <Alert type="warning" showIcon role="status" title={`规范映射名称暂时取不到（${catalogError}）；构件与编号不受影响，可稍后重试。`} />
+      ) : null}
+      {error ? <Alert type="error" showIcon title={error} closable onClose={() => setError(null)} /> : null}
+
+      <Row gutter={[14, 14]} style={stacked ? undefined : { flex: 1, minHeight: 0 }}>
+        <Col xs={24} lg={6} style={stacked ? undefined : { height: "100%" }}>
+          <Card
+            size="small"
+            title="构件分类"
+            style={{ height: stacked ? undefined : "100%" }}
+            styles={{
+              root: { display: "flex", flexDirection: "column" },
+              body: { flex: 1, minHeight: 0, maxHeight: stacked ? 280 : undefined, overflowY: "auto", padding: 0 },
+            }}
+          >
+            <Menu
+              mode="inline"
+              selectedKeys={expandedGroup ? [expandedGroup] : []}
+              onClick={({ key }) => openGroup(key)}
+              items={visibleGroupSections.map((section) => ({
+                type: "group" as const,
+                key: `section:${section.key}`,
+                label: (
+                  <Flex justify="space-between" gap={8}>
+                    <span>{structurePartLabel(section.key)}</span>
+                    <span>{section.groups.reduce((total, group) => total + group.activeCount, 0).toLocaleString()}</span>
+                  </Flex>
+                ),
+                children: section.groups.map((group) => ({
+                  key: group.siteComponentType,
+                  label: (
+                    <Flex justify="space-between" gap={8}>
+                      <Typography.Text ellipsis>{group.siteComponentType}</Typography.Text>
+                      <Typography.Text type="secondary">{group.activeCount.toLocaleString()}</Typography.Text>
+                    </Flex>
+                  ),
+                })),
+              }))}
+            />
+          </Card>
+        </Col>
+
+        <Col xs={24} lg={18} style={stacked ? undefined : { height: "100%" }}>
+          <Card
+            size="small"
+            role="region"
+            aria-label={listTitle}
+            title={<Typography.Title level={5} style={{ margin: 0 }}>{listTitle}</Typography.Title>}
+            extra={
+              <Flex align="center" gap={10}>
+                <Typography.Text type="secondary">
+                  {searchTerm ? `匹配 ${searchMatches.length} 条` : `共 ${groupTotal.toLocaleString()} 条`}
+                </Typography.Text>
+                {!searchTerm && expandedGroup && (expandedGroupSummary?.pendingCount ?? 0) > 0 ? (
+                  <Button size="small" disabled={busy} onClick={() => void confirmPendingMappings(expandedGroup)}>确认该组映射</Button>
+                ) : null}
+              </Flex>
+            }
+            style={{ height: stacked ? 560 : "100%" }}
+            styles={{
+              root: { display: "flex", flexDirection: "column" },
+              body: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: 0 },
+            }}
+          >
+            <div ref={tableRef} style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+              <Table<ComponentInventoryEntry>
+                rowKey="id"
                 size="small"
-                onChange={(nextPage, nextPageSize) => {
-                  setGroupPageSize(nextPageSize);
-                  setGroupPage(nextPage - 1);
-                }}
+                tableLayout="fixed"
+                columns={entryColumns}
+                dataSource={searchTerm ? searchMatches.slice(0, kMaxSearchResults) : pageEntries}
+                loading={!searchTerm && groupEntriesLoading}
+                pagination={false}
+                scroll={{ x: 920 }}
+                onRow={(entry) => ({
+                  tabIndex: -1,
+                  style: !entry.is_active && editingEntryId !== entry.id ? { opacity: 0.62 } : undefined,
+                })}
               />
-            </footer>
-          ) : null}
-        </section>
-      </div>
+            </div>
+            {!searchTerm ? (
+              <Flex justify="end" style={{ padding: "11px 14px", borderTop: `1px solid ${token.colorSplit}` }}>
+                <Pagination
+                  current={page + 1}
+                  pageSize={groupPageSize}
+                  total={groupTotal}
+                  pageSizeOptions={[20, 50, 100]}
+                  showSizeChanger
+                  showQuickJumper
+                  showTotal={(total) => `共 ${total.toLocaleString()} 条`}
+                  disabled={busy}
+                  size="small"
+                  onChange={(nextPage, nextPageSize) => {
+                    setGroupPageSize(nextPageSize);
+                    setGroupPage(nextPage - 1);
+                  }}
+                />
+              </Flex>
+            ) : null}
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 确认前的待办固定一行：明细最多三十条，摊开会把列表挤出屏幕，放进抽屉里看。 */}
       {blockerTotal > 0 ? (
-        <div className="inventory-blockers" role="status">
-          <strong>确认前还需处理 {blockerTotal} 项</strong>
-          <ul>
-            {pendingMappingCount > 0 ? (
-              <li>
-                {pendingMappingCount} 个构件的规范映射待确认；可在构件列表按组确认，或
-                <button
-                  type="button"
+        <Alert
+          type="warning"
+          showIcon
+          role="status"
+          title={`确认前还需处理 ${blockerTotal} 项${pendingMappingCount > 0 ? `，其中 ${pendingMappingCount} 个构件的规范映射待确认` : ""}`}
+          action={
+            <Space>
+              {pendingMappingCount > 0 ? (
+                <Button
+                  size="small"
                   disabled={busy || revision.status !== "草稿"}
                   onClick={() => void confirmPendingMappings()}
                 >
                   一键确认全部待确认映射
-                </button>
-              </li>
-            ) : null}
-            {/* 样本已由服务端截断到 30 条，这里不再自己 slice。 */}
-            {individualBlockers.map((blocker, index) => (
-              <li key={`${blocker.code}-${blocker.entity_id}-${index}`}>
-                {blocker.message}
-                {blocker.entity_type === "inventory_entry" && blocker.position !== null ? (
-                  <button type="button" onClick={() => focusEntry(blocker)}>定位</button>
-                ) : null}
-              </li>
-            ))}
-            {remainingBlockers > 0 ? (
-              <li>……其余 {remainingBlockers} 项处理后依次显示。</li>
-            ) : null}
-          </ul>
-        </div>
-      ) : (
-        <p className="inventory-confirmation-summary">共 {revision.active_entry_count} 个启用构件，规范映射均已确认。</p>
-      )}
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
-      {adding ? (
-        <div className="inventory-add-form">
-          <label>构件编号<input value={newEntry.component_number} onChange={(event) => setNewEntry((current) => ({ ...current, component_number: event.target.value }))} /></label>
-          <label>构件类别<input value={newEntry.site_component_type} onChange={(event) => setNewEntry((current) => ({ ...current, site_component_type: event.target.value, site_name: event.target.value }))} /></label>
-          <label>所属跨或位置<input value={newEntry.span_or_location ?? ""} onChange={(event) => setNewEntry((current) => ({ ...current, span_or_location: event.target.value }))} /></label>
-          <button type="button" disabled={busy || !newEntry.component_number.trim() || !newEntry.site_component_type.trim() || !newEntry.site_name.trim()} onClick={() => void addEntry()}>添加到草稿</button>
-          <button type="button" disabled={busy} onClick={() => setAdding(false)}>取消</button>
-        </div>
+                </Button>
+              ) : null}
+              {individualBlockers.length > 0 ? (
+                <Button size="small" onClick={() => setBlockersOpen(true)}>查看明细</Button>
+              ) : null}
+            </Space>
+          }
+        />
       ) : null}
-    </section>
+
+      <Drawer
+        open={blockersOpen}
+        size={480}
+        title={`确认前还需处理 ${blockerTotal} 项`}
+        onClose={() => setBlockersOpen(false)}
+      >
+        <Flex vertical gap={10}>
+          {/* 样本已由服务端截断到 30 条，这里不再自己 slice。 */}
+          {individualBlockers.map((blocker, index) => (
+            <Flex key={`${blocker.code}-${blocker.entity_id}-${index}`} align="baseline" justify="space-between" gap={12}>
+              <Typography.Text>{blocker.message}</Typography.Text>
+              {blocker.entity_type === "inventory_entry" && blocker.position !== null ? (
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => {
+                    setBlockersOpen(false);
+                    focusEntry(blocker);
+                  }}
+                >
+                  定位
+                </Button>
+              ) : null}
+            </Flex>
+          ))}
+          {remainingBlockers > 0 ? (
+            <Typography.Text type="secondary">……其余 {remainingBlockers} 项处理后依次显示。</Typography.Text>
+          ) : null}
+        </Flex>
+      </Drawer>
+
+      <Modal
+        open={adding}
+        title="手动添加构件"
+        okText="添加到草稿"
+        cancelText="取消"
+        confirmLoading={busy}
+        okButtonProps={{ disabled: !newEntry.component_number.trim() || !newEntry.site_component_type.trim() || !newEntry.site_name.trim() }}
+        onOk={() => void addEntry()}
+        onCancel={() => setAdding(false)}
+      >
+        <Form layout="vertical">
+          <Form.Item label="构件编号" htmlFor="inventory-add-number">
+            <Input id="inventory-add-number" value={newEntry.component_number} onChange={(event) => setNewEntry((current) => ({ ...current, component_number: event.target.value }))} />
+          </Form.Item>
+          {/* 现场名称与构件类别在生成时就是同一个值，改类别时同步跟随。 */}
+          <Form.Item label="构件类别" htmlFor="inventory-add-type">
+            <Input id="inventory-add-type" value={newEntry.site_component_type} onChange={(event) => setNewEntry((current) => ({ ...current, site_component_type: event.target.value, site_name: event.target.value }))} />
+          </Form.Item>
+          <Form.Item label="所属跨或位置" htmlFor="inventory-add-location" style={{ marginBottom: 0 }}>
+            <Input id="inventory-add-location" value={newEntry.span_or_location ?? ""} onChange={(event) => setNewEntry((current) => ({ ...current, span_or_location: event.target.value }))} />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </Card>
   );
 }

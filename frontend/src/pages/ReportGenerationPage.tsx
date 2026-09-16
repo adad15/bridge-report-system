@@ -10,15 +10,22 @@ import {
 } from "@ant-design/icons";
 import {
   Alert,
+  Avatar,
   Button,
   Card,
+  Col,
   Empty,
+  Flex,
+  Form,
   Input,
   Progress,
+  Row,
   Select,
   Space,
   Statistic,
   Tag,
+  Typography,
+  theme,
 } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -47,8 +54,8 @@ import {
   type ReportTemplate,
 } from "../api/reportApi";
 import { reportErrorMessage, reportJobFailureHint } from "../report/reportErrors";
+import { PageHeader } from "../design-system";
 import { PERSONNEL_ROLE_OPTIONS } from "../report/reportNumberFormats";
-import "./ReportAdminPages.css";
 
 /** 任务还在跑时的轮询间隔。装配一份真实规模的报告要一分多钟，不必问得更密。 */
 const POLL_INTERVAL_MS = 3000;
@@ -175,26 +182,23 @@ export function ReportGenerationPage() {
   const canGenerate = (preflight?.can_generate ?? false) && settingsNotes.length === 0;
 
   return (
-    <section className="report-generate-page">
-      <header className="workspace-page-header">
-        <div>
-          <h1>生成报告</h1>
-          <p>
-            {preflight ? `${preflight.inspection_year} 年度` : "年度"}定期检测报告。
-            生成结果是临时下载文件，过期后重新生成即可。
-          </p>
-        </div>
-        <div className="workspace-page-actions">
-          <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-            刷新
-          </Button>
-          {bridgeId ? (
-            <Link to={`/bridges/${encodeURIComponent(bridgeId)}/inspections/${encodeURIComponent(yearId)}`}>
-              <Button>返回年度</Button>
-            </Link>
-          ) : null}
-        </div>
-      </header>
+    <Flex vertical gap={16}>
+      <PageHeader
+        title="生成报告"
+        description={`${preflight ? `${preflight.inspection_year} 年度` : "年度"}定期检测报告。生成结果是临时下载文件，过期后重新生成即可。`}
+        extra={
+          <>
+            <Button icon={<ReloadOutlined />} onClick={() => void load()}>
+              刷新
+            </Button>
+            {bridgeId ? (
+              <Link to={`/bridges/${encodeURIComponent(bridgeId)}/inspections/${encodeURIComponent(yearId)}`}>
+                <Button>返回年度</Button>
+              </Link>
+            ) : null}
+          </>
+        }
+      />
 
       {error ? <Alert type="error" showIcon title={error} closable onClose={() => setError(null)} /> : null}
       {notice ? <Alert type="success" showIcon title={notice} closable onClose={() => setNotice(null)} /> : null}
@@ -224,7 +228,17 @@ export function ReportGenerationPage() {
         canGenerate={canGenerate}
         onGenerate={() => void generate()}
       />
-    </section>
+    </Flex>
+  );
+}
+
+/** 一条检查结果：代码在前，说明在后。 */
+function FindingLine({ code, message }: { code: string; message: string }) {
+  return (
+    <Flex gap={8} align="baseline" wrap>
+      <Typography.Text code>{code}</Typography.Text>
+      <Typography.Text>{message}</Typography.Text>
+    </Flex>
   );
 }
 
@@ -246,7 +260,6 @@ function PreflightCard({
   const ready = (preflight?.can_generate ?? false) && notes.length === 0;
   return (
     <Card
-      className="report-admin-card"
       title={
         <Space>
           <span>生成条件</span>
@@ -261,48 +274,29 @@ function PreflightCard({
       }
     >
       {preflight === null ? (
-        <p className="report-muted">正在检查…</p>
+        <Typography.Text type="secondary">正在检查…</Typography.Text>
       ) : ready && warnings.length === 0 ? (
-        <p className="report-muted">数据、评定、模板、照片和字段更新环境都已就绪，可以生成。</p>
+        <Typography.Text type="secondary">数据、评定、模板、照片和字段更新环境都已就绪，可以生成。</Typography.Text>
       ) : (
-        <div className="report-finding-groups">
+        <Flex vertical gap={16}>
           {blocking.length > 0 || notes.length > 0 ? (
-            <div>
-              <h4>
-                <CloseCircleFilled className="is-blocking" /> 阻断项（处理完才能生成）
-              </h4>
-              <ul className="report-finding-list">
-                {blocking.map((item) => (
-                  <li key={item.code}>
-                    <span className="report-issue-code">{item.code}</span>
-                    <span>{item.message}</span>
-                  </li>
-                ))}
-                {notes.map((note) => (
-                  <li key={note}>
-                    <span className="report-issue-code">report_settings</span>
-                    <span>{note}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Flex vertical gap={6}>
+              <Typography.Text strong>
+                <Typography.Text type="danger"><CloseCircleFilled /></Typography.Text> 阻断项（处理完才能生成）
+              </Typography.Text>
+              {blocking.map((item) => <FindingLine key={item.code} code={item.code} message={item.message} />)}
+              {notes.map((note) => <FindingLine key={note} code="report_settings" message={note} />)}
+            </Flex>
           ) : null}
           {warnings.length > 0 ? (
-            <div>
-              <h4>
-                <ExclamationCircleFilled className="is-warning" /> 提示（不阻断生成）
-              </h4>
-              <ul className="report-finding-list">
-                {warnings.map((item) => (
-                  <li key={item.code}>
-                    <span className="report-issue-code">{item.code}</span>
-                    <span>{item.message}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Flex vertical gap={6}>
+              <Typography.Text strong>
+                <Typography.Text type="warning"><ExclamationCircleFilled /></Typography.Text> 提示（不阻断生成）
+              </Typography.Text>
+              {warnings.map((item) => <FindingLine key={item.code} code={item.code} message={item.message} />)}
+            </Flex>
           ) : null}
-        </div>
+        </Flex>
       )}
     </Card>
   );
@@ -388,7 +382,6 @@ function SettingsCard({
 
   return (
     <Card
-      className="report-admin-card"
       title="报告配置"
       extra={
         <Button
@@ -403,41 +396,47 @@ function SettingsCard({
       }
     >
       {settings === null ? (
-        <p className="report-muted">正在加载…</p>
+        <Typography.Text type="secondary">正在加载…</Typography.Text>
       ) : (
-        <div className="report-settings-body">
-          <div className="report-form-grid">
-            <label>
-              <span>报告模板</span>
-              <Select
-                value={templateId}
-                onChange={setTemplateId}
-                placeholder="选择一份已启用且校验通过的模板"
-                allowClear
-                options={templates
-                  .filter((item) => item.is_enabled && item.validation_status === "valid")
-                  .map((item) => ({
-                    value: item.id,
-                    label: item.is_default ? `${item.template_name}（默认）` : item.template_name,
-                  }))}
-              />
-            </label>
-            <label>
-              <span>历史对比检查</span>
-              <Select
-                value={comparisonId}
-                onChange={setComparisonId}
-                placeholder="不对比"
-                allowClear
-                options={candidates.map((item) => ({
-                  value: item.inspection_year_id,
-                  label: `${item.inspection_year} 年度 · ${item.status}${
-                    item.overall_grade ? ` · ${item.overall_grade}` : ""
-                  }`,
-                }))}
-              />
-            </label>
-          </div>
+        <Flex vertical gap={16}>
+          <Form layout="vertical">
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item label="报告模板" htmlFor="report-settings-template" style={{ marginBottom: 0 }}>
+                  <Select
+                    id="report-settings-template"
+                    value={templateId}
+                    onChange={setTemplateId}
+                    placeholder="选择一份已启用且校验通过的模板"
+                    allowClear
+                    options={templates
+                      .filter((item) => item.is_enabled && item.validation_status === "valid")
+                      .map((item) => ({
+                        value: item.id,
+                        label: item.is_default ? `${item.template_name}（默认）` : item.template_name,
+                      }))}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item label="历史对比检查" htmlFor="report-settings-comparison" style={{ marginBottom: 0 }}>
+                  <Select
+                    id="report-settings-comparison"
+                    value={comparisonId}
+                    onChange={setComparisonId}
+                    placeholder="不对比"
+                    allowClear
+                    options={candidates.map((item) => ({
+                      value: item.inspection_year_id,
+                      label: `${item.inspection_year} 年度 · ${item.status}${
+                        item.overall_grade ? ` · ${item.overall_grade}` : ""
+                      }`,
+                    }))}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
 
           {missingRoles.length > 0 ? (
             <Alert
@@ -447,9 +446,9 @@ function SettingsCard({
             />
           ) : null}
 
-          <div className="report-assignment-block">
-            <div className="report-assignment-head">
-              <h4>签字人员</h4>
+          <Flex vertical gap={8}>
+            <Flex align="center" justify="space-between">
+              <Typography.Title level={5} style={{ margin: 0 }}>签字人员</Typography.Title>
               <Button
                 size="small"
                 onClick={() =>
@@ -458,17 +457,18 @@ function SettingsCard({
               >
                 添加一行
               </Button>
-            </div>
+            </Flex>
             {people.length === 0 ? (
-              <p className="report-muted">还没有配置签字人员。</p>
+              <Typography.Text type="secondary">还没有配置签字人员。</Typography.Text>
             ) : (
               people.map((row, index) => (
-                <div className="report-assignment-row" key={`person-${index}`}>
+                <Flex gap={8} align="center" key={`person-${index}`}>
                   <Select
                     value={row.personnel_id || undefined}
                     placeholder="选择人员"
                     showSearch
                     optionFilterProp="label"
+                    style={{ flex: 1, minWidth: 0 }}
                     onChange={(value) => {
                       const next = [...people];
                       next[index] = { ...row, personnel_id: value };
@@ -483,6 +483,7 @@ function SettingsCard({
                   />
                   <Select
                     value={row.role_code}
+                    style={{ width: 180 }}
                     onChange={(value) => {
                       const next = [...people];
                       next[index] = { ...row, role_code: value };
@@ -493,28 +494,29 @@ function SettingsCard({
                   <Button danger type="link" onClick={() => setPeople(people.filter((_, i) => i !== index))}>
                     移除
                   </Button>
-                </div>
+                </Flex>
               ))
             )}
-          </div>
+          </Flex>
 
-          <div className="report-assignment-block">
-            <div className="report-assignment-head">
-              <h4>检测设备</h4>
+          <Flex vertical gap={8}>
+            <Flex align="center" justify="space-between">
+              <Typography.Title level={5} style={{ margin: 0 }}>检测设备</Typography.Title>
               <Button size="small" onClick={() => setGear([...gear, { equipment_id: "", purpose: "" }])}>
                 添加一行
               </Button>
-            </div>
+            </Flex>
             {gear.length === 0 ? (
-              <p className="report-muted">还没有配置检测设备。</p>
+              <Typography.Text type="secondary">还没有配置检测设备。</Typography.Text>
             ) : (
               gear.map((row, index) => (
-                <div className="report-assignment-row" key={`gear-${index}`}>
+                <Flex gap={8} align="center" key={`gear-${index}`}>
                   <Select
                     value={row.equipment_id || undefined}
                     placeholder="选择设备"
                     showSearch
                     optionFilterProp="label"
+                    style={{ flex: 1, minWidth: 0 }}
                     onChange={(value) => {
                       const next = [...gear];
                       next[index] = { ...row, equipment_id: value };
@@ -530,6 +532,7 @@ function SettingsCard({
                   <Input
                     value={row.purpose}
                     placeholder="用途，如裂缝宽度"
+                    style={{ width: 220 }}
                     onChange={(event) => {
                       const next = [...gear];
                       next[index] = { ...row, purpose: event.target.value };
@@ -539,18 +542,18 @@ function SettingsCard({
                   <Button danger type="link" onClick={() => setGear(gear.filter((_, i) => i !== index))}>
                     移除
                   </Button>
-                </div>
+                </Flex>
               ))
             )}
-          </div>
+          </Flex>
 
           {settings.configured_at ? (
-            <p className="report-muted">
+            <Typography.Text type="secondary">
               上次保存：{settings.configured_at.slice(0, 19)}
               {settings.configured_by_display_name ? ` · ${settings.configured_by_display_name}` : ""}
-            </p>
+            </Typography.Text>
           ) : null}
-        </div>
+        </Flex>
       )}
     </Card>
   );
@@ -569,8 +572,8 @@ function SummaryCard({
 }) {
   if (preflight === null) {
     return (
-      <Card className="report-admin-card" title="内容摘要">
-        <p className="report-muted">正在统计…</p>
+      <Card title="内容摘要">
+        <Typography.Text type="secondary">正在统计…</Typography.Text>
       </Card>
     );
   }
@@ -585,44 +588,46 @@ function SummaryCard({
     : [];
 
   return (
-    <Card className="report-admin-card" title="内容摘要">
-      <div className="report-summary-metrics">
-        <Statistic title="有病害的构件" value={summary.defect_component_count} />
-        <Statistic title="病害记录" value={summary.defect_observation_count} suffix="条" />
-        <Statistic title="去重来源病害" value={summary.source_defect_count} suffix="条" />
-        <Statistic title="照片" value={summary.photo_count} suffix="张" />
-        <Statistic title="综合评级" value={summary.overall_grade ?? "—"} />
-      </div>
-      <p className="report-muted">
-        病害记录与去重来源病害的差值，是构件范围拆分造成的：一条「1-5#板」会拆成五条记录，
-        但与上次检查的对比按来源病害计一次。
-      </p>
-      <div className="report-part-coverage">
-        <span>本次数据涉及：</span>
-        {summary.structure_parts_with_data.length === 0 ? (
-          <Tag>无正式病害</Tag>
-        ) : (
-          summary.structure_parts_with_data.map((part) => (
-            <Tag key={part} color={!coverageKnown || covered.has(part) ? "blue" : "red"}>
-              {structurePartLabel(part)}
-            </Tag>
-          ))
-        )}
-      </div>
-      {uncovered.length > 0 ? (
-        <Alert
-          type="error"
-          showIcon
-          title={`所选模板没有覆盖：${uncovered.map(structurePartLabel).join("、")}`}
-          description="这些部位的病害没有输出位置，生成会被阻断。请换一份覆盖该部位的模板。"
-        />
-      ) : null}
-      {settings !== null ? (
-        <p className="report-muted">
-          第 3 章、各部位的「病害成因分析」小节，以及两张附录卡片里没有数据来源的格子，
-          按首个标准模板保持空白，这是有意设计，不影响生成。
-        </p>
-      ) : null}
+    <Card title="内容摘要">
+      <Flex vertical gap={16}>
+        <Row gutter={[16, 16]}>
+          <Col xs={12} md={8} xl={4}><Statistic title="有病害的构件" value={summary.defect_component_count} /></Col>
+          <Col xs={12} md={8} xl={5}><Statistic title="病害记录" value={summary.defect_observation_count} suffix="条" /></Col>
+          <Col xs={12} md={8} xl={5}><Statistic title="去重来源病害" value={summary.source_defect_count} suffix="条" /></Col>
+          <Col xs={12} md={8} xl={5}><Statistic title="照片" value={summary.photo_count} suffix="张" /></Col>
+          <Col xs={12} md={8} xl={5}><Statistic title="综合评级" value={summary.overall_grade ?? "—"} /></Col>
+        </Row>
+        <Typography.Text type="secondary">
+          病害记录与去重来源病害的差值，是构件范围拆分造成的：一条「1-5#板」会拆成五条记录，
+          但与上次检查的对比按来源病害计一次。
+        </Typography.Text>
+        <Flex align="center" gap={6} wrap>
+          <Typography.Text>本次数据涉及：</Typography.Text>
+          {summary.structure_parts_with_data.length === 0 ? (
+            <Tag>无正式病害</Tag>
+          ) : (
+            summary.structure_parts_with_data.map((part) => (
+              <Tag key={part} color={!coverageKnown || covered.has(part) ? "blue" : "red"}>
+                {structurePartLabel(part)}
+              </Tag>
+            ))
+          )}
+        </Flex>
+        {uncovered.length > 0 ? (
+          <Alert
+            type="error"
+            showIcon
+            title={`所选模板没有覆盖：${uncovered.map(structurePartLabel).join("、")}`}
+            description="这些部位的病害没有输出位置，生成会被阻断。请换一份覆盖该部位的模板。"
+          />
+        ) : null}
+        {settings !== null ? (
+          <Typography.Text type="secondary">
+            第 3 章、各部位的「病害成因分析」小节，以及两张附录卡片里没有数据来源的格子，
+            按首个标准模板保持空白，这是有意设计，不影响生成。
+          </Typography.Text>
+        ) : null}
+      </Flex>
     </Card>
   );
 }
@@ -669,48 +674,60 @@ function CurrentReportCard({
   );
 
   return (
-    <Card className="report-admin-card" title="当前报告" extra={action}>
-      {!canGenerate && !running ? (
-        <Alert
-          className="report-current-alert"
-          type="warning"
-          showIcon
-          title="生成条件还有未处理的阻断项，先处理完再生成。"
-        />
-      ) : null}
+    <Card title="当前报告" extra={action}>
+      <Flex vertical gap={16}>
+        {!canGenerate && !running ? (
+          <Alert
+            type="warning"
+            showIcon
+            title="生成条件还有未处理的阻断项，先处理完再生成。"
+          />
+        ) : null}
 
-      {job === null ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="这个年度还没有生成过报告"
-        />
-      ) : running ? (
-        <RunningState job={job} />
-      ) : job.can_download ? (
-        <ReadyState job={job} />
-      ) : job.status === "expired" ? (
-        <ExpiredState job={job} />
-      ) : (
-        <FailedState job={job} />
-      )}
+        {job === null ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="这个年度还没有生成过报告"
+          />
+        ) : running ? (
+          <RunningState job={job} />
+        ) : job.can_download ? (
+          <ReadyState job={job} />
+        ) : job.status === "expired" ? (
+          <ExpiredState job={job} />
+        ) : (
+          <FailedState job={job} />
+        )}
+      </Flex>
     </Card>
   );
 }
 
+/** 报告状态图标：语义色的方块，和指标卡的图标块同一种形态。 */
+function StateIcon({ icon, tone }: { icon: JSX.Element; tone: "success" | "error" | "neutral" }) {
+  const { token } = theme.useToken();
+  const palette = {
+    success: { color: token.colorSuccess, backgroundColor: token.colorSuccessBg },
+    error: { color: token.colorError, backgroundColor: token.colorErrorBg },
+    neutral: { color: token.colorTextSecondary, backgroundColor: token.colorFillTertiary },
+  }[tone];
+  return <Avatar shape="square" size={56} icon={icon} style={{ flex: "none", ...palette }} />;
+}
+
 function RunningState({ job }: { job: ReportJob }) {
   return (
-    <div className="report-current report-current-running">
+    <Flex vertical gap={8}>
       <Progress
         percent={STAGE_PERCENT[job.status] ?? 0}
         status="active"
         format={() => REPORT_JOB_STAGE_LABELS[job.status]}
       />
-      <p className="report-muted">
+      <Typography.Text type="secondary">
         {job.status === "updating_fields"
           ? "正在交给 Word 或 WPS 算目录页码和总页数。本机同时只允许一个更新在跑，排队是正常的。"
           : "装配一份真实规模的报告要一分多钟，进度会自动刷新。"}
-      </p>
-    </div>
+      </Typography.Text>
+    </Flex>
   );
 }
 
@@ -724,75 +741,69 @@ function ReadyState({ job }: { job: ReportJob }) {
   ].filter(Boolean);
 
   return (
-    <div className="report-current report-current-ready">
-      <span className="report-current-icon is-ready">
-        <FileWordOutlined />
-      </span>
-      <div className="report-current-body">
-        <strong>{job.download_filename}</strong>
-        <span className="report-muted">{facts.join(" · ")}</span>
-        <span className="report-muted">
-          生成于 {job.finished_at?.slice(0, 19) ?? job.created_at.slice(0, 19)}
-          {job.expires_at ? `，有效期至 ${job.expires_at.slice(0, 19)}` : ""}
-          。过期后临时文件自动清理，重新生成即可。
-        </span>
-      </div>
-      <Button
-        type="primary"
-        size="large"
-        icon={<DownloadOutlined />}
-        loading={downloading}
-        onClick={async () => {
-          setDownloading(true);
-          setError(null);
-          try {
-            await downloadReportJob(job.id, job.download_filename ?? "报告.docx");
-          } catch (caught) {
-            setError(reportErrorMessage(caught));
-          } finally {
-            setDownloading(false);
-          }
-        }}
-      >
-        下载报告
-      </Button>
-      {error ? (
-        <Alert className="report-current-error" type="error" showIcon title={error} />
-      ) : null}
-    </div>
+    <Flex vertical gap={12}>
+      <Flex align="center" gap={16} wrap>
+        <StateIcon icon={<FileWordOutlined />} tone="success" />
+        <Flex vertical gap={2} style={{ flex: 1, minWidth: 240 }}>
+          <Typography.Text strong>{job.download_filename}</Typography.Text>
+          <Typography.Text type="secondary">{facts.join(" · ")}</Typography.Text>
+          <Typography.Text type="secondary">
+            生成于 {job.finished_at?.slice(0, 19) ?? job.created_at.slice(0, 19)}
+            {job.expires_at ? `，有效期至 ${job.expires_at.slice(0, 19)}` : ""}
+            。过期后临时文件自动清理，重新生成即可。
+          </Typography.Text>
+        </Flex>
+        <Button
+          type="primary"
+          size="large"
+          icon={<DownloadOutlined />}
+          loading={downloading}
+          onClick={async () => {
+            setDownloading(true);
+            setError(null);
+            try {
+              await downloadReportJob(job.id, job.download_filename ?? "报告.docx");
+            } catch (caught) {
+              setError(reportErrorMessage(caught));
+            } finally {
+              setDownloading(false);
+            }
+          }}
+        >
+          下载报告
+        </Button>
+      </Flex>
+      {error ? <Alert type="error" showIcon title={error} /> : null}
+    </Flex>
   );
 }
 
 function FailedState({ job }: { job: ReportJob }) {
   const hint = reportJobFailureHint(job.error_code);
   return (
-    <div className="report-current">
-      <span className="report-current-icon is-failed">
-        <CloseCircleFilled />
-      </span>
-      <div className="report-current-body">
-        <strong>生成失败</strong>
-        <span className="report-issue-code">{job.error_code ?? "unknown"}</span>
-        <span>{job.error_message ?? "失败原因未记录。"}</span>
-        {hint ? <span className="report-muted">{hint}</span> : null}
-      </div>
-    </div>
+    <Flex align="center" gap={16}>
+      <StateIcon icon={<CloseCircleFilled />} tone="error" />
+      <Flex vertical gap={2}>
+        <Typography.Text strong>生成失败</Typography.Text>
+        <Typography.Text code>{job.error_code ?? "unknown"}</Typography.Text>
+        <Typography.Text>{job.error_message ?? "失败原因未记录。"}</Typography.Text>
+        {hint ? <Typography.Text type="secondary">{hint}</Typography.Text> : null}
+      </Flex>
+    </Flex>
   );
 }
 
 function ExpiredState({ job }: { job: ReportJob }) {
   return (
-    <div className="report-current">
-      <span className="report-current-icon is-expired">
-        <ClockCircleFilled />
-      </span>
-      <div className="report-current-body">
-        <strong>报告已过期</strong>
-        <span className="report-muted">
+    <Flex align="center" gap={16}>
+      <StateIcon icon={<ClockCircleFilled />} tone="neutral" />
+      <Flex vertical gap={2}>
+        <Typography.Text strong>报告已过期</Typography.Text>
+        <Typography.Text type="secondary">
           上次生成于 {job.finished_at?.slice(0, 19) ?? job.created_at.slice(0, 19)}，
           临时文件已清理。系统不保存报告版本，重新生成即可拿到同样的内容。
-        </span>
-      </div>
-    </div>
+        </Typography.Text>
+      </Flex>
+    </Flex>
   );
 }

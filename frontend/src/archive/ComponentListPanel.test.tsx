@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ComponentSummary } from "../api/componentArchiveApi";
+import { chooseOption } from "../test/antd";
 import { ComponentListPanel } from "./ComponentListPanel";
 
 function makeComponent(overrides: Partial<ComponentSummary> = {}): ComponentSummary {
@@ -81,7 +82,7 @@ describe("ComponentListPanel", () => {
   });
 
   // 默认按评分升序：列表是用来找有问题的构件的，不是按编号翻字典。
-  it("orders the worst score first by default", () => {
+  it("orders the worst score first by default", async () => {
     render(<ComponentListPanel components={components} selectedComponentId={null} onSelect={vi.fn()} />);
 
     const codes = within(groupItems("上部结构 · 板"))
@@ -89,7 +90,7 @@ describe("ComponentListPanel", () => {
     expect(codes[0]).toContain("2-1#板");
     expect(codes[1]).toContain("2-2#板");
 
-    fireEvent.change(screen.getByLabelText("排序方式"), { target: { value: "code" } });
+    await chooseOption(screen.getByLabelText("排序方式"), "按编号");
     const byCode = within(groupItems("上部结构 · 板"))
       .getAllByRole("button").map((item) => item.textContent);
     expect(byCode[0]).toContain("2-1#板");
@@ -119,7 +120,7 @@ describe("ComponentListPanel", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  it("filters by keyword and structure part", () => {
+  it("filters by keyword and structure part", async () => {
     render(<ComponentListPanel components={components} selectedComponentId={null} onSelect={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText("搜索构件"), { target: { value: "伸缩" } });
@@ -127,11 +128,11 @@ describe("ComponentListPanel", () => {
     expect(screen.getByRole("button", { name: /桥面系 · 伸缩缝/ })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("搜索构件"), { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText("结构分部筛选"), { target: { value: "上部结构" } });
+    await chooseOption(screen.getByLabelText("结构分部筛选"), "上部结构");
     expect(screen.getByRole("button", { name: /上部结构 · 板/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /桥面系 · 伸缩缝/ })).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("结构分部筛选"), { target: { value: "全部" } });
+    await chooseOption(screen.getByLabelText("结构分部筛选"), "全部结构");
     expect(screen.getByRole("button", { name: /上部结构 · 板/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /桥面系 · 伸缩缝/ })).toBeInTheDocument();
   });

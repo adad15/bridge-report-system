@@ -1,8 +1,13 @@
 import { App as AntdApp, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
+import dayjs from "dayjs";
+import "dayjs/locale/zh-cn";
 import type { PropsWithChildren } from "react";
 
 import { bridgeReportTheme } from "./theme";
+
+// DatePicker 的月份名和"周一起排"取自 dayjs 的语言包，antd 的 zh_CN 只管按钮文案。
+dayjs.locale("zh-cn");
 
 /**
  * 全站唯一的 Ant Design 根级 Provider。

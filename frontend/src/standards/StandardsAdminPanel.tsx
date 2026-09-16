@@ -1,3 +1,4 @@
+import { Alert, Button, Card, Flex, Modal, Tag, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -42,46 +43,47 @@ export function StandardsAdminPanel({ onClose }: Props) {
     }
   }
 
+  const statusTag = (item: StandardPackageSummary) => {
+    if (item.sync_status !== "正常") return <Tag color="error">故障</Tag>;
+    return item.is_enabled ? <Tag color="success">已启用</Tag> : <Tag>已停用</Tag>;
+  };
+
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <section className="workspace-dialog standards-admin-panel" role="dialog" aria-modal="true" aria-labelledby="standards-title">
-        <header className="standards-admin-header">
-          <h2 id="standards-title">规范管理</h2>
-          <button
-            type="button"
-            className="standards-admin-close"
-            aria-label="关闭规范管理"
-            disabled={busyId !== null}
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </header>
-        <div className="standards-admin-scroll">
-          <p className="standards-admin-note">停用只影响新建年度；历史年度仍保留原规范版本。</p>
-          {error ? <p className="error-text" role="alert">{error}</p> : null}
-          {packages === null && !error ? <p>正在加载规范目录…</p> : null}
-          {packages?.map((item) => (
-            <article className="standard-package-row" key={item.id}>
-              <div>
-                <strong>{item.standard_code} · {item.official_edition}</strong>
-                <p>{familyName(item.family)} · 规则包 {item.package_version}</p>
-                <span className={item.sync_status === "正常" ? "status-badge" : "warning-badge"}>
-                  {item.sync_status === "正常" ? (item.is_enabled ? "已启用" : "已停用") : "故障"}
-                </span>
-              </div>
-              <button
-                type="button"
-                disabled={busyId !== null || item.sync_status === "故障"}
+    <Modal
+      open
+      centered
+      width={640}
+      title="规范管理"
+      closable={{ "aria-label": "关闭规范管理", disabled: busyId !== null }}
+      onCancel={onClose}
+      styles={{ body: { maxHeight: "calc(100vh - 220px)", overflowY: "auto", overflowX: "hidden" } }}
+      footer={<Button onClick={onClose} disabled={busyId !== null}>关闭</Button>}
+    >
+      <Flex vertical gap={12}>
+        <Typography.Text type="secondary">停用只影响新建年度；历史年度仍保留原规范版本。</Typography.Text>
+        {error ? <Alert type="error" showIcon title={error} /> : null}
+        {packages === null && !error ? <Typography.Text type="secondary">正在加载规范目录…</Typography.Text> : null}
+        {packages?.map((item) => (
+          <Card key={item.id} size="small">
+            <Flex align="center" justify="space-between" gap={12}>
+              <Flex vertical gap={4}>
+                <Typography.Text strong>{item.standard_code} · {item.official_edition}</Typography.Text>
+                <Typography.Text type="secondary">
+                  {familyName(item.family)} · 规则包 {item.package_version}
+                </Typography.Text>
+                <div>{statusTag(item)}</div>
+              </Flex>
+              <Button
+                loading={busyId === item.id}
+                disabled={(busyId !== null && busyId !== item.id) || item.sync_status === "故障"}
                 onClick={() => void toggle(item)}
               >
-                {busyId === item.id ? "正在保存…" : item.is_enabled ? "停用" : "启用"}
-              </button>
-            </article>
-          ))}
-        </div>
-        <div className="dialog-actions"><button type="button" onClick={onClose} disabled={busyId !== null}>关闭</button></div>
-      </section>
-    </div>
+                {item.is_enabled ? "停用" : "启用"}
+              </Button>
+            </Flex>
+          </Card>
+        ))}
+      </Flex>
+    </Modal>
   );
 }

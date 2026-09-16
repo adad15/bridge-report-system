@@ -1,4 +1,24 @@
-import { type DragEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { InboxOutlined } from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Col,
+  DatePicker,
+  Flex,
+  Form,
+  Input,
+  Modal,
+  Row,
+  Select,
+  Tag,
+  Typography,
+  Upload,
+  type GetRef,
+  type InputRef,
+  type RefSelectProps,
+} from "antd";
+import dayjs from "dayjs";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { parseWordImport } from "../api/reviewApi";
 import {
@@ -10,7 +30,6 @@ import {
   workspaceErrorMessage,
 } from "../api/workspaceApi";
 import { backendBaseUrl } from "../config";
-import { InspectionDatePicker, isCompleteDate } from "./InspectionDatePicker";
 
 interface Props {
   bridgeName: string;
@@ -53,19 +72,17 @@ export function ImportWordDialog({
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [dragging, setDragging] = useState(false);
   const [sourceType, setSourceType] = useState<"软件导出Word" | "正式Word">("软件导出Word");
   const [inspectionDate, setInspectionDate] = useState("");
   const [reportNumber, setReportNumber] = useState("");
   const [projectName, setProjectName] = useState(`${bridgeName}${inspectionYear}年度定期检测`);
   const [phase, setPhase] = useState<"idle" | "uploading" | "parsing">("idle");
   const [error, setError] = useState<string | null>(null);
-  const sourceDbPathRef = useRef<HTMLInputElement>(null);
-  const taskIdRef = useRef<HTMLSelectElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const inspectionDateRef = useRef<HTMLInputElement>(null);
-  const reportNumberRef = useRef<HTMLInputElement>(null);
-  const projectNameRef = useRef<HTMLInputElement>(null);
+  const sourceDbPathRef = useRef<InputRef>(null);
+  const taskIdRef = useRef<RefSelectProps>(null);
+  const inspectionDateRef = useRef<GetRef<typeof DatePicker>>(null);
+  const reportNumberRef = useRef<InputRef>(null);
+  const projectNameRef = useRef<InputRef>(null);
 
   const busy = phase !== "idle";
   // 重新解析走的是既有导入记录，来源在登记时就定了，这里不再让人改。
@@ -97,16 +114,7 @@ export function ImportWordDialog({
   // 这里只是提前把红框亮出来。
   const wrongExtension = !!file && !file.name.toLocaleLowerCase().endsWith(".docx");
 
-  function acceptDrop(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setDragging(false);
-    if (busy) return;
-    const dropped = event.dataTransfer.files?.[0];
-    if (dropped) setFile(dropped);
-  }
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function submit() {
     setError(null);
     if (fromSourceDb) {
       if (!sourceDbPath.trim()) {
@@ -122,11 +130,10 @@ export function ImportWordDialog({
     } else if (!retryImport) {
       if (!file || !file.name.toLocaleLowerCase().endsWith(".docx")) {
         setError("请选择一个 .docx 文件。");
-        fileInputRef.current?.focus();
         return;
       }
     }
-    if (!isCompleteDate(inspectionDate)) {
+    if (inspectionDate === "") {
       setError("请选择检查日期，格式为 2026-05-18。");
       inspectionDateRef.current?.focus();
       return;
@@ -175,218 +182,210 @@ export function ImportWordDialog({
     }
   }
 
+  const primaryText = retryImport ? "重新解析" : fromSourceDb ? "开始导入" : "上传并解析";
+
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <form
-        className="workspace-dialog import-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="import-word-title"
-        noValidate
-        onSubmit={(event) => void submit(event)}
-      >
-        <header className="import-dialog-header">
-          <h2 id="import-word-title">{retryImport ? "重新解析检测资料" : "导入检测资料"}</h2>
-          {/* 弹窗一开就盖住了页面，得自己说清楚这份资料要落到哪座桥的哪一年；
-              规则模板恒为辽宁国省干线，跟着落在同一行，不值得单占一个字段。 */}
-          <p className="import-dialog-target">
-            {bridgeName} · {inspectionYear} 年度
-            {fromSourceDb ? null : (
-              <span className="import-dialog-profile">规则模板 辽宁国省干线</span>
-            )}
-          </p>
-        </header>
+    <Modal
+      open
+      centered
+      width={640}
+      mask={{ closable: false }}
+      onCancel={onClose}
+      title={retryImport ? "重新解析检测资料" : "导入检测资料"}
+      styles={{ body: { maxHeight: "calc(100vh - 220px)", overflowY: "auto", overflowX: "hidden" } }}
+      footer={[
+        <Button key="cancel" onClick={onClose} disabled={busy}>取消</Button>,
+        <Button key="submit" type="primary" loading={busy} onClick={() => void submit()}>{primaryText}</Button>,
+      ]}
+    >
+      <Flex vertical gap={12}>
+        {/* 弹窗一开就盖住了页面，得自己说清楚这份资料要落到哪座桥的哪一年；
+            规则模板恒为辽宁国省干线，跟着落在同一行，不值得单占一个字段。 */}
+        <Flex align="center" gap={8} wrap>
+          <Typography.Text type="secondary">{bridgeName} · {inspectionYear} 年度</Typography.Text>
+          {fromSourceDb ? null : <Tag>规则模板 辽宁国省干线</Tag>}
+        </Flex>
 
         {retryImport ? (
-          <p className="dialog-note">将重新解析仍在保留期内的临时资料：{retryImport.import_name}</p>
-        ) : (
-          <>
-            <div className="import-field">
-              <label htmlFor="import-data-source">数据来源</label>
-              <select
+          <Alert type="info" showIcon role="note" title={`将重新解析仍在保留期内的临时资料：${retryImport.import_name}`} />
+        ) : null}
+
+        <Form layout="vertical" onFinish={() => void submit()}>
+          {retryImport ? null : (
+            <Form.Item label="数据来源" htmlFor="import-data-source">
+              <Select
                 id="import-data-source"
                 value={dataSource}
                 disabled={busy}
-                onChange={(event) => setDataSource(event.target.value as typeof dataSource)}
-              >
-                {/* value 是本地分支用的判别值，不发给后端；这里只改显示名。 */}
-                <option value="来源软件">博试云桥隧定检系统</option>
-                <option value="Word">Word 文件</option>
-              </select>
-            </div>
-          </>
-        )}
+                onChange={setDataSource}
+                // value 是本地分支用的判别值，不发给后端；这里只改显示名。
+                options={[
+                  { value: "来源软件", label: "博试云桥隧定检系统" },
+                  { value: "Word", label: "Word 文件" },
+                ]}
+              />
+            </Form.Item>
+          )}
 
-        {/* 检查日期排在来源相关字段之前：它的浮层向下展开约 300px，
-           放在表单末尾会把对话框的可滚动高度撑出去、滚动条一出现整个弹窗就重排。 */}
-        <div className="import-field-row">
-          <div className="import-field required">
-            <label htmlFor="import-inspection-date">检查日期</label>
-            <InspectionDatePicker
-              id="import-inspection-date"
-              ref={inspectionDateRef}
-              required
-              disabled={busy}
-              value={inspectionDate}
-              onChange={setInspectionDate}
-            />
-          </div>
-          <div className="import-field required">
-            <label htmlFor="import-report-number">报告编号</label>
-            <input
-              id="import-report-number"
-              ref={reportNumberRef}
-              required
-              disabled={busy}
-              value={reportNumber}
-              onChange={(event) => setReportNumber(event.target.value)}
-            />
-          </div>
-        </div>
-
-        {fromSourceDb ? (
-          <>
-            <p className="dialog-note">
-              请先在博试云桥隧定检系统的桌面程序里打开该桥并下载对应年度——数据要在那一步才会落到本机离线库里。
-            </p>
-            <div className="import-field required">
-              <label htmlFor="import-source-db-path">离线库路径</label>
-              <div className="import-source-path-row">
-                <input
-                  id="import-source-db-path"
-                  ref={sourceDbPathRef}
-                  required
-                  disabled={busy || loadingTasks}
-                  value={sourceDbPath}
-                  placeholder={loadingTasks ? "正在查找博试云桥隧定检系统的离线库…" : "离线库的完整路径"}
-                  onChange={(event) => setSourceDbPath(event.target.value)}
-                />
-                <button
-                  type="button"
-                  disabled={busy || loadingTasks}
-                  onClick={() => void loadTasks(sourceDbPath.trim() || undefined)}
-                >
-                  {loadingTasks ? "读取中…" : "重新读取"}
-                </button>
-              </div>
-              <p className="import-field-hint">
-                已按博试云桥隧定检系统的默认位置填好，一般不用改。离线库只会被只读打开，不会被复制或修改。
-              </p>
-              {taskError ? <p className="import-field-warn">{taskError}</p> : null}
-            </div>
-            <div className="import-field required">
-              <label htmlFor="import-source-task">检测任务</label>
-              <select
-                id="import-source-task"
-                ref={taskIdRef}
-                required
-                disabled={busy || loadingTasks || !tasks?.length}
-                value={taskId}
-                onChange={(event) => setTaskId(event.target.value)}
-              >
-                <option value="">
-                  {loadingTasks ? "正在读取…" : tasks?.length ? "请选择" : "未读到检测任务"}
-                </option>
-                {(tasks ?? []).map((task) => (
-                  <option key={task.task_id} value={task.task_id}>
-                    {[task.name, task.check_date ?? "未填日期",
-                      `${task.defect_count} 条病害`, `${task.photo_count} 张照片`].join(" · ")}
-                  </option>
-                ))}
-              </select>
-              <p className="import-field-hint">
-                一份离线库里存着你打开过的所有桥；病害与照片条数可以用来确认这一年是否已下载全。
-              </p>
-            </div>
-          </>
-        ) : null}
-
-        {retryImport || fromSourceDb ? null : (
-          <>
-            <div className="import-field required">
-              <label htmlFor="import-word-file">Word 文件</label>
-              <div
-                className={[
-                  "import-file-picker",
-                  file ? "has-file" : "",
-                  dragging ? "dragging" : "",
-                  wrongExtension ? "invalid" : "",
-                ].filter(Boolean).join(" ")}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  if (!busy) setDragging(true);
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={acceptDrop}
-              >
-                <input
-                  id="import-word-file"
-                  ref={fileInputRef}
-                  className="import-file-input"
-                  type="file"
-                  accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          {/* 检查日期排在来源相关字段之前：它的浮层向下展开，放在表单末尾容易被弹窗底边挡住。 */}
+          <Row gutter={14}>
+            <Col span={12}>
+              <Form.Item label="检查日期" htmlFor="import-inspection-date" required>
+                <DatePicker
+                  id="import-inspection-date"
+                  ref={inspectionDateRef}
+                  format="YYYY-MM-DD"
+                  placeholder="2026-05-18"
                   disabled={busy}
-                  onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                  value={inspectionDate ? dayjs(inspectionDate) : null}
+                  onChange={(date) => setInspectionDate(date ? date.format("YYYY-MM-DD") : "")}
+                  style={{ width: "100%" }}
                 />
-                <span className="import-file-body" aria-hidden="true">
-                  {file ? (
-                    <>
-                      <span className="import-file-name">{file.name}</span>
-                      <span className="import-file-meta">{formatFileSize(file.size)} · 点击可重选</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="import-file-name">点击选择，或把 .docx 拖到这里</span>
-                      <span className="import-file-meta">仅支持检测软件导出的 .docx</span>
-                    </>
-                  )}
-                </span>
-              </div>
-              {wrongExtension ? <p className="import-field-warn">只能导入 .docx 文件。</p> : null}
-            </div>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="报告编号" htmlFor="import-report-number" required>
+                <Input
+                  id="import-report-number"
+                  ref={reportNumberRef}
+                  disabled={busy}
+                  value={reportNumber}
+                  onChange={(event) => setReportNumber(event.target.value)}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
 
-            <div className="import-field">
-              <label htmlFor="import-source-type">来源类型</label>
-              <select
-                id="import-source-type"
-                value={sourceType}
-                disabled={busy}
-                onChange={(event) => setSourceType(event.target.value as typeof sourceType)}
+          {fromSourceDb ? (
+            <>
+              <Form.Item>
+                <Alert
+                  type="info"
+                  showIcon
+                  role="note"
+                  title="请先在博试云桥隧定检系统的桌面程序里打开该桥并下载对应年度——数据要在那一步才会落到本机离线库里。"
+                />
+              </Form.Item>
+              <Form.Item
+                label="离线库路径"
+                htmlFor="import-source-db-path"
+                required
+                extra={taskError
+                  ? <Typography.Text type="warning">{taskError}</Typography.Text>
+                  : "已按博试云桥隧定检系统的默认位置填好，一般不用改。离线库只会被只读打开，不会被复制或修改。"}
               >
-                <option>软件导出Word</option>
-                <option>正式Word</option>
-              </select>
-            </div>
-          </>
-        )}
+                <Flex gap={8}>
+                  <Input
+                    id="import-source-db-path"
+                    ref={sourceDbPathRef}
+                    disabled={busy || loadingTasks}
+                    value={sourceDbPath}
+                    placeholder={loadingTasks ? "正在查找博试云桥隧定检系统的离线库…" : "离线库的完整路径"}
+                    onChange={(event) => setSourceDbPath(event.target.value)}
+                  />
+                  <Button
+                    disabled={busy}
+                    loading={loadingTasks}
+                    onClick={() => void loadTasks(sourceDbPath.trim() || undefined)}
+                  >
+                    重新读取
+                  </Button>
+                </Flex>
+              </Form.Item>
+              <Form.Item
+                label="检测任务"
+                htmlFor="import-source-task"
+                required
+                extra="一份离线库里存着你打开过的所有桥；病害与照片条数可以用来确认这一年是否已下载全。"
+              >
+                <Select
+                  id="import-source-task"
+                  ref={taskIdRef}
+                  disabled={busy || loadingTasks || !tasks?.length}
+                  value={taskId || undefined}
+                  placeholder={loadingTasks ? "正在读取…" : tasks?.length ? "请选择" : "未读到检测任务"}
+                  onChange={setTaskId}
+                  options={(tasks ?? []).map((task) => ({
+                    value: task.task_id,
+                    label: [task.name, task.check_date ?? "未填日期",
+                      `${task.defect_count} 条病害`, `${task.photo_count} 张照片`].join(" · "),
+                  }))}
+                />
+              </Form.Item>
+            </>
+          ) : null}
 
-        <div className="import-field required">
-          <label htmlFor="import-project-name">项目名称</label>
-          <input
-            id="import-project-name"
-            ref={projectNameRef}
+          {retryImport || fromSourceDb ? null : (
+            <>
+              <Form.Item label="Word 文件" htmlFor="import-word-file" required>
+                <Upload.Dragger
+                  id="import-word-file"
+                  accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  showUploadList={false}
+                  disabled={busy}
+                  beforeUpload={(picked) => {
+                    setFile(picked);
+                    return Upload.LIST_IGNORE;
+                  }}
+                >
+                  <Flex vertical align="center" gap={4}>
+                    <InboxOutlined aria-hidden="true" />
+                    {file ? (
+                      <>
+                        <Typography.Text strong>{file.name}</Typography.Text>
+                        <Typography.Text type="secondary">{formatFileSize(file.size)} · 点击可重选</Typography.Text>
+                      </>
+                    ) : (
+                      <>
+                        <Typography.Text>点击选择，或把 .docx 拖到这里</Typography.Text>
+                        <Typography.Text type="secondary">仅支持检测软件导出的 .docx</Typography.Text>
+                      </>
+                    )}
+                    {/* 选错扩展名当场就说，不必等到点了提交才发现——拦截仍在提交处。 */}
+                    {wrongExtension ? <Typography.Text type="danger">只能导入 .docx 文件。</Typography.Text> : null}
+                  </Flex>
+                </Upload.Dragger>
+              </Form.Item>
+
+              <Form.Item label="来源类型" htmlFor="import-source-type">
+                <Select
+                  id="import-source-type"
+                  value={sourceType}
+                  disabled={busy}
+                  onChange={setSourceType}
+                  options={[
+                    { value: "软件导出Word", label: "软件导出Word" },
+                    { value: "正式Word", label: "正式Word" },
+                  ]}
+                />
+              </Form.Item>
+            </>
+          )}
+
+          <Form.Item
+            label="项目名称"
+            htmlFor="import-project-name"
             required
-            disabled={busy}
-            value={projectName}
-            onChange={(event) => setProjectName(event.target.value)}
-          />
-          <p className="import-field-hint">已按桥名与年度预填，如与报告封面不一致请改成封面上的写法。</p>
-        </div>
+            extra="已按桥名与年度预填，如与报告封面不一致请改成封面上的写法。"
+          >
+            <Input
+              id="import-project-name"
+              ref={projectNameRef}
+              disabled={busy}
+              value={projectName}
+              onChange={(event) => setProjectName(event.target.value)}
+            />
+          </Form.Item>
+        </Form>
 
         {phase === "uploading" ? (
-          <p className="progress-text">
+          <Typography.Text type="secondary">
             {fromSourceDb ? "正在登记来源库导入…" : "正在上传并临时保存 Word…"}
-          </p>
+          </Typography.Text>
         ) : null}
-        {phase === "parsing" ? <p className="progress-text">正在解析病害、照片和评分…</p> : null}
-        {error ? <p className="error-text" role="alert">{error}</p> : null}
-        <div className="dialog-actions">
-          <button type="button" onClick={onClose} disabled={busy}>取消</button>
-          <button className="primary-button" type="submit" disabled={busy}>
-            {busy ? "处理中…" : retryImport ? "重新解析" : fromSourceDb ? "开始导入" : "上传并解析"}
-          </button>
-        </div>
-      </form>
-    </div>
+        {phase === "parsing" ? <Typography.Text type="secondary">正在解析病害、照片和评分…</Typography.Text> : null}
+        {error ? <Alert type="error" showIcon title={error} /> : null}
+      </Flex>
+    </Modal>
   );
 }

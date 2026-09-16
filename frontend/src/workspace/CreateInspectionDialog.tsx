@@ -1,3 +1,4 @@
+import { Alert, Flex, Form, InputNumber, Modal, Select } from "antd";
 import { useEffect, useState } from "react";
 
 import { ApiError } from "../api/apiClient";
@@ -16,7 +17,7 @@ interface Props {
 }
 
 export function CreateInspectionDialog({ bridgeId, onClose, onCreated }: Props) {
-  const [year, setYear] = useState(new Date().getFullYear());
+  const [year, setYear] = useState<number | null>(new Date().getFullYear());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [trees, setTrees] = useState<RatingTreeVersionSummary[] | null>(null);
@@ -37,7 +38,7 @@ export function CreateInspectionDialog({ bridgeId, onClose, onCreated }: Props) 
   }, []);
 
   async function submit() {
-    if (!Number.isInteger(year) || year < 1900 || year > 2200) {
+    if (year === null || !Number.isInteger(year) || year < 1900 || year > 2200) {
       setError("检测年度必须是 1900 至 2200 的整数。");
       return;
     }
@@ -68,24 +69,50 @@ export function CreateInspectionDialog({ bridgeId, onClose, onCreated }: Props) 
   }
 
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <section className="workspace-dialog" role="dialog" aria-modal="true" aria-labelledby="create-year-title">
-        <h2 id="create-year-title">新建年度检测</h2>
-        <label>检测年度<input type="number" min={1900} max={2200} value={year} onChange={(event) => setYear(Number(event.target.value))} /></label>
-        <label>桥梁评定树
-          <select value={ratingTreeVersionId} onChange={(event) => setRatingTreeVersionId(event.target.value)} disabled={trees === null || submitting}>
-            <option value="">请选择桥梁评定树</option>
-            {trees?.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.tree_name} · 树 {item.package_version} · H21 {item.h21_package_version} · JTG 5120 {item.maintenance_package_version}
-              </option>
-            ))}
-          </select>
-        </label>
-        {trees !== null && trees.length === 0 ? <p className="warning-text">缺少已发布的桥梁评定树，请检查后端规则同步状态。</p> : null}
-        {error ? <p className="error-text" role="alert">{error}</p> : null}
-        <div className="dialog-actions"><button type="button" onClick={onClose} disabled={submitting}>取消</button><button type="button" className="primary-button" onClick={() => void submit()} disabled={submitting || trees === null}>{submitting ? "正在创建…" : "创建年度"}</button></div>
-      </section>
-    </div>
+    <Modal
+      open
+      centered
+      title="新建年度检测"
+      okText="创建年度"
+      cancelText="取消"
+      confirmLoading={submitting}
+      okButtonProps={{ disabled: trees === null }}
+      cancelButtonProps={{ disabled: submitting }}
+      mask={{ closable: false }}
+      onOk={() => void submit()}
+      onCancel={onClose}
+    >
+      <Form layout="vertical" requiredMark={false} onFinish={() => void submit()}>
+        <Form.Item label="检测年度" htmlFor="create-inspection-year">
+          {/* 不设 min/max：越界时 InputNumber 会在失焦时悄悄改成边界值，用户看不到自己填错了。 */}
+          <InputNumber
+            id="create-inspection-year"
+            style={{ width: "100%" }}
+            precision={0}
+            value={year}
+            onChange={setYear}
+          />
+        </Form.Item>
+        <Form.Item label="桥梁评定树" htmlFor="create-inspection-tree">
+          <Select
+            id="create-inspection-tree"
+            placeholder="请选择桥梁评定树"
+            value={ratingTreeVersionId || undefined}
+            disabled={trees === null || submitting}
+            onChange={setRatingTreeVersionId}
+            options={trees?.map((item) => ({
+              value: item.id,
+              label: `${item.tree_name} · 树 ${item.package_version} · H21 ${item.h21_package_version} · JTG 5120 ${item.maintenance_package_version}`,
+            }))}
+          />
+        </Form.Item>
+      </Form>
+      <Flex vertical gap={8}>
+        {trees !== null && trees.length === 0 ? (
+          <Alert type="warning" showIcon role="note" title="缺少已发布的桥梁评定树，请检查后端规则同步状态。" />
+        ) : null}
+        {error ? <Alert type="error" showIcon title={error} /> : null}
+      </Flex>
+    </Modal>
   );
 }

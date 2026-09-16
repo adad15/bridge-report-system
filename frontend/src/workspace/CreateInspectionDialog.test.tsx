@@ -30,7 +30,8 @@ describe("CreateInspectionDialog", () => {
     vi.mocked(createInspectionYear).mockResolvedValue({ id: "year-1" } as never);
     const onCreated = vi.fn();
     render(<CreateInspectionDialog bridgeId="bridge-1" onClose={vi.fn()} onCreated={onCreated} />);
-    expect(await screen.findByRole("option", { name: /单位桥梁有效评定树.*H21 1.0.1.*JTG 5120 1.0.0/ })).toBeInTheDocument();
+    // 只有一个已发布的评定树时自动选上，选中项里带着三个规范包的版本。
+    expect(await screen.findByText(/单位桥梁有效评定树.*H21 1.0.1.*JTG 5120 1.0.0/)).toBeInTheDocument();
     const yearInput = screen.getByRole("spinbutton", { name: "检测年度" });
     await userEvent.clear(yearInput);
     await userEvent.type(yearInput, "2028");
@@ -44,7 +45,7 @@ describe("CreateInspectionDialog", () => {
 
   it("blocks an out-of-range year before requesting", async () => {
     render(<CreateInspectionDialog bridgeId="bridge-1" onClose={vi.fn()} onCreated={vi.fn()} />);
-    await screen.findByRole("option", { name: /单位桥梁有效评定树/ });
+    await screen.findByText(/单位桥梁有效评定树/);
     const yearInput = screen.getByRole("spinbutton", { name: "检测年度" });
     await userEvent.clear(yearInput);
     await userEvent.type(yearInput, "1800");
@@ -59,7 +60,7 @@ describe("CreateInspectionDialog", () => {
       { ...trees[0], id: "rating-tree-2", package_version: "2.0.0", is_default: true },
     ] as never);
     render(<CreateInspectionDialog bridgeId="bridge-1" onClose={vi.fn()} onCreated={vi.fn()} />);
-    const tree = await screen.findByRole("combobox", { name: "桥梁评定树" });
-    expect(tree).toHaveValue("rating-tree-2");
+    expect(await screen.findByText(/树 2\.0\.0/)).toBeInTheDocument();
+    expect(screen.queryByText(/树 1\.0\.0/)).not.toBeInTheDocument();
   });
 });

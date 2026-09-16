@@ -194,15 +194,16 @@ describe("RatingTreePage", () => {
     renderPage();
 
     expect(await screen.findByRole("heading", { name: "单位桥梁评定树" })).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "5 梁式桥上部结构" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "桥梁有效评定树" })).not.toBeInTheDocument();
+    // 目录树里的节点带着完整名称做 title；右侧下级列表里是按钮，两处各一个。
+    expect(await screen.findByTitle("5 梁式桥上部结构")).toBeInTheDocument();
+    expect(screen.queryByTitle("桥梁有效评定树")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "单位说明" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "5.1 混凝土梁式桥" })).toHaveLength(2);
-    fireEvent.click(screen.getAllByRole("button", { name: "5.1 混凝土梁式桥" })[0]);
+    expect(screen.getByTitle("5.1 混凝土梁式桥")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "5.1 混凝土梁式桥" })).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle("5.1 混凝土梁式桥"));
     expect(await screen.findByRole("heading", { name: "5.1 混凝土梁式桥" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", {
-      name: "5.1.1 上部承重构件、上部一般构件",
-    })).toHaveLength(2);
+    expect(await screen.findByTitle("5.1.1 上部承重构件、上部一般构件")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "5.1.1 上部承重构件、上部一般构件" })).toBeInTheDocument();
     expect(await screen.findByText("梁式桥")).toBeInTheDocument();
     expect(screen.queryByText("h21.bridge_type.beam")).not.toBeInTheDocument();
     expect(screen.queryByText("org.bridge.root")).not.toBeInTheDocument();
@@ -214,9 +215,9 @@ describe("RatingTreePage", () => {
     renderPage();
 
     await screen.findByRole("heading", { name: "单位桥梁评定树" });
-    fireEvent.click((await screen.findAllByRole("button", { name: "5.1 混凝土梁式桥" }))[0]);
-    fireEvent.click((await screen.findAllByRole("button", { name: "5.1.1 上部承重构件、上部一般构件" }))[0]);
-    fireEvent.click((await screen.findAllByRole("button", { name: "5.1.1-1 蜂窝、麻面" }))[0]);
+    fireEvent.click(await screen.findByTitle("5.1 混凝土梁式桥"));
+    fireEvent.click(await screen.findByTitle("5.1.1 上部承重构件、上部一般构件"));
+    fireEvent.click(await screen.findByTitle("5.1.1-1 蜂窝、麻面"));
 
     expect(await screen.findByRole("heading", { name: "5.1.1-1 蜂窝、麻面" })).toBeInTheDocument();
     expect(await screen.findByText("上部承重构件（主梁、挂梁）")).toBeInTheDocument();
@@ -244,9 +245,8 @@ describe("RatingTreePage", () => {
   it("renders the tree before the previously expanded branches finish loading", async () => {
     const first = renderIndex();
     await screen.findByRole("heading", { name: "单位桥梁评定树" });
-    fireEvent.click(screen.getByRole("button", { name: "5 梁式桥上部结构" }));
-    // 树里一个、右侧下级列表里一个，两处都叫这个名字。
-    await screen.findAllByRole("button", { name: "5.1 混凝土梁式桥" });
+    fireEvent.click(screen.getByTitle("5 梁式桥上部结构"));
+    await screen.findByTitle("5.1 混凝土梁式桥");
     first.unmount();
 
     // 重进时上次展开的子树按层拉，每层一个往返；这些往返不该挡在首屏前面。
@@ -263,13 +263,12 @@ describe("RatingTreePage", () => {
 
     renderIndex();
     // 5.1 还堵在网络里，树本身已经画出来了。
-    expect(await screen.findByRole("button", { name: "5 梁式桥上部结构" })).toBeInTheDocument();
-    expect(screen.queryAllByRole("button", { name: "5.1 混凝土梁式桥" })).toHaveLength(0);
+    expect(await screen.findByTitle("5 梁式桥上部结构")).toBeInTheDocument();
+    expect(screen.queryAllByTitle("5.1 混凝土梁式桥")).toHaveLength(0);
 
     releaseChildren!();
     await waitFor(() =>
-      expect(screen.queryAllByRole("button", { name: "5.1 混凝土梁式桥" }).length)
-        .toBeGreaterThan(0),
+      expect(screen.queryAllByTitle("5.1 混凝土梁式桥").length).toBeGreaterThan(0),
     );
   });
 
@@ -277,7 +276,7 @@ describe("RatingTreePage", () => {
     const first = renderPage();
     await screen.findByRole("heading", { name: "单位桥梁评定树" });
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "裂缝" } });
-    fireEvent.click(screen.getByRole("button", { name: "5 梁式桥上部结构" }));
+    fireEvent.click(screen.getByTitle("5 梁式桥上部结构"));
     await screen.findByRole("heading", { name: "5 梁式桥上部结构" });
     first.unmount();
 

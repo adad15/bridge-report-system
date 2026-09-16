@@ -1,15 +1,39 @@
 import {
-  CheckCircleOutlined,
-  ClockCircleOutlined,
+  AuditOutlined,
+  DownOutlined,
+  EllipsisOutlined,
   FileWordOutlined,
   ImportOutlined,
   InboxOutlined,
   LinkOutlined,
+  PlusOutlined,
+  ReloadOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { Steps } from "antd";
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Divider,
+  Dropdown,
+  Flex,
+  Result,
+  Row,
+  Space,
+  Steps,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+  theme,
+  type AlertProps,
+  type StepsProps,
+  type TableColumnsType,
+} from "antd";
+import dayjs from "dayjs";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/apiClient";
 import { useAuth } from "../auth/AuthContext";
@@ -21,14 +45,26 @@ import {
   readCached,
   writeCached,
 } from "../api/resourceCache";
-import { fetchInspectionWorkspace, type InspectionWorkspace, type WorkspaceImport } from "../api/workspaceApi";
+import {
+  fetchInspectionWorkspace,
+  type InspectionWorkspace,
+  type WorkspaceImport,
+  type WorkspaceStandardPackage,
+} from "../api/workspaceApi";
 import { backendBaseUrl } from "../config";
+import { MetricCard, type MetricTone } from "../design-system";
 import { CreateInspectionDialog } from "../workspace/CreateInspectionDialog";
 import { ImportWordDialog } from "../workspace/ImportWordDialog";
 import { DeleteInspectionYearDialog } from "../workspace/DeleteInspectionYearDialog";
 import { DeleteImportRecordDialog } from "../workspace/DeleteImportRecordDialog";
 import { useBridgeWorkspace } from "../workspace/BridgeWorkspaceShell";
-import { deriveInspectionProgress, inspectionWorkspacePath, reviewPath, statusBadgeClass } from "../workspace/workspaceState";
+import { StatusTag } from "../workspace/StatusTag";
+import {
+  deriveInspectionProgress,
+  inspectionWorkspacePath,
+  reviewPath,
+  type InspectionProgress,
+} from "../workspace/workspaceState";
 
 const actionLabel = (item: WorkspaceImport) => {
   if (item.available_action === "continue_review") return "继续校对";
@@ -37,6 +73,8 @@ const actionLabel = (item: WorkspaceImport) => {
   if (item.available_action === "parse") return item.import_status === "解析失败" ? "重新解析" : "开始解析";
   return null;
 };
+
+const formatDateTime = (value: string | null) => (value ? dayjs(value).format("YYYY-MM-DD HH:mm") : "—");
 
 interface ImportDialogState {
   retry: WorkspaceImport | null;
@@ -48,6 +86,7 @@ export function InspectionWorkspacePage() {
   const { bridgeId, inspectionYearId } = useParams<{ bridgeId: string; inspectionYearId?: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { token } = theme.useToken();
   const { overview, reloadOverview } = useBridgeWorkspace();
   const [years, setYears] = useState<InspectionYearSummary[] | null>(null);
   const [workspace, setWorkspace] = useState<InspectionWorkspace | null>(null);
@@ -114,7 +153,7 @@ export function InspectionWorkspacePage() {
     () => !inspectionYearId || years === null || years.some((item) => item.id === inspectionYearId),
     [inspectionYearId, years]
   );
-  if (!bridgeId) return <p className="error-text">缺少桥梁标识。</p>;
+  if (!bridgeId) return <Alert type="error" showIcon title="缺少桥梁标识。" />;
 
   const refresh = () => {
     // 显式刷新（新建年度、导入、删除等）必须丢弃缓存：这些场景下先闪一下改动前的
@@ -130,39 +169,65 @@ export function InspectionWorkspacePage() {
   };
 
   return (
-    <div className="inspection-layout">
-      <aside className="inspection-year-rail">
-        <div className="rail-heading"><h2>检测年度</h2><button type="button" onClick={() => setShowCreate(true)}>＋ 新建</button></div>
-        {years === null ? <p>加载年份…</p> : years.length === 0 ? <p className="empty-hint">暂无年度</p> : years.map((year) => (
-          <Link key={year.id} className={year.id === inspectionYearId ? "year-link active" : "year-link"} to={inspectionWorkspacePath(bridgeId, year.id)}>
-            <strong>{year.inspection_year}</strong><span>{year.status} · V{year.version_number}</span>
-          </Link>
-        ))}
-      </aside>
+    <Flex vertical gap={16}>
+      {/* 年度改成页签横排在最上面：原来左侧一整列年份表把正文挤窄，年份通常只有几个。 */}
+      {years && years.length > 0 ? (
+        <Tabs
+          aria-label="检测年度"
+          activeKey={inspectionYearId && selectedExists ? inspectionYearId : undefined}
+          onChange={(key) => navigate(inspectionWorkspacePath(bridgeId, key))}
+          tabBarExtraContent={<Button icon={<PlusOutlined />} onClick={() => setShowCreate(true)}>新建年度</Button>}
+          styles={{ header: { marginBottom: 0 } }}
+          items={years.map((year) => ({
+            key: year.id,
+            label: (
+              <Flex align="baseline" gap={6}>
+                <span>{year.inspection_year}</span>
+                <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+                  {year.status}{year.version_number > 1 ? ` · V${year.version_number}` : ""}
+                </Typography.Text>
+              </Flex>
+            ),
+          }))}
+        />
+      ) : null}
 
-      <section className="inspection-workspace-content">
-        {error ? <div className="workspace-card"><h2>无法加载年度工作台</h2><p className="error-text">{error}</p><button type="button" onClick={refresh}>重新加载</button></div> : null}
-        {!error && years?.length === 0 ? <div className="workspace-card empty-workspace"><h2>从新建年度检测开始</h2><p>年度创建后，可在这里导入 Word、解析并进入全屏校对。</p><button type="button" className="primary-button" onClick={() => setShowCreate(true)}>新建年度检测</button></div> : null}
-        {!error && !selectedExists ? <div className="workspace-card"><p className="error-text">指定年度不在当前桥梁的有效年度列表中。</p></div> : null}
-        {!error && inspectionYearId && selectedExists && workspace === null ? <div className="workspace-card"><p>正在加载年度资料…</p></div> : null}
-        {!error && workspace ? <AnnualWorkspace
-          workspace={workspace}
-          bridgeId={bridgeId}
-          onImport={() => setImportDialog({
-            retry: null,
-            inspectionYearId: workspace.inspection_year.id,
-            inspectionYear: workspace.inspection_year.inspection_year,
-          })}
-          onRetry={(item) => setImportDialog({
-            retry: item,
-            inspectionYearId: workspace.inspection_year.id,
-            inspectionYear: workspace.inspection_year.inspection_year,
-          })}
-          canDelete={user?.role === "admin"}
-          onDelete={() => setShowDelete(true)}
-          onDeleteImport={setDeleteImport}
-        /> : null}
-      </section>
+      {error ? (
+        <Card>
+          <Result status="error" title="无法加载年度工作台" subTitle={error} extra={<Button onClick={refresh}>重新加载</Button>} />
+        </Card>
+      ) : null}
+      {!error && years?.length === 0 ? (
+        <Card>
+          <Result
+            status="info"
+            title="从新建年度检测开始"
+            subTitle="年度创建后，可在这里导入 Word、解析并进入全屏校对。"
+            extra={<Button type="primary" onClick={() => setShowCreate(true)}>新建年度检测</Button>}
+          />
+        </Card>
+      ) : null}
+      {!error && years === null && !inspectionYearId ? <Card loading /> : null}
+      {!error && !selectedExists ? <Alert type="error" showIcon title="指定年度不在当前桥梁的有效年度列表中。" /> : null}
+      {!error && inspectionYearId && selectedExists && workspace === null ? <Card loading /> : null}
+      {!error && workspace ? <AnnualWorkspace
+        workspace={workspace}
+        bridgeId={bridgeId}
+        onImport={() => setImportDialog({
+          retry: null,
+          inspectionYearId: workspace.inspection_year.id,
+          inspectionYear: workspace.inspection_year.inspection_year,
+        })}
+        onRetry={(item) => setImportDialog({
+          retry: item,
+          inspectionYearId: workspace.inspection_year.id,
+          inspectionYear: workspace.inspection_year.inspection_year,
+        })}
+        onRefresh={refresh}
+        canDelete={user?.role === "admin"}
+        onDelete={() => setShowDelete(true)}
+        onDeleteImport={setDeleteImport}
+      /> : null}
 
       {showCreate ? <CreateInspectionDialog bridgeId={bridgeId} onClose={() => setShowCreate(false)} onCreated={(id) => {
         setShowCreate(false); refreshAll(); navigate(inspectionWorkspacePath(bridgeId, id));
@@ -198,138 +263,376 @@ export function InspectionWorkspacePage() {
           refreshAll();
         }}
       /> : null}
-    </div>
+    </Flex>
   );
 }
 
-function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry, canDelete, onDelete, onDeleteImport }: {
+const PROGRESS_TAG_COLOR: Record<string, string> = {
+  completed: "success",
+  review: "warning",
+  parsing: "processing",
+  uploaded: "warning",
+  parse_failed: "error",
+  empty: "default",
+};
+
+/** 规则包停用或同步异常时整行转成警示色，正常时只是一行灰字。 */
+function StandardPackageText({ standard }: { standard: WorkspaceStandardPackage }) {
+  const problem = !standard.is_enabled ? "已停用" : standard.sync_status !== "正常" ? standard.sync_status : null;
+  return (
+    <Typography.Text type={problem ? "warning" : "secondary"}>
+      {standard.standard_code} · 规则包 {standard.package_version}{problem ? `（${problem}）` : ""}
+    </Typography.Text>
+  );
+}
+
+/**
+ * 进度条上每一步写的是这一步的结果（几份资料、几条待校对、评定等级），而不是「已完成 / 待开始」，
+ * 进度和数字放在一处看。
+ */
+function progressSteps(
+  workspace: InspectionWorkspace,
+  progress: InspectionProgress,
+  totals: { pending: number; confirmed: number }
+): Pick<StepsProps, "current" | "status" | "items"> {
+  const year = workspace.inspection_year;
+  const importCount = workspace.imports.length;
+  const created = year.created_at ? dayjs(year.created_at).format("YYYY-MM-DD") : "已创建";
+  const rating = [year.overall_grade, year.overall_score].filter((value) => value !== null && value !== "").join(" · ");
+
+  if (progress.stage === "completed") {
+    const archived = year.status === "已归档";
+    return {
+      // 年度确认后下一件事是出报告；系统不知道报告出没出过，只有归档才算整条流程走完。
+      current: 4,
+      status: archived ? "finish" : "process",
+      items: [
+        { title: "创建检测", content: created },
+        { title: "导入资料", content: `${importCount} 份资料` },
+        { title: "数据校对", content: `${totals.confirmed} 条已确认` },
+        { title: "系统评定", content: rating || "已完成" },
+        { title: "生成报告", content: archived ? "已归档" : "可生成" },
+      ],
+    };
+  }
+  if (progress.stage === "review") {
+    return {
+      current: 2,
+      status: "process",
+      items: [
+        { title: "创建检测", content: created },
+        { title: "导入资料", content: `${importCount} 份资料` },
+        { title: "数据校对", content: totals.pending > 0 ? `${totals.pending} 条待校对` : "校对中" },
+        { title: "系统评定", content: "待开始" },
+        { title: "生成报告", content: "待开始" },
+      ],
+    };
+  }
+  const importContent: Record<string, string> = {
+    empty: "待导入",
+    uploaded: "待解析",
+    parsing: "解析中",
+    parse_failed: "解析失败",
+  };
+  return {
+    current: 1,
+    status: progress.stage === "parse_failed" ? "error" : "process",
+    items: [
+      { title: "创建检测", content: created },
+      { title: "导入资料", content: importContent[progress.stage] ?? progress.label },
+      { title: "数据校对", content: "待开始" },
+      { title: "系统评定", content: "待开始" },
+      { title: "生成报告", content: "待开始" },
+    ],
+  };
+}
+
+function AnnualWorkspace({ workspace, bridgeId, onImport, onRetry, onRefresh, canDelete, onDelete, onDeleteImport }: {
   workspace: InspectionWorkspace;
   bridgeId: string;
   onImport: () => void;
   onRetry: (item: WorkspaceImport) => void;
+  onRefresh: () => void;
   canDelete: boolean;
   onDelete: () => void;
   onDeleteImport: (item: WorkspaceImport) => void;
 }) {
-  const progress = deriveInspectionProgress(workspace.inspection_year, workspace.imports);
-  const progressIndex: number = progress.stage === "completed" ? 4 : progress.stage === "review" ? 2 : 1;
-  const pendingItems = workspace.imports.reduce((total, item) => total + item.statistics.pending_count, 0);
-  const errorCount = workspace.imports.filter((item) => item.import_status === "解析失败").length;
+  const navigate = useNavigate();
+  const { token } = theme.useToken();
+  const year = workspace.inspection_year;
+  const imports = workspace.imports;
+  const progress = deriveInspectionProgress(year, imports);
+  const totals = imports.reduce(
+    (sum, item) => ({
+      pending: sum.pending + item.statistics.pending_count,
+      confirmed: sum.confirmed + item.statistics.confirmed_count,
+    }),
+    { pending: 0, confirmed: 0 }
+  );
+  const errorCount = imports.filter((item) => item.import_status === "解析失败").length;
+  const yearPath = inspectionWorkspacePath(bridgeId, year.id);
+  const profile = workspace.standard_profile;
+  const openReview = (item: WorkspaceImport) => navigate(reviewPath(bridgeId, year.id, item.id));
+
+  const runAction = (item: WorkspaceImport) => {
+    if (item.available_action === "parse") onRetry(item);
+    else if (item.available_action === "reupload") onImport();
+    else openReview(item);
+  };
+
+  // 为 0 的指标转灰，只让真正需要处理的数字带颜色。
+  const metrics: Array<{ label: string; value: number; icon: JSX.Element; tone: MetricTone }> = [
+    { label: "导入记录", value: imports.length, icon: <ImportOutlined />, tone: "primary" },
+    { label: "待绑定项", value: workspace.pending.unbound_observation_count, icon: <LinkOutlined />, tone: "warning" },
+    { label: "待校对项", value: totals.pending, icon: <AuditOutlined />, tone: "warning" },
+    { label: "异常提醒", value: errorCount, icon: <WarningOutlined />, tone: "error" },
+  ];
+
+  const nextStep = nextStepHint(progress, imports, totals.pending);
+
+  // 每一列都给宽度：原来「资料」列不设宽度，宽屏上多出来的几百像素全堆在资料名后面。
+  // 列宽都定了以后，多出来的宽度按比例分给各列，状态标签也并到资料名后面，少一列空白。
+  const columns: TableColumnsType<WorkspaceImport> = [
+    {
+      title: "资料",
+      key: "import",
+      width: 260,
+      render: (_, item) => (
+        <Flex vertical gap={2}>
+          <Flex align="center" gap={8} wrap>
+            <Typography.Text strong>{item.import_name}</Typography.Text>
+            <StatusTag status={item.import_status} />
+          </Flex>
+          <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+            {item.system_number} · {item.source_type}
+          </Typography.Text>
+          {item.import_status === "解析失败" && item.error_message ? <Typography.Text type="danger">解析失败：{item.error_message}</Typography.Text> : null}
+          {item.import_status === "解析失败" && item.temporary_source_expires_at ? (
+            <Typography.Text type="secondary">临时 Word 保留至 {formatDateTime(item.temporary_source_expires_at)}</Typography.Text>
+          ) : null}
+          {item.available_action === "reupload" ? <Typography.Text type="danger">原临时 Word 已不可用，请重新上传。</Typography.Text> : null}
+          {item.edit_lock ? <Typography.Text type="warning">{item.edit_lock.owner_display_name} 正在编辑</Typography.Text> : null}
+        </Flex>
+      ),
+    },
+    { title: "病害", key: "defects", width: 88, align: "center", render: (_, item) => item.statistics.defect_count.toLocaleString() },
+    { title: "照片", key: "photos", width: 88, align: "center", render: (_, item) => item.statistics.photo_count.toLocaleString() },
+    {
+      title: "待校对",
+      key: "pending",
+      width: 88,
+      align: "center",
+      render: (_, item) => (
+        <Typography.Text type={item.statistics.pending_count > 0 ? "warning" : "secondary"} strong={item.statistics.pending_count > 0}>
+          {item.statistics.pending_count.toLocaleString()}
+        </Typography.Text>
+      ),
+    },
+    { title: "已确认", key: "confirmed", width: 88, align: "center", render: (_, item) => item.statistics.confirmed_count.toLocaleString() },
+    {
+      title: "导入时间 / 导入人",
+      key: "imported",
+      // 数字右对齐时会和这一列左对齐的时间贴在一起：四个统计列改成居中，这一列左侧再多留一段空。
+      width: 180 + token.paddingXL,
+      onHeaderCell: () => ({ style: { paddingInlineStart: token.paddingXL } }),
+      onCell: () => ({ style: { paddingInlineStart: token.paddingXL } }),
+      render: (_, item) => (
+        <Flex vertical gap={2}>
+          <Typography.Text style={{ whiteSpace: "nowrap" }}>{formatDateTime(item.created_at)}</Typography.Text>
+          <Typography.Text type="secondary" ellipsis style={{ fontSize: token.fontSizeSM, maxWidth: 150 }}>
+            {item.importer_name ?? "—"}
+          </Typography.Text>
+        </Flex>
+      ),
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 168,
+      render: (_, item) => {
+        const label = actionLabel(item);
+        return (
+          <Space size={4} style={{ whiteSpace: "nowrap" }}>
+            {label ? (
+              <Button type="link" size="small" onClick={() => runAction(item)}>{label}</Button>
+            ) : (
+              <Typography.Text type="secondary">处理中</Typography.Text>
+            )}
+            {/* 删除是破坏性操作，收进「更多」；一页可能有多条导入记录，按钮名带上记录名才区分得开。 */}
+            {canDelete ? (
+              <>
+                <Divider vertical />
+                <Dropdown
+                  trigger={["click"]}
+                  menu={{ items: [{ key: "delete", label: "删除导入记录", danger: true, onClick: () => onDeleteImport(item) }] }}
+                >
+                  <Button type="link" size="small" icon={<DownOutlined />} iconPlacement="end" aria-label={`更多操作 ${item.import_name}`}>
+                    更多
+                  </Button>
+                </Dropdown>
+              </>
+            ) : null}
+          </Space>
+        );
+      },
+    },
+  ];
+
   return (
     <>
-      <section className="workspace-card annual-heading annual-workflow-card">
-        <div className="annual-heading-main">
-          <p className="section-kicker">{workspace.inspection_year.system_number}</p>
-          <div className="annual-title-line">
-            <h2>{workspace.inspection_year.inspection_year} 年度检测</h2>
-            <span className={`progress-badge progress-${progress.stage}`}>{progress.label}</span>
-            <span>当前版本 V{workspace.inspection_year.version_number}</span>
-          </div>
-        </div>
-        <div className="annual-actions">{workspace.inspection_year.is_current ? <button className="primary-button" type="button" onClick={onImport}>导入资料</button> : null}<Link className="annual-action-link" to={`${inspectionWorkspacePath(bridgeId, workspace.inspection_year.id)}/report`}>生成报告</Link>{canDelete ? <details className="more-actions"><summary>更多</summary><div><button type="button" className="danger-menu-item" onClick={onDelete}>删除年度</button></div></details> : null}</div>
-        <Steps
-          className="annual-progress-steps"
-          current={progressIndex}
-          responsive={false}
-          titlePlacement="vertical"
-          items={[
-            { title: "创建检测", content: "已完成" },
-            { title: "导入资料", content: progressIndex === 1 ? "进行中" : "已完成" },
-            { title: "数据校对", content: progressIndex === 2 ? "进行中" : progressIndex > 2 ? "已完成" : "待开始" },
-            { title: "系统评定", content: progressIndex === 3 ? "进行中" : progressIndex > 3 ? "已完成" : "待开始" },
-            { title: "生成报告", content: progressIndex === 4 ? "已完成" : "待开始" },
-          ]}
-        />
-        {workspace.standard_profile ? <div className="inspection-standard-summary"><span><CheckCircleOutlined /> {workspace.standard_profile.technical_condition.standard_code} · 规则包 {workspace.standard_profile.technical_condition.package_version}（{workspace.standard_profile.technical_condition.is_enabled ? workspace.standard_profile.technical_condition.sync_status : "已停用"}）</span><span><CheckCircleOutlined /> {workspace.standard_profile.maintenance.standard_code} · 规则包 {workspace.standard_profile.maintenance.package_version}（{workspace.standard_profile.maintenance.is_enabled ? workspace.standard_profile.maintenance.sync_status : "已停用"}）</span></div> : <p className="warning-text">历史年度未绑定规范组合。</p>}
-      </section>
+      <Card>
+        <Flex vertical gap={20}>
+          <Flex align="flex-start" justify="space-between" gap={16} wrap>
+            <Flex vertical gap={6} style={{ minWidth: 0 }}>
+              <Flex align="center" gap={10} wrap>
+                <Typography.Title level={3} style={{ margin: 0 }}>{year.inspection_year} 年度检测</Typography.Title>
+                <Tag color={PROGRESS_TAG_COLOR[progress.stage] ?? "default"}>{progress.label}</Tag>
+              </Flex>
+              <Space wrap size={[0, 4]} separator={<Divider vertical />}>
+                <Typography.Text type="secondary">{year.system_number}</Typography.Text>
+                <Typography.Text type="secondary">当前版本 V{year.version_number}</Typography.Text>
+                {profile ? <StandardPackageText standard={profile.technical_condition} /> : null}
+                {profile ? <StandardPackageText standard={profile.maintenance} /> : null}
+                {profile ? null : <Typography.Text type="warning"><WarningOutlined /> 历史年度未绑定规范组合</Typography.Text>}
+              </Space>
+            </Flex>
+            {/* 年度确认后「生成报告」是主操作；之前的主操作在下一步提示里。 */}
+            <Space wrap>
+              <Button
+                type={progress.stage === "completed" ? "primary" : "default"}
+                icon={<FileWordOutlined />}
+                onClick={() => navigate(`${yearPath}/report`)}
+              >
+                生成报告
+              </Button>
+              {year.is_current ? <Button icon={<ImportOutlined />} onClick={onImport}>导入资料</Button> : null}
+              {canDelete ? (
+                <Dropdown
+                  trigger={["click"]}
+                  menu={{ items: [{ key: "delete", label: "删除年度", danger: true, onClick: onDelete }] }}
+                >
+                  <Button icon={<EllipsisOutlined />} aria-label="更多年度操作" />
+                </Dropdown>
+              ) : null}
+            </Space>
+          </Flex>
 
-      <section className="annual-metrics" aria-label="年度检测概况">
-        {[
-          { label: "导入记录", value: workspace.imports.length, icon: <ImportOutlined />, tone: "blue" },
-          { label: "待绑定项", value: workspace.pending.unbound_observation_count, icon: <LinkOutlined />, tone: "orange" },
-          { label: "待校对项", value: pendingItems, icon: <CheckCircleOutlined />, tone: "violet" },
-          { label: "异常提醒", value: errorCount, icon: <WarningOutlined />, tone: "red" },
-        ].map((item) => <article key={item.label} className={`annual-metric is-${item.tone}`}><span>{item.icon}</span><div><small>{item.label}</small><strong>{item.value}</strong></div></article>)}
-      </section>
+          <Steps size="small" {...progressSteps(workspace, progress, totals)} />
 
-      <div className="annual-record-layout">
-        <section className="workspace-card annual-record-card">
-          {/* 空态下 kicker 与标题原本都是「资料与处理记录」，同一句话印两遍。
-              有记录时 kicker 作分类、标题给条数；没有记录时标题自己就是分类。 */}
-          <div className="card-heading"><div>
-            {workspace.imports.length > 0 ? <p className="section-kicker">资料与处理记录</p> : null}
-            <h2>{workspace.imports.length > 0 ? `${workspace.imports.length} 条导入记录` : "资料与处理记录"}</h2>
-          </div></div>
-        {workspace.imports.length === 0 ? <div className="annual-upload-empty">
+          {nextStep ? (
+            <Alert
+              type={nextStep.type}
+              showIcon
+              role="status"
+              title={nextStep.title}
+              action={nextStep.target && nextStep.actionLabel ? (
+                <Button size="small" type="primary" onClick={() => runAction(nextStep.target!)}>{nextStep.actionLabel}</Button>
+              ) : nextStep.refresh ? (
+                <Button size="small" icon={<ReloadOutlined />} onClick={onRefresh}>刷新</Button>
+              ) : null}
+            />
+          ) : null}
+        </Flex>
+      </Card>
+
+      <Row gutter={[16, 16]} role="group" aria-label="年度检测概况">
+        {metrics.map((item) => (
+          <Col key={item.label} xs={12} xl={6}>
+            <MetricCard size="small" title={item.label} value={item.value} icon={item.icon} tone={item.value > 0 ? item.tone : "neutral"} />
+          </Col>
+        ))}
+      </Row>
+
+      <Card
+        title={
+          <Space size={8}>
+            <span>导入记录</span>
+            {imports.length > 0 ? <Typography.Text type="secondary" style={{ fontWeight: "normal" }}>{imports.length} 条</Typography.Text> : null}
+          </Space>
+        }
+        extra={imports.length > 0 ? <Button icon={<ReloadOutlined />} onClick={onRefresh}>刷新</Button> : null}
+      >
+        {imports.length === 0 ? (
+          <Flex vertical align="center" gap={12}>
             {/* 图标不再用 Word：来源已经有三种，点名其中一种会误导。 */}
-            <span className="annual-upload-empty-icon" aria-hidden="true"><InboxOutlined /></span>
-            <h3>尚未导入检测资料</h3>
-            <p>导入后可进行构件绑定与数据校对。</p>
-            {/* 三种来源摊开成一行三项：哪个能用、哪个还没做，一眼看完，
-                比塞进一句长句里让人自己挑要快。 */}
-            <ul className="annual-upload-sources">
-              <li>
-                <strong>博试云桥隧定检系统</strong>
-                <small>读取本机离线库</small>
-              </li>
-              <li>
-                <strong>Word 检测资料</strong>
-                <small>软件导出 Word 或正式报告</small>
-              </li>
-              <li className="is-pending">
-                <strong>移动端现场采集</strong>
-                <small>开发中</small>
-              </li>
-            </ul>
-            <div className="annual-upload-empty-actions">
-              <button className="primary-button" type="button" onClick={onImport}>导入检测资料</button>
-              <a href="#annual-next-step">查看导入说明</a>
-            </div>
-          </div> : (
-          <div className="import-card-list">{workspace.imports.map((item) => {
-            const label = actionLabel(item);
-            const lockText = item.edit_lock ? `${item.edit_lock.owner_display_name} 正在编辑` : null;
-            const importedAt = item.created_at ? new Date(item.created_at).toLocaleString("zh-CN", { hour12: false }) : "时间未知";
-            return <article className="import-source-card annual-import-record" key={item.id}>
-              <span className="annual-import-file-icon" aria-hidden="true"><FileWordOutlined /></span>
-              <div className="annual-import-record-body">
-                <div className="import-title-row"><h3>{item.import_name}</h3><span className={statusBadgeClass(item.import_status)}>{item.import_status}</span></div>
-                <div className="annual-import-meta"><span>{item.system_number}</span><span>{item.source_type}</span><span><ClockCircleOutlined /> {importedAt}</span>{item.importer_name ? <span>导入人：{item.importer_name}</span> : null}</div>
-                <div className="annual-import-statistics" aria-label={`${item.import_name} 处理统计`}>
-                  <span><small>病害</small><strong>{item.statistics.defect_count}</strong></span>
-                  <span><small>照片</small><strong>{item.statistics.photo_count}</strong></span>
-                  <span><small>待校对</small><strong>{item.statistics.pending_count}</strong></span>
-                  <span><small>已确认</small><strong>{item.statistics.confirmed_count}</strong></span>
-                </div>
-                {item.import_status === "解析失败" && item.error_message ? <p className="error-text">解析失败：{item.error_message}</p> : null}{item.import_status === "解析失败" && item.temporary_source_expires_at ? <p className="muted-text">临时 Word 保留至 {new Date(item.temporary_source_expires_at).toLocaleString()}</p> : null}{item.available_action === "reupload" ? <p className="error-text">原临时 Word 已不可用，请重新上传。</p> : null}{lockText ? <p className="lock-note">{lockText}</p> : null}
-              </div>
-              <div className="import-card-actions">
-                {label ? item.available_action === "parse" ? <button className="primary-button" type="button" onClick={() => onRetry(item)}>{label}</button> : item.available_action === "reupload" ? <button className="primary-button" type="button" onClick={onImport}>{label}</button> : <Link className="annual-import-primary-link" to={reviewPath(bridgeId, workspace.inspection_year.id, item.id)}>{label}</Link> : <span className="muted-text">处理中</span>}
-                {/* 删除原本和"继续校对"并排同权。破坏性操作不该走主流程视觉，收进"更多"，
-                    和上面年度卡删除年度的做法保持一致。一页可能有多张导入卡，summary 要
-                    带上记录名才区分得开。 */}
-                {canDelete ? (
-                  <details className="more-actions">
-                    <summary aria-label={`更多操作 ${item.import_name}`}>更多</summary>
-                    <div>
-                      <button type="button" className="danger-menu-item" onClick={() => onDeleteImport(item)}>删除导入记录</button>
-                    </div>
-                  </details>
-                ) : null}
-              </div>
-            </article>;
-          })}</div>
+            <InboxOutlined style={{ fontSize: 44, color: token.colorPrimary }} aria-hidden="true" />
+            <Typography.Title level={4} style={{ margin: 0 }}>尚未导入检测资料</Typography.Title>
+            <Typography.Text type="secondary">导入后可进行构件绑定与数据校对。</Typography.Text>
+            {/* 三种来源摊开成一行三项：哪个能用、哪个还没做，一眼看完。 */}
+            <Row gutter={[12, 12]} style={{ width: "100%", maxWidth: 880 }}>
+              <SourceOption title="博试云桥隧定检系统" description="读取本机离线库" />
+              <SourceOption title="Word 检测资料" description="软件导出 Word 或正式报告" />
+              <SourceOption title="移动端现场采集" description="开发中" disabled />
+            </Row>
+            <Button type="primary" onClick={onImport}>导入检测资料</Button>
+          </Flex>
+        ) : (
+          <Table<WorkspaceImport>
+            rowKey="id"
+            size="middle"
+            columns={columns}
+            dataSource={imports}
+            pagination={false}
+            scroll={{ x: 960 }}
+          />
         )}
-        </section>
-        <aside id="annual-next-step" className="workspace-card annual-next-card">
-          <h2>下一步</h2>
-          <ol>
-            <li className={progressIndex === 1 ? "is-active" : ""}><span>2</span><div><strong>导入资料</strong><p>导入 Word 检测资料，系统将自动解析内容。</p></div></li>
-            <li className={progressIndex === 2 ? "is-active" : ""}><span>3</span><div><strong>数据校对</strong><p>对识别的数据进行校对，确认构件与指标信息。</p></div></li>
-            <li><span>4</span><div><strong>系统评定</strong><p>完成校对后，系统将执行评定并生成结果。</p></div></li>
-          </ol>
-        </aside>
-      </div>
+      </Card>
     </>
   );
+}
+
+function SourceOption({ title, description, disabled }: { title: ReactNode; description: ReactNode; disabled?: boolean }) {
+  return (
+    <Col xs={24} md={8}>
+      <Card size="small">
+        <Flex vertical>
+          <Typography.Text strong disabled={disabled}>{title}</Typography.Text>
+          <Typography.Text type="secondary">{description}</Typography.Text>
+        </Flex>
+      </Card>
+    </Col>
+  );
+}
+
+/**
+ * 进度条下面那一行「下一步」：写明卡在哪条资料上、该点哪个按钮。
+ * 还没导入资料时下面的空状态本身就是入口，年度确认后主操作是「生成报告」，这两种不再提示。
+ */
+function nextStepHint(
+  progress: InspectionProgress,
+  imports: WorkspaceImport[],
+  pending: number
+): { type: NonNullable<AlertProps["type"]>; title: string; target?: WorkspaceImport; actionLabel?: string | null; refresh?: boolean } | null {
+  if (progress.stage === "review") {
+    const target = imports.find((item) => item.available_action === "continue_review");
+    return {
+      type: "info",
+      title: `下一步：数据校对${pending > 0 ? `，还有 ${pending} 条待校对` : ""}。`,
+      target,
+      actionLabel: target ? actionLabel(target) : null,
+    };
+  }
+  if (progress.stage === "uploaded") {
+    const target = imports.find((item) => item.import_status === "已上传");
+    return {
+      type: "info",
+      title: `下一步：解析已上传的资料「${target?.import_name ?? ""}」。`,
+      target,
+      actionLabel: target ? actionLabel(target) : null,
+    };
+  }
+  if (progress.stage === "parsing") {
+    const target = imports.find((item) => item.import_status === "解析中");
+    return { type: "info", title: `资料「${target?.import_name ?? ""}」正在解析，完成后即可开始校对。`, refresh: true };
+  }
+  if (progress.stage === "parse_failed") {
+    const target = imports.find((item) => item.import_status === "解析失败");
+    return {
+      type: "warning",
+      title: `资料「${target?.import_name ?? ""}」解析失败，原因见下方导入记录。`,
+      target,
+      actionLabel: target ? actionLabel(target) : null,
+    };
+  }
+  return null;
 }

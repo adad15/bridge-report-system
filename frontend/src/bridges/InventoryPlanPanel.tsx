@@ -1,3 +1,4 @@
+import { Alert, Col, Flex, Form, InputNumber, Row, Select, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
 
 import type { GenerateComponentInventoryInput } from "../api/componentInventoryApi";
@@ -53,68 +54,69 @@ export function InventoryPlanPanel({
   }
 
   return (
-    <div className="inventory-plan-panel">
-      <div className="inventory-plan-fields">
-        {catalogs.length > 1 ? (
-          <label>
-            <span className="field-label">初始台账规范来源</span>
-            <select
-              value={packageId}
-              onChange={(event) => {
-                if (!discardSelection("换规范")) return;
-                setPackageId(event.target.value);
-                setBridgeTypeId("");
-              }}
-            >
-              <option value="">请选择规范</option>
-              {catalogs.map((item) => (
-                <option key={item.package.id} value={item.package.id}>
-                  {item.package.standard_code} · {item.package.standard_name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <label>
-          <span className="field-label">桥型</span>
-          <select
-            value={bridgeTypeId}
-            disabled={!catalog}
-            onChange={(event) => {
-              if (!discardSelection("换桥型")) return;
-              setBridgeTypeId(event.target.value);
-            }}
-          >
-            <option value="">请选择桥型</option>
-            {catalog?.bridge_types.map((item) => (
-              <option key={item.id} value={item.id}>{item.name}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="field-label">跨数</span>
-          <input
-            aria-label="跨数"
-            type="number"
-            min={0}
-            max={1000}
-            step={1}
-            value={spanCount}
-            onChange={(event) => setSpanCount(event.target.value)}
-          />
-        </label>
-      </div>
+    <Flex vertical gap={12}>
+      <Form layout="vertical">
+        <Row gutter={14}>
+          {catalogs.length > 1 ? (
+            <Col xs={24} md={8}>
+              <Form.Item label="初始台账规范来源" htmlFor="inventory-plan-package">
+                <Select
+                  id="inventory-plan-package"
+                  placeholder="请选择规范"
+                  value={packageId || undefined}
+                  onChange={(next) => {
+                    if (!discardSelection("换规范")) return;
+                    setPackageId(next);
+                    setBridgeTypeId("");
+                  }}
+                  options={catalogs.map((item) => ({
+                    value: item.package.id,
+                    label: `${item.package.standard_code} · ${item.package.standard_name}`,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+          ) : null}
+          <Col xs={24} md={8}>
+            <Form.Item label="桥型" htmlFor="inventory-plan-bridge-type">
+              <Select
+                id="inventory-plan-bridge-type"
+                placeholder="请选择桥型"
+                value={bridgeTypeId || undefined}
+                disabled={!catalog}
+                onChange={(next) => {
+                  if (!discardSelection("换桥型")) return;
+                  setBridgeTypeId(next);
+                }}
+                options={catalog?.bridge_types.map((item) => ({ value: item.id, label: item.name }))}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={8}>
+            <Form.Item label="跨数" htmlFor="inventory-plan-spans">
+              {/* 不设 min/max：越界时向导不出现，不在失焦时悄悄改成边界值。 */}
+              <InputNumber
+                id="inventory-plan-spans"
+                style={{ width: "100%" }}
+                precision={0}
+                value={spanCount === "" ? null : Number(spanCount)}
+                onChange={(value) => setSpanCount(value === null ? "" : String(value))}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Form>
 
-      {loading ? <p className="wizard-standard-note">正在加载规范…</p> : null}
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
+      {loading ? <Typography.Text type="secondary">正在加载规范…</Typography.Text> : null}
+      {error ? <Alert type="error" showIcon title={error} /> : null}
       {!loading && !error && catalogs.length === 0 ? (
-        <p className="wizard-standard-note">当前没有可用的技术评定规范包。</p>
+        <Typography.Text type="secondary">当前没有可用的技术评定规范包。</Typography.Text>
       ) : null}
       {catalog ? (
-        <p className="wizard-standard-note">
-          初始台账规范 <b>{catalog.package.standard_code} · {catalog.package.standard_name}</b>
+        <Typography.Text type="secondary">
+          初始台账规范 <Typography.Text strong>{catalog.package.standard_code} · {catalog.package.standard_name}</Typography.Text>
           ——这里选择的规范只用于生成初始构件台账，不会绑定或限制以后检测项目采用的评分规范。
-        </p>
+        </Typography.Text>
       ) : null}
 
       {ready ? (
@@ -127,15 +129,15 @@ export function InventoryPlanPanel({
             onSelectionChange={setSelection}
             onPlanChange={handlePlanChange}
           />
-          <p className="wizard-status">
+          <Typography.Text type="secondary">
             {summary.missing.length > 0
               ? `还有 ${summary.missing.length} 处未填完：${summary.missing.join("、")}`
               : summary.partCount === 0
                 ? "勾选桥上有的部件。"
                 : `将生成 ${summary.total} 个构件 · ${summary.partCount} 个部件`}
-          </p>
+          </Typography.Text>
         </>
       ) : null}
-    </div>
+    </Flex>
   );
 }

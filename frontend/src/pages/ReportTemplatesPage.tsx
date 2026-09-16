@@ -10,15 +10,20 @@ import {
   Alert,
   Button,
   Card,
+  Col,
   Drawer,
   Empty,
+  Flex,
+  Form,
   Input,
   Modal,
   Popconfirm,
+  Row,
   Select,
   Space,
   Table,
   Tag,
+  Typography,
   Upload,
   type TableProps,
   type UploadFile,
@@ -38,6 +43,7 @@ import {
   type TemplateIssue,
 } from "../api/reportApi";
 import { useAuth } from "../auth/AuthContext";
+import { PageHeader } from "../design-system";
 import { reportErrorMessage, templateValidationIssues } from "../report/reportErrors";
 import {
   DEFAULT_REQUIRED_ROLES,
@@ -47,7 +53,6 @@ import {
   rowsToFormatMap,
   type NumberFormatRow,
 } from "../report/reportNumberFormats";
-import "./ReportAdminPages.css";
 
 /**
  * 系统管理 · 报告模板（设计 §21.1）。
@@ -110,10 +115,10 @@ export function ReportTemplatesPage() {
         key: "template_name",
         width: 260,
         render: (_value, item) => (
-          <div className="report-template-name">
-            <strong>{item.template_name}</strong>
-            <span>{item.template_code}</span>
-          </div>
+          <Flex vertical>
+            <Typography.Text strong>{item.template_name}</Typography.Text>
+            <Typography.Text type="secondary">{item.template_code}</Typography.Text>
+          </Flex>
         ),
       },
       {
@@ -161,10 +166,10 @@ export function ReportTemplatesPage() {
         key: "updated",
         width: 200,
         render: (_value, item) => (
-          <div className="report-template-updated">
-            <span>{item.updated_at.slice(0, 19)}</span>
-            <span>{item.updated_by_display_name ?? "—"}</span>
-          </div>
+          <Flex vertical>
+            <Typography.Text>{item.updated_at.slice(0, 19)}</Typography.Text>
+            <Typography.Text type="secondary">{item.updated_by_display_name ?? "—"}</Typography.Text>
+          </Flex>
         ),
       },
       {
@@ -173,7 +178,7 @@ export function ReportTemplatesPage() {
         width: 280,
         fixed: "right",
         render: (_value, item) => (
-          <Space size={2} wrap={false} className="report-table-actions">
+          <Space size={2} wrap={false}>
             <Button type="link" size="small" onClick={() => setInspecting(item)}>
               锚点
             </Button>
@@ -237,31 +242,27 @@ export function ReportTemplatesPage() {
   );
 
   return (
-    <section className="report-admin-page">
-      <header className="workspace-page-header">
-        <div>
-          <h1>报告模板</h1>
-          <p>
-            模板定下报告的章节顺序、版式和编号规则；生成器只往锚点里填内容，不写死章节号。
-          </p>
-        </div>
-        {isAdmin ? (
-          <div className="workspace-page-actions">
+    <Flex vertical gap={16}>
+      <PageHeader
+        title="报告模板"
+        description="模板定下报告的章节顺序、版式和编号规则；生成器只往锚点里填内容，不写死章节号。"
+        extra={isAdmin ? (
+          <>
             <Button icon={<ReloadOutlined />} onClick={() => void load()}>
               刷新
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setUploadOpen(true)}>
               上传模板
             </Button>
-          </div>
+          </>
         ) : null}
-      </header>
+      />
 
       {error ? (
         <Alert type="error" showIcon title={error} closable onClose={() => setError(null)} />
       ) : null}
 
-      <Card className="report-admin-card" title={`模板列表（${templates?.length ?? 0}）`}>
+      <Card title={`模板列表（${templates?.length ?? 0}）`}>
         <Table<ReportTemplate>
           rowKey="id"
           loading={templates === null && error === null}
@@ -297,7 +298,7 @@ export function ReportTemplatesPage() {
         }}
       />
       <TemplateDetailDrawer template={inspecting} onClose={() => setInspecting(null)} />
-    </section>
+    </Flex>
   );
 }
 
@@ -305,15 +306,15 @@ export function ReportTemplatesPage() {
 function ValidationIssueList({ issues }: { issues: TemplateIssue[] }) {
   if (issues.length === 0) return null;
   return (
-    <ul className="report-issue-list">
+    <Flex vertical gap={6}>
       {issues.map((issue, index) => (
-        <li key={`${issue.code}-${index}`} className={`is-${issue.severity}`}>
-          <span className="report-issue-code">{issue.code}</span>
-          <span>{issue.message}</span>
-          {issue.location ? <em>{issue.location}</em> : null}
-        </li>
+        <Flex key={`${issue.code}-${index}`} gap={8} align="baseline" wrap>
+          <Typography.Text code type={issue.severity === "error" ? "danger" : "warning"}>{issue.code}</Typography.Text>
+          <Typography.Text>{issue.message}</Typography.Text>
+          {issue.location ? <Typography.Text type="secondary" italic>{issue.location}</Typography.Text> : null}
+        </Flex>
       ))}
-    </ul>
+    </Flex>
   );
 }
 
@@ -391,52 +392,62 @@ function UploadTemplateModal({
       onCancel={onClose}
       okButtonProps={{ disabled: !code.trim() || !name.trim() || !file }}
     >
-      <div className="report-form-grid">
-        <label>
-          <span>模板代码</span>
-          <Input
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            placeholder="PERIODIC_INSPECTION_V2"
-          />
-        </label>
-        <label>
-          <span>模板名称</span>
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="定期检测报告标准模板"
-          />
-        </label>
-        <label className="is-full">
-          <span>说明</span>
-          <Input
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="选填"
-          />
-        </label>
-        <label className="is-full">
-          <span>所需人员角色</span>
-          <Select
-            mode="multiple"
-            value={roles}
-            onChange={setRoles}
-            options={PERSONNEL_ROLE_OPTIONS}
-            placeholder="签字页按这些角色决定必填项"
-          />
-        </label>
-      </div>
+      <Form layout="vertical">
+        <Row gutter={16}>
+          <Col xs={24} sm={12}>
+            <Form.Item label="模板代码" htmlFor="template-upload-code">
+              <Input
+                id="template-upload-code"
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+                placeholder="PERIODIC_INSPECTION_V2"
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item label="模板名称" htmlFor="template-upload-name">
+              <Input
+                id="template-upload-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="定期检测报告标准模板"
+              />
+            </Form.Item>
+          </Col>
+          <Col span={24}>
+            <Form.Item label="说明" htmlFor="template-upload-description">
+              <Input
+                id="template-upload-description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="选填"
+              />
+            </Form.Item>
+          </Col>
+          <Col span={24}>
+            <Form.Item label="所需人员角色" htmlFor="template-upload-roles">
+              <Select
+                id="template-upload-roles"
+                mode="multiple"
+                value={roles}
+                onChange={setRoles}
+                options={PERSONNEL_ROLE_OPTIONS}
+                placeholder="签字页按这些角色决定必填项"
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Form>
 
-      <h4 className="report-form-subtitle">表号与图号格式</h4>
-      <p className="report-form-hint">
+      <Typography.Title level={5}>表号与图号格式</Typography.Title>
+      <Typography.Paragraph type="secondary">
         {"{n}"} 是序号占位。配同一个格式串的内容块共用一条序列，按文档顺序递增——
         4.1.1 与 4.1.2 都配「表4.1-{"{n}"}」就得到 表4.1-1 和 表4.1-2。
-      </p>
-      <div className="report-format-rows">
+      </Typography.Paragraph>
+      <Flex vertical gap={8}>
         {formats.map((row, index) => (
-          <div className="report-format-row" key={row.key}>
-            <span title={row.key}>{row.label}</span>
+          <Flex align="center" gap={12} key={row.key}>
+            <Typography.Text title={row.key} style={{ flex: "none", width: 180 }}>{row.label}</Typography.Text>
             <Input
               value={row.format}
               aria-label={`${row.label}的编号格式`}
@@ -446,11 +457,11 @@ function UploadTemplateModal({
                 setFormats(next);
               }}
             />
-          </div>
+          </Flex>
         ))}
-      </div>
+      </Flex>
 
-      <h4 className="report-form-subtitle">模板文件</h4>
+      <Typography.Title level={5}>模板文件</Typography.Title>
       <Upload.Dragger
         accept=".docx"
         maxCount={1}
@@ -465,8 +476,10 @@ function UploadTemplateModal({
         <p className="ant-upload-hint">校验不通过时不写库，也不会动已有模板。</p>
       </Upload.Dragger>
 
-      {error ? <Alert className="report-form-alert" type="error" showIcon title={error} /> : null}
-      <ValidationIssueList issues={issues} />
+      <Flex vertical gap={12} style={{ marginTop: 12 }}>
+        {error ? <Alert type="error" showIcon title={error} /> : null}
+        <ValidationIssueList issues={issues} />
+      </Flex>
     </Modal>
   );
 }
@@ -526,9 +539,9 @@ function ReplaceTemplateModal({
         showIcon
         title="校验不通过时保留旧模板，一个字节都不动。"
         description="编号格式和所需角色沿用现有配置，这里只换文件。"
+        style={{ marginBottom: 12 }}
       />
       <Upload.Dragger
-        className="report-form-upload"
         accept=".docx"
         maxCount={1}
         beforeUpload={() => false}
@@ -540,8 +553,10 @@ function ReplaceTemplateModal({
         </p>
         <p className="ant-upload-text">把新的 .docx 拖到这里，或点击选择</p>
       </Upload.Dragger>
-      {error ? <Alert className="report-form-alert" type="error" showIcon title={error} /> : null}
-      <ValidationIssueList issues={issues} />
+      <Flex vertical gap={12} style={{ marginTop: 12 }}>
+        {error ? <Alert type="error" showIcon title={error} /> : null}
+        <ValidationIssueList issues={issues} />
+      </Flex>
     </Modal>
   );
 }
@@ -569,46 +584,46 @@ function TemplateDetailDrawer({
       title={template ? `${template.template_name} · 锚点与配置` : "模板详情"}
     >
       {template === null ? null : (
-        <div className="report-drawer-body">
-          <section>
-            <h4>内容锚点（文档顺序）</h4>
+        <Flex vertical gap={24}>
+          <Flex vertical gap={8}>
+            <Typography.Title level={5} style={{ margin: 0 }}>内容锚点（文档顺序）</Typography.Title>
             {anchors.length === 0 ? (
-              <p className="report-muted">这份模板还没有校验结果，重新上传后即可看到。</p>
+              <Typography.Text type="secondary">这份模板还没有校验结果，重新上传后即可看到。</Typography.Text>
             ) : (
-              <ol className="report-anchor-list">
+              <Flex vertical gap={4} component="ol" style={{ margin: 0, paddingInlineStart: 20 }}>
                 {anchors.map((anchor, index) => {
                   const [block, part] = anchor.split(":");
                   return (
                     <li key={`${anchor}-${index}`}>
-                      <code>{block}</code>
+                      <Typography.Text code>{block}</Typography.Text>
                       {part ? <Tag>{structurePartLabel(part)}</Tag> : null}
                     </li>
                   );
                 })}
-              </ol>
+              </Flex>
             )}
-          </section>
+          </Flex>
 
-          <section>
-            <h4>表号与图号格式</h4>
+          <Flex vertical gap={8}>
+            <Typography.Title level={5} style={{ margin: 0 }}>表号与图号格式</Typography.Title>
             {formats.length === 0 ? (
-              <p className="report-muted">未配置。</p>
+              <Typography.Text type="secondary">未配置。</Typography.Text>
             ) : (
-              <ul className="report-kv-list">
+              <Flex vertical gap={4}>
                 {formats.map((row) => (
-                  <li key={row.key}>
-                    <span>{row.label}</span>
-                    <code>{row.format}</code>
-                  </li>
+                  <Flex key={row.key} justify="space-between" gap={12}>
+                    <Typography.Text>{row.label}</Typography.Text>
+                    <Typography.Text code>{row.format}</Typography.Text>
+                  </Flex>
                 ))}
-              </ul>
+              </Flex>
             )}
-          </section>
+          </Flex>
 
-          <section>
-            <h4>所需人员角色</h4>
+          <Flex vertical gap={8}>
+            <Typography.Title level={5} style={{ margin: 0 }}>所需人员角色</Typography.Title>
             {roles.length === 0 ? (
-              <p className="report-muted">未配置。</p>
+              <Typography.Text type="secondary">未配置。</Typography.Text>
             ) : (
               <Space size={4} wrap>
                 {roles.map((role) => (
@@ -618,17 +633,17 @@ function TemplateDetailDrawer({
                 ))}
               </Space>
             )}
-          </section>
+          </Flex>
 
-          <section>
-            <h4>校验明细</h4>
+          <Flex vertical gap={8}>
+            <Typography.Title level={5} style={{ margin: 0 }}>校验明细</Typography.Title>
             {(result?.issues ?? []).length === 0 ? (
-              <p className="report-muted">没有问题。</p>
+              <Typography.Text type="secondary">没有问题。</Typography.Text>
             ) : (
               <ValidationIssueList issues={result?.issues ?? []} />
             )}
-          </section>
-        </div>
+          </Flex>
+        </Flex>
       )}
     </Drawer>
   );

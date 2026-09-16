@@ -1,5 +1,5 @@
 import { DownOutlined, RightOutlined, SearchOutlined } from "@ant-design/icons";
-import { Input } from "antd";
+import { Input, Select } from "antd";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import type { ComponentSummary } from "../api/componentArchiveApi";
@@ -160,29 +160,21 @@ export function ComponentListPanel({ components, selectedComponentId, onSelect }
           onChange={(event) => setKeyword(event.target.value)}
         />
         <div className="archive-list-filter-row">
-          {/* 原生 select：与渲染稿的下拉外观一致，同时保持既有筛选测试可直接驱动。 */}
-          <select
-            className="archive-list-select"
+          <Select
             aria-label="结构分部筛选"
             value={structurePart}
-            onChange={(event) => setStructurePart(event.target.value as (typeof STRUCTURE_PART_FILTERS)[number])}
-          >
-            {STRUCTURE_PART_FILTERS.map((part) => (
-              <option key={part} value={part}>
-                {part === "全部" ? "全部结构" : part}
-              </option>
-            ))}
-          </select>
-          <select
-            className="archive-list-select"
+            onChange={setStructurePart}
+            options={STRUCTURE_PART_FILTERS.map((part) => ({
+              value: part,
+              label: part === "全部" ? "全部结构" : part,
+            }))}
+          />
+          <Select
             aria-label="排序方式"
             value={sort}
-            onChange={(event) => setSort(event.target.value as SortMode)}
-          >
-            {Object.entries(SORT_MODES).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
+            onChange={setSort}
+            options={Object.entries(SORT_MODES).map(([value, label]) => ({ value: value as SortMode, label }))}
+          />
         </div>
       </div>
       {groups.length === 0 ? (

@@ -67,9 +67,9 @@ export function ComponentDetailPanel({ archive, bridgeId, onRebind }: ComponentD
           </div>
           <p>
             构件编号：{component.system_number}
-            <button type="button" className="archive-history-inline" onClick={() => void toggleRevisions()}>
+            <Button type="link" size="small" onClick={() => void toggleRevisions()}>
               {revisionsOpen ? "返回当前档案" : "历史修订"}
-            </button>
+            </Button>
           </p>
         </div>
       </header>

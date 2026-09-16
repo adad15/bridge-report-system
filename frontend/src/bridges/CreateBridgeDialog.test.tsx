@@ -1,11 +1,12 @@
 import { useEffect } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createBridge } from "../api/bridgeAdministrationApi";
 import { generateComponentInventory } from "../api/componentInventoryApi";
 import { fetchStandardCatalog, fetchStandardPackages } from "../api/standardsApi";
+import { chooseOption, optionLabels, selectedLabel } from "../test/antd";
 import { CreateBridgeDialog } from "./CreateBridgeDialog";
 import type { InventorySelection, InventorySummary } from "./BridgeInventoryWizard";
 
@@ -84,7 +85,7 @@ vi.mock("./BridgeInventoryWizard", async (importOriginal) => {
 
 async function fillBase() {
   await userEvent.type(screen.getByLabelText("桥梁名称"), "测试桥");
-  await userEvent.selectOptions(await screen.findByLabelText("桥型"), "h21.bridge_type.beam");
+  await chooseOption(await screen.findByLabelText("桥型"), "梁式桥");
   await userEvent.type(screen.getByLabelText("跨数"), "5");
 }
 
@@ -121,6 +122,7 @@ describe("CreateBridgeDialog", () => {
     await userEvent.click(screen.getByRole("button", { name: "下一步：构件台账" }));
     await userEvent.click(await screen.findByRole("button", { name: "创建桥梁并生成台账" }));
 
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
     expect(createBridge).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ bridge_name: "测试桥" }));
     expect(generateComponentInventory).toHaveBeenCalledWith(expect.any(String), "bridge-1", plan);
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: "bridge-1" }));
@@ -145,9 +147,10 @@ describe("CreateBridgeDialog", () => {
 
     render(<CreateBridgeDialog onClose={vi.fn()} onCreated={vi.fn()} />);
     const select = await screen.findByLabelText("初始台账规范来源");
-    expect(select).toHaveValue("package-1");
-    expect(screen.getByRole("option", { name: /v1\.0\.4/ })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /v1\.0\.3/ })).toBeInTheDocument();
+    await waitFor(() => expect(selectedLabel(select)).toMatch(/v1\.0\.4/));
+    const labels = await optionLabels(select);
+    expect(labels.some((label) => /v1\.0\.4/.test(label))).toBe(true);
+    expect(labels.some((label) => /v1\.0\.3/.test(label))).toBe(true);
   });
 
   it("keeps 下一步 disabled until the name, the bridge type and the span count are all there", async () => {
@@ -157,7 +160,7 @@ describe("CreateBridgeDialog", () => {
 
     await userEvent.type(screen.getByLabelText("桥梁名称"), "测试桥");
     expect(next).toBeDisabled();
-    await userEvent.selectOptions(screen.getByLabelText("桥型"), "h21.bridge_type.beam");
+    await chooseOption(screen.getByLabelText("桥型"), "梁式桥");
     expect(next).toBeDisabled();
     await userEvent.type(screen.getByLabelText("跨数"), "5");
     expect(next).toBeEnabled();
@@ -178,7 +181,7 @@ describe("CreateBridgeDialog", () => {
     expect(screen.getByText("已勾 1 个")).toBeInTheDocument();
 
     // 回第一步改个桩号再回来，勾好的部件不能没。
-    await userEvent.click(screen.getByRole("button", { name: "上一步" }));
+    await userEvent.click(screen.getByRole("button", { name: /^上一步$/ }));
     await userEvent.type(screen.getByLabelText("桩号"), "K109+747");
     await userEvent.click(screen.getByRole("button", { name: "下一步：构件台账" }));
     expect(await screen.findByText("已勾 1 个")).toBeInTheDocument();
@@ -191,12 +194,12 @@ describe("CreateBridgeDialog", () => {
     await fillBase();
     await userEvent.click(screen.getByRole("button", { name: "下一步：构件台账" }));
     await userEvent.click(await screen.findByRole("button", { name: "勾一个部件" }));
-    await userEvent.click(screen.getByRole("button", { name: "上一步" }));
+    await userEvent.click(screen.getByRole("button", { name: /^上一步$/ }));
 
-    await userEvent.selectOptions(screen.getByLabelText("桥型"), "h21.bridge_type.cable_stayed");
+    await chooseOption(screen.getByLabelText("桥型"), "斜拉桥");
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining("换桥型会清空已经勾选的 1 个部件"));
     // 拒绝之后桥型和勾选都得原样留着。
-    expect(screen.getByLabelText("桥型")).toHaveValue("h21.bridge_type.beam");
+    expect(selectedLabel(screen.getByLabelText("桥型"))).toBe("梁式桥");
     await userEvent.click(screen.getByRole("button", { name: "下一步：构件台账" }));
     expect(await screen.findByText("已勾 1 个")).toBeInTheDocument();
   });

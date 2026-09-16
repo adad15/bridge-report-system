@@ -1,9 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { parseWordImport } from "../api/reviewApi";
 import { createSourceDbImport, listSourceTasks, uploadWordImport } from "../api/workspaceApi";
+import { chooseOption, optionLabels, selectedLabel } from "../test/antd";
 import { ImportWordDialog } from "./ImportWordDialog";
 
 vi.mock("../api/reviewApi", () => ({ parseWordImport: vi.fn() }));
@@ -21,7 +22,12 @@ const TASKS = [
 
 /** 默认来源已是来源软件离线库；要测 Word 那条路就得先切回去。 */
 async function chooseWord() {
-  await userEvent.selectOptions(screen.getByLabelText("数据来源"), "Word");
+  await chooseOption(screen.getByLabelText("数据来源"), "Word 文件");
+}
+
+/** 离线库读完、任务列表填进下拉框之后才能往下操作。 */
+async function tasksLoaded() {
+  await waitFor(() => expect(screen.getByLabelText("离线库路径")).toHaveValue("D:/data/1"));
 }
 
 describe("ImportWordDialog", () => {
@@ -37,10 +43,11 @@ describe("ImportWordDialog", () => {
     const onCompleted = vi.fn();
     render(<ImportWordDialog bridgeName="绕阳河二号桥" inspectionYearId="year-1" inspectionYear={2026} onClose={vi.fn()} onChanged={vi.fn()} onCompleted={onCompleted} />);
     await chooseWord();
-    await userEvent.upload(screen.getByLabelText("Word 文件"), new File(["docx"], "报告.docx"));
-    await userEvent.type(screen.getByLabelText("检查日期"), "2026-05-18");
+    await userEvent.upload(screen.getByLabelText("Word 文件", { selector: "input" }), new File(["docx"], "报告.docx"));
+    await userEvent.type(screen.getByLabelText("检查日期"), "2026-05-18{Enter}");
     await userEvent.type(screen.getByLabelText("报告编号"), "BG-001");
     await userEvent.click(screen.getByRole("button", { name: "上传并解析" }));
+    await waitFor(() => expect(onCompleted).toHaveBeenCalled());
     expect(uploadWordImport).toHaveBeenCalledWith(expect.any(String), "year-1", expect.any(File), "软件导出Word");
     expect(parseWordImport).toHaveBeenCalledWith(expect.any(String), "import-1", expect.objectContaining({
       rule_profile: "辽宁国省干线",
@@ -55,8 +62,8 @@ describe("ImportWordDialog", () => {
   it("rejects a non-docx file without uploading", async () => {
     render(<ImportWordDialog bridgeName="测试桥" inspectionYearId="year-1" inspectionYear={2026} onClose={vi.fn()} onChanged={vi.fn()} onCompleted={vi.fn()} />);
     await chooseWord();
-    await userEvent.upload(screen.getByLabelText("Word 文件"), new File(["x"], "报告.doc", { type: "application/msword" }), { applyAccept: false });
-    await userEvent.type(screen.getByLabelText("检查日期"), "2026-05-18");
+    await userEvent.upload(screen.getByLabelText("Word 文件", { selector: "input" }), new File(["x"], "报告.doc", { type: "application/msword" }), { applyAccept: false });
+    await userEvent.type(screen.getByLabelText("检查日期"), "2026-05-18{Enter}");
     await userEvent.type(screen.getByLabelText("报告编号"), "BG-001");
     await userEvent.click(screen.getByRole("button", { name: "上传并解析" }));
     expect(screen.getByRole("alert")).toHaveTextContent(".docx");
@@ -66,7 +73,7 @@ describe("ImportWordDialog", () => {
   it("shows a field-specific error instead of letting native validation silently block submission", async () => {
     render(<ImportWordDialog bridgeName="测试桥" inspectionYearId="year-1" inspectionYear={2026} onClose={vi.fn()} onChanged={vi.fn()} onCompleted={vi.fn()} />);
     await chooseWord();
-    await userEvent.upload(screen.getByLabelText("Word 文件"), new File(["docx"], "报告.docx"));
+    await userEvent.upload(screen.getByLabelText("Word 文件", { selector: "input" }), new File(["docx"], "报告.docx"));
     await userEvent.click(screen.getByRole("button", { name: "上传并解析" }));
     expect(screen.getByRole("alert")).toHaveTextContent("请选择检查日期");
     expect(screen.getByLabelText("检查日期")).toHaveFocus();
@@ -78,11 +85,12 @@ describe("ImportWordDialog", () => {
     vi.mocked(parseWordImport).mockResolvedValue({ parsed: true } as never);
     const onCompleted = vi.fn();
     render(<ImportWordDialog bridgeName="百股大桥" inspectionYearId="year-1" inspectionYear={2024} onClose={vi.fn()} onChanged={vi.fn()} onCompleted={onCompleted} />);
-    await screen.findByRole("option", { name: /2025-06-20/ });
-    await userEvent.selectOptions(screen.getByLabelText("检测任务"), "task-2025");
-    await userEvent.type(screen.getByLabelText("检查日期"), "2024-06-21");
+    await tasksLoaded();
+    await chooseOption(screen.getByLabelText("检测任务"), /2025-06-20/);
+    await userEvent.type(screen.getByLabelText("检查日期"), "2024-06-21{Enter}");
     await userEvent.type(screen.getByLabelText("报告编号"), "BG-2024");
     await userEvent.click(screen.getByRole("button", { name: "开始导入" }));
+    await waitFor(() => expect(onCompleted).toHaveBeenCalled());
 
     // 路径由后端给出，用户没填过一个字符。
     // 名字用选中的任务，而不是离线库那个叫 "1" 的文件名——列表里才认得出来。
@@ -101,9 +109,9 @@ describe("ImportWordDialog", () => {
     const onChanged = vi.fn();
     const onCompleted = vi.fn();
     render(<ImportWordDialog bridgeName="百股大桥" inspectionYearId="year-1" inspectionYear={2024} onClose={vi.fn()} onChanged={onChanged} onCompleted={onCompleted} />);
-    await screen.findByRole("option", { name: /2025-06-20/ });
-    await userEvent.selectOptions(screen.getByLabelText("检测任务"), "task-2025");
-    await userEvent.type(screen.getByLabelText("检查日期"), "2024-06-21");
+    await tasksLoaded();
+    await chooseOption(screen.getByLabelText("检测任务"), /2025-06-20/);
+    await userEvent.type(screen.getByLabelText("检查日期"), "2024-06-21{Enter}");
     await userEvent.type(screen.getByLabelText("报告编号"), "BG-2024");
     await userEvent.click(screen.getByRole("button", { name: "开始导入" }));
 
@@ -116,10 +124,11 @@ describe("ImportWordDialog", () => {
     render(<ImportWordDialog bridgeName="百股大桥" inspectionYearId="year-1" inspectionYear={2024} onClose={vi.fn()} onChanged={vi.fn()} onCompleted={vi.fn()} />);
 
     // taskId 是厂商库里的 UUID；界面必须把它翻译成人能认的桥名、日期与条数。
-    const option = await screen.findByRole("option", { name: /2025-06-20/ });
-    expect(option).toHaveTextContent("百股大桥");
-    expect(option).toHaveTextContent("314 条病害");
-    expect(option).toHaveTextContent("253 张照片");
+    await tasksLoaded();
+    const option = (await optionLabels(screen.getByLabelText("检测任务"))).find((label) => label.includes("2025-06-20"));
+    expect(option).toContain("百股大桥");
+    expect(option).toContain("314 条病害");
+    expect(option).toContain("253 张照片");
     // 路径也不用人填。
     expect(screen.getByLabelText("离线库路径")).toHaveValue("D:/data/1");
   });
@@ -130,13 +139,14 @@ describe("ImportWordDialog", () => {
     vi.mocked(parseWordImport).mockResolvedValue({ parsed: true } as never);
     render(<ImportWordDialog bridgeName="百股大桥" inspectionYearId="year-1" inspectionYear={2024} onClose={vi.fn()} onChanged={vi.fn()} onCompleted={vi.fn()} />);
 
-    await screen.findByRole("option", { name: /2024-06-21/ });
-    await userEvent.type(screen.getByLabelText("检查日期"), "2024-06-21");
+    await tasksLoaded();
+    expect(selectedLabel(screen.getByLabelText("检测任务"))).toMatch(/2024-06-21/);
+    await userEvent.type(screen.getByLabelText("检查日期"), "2024-06-21{Enter}");
     await userEvent.type(screen.getByLabelText("报告编号"), "BG-2024");
     await userEvent.click(screen.getByRole("button", { name: "开始导入" }));
 
-    expect(createSourceDbImport).toHaveBeenCalledWith(
-      expect.any(String), "year-1", "D:/data/1", "task-2024", "百股大桥 2024-06-21");
+    await waitFor(() => expect(createSourceDbImport).toHaveBeenCalledWith(
+      expect.any(String), "year-1", "D:/data/1", "task-2024", "百股大桥 2024-06-21"));
   });
 
   it("says what went wrong when the offline database cannot be read", async () => {
@@ -144,13 +154,13 @@ describe("ImportWordDialog", () => {
     render(<ImportWordDialog bridgeName="百股大桥" inspectionYearId="year-1" inspectionYear={2024} onClose={vi.fn()} onChanged={vi.fn()} onCompleted={vi.fn()} />);
 
     expect(await screen.findByText(/找不到来源软件的离线库/)).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "未读到检测任务" })).toBeInTheDocument();
+    expect(screen.getByText("未读到检测任务")).toBeInTheDocument();
   });
 
   it("refuses to register an import until a task is chosen", async () => {
     render(<ImportWordDialog bridgeName="百股大桥" inspectionYearId="year-1" inspectionYear={2024} onClose={vi.fn()} onChanged={vi.fn()} onCompleted={vi.fn()} />);
-    await screen.findByRole("option", { name: /2025-06-20/ });
-    await userEvent.type(screen.getByLabelText("检查日期"), "2024-06-21");
+    await tasksLoaded();
+    await userEvent.type(screen.getByLabelText("检查日期"), "2024-06-21{Enter}");
     await userEvent.type(screen.getByLabelText("报告编号"), "BG-2024");
     await userEvent.click(screen.getByRole("button", { name: "开始导入" }));
 

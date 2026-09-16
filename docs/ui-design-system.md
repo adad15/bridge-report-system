@@ -47,7 +47,26 @@
 - 对应页面验收通过后，才删除其旧 CSS。
 - 未迁移页面允许继续使用原实现，但不得反向影响已迁移页面的主题。
 
-### 2.5 前后端权限一致
+### 2.5 只用 Ant Design，不再新增自写 CSS
+
+2026-09-14 起执行。系统里原有约 1.4 万行自写 CSS，与 Ant Design 并存导致同一类控件两套外观，也难以按屏幕尺寸统一调密度，因此逐步全部换成 Ant Design。
+
+- 新写和改写的界面只用 Ant Design 组件及其属性表达：布局用 `Flex`、`Row`/`Col`、`Space`，文字用 `Typography`，弹窗用 `Modal`，表单用 `Form` 配 `Input`、`Select`、`InputNumber`、`DatePicker`，按钮用 `Button`，上传用 `Upload`，删除确认用 `Popconfirm` 或 `Modal`，错误和提示用 `Alert`。
+- 不新增 `.css` 规则，也不为了样式新增 `className`。个别尺寸（固定高度、滚动区最大高度）通过组件的 `styles` / `style` 属性给出，只写尺寸，不写颜色、字号和间距——这些走主题 Token。
+- 需要全站统一调整的视觉（控件高度、表单项间距等）改 `frontend/src/design-system/theme`，不在页面里覆盖。
+- 旧 CSS 随页面迁移删除：一个选择器在代码里已经没有任何引用才删，仍有页面在用的先留着。
+- 测试注意：Ant Design 会在两个汉字的按钮文字中间插空格（显示为「取 消」），测试里按名称找这类按钮写成 `/^取\s?消$/`；`Modal`、`Popconfirm` 渲染在 `body` 下的浮层里，用 `screen` 查询；`Dropdown` 的菜单项角色是 `menuitem`，要先点开触发按钮；`Select` 用 `src/test/antd.ts` 里的 `chooseOption`、`optionLabels`、`selectedLabel` 驱动和断言。
+- 弹窗主体设了 `overflowY: "auto"` 时要同时写 `overflowX: "hidden"`，否则 `Row` 的负外边距会撑出横向滚动条。
+
+迁移分五步，逐步验收：
+
+1. 定下本条规矩；桥梁概况编辑弹窗、图件弹窗改为 Ant Design。（已完成）
+2. 手写弹窗（`dialog-backdrop` / `workspace-dialog`）换 `Modal`，原生 `button`、`input`、`select`、`textarea` 换 Ant Design 对应组件。暂不含模块 06/07：`src/review/`、`src/triage/` 及其页面 `ReviewWorkspacePage`。（已完成：新建桥梁、新建年度、导入资料、三个删除弹窗、规范管理、重新绑定线索均已改为 `Modal`；自写的检查日期选择器换成 `DatePicker`；构件台账、台账向导、年度检测、构件列表、评定树搜索的表单控件已换。整行可点的列表项和树节点——评定树目录、构件分类、构件列表、工作台列表——仍是原生按钮，随第 4 步换成 `Tree` / `Menu` / `List` 时一起改。随之失去引用的约 180 条 CSS 规则已删除。）
+3. 应用外壳（顶栏、侧栏）换 Ant Design `Layout`。（已完成：`Layout` / `Sider` / `Menu`，颜色与高度在 `design-system/theme` 的 `Layout`、`Menu` 组件 Token 里；顶栏 68px、侧栏 248 / 76px 的结构尺寸集中在 `AppLayout.tsx`。）
+4. 逐页替换页面级布局 CSS。页面共用的模式已封装：标题区 `PageHeader`、指标卡 `MetricCard`（在 `design-system`），业务状态标签 `StatusTag`（在 `workspace`）。进度：桥梁档案列表、桥梁工作区页头、桥梁概览、构件台账（含台账向导）、年度检测、工作台、评定树、报告模板 / 报告人员与设备 / 生成报告、登录页已完成，对应样式表已删除。剩下的构件病害档案（`src/archive`，模块 06）、线索整理（`src/triage`）和校对工作台（`src/review`）按约定暂缓。登录页是全系统唯一的品牌页，左侧渐变与桥梁线稿以组件 `style` 集中写在 `AuthLayout.tsx`，属于 §2.5 的品牌例外。
+5. 按视口宽度切换紧凑密度，解决笔记本屏幕上的拥挤。
+
+### 2.6 前后端权限一致
 
 前端可以根据角色隐藏管理员入口，但不能把隐藏入口当作权限控制。路由、菜单和操作可见性必须与后端权限校验保持一致。
 

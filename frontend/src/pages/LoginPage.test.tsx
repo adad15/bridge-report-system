@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setAuthToken, setUnauthorizedHandler } from "../api/apiClient";
 import { AuthProvider } from "../auth/AuthContext";
 import { DesignSystemProvider } from "../design-system";
+import { emulateViewport } from "../test/antd";
 import { LoginPage, LoginRestoringPage } from "./LoginPage";
 
 function renderLoginPage() {
@@ -20,6 +21,8 @@ function renderLoginPage() {
 describe("LoginPage", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    // 左侧品牌区只在宽屏出现。
+    emulateViewport(1440);
   });
 
   afterEach(() => {

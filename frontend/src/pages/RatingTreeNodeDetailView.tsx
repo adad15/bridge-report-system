@@ -1,9 +1,18 @@
+import { ArrowRightOutlined, FileTextOutlined } from "@ant-design/icons";
 import {
-  ArrowRightOutlined,
-  FileTextOutlined,
-  InfoCircleFilled,
-} from "@ant-design/icons";
-import { Tag } from "antd";
+  Alert,
+  Button,
+  Card,
+  Col,
+  Descriptions,
+  Empty,
+  Flex,
+  Row,
+  Spin,
+  Table,
+  Tag,
+  Typography,
+} from "antd";
 
 import type {
   RatingTreeNode,
@@ -58,29 +67,44 @@ function summarySource(version: RatingTreeVersion, node: RatingTreeNode): string
   return "随发布版本固化";
 }
 
+function SectionTitle({ children }: { children: string }) {
+  return <Typography.Title level={5} style={{ margin: 0 }}>{children}</Typography.Title>;
+}
+
 function ScaleRulesPanel({ node }: { node: RatingTreeNode }) {
   return (
-    <section className="rating-detail-scale-card" aria-label="标度判定与扣分">
-      <div className="rating-detail-section-heading">
-        <h3>标度判定与扣分</h3>
-        <span>{node.allowed_scales.length > 0 ? `${node.allowed_scales.length} 个标度` : "暂无标度"}</span>
-      </div>
-      <div className="rating-detail-scale-content">
+    <Card
+      size="small"
+      role="region"
+      aria-label="标度判定与扣分"
+      title={<SectionTitle>标度判定与扣分</SectionTitle>}
+      extra={<Typography.Text type="secondary">{node.allowed_scales.length > 0 ? `${node.allowed_scales.length} 个标度` : "暂无标度"}</Typography.Text>}
+    >
+      <Flex vertical gap={10}>
         {node.uses_source_scale_descriptions ? (
-          <p className="rating-tree-source-table">判定来源：来源软件 {node.display_number || ""}；扣分参照：H21 {node.h21_source_table || "—"}</p>
-        ) : node.h21_source_table ? <p className="rating-tree-source-table">来源：{node.h21_source_table}</p> : null}
+          <Typography.Text type="secondary">判定来源：来源软件 {node.display_number || ""}；扣分参照：H21 {node.h21_source_table || "—"}</Typography.Text>
+        ) : node.h21_source_table ? <Typography.Text type="secondary">来源：{node.h21_source_table}</Typography.Text> : null}
         {node.allowed_scales.length === 0 ? (
-          <p className="rating-detail-scale-empty">当前病害节点暂无标度扣分规则。</p>
+          <Typography.Text type="secondary">当前病害节点暂无标度扣分规则。</Typography.Text>
         ) : (
-          <div className="rating-tree-scale-table-wrap">
-            <table className="rating-tree-scale-table">
-              <thead><tr><th>标度</th><th>判定说明</th><th>扣分</th></tr></thead>
-              <tbody>{node.allowed_scales.map((scale) => <tr key={scale}><td>{scale}</td><td>{node.scale_descriptions[String(scale)] || "—"}</td><td>{node.deduction_points[String(scale)] ?? "—"}</td></tr>)}</tbody>
-            </table>
-          </div>
+          <Table
+            size="small"
+            rowKey="scale"
+            pagination={false}
+            dataSource={node.allowed_scales.map((scale) => ({
+              scale,
+              description: node.scale_descriptions[String(scale)] || "—",
+              deduction: node.deduction_points[String(scale)] ?? "—",
+            }))}
+            columns={[
+              { title: "标度", dataIndex: "scale", width: 72 },
+              { title: "判定说明", dataIndex: "description" },
+              { title: "扣分", dataIndex: "deduction", width: 80 },
+            ]}
+          />
         )}
-      </div>
-    </section>
+      </Flex>
+    </Card>
   );
 }
 
@@ -93,13 +117,24 @@ export function RatingTreeNodeDetailView({
   childrenLoading,
   onSelectChild,
 }: RatingTreeNodeDetailViewProps) {
-  if (loading) return <div className="rating-tree-detail-state">正在加载节点详情…</div>;
+  if (loading) {
+    return (
+      <Flex align="center" justify="center" gap={8} style={{ minHeight: 240 }}>
+        <Spin />
+        <Typography.Text type="secondary">正在加载节点详情…</Typography.Text>
+      </Flex>
+    );
+  }
   if (node === null) {
     return (
-      <div className="rating-tree-detail-state">
-        <strong>{version.tree_name}</strong>
-        <span>从左侧选择节点，查看适用范围和评分规则。</span>
-      </div>
+      <Empty
+        description={
+          <Flex vertical gap={4}>
+            <Typography.Text strong>{version.tree_name}</Typography.Text>
+            <Typography.Text type="secondary">从左侧选择节点，查看适用范围和评分规则。</Typography.Text>
+          </Flex>
+        }
+      />
     );
   }
 
@@ -116,73 +151,93 @@ export function RatingTreeNodeDetailView({
   const maximumDeduction = deductions.length > 0 ? Math.max(...deductions) : null;
 
   return (
-    <article className="rating-tree-detail rating-tree-detail-redesign">
-      <header className="rating-detail-hero">
-        <div className="rating-tree-breadcrumb">
+    <Flex component="article" vertical gap={16}>
+      <Flex vertical gap={4}>
+        <Typography.Text type="secondary">
           {node.path.filter((item) => item.node_type !== "root").map((item) => ratingTreeDisplayLabel(item)).join(" / ") || version.tree_name}
-        </div>
-        <div className="rating-tree-detail-title-row">
-          <h2>{ratingTreeDisplayLabel(node)}</h2>
-          <div className="rating-detail-tags">
-            <Tag color="blue">{nodeTypeLabel(node.node_type)}</Tag>
-            <Tag color={node.is_scoring ? "green" : node.is_selectable ? "gold" : "default"}>
-              {node.is_scoring ? "计分节点" : node.is_selectable ? "记录节点" : "目录节点"}
-            </Tag>
-          </div>
-        </div>
-      </header>
+        </Typography.Text>
+        <Flex align="center" gap={10} wrap>
+          <Typography.Title level={3} style={{ margin: 0 }}>{ratingTreeDisplayLabel(node)}</Typography.Title>
+          <Tag color="blue">{nodeTypeLabel(node.node_type)}</Tag>
+          <Tag color={node.is_scoring ? "green" : node.is_selectable ? "gold" : "default"}>
+            {node.is_scoring ? "计分节点" : node.is_selectable ? "记录节点" : "目录节点"}
+          </Tag>
+        </Flex>
+      </Flex>
 
-      <section className="rating-detail-metadata" aria-label="节点元数据">
-        <div><span>节点编号</span><strong>{sectionNumber}</strong></div>
-        <div><span>节点类型</span><strong>{nodeTypeLabel(node.node_type)}</strong></div>
-        <div><span>适用桥型</span><strong>{bridgeScopes.join("、")}</strong></div>
-        <div><span>计分方式</span><strong>{scoringLabel(node)}</strong></div>
-      </section>
+      <Descriptions
+        bordered
+        size="small"
+        column={{ xs: 1, md: 2, xl: 4 }}
+        aria-label="节点元数据"
+        items={[
+          { key: "number", label: "节点编号", children: sectionNumber },
+          { key: "type", label: "节点类型", children: nodeTypeLabel(node.node_type) },
+          { key: "bridge", label: "适用桥型", children: bridgeScopes.join("、") },
+          { key: "scoring", label: "计分方式", children: scoringLabel(node) },
+        ]}
+      />
 
-      <section className="rating-detail-scope" aria-label="适用范围">
-        <span>适用范围</span>
-        <div>{componentScopes.map((scope) => <Tag key={scope} color="blue">{scope}</Tag>)}</div>
-      </section>
+      <Flex align="center" gap={8} wrap role="group" aria-label="适用范围">
+        <Typography.Text type="secondary">适用范围</Typography.Text>
+        {componentScopes.map((scope) => <Tag key={scope} color="blue">{scope}</Tag>)}
+      </Flex>
 
-      <div className="rating-detail-lower-grid">
-        {node.node_type === "defect" ? <ScaleRulesPanel node={node} /> : (
-          <section className="rating-detail-children" aria-label={childHeading}>
-            <div className="rating-detail-section-heading">
-              <h3>{childHeading}</h3>
-              <span>{childrenLoading ? "正在加载…" : `${children.length} 项`}</span>
-            </div>
-            {!childrenLoading && children.length === 0 ? (
-              <p className="rating-tree-child-empty">该节点没有下级项目。</p>
-            ) : (
-              <ul className="rating-tree-child-list rating-detail-child-list">
-                {children.map((child) => (
-                  <li key={child.id}>
-                    <button type="button" aria-label={ratingTreeDisplayLabel(child)} onClick={() => onSelectChild(child)}>
-                      <FileTextOutlined aria-hidden="true" />
-                      <span className="rating-detail-child-name">{child.display_name}</span>
-                      <span className="rating-detail-child-number">{ratingTreeSectionNumber(child) ?? "—"}</span>
-                      {child.is_scoring ? <Tag color="green">计分节点</Tag> : null}
-                      <ArrowRightOutlined aria-hidden="true" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} xl={16}>
+          {node.node_type === "defect" ? <ScaleRulesPanel node={node} /> : (
+            <Card
+              size="small"
+              role="region"
+              aria-label={childHeading}
+              title={<SectionTitle>{childHeading}</SectionTitle>}
+              extra={<Typography.Text type="secondary">{childrenLoading ? "正在加载…" : `${children.length} 项`}</Typography.Text>}
+            >
+              {!childrenLoading && children.length === 0 ? (
+                <Typography.Text type="secondary">该节点没有下级项目。</Typography.Text>
+              ) : (
+                <Flex vertical gap={2}>
+                  {children.map((child) => (
+                    <Button
+                      key={child.id}
+                      type="text"
+                      block
+                      aria-label={ratingTreeDisplayLabel(child)}
+                      onClick={() => onSelectChild(child)}
+                      style={{ height: "auto", padding: "8px 10px" }}
+                    >
+                      <Flex align="center" gap={10} style={{ width: "100%" }}>
+                        <FileTextOutlined aria-hidden="true" />
+                        <Typography.Text ellipsis style={{ flex: 1, textAlign: "left" }}>{child.display_name}</Typography.Text>
+                        <Typography.Text type="secondary">{ratingTreeSectionNumber(child) ?? "—"}</Typography.Text>
+                        {child.is_scoring ? <Tag color="green">计分节点</Tag> : null}
+                        <ArrowRightOutlined aria-hidden="true" />
+                      </Flex>
+                    </Button>
+                  ))}
+                </Flex>
+              )}
+            </Card>
+          )}
+        </Col>
 
-        <aside className="rating-detail-summary-column">
-          <section className="rating-detail-summary">
-            <div className="rating-detail-section-heading"><h3>评分规则摘要</h3></div>
-            <dl>
-              <div><dt>标度</dt><dd>{knownScales.length > 0 ? `${knownScales[0]}–${knownScales[knownScales.length - 1]}` : "—"}</dd></div>
-              <div><dt>最高扣分</dt><dd>{maximumDeduction ?? "—"}</dd></div>
-              <div><dt>规则来源</dt><dd>{summarySource(version, node)}</dd></div>
-            </dl>
-          </section>
-          <div className="rating-detail-readonly-note"><InfoCircleFilled /><span>该版本已发布，仅供查看，不能在此页面修改规则。</span></div>
-        </aside>
-      </div>
-    </article>
+        <Col xs={24} xl={8}>
+          <Flex vertical gap={12}>
+            <Card size="small" title={<SectionTitle>评分规则摘要</SectionTitle>}>
+              <Descriptions
+                size="small"
+                column={1}
+                items={[
+                  { key: "scales", label: "标度", children: knownScales.length > 0 ? `${knownScales[0]}–${knownScales[knownScales.length - 1]}` : "—" },
+                  { key: "max", label: "最高扣分", children: maximumDeduction ?? "—" },
+                  { key: "source", label: "规则来源", children: summarySource(version, node) },
+                ]}
+              />
+            </Card>
+            <Alert type="info" showIcon role="note" title="该版本已发布，仅供查看，不能在此页面修改规则。" />
+          </Flex>
+        </Col>
+      </Row>
+    </Flex>
   );
 }

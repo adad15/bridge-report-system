@@ -1,10 +1,11 @@
+import { Button, Card, Result } from "antd";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Link, Outlet, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/apiClient";
 import { fetchBridgeOverview, type BridgeOverview } from "../api/workspaceApi";
 import { backendBaseUrl } from "../config";
-import { statusBadgeClass } from "./workspaceState";
+import { useHeaderBridge } from "../layouts/HeaderBridgeContext";
 
 interface BridgeWorkspaceContextValue {
   overview: BridgeOverview;
@@ -42,39 +43,42 @@ export function BridgeWorkspaceShell() {
     };
   }, [bridgeId, version]);
 
+  // 桥名、状态、编号挂在顶栏上，页面里不再单独占一张卡片。
+  const bridgeSummary = overview?.bridge;
+  useHeaderBridge(bridgeSummary ? {
+    id: bridgeSummary.id,
+    name: bridgeSummary.bridge_name,
+    status: bridgeSummary.status,
+    systemNumber: bridgeSummary.system_number,
+    routeName: bridgeSummary.route_name,
+  } : null);
+
   const context = useMemo(
     () => (overview ? { overview, reloadOverview: () => setVersion((current) => current + 1) } : null),
     [overview]
   );
 
-  if (!bridgeId) return <section className="status-panel"><p className="error-text">缺少桥梁标识。</p></section>;
+  if (!bridgeId) return <Result status="error" title="缺少桥梁标识。" />;
   if (error) {
     return (
-      <section className="status-panel">
-        <h1>无法打开桥梁档案</h1>
-        <p className="error-text">{error}</p>
-        <button type="button" onClick={() => setVersion((current) => current + 1)}>重新加载</button>
-        <Link to="/bridges">返回桥梁档案</Link>
-      </section>
+      <Card>
+        <Result
+          status="error"
+          title="无法打开桥梁档案"
+          subTitle={error}
+          extra={[
+            <Button key="reload" type="primary" onClick={() => setVersion((current) => current + 1)}>重新加载</Button>,
+            <Link key="back" to="/bridges">返回桥梁档案</Link>,
+          ]}
+        />
+      </Card>
     );
   }
-  if (!overview || !context) return <section className="status-panel"><p>正在加载桥梁档案…</p></section>;
+  if (!overview || !context) return <Card loading>正在加载桥梁档案…</Card>;
 
-  const bridge = overview.bridge;
   return (
-    <div className="bridge-workspace-shell">
-      <header className="bridge-workspace-header">
-        <div className="bridge-breadcrumb"><Link to="/bridges">桥梁档案</Link><span>/</span><span>{bridge.bridge_name}</span></div>
-        <div className="bridge-title-row">
-          <h1>{bridge.bridge_name}</h1>
-          <span className={statusBadgeClass(bridge.status)}>{bridge.status}</span>
-          <span className="bridge-title-rule" aria-hidden="true" />
-          <p>{bridge.system_number} · {bridge.route_name ?? "路线未填写"}</p>
-        </div>
-      </header>
-      <BridgeWorkspaceContext.Provider value={context}>
-        <Outlet />
-      </BridgeWorkspaceContext.Provider>
-    </div>
+    <BridgeWorkspaceContext.Provider value={context}>
+      <Outlet />
+    </BridgeWorkspaceContext.Provider>
   );
 }

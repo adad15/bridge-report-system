@@ -4,11 +4,16 @@ import {
   FileDoneOutlined,
   HistoryOutlined,
 } from "@ant-design/icons";
-import { Progress } from "antd";
-import { Link } from "react-router-dom";
+import { Button, Card, Col, Divider, Flex, Grid, Row, Typography, theme } from "antd";
+import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
+import { MetricCard, type MetricTone } from "../design-system";
+import { BridgeLocationCard } from "../bridges/BridgeLocationCard";
 import { BridgeProfileCard } from "../bridges/BridgeProfileCard";
+import { OVERVIEW_SCROLL_HEIGHT } from "../bridges/overviewLayout";
+import { useBridgeMedia } from "../bridges/useBridgeMedia";
+import { useBridgeProfile } from "../bridges/useBridgeProfile";
 
 import type {
   BridgeDefectComparison,
@@ -71,10 +76,9 @@ function describeGroup(group: DefectGroupDelta, comparison: BridgeDefectComparis
 function DefectComparisonCard({ comparison }: DefectComparisonCardProps) {
   if (!comparison.available) {
     return (
-      <section className="workspace-card bridge-comparison-card">
-        <h2>年度病害对比</h2>
-        <p className="bridge-comparison-note">需要两个已确认的年度检测才能对比，当前不足两个。</p>
-      </section>
+      <Card size="small" title="年度病害对比" style={{ height: "100%" }}>
+        <Typography.Text type="secondary">需要两个已确认的年度检测才能对比，当前不足两个。</Typography.Text>
+      </Card>
     );
   }
 
@@ -89,27 +93,28 @@ function DefectComparisonCard({ comparison }: DefectComparisonCardProps) {
     + `净${net >= 0 ? "增" : "减"} ${Math.abs(net)} 条；`
     + `${comparison.unchanged_component_count} 个构件与上年持平。`;
   return (
-    <section className="workspace-card bridge-comparison-card">
-      <header className="bridge-comparison-head">
-        <h2>年度病害对比</h2>
-        <span className="bridge-comparison-years">
-          {comparison.previous_year} 年 → {comparison.latest_year} 年
-        </span>
-      </header>
-
-      <div className="bridge-comparison-body">
+    <Card
+      size="small"
+      title="年度病害对比"
+      extra={<Typography.Text type="secondary">{comparison.previous_year} 年 → {comparison.latest_year} 年</Typography.Text>}
+      style={{ height: "100%" }}
+    >
+      {/* 89 个构件逐条成文会把概览页撑爆，限高滚动。高度跟着视口走：屏幕高就多给几行，
+          屏幕矮就自己收，不把整页顶出竖滚动条。 */}
+      <div style={{ maxHeight: OVERVIEW_SCROLL_HEIGHT, overflowY: "auto" }}>
         {comparison.groups.map((group) => (
-          <p key={`${group.structure_part}-${group.component_type}`} className="bridge-comparison-line">
+          <Typography.Paragraph key={`${group.structure_part}-${group.component_type}`}>
             <strong>{group.structure_part}·{group.component_type}</strong>
-            <span className="bridge-comparison-scale">（{group.component_count} 个构件）</span>
+            <Typography.Text type="secondary">（{group.component_count} 个构件）</Typography.Text>
             ：{describeGroup(group, comparison)}
-          </p>
+          </Typography.Paragraph>
         ))}
       </div>
 
-      <p className="bridge-comparison-summary">{summary}</p>
-      <p className="bridge-comparison-note">以上按病害条数统计，不代表逐条病害的对应关系。</p>
-    </section>
+      <Divider size="small" />
+      <Typography.Paragraph strong>{summary}</Typography.Paragraph>
+      <Typography.Text type="secondary">以上按病害条数统计，不代表逐条病害的对应关系。</Typography.Text>
+    </Card>
   );
 }
 
@@ -117,70 +122,101 @@ export function BridgeOverviewPage() {
   const { overview } = useBridgeWorkspace();
   const { user } = useAuth();
   const { bridge, latest_inspection: latest } = overview;
+  const { profile, error: profileError, setProfile } = useBridgeProfile(bridge.id);
+  const { media, replace: replaceMedia, remove: removeMedia } = useBridgeMedia(bridge.id);
+  const isAdmin = user?.role === "admin";
+  const navigate = useNavigate();
+  const { token } = theme.useToken();
+  const stacked = Grid.useBreakpoint().xl === false;
+
+  // 四个档案环节齐了就是 100%。这个比例只在上面的指标行里出一次；
+  // 原来还有一张把它展开写一遍的卡片，那块位置现在给了地理位置。
   const completeness = [
-    { label: "基础信息", complete: Boolean(bridge.system_number && bridge.bridge_name) },
-    { label: "年度检测", complete: latest !== null },
-    { label: "病害档案", complete: overview.defect_archive.component_count > 0 },
-    { label: "待办清理", complete: overview.pending.total_count === 0 },
+    Boolean(bridge.system_number && bridge.bridge_name),
+    latest !== null,
+    overview.defect_archive.component_count > 0,
+    overview.pending.total_count === 0,
   ];
   const completenessPercent = Math.round(
-    completeness.filter((item) => item.complete).length / completeness.length * 100,
+    completeness.filter(Boolean).length / completeness.length * 100,
   );
 
-  const metrics = [
-    { label: "档案完整度", value: `${completenessPercent}%`, tone: "blue", icon: <FileDoneOutlined /> },
-    { label: "待处理资料", value: overview.pending.import_count, tone: "orange", icon: <AuditOutlined /> },
-    { label: "病害构件", value: overview.defect_archive.component_count, tone: "green", icon: <ApartmentOutlined /> },
-    { label: "跨年病害线索", value: overview.defect_archive.thread_count, tone: "violet", icon: <HistoryOutlined /> },
+  const metrics: Array<{ label: string; value: string | number; tone: MetricTone; icon: JSX.Element }> = [
+    { label: "档案完整度", value: `${completenessPercent}%`, tone: "primary", icon: <FileDoneOutlined /> },
+    { label: "待处理资料", value: overview.pending.import_count, tone: "warning", icon: <AuditOutlined /> },
+    { label: "病害构件", value: overview.defect_archive.component_count, tone: "success", icon: <ApartmentOutlined /> },
+    { label: "跨年病害线索", value: overview.defect_archive.thread_count, tone: "neutral", icon: <HistoryOutlined /> },
   ];
 
   return (
-    <div className="bridge-overview-page bridge-overview-dashboard">
-      <section className="bridge-dashboard-metrics" aria-label="桥梁档案概况">
+    <Flex vertical gap={10}>
+      <Row gutter={[12, 12]} role="group" aria-label="桥梁档案概况">
         {metrics.map((metric) => (
-          <article key={metric.label} className={`bridge-dashboard-metric is-${metric.tone}`}>
-            <span className="bridge-dashboard-metric-icon" aria-hidden="true">{metric.icon}</span>
-            <div><span>{metric.label}</span><strong>{metric.value}</strong></div>
-          </article>
+          <Col key={metric.label} xs={24} sm={12} xl={6}>
+            <MetricCard size="small" title={metric.label} value={metric.value} tone={metric.tone} icon={metric.icon} />
+          </Col>
         ))}
-      </section>
+      </Row>
 
-      <div className="bridge-overview-grid">
-        <section className="workspace-card bridge-latest-card">
-          <h2>最新技术状况</h2>
-          <div className="bridge-latest-empty" aria-live="polite">
-            <span className="bridge-latest-illustration" aria-hidden="true"><FileDoneOutlined /><i /></span>
-            <h3>{latest ? `${latest.inspection_year} 年度综合评定` : "尚无正式年度结论"}</h3>
-            {latest ? (
-              <p>综合评分 <strong>{show(latest.overall_score)}</strong> · 综合评定 <strong>{show(latest.overall_grade)}</strong></p>
-            ) : (
-              <p>完成年度检测并确认后，将在此生成综合评定结论。</p>
-            )}
-            <Link className="primary-link" to={inspectionsPath(bridge.id)}>进入年度检测</Link>
+      <Row gutter={[10, 10]}>
+        <Col xs={24} xl={13}>
+          {/* 同一行右边是桥梁概况，录满时比这张卡片高，结论居中放在多出来的高度里。 */}
+          <Card
+            size="small"
+            title="最新技术状况"
+            style={{ height: "100%" }}
+            styles={{
+              root: { display: "flex", flexDirection: "column" },
+              body: { flex: 1, display: "flex", alignItems: "center", justifyContent: "center" },
+            }}
+          >
+            <Flex vertical align="center" gap={6} aria-live="polite">
+              <FileDoneOutlined style={{ fontSize: 40, color: token.colorTextQuaternary }} aria-hidden="true" />
+              <Typography.Title level={4} style={{ margin: 0 }}>
+                {latest ? `${latest.inspection_year} 年度综合评定` : "尚无正式年度结论"}
+              </Typography.Title>
+              {latest ? (
+                <Typography.Text type="secondary">
+                  综合评分 <Typography.Text strong>{show(latest.overall_score)}</Typography.Text>
+                  {" · "}综合评定 <Typography.Text strong>{show(latest.overall_grade)}</Typography.Text>
+                </Typography.Text>
+              ) : (
+                <Typography.Text type="secondary">完成年度检测并确认后，将在此生成综合评定结论。</Typography.Text>
+              )}
+              <Button type="primary" onClick={() => navigate(inspectionsPath(bridge.id))}>进入年度检测</Button>
+            </Flex>
+          </Card>
+        </Col>
+
+        <Col xs={24} xl={11}>
+          {/* 这一行的高度只由左边的最新技术状况决定：桥梁概况铺满同样高的格子，
+              多出来的项在卡片里滚动，不把这一行撑高。上下叠放时给它一个固定高度。 */}
+          <div style={stacked ? { height: 360 } : { position: "relative", height: "100%" }}>
+            <div style={stacked ? { height: "100%" } : { position: "absolute", inset: 0 }}>
+              <BridgeProfileCard
+                profile={profile}
+                error={profileError}
+                canEdit={isAdmin}
+                onSaved={setProfile}
+                media={media}
+                onMediaReplaced={replaceMedia}
+                onMediaRemoved={removeMedia}
+              />
+            </div>
           </div>
-        </section>
+        </Col>
 
-        <section className="workspace-card bridge-completeness-card">
-          <h2>档案完整度</h2>
-          <div className="bridge-completeness-body">
-            <Progress type="circle" percent={completenessPercent} size={104} strokeWidth={9} />
-            <ul>
-              {completeness.map((item) => (
-                <li key={item.label} className={item.complete ? "is-complete" : ""}>
-                  <span aria-hidden="true">{item.complete ? "✓" : "—"}</span>
-                  <strong>{item.label}</strong>
-                  <em>{item.complete ? "已完成" : "待完善"}</em>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <p className="bridge-card-footnote">完善档案信息，提升评定准确性与管理效率。</p>
-        </section>
+        <Col xs={24} xl={13}>
+          <DefectComparisonCard comparison={overview.defect_comparison} />
+        </Col>
 
-        <DefectComparisonCard comparison={overview.defect_comparison} />
-
-        <BridgeProfileCard bridgeId={bridge.id} canEdit={user?.role === "admin"} />
-      </div>
-    </div>
+        <Col xs={24} xl={11}>
+          <BridgeLocationCard
+            profile={profile}
+            locationMap={media.find((item) => item.slot === "LOCATION_MAP")}
+          />
+        </Col>
+      </Row>
+    </Flex>
   );
 }
