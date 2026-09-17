@@ -59,6 +59,8 @@ report::BridgeProfileInput parse_input(const Json::Value& body) {
     input.route_name = read_text(body, "route_name");
     input.administrative_region = read_text(body, "administrative_region");
     input.station_mark = read_text(body, "station_mark");
+    input.longitude = read_number(body, "longitude");
+    input.latitude = read_number(body, "latitude");
 
     input.bridge_type = read_text(body, "bridge_type");
     input.bridge_scale = read_text(body, "bridge_scale");
@@ -154,7 +156,8 @@ void register_bridge_profile_routes(const drogon::orm::DbClientPtr& db_client) {
                     case report::BridgeProfileWriteStatus::MeasureOutOfRange:
                         respond_json(callback,
                             make_error_body("bridge_profile_measure_out_of_range",
-                                "梁片数、梁高和宽度必须大于 0，斜交角要在 0 到 180 度之间。"),
+                                "梁片数、梁高和宽度必须大于 0，斜交角要在 0 到 180 度之间，"
+                                "经度在 ±180、纬度在 ±90 之内。"),
                             drogon::k400BadRequest);
                         return;
                     case report::BridgeProfileWriteStatus::Ok:

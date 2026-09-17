@@ -12,7 +12,8 @@ namespace {
 /// 读写共用一份列清单，省得两处各抄一遍再慢慢漂移。
 constexpr const char* kProfileColumns =
     "id::text as bridge_id, bridge_name, business_code, route_number, route_name, "
-    "administrative_region, station_mark, bridge_type, bridge_scale, span_combination, "
+    "administrative_region, station_mark, longitude, latitude, "
+    "bridge_type, bridge_scale, span_combination, "
     "bridge_length_m, bridge_width_m, built_year, skew_angle_deg, carriageway_width_m, "
     "sidewalk_width_m, deck_pavement, expansion_joint_type, expansion_joint_piers, "
     "bearing_type, superstructure_form, girders_per_span, girder_height_m, "
@@ -46,6 +47,8 @@ report::BridgeProfile read_profile(const drogon::orm::Row& row) {
     profile.route_name = optional_text(row, "route_name");
     profile.administrative_region = optional_text(row, "administrative_region");
     profile.station_mark = optional_text(row, "station_mark");
+    profile.longitude = optional_double(row, "longitude");
+    profile.latitude = optional_double(row, "latitude");
 
     profile.bridge_type = optional_text(row, "bridge_type");
     profile.bridge_scale = optional_text(row, "bridge_scale");
@@ -124,6 +127,8 @@ report::BridgeProfileWriteStatus BridgeProfileRepository::save(
             " route_name = nullif($4, ''), "
             " administrative_region = nullif($5, ''), "
             " station_mark = nullif($6, ''), "
+            " longitude = nullif($31, '')::numeric, "
+            " latitude = nullif($32, '')::numeric, "
             " bridge_type = nullif($7, ''), "
             " bridge_scale = nullif($8, ''), "
             " span_combination = nullif($9, ''), "
@@ -165,11 +170,13 @@ report::BridgeProfileWriteStatus BridgeProfileRepository::save(
             text_param(input.pier_form), text_param(input.foundation_form),
             text_param(input.design_load), text_param(input.design_org),
             text_param(input.construction_org), text_param(input.maintenance_org),
-            text_param(input.supervision_org));
+            text_param(input.supervision_org),
+            number_param(input.longitude), number_param(input.latitude));
         if (rows.empty()) return report::BridgeProfileWriteStatus::BridgeNotFound;
         return report::BridgeProfileWriteStatus::Ok;
     } catch (const drogon::orm::DrogonDbException&) {
-        // 片数、梁高、宽度为正，斜交角在 (0, 180] —— 数据库的 check 约束挡下来了。
+        // 片数、梁高、宽度为正，斜交角在 (0, 180]，经纬度在 ±180 / ±90 ——
+        // 数据库的 check 约束挡下来了。
         // 这里翻成一个能向用户解释的状态，而不是笼统的「保存失败」。
         return report::BridgeProfileWriteStatus::MeasureOutOfRange;
     }

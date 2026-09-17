@@ -15,6 +15,8 @@ add_library(bridge_report_backend_core
     src/assessment/AssessmentConfirmationService.cpp
     src/archive/ArchivePaths.cpp
     src/archive/ExtractedPhotoArchive.cpp
+    src/archive/BridgeMediaArchive.cpp
+    src/archive/ImageContent.cpp
     src/archive/SourceDbReference.cpp
     src/archive/TemporaryWordStorage.cpp
     src/archive/WordInputArchive.cpp
@@ -24,6 +26,7 @@ add_library(bridge_report_backend_core
     src/db/AuthRepository.cpp
     src/db/BridgeAdministrationRepository.cpp
     src/db/BridgeDeletionRepository.cpp
+    src/db/BridgeMediaRepository.cpp
     src/db/BridgeProfileRepository.cpp
     src/db/ComponentArchiveRepository.cpp
     src/db/ComponentInventoryRepository.cpp
@@ -58,7 +61,9 @@ add_library(bridge_report_backend_core
     src/http/AuthRoutes.cpp
     src/http/AssessmentRoutes.cpp
     src/http/BridgeAdministrationRoutes.cpp
+    src/http/BridgeMediaRoutes.cpp
     src/http/BridgeProfileRoutes.cpp
+    src/http/MapRoutes.cpp
     src/http/ComponentArchiveRoutes.cpp
     src/http/ComponentInventoryRoutes.cpp
     src/http/Cors.cpp
@@ -96,7 +101,10 @@ add_library(bridge_report_backend_core
     src/rating_tree/RatingTreeModels.cpp
     src/rating_tree/RatingTreePackageLoader.cpp
     src/rating_tree/RatingTreeResolver.cpp
+    src/report/BridgeMediaModels.cpp
+    src/report/BridgeMediaStore.cpp
     src/report/BridgeProfileModels.cpp
+    src/report/LocationMapGenerator.cpp
     src/report/InspectionReportSettingsModels.cpp
     src/report/ReportContextModels.cpp
     src/report/ReportDirectoryModels.cpp
@@ -199,7 +207,10 @@ add_executable(bridge_report_backend_tests
     tests/test_bridge_administration_repository.cpp
     tests/test_bridge_administration_routes.cpp
     tests/test_bridge_deletion_repository.cpp
+    tests/test_bridge_media_archive.cpp
+    tests/test_bridge_media_repository.cpp
     tests/test_bridge_profile_repository.cpp
+    tests/test_location_map_generator.cpp
     tests/test_component_archive_repository.cpp
     tests/test_component_archive_routes.cpp
     tests/test_component_inventory_generator.cpp

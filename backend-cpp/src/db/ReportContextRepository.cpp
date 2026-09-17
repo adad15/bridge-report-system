@@ -385,6 +385,19 @@ std::optional<report::ReportContext> ReportContextRepository::build(
         context.bridge_profile.construction_org = optional_text(head[0], "construction_org");
         context.bridge_profile.supervision_org = optional_text(head[0], "supervision_org");
 
+        // ---- §1.1 的图件 ------------------------------------------------------
+        // 图属于桥本身，不属于哪一年，所以按桥取；次序交给 Python 侧按报告契约排。
+        const auto media = tx->execSqlSync(
+            "select m.slot, f.storage_relative_path from bridge_media m "
+            "join archived_files f on f.id=m.archived_file_id "
+            "join inspection_years iy on iy.bridge_id=m.bridge_id "
+            "where iy.id=$1::uuid order by m.slot",
+            inspection_year_id);
+        for (const auto& row : media) {
+            context.bridge_media.push_back(
+                {row["slot"].as<std::string>(), row["storage_relative_path"].as<std::string>()});
+        }
+
         // ---- 当前正式评定（设计 §13）------------------------------------------
         // 一律读当前 is_current 的正式评定，绝不重跑，也绝不读旧 Word 里的评分。
         const auto run = tx->execSqlSync(

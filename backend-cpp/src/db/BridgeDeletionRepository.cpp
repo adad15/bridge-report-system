@@ -85,6 +85,7 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
         "(select count(*) from inspection_years where bridge_id=$1::uuid) as versions,"
         "(select count(*) from import_records where bridge_id=$1::uuid) as imports,"
         "(select count(*) from bridge_aliases where bridge_id=$1::uuid) as bridge_aliases,"
+        "(select count(*) from bridge_media where bridge_id=$1::uuid) as bridge_media,"
         "(select count(*) from bridge_components where bridge_id=$1::uuid) as components,"
         "(select count(*) from component_aliases a join bridge_components c on c.id=a.bridge_component_id where c.bridge_id=$1::uuid) as component_aliases,"
         "(select count(*) from bridge_component_generation_batches where bridge_id=$1::uuid) as component_generation_batches,"
@@ -114,6 +115,7 @@ std::optional<deletion::BridgeDeletionPlan> build_plan(
     plan.counts.inspection_versions = counts["versions"].as<int>();
     plan.counts.import_records = counts["imports"].as<int>();
     plan.counts.bridge_aliases = counts["bridge_aliases"].as<int>();
+    plan.counts.bridge_media = counts["bridge_media"].as<int>();
     plan.counts.bridge_components = counts["components"].as<int>();
     plan.counts.component_aliases = counts["component_aliases"].as<int>();
     plan.counts.component_generation_batches = counts["component_generation_batches"].as<int>();
@@ -346,6 +348,9 @@ deletion::DeleteBridgeOutcome BridgeDeletionRepository::delete_bridge(
         tx->execSqlSync("delete from inspection_years where bridge_id=$1::uuid", bridge_id);
         tx->execSqlSync("delete from defect_threads where bridge_id=$1::uuid", bridge_id);
         tx->execSqlSync("delete from bridge_aliases where bridge_id=$1::uuid", bridge_id);
+        // 必须早于删归档文件行：图件对 archived_files 是 restrict，反过来会被数据库挡住。
+        // 删桥本身会级联它，但那是后面一步。
+        tx->execSqlSync("delete from bridge_media where bridge_id=$1::uuid", bridge_id);
         for (const auto& file_id : plan->archived_file_ids_to_delete) {
             tx->execSqlSync("delete from archived_files where id=$1::uuid", file_id);
         }

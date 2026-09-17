@@ -141,6 +141,36 @@ PERSONNEL_ROLE_LABELS: Final = {
 }
 
 
+@dataclass(frozen=True)
+class BridgeFigureSlot:
+    """§1.1 的一个图件槽位在报告里怎么出。"""
+
+    slot: str
+    #: 编号前缀。同一个前缀共用一条序列：正式报告里地理位置图是图 1-1，
+    #: 后面的示意图从 1-2 接着编；照片另起一条，从照片 1-1 开始。
+    prefix: str
+    #: 序列分组。图和示意图共用 "figure"，照片是 "photo"。
+    sequence: str
+    #: 题注里桥名后面跟的那一截。
+    title_suffix: str
+
+
+#: §1.1 图件的出图次序与写法，次序就是报告里的图号次序。
+#:
+#: 章号写死成 1：桥梁概况固定在第 1 章，模板契约里 BRIDGE_PROFILE 锚点就在 1.1。
+BRIDGE_FIGURE_SLOTS: Final = (
+    BridgeFigureSlot("LOCATION_MAP", "图", "figure", "地理位置图"),
+    BridgeFigureSlot("LAYOUT_DRAWING", "示意图", "figure", "桥型布置图"),
+    BridgeFigureSlot("CROSS_SECTION", "示意图", "figure", "横断面图"),
+    BridgeFigureSlot("OVERVIEW_PHOTO", "照片", "photo", "全貌"),
+    BridgeFigureSlot("DECK_PHOTO", "照片", "photo", "桥面"),
+    BridgeFigureSlot("UNDERSIDE_PHOTO", "照片", "photo", "桥下"),
+)
+
+#: §1.1 所在的章号。
+BRIDGE_FIGURE_CHAPTER: Final = 1
+
+
 def personnel_placeholder(role: str) -> str:
     return f"personnel.{role}.names"
 

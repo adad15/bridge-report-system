@@ -1,6 +1,7 @@
 #include "bridge_report/archive/ExtractedPhotoArchive.hpp"
 
 #include "bridge_report/archive/ArchivePaths.hpp"
+#include "bridge_report/archive/ImageContent.hpp"
 
 #include <algorithm>
 #include <array>
@@ -27,20 +28,6 @@ bool has_jpeg_head(const unsigned char* bytes, std::streamsize count) {
     return count >= 4 && bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff;
 }
 
-/// 只看文件头，认不出就返回空串；JPEG 还要看结尾，由调用方补上。
-std::string detect_by_head(const unsigned char* bytes, std::streamsize count) {
-    const std::array<unsigned char, 8> png = {0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a};
-    if (count >= 8 && std::equal(png.begin(), png.end(), bytes)) return ".png";
-    if (count >= 6 && ((std::equal(bytes, bytes + 6, reinterpret_cast<const unsigned char*>("GIF87a")))
-        || (std::equal(bytes, bytes + 6, reinterpret_cast<const unsigned char*>("GIF89a"))))) return ".gif";
-    if (count >= 14 && bytes[0] == 'B' && bytes[1] == 'M') return ".bmp";
-    if (count >= 12 && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
-        && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') return ".webp";
-    if (count >= 4 && ((bytes[0] == 'I' && bytes[1] == 'I' && bytes[2] == 42 && bytes[3] == 0)
-        || (bytes[0] == 'M' && bytes[1] == 'M' && bytes[2] == 0 && bytes[3] == 42))) return ".tiff";
-    return {};
-}
-
 std::string detect_image_extension(const std::filesystem::path& path) {
     std::array<unsigned char, 16> bytes{};
     std::ifstream input(path, std::ios::binary);
@@ -54,26 +41,20 @@ std::string detect_image_extension(const std::filesystem::path& path) {
         tail.read(reinterpret_cast<char*>(end), 2);
         if (tail && end[0] == 0xff && end[1] == 0xd9) return ".jpg";
     }
-    const auto detected = detect_by_head(bytes.data(), count);
+    const auto detected = archive::detect_image_extension(
+        std::string_view(reinterpret_cast<const char*>(bytes.data()), static_cast<std::size_t>(count)));
     if (detected.empty()) throw PhotoArchiveError("temporary photo is not a supported image: " + path.string());
     return detected;
 }
 
 std::string detect_image_extension_from_bytes(std::string_view content) {
-    const auto* bytes = reinterpret_cast<const unsigned char*>(content.data());
-    const auto count = static_cast<std::streamsize>(content.size());
-    if (has_jpeg_head(bytes, count) && count >= 6 && bytes[count - 2] == 0xff && bytes[count - 1] == 0xd9) {
-        return ".jpg";
-    }
-    const auto detected = detect_by_head(bytes, count);
+    const auto detected = archive::detect_image_extension(content);
     if (detected.empty()) throw PhotoArchiveError("uploaded photo is not a supported image");
     return detected;
 }
 
 bool extension_matches(const std::string& extension, const std::string& detected) {
-    if (detected == ".jpg") return extension == ".jpg" || extension == ".jpeg";
-    if (detected == ".tiff") return extension == ".tif" || extension == ".tiff";
-    return extension == detected;
+    return image_extension_matches(extension, detected);
 }
 
 using DigestContext = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
@@ -96,14 +77,6 @@ std::string finish_digest(EVP_MD_CTX* context) {
     output << std::hex << std::setfill('0');
     for (unsigned int index = 0; index < length; ++index) output << std::setw(2) << static_cast<int>(digest[index]);
     return output.str();
-}
-
-std::string sha256_bytes(std::string_view content) {
-    auto context = new_digest_context();
-    if (!content.empty() && EVP_DigestUpdate(context.get(), content.data(), content.size()) != 1) {
-        throw PhotoArchiveError("unable to hash uploaded photo");
-    }
-    return finish_digest(context.get());
 }
 
 std::string sha256_file(const std::filesystem::path& path) {
@@ -204,7 +177,7 @@ ArchivedPhotoFile archive_uploaded_photo(const UploadedPhotoInput& input, const 
     const auto detected = detect_image_extension_from_bytes(input.content);
     if (!extension_matches(extension, detected)) throw PhotoArchiveError("photo extension does not match its content");
 
-    const auto hash = sha256_bytes(input.content);
+    const auto hash = sha256_hex(input.content);
     const auto current_name = sanitize_path_part(input.candidate_id) + "_" + hash.substr(0, 12) + detected;
     const auto relative = build_import_photo_relative_path(
         context.bridge_system_number, context.bridge_name, context.inspection_year,

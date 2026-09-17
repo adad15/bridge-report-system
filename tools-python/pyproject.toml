@@ -5,6 +5,9 @@ description = "Local Python tool service for the bridge report system."
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",
+  # 报告 §1.1 的地理位置图要从地图服务拓一张静态图；
+  # C++ 那边的 HTTPS 客户端在本机连不出去，这一步放在这里。
+  "httpx>=0.27.0",
   # 报告里的照片要按版面尺寸重新采样后再嵌入：归档原图是 1600×1200，
   # 而版面上只有 6.9cm 宽，455 张原样嵌进去会做出一份 126MB 的报告。
   "pillow>=10.0.0",
@@ -17,7 +20,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0.0",
-  "httpx>=0.27.0"
 ]
 
 [tool.pytest.ini_options]

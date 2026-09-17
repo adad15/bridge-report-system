@@ -50,6 +50,8 @@ from bridge_report_tools.reports.conclusion import (
     overall_assessment_paragraphs,
 )
 from bridge_report_tools.reports.contract import (
+    BRIDGE_FIGURE_CHAPTER,
+    BRIDGE_FIGURE_SLOTS,
     TABLE_COLUMNS,
     TABLE_MARKER_PREFIX,
     ASSESSMENT_RESULT_COLUMNS,
@@ -86,8 +88,8 @@ from bridge_report_tools.reports.errors import ReportBuildError
 from bridge_report_tools.reports.photo_resampler import resample
 from bridge_report_tools.reports.report_context import (
     ReportAssessment,
+    ReportBridgeMedia,
     ReportContext,
-    ReportPhoto,
     ReportStructurePart,
 )
 from bridge_report_tools.reports.styles import (
@@ -277,6 +279,11 @@ PHOTO_COLUMNS = 2
 PHOTO_FRAME_HEIGHT: Length = Mm(52)
 #: 单元格左右内边距之和，从版心宽度里扣掉，免得图片把表格撑宽。
 PHOTO_CELL_PADDING: Length = Mm(4)
+
+#: §1.1 的地理位置图和示意图一行一张，按这个框完整缩放进去。比病害照片大：
+#: 地图上的路名和河名小了就看不清。
+FIGURE_FRAME_WIDTH: Length = Mm(150)
+FIGURE_FRAME_HEIGHT: Length = Mm(95)
 
 
 @dataclass(frozen=True)
@@ -497,58 +504,87 @@ def render_defect_photos(inputs: BuildInputs, anchor: AnchorHit, into: BlockInse
     frame_width = Emu(
         int(_available_width(inputs, into)) // PHOTO_COLUMNS - int(PHOTO_CELL_PADDING)
     )
-    photos = part.photos
-    # 整块照片装进一张表，每两行一组（上排图片、下排图题）。不做成"一行一张表"是
-    # 因为紧挨着的两张表会被 Word 合并——实测 6 张表读回来只剩 5 张。
-    rows = 2 * ((len(photos) + PHOTO_COLUMNS - 1) // PHOTO_COLUMNS)
-    table = into.table(rows, PHOTO_COLUMNS, STYLE_PHOTO_LAYOUT)
+    items = [
+        _FigureItem(photo.report_number, photo.caption, photo.storage_relative_path)
+        for photo in part.photos
+    ]
+    _figure_table(inputs, into, items, PHOTO_COLUMNS, frame_width, PHOTO_FRAME_HEIGHT)
+
+
+@dataclass(frozen=True)
+class _FigureItem:
+    """图表里的一格。病害照片和 §1.1 的图走同一套排版。"""
+
+    number: str
+    caption: str
+    storage_relative_path: str
+
+
+def _figure_table(
+    inputs: BuildInputs,
+    into: BlockInserter,
+    items: list,
+    columns: int,
+    frame_width: Length,
+    frame_height: Length,
+) -> None:
+    """把一组图装进一张表：每两行一组，上排图片、下排图题。
+
+    不做成「一行一张表」是因为紧挨着的两张表会被 Word 合并——实测 6 张表读回来只剩 5 张。
+    """
+    rows = 2 * ((len(items) + columns - 1) // columns)
+    table = into.table(rows, columns, STYLE_PHOTO_LAYOUT)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     column_width = Emu(int(frame_width) + int(PHOTO_CELL_PADDING))
-    set_fixed_columns(table, [column_width] * PHOTO_COLUMNS)
+    set_fixed_columns(table, [column_width] * columns)
 
-    for index, photo in enumerate(photos):
-        row, column = 2 * (index // PHOTO_COLUMNS), index % PHOTO_COLUMNS
+    for index, item in enumerate(items):
+        row, column = 2 * (index // columns), index % columns
         image_paragraph = table.cell(row, column).paragraphs[0]
         image_paragraph.style = STYLE_PHOTO
-        _insert_picture(inputs, image_paragraph, photo, frame_width)
+        _insert_image(inputs, image_paragraph, item.storage_relative_path, item.number,
+                      frame_width, frame_height)
 
         # 图题落在表格单元格里，与正式报告的载体一致（设计 §11.11）——我们自己的
         # Word 导入器也是从单元格里扫题注的，段落里的题注它读不到。
-        _cell_text(table.cell(row + 1, column), photo.caption, STYLE_PHOTO_CAPTION)
+        _cell_text(table.cell(row + 1, column), item.caption, STYLE_PHOTO_CAPTION)
 
-    # 最后一行只剩一张时右栏留空（设计 §11.6），不把它拉宽占满整行——那样这一张的
-    # 尺寸就和前面所有照片不一致了。
-    for column in range(len(photos) % PHOTO_COLUMNS or PHOTO_COLUMNS, PHOTO_COLUMNS):
+    # 最后一行没填满时空格留空（设计 §11.6），不把最后一张拉宽占满整行——那样它的
+    # 尺寸就和前面的图不一致了。
+    for column in range(len(items) % columns or columns, columns):
         table.cell(rows - 2, column).paragraphs[0].style = STYLE_PHOTO
         _cell_text(table.cell(rows - 1, column), "", STYLE_PHOTO_CAPTION)
 
     _no_split(table)
 
 
-def _insert_picture(
-    inputs: BuildInputs, paragraph: Paragraph, photo: ReportPhoto, frame_width: Length
+def _insert_image(
+    inputs: BuildInputs,
+    paragraph: Paragraph,
+    storage_relative_path: str,
+    number: str,
+    frame_width: Length,
+    frame_height: Length,
 ) -> None:
-    path = (inputs.archive_root / photo.storage_relative_path).resolve()
+    path = (inputs.archive_root / storage_relative_path).resolve()
     if not path.is_file():
         # 生成前检查本该拦住（设计 §11.10）；真到这一步还缺文件，说明归档在生成
         # 期间被动过，只能中止——绝不能出一份少图的报告。
         raise ReportBuildError(
             code="report_photo_file_missing",
-            message=f"照片 {photo.report_number} 的归档文件不存在：{photo.storage_relative_path}",
+            message=f"{number} 的归档文件不存在：{storage_relative_path}",
         )
 
     try:
         # 按版面尺寸重采样后再嵌入：归档原图是证据要留全尺寸，报告里那张只有
         # 6.9cm 宽，原样嵌 455 张会做出一份 126MB 的报告（设计 §11.4）。
-        embedded = resample(
-            path, int(frame_width), int(PHOTO_FRAME_HEIGHT), inputs.photo_cache
-        )
-        width, height = _fit(embedded, frame_width, PHOTO_FRAME_HEIGHT)
+        embedded = resample(path, int(frame_width), int(frame_height), inputs.photo_cache)
+        width, height = _fit(embedded, frame_width, frame_height)
         paragraph.add_run().add_picture(str(embedded), width=width, height=height)
     except UnrecognizedImageError as error:
         raise ReportBuildError(
             code="report_photo_unreadable",
-            message=f"照片 {photo.report_number} 无法作为图片读取：{photo.storage_relative_path}",
+            message=f"{number} 无法作为图片读取：{storage_relative_path}",
         ) from error
 
 
@@ -619,8 +655,76 @@ def render_bridge_profile(inputs: BuildInputs, anchor: AnchorHit, into: BlockIns
     档案还没录的项不出现——句子按可用的字段自己缩短，缺得太多就整段不出，
     不留「未知」也不留半截话（措辞规则都在 conclusion 模块里）。
     """
-    for text in bridge_profile_paragraphs(inputs.context):
+    figures = plan_bridge_figures(inputs.context)
+    paragraphs = bridge_profile_paragraphs(inputs.context)
+
+    # 有地理位置图才写引用句。没图还写「见图 1-1」，读者会去找一张不存在的图。
+    location = next((figure for figure in figures if figure.slot == "LOCATION_MAP"), None)
+    if location is not None:
+        reference = f"桥梁的地理位置图见{location.number}。"
+        if paragraphs:
+            paragraphs[0] = paragraphs[0] + reference
+        else:
+            paragraphs.append(reference)
+
+    for text in paragraphs:
         into.paragraph(text, style=STYLE_BODY)
+
+    drawings = [figure for figure in figures if figure.sequence == "figure"]
+    photos = [figure for figure in figures if figure.sequence == "photo"]
+    if drawings:
+        width = Emu(min(int(_available_width(inputs, into)), int(FIGURE_FRAME_WIDTH)))
+        _figure_table(inputs, into, drawings, 1, width, FIGURE_FRAME_HEIGHT)
+    if photos:
+        width = Emu(
+            int(_available_width(inputs, into)) // PHOTO_COLUMNS - int(PHOTO_CELL_PADDING)
+        )
+        _figure_table(inputs, into, photos, PHOTO_COLUMNS, width, PHOTO_FRAME_HEIGHT)
+
+
+@dataclass(frozen=True)
+class PlannedFigure:
+    """§1.1 里定好了号的一张图。"""
+
+    slot: str
+    sequence: str
+    #: 如「图 1-1」「示意图 1-2」「照片 1-1」。
+    number: str
+    #: 「{图号}␠␠{标题}」，两个空格，和病害照片的题注一个写法（设计 §11.7）。
+    caption: str
+    storage_relative_path: str
+
+
+def plan_bridge_figures(context: ReportContext) -> list[PlannedFigure]:
+    """按报告次序给 §1.1 的图定号。
+
+    只编实际有的图：缺了桥型布置图，横断面图就是示意图 1-2 而不是 1-3，正文里不会出现跳号。
+    图和示意图共用一条序列，照片另起一条，和正式报告一致。
+    """
+    by_slot: dict[str, ReportBridgeMedia] = {item.slot: item for item in context.bridge_media}
+    bridge_name = (context.scalars.get("bridge_name") or "").strip()
+    route_code = (context.scalars.get("route_code") or "").strip()
+
+    counters: dict[str, int] = {}
+    planned: list[PlannedFigure] = []
+    for spec in BRIDGE_FIGURE_SLOTS:
+        media = by_slot.get(spec.slot)
+        if media is None:
+            continue
+        counters[spec.sequence] = counters.get(spec.sequence, 0) + 1
+        number = f"{spec.prefix} {BRIDGE_FIGURE_CHAPTER}-{counters[spec.sequence]}"
+        # 地理位置图的题注带路线编号：正式报告写的是「S320百股大桥地理位置图」。
+        subject = f"{route_code}{bridge_name}" if spec.slot == "LOCATION_MAP" else bridge_name
+        planned.append(
+            PlannedFigure(
+                slot=spec.slot,
+                sequence=spec.sequence,
+                number=number,
+                caption=f"{number}  {subject}{spec.title_suffix}",
+                storage_relative_path=media.storage_relative_path,
+            )
+        )
+    return planned
 
 
 def render_previous_comparison(

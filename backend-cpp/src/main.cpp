@@ -34,7 +34,9 @@
 #include "bridge_report/http/RatingTreeRoutes.hpp"
 #include "bridge_report/http/ReportDirectoryRoutes.hpp"
 #include "bridge_report/http/InspectionReportSettingsRoutes.hpp"
+#include "bridge_report/http/BridgeMediaRoutes.hpp"
 #include "bridge_report/http/BridgeProfileRoutes.hpp"
+#include "bridge_report/http/MapRoutes.hpp"
 #include "bridge_report/http/ReportGenerationRoutes.hpp"
 #include "bridge_report/http/ReportTemplateRoutes.hpp"
 #include "bridge_report/http/ReviewRoutes.hpp"
@@ -548,6 +550,8 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_inspection_report_settings_routes(db_client);
     bridge_report::http::register_report_generation_routes(db_client, report_runner);
     bridge_report::http::register_bridge_profile_routes(db_client);
+    bridge_report::http::register_bridge_media_routes(db_client, config);
+    bridge_report::http::register_map_routes(db_client, config);
 
     // 路由自检：能改数据的接口必须同时注册 OPTIONS 预检。
     //

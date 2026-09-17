@@ -22,4 +22,10 @@ cmake --build --preset ("vs2022-x64-" + $Configuration.ToLower())
 # 按进程工作目录解析；若留在 backend-cpp 启动，归档会写进 backend-cpp\archive，
 # 与仓库根的 archive（.gitkeep 所标记的正式位置）分叉，表现为照片时有时无。
 Set-Location $repositoryRoot
-& "backend-cpp\build\vs-debug\$Configuration\bridge-report-backend.exe" "config\local.example.json"
+# 配置优先用本机的 config\local.json：它被 .gitignore 排除，是放地图 key
+# 这类不能进版本库的值的地方。没建过就退回仓库里的示例配置，两者默认值一致。
+$configPath = "config\local.json"
+if (-not (Test-Path -LiteralPath (Join-Path $repositoryRoot $configPath))) {
+  $configPath = "config\local.example.json"
+}
+& "backend-cpp\build\vs-debug\$Configuration\bridge-report-backend.exe" $configPath

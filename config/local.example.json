@@ -41,6 +41,11 @@
   "standards": {
     "root": "standards"
   },
+  "map": {
+    "js_key": "",
+    "security_js_code": "",
+    "web_service_key": ""
+  },
   "logs": {
     "root": "logs"
   },

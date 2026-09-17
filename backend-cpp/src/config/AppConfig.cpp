@@ -160,6 +160,13 @@ AppConfig load_app_config(const std::filesystem::path& path) {
     config.postgres.user = get_string_or_default(postgres, "user", config.postgres.user);
     config.postgres.password = get_string_or_default(postgres, "password", config.postgres.password);
 
+    const auto& map = root["map"];
+    config.map.js_key = get_string_or_default(map, "js_key", config.map.js_key);
+    config.map.security_js_code =
+        get_string_or_default(map, "security_js_code", config.map.security_js_code);
+    config.map.web_service_key =
+        get_string_or_default(map, "web_service_key", config.map.web_service_key);
+
     apply_environment_overrides(config);
     return config;
 }

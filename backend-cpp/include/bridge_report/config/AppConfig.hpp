@@ -18,6 +18,27 @@ struct PostgresConfig {
 };
 
 /**
+ * @brief 地图服务配置（高德）。
+ *
+ * 两个 key 是不同类型，控制台里分开申请，不能混用：
+ *
+ * * `js_key` 是 Web 端 key，给浏览览器里的地图用，会随页面下发，
+ *   靠域名白名单限制滥用；
+ * * `web_service_key` 是 Web 服务 key，给服务端调静态地图接口用，
+ *   **绝不下发到前端**。
+ *
+ * 两个都可以不配：没配 `js_key` 就不出地图，改显示已经存下的
+ * 地理位置图；没配 `web_service_key` 就不能自动生图，只能人工上传。
+ * 本地部署、内网无外网的机器就是这个形态。
+ */
+struct MapConfig {
+    std::string js_key{};
+    /// JS API 2.0 的安全密钥，和 js_key 配对使用，同样是给浏览器的。
+    std::string security_js_code{};
+    std::string web_service_key{};
+};
+
+/**
  * @brief C++ 后端启动所需的应用配置。
  */
 struct AppConfig {
@@ -48,6 +69,7 @@ struct AppConfig {
     int cleanup_retry_base_seconds{300};
     int cleanup_retry_max_seconds{86400};
     PostgresConfig postgres{};
+    MapConfig map{};
 };
 
 /**

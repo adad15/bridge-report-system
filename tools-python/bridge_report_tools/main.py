@@ -17,6 +17,12 @@ from bridge_report_tools.importers.source_db.reader import (
     open_source_db,
 )
 from bridge_report_tools.importers.word_importer import parse_word_import
+from bridge_report_tools.maps import (
+    StaticMapError,
+    StaticMapRequest,
+    StaticMapResponse,
+    fetch_static_map,
+)
 from bridge_report_tools.reports.errors import ReportBuildError, ReportTemplateError
 from bridge_report_tools.reports.field_update_queue import FieldUpdateQueueTimeout
 from bridge_report_tools.reports.field_updater import FieldUpdateError
@@ -232,4 +238,20 @@ def validate_report_output(request: OutputValidationRequest) -> OutputValidation
                 "code": "template_contract_unknown",
                 "message": f"unknown contract: {request.contract_type}",
             },
+        ) from exc
+
+
+@app.post("/map/static-image", response_model=StaticMapResponse)
+def static_map_image(request: StaticMapRequest) -> StaticMapResponse:
+    """按给定取景取一张静态地图，给报告 §1.1 的图 1-1 用。
+
+    本机这套 drogon 的 HTTPS 客户端连不出去，所以这一步放在工具服务这边。
+    外部服务不好使是常态，报错要说清楚是连不上还是 key 不对，因为两者的修法完全不同。
+    """
+    try:
+        return fetch_static_map(request)
+    except StaticMapError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": exc.code, "message": exc.message},
         ) from exc

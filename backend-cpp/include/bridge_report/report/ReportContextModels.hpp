@@ -187,6 +187,15 @@ struct ReportAssessment {
     Json::Value to_json() const;
 };
 
+/// §1.1 的一张桥梁图件。图号不在这里定：它只在本节里被引用，由 Python 侧按实际有的图连续编号。
+struct ReportBridgeMedia {
+    std::string slot;
+    /// 相对归档根目录的路径，Python 侧拼成绝对路径。
+    std::string storage_relative_path;
+
+    Json::Value to_json() const;
+};
+
 /// 桥梁概况：只放 bridges 表里真有的事实，缺的就不出（设计 §14 第 5 条的同一条纪律）。
 struct ReportBridgeProfile {
     std::optional<std::string> business_code;
@@ -275,6 +284,8 @@ struct ReportContext {
     std::vector<ReportEquipmentEntry> equipment;
     ReportAssessment assessment;
     ReportBridgeProfile bridge_profile;
+    /// §1.1 的图件。没有就不出图，也不写「见图 1-1」。
+    std::vector<ReportBridgeMedia> bridge_media;
 
     /// 全部结构部位合计的对比。按唯一来源计数键直接汇总，不是把各部位相加
     /// （设计 §12.2）。

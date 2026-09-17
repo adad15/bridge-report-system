@@ -11,6 +11,7 @@
 
 #include "bridge_report/archive/ArchivePaths.hpp"
 #include "bridge_report/db/ReportContextRepository.hpp"
+#include "bridge_report/report/LocationMapGenerator.hpp"
 #include "bridge_report/db/ReportPreflightRepository.hpp"
 #include "bridge_report/db/ReportTemplateRepository.hpp"
 
@@ -161,6 +162,18 @@ void ReportGenerationRunner::run(const std::string& job_id) {
             jobs.advance(job_id, JobStatus::ValidatingData, progress);
             throw JobFailure{kJobErrorPreflightBlocked,
                              summary.empty() ? "生成前检查未通过。" : summary};
+        }
+
+        // ---- 地理位置图（§1.1 图 1-1） -----------------------------------------
+        // 必须在组装上下文之前：上下文要带上这次刷出来的那张图。取不到不算失败，
+        // 沿用旧图或者这次不出图，报告照常生成。
+        const auto location_map = refresh_location_map(
+            client_, config_, job->inspection_year_id, python_static_map_fetcher(config_));
+        progress["location_map"] = location_map_status_text(location_map.status);
+        if (!location_map.detail.empty()) {
+            progress["location_map_detail"] = location_map.detail;
+            LOG_WARN << "报告生成任务 " << job_id << " 地理位置图未刷新："
+                     << location_map.detail;
         }
 
         db::ReportTemplateRepository templates(client_);

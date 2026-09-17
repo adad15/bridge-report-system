@@ -39,6 +39,21 @@ std::filesystem::path build_import_photo_relative_path(
 );
 
 /**
+ * @brief 构建桥梁图件在 archive 根目录下的相对路径。
+ *
+ * 图件属于桥本身，不属于哪一年，所以不进年度目录。
+ *
+ * **只用系统编号，不拼桥名。** Windows 上窄字符路径按本地代码页解释，把 UTF-8
+ * 的中文桥名交给 std::filesystem 会建出一个乱码目录；自己读得回来，换一个库
+ * （比如 drogon 发文件响应）就读不到了，表现成图片 404。系统编号本身唯一且全是 ASCII。
+ */
+std::filesystem::path build_bridge_media_relative_path(
+    std::string_view bridge_number,
+    std::string_view slot,
+    std::string_view file_name
+);
+
+/**
  * @brief 拒绝空路径、根路径、绝对路径，以及包含 ".." 的归档路径。
  */
 bool is_safe_archive_relative_path(const std::filesystem::path& path);

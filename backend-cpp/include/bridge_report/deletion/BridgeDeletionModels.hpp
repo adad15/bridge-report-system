@@ -15,6 +15,8 @@ struct BridgeDeletionCounts {
     int inspection_versions{0};
     int import_records{0};
     int bridge_aliases{0};
+    /// 桥梁图件：地理位置图、桥型布置图与桥梁照片，文件本身算在归档文件里。
+    int bridge_media{0};
     int bridge_components{0};
     int component_aliases{0};
     int component_generation_batches{0};

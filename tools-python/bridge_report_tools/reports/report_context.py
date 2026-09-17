@@ -260,6 +260,19 @@ class ReportEquipmentEntry(ContextModel):
     purpose: str | None = None
 
 
+class ReportBridgeMedia(ContextModel):
+    """一张桥梁图件：报告 §1.1 的地理位置图、示意图或桥梁照片。
+
+    图号不在这里定。病害照片的图号由 C++ 现编，是因为病害表要引用它；§1.1 的图
+    只在本节内被引用，按当前有的图在渲染时连续编号更简单，缺一张也不会跳号。
+    """
+
+    #: 槽位代码，决定这张图归哪一组、排第几、题注怎么写。
+    slot: str
+    #: 相对归档根目录的路径，由调用方拼成绝对路径。
+    storage_relative_path: str
+
+
 class ReportContext(ContextModel):
     inspection_year_id: str
     template_id: str
@@ -276,6 +289,8 @@ class ReportContext(ContextModel):
     equipment: list[ReportEquipmentEntry] = Field(default_factory=list)
     assessment: ReportAssessment
     bridge_profile: ReportBridgeProfile = Field(default_factory=ReportBridgeProfile)
+    #: §1.1 的图件。没有就不出图，也不写「见图 1-1」这类引用句。
+    bridge_media: list[ReportBridgeMedia] = Field(default_factory=list)
     overall_comparison: PartComparison
 
     def part(self, part_code: str) -> ReportStructurePart | None:

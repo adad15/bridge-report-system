@@ -228,3 +228,43 @@ TEST(BridgeDeletionRepositoryTest, DeletesTheBridgesDisposableAssessmentRuns) {
         "select 1 from assessment_runs where id=$1::uuid", run_id).empty());
     client->closeAll();
 }
+
+// 图件对 archived_files 是 restrict 外键，而整桥删除是先删归档文件行、后删桥行。
+// 少了「先删图件」这一步，任何录过图件的桥都删不掉，报的还是一句笼统的数据库错误。
+TEST(BridgeDeletionRepositoryTest, DeletesABridgeThatHasMediaFiles) {
+    if (std::getenv("BRIDGE_REPORT_TEST_DATABASE_URL") == nullptr) GTEST_SKIP();
+    const auto client = bridge_report::db::create_db_client(bridge_report::config::PostgresConfig{}, 1);
+    const auto bridge_id = client->execSqlSync(
+        "insert into bridges(bridge_name) values('图件删除测试桥') returning id::text as id")
+        [0]["id"].as<std::string>();
+    const auto file_id = client->execSqlSync(
+        "insert into archived_files(bridge_id,original_file_name,current_file_name,"
+        "storage_relative_path,file_type,file_purpose,file_extension,file_size_bytes) "
+        "values($1::uuid,'location.png','location.png','bridges/media/location.png','图片',"
+        "'桥梁图件·地理位置图','.png',12) returning id::text as id",
+        bridge_id)[0]["id"].as<std::string>();
+    client->execSqlSync(
+        "insert into bridge_media(bridge_id,slot,archived_file_id) values($1::uuid,'LOCATION_MAP',$2::uuid)",
+        bridge_id, file_id);
+
+    bridge_report::db::BridgeDeletionRepository repository(client);
+    const auto preview = repository.preview(bridge_id);
+    ASSERT_TRUE(preview.has_value());
+    EXPECT_EQ(preview->counts.bridge_media, 1);
+    // 图件的文件属于这座桥，没有别处引用，应该被算进"要删的归档文件"。
+    EXPECT_EQ(preview->counts.archived_files_to_delete, 1);
+
+    bridge_report::deletion::DeletionActorSnapshot actor;
+    actor.user_id = client->execSqlSync(
+        "select id::text as id from users where username='admin'")[0]["id"].as<std::string>();
+    actor.username = "admin";
+    actor.display_name = "管理员";
+    const auto batch_id = client->execSqlSync("select gen_random_uuid()::text as id")[0]["id"].as<std::string>();
+    const auto outcome = repository.delete_bridge(
+        bridge_id, preview->impact_token(), "图件删除测试", actor, batch_id);
+
+    ASSERT_EQ(outcome.status, bridge_report::deletion::DeleteBridgeStatus::Deleted);
+    EXPECT_TRUE(client->execSqlSync("select 1 from bridges where id=$1::uuid", bridge_id).empty());
+    EXPECT_TRUE(client->execSqlSync("select 1 from bridge_media where bridge_id=$1::uuid", bridge_id).empty());
+    EXPECT_TRUE(client->execSqlSync("select 1 from archived_files where id=$1::uuid", file_id).empty());
+}

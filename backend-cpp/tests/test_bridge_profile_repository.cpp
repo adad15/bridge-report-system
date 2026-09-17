@@ -58,6 +58,8 @@ protected:
         input.route_name = "大养线";
         input.administrative_region = "太和区";
         input.station_mark = "K12+345";
+        input.longitude = 121.1352;
+        input.latitude = 41.0967;
         input.bridge_type = "简支板桥";
         input.bridge_scale = "中桥";
         input.span_combination = "5×13m";
@@ -102,6 +104,10 @@ TEST_F(BridgeProfileRepositoryTest, SavesAndReadsBackEveryField) {
     EXPECT_EQ(profile->expansion_joint_piers, "1、4");
     EXPECT_EQ(profile->design_load, "公路-Ⅰ级");
     EXPECT_EQ(profile->supervision_org, "某某公路管理处");
+    ASSERT_TRUE(profile->longitude.has_value());
+    EXPECT_DOUBLE_EQ(*profile->longitude, 121.1352);
+    ASSERT_TRUE(profile->latitude.has_value());
+    EXPECT_DOUBLE_EQ(*profile->latitude, 41.0967);
     ASSERT_TRUE(profile->girder_height_m.has_value());
     EXPECT_DOUBLE_EQ(*profile->girder_height_m, 0.7);
     ASSERT_TRUE(profile->sidewalk_width_m.has_value());
@@ -157,6 +163,13 @@ TEST_F(BridgeProfileRepositoryTest, OutOfRangeMeasuresAreRejectedAsABusinessResu
 
     input = full_input();
     input.skew_angle_deg = 200.0;
+    EXPECT_EQ(repository().save(bridge_id_, input),
+              BridgeProfileWriteStatus::MeasureOutOfRange);
+
+    // 经纬度填反是最常见的录入错误，反了之后纬度会超出 ±90。
+    input = full_input();
+    input.longitude = 41.0967;
+    input.latitude = 121.1352;
     EXPECT_EQ(repository().save(bridge_id_, input),
               BridgeProfileWriteStatus::MeasureOutOfRange);
 

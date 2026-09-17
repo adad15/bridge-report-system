@@ -25,6 +25,9 @@ struct BridgeProfile {
     std::optional<std::string> route_name;
     std::optional<std::string> administrative_region;
     std::optional<std::string> station_mark;
+    /// 桥位经度，WGS-84。地图底图用的 GCJ-02 在前端画图前转，接口上一律是 WGS-84。
+    std::optional<double> longitude;
+    std::optional<double> latitude;
 
     std::optional<std::string> bridge_type;
     std::optional<std::string> bridge_scale;
@@ -71,6 +74,8 @@ struct BridgeProfileInput {
     std::optional<std::string> route_name;
     std::optional<std::string> administrative_region;
     std::optional<std::string> station_mark;
+    std::optional<double> longitude;
+    std::optional<double> latitude;
 
     std::optional<std::string> bridge_type;
     std::optional<std::string> bridge_scale;

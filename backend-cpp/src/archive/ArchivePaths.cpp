@@ -53,6 +53,19 @@ std::string sanitize_path_part(std::string_view value) {
     return result;
 }
 
+std::filesystem::path build_bridge_media_relative_path(
+    std::string_view bridge_number,
+    std::string_view slot,
+    std::string_view file_name
+) {
+    // 路径格式：bridges/<系统编号>/media/<slot>/<file>，全是 ASCII。
+    return std::filesystem::path("bridges")
+        / sanitize_path_part(bridge_number)
+        / "media"
+        / sanitize_path_part(slot)
+        / sanitize_path_part(file_name);
+}
+
 std::filesystem::path build_import_input_relative_path(
     std::string_view bridge_number,
     std::string_view bridge_name,

@@ -26,6 +26,8 @@ Json::Value BridgeProfile::to_json() const {
     put(json, "route_name", route_name);
     put(json, "administrative_region", administrative_region);
     put(json, "station_mark", station_mark);
+    put(json, "longitude", longitude);
+    put(json, "latitude", latitude);
 
     put(json, "bridge_type", bridge_type);
     put(json, "bridge_scale", bridge_scale);

@@ -30,6 +30,7 @@ from bridge_report_tools.reports.docx_builder import (
     RESULT_TABLE_HEADERS,
     WEIGHT_TABLE_HEADERS,
     build_report,
+    plan_bridge_figures,
 )
 from bridge_report_tools.reports.errors import ReportBuildError
 from bridge_report_tools.reports.report_context import ReportContext
@@ -849,6 +850,84 @@ def test_bridge_profile_is_prose_that_shortens_without_data(
     assert "百股大桥位于大养线公路（S320）太和区段，建成于 1998 年。属中桥。" in text
     assert "未知" not in text
     assert "设计单位" not in text
+
+
+def _media(*slots: str) -> list[dict]:
+    return [{"slot": slot, "storage_relative_path": ARCHIVE} for slot in slots]
+
+
+def test_bridge_figures_are_numbered_in_report_order() -> None:
+    """图和示意图共用一条序列，照片另起一条，和正式报告一致。"""
+    ctx = context(bridge_media=_media(
+        "UNDERSIDE_PHOTO", "LOCATION_MAP", "CROSS_SECTION",
+        "OVERVIEW_PHOTO", "LAYOUT_DRAWING", "DECK_PHOTO",
+    ))
+
+    planned = plan_bridge_figures(ctx)
+
+    assert [figure.number for figure in planned] == [
+        "图 1-1", "示意图 1-2", "示意图 1-3", "照片 1-1", "照片 1-2", "照片 1-3",
+    ]
+    # 地理位置图的题注带路线编号，照正式报告的写法。
+    assert planned[0].caption == "图 1-1  S320百股大桥地理位置图"
+    assert planned[1].caption == "示意图 1-2  百股大桥桥型布置图"
+    assert planned[3].caption == "照片 1-1  百股大桥全貌"
+
+
+def test_missing_figures_do_not_leave_gaps_in_the_numbering() -> None:
+    """缺了桥型布置图，横断面图就是示意图 1-2，正文里不会出现跳号。"""
+    ctx = context(bridge_media=_media("CROSS_SECTION", "DECK_PHOTO"))
+
+    assert [figure.number for figure in plan_bridge_figures(ctx)] == ["示意图 1-1", "照片 1-1"]
+
+
+def test_bridge_profile_places_figures_and_refers_to_the_location_map(
+    tmp_path: Path, archive: Path
+) -> None:
+    ctx = context(
+        bridge_profile={"built_year": 1998},
+        bridge_media=_media("LOCATION_MAP", "OVERVIEW_PHOTO"),
+    )
+    result, _ = build(tmp_path, archive, ctx, anchors=("BRIDGE_PROFILE",))
+
+    text = _all_text(result.output_path)
+    # 有图才写引用句，接在叙述那段的末尾。
+    assert "建成于 1998 年。桥梁的地理位置图见图 1-1。" in text
+    assert "图 1-1  S320百股大桥地理位置图" in text
+    assert "照片 1-1  百股大桥全貌" in text
+    assert _picture_count(result.output_path) == 2
+
+
+def test_bridge_profile_without_media_writes_no_reference_or_figures(
+    tmp_path: Path, archive: Path
+) -> None:
+    """没图就不写「见图 1-1」：读者会去找一张不存在的图。"""
+    ctx = context(bridge_profile={"built_year": 1998})
+    result, _ = build(tmp_path, archive, ctx, anchors=("BRIDGE_PROFILE",))
+
+    text = _all_text(result.output_path)
+    assert "见图" not in text
+    assert _picture_count(result.output_path) == 0
+
+
+def test_a_location_map_alone_still_gets_its_reference(tmp_path: Path, archive: Path) -> None:
+    """档案一项没录、只有地理位置图时，引用句单独成段，不能因为没有叙述就丢了。"""
+    ctx = context(bridge_profile={}, scalars={"bridge_name": "百股大桥", "route_code": "S320"},
+                  bridge_media=_media("LOCATION_MAP"))
+    result, _ = build(tmp_path, archive, ctx, anchors=("BRIDGE_PROFILE",))
+
+    assert "桥梁的地理位置图见图 1-1。" in _all_text(result.output_path)
+
+
+def test_a_missing_figure_file_aborts_instead_of_dropping_the_figure(
+    tmp_path: Path, archive: Path
+) -> None:
+    """文件不在就中止：绝不能出一份少图的报告。"""
+    ctx = context(bridge_media=[{"slot": "LOCATION_MAP", "storage_relative_path": "nowhere.png"}])
+
+    with pytest.raises(ReportBuildError) as raised:
+        build(tmp_path, archive, ctx, anchors=("BRIDGE_PROFILE",))
+    assert raised.value.code == "report_photo_file_missing"
 
 
 # --------------------------------------------------------------------------

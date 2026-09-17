@@ -269,7 +269,16 @@ Json::Value ReportContext::to_json() const {
     for (const auto& item : equipment) json["equipment"].append(item.to_json());
     json["assessment"] = assessment.to_json();
     json["bridge_profile"] = bridge_profile.to_json();
+    json["bridge_media"] = Json::Value(Json::arrayValue);
+    for (const auto& item : bridge_media) json["bridge_media"].append(item.to_json());
     json["overall_comparison"] = overall_comparison.to_json();
+    return json;
+}
+
+Json::Value ReportBridgeMedia::to_json() const {
+    Json::Value json;
+    json["slot"] = slot;
+    json["storage_relative_path"] = storage_relative_path;
     return json;
 }
 

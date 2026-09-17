@@ -35,6 +35,7 @@ Json::Value BridgeDeletionCounts::to_json() const {
     value["inspection_versions"] = inspection_versions;
     value["import_records"] = import_records;
     value["bridge_aliases"] = bridge_aliases;
+    value["bridge_media"] = bridge_media;
     value["bridge_components"] = bridge_components;
     value["component_aliases"] = component_aliases;
     value["component_generation_batches"] = component_generation_batches;
@@ -66,6 +67,7 @@ BridgeDeletionCounts& BridgeDeletionCounts::operator+=(const BridgeDeletionCount
     inspection_versions += other.inspection_versions;
     import_records += other.import_records;
     bridge_aliases += other.bridge_aliases;
+    bridge_media += other.bridge_media;
     bridge_components += other.bridge_components;
     component_aliases += other.component_aliases;
     component_generation_batches += other.component_generation_batches;
