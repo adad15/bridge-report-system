@@ -1,9 +1,7 @@
-/* 全站只剩这两条：其余外观一律走 Ant Design 组件与主题 Token（见 docs/ui-design-system.md §2.5）。 */
+/* 全站只剩这两条：Ant Design 管不到文档本身的滚动条与 body 外边距。
+   字体、文字色、底色取主题 Token，由 DesignSystemProvider 写到根上（见 docs/ui-design-system.md §2.5）。 */
 
 :root {
-  font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
-  color: #18202a;
-  background: #f3f5f8;
   /* 滚动条槽位常驻。页面滚不滚是按内容定的——长桥梁列表滚、评定树和校对工作台
      不滚——不留槽位的话，切页时滚动条一出一进，视口宽度就变 15px，整页内容跟着
      横向弹一下。占住它，代价是不滚动的页面右侧空出一条 15px 的底色。 */

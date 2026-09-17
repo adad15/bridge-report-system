@@ -1,5 +1,5 @@
 import { Line } from "@ant-design/charts";
-import { Typography } from "antd";
+import { Typography, theme } from "antd";
 
 import type { ComponentYearRating } from "../api/componentArchiveApi";
 
@@ -14,6 +14,8 @@ interface RatingPoint {
 
 // 构件年度评分：年份—评分折线图，只读展示系统评定投影。
 export function ComponentRatingSummary({ ratings }: { ratings: ComponentYearRating[] }) {
+  // 图表画在 canvas 上读不到 CSS，颜色只能从主题 Token 取值传进去。
+  const { token } = theme.useToken();
   if (ratings.length === 0) {
     return <Typography.Text type="secondary">该构件暂无年度评分记录。</Typography.Text>;
   }
@@ -48,11 +50,11 @@ export function ComponentRatingSummary({ ratings }: { ratings: ComponentYearRati
         height={200}
         autoFit
         scale={{ y: { domainMin, domainMax, nice: false } }}
-        style={{ lineWidth: 2, stroke: "#2f54eb" }}
+        style={{ lineWidth: 2, stroke: token.colorPrimary }}
         point={{
           shapeField: "circle",
           sizeField: 4,
-          style: { fill: "#2f54eb", stroke: "#ffffff", lineWidth: 1.5 },
+          style: { fill: token.colorPrimary, stroke: token.colorBgContainer, lineWidth: 1.5 },
         }}
         label={{
           text: "score",
@@ -60,28 +62,28 @@ export function ComponentRatingSummary({ ratings }: { ratings: ComponentYearRati
           dy: -10,
           // fillOpacity 必须显式给：G2 默认把标签压到约 45% 不透明度，
           // 只调 fill 会被这层透明度吃掉，看起来永远是浅灰。
-          style: { fontSize: 12, fontWeight: 600, fill: "#172033", fillOpacity: 1 },
+          style: { fontSize: token.fontSizeSM, fontWeight: 600, fill: token.colorText, fillOpacity: 1 },
         }}
         // 坐标是读图的基准，不能比数据还淡。
         //
         // G2 默认把坐标标签压到约 45% 不透明度，只改 labelFill 会被这层透明度吃掉
-        // （实测 #334155 合成出来是 rgb(163,169,178)）。解开它的键是 labelOpacity；
+        // （实测深灰 #334155 合成出来是 rgb(163,169,178)）。解开它的键是 labelOpacity；
         // labelFillOpacity 在坐标轴上不生效——那是标记标签(label.style.fillOpacity)的写法。
         axis={{
           x: {
             title: false,
-            labelFontSize: 12,
-            labelFill: "#334155",
+            labelFontSize: token.fontSizeSM,
+            labelFill: token.colorTextSecondary,
             labelOpacity: 1,
-            lineStroke: "#b3c0d2",
-            tickStroke: "#b3c0d2",
+            lineStroke: token.colorBorder,
+            tickStroke: token.colorBorder,
           },
           y: {
             title: false,
-            labelFontSize: 12,
-            labelFill: "#334155",
+            labelFontSize: token.fontSizeSM,
+            labelFill: token.colorTextSecondary,
             labelOpacity: 1,
-            gridStroke: "#dfe5ee",
+            gridStroke: token.colorBorderSecondary,
             gridLineWidth: 1,
           },
         }}
