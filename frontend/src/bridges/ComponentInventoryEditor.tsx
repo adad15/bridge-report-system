@@ -64,6 +64,7 @@ import {
   type StandardCatalog,
 } from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
+import { useShellMetrics } from "../design-system";
 import { StatusTag } from "../workspace/StatusTag";
 import { InventoryPlanPanel } from "./InventoryPlanPanel";
 import { structurePartLabel, structurePartOrder } from "./structureParts";
@@ -206,6 +207,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   const tableRef = useRef<HTMLDivElement | null>(null);
   const { token } = theme.useToken();
   const stacked = Grid.useBreakpoint().lg === false;
+  const { pageOffset } = useShellMetrics();
 
   const load = useCallback(async () => {
     // 有上次的结果就先渲染它、不显示"加载中"，再在后台重新校验：
@@ -794,7 +796,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
    * 剩下的高度全给左右两栏，两栏各自滚动。142px = 顶栏 68 + 内容区上下留白 30 与 44。
    * 窄屏上下叠放时交还给整页滚动。
    */
-  const ledgerHeight = stacked ? undefined : "max(560px, calc(100dvh - 142px))";
+  const ledgerHeight = stacked ? undefined : `max(520px, calc(100dvh - ${pageOffset}px))`;
   const listTitle = searchTerm ? "搜索结果" : "构件列表";
   const confirmedCount = Math.max(0, revision.active_entry_count - (summary?.blockers.individual_total ?? 0));
   const stats = [

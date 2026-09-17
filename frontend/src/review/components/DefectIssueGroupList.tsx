@@ -1,3 +1,4 @@
+import { Button, Card, Empty, Flex, Select, Typography } from "antd";
 import { useMemo, useState } from "react";
 
 import type { RatingTreeNodeSummary } from "../../api/ratingTreeApi";
@@ -43,15 +44,17 @@ export function DefectIssueGroupList({
   );
 
   if (groups.length === 0) {
-    return <p className="empty-review-result">当前筛选下没有可分组的待处理病害。</p>;
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选下没有可分组的待处理病害。" />;
   }
 
   return (
-    <div className="defect-issue-groups">
-      <div className="defect-issue-groups-summary">
-        <strong>{groups.length} 个问题组</strong>
-        <span>共 {groups.reduce((total, group) => total + group.rows.length, 0)} 条待处理病害</span>
-      </div>
+    <Flex vertical gap={12}>
+      <Flex align="baseline" gap={10} wrap>
+        <Typography.Text strong>{groups.length} 个问题组</Typography.Text>
+        <Typography.Text type="secondary">
+          共 {groups.reduce((total, group) => total + group.rows.length, 0)} 条待处理病害
+        </Typography.Text>
+      </Flex>
       {groups.map((group) => {
         const options = nodeOptions.get(group.key) ?? [];
         const selectedNodeId = selectedNodes.get(group.key) ?? "";
@@ -66,92 +69,97 @@ export function DefectIssueGroupList({
         const componentNumbers = [...new Set(group.rows
           .map((row) => row.defect.component_number ?? row.defect.component_name))];
         return (
-          <section className="defect-issue-group" key={group.key}>
-            <div className="defect-issue-group-heading">
-              <div>
-                <p>{group.kind === "unmatched" ? "无匹配结果" : "待处理问题"}</p>
-                <h3>{group.title}</h3>
-              </div>
-              <strong>{group.rows.length} 条</strong>
-            </div>
-            <div className="defect-issue-group-meta">
-              {group.sourceGroupNumber || group.sourceIndicatorNumber ? (
-                <span>来源编号 {group.sourceGroupNumber ?? "?"} / {group.sourceIndicatorNumber ?? "?"}</span>
-              ) : null}
-              <span>
-                构件 {componentNumbers.slice(0, 4).join("、")}
-                {componentNumbers.length > 4 ? ` 等 ${componentNumbers.length} 个` : ""}
-              </span>
-            </div>
-            <ul className="defect-issue-group-problems">
-              {group.problemMessages.slice(0, 3).map((message) => <li key={message}>{message}</li>)}
-            </ul>
-            <div className="defect-issue-group-samples">
-              {group.rows.slice(0, 3).map((row) => (
-                <button
-                  type="button"
-                  key={row.candidateId}
-                  onClick={() => onOpenDefect(row.candidateId)}
-                >
-                  {row.defect.component_number ?? row.defect.component_name}
-                  <span>{row.defect.defect_location || "未记录位置"}</span>
-                </button>
-              ))}
-            </div>
-            {canAssign ? (
-              <div className="defect-issue-group-action">
-                <select
-                  aria-label={`为 ${group.title} 选择评定树病害`}
-                  disabled={disabled}
-                  value={selectedNodeId}
-                  onChange={(event) => setSelectedNodes((current) => {
-                    const next = new Map(current);
-                    next.set(group.key, event.target.value);
-                    return next;
-                  })}
-                >
-                  <option value="">请选择评定树病害</option>
-                  {options.map((node) => (
-                    <option key={node.id} value={node.id}>
-                      {ratingTreeOptionLabel(node, options)}{node.is_scoring ? "" : "（暂不计分）"}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="review-action-primary"
-                  disabled={disabled || !selectedNode}
-                  onClick={() => selectedNode && onApplyNode(group, selectedNode)}
-                >
-                  应用到本组 {group.rows.length} 条
-                </button>
-              </div>
-            ) : confirmableCount > 0 ? (
-              <div className="defect-issue-group-action defect-issue-group-confirm-action">
-                <p className="defect-issue-group-manual">
-                  {excludedCount > 0
-                    ? `${confirmableCount} 条可确认，${excludedCount} 条存在其他问题。`
-                    : "本组仅需确认构件范围拆分结果。"}
-                </p>
-                <button
-                  type="button"
-                  className="review-action-primary"
-                  disabled={disabled}
-                  onClick={() => onConfirmGroup(group)}
-                >
-                  确认本组可确认项（{confirmableCount}）
-                </button>
-              </div>
-            ) : (
-              <p className="defect-issue-group-manual">
-                {group.kind === "unmatched" && !group.hasExactSourceIdentity
-                  ? "来源身份不完整，需逐条核对。"
-                  : "本组包含其他待处理项，需打开样例继续处理。"}
-              </p>
-            )}
-          </section>
+          <Card
+            key={group.key}
+            size="small"
+            title={
+              <Flex vertical gap={2}>
+                <Typography.Text type="secondary" style={{ fontWeight: "normal" }}>
+                  {group.kind === "unmatched" ? "无匹配结果" : "待处理问题"}
+                </Typography.Text>
+                <Typography.Text strong>{group.title}</Typography.Text>
+              </Flex>
+            }
+            extra={<Typography.Text strong>{group.rows.length} 条</Typography.Text>}
+          >
+            <Flex vertical gap={10}>
+              <Flex gap={16} wrap>
+                {group.sourceGroupNumber || group.sourceIndicatorNumber ? (
+                  <Typography.Text type="secondary">
+                    来源编号 {group.sourceGroupNumber ?? "?"} / {group.sourceIndicatorNumber ?? "?"}
+                  </Typography.Text>
+                ) : null}
+                <Typography.Text type="secondary">
+                  构件 {componentNumbers.slice(0, 4).join("、")}
+                  {componentNumbers.length > 4 ? ` 等 ${componentNumbers.length} 个` : ""}
+                </Typography.Text>
+              </Flex>
+
+              <Flex vertical gap={2}>
+                {group.problemMessages.slice(0, 3).map((message) => (
+                  <Typography.Text key={message}>{message}</Typography.Text>
+                ))}
+              </Flex>
+
+              <Flex gap={8} wrap>
+                {group.rows.slice(0, 3).map((row) => (
+                  <Button key={row.candidateId} size="small" onClick={() => onOpenDefect(row.candidateId)}>
+                    {row.defect.component_number ?? row.defect.component_name}
+                    <Typography.Text type="secondary"> {row.defect.defect_location || "未记录位置"}</Typography.Text>
+                  </Button>
+                ))}
+              </Flex>
+
+              {canAssign ? (
+                <Flex align="center" gap={8} wrap>
+                  <Select
+                    aria-label={`为 ${group.title} 选择评定树病害`}
+                    style={{ minWidth: 260 }}
+                    disabled={disabled}
+                    value={selectedNodeId}
+                    onChange={(value: string) => setSelectedNodes((current) => {
+                      const next = new Map(current);
+                      next.set(group.key, value);
+                      return next;
+                    })}
+                    options={[
+                      { value: "", label: "请选择评定树病害" },
+                      ...options.map((node) => ({
+                        value: node.id,
+                        label: `${ratingTreeOptionLabel(node, options)}${node.is_scoring ? "" : "（暂不计分）"}`,
+                      })),
+                    ]}
+                  />
+                  <Button
+                    type="primary"
+                    disabled={disabled || !selectedNode}
+                    onClick={() => selectedNode && onApplyNode(group, selectedNode)}
+                  >
+                    应用到本组 {group.rows.length} 条
+                  </Button>
+                </Flex>
+              ) : confirmableCount > 0 ? (
+                <Flex align="center" gap={10} wrap>
+                  <Typography.Text type="secondary">
+                    {excludedCount > 0
+                      ? `${confirmableCount} 条可确认，${excludedCount} 条存在其他问题。`
+                      : "本组仅需确认构件范围拆分结果。"}
+                  </Typography.Text>
+                  <Button type="primary" disabled={disabled} onClick={() => onConfirmGroup(group)}>
+                    确认本组可确认项（{confirmableCount}）
+                  </Button>
+                </Flex>
+              ) : (
+                <Typography.Text type="secondary">
+                  {group.kind === "unmatched" && !group.hasExactSourceIdentity
+                    ? "来源身份不完整，需逐条核对。"
+                    : "本组包含其他待处理项，需打开样例继续处理。"}
+                </Typography.Text>
+              )}
+            </Flex>
+          </Card>
         );
       })}
-    </div>
+    </Flex>
   );
 }

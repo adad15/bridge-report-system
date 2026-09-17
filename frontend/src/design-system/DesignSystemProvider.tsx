@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/zh-cn";
 import type { PropsWithChildren } from "react";
 
+import { useCompactDensity } from "./density";
 import { bridgeReportTheme } from "./theme";
 
 // DatePicker 的月份名和"周一起排"取自 dayjs 的语言包，antd 的 zh_CN 只管按钮文案。
@@ -16,8 +17,10 @@ dayjs.locale("zh-cn");
  * 等全局反馈能力对应的上下文。component=false 避免为了 Provider 改变现有 DOM 布局。
  */
 export function DesignSystemProvider({ children }: PropsWithChildren) {
+  // 窗口变窄或变矮时整站切紧凑档：控件、间距、字号和外壳尺寸一起收一档。
+  const compact = useCompactDensity();
   return (
-    <ConfigProvider locale={zhCN} theme={bridgeReportTheme}>
+    <ConfigProvider locale={zhCN} theme={bridgeReportTheme(compact)}>
       <AntdApp component={false}>{children}</AntdApp>
     </ConfigProvider>
   );

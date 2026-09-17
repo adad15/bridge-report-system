@@ -1,3 +1,5 @@
+import { Button, Flex, Typography, theme } from "antd";
+
 import type { ReviewCounts } from "../grouping";
 
 // 构件绑定排第一位：构件不绑好，评定树匹配跑不起来，它是流程上的第一步。
@@ -40,23 +42,43 @@ export function ReviewSidebar({
   active,
   onSelect,
 }: ReviewSidebarProps) {
+  const { token } = theme.useToken();
   const sidebarCounts: SidebarCounts = { ...counts, binding_pending_count: bindingPendingCount };
   return (
-    <nav className="review-sidebar">
+    <Flex vertical gap={4} component="nav" style={{ padding: 8 }}>
       {GROUPS.map((group) => {
         const count = group.count(sidebarCounts);
+        const selected = group.key === active;
         return (
-          <button
+          <Button
             key={group.key}
-            type="button"
-            className={group.key === active ? "review-sidebar-item active" : "review-sidebar-item"}
+            type="text"
+            block
+            aria-current={selected ? "page" : undefined}
+            style={{
+              height: "auto",
+              paddingBlock: 8,
+              textAlign: "start",
+              background: selected ? token.colorPrimaryBg : undefined,
+              color: selected ? token.colorPrimary : undefined,
+            }}
             onClick={() => onSelect(group.key)}
           >
-            <span>{group.label}</span>
-            <span className="review-sidebar-count">{count === null ? "-" : count}</span>
-          </button>
+            <Flex align="center" justify="space-between" gap={8} style={{ width: "100%" }}>
+              <Typography.Text
+                ellipsis
+                strong={selected}
+                style={selected ? { color: token.colorPrimary } : undefined}
+              >
+                {group.label}
+              </Typography.Text>
+              <Typography.Text type={selected ? undefined : "secondary"} style={{ flex: "none" }}>
+                {count === null ? "-" : count}
+              </Typography.Text>
+            </Flex>
+          </Button>
         );
       })}
-    </nav>
+    </Flex>
   );
 }

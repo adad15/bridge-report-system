@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -273,11 +273,11 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
   it("places the edit-lock notice inline after the details control", async () => {
     await renderEditableReview();
 
-    const notice = screen.getByText("你正在编辑此导入记录。").closest(".review-edit-lock-banner");
-    const inlineNotice = notice?.closest(".review-header-inline-notice");
-    expect(inlineNotice).toBeInTheDocument();
-    expect(inlineNotice?.previousElementSibling).toHaveClass("review-header-details-toggle");
-    expect(inlineNotice?.closest(".review-header")).toBeInTheDocument();
+    // 提示跟在页眉里、排在“详情”之后，而不是另起一行。
+    const header = screen.getByRole("banner");
+    const notice = within(header).getByText("你正在编辑此导入记录。");
+    const details = within(header).getByRole("button", { name: /详情/ });
+    expect(details.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("clears a stale successful preflight message when confirmation fails", async () => {
@@ -383,11 +383,12 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     );
   });
 
-  it("removes the transparent top gap from the component-binding scroll area", async () => {
+  it("shows the component-binding panel when that group is selected", async () => {
     await renderEditableReview();
 
     fireEvent.click(screen.getByRole("button", { name: /构件绑定/ }));
-    expect(document.querySelector(".review-main")).toHaveClass("review-main-component-binding");
+    expect(document.querySelector('[data-review-group="component_binding"]')).not.toHaveAttribute("hidden");
+    expect(document.querySelector('[data-review-group="defect_photos"]')).toHaveAttribute("hidden");
   });
 
   // 构件绑定现在是落地分区（流程第一步）；没点进去过的分区仍然不挂载，

@@ -8,6 +8,7 @@ import {
   applySourceRatingResolution, addManualDefect, fetchResolutionWorkspace } from "../../api/resolutionApi";
 import { fetchApplicableRatingTreeDefects, fetchRatingTreeNode } from "../../api/ratingTreeApi";
 import { data } from "../testFixtures";
+import { chooseOption, findOption, optionLabels, selectedLabel } from "../../test/antd";
 import { DefectsSection } from "./DefectsSection";
 
 vi.mock("../../api/componentInventoryApi", async (importOriginal) => {
@@ -228,17 +229,17 @@ describe("DefectsSection", () => {
     render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId={null} onSelect={vi.fn()} dispatch={vi.fn()} ratingTree={{ version_id: "tree-version-1", tree_name: "单位桥梁评定树", package_version: "1.0.0", content_checksum: "sha256:test" }} allowStructureChanges />);
 
     // 规则还在路上：算不出来的筹码显示"—"且点不动。
-    const pending = await screen.findByRole("option", { name: "待处理（—）" });
-    expect(pending).toBeDisabled();
-    expect(screen.getByRole("option", { name: "可批量确认（—）" })).toBeDisabled();
+    const statusFilter = await screen.findByLabelText("按状态筛选");
+    expect(await findOption(statusFilter, "待处理（—）")).toHaveAttribute("aria-disabled", "true");
+    expect(await findOption(statusFilter, "可批量确认（—）")).toHaveAttribute("aria-disabled", "true");
     // 病害列表照常显示，一条不挡——草稿早就到了，错的只有派生计数。
-    expect(screen.getByRole("option", { name: /^全部状态（\d+）$/ })).toBeEnabled();
+    expect(await findOption(statusFilter, /^全部状态（\d+）$/)).toHaveAttribute("aria-disabled", "false");
 
     releaseSummary(summary());
 
-    await waitFor(() =>
-      expect(screen.getByRole("option", { name: /^待处理（\d+）$/ })).toBeEnabled());
-    expect(screen.queryByRole("option", { name: "可批量确认（—）" })).not.toBeInTheDocument();
+    await waitFor(async () =>
+      expect(await findOption(statusFilter, /^待处理（\d+）$/)).toHaveAttribute("aria-disabled", "false"));
+    expect(await optionLabels(statusFilter)).not.toContain("可批量确认（—）");
   });
 
   // 这一段此前会下载整份台账（现网一座桥 5174 条构件、3.6 MB），只为两件事：
@@ -371,12 +372,12 @@ describe("DefectsSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "新增病害" }));
     // 构件按需检索：先搜，再从命中结果里选。此前是把整份台账灌进下拉并默认选中第一条。
     fireEvent.change(screen.getByLabelText("搜索构件"), { target: { value: "1-1#梁" } });
+    // antd 下拉框：选项要点开才渲染，选中值看标签而不是 value。
     await waitFor(() => expect(screen.getByLabelText("实际构件")).toBeEnabled());
-    fireEvent.change(screen.getByLabelText("实际构件"), { target: { value: "entry-1" } });
-    await waitFor(() => expect(screen.getByLabelText("实际构件")).toHaveValue("entry-1"));
+    await chooseOption(screen.getByLabelText("实际构件"), /1-1#梁/);
+    await waitFor(() => expect(selectedLabel(screen.getByLabelText("实际构件"))).toContain("1-1#梁"));
     fireEvent.change(screen.getByLabelText("新增病害位置"), { target: { value: "第1跨梁底" } });
-    await waitFor(() => expect(screen.getByLabelText("新增病害类型")).toHaveValue(""));
-    fireEvent.change(screen.getByLabelText("新增病害类型"), { target: { value: "tree-node-crack" } });
+    await chooseOption(screen.getByLabelText("新增病害类型"), /裂缝/);
     fireEvent.change(screen.getByLabelText("新增病害描述"), { target: { value: "梁底纵向裂缝" } });
     fireEvent.click(screen.getByRole("button", { name: "添加病害" }));
 
@@ -412,13 +413,14 @@ describe("DefectsSection", () => {
     render(<DefectsSection draft={draft} importRecordId="record-1" baseUrl="http://backend" bridgeId="bridge-1" selectedCandidateId="defect_0001" selectedPhotoCandidateId="photo_0001" onSelect={vi.fn()} dispatch={vi.fn()} disabled />);
     await sectionReady();
 
-    // 筛选仍可使用，详情内正式字段和业务动作被锁定。
+    // 筛选仍可使用；详情换成描述列表，正式字段和业务动作整片不出现，而不是一屏灰掉的控件。
     expect(screen.getByRole("textbox", { name: "搜索病害" })).toBeEnabled();
-    expect(screen.getByRole("textbox", { name: "病害位置" })).toBeDisabled();
-    expect(screen.getByRole("combobox", { name: "评定树病害" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "添加照片" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "确认缺图" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "确认" })).toBeDisabled();
+    expect(screen.queryByRole("textbox", { name: "病害位置" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("评定树病害")).not.toBeInTheDocument();
+    expect(screen.getByText("评定树病害")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "添加照片" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "确认缺图" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^确\s?认$/ })).not.toBeInTheDocument();
 
     // 快速列表与缩略图查看不禁用：只读态仍能检查导入结果。
     expect(screen.getByRole("button", { name: /2-1#梁/ })).toBeEnabled();
@@ -486,6 +488,31 @@ describe("DefectsSection", () => {
     expect(screen.getByRole("combobox", { name: "评定树病害" })).toBeInTheDocument();
   });
 
+  // 精细维护里按当前筛选结果的顺序前后翻：确认后仍停在原地，要看下一条靠这两个按钮。
+  it("steps to the next defect in the filtered list from the detail header", async () => {
+    const draft = data();
+    const [first] = draft.defects;
+    draft.defects = [first, { ...first, candidate_id: "defect_0002", component_number: "2-2#梁" }];
+    const onSelect = vi.fn();
+
+    render(
+      <DefectsSection
+        draft={draft}
+        importRecordId="record-1"
+        baseUrl="http://backend"
+        bridgeId="bridge-1"
+        selectedCandidateId="defect_0001"
+        onSelect={onSelect}
+        dispatch={vi.fn()}
+      />,
+    );
+    await sectionReady();
+
+    expect(screen.getByRole("button", { name: "上一条" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "下一条" }));
+    expect(onSelect).toHaveBeenCalledWith("defect_0002");
+  });
+
   it("locks defects outside the reopen scope while keeping warning defects editable", async () => {
     const draft = data();
     const [first] = draft.defects;
@@ -514,7 +541,8 @@ describe("DefectsSection", () => {
     await sectionReady();
     expect(screen.getByRole("textbox", { name: "病害位置" })).toBeEnabled();
     rerender(<DefectsSection selectedCandidateId="defect_0002" {...commonProps} />);
-    expect(screen.getByRole("textbox", { name: "病害位置" })).toBeDisabled();
+    // 范围外的病害按只读展示：不给输入框。
+    expect(screen.queryByRole("textbox", { name: "病害位置" })).not.toBeInTheDocument();
   });
 
   it("paginates defect cards and jumps to the selected defect's page", async () => {
@@ -639,7 +667,7 @@ describe("DefectsSection", () => {
     await sectionReady();
 
     // 先筛到"待处理"（这一步会清掉上一次的钉），再打开这条。
-    fireEvent.change(screen.getByRole("combobox", { name: "按状态筛选" }), { target: { value: "status:needs_attention" } });
+    await chooseOption(screen.getByLabelText("按状态筛选"), /^待处理/);
     fireEvent.click(screen.getByRole("button", { name: /^2-1#梁/ }));
     rerender(<DefectsSection draft={draft} selectedCandidateId="defect_0001" {...props} />);
 
@@ -705,9 +733,10 @@ describe("DefectsSection", () => {
     };
     const { rerender } = render(<DefectsSection draft={draft} {...props} />);
     await sectionReady();
-    await waitFor(() => expect(screen.getByRole("option", { name: "可批量确认（1）" })).toBeInTheDocument());
-    fireEvent.change(screen.getByRole("combobox", { name: "按状态筛选" }), { target: { value: "status:batchable" } });
-    fireEvent.click(screen.getByRole("button", { name: "确认" }));
+    await waitFor(async () =>
+      expect(await optionLabels(screen.getByLabelText("按状态筛选"))).toContain("可批量确认（1）"));
+    await chooseOption(screen.getByLabelText("按状态筛选"), /^可批量确认/);
+    fireEvent.click(screen.getByRole("button", { name: /^确\s?认$/ }));
     expect(dispatch).toHaveBeenCalledWith({ type: "confirm_defect_groups", candidateIds: ["defect_0001"] });
     // 确认后停在原地：不再自动切到下一条，所以不该有选中项变更。
     expect(props.onSelect).not.toHaveBeenCalled();
@@ -719,7 +748,7 @@ describe("DefectsSection", () => {
     rerender(<DefectsSection draft={confirmedDraft} {...props} />);
     expect(screen.getByRole("button", { name: /^2-1#梁/ })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("combobox", { name: "按状态筛选" }), { target: { value: "status:needs_attention" } });
+    await chooseOption(screen.getByLabelText("按状态筛选"), /^待处理/);
     expect(screen.queryByRole("button", { name: /^2-1#梁/ })).not.toBeInTheDocument();
   });
 
@@ -784,7 +813,9 @@ describe("DefectsSection", () => {
       }],
     };
     rerender(<DefectsSection draft={cleanDraft} {...props} />);
-    await waitFor(() => expect(screen.getByRole("button", { name: /校对通过.*0.*条/ })).toBeDisabled());
+    // 整张卡片就是按钮（div + role），禁用写在 aria-disabled 上。
+    await waitFor(() => expect(screen.getByRole("button", { name: /校对通过.*0.*条/ }))
+      .toHaveAttribute("aria-disabled", "true"));
     expect(screen.queryByLabelText("待处理问题快捷筛选")).not.toBeInTheDocument();
   });
 
@@ -912,11 +943,11 @@ describe("DefectsSection", () => {
       render(<DefectsSection draft={boundDraft()} {...matchProps()} />);
 
       // 左侧列表不打开详情就能读出状态，顶部统计把组合病害与无结果分开计数。
-      await waitFor(() => expect(
-        document.querySelector(".defect-quick-status.needs_attention"),
-      ).toHaveTextContent("疑似组合病害"));
-      expect(screen.getByRole("option", { name: "疑似组合病害（1）" })).toBeInTheDocument();
-      expect(screen.getByRole("option", { name: "无匹配结果（0）" })).toBeInTheDocument();
+      // 列表里的状态换成了 antd 标签，按文字查。
+      await waitFor(() => expect(screen.getByText("疑似组合病害")).toBeInTheDocument());
+      const labels = await optionLabels(screen.getByLabelText("按状态筛选"));
+      expect(labels).toContain("疑似组合病害（1）");
+      expect(labels).toContain("无匹配结果（0）");
     });
 
     // 三个头条问题只在顶部统计卡上有入口，下拉框不再重复一份；筛选生效时
@@ -930,10 +961,9 @@ describe("DefectsSection", () => {
       render(<DefectsSection draft={boundDraft()} {...matchProps()} />);
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalled());
 
-      const select = await screen.findByLabelText("按部件筛选") as HTMLSelectElement;
-      expect([...select.options][0].textContent).toBe("全部部件");
+      const labels = await optionLabels(await screen.findByLabelText("按部件筛选"));
+      expect(labels[0]).toBe("全部部件");
       // 与筹码是两个维度，不该再出现问题类型的那几项。
-      const labels = [...select.options].map((option) => option.textContent);
       expect(labels).not.toContain("构件未绑定");
       expect(labels).not.toContain("照片待处理");
     });
@@ -948,8 +978,8 @@ describe("DefectsSection", () => {
 
       const alert = await screen.findByRole("alert");
       expect(alert).toHaveTextContent("评定树目录当前不可用");
-      expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
-      expect(screen.getByRole("option", { name: "无匹配结果（0）" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^重\s?试$/ })).toBeInTheDocument();
+      expect(await optionLabels(screen.getByLabelText("按状态筛选"))).toContain("无匹配结果（0）");
     });
 
     it("waits for the description field to lose focus before rematching that defect", async () => {
@@ -1039,10 +1069,13 @@ describe("DefectsSection", () => {
       );
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalled());
       fireEvent.click(screen.getByRole("button", { name: "问题分组 1" }));
-      const picker = await screen.findByRole("combobox", { name: "为 存在黑点痕迹 选择评定树病害" });
-      fireEvent.change(picker, { target: { value: treeNode.id } });
+      await chooseOption(
+        await screen.findByLabelText("为 存在黑点痕迹 选择评定树病害"),
+        new RegExp(treeNode.display_name),
+      );
       fireEvent.click(screen.getByRole("button", { name: "应用到本组 2 条" }));
-      fireEvent.click(screen.getByRole("button", { name: "应用到本组" }));
+      // antd 弹窗挂在页面外层并且有一帧过渡，要等它出现。
+      fireEvent.click(await screen.findByRole("button", { name: "应用到本组" }));
 
       // 节点必须写进关系表。此前这里只 dispatch 改草稿：病害名字改了、节点没存，
       // 刷新后名字还在节点没了——比不生效更难发现。每条来源病害各写一次，
@@ -1111,10 +1144,13 @@ describe("DefectsSection", () => {
       render(<DefectsSection draft={draft} {...matchProps(dispatch)} />);
       await waitFor(() => expect(mockedMatchDefects).toHaveBeenCalled());
       fireEvent.click(screen.getByRole("button", { name: "问题分组 1" }));
-      const picker = await screen.findByRole("combobox", { name: "为 存在黑点痕迹 选择评定树病害" });
-      fireEvent.change(picker, { target: { value: treeNode.id } });
+      await chooseOption(
+        await screen.findByLabelText("为 存在黑点痕迹 选择评定树病害"),
+        new RegExp(treeNode.display_name),
+      );
       fireEvent.click(screen.getByRole("button", { name: "应用到本组 2 条" }));
-      fireEvent.click(screen.getByRole("button", { name: "应用到本组" }));
+      // antd 弹窗挂在页面外层并且有一帧过渡，要等它出现。
+      fireEvent.click(await screen.findByRole("button", { name: "应用到本组" }));
 
       await waitFor(() => expect(mockedApplySourceRating).toHaveBeenCalled());
       expect(dispatch).not.toHaveBeenCalledWith(

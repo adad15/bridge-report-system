@@ -1,6 +1,6 @@
 import { useState, type Dispatch } from "react";
-import { Button, Empty, Input, Modal, Upload } from "antd";
-import { InboxOutlined } from "@ant-design/icons";
+import { Alert, Button, Empty, Flex, Form, Image, Input, Modal, Tag, Tooltip, Typography, Upload, theme } from "antd";
+import { ExpandOutlined, InboxOutlined, PlusOutlined } from "@ant-design/icons";
 
 import { defectPhotoErrorMessage, deleteUploadedPhoto, uploadDefectPhoto } from "../../api/defectPhotoApi";
 import { photoContentUrl } from "../../api/reviewApi";
@@ -48,14 +48,17 @@ export function DefectPhotoPanel({
   /* 选中的文件先暂存，由弹窗底部的「上传」提交。原来是选完文件立刻上传，于是
      题注必须抢在选文件之前填——顺手先选图的人会把说明整个丢掉。 */
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const { token } = theme.useToken();
 
   const closePicker = () => {
     setPicking(false);
     setCaption("");
     setPendingFile(null);
   };
+  // 默认优先看有图的那张；全是缺图引用时也要选中一张，否则"确认缺图"这类操作没有落点。
   const active = cards.find((card) => card.key === activeKey)
     ?? cards.find((card) => card.kind === "photo")
+    ?? cards[0]
     ?? null;
   const unassigned = draft.photos.filter((photo) => !photo.linked_defect_candidate_id);
   const canUpload = allowUpload && !disabled && Boolean(editLockToken);
@@ -126,114 +129,171 @@ export function DefectPhotoPanel({
     });
   }
 
+  const activeIndex = active ? cards.findIndex((card) => card.key === active.key) : -1;
+  const canAdd = !(unassigned.length === 0 && !canUpload);
+  const thumbSize = { width: 84, height: 60 };
+
   return (
-    <section className="defect-photo-panel" aria-label="病害照片">
-      <div className="defect-photo-panel-heading">
-        <h4>照片与证据</h4>
-      </div>
+    <Flex vertical gap={10} role="group" aria-label="病害照片">
+      <Flex align="center" justify="space-between" gap={8}>
+        <Typography.Text strong>
+          照片与证据 <Typography.Text type="secondary">{cards.length}</Typography.Text>
+        </Typography.Text>
+        {active?.photo ? (
+          <Tooltip title="在新窗口查看原图">
+            <Button
+              type="text"
+              size="small"
+              aria-label="查看原图"
+              icon={<ExpandOutlined />}
+              href={photoContentUrl(baseUrl, importRecordId, active.photo.candidate_id)}
+              target="_blank"
+              rel="noreferrer"
+            />
+          </Tooltip>
+        ) : null}
+      </Flex>
 
-      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {error ? <Alert type="error" showIcon role="alert" title={error} /> : null}
 
-      {active?.photo ? (
-        <div className="defect-photo-stage">
-          <img
-            src={photoContentUrl(baseUrl, importRecordId, active.photo.candidate_id)}
-            alt={`照片 ${active.photo.photo_number}`}
-          />
-          {/* Word 图注是判断"这张图是不是这条病害"的第一手依据。 */}
-          <p className="photo-relation-caption">
-            {active.photo.extracted_file.original_caption ?? "无照片说明"}
-          </p>
-        </div>
+      {cards.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这条病害还没有照片，Word 原文也没有照片编号。" />
       ) : null}
 
-      {cards.length === 0 ? <p>这条病害还没有照片，Word 原文也没有照片编号。</p> : null}
-
-      <div className="defect-photo-cards">
-        {cards.map((card) => (
-          <div
-            key={card.key}
-            className={`defect-photo-card ${card.kind} ${card.key === active?.key ? "active" : ""}`}
-          >
-            <button
-              type="button"
-              className="defect-photo-card-main"
-              aria-label={card.photoNumber ? `查看照片 ${card.photoNumber}` : "查看照片"}
-              onClick={() => setActiveKey(card.key)}
-            >
-              {card.photo ? (
-                <img loading="lazy" src={photoContentUrl(baseUrl, importRecordId, card.photo.candidate_id)} alt="" />
-              ) : (
-                <span className="defect-photo-card-empty">无图</span>
-              )}
-              {/* 来源软件导入没有照片编号（靠外键绑定），这里不显示占位文字。 */}
-              {card.photoNumber ? <strong>{card.photoNumber}</strong> : null}
-              {card.kind === "missing" ? (
-                <small>{card.acknowledgedMissing ? "原报告缺图" : "待核对"}</small>
-              ) : null}
-            </button>
-
-            <div className="defect-photo-card-actions">
-              {card.kind === "missing" ? (
-                <>
-                  <button
-                    type="button"
-                    disabled={disabled || busy}
-                    onClick={() => dispatch({
-                      type: "set_photo_reference_missing",
-                      defectCandidateId: defect.candidate_id,
-                      photoNumber: card.photoNumber,
-                      photoCandidateId: card.photo?.candidate_id ?? null,
-                      missing: !card.acknowledgedMissing,
-                    })}
-                  >
-                    {card.acknowledgedMissing ? "撤销缺图" : "确认缺图"}
-                  </button>
-                  {/* 拆分复制来的引用在这儿了结：图是真的，只是它属于另一条病害。
-                      与"确认缺图"分成两个按钮，是因为两者对报告的结论完全相反。 */}
-                  <button
-                    type="button"
-                    className="danger-text-button"
-                    disabled={disabled || busy}
-                    title="该引用不属于本病害：把这个照片编号从本条病害的 Word 引用里移除"
-                    onClick={() => { detachReference(card); }}
-                  >
-                    不属于本病害
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  className="danger-text-button"
-                  disabled={disabled || busy}
-                  onClick={() => { void removeCard(card); }}
-                >
-                  删除照片
-                </button>
-              )}
-            </div>
+      {active ? (
+        <Flex vertical gap={6}>
+          <div style={{ position: "relative", borderRadius: token.borderRadiusLG, overflow: "hidden", background: token.colorFillTertiary }}>
+            {active.photo ? (
+              <Image
+                src={photoContentUrl(baseUrl, importRecordId, active.photo.candidate_id)}
+                alt={`照片 ${active.photo.photo_number}`}
+                width="100%"
+                style={{ aspectRatio: "4 / 3", objectFit: "cover", display: "block" }}
+              />
+            ) : (
+              <Flex vertical align="center" justify="center" gap={4} style={{ aspectRatio: "4 / 3" }}>
+                <Typography.Text type="secondary">Word 原文引用了这张照片，但导入里没有找到</Typography.Text>
+                <Typography.Text strong>{active.photoNumber ?? ""}</Typography.Text>
+              </Flex>
+            )}
+            {active.photoNumber ? (
+              <Tag
+                variant="filled"
+                style={{
+                  position: "absolute",
+                  insetInlineStart: 10,
+                  insetBlockStart: 10,
+                  margin: 0,
+                  background: "rgba(23, 32, 51, 0.72)",
+                  color: token.colorWhite,
+                }}
+              >
+                {active.photoNumber} · {activeIndex + 1} / {cards.length}
+              </Tag>
+            ) : null}
           </div>
-        ))}
-      </div>
+          {/* Word 图注是判断"这张图是不是这条病害"的第一手依据。 */}
+          {active.photo ? (
+            <Typography.Text type="secondary">
+              {active.photo.extracted_file.original_caption ?? "无照片说明"}
+            </Typography.Text>
+          ) : null}
 
-      <div className="defect-photo-panel-actions">
-        <button
-          type="button"
-          aria-label="添加照片"
-          disabled={disabled || busy || (unassigned.length === 0 && !canUpload)}
-          title={unassigned.length === 0 && !canUpload ? "本次导入没有未归属的照片，也无法上传" : undefined}
-          onClick={() => (picking ? closePicker() : setPicking(true))}
-        >
-          ＋ 添加照片
-        </button>
-        {active?.photo ? (
-          <a
-            href={photoContentUrl(baseUrl, importRecordId, active.photo.candidate_id)}
-            target="_blank"
-            rel="noreferrer"
-          >查看原图</a>
-        ) : <span className="defect-photo-original-disabled">查看原图</span>}
-      </div>
+          {/* 写操作只对当前这一张：不再在每张缩略图下面各挂一个删除按钮。只读时整片不出现。 */}
+          {disabled ? null : active.kind === "missing" ? (
+            <Flex align="center" gap={8} wrap>
+              <Typography.Text type="secondary">
+                {active.acknowledgedMissing ? "已确认原报告缺图" : "待核对"}
+              </Typography.Text>
+              <Button
+                size="small"
+                disabled={busy}
+                onClick={() => dispatch({
+                  type: "set_photo_reference_missing",
+                  defectCandidateId: defect.candidate_id,
+                  photoNumber: active.photoNumber,
+                  photoCandidateId: active.photo?.candidate_id ?? null,
+                  missing: !active.acknowledgedMissing,
+                })}
+              >
+                {active.acknowledgedMissing ? "撤销缺图" : "确认缺图"}
+              </Button>
+              {/* 拆分复制来的引用在这儿了结：图是真的，只是它属于另一条病害。
+                  与"确认缺图"分成两个按钮，是因为两者对报告的结论完全相反。 */}
+              <Button
+                size="small"
+                type="text"
+                danger
+                disabled={busy}
+                title="该引用不属于本病害：把这个照片编号从本条病害的 Word 引用里移除"
+                onClick={() => { detachReference(active); }}
+              >
+                不属于本病害
+              </Button>
+            </Flex>
+          ) : (
+            <Flex justify="end">
+              <Button size="small" type="text" danger disabled={busy} onClick={() => { void removeCard(active); }}>
+                删除照片
+              </Button>
+            </Flex>
+          )}
+        </Flex>
+      ) : null}
+
+      <Flex gap={8} wrap>
+        {cards.map((card) => {
+          const selected = card.key === active?.key;
+          return (
+            <Button
+              key={card.key}
+              type="text"
+              aria-label={card.photoNumber ? `查看照片 ${card.photoNumber}` : "查看照片"}
+              aria-current={selected ? "true" : undefined}
+              onClick={() => setActiveKey(card.key)}
+              style={{
+                height: "auto",
+                padding: 3,
+                borderRadius: token.borderRadius,
+                border: `2px solid ${selected ? token.colorPrimary : "transparent"}`,
+                background: selected ? token.colorPrimaryBg : token.colorFillQuaternary,
+              }}
+            >
+              <Flex vertical align="center" gap={2}>
+                {card.photo ? (
+                  <img
+                    loading="lazy"
+                    src={photoContentUrl(baseUrl, importRecordId, card.photo.candidate_id)}
+                    alt=""
+                    style={{ ...thumbSize, objectFit: "cover", borderRadius: token.borderRadiusSM, display: "block" }}
+                  />
+                ) : (
+                  <Flex align="center" justify="center" style={{ ...thumbSize, borderRadius: token.borderRadiusSM, background: token.colorFillTertiary }}>
+                    <Typography.Text type="secondary">{card.acknowledgedMissing ? "原报告缺图" : "无图"}</Typography.Text>
+                  </Flex>
+                )}
+                {/* 来源软件导入没有照片编号（靠外键绑定），这里不显示占位文字。 */}
+                {card.photoNumber ? <Typography.Text style={{ fontSize: token.fontSizeSM }}>{card.photoNumber}</Typography.Text> : null}
+              </Flex>
+            </Button>
+          );
+        })}
+        {disabled ? null : (
+          <Button
+            type="dashed"
+            aria-label="添加照片"
+            disabled={busy || !canAdd}
+            title={canAdd ? undefined : "本次导入没有未归属的照片，也无法上传"}
+            onClick={() => (picking ? closePicker() : setPicking(true))}
+            style={{ width: thumbSize.width + 10, height: thumbSize.height + 30 }}
+          >
+            <Flex vertical align="center" gap={2}>
+              <PlusOutlined />
+              <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>添加照片</Typography.Text>
+            </Flex>
+          </Button>
+        )}
+      </Flex>
 
       {/* 添加照片是操作类浮层：body 是唯一滚动区，底部主操作恒可见。 */}
       <Modal
@@ -241,7 +301,7 @@ export function DefectPhotoPanel({
         title="添加照片"
         centered
         width={PICKER_DIALOG_WIDTH}
-        maskClosable={!busy}
+        mask={{ closable: !busy }}
         onCancel={closePicker}
         footer={canUpload ? [
           <Button key="cancel" disabled={busy} onClick={closePicker}>取消</Button>,
@@ -259,12 +319,13 @@ export function DefectPhotoPanel({
       >
         {unassigned.length > 0 ? (
           <>
-            <p className="defect-photo-dialog-hint">从本次导入的未归属照片里选一张</p>
-            <div className="defect-photo-picker-existing" aria-label="未归属的照片">
+            <Typography.Text type="secondary">从本次导入的未归属照片里选一张</Typography.Text>
+            <Flex gap={10} wrap role="group" aria-label="未归属的照片" style={{ marginBlock: 10 }}>
               {unassigned.map((photo) => (
-                <button
+                <Button
                   key={photo.candidate_id}
-                  type="button"
+                  type="text"
+                  style={{ height: "auto", padding: 4 }}
                   disabled={disabled || busy}
                   onClick={() => {
                     dispatch({
@@ -275,11 +336,18 @@ export function DefectPhotoPanel({
                     closePicker();
                   }}
                 >
-                  <img loading="lazy" src={photoContentUrl(baseUrl, importRecordId, photo.candidate_id)} alt="" />
-                  <span>{photo.photo_number}</span>
-                </button>
+                  <Flex vertical align="center" gap={4}>
+                    <img
+                      loading="lazy"
+                      src={photoContentUrl(baseUrl, importRecordId, photo.candidate_id)}
+                      alt=""
+                      style={{ width: 92, height: 68, objectFit: "cover", borderRadius: token.borderRadius }}
+                    />
+                    <Typography.Text>{photo.photo_number}</Typography.Text>
+                  </Flex>
+                </Button>
               ))}
-            </div>
+            </Flex>
           </>
         ) : (
           <Empty
@@ -291,7 +359,7 @@ export function DefectPhotoPanel({
         )}
 
         {canUpload ? (
-          <div className={unassigned.length > 0 ? "defect-photo-upload defect-photo-upload-divided" : "defect-photo-upload"}>
+          <Flex vertical gap={10} style={unassigned.length > 0 ? { borderTop: `1px solid ${token.colorSplit}`, paddingTop: 12 } : undefined}>
             <Upload.Dragger
               accept={PHOTO_ACCEPT}
               maxCount={1}
@@ -304,18 +372,20 @@ export function DefectPhotoPanel({
               <p className="ant-upload-text">点击或把照片拖到这里</p>
               <p className="ant-upload-hint">一次一张，支持 JPG / PNG / GIF / BMP / WebP / TIFF</p>
             </Upload.Dragger>
-            <label className="defect-photo-caption-field">
-              <span>照片说明</span>
-              <Input
-                value={caption}
-                disabled={busy}
-                placeholder="将作为报告里的照片题注"
-                onChange={(event) => setCaption(event.target.value)}
-              />
-            </label>
-          </div>
+            <Form layout="vertical" style={{ marginBottom: 0 }}>
+              <Form.Item label="照片说明" htmlFor="defect-photo-caption" style={{ marginBottom: 0 }}>
+                <Input
+                  id="defect-photo-caption"
+                  value={caption}
+                  disabled={busy}
+                  placeholder="将作为报告里的照片题注"
+                  onChange={(event) => setCaption(event.target.value)}
+                />
+              </Form.Item>
+            </Form>
+          </Flex>
         ) : null}
       </Modal>
-    </section>
+    </Flex>
   );
 }

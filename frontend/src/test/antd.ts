@@ -40,6 +40,21 @@ export async function optionLabels(combobox: HTMLElement): Promise<string[]> {
   return labels;
 }
 
+/**
+ * 点开下拉框，返回文字匹配的那一项。
+ *
+ * 用来断言选项本身的状态（禁用与否、在不在），而不是选它——antd 的选项是浮层里的
+ * `div`，`toBeDisabled()` 只认表单元素，禁用要查 `aria-disabled`。
+ */
+export async function findOption(combobox: HTMLElement, label: string | RegExp): Promise<HTMLElement> {
+  await userEvent.click(combobox);
+  return waitFor(() => {
+    const found = optionElements(combobox).find((item) => matches(item.textContent ?? "", label));
+    if (!found) throw new Error(`下拉框里没有「${String(label)}」`);
+    return found;
+  });
+}
+
 /** 点开下拉框并点选文字匹配的那一项。 */
 export async function chooseOption(combobox: HTMLElement, label: string | RegExp): Promise<void> {
   await userEvent.click(combobox);
@@ -48,7 +63,9 @@ export async function chooseOption(combobox: HTMLElement, label: string | RegExp
     if (!found) throw new Error(`下拉框里没有「${String(label)}」`);
     return found;
   });
-  await userEvent.click(option);
+  // 浮层收起的那一帧上有 pointer-events: none，userEvent 默认会因此拒绝点击；
+  // 这里点的是刚查到的那个选项，不需要它再替我们判断一次可点性。
+  await userEvent.setup({ pointerEventsCheck: 0 }).click(option);
 }
 
 /**

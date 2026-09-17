@@ -144,7 +144,7 @@ describe("ComponentListPanel", () => {
 
     fireEvent.click(screen.getByText("2-1#板"));
     expect(onSelect).toHaveBeenCalledWith("component-1");
-    expect(screen.getByText("伸缩缝装置").closest("button")).toHaveClass("active");
+    expect(screen.getByText("伸缩缝装置").closest("button")).toHaveAttribute("aria-current", "true");
   });
 
   // 283 个"板"折起来，才轮得到看别的类型。
@@ -163,11 +163,11 @@ describe("ComponentListPanel", () => {
       <ComponentListPanel components={components} selectedComponentId={null} onSelect={vi.fn()} />);
 
     // jsdom 不做排版，所有尺寸都是 0；手工铺一份布局，效果里的判断才有东西可依据。
-    const list = container.querySelector(".archive-component-list") as HTMLElement;
+    const list = container.querySelector("[aria-label='构件列表']") as HTMLElement;
     stub(list, { offsetTop: 0, clientHeight: 200 });
     // 列表已经滚过一段，选中项落在当前视口之内（150 ≤ 150 < 300）。
     list.scrollTop = 100;
-    const rows = [...container.querySelectorAll(".archive-group-items > li")] as HTMLElement[];
+    const rows = [...container.querySelectorAll("li")] as HTMLElement[];
     rows.forEach((row) => stub(row, { offsetTop: 150, offsetHeight: 25 }));
 
     rerender(
@@ -182,10 +182,10 @@ describe("ComponentListPanel", () => {
     const { container, rerender } = render(
       <ComponentListPanel components={components} selectedComponentId={null} onSelect={vi.fn()} />);
 
-    const list = container.querySelector(".archive-component-list") as HTMLElement;
+    const list = container.querySelector("[aria-label='构件列表']") as HTMLElement;
     stub(list, { offsetTop: 0, clientHeight: 60 });
     list.scrollTop = 0;
-    const rows = [...container.querySelectorAll(".archive-group-items > li")] as HTMLElement[];
+    const rows = [...container.querySelectorAll("li")] as HTMLElement[];
     // 把目标行放到远处，确保落在可视范围之外。
     rows.forEach((row) => stub(row, { offsetTop: 400, offsetHeight: 25 }));
 

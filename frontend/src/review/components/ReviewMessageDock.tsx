@@ -1,3 +1,5 @@
+import { Alert, Flex, Typography } from "antd";
+
 import type { ApiErrorIssue } from "../../api/apiClient";
 
 // 保存草稿 / 入库前检查 / 确认入库失败后展示给用户的提示；成功也复用同一个状态
@@ -19,31 +21,27 @@ interface ReviewMessageDockProps {
 // 反而要来回找。纯展示组件，成功消息的消失时机归页面层管。
 export function ReviewMessageDock({ saveMessage, onDismissSaveMessage }: ReviewMessageDockProps) {
   if (!saveMessage) return null;
-  const saveMessageText = saveMessage?.text.trim() || (saveMessage?.kind === "error" ? "操作失败，请稍后重试。" : "操作已完成。");
+  const saveMessageText = saveMessage.text.trim()
+    || (saveMessage.kind === "error" ? "操作失败，请稍后重试。" : "操作已完成。");
 
   return (
-    <div className="review-message-dock">
-      {saveMessage ? (
-        <div className={saveMessage.kind === "error" ? "review-dock-row review-dock-error" : "review-dock-row review-dock-success"}>
-          <div className="review-dock-body">
-            <p className={saveMessage.kind === "error" ? "error-text" : undefined}>{saveMessageText}</p>
-            {saveMessage.issues && saveMessage.issues.length > 0 ? (
-              <ul className="review-warning-list">
-                {saveMessage.issues.map((issue, index) => (
-                  <li key={`${issue.path}-${index}`} className="error-text">
-                    {issue.path}: {issue.message}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-          {saveMessage.kind === "error" ? (
-            <button type="button" className="review-dock-close" aria-label="关闭消息" onClick={onDismissSaveMessage}>
-              ×
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+    <Alert
+      type={saveMessage.kind === "error" ? "error" : "success"}
+      showIcon
+      role={saveMessage.kind === "error" ? "alert" : "status"}
+      title={saveMessageText}
+      description={saveMessage.issues && saveMessage.issues.length > 0 ? (
+        <Flex vertical gap={2}>
+          {saveMessage.issues.map((issue, index) => (
+            <Typography.Text key={`${issue.path}-${index}`} type="danger">
+              {issue.path}: {issue.message}
+            </Typography.Text>
+          ))}
+        </Flex>
+      ) : undefined}
+      closable={saveMessage.kind === "error" ? { "aria-label": "关闭消息" } : false}
+      onClose={onDismissSaveMessage}
+      style={{ margin: "0 16px" }}
+    />
   );
 }

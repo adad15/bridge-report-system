@@ -1,6 +1,8 @@
 import { Avatar, Card, Flex, Statistic, Typography, theme } from "antd";
 import type { ReactNode } from "react";
 
+import { useCompactDensity } from "../density";
+
 export type MetricTone = "primary" | "success" | "warning" | "error" | "neutral";
 
 /**
@@ -17,6 +19,8 @@ export function MetricCard({
   suffix,
   description,
   size = "default",
+  onClick,
+  disabled = false,
 }: {
   title: ReactNode;
   value: number | string;
@@ -27,8 +31,16 @@ export function MetricCard({
   description?: ReactNode;
   /** small 用在要一屏放下的页面（桥梁概览）：卡片内边距和图标都收一档。 */
   size?: "default" | "small";
+  /**
+   * 传了就把整张卡片当按钮用（比如“待处理问题”点进问题分组）。卡片自己承担点击，
+   * 不要在外面再套 Button——按钮是行内排版，卡片会被收缩到内容宽度、和同排对不齐。
+   */
+  onClick?: () => void;
+  disabled?: boolean;
 }) {
   const { token } = theme.useToken();
+  // 紧凑档下一律按 small 画：笔记本屏幕上指标行少占 20 多像素，下面的表格就多一行。
+  const dense = useCompactDensity() || size === "small";
   const palette: Record<MetricTone, { color: string; background: string }> = {
     primary: { color: token.colorPrimary, background: token.colorPrimaryBg },
     success: { color: token.colorSuccess, background: token.colorSuccessBg },
@@ -39,11 +51,25 @@ export function MetricCard({
   const { color, background } = palette[tone];
 
   return (
-    <Card size={size === "small" ? "small" : undefined}>
-      <Flex align="center" gap={size === "small" ? 14 : 20}>
+    <Card
+      size={dense ? "small" : undefined}
+      hoverable={Boolean(onClick) && !disabled}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick && !disabled ? 0 : undefined}
+      aria-disabled={onClick ? disabled : undefined}
+      onClick={onClick && !disabled ? onClick : undefined}
+      onKeyDown={onClick && !disabled ? (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      } : undefined}
+      style={onClick ? { cursor: disabled ? "default" : "pointer" } : undefined}
+    >
+      <Flex align="center" gap={dense ? 14 : 20}>
         <Avatar
           shape="square"
-          size={size === "small" ? 42 : 56}
+          size={dense ? 42 : 56}
           icon={icon}
           style={{ flex: "none", color, backgroundColor: background, borderRadius: token.borderRadiusLG }}
         />

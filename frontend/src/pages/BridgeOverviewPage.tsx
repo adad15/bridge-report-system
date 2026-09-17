@@ -8,10 +8,10 @@ import { Button, Card, Col, Divider, Flex, Grid, Row, Typography, theme } from "
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { MetricCard, type MetricTone } from "../design-system";
+import { MetricCard, useShellMetrics, type MetricTone } from "../design-system";
 import { BridgeLocationCard } from "../bridges/BridgeLocationCard";
 import { BridgeProfileCard } from "../bridges/BridgeProfileCard";
-import { OVERVIEW_SCROLL_HEIGHT } from "../bridges/overviewLayout";
+import { overviewScrollHeight } from "../bridges/overviewLayout";
 import { useBridgeMedia } from "../bridges/useBridgeMedia";
 import { useBridgeProfile } from "../bridges/useBridgeProfile";
 
@@ -74,6 +74,8 @@ function describeGroup(group: DefectGroupDelta, comparison: BridgeDefectComparis
  * 也不做"高度集中于某部位"这类判断——那是人写报告时的结论，不是数据本身。
  */
 function DefectComparisonCard({ comparison }: DefectComparisonCardProps) {
+  // 限高跟着外壳走：紧凑档下顶栏与留白少占几十像素，这里就能多给几行。
+  const { pageOffset } = useShellMetrics();
   if (!comparison.available) {
     return (
       <Card size="small" title="年度病害对比" style={{ height: "100%" }}>
@@ -101,7 +103,7 @@ function DefectComparisonCard({ comparison }: DefectComparisonCardProps) {
     >
       {/* 89 个构件逐条成文会把概览页撑爆，限高滚动。高度跟着视口走：屏幕高就多给几行，
           屏幕矮就自己收，不把整页顶出竖滚动条。 */}
-      <div style={{ maxHeight: OVERVIEW_SCROLL_HEIGHT, overflowY: "auto" }}>
+      <div style={{ maxHeight: overviewScrollHeight(pageOffset), overflowY: "auto" }}>
         {comparison.groups.map((group) => (
           <Typography.Paragraph key={`${group.structure_part}-${group.component_type}`}>
             <strong>{group.structure_part}·{group.component_type}</strong>
@@ -128,6 +130,7 @@ export function BridgeOverviewPage() {
   const navigate = useNavigate();
   const { token } = theme.useToken();
   const stacked = Grid.useBreakpoint().xl === false;
+  const { pageOffset } = useShellMetrics();
 
   // 四个档案环节齐了就是 100%。这个比例只在上面的指标行里出一次；
   // 原来还有一张把它展开写一遍的卡片，那块位置现在给了地理位置。

@@ -36,6 +36,21 @@ function navigation() {
   return screen.getByRole("complementary", { name: "主导航" });
 }
 
+describe("AppLayout 密度", () => {
+  // 笔记本屏幕上整站收一档：侧栏跟着变窄，省下来的宽度归内容区。
+  it("narrows the sider on a laptop-sized viewport", async () => {
+    emulateViewport(1280);
+    renderAt("/workbench");
+    const compactWidth = navigation().style.width;
+
+    emulateViewport(1920);
+    renderAt("/workbench");
+    const roomyWidth = screen.getAllByRole("complementary", { name: "主导航" })[1].style.width;
+
+    expect(Number.parseInt(compactWidth, 10)).toBeLessThan(Number.parseInt(roomyWidth, 10));
+  });
+});
+
 describe("AppLayout", () => {
   beforeEach(() => {
     authState.role = "admin";

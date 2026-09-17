@@ -1,4 +1,4 @@
-import { Spin } from "antd";
+import { Alert, Button, Card, Col, Flex, Form, Input, Row, Select, Spin, Typography, theme } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   EMPTY_RESOLUTION_INDEX,
@@ -32,6 +32,7 @@ import {
   type RatingTreeNodeSummary,
 } from "../../api/ratingTreeApi";
 import type { ReviewRatingTree } from "../../api/reviewApi";
+import { MetricCard } from "../../design-system";
 import type { BridgeAnnualInspectionData, DefectCandidate } from "../../contracts/annualInspection";
 import {
   ratingTreeDisplayLabel,
@@ -49,6 +50,7 @@ import { ApiError } from "../../api/apiClient";
 import { applySourceRatingResolution } from "../../api/resolutionApi";
 import { applicableRatingTreeNodes } from "../applicableRatingTreeNodes";
 import { DefectIssueGroupList } from "./DefectIssueGroupList";
+import { DefectListHeader } from "./DefectListHeader";
 import { DefectQuickReviewList } from "./DefectQuickReviewList";
 import { DefectReviewToolbar } from "./DefectReviewToolbar";
 import { UnlinkedPhotosPanel } from "./UnlinkedPhotosPanel";
@@ -82,6 +84,8 @@ const DETAIL_WIDTH_STORAGE_KEY = "bridge-report:defect-detail-width-percent-v2";
 const DEFAULT_DETAIL_WIDTH = 73;
 const MIN_DETAIL_WIDTH = 58;
 const MAX_DETAIL_WIDTH = 85;
+/** 屏幕很矮时拆分区的保底高度：列表至少还能露出五六条。 */
+const SPLIT_MIN_HEIGHT = 480;
 
 function readStoredDetailWidth(): number {
   try {
@@ -201,6 +205,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const [matchError, setMatchError] = useState<string | null>(null);
   const [rematching, setRematching] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const { token } = theme.useToken();
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [reviewMode, setReviewMode] = useState<"records" | "groups">("records");
   const [pendingGroupAssignment, setPendingGroupAssignment] = useState<{
@@ -706,8 +711,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
     };
   }, [showAddForm, componentSearch, inventorySummary, baseUrl]);
 
-  const submitManualDefect = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitManualDefect = () => {
     const entry = inventoryEntries.find((item) => item.id === form.componentEntryId);
     const inventory = inventorySummary?.revision ?? null;
     const mapping = entry?.mappings.find((item) => item.is_active);
@@ -787,63 +791,92 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
      界面会卡在转圈上连错误都看不到。 */
   /* 解析状态一条都没取回来时，不能照常渲染：那会把每条病害都显示成"未绑定构件、
      未定评定项"，看着像数据丢了。说清楚是没取回来，而不是真的没绑。 */
+  /** 当前筛选结果里，打开那条的前一条 / 后一条；到头了返回 null。 */
+  function neighbourId(delta: -1 | 1): string | null {
+    if (!currentRow) return null;
+    const index = displayedRows.findIndex((row) => row.candidateId === currentRow.candidateId);
+    if (index < 0) return null;
+    return displayedRows[index + delta]?.candidateId ?? null;
+  }
+
+  function openNeighbour(delta: -1 | 1): void {
+    const target = neighbourId(delta);
+    if (!target) return;
+    setPinnedRowId(target);
+    onSelect(target);
+  }
+
   if (resolutionError && resolution.size === 0) {
     return (
-      <section className="status-panel defect-photo-section">
-        <p className="error-text" role="alert">未能取到构件绑定与评定结果：{resolutionError}</p>
-        <p>页面上的病害条目暂时无法显示绑定与评定状态。请刷新页面重试。</p>
-      </section>
+      <Card>
+        <Alert
+          type="error"
+          showIcon
+          role="alert"
+          title={`未能取到构件绑定与评定结果：${resolutionError}`}
+          description="页面上的病害条目暂时无法显示绑定与评定状态。请刷新页面重试。"
+        />
+      </Card>
     );
   }
 
   if (!resolutionReady) {
     return (
-      <section className="status-panel defect-photo-section defect-section-loading" aria-busy="true">
-        <Spin size="large" />
-        <p>正在载入病害与照片…</p>
-      </section>
+      <Card>
+        <Flex vertical align="center" gap={12} style={{ paddingBlock: 32 }} aria-busy="true">
+          <Spin size="large" />
+          <Typography.Text type="secondary">正在载入病害与照片…</Typography.Text>
+        </Flex>
+      </Card>
     );
   }
 
+  // 打开精细维护后这一区吃满主区剩下的高度：详情短时不在底下留一大片空白，
+  // 详情长时照常把整页撑高滚动（不在详情里再套一层滚动条）。
+  const fillHeight = Boolean(currentRow) && reviewMode === "records";
+
   return (
-    <section className="status-panel defect-photo-section">
-      <div className="defect-overview-metrics" aria-label="病害与照片汇总">
-        <article className="defect-metric-card blue">
-          <span className="defect-metric-icon"><FileProtectOutlined /></span>
-          <span><small>病害总数</small><strong>{allModel.summary.all}</strong><em>条</em></span>
-        </article>
-        <article className="defect-metric-card green">
-          <span className="defect-metric-icon"><SafetyCertificateOutlined /></span>
-          <span><small>已确认</small><strong>{allModel.rows.filter((row) => row.defect.group_review_status === "已确认").length}</strong><em>条</em></span>
-        </article>
-        <article className="defect-metric-card blue">
-          <span className="defect-metric-icon"><PictureOutlined /></span>
-          <span><small>关联照片</small><strong>{linkedPhotoCount}</strong><em>张</em></span>
-        </article>
-        <button
-          type="button"
-          className={`defect-metric-card issue-entry ${qualityChecksPending ? "blue" : allModel.summary.pending > 0 ? "orange" : "green"}`}
-          disabled={qualityChecksPending || allModel.summary.pending === 0}
-          onClick={openIssueGroups}
-        >
-          <span className="defect-metric-icon">{qualityChecksPending || allModel.summary.pending > 0 ? <FileSearchOutlined /> : <CheckCircleOutlined />}</span>
-          <span>
-            <small>{qualityChecksPending ? "正在检查" : allModel.summary.pending > 0 ? "待处理问题" : "校对通过"}</small>
-            <strong>{qualityChecksPending ? "—" : allModel.summary.pending}</strong><em>条</em>
-          </span>
-        </button>
-      </div>
-      <div className={`defect-review-layout ${currentRow ? "has-detail" : ""}`}>
-        <div className="defect-review-card">
+    <Flex vertical gap={14} style={fillHeight ? { flex: 1 } : undefined}>
+      <Row gutter={[12, 12]} role="group" aria-label="病害与照片汇总">
+        <Col xs={12} xl={6}>
+          <MetricCard size="small" title="病害总数" value={allModel.summary.all} suffix="条" tone="primary" icon={<FileProtectOutlined />} />
+        </Col>
+        <Col xs={12} xl={6}>
+          <MetricCard
+            size="small"
+            title="已确认"
+            value={allModel.rows.filter((row) => row.defect.group_review_status === "已确认").length}
+            suffix="条"
+            tone="success"
+            icon={<SafetyCertificateOutlined />}
+          />
+        </Col>
+        <Col xs={12} xl={6}>
+          <MetricCard size="small" title="关联照片" value={linkedPhotoCount} suffix="张" tone="primary" icon={<PictureOutlined />} />
+        </Col>
+        <Col xs={12} xl={6}>
+          {/* 这一张同时是入口：点它切到问题分组视图。 */}
+          <MetricCard
+            size="small"
+            title={qualityChecksPending ? "正在检查" : allModel.summary.pending > 0 ? "待处理问题" : "校对通过"}
+            value={qualityChecksPending ? "—" : allModel.summary.pending}
+            suffix="条"
+            tone={qualityChecksPending ? "primary" : allModel.summary.pending > 0 ? "warning" : "success"}
+            icon={qualityChecksPending || allModel.summary.pending > 0 ? <FileSearchOutlined /> : <CheckCircleOutlined />}
+            disabled={qualityChecksPending || allModel.summary.pending === 0}
+            onClick={openIssueGroups}
+          />
+        </Col>
+      </Row>
+      <Card
+        style={fillHeight ? { flex: 1, display: "flex", flexDirection: "column" } : undefined}
+        styles={{ body: { display: "flex", flexDirection: "column", gap: 14, ...(fillHeight ? { flex: 1 } : {}) } }}
+      >
           <DefectReviewToolbar
             summary={allModel.summary}
             filter={filter}
             issueFilter={issueFilter}
             search={search}
-            selectedCount={currentlySafeSelection.length}
-            selectableCount={selectableCandidateIds.length}
-            allSelectableSelected={allSelectableSelected}
-            someSelectableSelected={someSelectableSelected}
             viewMode={reviewMode}
             issueGroupCount={issueGroups.length}
             disabled={disabled}
@@ -863,43 +896,152 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
             onFilterChange={(nextFilter) => { clearPinnedResult(); setFilter(nextFilter); }}
             onIssueFilterChange={(nextIssueFilter) => { clearPinnedResult(); setIssueFilter(nextIssueFilter); }}
             onSearchChange={(nextSearch) => { clearPinnedResult(); setSearch(nextSearch); }}
-            onToggleSelectAll={() => setSelectedIds((current) => {
-              const next = new Set(current);
-              if (allSelectableSelected) {
-                for (const id of selectableCandidateIds) next.delete(id);
-              } else {
-                for (const id of selectableCandidateIds) next.add(id);
-              }
-              return next;
-            })}
             onViewModeChange={(mode) => {
               clearPinnedResult();
               setReviewMode(mode);
               if (mode === "groups") onCloseDetail?.();
             }}
-            onBatchConfirm={() => setBatchDialogOpen(true)}
             onRematch={() => { void runMatch(rematchCandidateIds); }}
           />
           {showAddForm ? (
-        <form className="manual-defect-form" onSubmit={submitManualDefect}>
-          <label>搜索构件<input aria-label="搜索构件" placeholder="编号、类别或现场名，如 3#墩盖梁" disabled={loadingInventory} value={componentSearch} onChange={(event) => setComponentSearch(event.target.value)} /></label>
-          <label>实际构件<select aria-label="实际构件" disabled={loadingInventory || inventoryEntries.length === 0} required value={form.componentEntryId} onChange={(event) => setForm({ ...form, componentEntryId: event.target.value, ratingTreeNodeId: "" })}><option value="">{componentSearching ? "正在搜索…" : inventoryEntries.length === 0 ? "先在上方搜索构件" : "请选择构件"}</option>{inventoryEntries.map((entry) => <option key={entry.id} value={entry.id}>{entry.component_number} / {entry.site_component_type} / {entry.site_name}</option>)}</select></label>
-          <label>构件类别<input aria-label="新增病害构件类别" readOnly value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.site_component_type ?? ""} /></label>
-          <label>构件编号<input aria-label="新增病害构件编号" readOnly value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.component_number ?? ""} /></label>
-          <label>病害位置<input aria-label="新增病害位置" required value={form.defectLocation} onChange={(event) => setForm({ ...form, defectLocation: event.target.value })} /></label>
-          <label>病害类型<select aria-label="新增病害类型" required value={form.ratingTreeNodeId} onChange={(event) => setForm({ ...form, ratingTreeNodeId: event.target.value, defectScale: "" })}><option value="">请选择评定树病害</option>{manualDefectNodes.map((node) => <option key={node.id} value={node.id}>{ratingTreeOptionLabel(node, manualDefectNodes)}{node.is_scoring ? "" : "（暂不计分）"}</option>)}</select></label>
-          <label className="manual-defect-form-wide">病害描述<input aria-label="新增病害描述" required value={form.defectDescription} onChange={(event) => setForm({ ...form, defectDescription: event.target.value })} /></label>
-          <label>病害标度（可稍后填写）<select aria-label="新增病害标度" disabled={!manualTreeNode?.is_scoring} value={form.defectScale} onChange={(event) => setForm({ ...form, defectScale: event.target.value })}><option value="">{manualTreeNode?.is_scoring ? "请选择标度" : "该节点暂不计分"}</option>{manualTreeNode?.allowed_scales.map((scale) => <option key={scale} value={scale}>{scale} · {manualTreeNode.scale_descriptions[String(scale)]}</option>)}</select></label>
-          {formError ? <p className="form-error" role="alert">{formError}</p> : null}
-          <div className="manual-defect-form-actions"><button type="button" onClick={() => { setShowAddForm(false); setFormError(""); }}>取消</button><button type="submit" disabled={loadingInventory || !form.componentEntryId}>添加病害</button></div>
-        </form>
+            <Card size="small" title="新增病害">
+              <Form layout="vertical" onFinish={() => undefined} style={{ marginBottom: 0 }}>
+                <Row gutter={[12, 0]}>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="搜索构件" htmlFor="manual-defect-search">
+                      <Input
+                        id="manual-defect-search"
+                        aria-label="搜索构件"
+                        placeholder="编号、类别或现场名，如 3#墩盖梁"
+                        disabled={loadingInventory}
+                        value={componentSearch}
+                        onChange={(event) => setComponentSearch(event.target.value)}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="实际构件" htmlFor="manual-defect-component">
+                      <Select
+                        id="manual-defect-component"
+                        aria-label="实际构件"
+                        disabled={loadingInventory || inventoryEntries.length === 0}
+                        value={form.componentEntryId}
+                        onChange={(value: string) => setForm({ ...form, componentEntryId: value, ratingTreeNodeId: "" })}
+                        options={[
+                          {
+                            value: "",
+                            label: componentSearching
+                              ? "正在搜索…"
+                              : inventoryEntries.length === 0 ? "先在上方搜索构件" : "请选择构件",
+                          },
+                          ...inventoryEntries.map((entry) => ({
+                            value: entry.id,
+                            label: `${entry.component_number} / ${entry.site_component_type} / ${entry.site_name}`,
+                          })),
+                        ]}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="构件类别" htmlFor="manual-defect-category">
+                      <Input
+                        id="manual-defect-category"
+                        aria-label="新增病害构件类别"
+                        readOnly
+                        value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.site_component_type ?? ""}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="构件编号" htmlFor="manual-defect-number">
+                      <Input
+                        id="manual-defect-number"
+                        aria-label="新增病害构件编号"
+                        readOnly
+                        value={inventoryEntries.find((entry) => entry.id === form.componentEntryId)?.component_number ?? ""}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="病害位置" htmlFor="manual-defect-location" required>
+                      <Input
+                        id="manual-defect-location"
+                        aria-label="新增病害位置"
+                        value={form.defectLocation}
+                        onChange={(event) => setForm({ ...form, defectLocation: event.target.value })}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="病害类型" htmlFor="manual-defect-type" required>
+                      <Select
+                        id="manual-defect-type"
+                        aria-label="新增病害类型"
+                        value={form.ratingTreeNodeId}
+                        onChange={(value: string) => setForm({ ...form, ratingTreeNodeId: value, defectScale: "" })}
+                        options={[
+                          { value: "", label: "请选择评定树病害" },
+                          ...manualDefectNodes.map((node) => ({
+                            value: node.id,
+                            label: `${ratingTreeOptionLabel(node, manualDefectNodes)}${node.is_scoring ? "" : "（暂不计分）"}`,
+                          })),
+                        ]}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24}>
+                    <Form.Item label="病害描述" htmlFor="manual-defect-description" required>
+                      <Input
+                        id="manual-defect-description"
+                        aria-label="新增病害描述"
+                        value={form.defectDescription}
+                        onChange={(event) => setForm({ ...form, defectDescription: event.target.value })}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item label="病害标度（可稍后填写）" htmlFor="manual-defect-scale">
+                      <Select
+                        id="manual-defect-scale"
+                        aria-label="新增病害标度"
+                        disabled={!manualTreeNode?.is_scoring}
+                        value={form.defectScale}
+                        onChange={(value: string) => setForm({ ...form, defectScale: value })}
+                        options={[
+                          { value: "", label: manualTreeNode?.is_scoring ? "请选择标度" : "该节点暂不计分" },
+                          ...(manualTreeNode?.allowed_scales ?? []).map((scale) => ({
+                            value: String(scale),
+                            label: `${scale} · ${manualTreeNode?.scale_descriptions[String(scale)] ?? ""}`,
+                          })),
+                        ]}
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+                {formError ? <Alert type="error" showIcon role="alert" title={formError} style={{ marginBottom: 12 }} /> : null}
+                <Flex gap={8} wrap>
+                  <Button onClick={() => { setShowAddForm(false); setFormError(""); }}>取消</Button>
+                  <Button
+                    type="primary"
+                    disabled={loadingInventory || !form.componentEntryId}
+                    onClick={() => submitManualDefect()}
+                  >
+                    添加病害
+                  </Button>
+                </Flex>
+              </Form>
+            </Card>
           ) : null}
       {/* 原来这里是一个 fieldset：它曾经用 disabled 一揽子关掉整片区域，禁用改成
           逐控件处理后就只剩一个空壳，还带着 fieldset 自己的 min-width:min-content。 */}
-          <div className="defect-review-body">
-        {draft.defects.length === 0 ? <p>暂无病害候选，可使用“新增病害”手动添加。</p> : null}
-        {treeError ? <p className="form-error" role="alert">{treeError}</p> : null}
-        {!ratingTree ? <p className="warning-text">当前检测年度未锁定评定树，无法确定病害评分节点。</p> : null}
+          <Flex vertical gap={12} style={fillHeight ? { flex: 1 } : undefined}>
+        {draft.defects.length === 0 ? (
+          <Typography.Text type="secondary">暂无病害候选，可使用“新增病害”手动添加。</Typography.Text>
+        ) : null}
+        {treeError ? <Alert type="error" showIcon role="alert" title={treeError} /> : null}
+        {!ratingTree ? (
+          <Alert type="warning" showIcon role="note" title="当前检测年度未锁定评定树，无法确定病害评分节点。" />
+        ) : null}
         {reviewMode === "groups" ? (
           <DefectIssueGroupList
             groups={issueGroups}
@@ -914,12 +1056,37 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
             }}
           />
         ) : (
-          <div
+          <Flex
             ref={splitWorkspaceRef}
-            className={`defect-review-workspace ${currentRow ? "detail-open" : ""}`}
-            style={{ "--defect-detail-width": `${detailWidth}%` } as CSSProperties}
+            gap={0}
+            align="stretch"
+            style={fillHeight ? { flex: "1 0 auto", minHeight: SPLIT_MIN_HEIGHT } : { minHeight: 0 }}
           >
-          <div className="defect-review-list-pane">
+          {/* 拆分态下列表不参与撑高：行高取"剩余高度"与"详情高度"里大的那个，列表贴满这一行、
+              在自己里面滚。否则 20 条三四行高的条目会把左栏拉得比详情长出一大截。 */}
+          <div style={currentRow
+            ? { flex: 1, minWidth: 0, position: "relative" }
+            : { flex: 1, minWidth: 0 }}
+          >
+          <Flex vertical gap={8} style={currentRow ? { position: "absolute", inset: 0 } : undefined}>
+            <DefectListHeader
+              total={displayedRows.length}
+              selectedCount={currentlySafeSelection.length}
+              selectableCount={selectableCandidateIds.length}
+              allSelectableSelected={allSelectableSelected}
+              someSelectableSelected={someSelectableSelected}
+              readOnly={disabled}
+              onToggleSelectAll={() => setSelectedIds((current) => {
+                const next = new Set(current);
+                if (allSelectableSelected) {
+                  for (const id of selectableCandidateIds) next.delete(id);
+                } else {
+                  for (const id of selectableCandidateIds) next.add(id);
+                }
+                return next;
+              })}
+              onBatchConfirm={() => setBatchDialogOpen(true)}
+            />
             <DefectQuickReviewList
               rows={displayedRows}
               importRecordId={importRecordId}
@@ -927,6 +1094,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
               selectedCandidateIds={selectedIds}
               activeCandidateId={selectedCandidateId}
               compact={Boolean(currentRow)}
+              selectable={!disabled}
               onPageChange={clearPinnedResult}
               onToggleSelection={(candidateId) => setSelectedIds((current) => {
                 const next = new Set(current);
@@ -939,11 +1107,17 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
                 onSelect(candidateId, photoCandidateId);
               }}
             />
+          </Flex>
           </div>
           {currentRow ? (
             <>
               <div
-                className="defect-detail-resize-handle"
+                style={{
+                  flex: "none",
+                  width: 10,
+                  cursor: "col-resize",
+                  background: `linear-gradient(to right, transparent 4px, ${token.colorSplit} 4px, ${token.colorSplit} 6px, transparent 6px)`,
+                }}
                 role="separator"
                 aria-label="调整精细维护区域宽度"
                 aria-orientation="vertical"
@@ -954,7 +1128,7 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
                 onPointerDown={startResize}
                 onKeyDown={resizeWithKeyboard}
               />
-              <aside className="defect-detail-pane">
+              <aside style={{ flex: "none", width: `${detailWidth}%`, minWidth: 0 }}>
                 <DefectDetailEditor
                   draft={draft}
                   row={currentRow}
@@ -970,6 +1144,8 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
                   editLockToken={editLockToken}
                   onSave={onSave}
                   onClose={closeDetail}
+                  onPrevious={neighbourId(-1) ? () => openNeighbour(-1) : undefined}
+                  onNext={neighbourId(1) ? () => openNeighbour(1) : undefined}
                   onDefectTextCommitted={(candidateId) => { void runMatch([candidateId]); }}
                   onRatingResolved={() => { void refreshResolution(); }}
                   inventoryRevisionId={inventoryRevisionId}
@@ -983,12 +1159,11 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
               </aside>
             </>
           ) : null}
-          </div>
+          </Flex>
         )}
         <UnlinkedPhotosPanel draft={draft} importRecordId={importRecordId} baseUrl={baseUrl} selectedPhotoCandidateId={selectedPhotoCandidateId} />
-          </div>
-        </div>
-      </div>
+          </Flex>
+      </Card>
       <DefectBatchConfirmDialog
         open={batchDialogOpen}
         defectCount={currentlySafeSelection.length}
@@ -1087,6 +1262,6 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
           setPendingGroupConfirmationKey(null);
         }}
       />
-    </section>
+    </Flex>
   );
 }

@@ -243,8 +243,9 @@ describe("DefectPhotoPanel", () => {
     });
     renderPanel(draft, { disabled: true });
 
-    expect(screen.getByRole("button", { name: "添加照片" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "删除照片" })).toBeDisabled();
+    // 只读态不摆写操作：添加、删除都不出现。
+    expect(screen.queryByRole("button", { name: "添加照片" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除照片" })).not.toBeInTheDocument();
     // 看图不算编辑：缩略图按钮在只读态照常可用。
     expect(screen.getByRole("button", { name: "查看照片 2.1-1" })).toBeEnabled();
   });

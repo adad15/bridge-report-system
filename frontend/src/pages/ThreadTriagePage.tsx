@@ -1,3 +1,4 @@
+import { Alert, Button, Card, Empty, Flex, Skeleton, Typography } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -15,6 +16,7 @@ import {
   fetchTriageSummary,
   resolveTriageCluster,
 } from "../api/threadTriageApi";
+import { PageHeader } from "../design-system";
 import { ManualClusterCard } from "../triage/ManualClusterCard";
 import { TriageBatchCard } from "../triage/TriageBatchCard";
 import { TriageBatchDetailTable } from "../triage/TriageBatchDetail";
@@ -148,7 +150,7 @@ export function ThreadTriagePage() {
     }
   }
 
-  if (!bridgeId) return <p>缺少桥梁标识。</p>;
+  if (!bridgeId) return <Alert type="error" showIcon title="缺少桥梁标识。" />;
 
   const visibleBatches = (summary?.batches ?? []).filter(
     (batch) => !skippedBatchIds.has(batch.batch_id));
@@ -157,26 +159,23 @@ export function ThreadTriagePage() {
     : 0;
 
   return (
-    <section className="status-panel triage-page triage-page-redesign">
-      <header className="triage-page-head">
-        <h1>病害线索整理</h1>
-        <Link to={`/bridges/${bridgeId}/components`}>返回构件病害档案</Link>
-      </header>
+    <Flex vertical gap={16}>
+      <PageHeader
+        title="病害线索整理"
+        description={summary
+          ? `未绑定 ${summary.unbound_observation_count} 条 · 可批量处理 ${summary.batchable_observation_count} 条 · 异常 ${summary.manual_observation_count} 条`
+          : undefined}
+        extra={<Link to={`/bridges/${bridgeId}/components`}>返回构件病害档案</Link>}
+      />
 
-      {summary ? (
-        <p className="triage-page-counts">
-          未绑定 {summary.unbound_observation_count} 条 ·
-          可批量处理 {summary.batchable_observation_count} 条 ·
-          异常 {summary.manual_observation_count} 条
-        </p>
-      ) : null}
-
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
-      {notice ? <p className="triage-page-notice" role="status">{notice}</p> : null}
-      {summary === null && !error ? <p>正在加载整理工作台…</p> : null}
+      {error ? <Alert type="error" showIcon title={error} /> : null}
+      {notice ? <Alert type="success" showIcon role="status" title={notice} closable onClose={() => setNotice(null)} /> : null}
+      {summary === null && !error ? <Card loading /> : null}
 
       {summary && summary.batches.length === 0 ? (
-        <p className="archive-empty-hint">没有可批量处理的批次。</p>
+        <Card>
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有可批量处理的批次。" />
+        </Card>
       ) : null}
 
       {visibleBatches.map((batch) => (
@@ -189,9 +188,9 @@ export function ThreadTriagePage() {
           onConfirm={() => { void confirmBatch(batch.batch_id); }}
           onSkip={() => setSkippedBatchIds((current) => new Set(current).add(batch.batch_id))}
         >
-          {detailError ? <p className="error-text">{detailError}</p> : null}
+          {detailError ? <Alert type="error" showIcon title={detailError} /> : null}
           {detail && detail.batch_id === batch.batch_id ? (
-            <>
+            <Flex vertical gap={8}>
               <TriageBatchDetailTable
                 detail={detail}
                 excludedGroupIds={excludedGroupIds}
@@ -203,30 +202,43 @@ export function ThreadTriagePage() {
                   return next;
                 })}
               />
-              <p className="triage-detail-summary">
+              <Typography.Text type="secondary">
                 将处理 {pendingCount} 组、
                 {detail.groups
                   .filter((group) => !excludedGroupIds.has(group.group_id))
                   .reduce((total, group) => total + group.observations.length, 0)} 条观测
                 {excludedGroupIds.size > 0 ? `（已剔除 ${excludedGroupIds.size} 组）` : ""}
-              </p>
-            </>
+              </Typography.Text>
+            </Flex>
           ) : expandedBatchId === batch.batch_id && !detailError ? (
-            <p>正在加载批次明细…</p>
+            <Skeleton active paragraph={{ rows: 3 }} />
           ) : null}
         </TriageBatchCard>
       ))}
 
       {summary && summary.manual_clusters.length > 0 ? (
-        <section className="triage-manual-section" aria-label="需单独处理">
-          <h2>需单独处理（{summary.manual_group_count} 组 / {summary.manual_observation_count} 条）</h2>
-          <p className="archive-empty-hint">
-            这些组之间存在必须一起判断的关系：系统能看出它们有关，但看不出该合还是该分。
-          </p>
+        <Flex vertical gap={12} component="section" aria-label="需单独处理">
+          <Flex vertical gap={2}>
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              需单独处理（{summary.manual_group_count} 组 / {summary.manual_observation_count} 条）
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              这些组之间存在必须一起判断的关系：系统能看出它们有关，但看不出该合还是该分。
+            </Typography.Text>
+          </Flex>
           {issues.length > 0 ? (
-            <ul className="triage-detail-issues" role="alert">
-              {issues.map((issue, index) => <li key={`${issue.reason_code}-${index}`}>{issue.message}</li>)}
-            </ul>
+            <Alert
+              type="error"
+              showIcon
+              title="这一簇没能处理"
+              description={
+                <Flex vertical gap={2}>
+                  {issues.map((issue, index) => (
+                    <Typography.Text key={`${issue.reason_code}-${index}`}>{issue.message}</Typography.Text>
+                  ))}
+                </Flex>
+              }
+            />
           ) : null}
           {summary.manual_clusters
             .filter((cluster) => !skippedClusterIds.has(cluster.cluster_id))
@@ -240,8 +252,8 @@ export function ThreadTriagePage() {
                 onSkip={() => setSkippedClusterIds((current) => new Set(current).add(cluster.cluster_id))}
               />
             ))}
-        </section>
+        </Flex>
       ) : null}
-    </section>
+    </Flex>
   );
 }

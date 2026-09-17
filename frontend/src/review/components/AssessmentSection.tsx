@@ -1,4 +1,5 @@
-import { useState, type CSSProperties } from "react";
+import { Alert, Button, Card, Col, Empty, Flex, Progress, Row, Statistic, Table, Tag, Typography, theme, type TableColumnsType } from "antd";
+import { useState } from "react";
 
 import type { AssessmentCategoryResult, AssessmentIssue, AssessmentReport, AssessmentResult } from "../../api/assessmentApi";
 import type { AssessmentPhase } from "../assessmentState";
@@ -61,6 +62,23 @@ const BRIDGE_TYPE_LABELS: Record<string, string> = {
   "h21.bridge_type.cable_stayed": "斜拉桥",
 };
 
+const GRADE_LABELS: Record<number, string> = {
+  1: "总体状况良好",
+  2: "总体状况良好",
+  3: "存在轻度缺损",
+  4: "存在明显缺损",
+  5: "技术状况危险",
+};
+
+/* 等级是这个分区唯一的结论性字段：纯文本时 4 类和 1 类视觉权重相同，得逐行读才知道哪里出了问题。
+   绿 → 蓝 → 黄 → 橙 → 红，按等级从好到坏。 */
+const GRADE_COLORS = ["#239447", "#1769e0", "#e89900", "#df5b16", "#c82727"];
+const GRADE_TAG_COLORS = ["success", "processing", "warning", "volcano", "error"];
+
+function gradeColor(grade: number): string {
+  return GRADE_COLORS[grade - 1] ?? GRADE_COLORS[GRADE_COLORS.length - 1];
+}
+
 function categoryOrder(componentTypeId: string): number {
   return CATEGORY_ORDER.get(componentTypeId) ?? Number.MAX_SAFE_INTEGER;
 }
@@ -83,57 +101,34 @@ function componentCount(categories: AssessmentCategoryResult[]): number {
   return categories.reduce((total, category) => total + category.components.length, 0);
 }
 
-/* 等级是这个分区唯一的结论性字段，纯文本时 4 类和 1 类视觉权重相同，得逐行读才知道哪里出了问题。
-   配色沿用工作台已有的 .review-chip-* 语义色（绿 / 蓝 / 黄），4—5 类往橙红延伸。 */
-function GradeChip({ grade }: { grade: number }) {
-  return <span className={`assessment-grade assessment-grade-${grade}`}>{grade} 类</span>;
-}
-
-/* 得分条是分数的图形复述，作用是吸收表格的富余宽度：其余各列全部定宽，剩下多少都归这一列，
-   于是表格能铺满内容区而数字列不会被重新拉散。填色随等级走，51.11 和 100.00 的差距才一眼看得出。 */
-function ScoreBar({ score, grade }: { score: number; grade: number }) {
-  const ratio = Math.min(100, Math.max(0, score));
-  return (
-    <span className="assessment-score-bar">
-      <span
-        className={`assessment-score-bar-fill assessment-score-bar-fill-${grade}`}
-        style={{ width: `${ratio}%` }}
-      />
-    </span>
-  );
-}
-
-const GRADE_LABELS: Record<number, string> = {
-  1: "总体状况良好",
-  2: "总体状况良好",
-  3: "存在轻度缺损",
-  4: "存在明显缺损",
-  5: "技术状况危险",
-};
-
-const GRADE_COLORS = ["#239447", "#1769e0", "#e89900", "#df5b16", "#c82727"];
-
-function OverallScoreRing({ score }: { score: number }) {
-  const ratio = Math.min(100, Math.max(0, score));
-  return (
-    <div className="assessment-score-ring" style={{ "--assessment-score": `${ratio}%` } as CSSProperties}>
-      <strong>{score.toFixed(2)}</strong>
-      <span>/ 100</span>
-    </div>
-  );
+function GradeTag({ grade }: { grade: number }) {
+  return <Tag color={GRADE_TAG_COLORS[grade - 1]} variant="filled">{grade} 类</Tag>;
 }
 
 function BridgeTypeIllustration() {
+  const stroke = "#8aa2c8";
   return (
-    <svg className="assessment-bridge-illustration" viewBox="0 0 132 64" aria-hidden="true">
-      <path className="beam-deck" d="M5 15.5h122M8 22h116" />
-      <path className="beam-joints" d="M18 15.5v6.5m24-6.5V22m24-6.5V22m24-6.5V22m24-6.5V22" />
-      <path className="beam-piers" d="M31 23l-2 28m13-28 2 28M87 23l-2 28m13-28 2 28" />
-      <path className="beam-caps" d="M26 25h21m35 0h21M24 52h25m31 0h25" />
-      <path className="beam-abutments" d="M10 22v20m112-20v20M6 42h16m88 0h16" />
-      <path className="beam-ground" d="M4 57c15-3 27-3 42 0 15 3 27 3 42 0 14-3 26-3 40 0" />
+    <svg viewBox="0 0 132 64" width={132} height={64} aria-hidden="true" fill="none" stroke={stroke} strokeWidth={2} strokeLinecap="round">
+      <path d="M5 15.5h122M8 22h116" />
+      <path d="M18 15.5v6.5m24-6.5V22m24-6.5V22m24-6.5V22m24-6.5V22" strokeWidth={1.2} />
+      <path d="M31 23l-2 28m13-28 2 28M87 23l-2 28m13-28 2 28" />
+      <path d="M26 25h21m35 0h21M24 52h25m31 0h25" />
+      <path d="M10 22v20m112-20v20M6 42h16m88 0h16" />
+      <path d="M4 57c15-3 27-3 42 0 15 3 27 3 42 0 14-3 26-3 40 0" strokeWidth={1.2} />
     </svg>
   );
+}
+
+/** 表格里一行：结构分部行与它下面的部件类别行共用一套列。 */
+interface BreakdownRow {
+  key: string;
+  label: string;
+  score: number;
+  grade: number;
+  weight: number;
+  components: number;
+  isPart: boolean;
+  structurePart: string;
 }
 
 interface AssessmentSectionProps {
@@ -155,6 +150,7 @@ interface AssessmentSectionProps {
 }
 
 export function AssessmentSection({ mode, phase, response, error, note, canRetry, onRetry, onSelectIssue }: AssessmentSectionProps) {
+  const { token } = theme.useToken();
   const result = response?.result ?? null;
   const confirmed = mode === "confirmed";
   const [activePart, setActivePart] = useState("all");
@@ -174,184 +170,326 @@ export function AssessmentSection({ mode, phase, response, error, note, canRetry
     !lowest || part.score < lowest.score ? part : lowest
   , null) ?? null;
   const gradeTotal = gradeCounts.reduce((total, count) => total + count, 0);
-  let gradeCursor = 0;
-  const gradeGradient = gradeCounts.map((count, index) => {
-    const start = gradeTotal ? gradeCursor / gradeTotal * 360 : 0;
-    gradeCursor += count;
-    const end = gradeTotal ? gradeCursor / gradeTotal * 360 : 0;
-    return `${GRADE_COLORS[index]} ${start}deg ${end}deg`;
-  }).join(", ");
+
+  // 分部行与类别行摊平成一张表：层级靠首列缩进表达，不再靠多个 tbody。
+  const breakdownRows: BreakdownRow[] = visibleParts.flatMap((part) => [
+    {
+      key: part.structure_part,
+      label: PART_LABELS[part.structure_part] ?? part.structure_part,
+      score: part.score,
+      grade: part.grade,
+      weight: part.overall_weight,
+      components: componentCount(part.categories),
+      isPart: true,
+      structurePart: part.structure_part,
+    },
+    ...sortedCategories(part.categories).map((category) => ({
+      key: `${part.structure_part}:${category.component_type_id}`,
+      label: categoryLabel(category.component_type_id, category.component_type_name),
+      score: category.score,
+      grade: category.grade,
+      weight: category.effective_weight,
+      components: category.components.length,
+      isPart: false,
+      structurePart: part.structure_part,
+    })),
+  ]);
+
+  const columns: TableColumnsType<BreakdownRow> = [
+    {
+      title: "结构分部 / 部件类别",
+      key: "label",
+      width: 220,
+      render: (_value, row) => (
+        <Typography.Text strong={row.isPart} style={{ paddingInlineStart: row.isPart ? 0 : 16 }}>
+          {row.label}
+        </Typography.Text>
+      ),
+    },
+    {
+      title: "分数",
+      key: "score",
+      width: 88,
+      align: "right",
+      render: (_value, row) => <Typography.Text strong={row.isPart}>{row.score.toFixed(2)}</Typography.Text>,
+    },
+    {
+      // 得分条吸收表格的富余宽度：其余各列全部定宽，剩下多少都归这一列。
+      title: "",
+      key: "bar",
+      render: (_value, row) => (
+        <Progress
+          percent={Math.min(100, Math.max(0, row.score))}
+          showInfo={false}
+          strokeColor={gradeColor(row.grade)}
+          railColor={token.colorFillTertiary}
+          size={{ height: row.isPart ? 10 : 8 }}
+          style={{ margin: 0 }}
+        />
+      ),
+    },
+    { title: "等级", key: "grade", width: 84, render: (_value, row) => <GradeTag grade={row.grade} /> },
+    {
+      title: "权重",
+      key: "weight",
+      width: 90,
+      align: "right",
+      render: (_value, row) => <Typography.Text type="secondary">{row.weight.toFixed(4)}</Typography.Text>,
+    },
+    {
+      title: "构件数",
+      key: "components",
+      width: 90,
+      align: "right",
+      render: (_value, row) => row.components,
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 100,
+      render: (_value, row) => (row.isPart ? (
+        <Button type="link" size="small" onClick={() => setActivePart(row.structurePart)}>查看明细</Button>
+      ) : <Typography.Text type="secondary">—</Typography.Text>),
+    },
+  ];
+
   return (
-    <section className="status-panel assessment-section">
-      <div className="assessment-heading">
-        <div>
-          <h2>系统技术状况评定</h2>
-          {response ? (
-            <p className="assessment-standard-identity">
-              {response.standard.standard_code} · {response.standard.standard_name} · 规则包 {response.standard.package_version}
-            </p>
-          ) : (
-            <p>
-              {confirmed
-                ? "正在读取本记录入库时写下的评定结果。"
-                : "系统将使用项目锁定的规范和已确认构件台账计算。"}
-            </p>
-          )}
-          {note ? <p className="assessment-superseded-note">{note}</p> : null}
-        </div>
-        <div className="assessment-heading-actions">
+    <Card
+      title="系统技术状况评定"
+      extra={
+        <Flex align="center" gap={10}>
           {phase === "updating" ? (
-            <span className="assessment-updating" role="status">
-              {confirmed ? "正在读取…" : "评分更新中…"}
-            </span>
+            <Typography.Text type="secondary" role="status">{confirmed ? "正在读取…" : "评分更新中…"}</Typography.Text>
           ) : null}
-          <button
-            type="button"
+          <Button
             disabled={!canRetry}
             title={canRetry ? undefined : "需要先获取编辑权才能试算"}
             onClick={onRetry}
           >
             {confirmed ? "重新加载" : "重新试算"}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </Flex>
+      }
+    >
+      <Flex vertical gap={16}>
+        {response ? (
+          <Typography.Text type="secondary">
+            {response.standard.standard_code} · {response.standard.standard_name} · 规则包 {response.standard.package_version}
+          </Typography.Text>
+        ) : (
+          <Typography.Text type="secondary">
+            {confirmed
+              ? "正在读取本记录入库时写下的评定结果。"
+              : "系统将使用项目锁定的规范和已确认构件台账计算。"}
+          </Typography.Text>
+        )}
+        {note ? <Alert type="warning" showIcon title={note} /> : null}
+        {error ? <Alert type="error" showIcon title={error} /> : null}
 
-      {error ? <p className="error-text">{error}</p> : null}
-      {response?.issues.length ? (
-        <div className="assessment-issues">
-          <h3>待处理项</h3>
-          <ul>
-            {response.issues.map((issue, index) => (
-              <li key={`${issue.code}-${issue.entity_id}-${index}`}>
-                <button type="button" className="assessment-issue-link" onClick={() => onSelectIssue(issue)}>{issue.message}</button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+        {response?.issues.length ? (
+          <Card size="small" title="待处理项">
+            <Flex vertical gap={4} align="start">
+              {response.issues.map((issue, index) => (
+                <Button
+                  key={`${issue.code}-${issue.entity_id}-${index}`}
+                  type="link"
+                  style={{ padding: 0, height: "auto", textAlign: "left" }}
+                  onClick={() => onSelectIssue(issue)}
+                >
+                  {issue.message}
+                </Button>
+              ))}
+            </Flex>
+          </Card>
+        ) : null}
 
-      {result ? (
-        <>
-          <div className="assessment-overview-cards" aria-label="系统评定概览">
-            <article className="assessment-overview-card score">
-              <span>全桥评分</span>
-              <div className="assessment-overview-card-content">
-                <OverallScoreRing score={result.overall_score} />
-              </div>
-            </article>
-            <article className="assessment-overview-card grade">
-              <span>技术状况等级</span>
-              <div className="assessment-overview-card-content">
-                <strong>{result.final_grade} 类</strong>
-                <em>{GRADE_LABELS[result.final_grade] ?? "查看详细评定结果"}</em>
-              </div>
-            </article>
-            <article className="assessment-overview-card bridge-type">
-              <span>桥梁类型</span>
-              <div className="assessment-overview-card-content">
-                <strong>{BRIDGE_TYPE_LABELS[result.bridge_type_id] ?? result.bridge_type_id}</strong>
-                <BridgeTypeIllustration />
-              </div>
-            </article>
-            <article className="assessment-overview-card components">
-              <span>评定构件</span>
-              <strong>{totalComponents.toLocaleString("zh-CN")}<small> 项</small></strong>
-              <div className="assessment-completion-label"><span>完成度</span><b>100%</b></div>
-              <span className="assessment-completion-track"><i /></span>
-            </article>
-          </div>
-          <div className="assessment-validation-strip">
-            <p className="success"><b>✓</b><span>评定计算完成，规则校验通过</span></p>
-            {lowestPart ? (
-              <p className="warning"><b>!</b><span>{PART_LABELS[lowestPart.structure_part] ?? lowestPart.structure_part}评分 {lowestPart.score.toFixed(2)}{attentionCategories.length ? `，建议重点复核${attentionCategories.slice(0, 2).map((category) => categoryLabel(category.component_type_id, category.component_type_name)).join("与")}` : "。"}</span></p>
-            ) : null}
-          </div>
-          <div className="assessment-dashboard-grid">
-            <div className="assessment-breakdown-card">
-              <div className="assessment-breakdown-heading">
-                <h3>结构分部评分</h3>
-                <div className="assessment-part-tabs" role="group" aria-label="按结构分部筛选">
-                  <button type="button" aria-pressed={activePart === "all"} onClick={() => setActivePart("all")}>全部</button>
-                  {result.structure_parts.map((part) => (
-                    <button key={part.structure_part} type="button" aria-pressed={activePart === part.structure_part} onClick={() => setActivePart(part.structure_part)}>{PART_LABELS[part.structure_part] ?? part.structure_part}</button>
-                  ))}
-                </div>
-                <div className="assessment-grade-legend" aria-label="技术状况等级图例">
-                  {[1, 2, 3, 4, 5].map((grade, index) => <span key={grade}><i style={{ background: GRADE_COLORS[index] }} />{grade}类</span>)}
-                </div>
-              </div>
-              <div className="table-scroll">
-                <table className="data-table assessment-result-table">
-                  <thead>
-                    <tr>
-                      <th>结构分部 / 部件类别</th>
-                      <th className="numeric-cell">分数</th>
-                      <th className="assessment-score-bar-head" />
-                      <th>等级</th>
-                      <th className="numeric-cell">权重</th>
-                      <th className="numeric-cell">构件数</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  {visibleParts.map((part) => (
-                    <tbody key={part.structure_part}>
-                      <tr className="assessment-part-row">
-                        <th scope="rowgroup">{PART_LABELS[part.structure_part] ?? part.structure_part}</th>
-                        <td className="numeric-cell">{part.score.toFixed(2)}</td>
-                        <td className="assessment-score-bar-cell"><ScoreBar score={part.score} grade={part.grade} /></td>
-                        <td><GradeChip grade={part.grade} /></td>
-                        <td className="numeric-cell assessment-muted-cell">{part.overall_weight.toFixed(4)}</td>
-                        <td className="numeric-cell assessment-muted-cell">{componentCount(part.categories)}</td>
-                        <td><button type="button" className="assessment-detail-link" onClick={() => setActivePart(part.structure_part)}>查看明细</button></td>
-                      </tr>
-                      {sortedCategories(part.categories).map((category) => (
-                        <tr key={category.component_type_id} className={category.grade >= 4 ? "assessment-attention-row" : ""}>
-                          <td className="assessment-category-cell">{categoryLabel(category.component_type_id, category.component_type_name)}</td>
-                          <td className="numeric-cell">{category.score.toFixed(2)}</td>
-                          <td className="assessment-score-bar-cell"><ScoreBar score={category.score} grade={category.grade} /></td>
-                          <td><GradeChip grade={category.grade} /></td>
-                          <td className="numeric-cell assessment-muted-cell">{category.effective_weight.toFixed(4)}</td>
-                          <td className="numeric-cell">{category.components.length}</td>
-                          <td className="assessment-muted-cell">—</td>
-                        </tr>
+        {result ? (
+          <>
+            <Row gutter={[12, 12]} aria-label="系统评定概览">
+              <Col xs={12} xl={6}>
+                <Card size="small" style={{ height: "100%" }}>
+                  <Flex vertical align="center" gap={6}>
+                    <Typography.Text type="secondary">全桥评分</Typography.Text>
+                    <Progress
+                      type="dashboard"
+                      size={110}
+                      percent={Math.min(100, Math.max(0, result.overall_score))}
+                      strokeColor={gradeColor(result.final_grade)}
+                      format={() => (
+                        <Flex vertical align="center">
+                          <Typography.Text strong style={{ fontSize: 22 }}>{result.overall_score.toFixed(2)}</Typography.Text>
+                          <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>/ 100</Typography.Text>
+                        </Flex>
+                      )}
+                    />
+                  </Flex>
+                </Card>
+              </Col>
+              <Col xs={12} xl={6}>
+                <Card size="small" style={{ height: "100%" }}>
+                  <Flex vertical gap={8}>
+                    <Typography.Text type="secondary">技术状况等级</Typography.Text>
+                    <Flex align="baseline" gap={8}>
+                      <Typography.Title level={2} style={{ margin: 0, color: gradeColor(result.final_grade) }}>
+                        {result.final_grade} 类
+                      </Typography.Title>
+                    </Flex>
+                    <Typography.Text type="secondary">
+                      {GRADE_LABELS[result.final_grade] ?? "查看详细评定结果"}
+                    </Typography.Text>
+                  </Flex>
+                </Card>
+              </Col>
+              <Col xs={12} xl={6}>
+                <Card size="small" style={{ height: "100%" }}>
+                  <Flex vertical gap={8}>
+                    <Typography.Text type="secondary">桥梁类型</Typography.Text>
+                    <Typography.Text strong>{BRIDGE_TYPE_LABELS[result.bridge_type_id] ?? result.bridge_type_id}</Typography.Text>
+                    <BridgeTypeIllustration />
+                  </Flex>
+                </Card>
+              </Col>
+              <Col xs={12} xl={6}>
+                <Card size="small" style={{ height: "100%" }}>
+                  <Flex vertical gap={8}>
+                    <Statistic title="评定构件" value={totalComponents} suffix="项" />
+                    <Flex align="center" justify="space-between">
+                      <Typography.Text type="secondary">完成度</Typography.Text>
+                      <Typography.Text strong>100%</Typography.Text>
+                    </Flex>
+                    <Progress percent={100} showInfo={false} strokeColor={token.colorSuccess} size={{ height: 8 }} style={{ margin: 0 }} />
+                  </Flex>
+                </Card>
+              </Col>
+            </Row>
+
+            <Flex vertical gap={8}>
+              <Alert type="success" showIcon role="note" title="评定计算完成，规则校验通过" />
+              {lowestPart ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  role="note"
+                  title={`${PART_LABELS[lowestPart.structure_part] ?? lowestPart.structure_part}评分 ${lowestPart.score.toFixed(2)}${
+                    attentionCategories.length
+                      ? `，建议重点复核${attentionCategories.slice(0, 2).map((category) => categoryLabel(category.component_type_id, category.component_type_name)).join("与")}`
+                      : "。"}`}
+                />
+              ) : null}
+            </Flex>
+
+            <Row gutter={[14, 14]} align="stretch">
+              <Col xs={24} xl={16}>
+                <Card
+                  size="small"
+                  style={{ height: "100%" }}
+                  title="结构分部评分"
+                  extra={
+                    <Flex align="center" gap={6} role="group" aria-label="按结构分部筛选">
+                      <Button
+                        size="small"
+                        aria-pressed={activePart === "all"}
+                        type={activePart === "all" ? "primary" : "default"}
+                        onClick={() => setActivePart("all")}
+                      >
+                        全部
+                      </Button>
+                      {result.structure_parts.map((part) => (
+                        <Button
+                          key={part.structure_part}
+                          size="small"
+                          aria-pressed={activePart === part.structure_part}
+                          type={activePart === part.structure_part ? "primary" : "default"}
+                          onClick={() => setActivePart(part.structure_part)}
+                        >
+                          {PART_LABELS[part.structure_part] ?? part.structure_part}
+                        </Button>
                       ))}
-                    </tbody>
+                    </Flex>
+                  }
+                >
+                  <Table<BreakdownRow>
+                    rowKey="key"
+                    size="small"
+                    columns={columns}
+                    dataSource={breakdownRows}
+                    pagination={false}
+                    scroll={{ x: 760 }}
+                    onRow={(row) => ({
+                      style: row.grade >= 4 ? { background: token.colorErrorBg } : undefined,
+                    })}
+                  />
+                </Card>
+              </Col>
+
+              <Col xs={24} xl={8}>
+                <Flex vertical gap={14} style={{ height: "100%" }}>
+                  <Card size="small" title="等级分布">
+                    <Flex vertical gap={8}>
+                      {gradeCounts.map((count, index) => (
+                        <Flex key={index} align="center" gap={10}>
+                          <Typography.Text style={{ width: 40, flex: "none" }}>{index + 1}类</Typography.Text>
+                          <Progress
+                            percent={gradeTotal ? (count / gradeTotal) * 100 : 0}
+                            showInfo={false}
+                            strokeColor={GRADE_COLORS[index]}
+                            railColor={token.colorFillTertiary}
+                            size={{ height: 8 }}
+                            style={{ flex: 1, margin: 0 }}
+                          />
+                          <Typography.Text style={{ width: 48, flex: "none", textAlign: "right" }}>{count} 项</Typography.Text>
+                          <Typography.Text type="secondary" style={{ width: 52, flex: "none", textAlign: "right" }}>
+                            {gradeTotal ? `${(count / gradeTotal * 100).toFixed(1)}%` : "0%"}
+                          </Typography.Text>
+                        </Flex>
+                      ))}
+                    </Flex>
+                  </Card>
+
+                  <Card
+                    size="small"
+                    style={{ flex: 1 }}
+                    title={<>重点关注 <Typography.Text strong>{attentionCategories.length}</Typography.Text> 项</>}
+                  >
+                    {attentionCategories.length ? (
+                      <Flex vertical gap={10}>
+                        {attentionCategories.map((category, index) => (
+                          <Flex key={category.component_type_id} align="center" gap={8} wrap>
+                            <Typography.Text type="secondary">{index + 1}</Typography.Text>
+                            <Typography.Text strong>
+                              {categoryLabel(category.component_type_id, category.component_type_name)}
+                            </Typography.Text>
+                            <GradeTag grade={category.grade} />
+                            <Typography.Text type="secondary">分数 {category.score.toFixed(2)}</Typography.Text>
+                            <Typography.Text type="secondary">构件数 {category.components.length}</Typography.Text>
+                          </Flex>
+                        ))}
+                      </Flex>
+                    ) : (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 4—5 类重点关注项。" />
+                    )}
+                  </Card>
+                </Flex>
+              </Col>
+            </Row>
+
+            {result.triggered_controls.length ? (
+              <Card size="small" title="单项控制">
+                <Flex vertical gap={4}>
+                  {result.triggered_controls.map((control) => (
+                    <Typography.Text key={control.control_id}>
+                      {control.label}（{control.source_reference}）
+                    </Typography.Text>
                   ))}
-                </table>
-              </div>
-            </div>
-            <aside className="assessment-insights">
-              <section className="assessment-grade-distribution">
-                <h3>等级分布</h3>
-                <div className="assessment-grade-distribution-body">
-                  <span className="assessment-grade-donut" style={{ background: `conic-gradient(${gradeGradient || "#e5e7eb 0deg 360deg"})` }} aria-label={`共 ${gradeTotal} 个部件类别`}><i /></span>
-                  <div>
-                    {gradeCounts.map((count, index) => (
-                      <p key={index}><span><i style={{ background: GRADE_COLORS[index] }} />{index + 1}类</span><b>{count} 项</b><em>{gradeTotal ? `${(count / gradeTotal * 100).toFixed(1)}%` : "0%"}</em></p>
-                    ))}
-                  </div>
-                </div>
-              </section>
-              <section className="assessment-attention-card">
-                <h3>重点关注 <strong>{attentionCategories.length}</strong> 项</h3>
-                {attentionCategories.length ? attentionCategories.map((category, index) => (
-                  <article key={category.component_type_id}>
-                    <span>{index + 1}</span>
-                    <strong>{categoryLabel(category.component_type_id, category.component_type_name)}</strong>
-                    <GradeChip grade={category.grade} />
-                    <small>分数 {category.score.toFixed(2)}</small>
-                    <small>构件数 {category.components.length}</small>
-                  </article>
-                )) : <p className="assessment-no-attention">暂无 4—5 类重点关注项。</p>}
-              </section>
-            </aside>
-          </div>
-          {result.triggered_controls.length ? <div className="assessment-controls"><h3>单项控制</h3>{result.triggered_controls.map((control) => <p key={control.control_id}>{control.label}（{control.source_reference}）</p>)}</div> : null}
-          <p className="assessment-explanation">{result.explanation}</p>
-        </>
-      ) : phase === "idle" ? (
-        <p>{confirmed ? "本记录没有已入库的评定结果。" : "等待试算。"}</p>
-      ) : null}
-    </section>
+                </Flex>
+              </Card>
+            ) : null}
+            <Typography.Text type="secondary">{result.explanation}</Typography.Text>
+          </>
+        ) : phase === "idle" ? (
+          <Typography.Text type="secondary">{confirmed ? "本记录没有已入库的评定结果。" : "等待试算。"}</Typography.Text>
+        ) : null}
+      </Flex>
+    </Card>
   );
 }

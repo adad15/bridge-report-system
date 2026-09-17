@@ -1,4 +1,4 @@
-import { Button, Tag } from "antd";
+import { Button, Card, Flex, Tag, Typography } from "antd";
 
 import type { TriageBatchSummary, TriageSampleGroup } from "../api/threadTriageApi";
 
@@ -35,50 +35,55 @@ export function TriageBatchCard({
 }: TriageBatchCardProps) {
   const location = batch.defect_location ?? "（无位置）";
   return (
-    <section className="triage-batch-card" aria-label={`批次 ${batch.component_type} ${batch.defect_type}`}>
-      <header className="triage-batch-head">
-        <div>
-          <strong>
+    <Card
+      role="region"
+      aria-label={`批次 ${batch.component_type} ${batch.defect_type}`}
+      title={
+        <Flex vertical gap={2}>
+          <Typography.Text strong>
             {batch.structure_part}｜{batch.component_type} · {batch.defect_type} · {location}
-          </strong>
-          <p className="triage-batch-years">{yearSpan(batch.year_set)}</p>
-        </div>
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontWeight: "normal" }}>{yearSpan(batch.year_set)}</Typography.Text>
+        </Flex>
+      }
+      extra={
         <Tag color={batch.action === "create" ? "blue" : "green"} variant="filled">
           {batch.action === "create" ? "批量新建" : "批量绑定"}
         </Tag>
-      </header>
+      }
+    >
+      <Flex vertical gap={12}>
+        <Flex align="center" gap={16} wrap>
+          <Typography.Text>{batch.group_count} 个构件 · {batch.observation_count} 条观测</Typography.Text>
+          {batch.action === "bind" ? (
+            <Typography.Text type="secondary">将分别绑定到各构件中精确命中的已有线索</Typography.Text>
+          ) : null}
+        </Flex>
 
-      <p className="triage-batch-scale">
-        {batch.group_count} 个构件 · {batch.observation_count} 条观测
-      </p>
+        <Flex gap={8} wrap>
+          {batch.sample_groups.map((group) => (
+            <Tag key={group.group_id} variant="filled">
+              {sampleLabel(group)}
+              <Typography.Text type="secondary"> {group.years.join(" · ")}</Typography.Text>
+            </Tag>
+          ))}
+          {batch.group_count > batch.sample_groups.length ? (
+            <Typography.Text type="secondary">…还有 {batch.group_count - batch.sample_groups.length} 个</Typography.Text>
+          ) : null}
+        </Flex>
 
-      {batch.action === "bind" ? (
-        <p className="triage-batch-bind-note">将分别绑定到各构件中精确命中的已有线索</p>
-      ) : null}
+        {expanded ? children : null}
 
-      <ul className="triage-batch-samples">
-        {batch.sample_groups.map((group) => (
-          <li key={group.group_id}>
-            <span className="triage-sample-code">{sampleLabel(group)}</span>
-            <span className="triage-sample-years">{group.years.join(" · ")}</span>
-          </li>
-        ))}
-        {batch.group_count > batch.sample_groups.length ? (
-          <li className="triage-sample-more">…还有 {batch.group_count - batch.sample_groups.length} 个</li>
-        ) : null}
-      </ul>
-
-      {expanded ? children : null}
-
-      <div className="triage-batch-actions">
-        <Button type="primary" disabled={busy} aria-label={`确认这 ${batch.group_count} 组`} onClick={onConfirm}>
-          确认这 {batch.group_count} 组
-        </Button>
-        <Button disabled={busy} aria-label="展开逐组核对" onClick={onToggleExpand}>
-          {expanded ? "收起" : "展开逐组核对"}
-        </Button>
-        <Button disabled={busy} aria-label="暂不处理" onClick={onSkip}>暂不处理</Button>
-      </div>
-    </section>
+        <Flex gap={8} wrap>
+          <Button type="primary" disabled={busy} aria-label={`确认这 ${batch.group_count} 组`} onClick={onConfirm}>
+            确认这 {batch.group_count} 组
+          </Button>
+          <Button disabled={busy} aria-label="展开逐组核对" onClick={onToggleExpand}>
+            {expanded ? "收起" : "展开逐组核对"}
+          </Button>
+          <Button disabled={busy} aria-label="暂不处理" onClick={onSkip}>暂不处理</Button>
+        </Flex>
+      </Flex>
+    </Card>
   );
 }

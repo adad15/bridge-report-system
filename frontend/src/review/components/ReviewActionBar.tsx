@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { DownOutlined, UpOutlined } from "@ant-design/icons";
+import { Button, Flex, Popover, Typography, theme } from "antd";
+import { CheckCircleOutlined, DownOutlined, UpOutlined, WarningOutlined } from "@ant-design/icons";
 
 import type { PreflightResponse } from "../../api/reviewApi";
 import { formatIssue } from "../preflightIssueText";
@@ -43,99 +44,95 @@ export function ReviewActionBar({
   preflight = null,
   preflightTargetLabels = new Map(),
 }: ReviewActionBarProps) {
+  const { token } = theme.useToken();
   const [preflightExpanded, setPreflightExpanded] = useState(false);
   const preflightIssueCount = preflight
     ? preflight.blocking_errors.length + preflight.warnings.length
     : 0;
+
+  const barStyle = {
+    padding: "10px 16px",
+    borderTop: `1px solid ${token.colorSplit}`,
+    background: token.colorBgContainer,
+  };
+
   if (readOnlyNotice) {
     return (
-      <div className="review-action-bar review-action-bar-readonly">
-        <p>{readOnlyNotice}</p>
-        {onReopenWarnings ? (
-          <button type="button" onClick={onReopenWarnings}>
-            修正警告病害
-          </button>
-        ) : null}
-        {onReopenFull ? (
-          <button type="button" onClick={onReopenFull}>
-            解锁全部修改
-          </button>
-        ) : null}
-        <button type="button" onClick={onBackToBridge}>
-          {backLabel}
-        </button>
-      </div>
+      <Flex align="center" gap={10} wrap style={barStyle}>
+        <Typography.Text type="secondary" style={{ flex: 1, minWidth: 200 }}>{readOnlyNotice}</Typography.Text>
+        {onReopenWarnings ? <Button onClick={onReopenWarnings}>修正警告病害</Button> : null}
+        {onReopenFull ? <Button onClick={onReopenFull}>解锁全部修改</Button> : null}
+        <Button onClick={onBackToBridge}>{backLabel}</Button>
+      </Flex>
     );
   }
 
   return (
-    <div className="review-action-bar">
-      <button type="button" disabled={!onBackToBridge} onClick={onBackToBridge}>
-        {backLabel}
-      </button>
-      <span className="review-action-dirty">{dirty ? "● 有未保存的修改，请先保存草稿再进行入库前检查" : null}</span>
+    <Flex align="center" gap={12} wrap style={barStyle}>
+      <Button disabled={!onBackToBridge} onClick={onBackToBridge}>{backLabel}</Button>
+
+      {dirty ? (
+        <Typography.Text type="warning">● 有未保存的修改，请先保存草稿再进行入库前检查</Typography.Text>
+      ) : null}
+
       {preflight ? (
-        <div className={preflight.can_confirm ? "review-preflight-slot is-pass" : "review-preflight-slot is-block"}>
-          {/* 明细浮在本栏上方，不把操作栏顶高，也不再另起一行。 */}
-          {preflightExpanded && preflightIssueCount > 0 ? (
-            <div className="review-preflight-detail">
-              <ul className="review-warning-list">
-                {preflight.blocking_errors.map((issue, index) => (
-                  <li key={`blocking-${index}`} className="error-text">
-                    {formatIssue(issue, preflightTargetLabels)}
-                  </li>
-                ))}
-                {preflight.warnings.map((issue, index) => (
-                  <li key={`warning-${index}`} className="warning-text">
-                    {formatIssue(issue, preflightTargetLabels)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          <p className="review-preflight-line">
-            <span className="review-preflight-icon" aria-hidden="true">{preflight.can_confirm ? "✓" : "⚠"}</span>
-            <b>
-              {preflight.can_confirm
-                ? "检查通过，可以确认入库。"
-                : `入库前检查：${preflight.blocking_errors.length} 个阻断项 · ${preflight.warnings.length} 个提醒`}
-            </b>
-            {preflightIssueCount > 0 ? (
-              <button
-                type="button"
-                className="review-preflight-toggle"
+        <Flex align="center" gap={6}>
+          <Typography.Text type={preflight.can_confirm ? "success" : "warning"}>
+            {preflight.can_confirm ? <CheckCircleOutlined /> : <WarningOutlined />}
+          </Typography.Text>
+          <Typography.Text strong>
+            {preflight.can_confirm
+              ? "检查通过，可以确认入库。"
+              : `入库前检查：${preflight.blocking_errors.length} 个阻断项 · ${preflight.warnings.length} 个提醒`}
+          </Typography.Text>
+          {preflightIssueCount > 0 ? (
+            /* 明细浮在本栏上方，不把操作栏顶高，也不再另起一行。 */
+            <Popover
+              open={preflightExpanded}
+              placement="top"
+              trigger="click"
+              // 收起后要真的从 DOM 里移掉：留着隐藏的明细，读屏和测试都还会读到它。
+              destroyOnHidden
+              onOpenChange={setPreflightExpanded}
+              content={
+                <Flex vertical gap={4} style={{ maxWidth: 520, maxHeight: 320, overflowY: "auto" }}>
+                  {preflight.blocking_errors.map((issue, index) => (
+                    <Typography.Text key={`blocking-${index}`} type="danger">
+                      {formatIssue(issue, preflightTargetLabels)}
+                    </Typography.Text>
+                  ))}
+                  {preflight.warnings.map((issue, index) => (
+                    <Typography.Text key={`warning-${index}`} type="warning">
+                      {formatIssue(issue, preflightTargetLabels)}
+                    </Typography.Text>
+                  ))}
+                </Flex>
+              }
+            >
+              <Button
+                type="text"
+                size="small"
                 aria-expanded={preflightExpanded}
                 aria-label={preflightExpanded ? "收起入库前检查明细" : "展开入库前检查明细"}
-                onClick={() => setPreflightExpanded((value) => !value)}
-              >
-                {preflightExpanded ? <UpOutlined /> : <DownOutlined />}
-              </button>
-            ) : null}
-          </p>
-        </div>
+                icon={preflightExpanded ? <UpOutlined /> : <DownOutlined />}
+              />
+            </Popover>
+          ) : null}
+        </Flex>
       ) : null}
+
       {/* 取消导入 / 保存草稿 / 入库前检查 / 确认入库是同一组收口动作，成组靠右；
           左边只留「返回」。中间放不下时整组一起换行，不会拆成两截。 */}
-      <div className="review-action-bar-right">
+      <Flex align="center" gap={8} wrap style={{ marginInlineStart: "auto" }}>
         {onAbandonReopen ? (
-          <button type="button" className="review-action-cancel" onClick={onAbandonReopen}>
-            放弃修改
-          </button>
+          <Button danger onClick={onAbandonReopen}>放弃修改</Button>
         ) : (
-          <button type="button" className="review-action-cancel" disabled={!onCancelImport} onClick={onCancelImport}>
-            取消导入
-          </button>
+          <Button danger disabled={!onCancelImport} onClick={onCancelImport}>取消导入</Button>
         )}
-        <button type="button" disabled={!onSaveDraft} onClick={onSaveDraft}>
-          保存草稿
-        </button>
-        <button type="button" disabled={!onPreflight} onClick={onPreflight}>
-          入库前检查
-        </button>
-        <button type="button" className="review-action-primary" disabled={!onConfirmImport} onClick={onConfirmImport}>
-          确认年度事实入库
-        </button>
-      </div>
-    </div>
+        <Button disabled={!onSaveDraft} onClick={onSaveDraft}>保存草稿</Button>
+        <Button disabled={!onPreflight} onClick={onPreflight}>入库前检查</Button>
+        <Button type="primary" disabled={!onConfirmImport} onClick={onConfirmImport}>确认年度事实入库</Button>
+      </Flex>
+    </Flex>
   );
 }

@@ -1,3 +1,5 @@
+import { Badge, Button, Descriptions, Divider, Flex, Popover, Tag, Typography, theme } from "antd";
+import { DownOutlined, UpOutlined } from "@ant-design/icons";
 import { useState, type ReactNode } from "react";
 
 import type { ReviewResponse } from "../../api/reviewApi";
@@ -11,10 +13,10 @@ interface OverviewHeaderProps {
   statusNotice?: ReactNode;
 }
 
-function statusBadgeClass(importStatus: string): string {
-  if (importStatus === "待校对") return "review-status-badge review-status-pending";
-  if (importStatus === "已确认") return "review-status-badge review-status-confirmed";
-  return "review-status-badge review-status-neutral";
+function statusTagColor(importStatus: string): string {
+  if (importStatus === "待校对") return "warning";
+  if (importStatus === "已确认") return "success";
+  return "default";
 }
 
 // 工作台页眉（模块 05 §7.1，布局见 2026-07-12 布局设计 §5）：主行只放桥名/年度/编号/
@@ -22,74 +24,73 @@ function statusBadgeClass(importStatus: string): string {
 // 计数用 counts（来自实时 draft 的 buildStatistics），不用 response.statistics
 // （那是拉取时的快照，编辑后会过期）。
 export function OverviewHeader({ response, draft, counts, statusNotice }: OverviewHeaderProps) {
+  const { token } = theme.useToken();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const { bridge, inspection_year, import_record } = response;
   // 折叠后解析问题不能被埋掉：详情按钮上挂红点计数提醒用户展开查看。
   const issueCount = draft.errors.length + draft.warnings.length;
 
+  const details = (
+    <Flex vertical gap={10} style={{ maxWidth: 560, maxHeight: 360, overflowY: "auto" }}>
+      <Descriptions
+        size="small"
+        column={2}
+        styles={{ label: { whiteSpace: "nowrap" } }}
+        items={[
+          { key: "source", label: "来源类型", children: import_record.source_type },
+          { key: "importer", label: "解析规则", children: import_record.importer_name ?? "-" },
+          { key: "defects", label: "病害候选数量", children: counts.defect_count },
+          { key: "photos", label: "照片候选数量", children: counts.photo_count },
+          { key: "ratings", label: "评分项数量", children: counts.rating_item_count },
+        ]}
+      />
+      {draft.errors.map((item, index) => (
+        <Typography.Text key={`error-${index}`} type="danger">{item.message}</Typography.Text>
+      ))}
+      {draft.warnings.map((item, index) => (
+        <Typography.Text key={`warning-${index}`} type="warning">{item.message}</Typography.Text>
+      ))}
+    </Flex>
+  );
+
   return (
-    <header className="review-header">
-      <div className="review-header-main">
-        <h1>{inspection_year ? `${inspection_year.inspection_year} 年度检测` : "导入资料"} · {import_record.source_type}校对</h1>
-        <span className="review-header-sub">
-          {bridge.bridge_name} · {import_record.system_number}
-        </span>
-        <span className={statusBadgeClass(import_record.import_status)}>{import_record.import_status}</span>
-        <button
-          type="button"
-          className="review-header-details-toggle"
-          aria-expanded={detailsOpen}
-          onClick={() => setDetailsOpen((open) => !open)}
-        >
-          详情 {detailsOpen ? "▴" : "▾"}
-          {issueCount > 0 ? <span className="review-header-issue-dot">{issueCount}</span> : null}
-        </button>
-        {statusNotice ? <div className="review-header-inline-notice">{statusNotice}</div> : null}
-        <span className="review-header-spacer" />
-        <span className="review-chip review-chip-warning">
-          待确认 <b>{counts.pending_count}</b>
-        </span>
-        <span className="review-chip review-chip-success">
-          已确认 <b>{counts.confirmed_count}</b>
-        </span>
-        <span className="review-chip">
-          已忽略 <b>{counts.ignored_count}</b>
-        </span>
-      </div>
-      {detailsOpen ? (
-        <div className="review-header-details">
-          <div className="review-header-details-grid">
-            <span>来源类型</span>
-            <span>{import_record.source_type}</span>
-            <span>解析规则</span>
-            <span>{import_record.importer_name ?? "-"}</span>
-            <span>病害候选数量</span>
-            <span>{counts.defect_count}</span>
-            <span>照片候选数量</span>
-            <span>{counts.photo_count}</span>
-            <span>评分项数量</span>
-            <span>{counts.rating_item_count}</span>
-          </div>
-          {draft.errors.length > 0 ? (
-            <ul className="review-warning-list">
-              {draft.errors.map((item, index) => (
-                <li key={`error-${index}`} className="error-text">
-                  {item.message}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {draft.warnings.length > 0 ? (
-            <ul className="review-warning-list">
-              {draft.warnings.map((item, index) => (
-                <li key={`warning-${index}`} className="warning-text">
-                  {item.message}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
-    </header>
+    <Flex
+      component="header"
+      align="center"
+      gap={12}
+      wrap
+      style={{ padding: "10px 16px", borderBottom: `1px solid ${token.colorSplit}` }}
+    >
+      <Typography.Title level={5} style={{ margin: 0 }}>
+        {inspection_year ? `${inspection_year.inspection_year} 年度检测` : "导入资料"} · {import_record.source_type}校对
+      </Typography.Title>
+      <Typography.Text type="secondary">{bridge.bridge_name} · {import_record.system_number}</Typography.Text>
+      <Tag color={statusTagColor(import_record.import_status)} variant="filled">{import_record.import_status}</Tag>
+
+      <Popover
+        open={detailsOpen}
+        placement="bottomLeft"
+        trigger="click"
+        destroyOnHidden
+        content={details}
+        onOpenChange={setDetailsOpen}
+      >
+        <Badge count={issueCount} size="small">
+          <Button type="text" size="small" aria-expanded={detailsOpen}>
+            详情 {detailsOpen ? <UpOutlined /> : <DownOutlined />}
+          </Button>
+        </Badge>
+      </Popover>
+
+      {statusNotice}
+
+      <Flex align="center" gap={10} style={{ marginInlineStart: "auto" }} wrap>
+        <Typography.Text type="secondary">待确认 <Typography.Text strong type="warning">{counts.pending_count}</Typography.Text></Typography.Text>
+        <Divider orientation="vertical" style={{ margin: 0 }} />
+        <Typography.Text type="secondary">已确认 <Typography.Text strong type="success">{counts.confirmed_count}</Typography.Text></Typography.Text>
+        <Divider orientation="vertical" style={{ margin: 0 }} />
+        <Typography.Text type="secondary">已忽略 <Typography.Text strong>{counts.ignored_count}</Typography.Text></Typography.Text>
+      </Flex>
+    </Flex>
   );
 }

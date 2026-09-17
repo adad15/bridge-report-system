@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "../api/apiClient";
+import { chooseOption } from "../test/antd";
 import {
   applyTriageBatch,
   fetchTriageBatchDetail,
@@ -604,7 +605,7 @@ describe("ThreadTriagePage 异常簇", () => {
     expect(await screen.findByText("BHXS-000700")).toBeInTheDocument();
     expect(screen.getByText("BHXS-000800")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("目标线索"), { target: { value: "t-b" } });
+    await chooseOption(screen.getByLabelText("目标线索"), /BHXS-000800/);
     fireEvent.click(screen.getByRole("button", { name: "绑定到该线索" }));
 
     await waitFor(() => expect(mockedResolve).toHaveBeenCalledTimes(1));

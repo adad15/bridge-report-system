@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pagination } from "antd";
+import { Alert, Button, Card, Checkbox, Empty, Flex, Input, Pagination, Progress, Result, Select, Table, Tag, Typography } from "antd";
 import {
   applyComponentResolution,
   applyResolutionPlan,
@@ -36,7 +36,6 @@ import { BulkReplaceDialog } from "./BulkReplaceDialog";
 import { ComponentRangeSplitDialog } from "./ComponentRangeSplitDialog";
 import { ApiError } from "../../api/apiClient";
 import { backendBaseUrl } from "../../config";
-import "./ComponentBindingRatingTree.css";
 
 const MAX_SEARCH_RESULTS = 20;
 const DEFAULT_PAGE_SIZE = 20;
@@ -46,6 +45,14 @@ const STATUS_LABELS: Record<string, string> = {
   unmatched: "未匹配",
   ambiguous: "歧义",
   missing: "已标记缺失",
+};
+
+/* 状态色：已绑定绿、未匹配琥珀、歧义蓝、缺失灰。 */
+const STATUS_TAG_COLORS: Record<string, string> = {
+  bound: "success",
+  unmatched: "warning",
+  ambiguous: "processing",
+  missing: "default",
 };
 
 type BindingFilter = "pending" | "bound" | "missing" | "all";
@@ -105,7 +112,6 @@ function GroupSplitSelector({
   busy: boolean;
   onChange: (checked: boolean) => void;
 }) {
-  const checkbox = useRef<HTMLInputElement>(null);
   const selectedCount = eligibleRows.filter((row) =>
     selection.has(splitTargetKey(partName, row.component_number))
   ).length;
@@ -117,27 +123,19 @@ function GroupSplitSelector({
     0
   );
 
-  useEffect(() => {
-    if (checkbox.current) {
-      checkbox.current.indeterminate = selectedCount > 0 && !allSelected;
-    }
-  }, [selectedCount, allSelected]);
-
   return (
-    <label className="binding-group-split-select">
-      <input
-        ref={checkbox}
-        type="checkbox"
-        aria-label={`全选 ${partName} 待拆分构件`}
-        checked={allSelected}
-        disabled={busy}
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      <span>{allSelected ? "取消全选" : "全选待拆分"} {eligibleRows.length}</span>
+    <Checkbox
+      aria-label={`全选 ${partName} 待拆分构件`}
+      checked={allSelected}
+      indeterminate={selectedCount > 0 && !allSelected}
+      disabled={busy}
+      onChange={(event) => onChange(event.target.checked)}
+    >
+      {allSelected ? "取消全选" : "全选待拆分"} {eligibleRows.length}
       {projectedDefects > 0 ? (
-        <span className="binding-split-projection">约 {projectedDefects} 条</span>
+        <Typography.Text type="secondary"> 约 {projectedDefects} 条</Typography.Text>
       ) : null}
-    </label>
+    </Checkbox>
   );
 }
 
@@ -229,27 +227,27 @@ function RowAction(
     // "已绑定"徽标已经说明状态。只有绑到了别的编号（人工改绑）才值得标出来。
     const rebound = bound && bound.component_number !== row.component_number;
     return (
-      <div className="binding-row-action">
+      <Flex align="center" gap={8} wrap>
         {rebound ? (
-          <span className="binding-bound-target">
+          <Typography.Text type="secondary">
             → {bound.component_number} / {bound.site_component_type}
-          </span>
+          </Typography.Text>
         ) : null}
-        {!bound ? <span className="binding-bound-target">已绑定构件</span> : null}
-        <button type="button" disabled={busy} aria-label={`取消绑定 ${row.component_number}`} onClick={onClear}>
+        {!bound ? <Typography.Text type="secondary">已绑定构件</Typography.Text> : null}
+        <Button size="small" disabled={busy} aria-label={`取消绑定 ${row.component_number}`} onClick={onClear}>
           取消绑定
-        </button>
-      </div>
+        </Button>
+      </Flex>
     );
   }
   if (row.status === "missing") {
     return (
-      <div className="binding-row-action">
-        <span className="binding-missing-note">台账确无此构件</span>
-        <button type="button" disabled={busy} aria-label={`取消标记 ${row.component_number}`} onClick={onClear}>
+      <Flex align="center" gap={8} wrap>
+        <Typography.Text type="secondary">台账确无此构件</Typography.Text>
+        <Button size="small" disabled={busy} aria-label={`取消标记 ${row.component_number}`} onClick={onClear}>
           取消标记
-        </button>
-      </div>
+        </Button>
+      </Flex>
     );
   }
 
@@ -265,13 +263,13 @@ function RowAction(
   }
 
   return (
-    <div className="binding-row-action">
-      <select
+    <Flex align="center" gap={8} wrap>
+      <Select
         aria-label={`为 ${row.component_number} 选择实际构件`}
+        style={{ minWidth: 260 }}
         value=""
         disabled={busy}
-        onChange={(event) => {
-          const value = event.target.value;
+        onChange={(value: string) => {
           if (!value) return;
           if (value === SIDE_PAIR_VALUE) {
             // 哨兵值不是构件 id，必须在这里分流；漏了就会把 "__side_pair__"
@@ -282,35 +280,36 @@ function RowAction(
           }
           onBind(value);
         }}
-      >
-        <option value="">
-          {term && options.size === 0 ? "没有匹配的构件" : "请选择实际构件（可先搜索）"}
-        </option>
-        {/* "两侧"排在候选之上：报告写"两侧护栏"时，逐个绑左右两件才是对的做法，
-            单选任一侧都会让另一侧留在满分。 */}
-        {row.side_pair_option ? (
-          <option value={SIDE_PAIR_VALUE}>{row.side_pair_option.label}</option>
-        ) : null}
-        {[...options.values()].map((option) => (
-          <option key={option.bridgeComponentId} value={option.bridgeComponentId}>
-            {option.candidate ? "候选 · " : ""}
-            {option.componentNumber} / {option.siteComponentType} / {option.siteName}
-          </option>
-        ))}
-      </select>
-      <input
+        options={[
+          {
+            value: "",
+            label: term && options.size === 0 ? "没有匹配的构件" : "请选择实际构件（可先搜索）",
+          },
+          /* "两侧"排在候选之上：报告写"两侧护栏"时，逐个绑左右两件才是对的做法，
+             单选任一侧都会让另一侧留在满分。 */
+          ...(row.side_pair_option
+            ? [{ value: SIDE_PAIR_VALUE, label: row.side_pair_option.label }]
+            : []),
+          ...[...options.values()].map((option) => ({
+            value: option.bridgeComponentId,
+            label: `${option.candidate ? "候选 · " : ""}${option.componentNumber} / ${option.siteComponentType} / ${option.siteName}`,
+          })),
+        ]}
+      />
+      <Input
         aria-label={`搜索实际构件 ${row.component_number}`}
         placeholder="编号、类别或现场名"
+        style={{ width: 180 }}
         value={search}
         disabled={busy}
         onChange={(event) => setSearch(event.target.value)}
       />
       {/* 搜索失败只报在行内，概览带来的候选项照常可用。 */}
-      {searchError ? <span className="binding-row-error">{searchError}</span> : null}
-      <button type="button" disabled={busy} aria-label={`标记缺失 ${row.component_number}`} onClick={onMarkMissing}>
+      {searchError ? <Typography.Text type="danger">{searchError}</Typography.Text> : null}
+      <Button size="small" disabled={busy} aria-label={`标记缺失 ${row.component_number}`} onClick={onMarkMissing}>
         标记缺失
-      </button>
-    </div>
+      </Button>
+    </Flex>
   );
 }
 
@@ -696,19 +695,19 @@ export function ComponentBindingWorkspace({
      原来在这里打一行后端拒绝原文的红字，既像出了故障，也没说清还能去哪儿看。 */
   if (!bindingAvailable) {
     return (
-      <div className="binding-unavailable">
-        <h3>构件绑定已完成</h3>
-        <p>
-          这条导入记录状态为「{importStatus}」，构件绑定只在校对阶段开放。
-          绑定结果仍可在「病害与照片」里逐条查看，评定结论见「系统技术状况评定」。
-        </p>
-      </div>
+      <Card>
+        <Result
+          status="success"
+          title="构件绑定已完成"
+          subTitle={`这条导入记录状态为「${importStatus}」，构件绑定只在校对阶段开放。绑定结果仍可在「病害与照片」里逐条查看，评定结论见「系统技术状况评定」。`}
+        />
+      </Card>
     );
   }
 
-  if (loading) return <p>正在加载构件绑定…</p>;
-  if (error && !overview) return <p className="error-text" role="alert">{error}</p>;
-  if (!overview) return <p>没有可绑定的病害。</p>;
+  if (loading) return <Card loading />;
+  if (error && !overview) return <Alert type="error" showIcon role="alert" title={error} />;
+  if (!overview) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有可绑定的病害。" />;
   const allResolved = progress.total > 0 && progress.settled === progress.total;
   const progressPercent = progress.total > 0
     ? Math.round((progress.settled / progress.total) * 100)
@@ -721,103 +720,92 @@ export function ComponentBindingWorkspace({
   }
 
   return (
-    <section className="component-binding-workspace" aria-labelledby="component-binding-title">
-      <div className="binding-rating-tree" aria-label="年度评定树绑定">
-        <div className="binding-rating-tree-current">
-          <span>年度评定树</span>
-          <strong>
-            {overview.rating_tree
-              ? `${overview.rating_tree.tree_name} ${overview.rating_tree.package_version}`
-              : "尚未绑定"}
-          </strong>
-          {overview.rating_tree ? (
-            <small>
-              H21 {overview.rating_tree.h21_package_version}
-              {" · "}
-              JTG 5120 {overview.rating_tree.maintenance_package_version}
-            </small>
-          ) : (
-            <small>绑定后，病害匹配与系统评定将统一使用该版本。</small>
-          )}
-        </div>
-        <label>
-          <span>选择已发布版本</span>
-          <select
-            aria-label="选择年度评定树"
-            value={selectedRatingTreeId}
-            disabled={writeDisabled || ratingTrees.length === 0}
-            onChange={(event) => {
-              setSelectedRatingTreeId(event.target.value);
-              setRatingTreeMessage(null);
-              setRatingTreeError(null);
-            }}
-          >
-            <option value="">
-              {ratingTrees.length === 0 ? "暂无可用评定树" : "请选择评定树"}
-            </option>
-            {ratingTrees.map((tree) => (
-              <option key={tree.id} value={tree.id}>
-                {tree.tree_name} {tree.package_version}
-                {tree.h21_package_version
-                  ? ` · H21 ${tree.h21_package_version}`
-                  : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          className="binding-rating-tree-action"
-          disabled={
-            writeDisabled ||
-            !selectedRatingTreeId ||
-            selectedRatingTreeId === overview.rating_tree?.version_id
-          }
-          onClick={() => void handleBindRatingTree()}
-        >
-          {overview.rating_tree ? "切换评定树" : "绑定评定树"}
-        </button>
-      </div>
-      {ratingTreeMessage ? (
-        <p className="binding-rating-tree-success" role="status">
-          {ratingTreeMessage}
-        </p>
-      ) : null}
-      {ratingTreeError ? (
-        <p className="error-text" role="alert">{ratingTreeError}</p>
-      ) : null}
-      <div className="binding-work-card">
-        <div className="binding-heading">
-          <div className="binding-heading-title">
-            <div className="binding-title-line">
-              <h3 id="component-binding-title">构件绑定</h3>
-              <span className={canEdit ? "binding-edit-state is-editing" : "binding-edit-state"}>
-                {canEdit ? "编辑中" : "只读"}
-              </span>
-              <span className="binding-inventory-state">
+    <Flex vertical gap={14}>
+      <Card size="small" aria-label="年度评定树绑定">
+        <Flex align="flex-end" justify="space-between" gap={16} wrap>
+          <Flex vertical gap={2}>
+            <Typography.Text type="secondary">年度评定树</Typography.Text>
+            <Typography.Text strong>
+              {overview.rating_tree
+                ? `${overview.rating_tree.tree_name} ${overview.rating_tree.package_version}`
+                : "尚未绑定"}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              {overview.rating_tree
+                ? `H21 ${overview.rating_tree.h21_package_version} · JTG 5120 ${overview.rating_tree.maintenance_package_version}`
+                : "绑定后，病害匹配与系统评定将统一使用该版本。"}
+            </Typography.Text>
+          </Flex>
+          <Flex align="flex-end" gap={8} wrap>
+            <Flex vertical gap={4}>
+              <Typography.Text type="secondary">选择已发布版本</Typography.Text>
+              <Select
+                aria-label="选择年度评定树"
+                style={{ minWidth: 280 }}
+                value={selectedRatingTreeId}
+                disabled={writeDisabled || ratingTrees.length === 0}
+                onChange={(value: string) => {
+                  setSelectedRatingTreeId(value);
+                  setRatingTreeMessage(null);
+                  setRatingTreeError(null);
+                }}
+                options={[
+                  { value: "", label: ratingTrees.length === 0 ? "暂无可用评定树" : "请选择评定树" },
+                  ...ratingTrees.map((tree) => ({
+                    value: tree.id,
+                    label: `${tree.tree_name} ${tree.package_version}${tree.h21_package_version ? ` · H21 ${tree.h21_package_version}` : ""}`,
+                  })),
+                ]}
+              />
+            </Flex>
+            <Button
+              type="primary"
+              disabled={
+                writeDisabled ||
+                !selectedRatingTreeId ||
+                selectedRatingTreeId === overview.rating_tree?.version_id
+              }
+              onClick={() => void handleBindRatingTree()}
+            >
+              {overview.rating_tree ? "切换评定树" : "绑定评定树"}
+            </Button>
+          </Flex>
+        </Flex>
+      </Card>
+      {ratingTreeMessage ? <Alert type="success" showIcon role="status" title={ratingTreeMessage} /> : null}
+      {ratingTreeError ? <Alert type="error" showIcon role="alert" title={ratingTreeError} /> : null}
+      <Card styles={{ body: { display: "flex", flexDirection: "column", gap: 14 } }}>
+        <Flex align="flex-start" justify="space-between" gap={16} wrap>
+          <Flex vertical gap={8} style={{ minWidth: 260 }}>
+            <Flex align="center" gap={10} wrap>
+              <Typography.Title level={5} id="component-binding-title" style={{ margin: 0 }}>构件绑定</Typography.Title>
+              <Tag color={canEdit ? "processing" : "default"} variant="filled">{canEdit ? "编辑中" : "只读"}</Tag>
+              <Typography.Text type="secondary">
                 台账版本 · {overview.inventory_confirmed ? "已确认" : "未确认"}
-              </span>
-            </div>
-            <div className="binding-progress" aria-label={`已处理 ${progress.settled} / ${progress.total}`}>
-              <span>已处理 {progress.settled} / {progress.total}</span>
-              <span className="binding-progress-track" aria-hidden="true">
-                <i style={{ width: `${progressPercent}%` }} />
-              </span>
-              <strong>{progressPercent}%</strong>
-            </div>
-          </div>
-          <div className="binding-heading-tools">
-            <div className="binding-filters" role="group" aria-label="按状态筛选">
+              </Typography.Text>
+            </Flex>
+            <Flex align="center" gap={10} aria-label={`已处理 ${progress.settled} / ${progress.total}`}>
+              <Typography.Text type="secondary">已处理 {progress.settled} / {progress.total}</Typography.Text>
+              <Progress
+                percent={progressPercent}
+                showInfo={false}
+                size={{ height: 8 }}
+                style={{ flex: 1, minWidth: 120, margin: 0 }}
+              />
+              <Typography.Text strong>{progressPercent}%</Typography.Text>
+            </Flex>
+          </Flex>
+          <Flex align="center" gap={10} wrap>
+            <Flex gap={6} role="group" aria-label="按状态筛选" wrap>
               {([
                 ["pending", "待处理", counts.pending],
                 ["bound", "已绑定", counts.bound],
                 ["missing", "已标记缺失", counts.missing],
                 ["all", "全部", counts.total],
               ] as const).map(([key, label, count]) => (
-                <button
+                <Button
                   key={key}
-                  type="button"
-                  className={filter === key ? "binding-filter active" : "binding-filter"}
+                  type={filter === key ? "primary" : "default"}
                   aria-label={`${label} ${count}`}
                   aria-pressed={filter === key}
                   onClick={() => {
@@ -826,76 +814,75 @@ export function ComponentBindingWorkspace({
                     if (key !== "pending" && key !== "all") setSplitSelection(new Map());
                   }}
                 >
-                  <span>{label}</span>
-                  <strong>{count}</strong>
-                </button>
+                  {label} {count}
+                </Button>
               ))}
-            </div>
+            </Flex>
             {splitEligibleCount > 0 ? (
-              <button
-                type="button"
-                className="binding-split-selected"
+              <Button
                 disabled={writeDisabled || splitSelection.size === 0}
                 title={splitSelection.size === 0 ? "先勾选待拆分的构件行" : undefined}
                 onClick={openSelectedSplitPreview}
               >
                 拆分构件
-                {splitSelection.size > 0 ? (
-                  <span className="binding-split-count">{splitSelection.size}</span>
-                ) : null}
-                {splitProjection > 0 ? (
-                  <span className="binding-split-projection">约 {splitProjection} 条</span>
-                ) : null}
-              </button>
+                {splitSelection.size > 0 ? ` ${splitSelection.size}` : ""}
+                {splitProjection > 0 ? ` · 约 ${splitProjection} 条` : ""}
+              </Button>
             ) : null}
-          </div>
-        </div>
+          </Flex>
+        </Flex>
         {splitEligibleCount > 0 ? (
-          <p className="binding-split-guidance">
+          <Typography.Text type="secondary">
             区间拆分会增加解析实例并重新计算评分；照片需要在拆分后人工核对归属。
-          </p>
+          </Typography.Text>
         ) : null}
-      {error ? <p className="error-text" role="alert">{error}</p> : null}
+      {error ? <Alert type="error" showIcon role="alert" title={error} /> : null}
       {/* 控件已经按 canEdit 全部禁用了，但灰掉不解释等于让人猜。 */}
       {!canEdit ? (
-        <p className="warning-text">
-          当前页面没有编辑权，绑定与拆分均不可用；取得编辑权后即可操作。
-        </p>
+        <Alert type="warning" showIcon role="note" title="当前页面没有编辑权，绑定与拆分均不可用；取得编辑权后即可操作。" />
       ) : null}
       {!overview.inventory_confirmed ? (
-        <p className="error-text" role="alert">
-          该桥构件台账尚未确认，请先建立并确认台账后再进行构件绑定。
-        </p>
+        <Alert type="error" showIcon role="alert" title="该桥构件台账尚未确认，请先建立并确认台账后再进行构件绑定。" />
       ) : null}
       {overview.inventory_confirmed ? (
         <>
-      {overview.groups.length === 0 ? <p>本次导入没有需要绑定的病害。</p> : null}
+      {overview.groups.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本次导入没有需要绑定的病害。" />
+      ) : null}
       {overview.groups.length > 0 && visibleGroups.length === 0 ? (
         // "全部处理完毕"只在待处理筛选下成立；其余筛选为空只是该状态没有行。
         filter === "pending" ? (
-          <div className="binding-all-done">
-            <span className="binding-all-done-mark" aria-hidden="true">✓</span>
-            <div>
-              <strong>全部构件已处理完毕。</strong>
-              <p>{counts.bound} 个已绑定，{counts.missing} 个已标记缺失，可进入下一分区继续校对。</p>
-            </div>
-            <button type="button" onClick={() => { setFilter("all"); setPage(1); }}>
-              查看全部 {counts.total}
-            </button>
-          </div>
-        ) : <p className="empty-hint">该状态下没有构件。</p>
+          <Alert
+            type="success"
+            showIcon
+            role="status"
+            title="全部构件已处理完毕。"
+            description={`${counts.bound} 个已绑定，${counts.missing} 个已标记缺失，可进入下一分区继续校对。`}
+            action={
+              <Button size="small" onClick={() => { setFilter("all"); setPage(1); }}>
+                查看全部 {counts.total}
+              </Button>
+            }
+          />
+        ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="该状态下没有构件。" />
       ) : null}
       {pagedGroups.map((group) => (
-        <div className="binding-group" key={group.part_name}>
-          <div className="binding-group-heading">
-            <strong>{group.part_name}</strong>
-            <span className="binding-group-counts">
-              共 {group.total}
-              {group.unmatched > 0 ? ` · 未匹配 ${group.unmatched}` : ""}
-              {group.ambiguous > 0 ? ` · 歧义 ${group.ambiguous}` : ""}
-              {group.missing > 0 ? ` · 缺失 ${group.missing}` : ""}
-            </span>
-            <div className="binding-group-actions">
+        <Card
+          size="small"
+          key={group.part_name}
+          title={
+            <Flex align="center" gap={10} wrap>
+              <Typography.Text strong>{group.part_name}</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontWeight: "normal" }}>
+                共 {group.total}
+                {group.unmatched > 0 ? ` · 未匹配 ${group.unmatched}` : ""}
+                {group.ambiguous > 0 ? ` · 歧义 ${group.ambiguous}` : ""}
+                {group.missing > 0 ? ` · 缺失 ${group.missing}` : ""}
+              </Typography.Text>
+            </Flex>
+          }
+          extra={
+            <Flex align="center" gap={10} wrap>
               {group.rows.some((row) => row.split_eligible) ? (
                 <GroupSplitSelector
                   partName={group.part_name}
@@ -925,74 +912,101 @@ export function ComponentBindingWorkspace({
               ) : null}
               {/* 写法差异按部件成规律，故批量替换逐组进行；无待处理行时无从替换。 */}
               {group.unmatched + group.ambiguous > 0 ? (
-                <button
-                  type="button"
-                  className="binding-bulk-replace"
+                <Button
+                  size="small"
                   disabled={writeDisabled}
                   onClick={() => { setReplaceError(null); setReplaceGroup(group.part_name); }}
                 >
                   批量替换
-                </button>
+                </Button>
               ) : null}
-            </div>
-          </div>
-          <div className="binding-table-head" aria-hidden="true">
-            <span />
-            <span>报告构件</span>
-            <span>引用病害</span>
-            <span>状态</span>
-            <span>候选与实际构件 / 操作</span>
-          </div>
-          {group.rows.map((row) => (
-            <div className={`binding-row binding-row-${row.status}`} key={row.component_number}>
-              {row.split_eligible ? (
-                <input
-                  type="checkbox"
-                  className="binding-row-split-checkbox"
-                  aria-label={`选择拆分 ${row.component_number}`}
-                  checked={splitSelection.has(splitTargetKey(group.part_name, row.component_number))}
-                  disabled={writeDisabled}
-                  onChange={(event) => {
-                    const key = splitTargetKey(group.part_name, row.component_number);
-                    setSplitSelection((current) => {
-                      const next = new Map(current);
-                      if (event.target.checked) {
-                        next.set(key, {
-                          group_id: row.group_id,
-                          part_name: group.part_name,
-                          component_number: row.component_number,
-                        });
-                      } else next.delete(key);
-                      return next;
-                    });
-                  }}
-                />
-              ) : <span className="binding-row-split-placeholder" aria-hidden="true" />}
-              <span className="binding-row-number">
-                {row.component_number}
-                {row.split_eligible && row.split_expanded_count ? (
-                  <small>可展开到 {row.split_expanded_count} 件</small>
-                ) : null}
-              </span>
-              <span className="binding-row-refs">引用 {row.defect_count} 条</span>
-              <span className={`binding-status binding-status-${row.status}`}>
-                {STATUS_LABELS[row.status] ?? row.status}
-              </span>
-              <RowAction
-                row={row}
-                revisionId={requireRevisionId(overview)}
-                busy={writeDisabled}
-                onBind={(id) => run(() => resolveGroup(row, "bind", [id]))}
-                onBindMulti={(ids) => run(() => resolveGroup(row, "bind", ids))}
-                onMarkMissing={() => run(() => resolveGroup(row, "mark_missing"))}
-                onClear={() => run(() => resolveGroup(row, "clear"))}
-              />
-            </div>
-          ))}
-        </div>
+            </Flex>
+          }
+        >
+          <Table<BindingRow>
+            rowKey="component_number"
+            size="small"
+            pagination={false}
+            scroll={{ x: 900 }}
+            dataSource={group.rows}
+            columns={[
+              {
+                title: "",
+                key: "split",
+                width: 46,
+                align: "center",
+                render: (_value: unknown, row: BindingRow) => (row.split_eligible ? (
+                  <Checkbox
+                    aria-label={`选择拆分 ${row.component_number}`}
+                    checked={splitSelection.has(splitTargetKey(group.part_name, row.component_number))}
+                    disabled={writeDisabled}
+                    onChange={(event) => {
+                      const key = splitTargetKey(group.part_name, row.component_number);
+                      setSplitSelection((current) => {
+                        const next = new Map(current);
+                        if (event.target.checked) {
+                          next.set(key, {
+                            group_id: row.group_id,
+                            part_name: group.part_name,
+                            component_number: row.component_number,
+                          });
+                        } else next.delete(key);
+                        return next;
+                      });
+                    }}
+                  />
+                ) : null),
+              },
+              {
+                title: "报告构件",
+                key: "number",
+                width: 190,
+                render: (_value: unknown, row: BindingRow) => (
+                  <Flex vertical>
+                    <Typography.Text strong>{row.component_number}</Typography.Text>
+                    {row.split_eligible && row.split_expanded_count ? (
+                      <Typography.Text type="secondary">可展开到 {row.split_expanded_count} 件</Typography.Text>
+                    ) : null}
+                  </Flex>
+                ),
+              },
+              {
+                title: "引用病害",
+                key: "refs",
+                width: 110,
+                render: (_value: unknown, row: BindingRow) => `引用 ${row.defect_count} 条`,
+              },
+              {
+                title: "状态",
+                key: "status",
+                width: 110,
+                render: (_value: unknown, row: BindingRow) => (
+                  <Tag color={STATUS_TAG_COLORS[row.status] ?? "default"} variant="filled">
+                    {STATUS_LABELS[row.status] ?? row.status}
+                  </Tag>
+                ),
+              },
+              {
+                title: "候选与实际构件 / 操作",
+                key: "action",
+                render: (_value: unknown, row: BindingRow) => (
+                  <RowAction
+                    row={row}
+                    revisionId={requireRevisionId(overview)}
+                    busy={writeDisabled}
+                    onBind={(id) => run(() => resolveGroup(row, "bind", [id]))}
+                    onBindMulti={(ids) => run(() => resolveGroup(row, "bind", ids))}
+                    onMarkMissing={() => run(() => resolveGroup(row, "mark_missing"))}
+                    onClear={() => run(() => resolveGroup(row, "clear"))}
+                  />
+                ),
+              },
+            ]}
+          />
+        </Card>
       ))}
       {visibleRowTotal > 0 ? (
-        <footer className="binding-pagination">
+        <Flex justify="end">
           <Pagination
             align="end"
             current={page}
@@ -1009,22 +1023,20 @@ export function ComponentBindingWorkspace({
               setPageSize(nextPageSize);
             }}
           />
-        </footer>
+        </Flex>
       ) : null}
       {splitSelection.size > 0 ? (
-        <div className="binding-selection-bar" role="status">
-          <span>
-            已选择 <strong>{splitSelection.size}</strong> 个范围
-            {splitProjection > 0 ? ` · 预计生成约 ${splitProjection} 条解析实例` : ""}
-          </span>
-          <button
-            type="button"
-            disabled={writeDisabled}
-            onClick={openSelectedSplitPreview}
-          >
-            预览拆分影响
-          </button>
-        </div>
+        <Alert
+          type="info"
+          showIcon
+          role="status"
+          title={`已选择 ${splitSelection.size} 个范围${splitProjection > 0 ? ` · 预计生成约 ${splitProjection} 条解析实例` : ""}`}
+          action={
+            <Button size="small" disabled={writeDisabled} onClick={openSelectedSplitPreview}>
+              预览拆分影响
+            </Button>
+          }
+        />
       ) : null}
       {replaceGroup !== null ? (
         <BulkReplaceDialog
@@ -1125,23 +1137,20 @@ export function ComponentBindingWorkspace({
       {/* 这两个按钮都是"离开绑定、去校对"。作为校对页的一个分区嵌入时不传回调，
           此时不渲染页脚，否则会留下两个点了没反应的死按钮。 */}
       {onEnterReview ? (
-        <div className="binding-footer">
-          <button
-            type="button"
-            className="binding-enter-review"
+        <Flex gap={8} wrap>
+          <Button
+            type="primary"
             disabled={busy || !allResolved}
             onClick={() => onEnterReview()}
           >
             {allResolved ? "全部绑定完成，进入校对" : "仍有未处理构件"}
-          </button>
-          <button type="button" className="binding-later" disabled={busy} onClick={() => onEnterReview()}>
-            稍后再绑
-          </button>
-        </div>
+          </Button>
+          <Button disabled={busy} onClick={() => onEnterReview()}>稍后再绑</Button>
+        </Flex>
       ) : null}
         </>
       ) : null}
-      </div>
-    </section>
+      </Card>
+    </Flex>
   );
 }

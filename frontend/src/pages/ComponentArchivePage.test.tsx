@@ -123,7 +123,7 @@ describe("ComponentArchivePage", () => {
   it("never asks for per-observation thread candidates", async () => {
     renderPage();
 
-    await screen.findByRole("heading", { name: "1#铰缝", level: 2 });
+    await screen.findByRole("heading", { name: "1#铰缝", level: 4 });
     expect(mockedSuggestions).not.toHaveBeenCalled();
   });
   // 导入属于年度检测、台账是另一条业务线，都不该由这个页面发起。
@@ -147,6 +147,6 @@ describe("ComponentArchivePage", () => {
     expect(pick).toHaveTextContent("82.5");
     fireEvent.click(pick);
 
-    expect(await screen.findByRole("heading", { name: "1#铰缝", level: 2 })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "1#铰缝", level: 4 })).toBeInTheDocument();
   });
 });

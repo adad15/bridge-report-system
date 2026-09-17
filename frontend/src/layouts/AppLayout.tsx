@@ -32,7 +32,7 @@ import { useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
-import { BridgeMark, useMediaQuery } from "../design-system";
+import { BridgeMark, useMediaQuery, useShellMetrics } from "../design-system";
 import { StatusTag } from "../workspace/StatusTag";
 import { HeaderBridgeContext, type HeaderBridge } from "./HeaderBridgeContext";
 
@@ -42,12 +42,9 @@ interface AppLayoutProps {
 }
 
 /*
- * 外壳的几个结构尺寸。页面里有几处按视口高度留位置（总览卡片、校对工作台），
- * 都是按 68px 的顶栏算的，改这里要一起核对。
+ * 外壳的结构尺寸都在 design-system/density.ts：它按视口分宽松 / 紧凑两档，
+ * 页面里那些"吃满一屏"的高度公式减的也是同一份（pageOffset）。
  */
-const HEADER_HEIGHT = 68;
-const SIDER_WIDTH = 248;
-const SIDER_COLLAPSED_WIDTH = 76;
 
 const navigation = [
   { to: "/workbench", label: "工作台", icon: <DashboardOutlined /> },
@@ -97,6 +94,8 @@ export function AppLayout({ children, reviewWorkspace = false }: AppLayoutProps)
   const location = useLocation();
   const navigate = useNavigate();
   const { token } = theme.useToken();
+  // 宽松 / 紧凑两档的结构尺寸：顶栏高度、侧栏宽度、内容区留白。
+  const shell = useShellMetrics();
   const screens = Grid.useBreakpoint();
   const isAdmin = user?.role === "admin";
   const isWorkbench = location.pathname === "/workbench";
@@ -112,7 +111,7 @@ export function AppLayout({ children, reviewWorkspace = false }: AppLayoutProps)
   // 窄屏一律收起侧栏，也不给展开按钮；useBreakpoint 首次渲染前是空对象，按宽屏处理。
   const narrow = screens.lg === false;
   const collapsed = narrow || collapsedByUser;
-  const siderWidth = collapsed ? SIDER_COLLAPSED_WIDTH : SIDER_WIDTH;
+  const siderWidth = collapsed ? shell.siderCollapsedWidth : shell.siderWidth;
   // 校对工作台是应用式页面：整屏不滚，只有它自己的面板滚。屏幕窄到放不下时退回整页滚动。
   const reviewScrollsWithPage = useMediaQuery("(max-width: 1100px)");
   const fixedHeight = reviewWorkspace && !reviewScrollsWithPage;
@@ -256,15 +255,15 @@ export function AppLayout({ children, reviewWorkspace = false }: AppLayoutProps)
       <Layout hasSider>
         <Layout.Sider
           theme="light"
-          width={SIDER_WIDTH}
-          collapsedWidth={SIDER_COLLAPSED_WIDTH}
+          width={shell.siderWidth}
+          collapsedWidth={shell.siderCollapsedWidth}
           collapsed={collapsed}
           trigger={null}
           aria-label="主导航"
           style={{
             position: "sticky",
-            top: HEADER_HEIGHT,
-            height: `calc(100dvh - ${HEADER_HEIGHT}px)`,
+            top: shell.headerHeight,
+            height: `calc(100dvh - ${shell.headerHeight}px)`,
             borderRight: `1px solid ${token.colorBorderSecondary}`,
           }}
         >
@@ -305,7 +304,12 @@ export function AppLayout({ children, reviewWorkspace = false }: AppLayoutProps)
           style={
             reviewWorkspace
               ? { minWidth: 0, minHeight: 0, overflow: fixedHeight ? "hidden" : "auto" }
-              : { minWidth: 0, padding: screens.sm === false ? "22px 16px 32px" : "30px clamp(24px, 3vw, 52px) 44px" }
+              : {
+                minWidth: 0,
+                padding: screens.sm === false
+                  ? "22px 16px 32px"
+                  : `${shell.contentPaddingBlock[0]}px ${shell.contentPaddingInline} ${shell.contentPaddingBlock[1]}px`,
+              }
           }
         >
           <div style={reviewWorkspace ? { height: "100%" } : { width: "min(1480px, 100%)", minHeight: "100%", margin: "0 auto" }}>

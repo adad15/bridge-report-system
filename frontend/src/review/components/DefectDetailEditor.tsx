@@ -1,4 +1,28 @@
 import { useEffect, useMemo, useState, type Dispatch } from "react";
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Divider,
+  Flex,
+  Form,
+  Input,
+  Select,
+  Tag,
+  Tooltip,
+  Typography,
+  theme,
+} from "antd";
+import {
+  CheckCircleFilled,
+  CloseOutlined,
+  DownOutlined,
+  ExclamationCircleFilled,
+  StopOutlined,
+  UndoOutlined,
+  UpOutlined,
+} from "@ant-design/icons";
 
 import {
   fetchComponentArchive,
@@ -39,6 +63,9 @@ interface DefectDetailEditorProps {
   onSave?: () => void;
   onConfirm: () => void;
   onClose: () => void;
+  /** 当前筛选结果里的上一条 / 下一条；到头了不传，按钮置灰。 */
+  onPrevious?: () => void;
+  onNext?: () => void;
   /**
    * 病害类型/描述这类影响匹配的文字提交后触发重新匹配。只在失焦时调用，
    * 不能每敲一个键就发一次请求。
@@ -71,6 +98,8 @@ export function DefectDetailEditor({
   onSave,
   onConfirm,
   onClose,
+  onPrevious,
+  onNext,
   onDefectTextCommitted,
   onRatingResolved,
   inventoryRevisionId,
@@ -117,6 +146,7 @@ export function DefectDetailEditor({
         .join("、")
     : defect.measurement_text ?? "";
   const [ratingError, setRatingError] = useState("");
+  const { token } = theme.useToken();
 
   const historicalObservations = useMemo(() => {
     if (!componentArchive) return [];
@@ -289,103 +319,283 @@ export function DefectDetailEditor({
     return () => { active = false; };
   }, [baseUrl, boundComponentId, bridgeId]);
 
+  const location = displayDefectLocation(defect.defect_location);
+  const confirmed = defect.group_review_status === "已确认";
+  const ignored = defect.review_status === "已忽略";
+  const statusLabel = ignored ? "已忽略" : confirmed ? "已确认" : "待确认";
+  const statusColor = ignored ? "default" : confirmed ? "success" : "warning";
+  const sourceLabel = [
+    defect.source_ref.table_title,
+    defect.source_ref.row_index !== null && defect.source_ref.row_index !== undefined
+      ? `第 ${defect.source_ref.row_index} 行` : null,
+  ].filter(Boolean).join(" ");
+  const measurementText = measurementSummary
+    ? `${measurementSummary}${defect.measurements.length === 0 ? "（未能解析，按原文入库）" : ""}`
+    : "—";
+  const scaleDescription = currentScale !== null ? selectedNodeScaleDescriptions[String(currentScale)] : undefined;
+
+  // 历年演变压成一行：通常只有"当前"一条，原来那张大卡片大半是空白。
+  const history = (
+    <Card
+      size="small"
+      aria-label="历年病害演变"
+      title="历年病害演变"
+      extra={archiveHref ? (
+        <Typography.Link href={archiveHref} target="_blank" rel="noreferrer">查看构件完整病害档案 ›</Typography.Link>
+      ) : null}
+      styles={{ body: { paddingBlock: 10 } }}
+    >
+      <Flex vertical gap={6}>
+        <Flex align="center" gap={8} wrap>
+          <Tag color="processing" variant="filled">{draft.inspection.inspection_year} 当前</Tag>
+          <Typography.Text>
+            {currentScale !== null ? `标度 ${currentScale}` : "标度待确认"}
+            {measurementSummary ? ` · ${measurementSummary}` : ""}
+          </Typography.Text>
+        </Flex>
+        {historicalObservations.map((observation, index) => (
+          <Flex key={observation.id} align="center" gap={8} wrap>
+            {/* 最近的一次叫「上次检测」，再往前只能说是历史记录。 */}
+            <Tag variant="filled">{observation.inspection_year} {index === 0 ? "上次检测" : "历史记录"}</Tag>
+            <Typography.Text type="secondary">
+              {observation.scale ? `标度 ${observation.scale}` : "无标度"}
+              {observation.measurements.length > 0
+                ? ` · ${observation.measurements.map((measurement) => measurement.raw_text).filter(Boolean).join("、")}`
+                : ""}
+            </Typography.Text>
+          </Flex>
+        ))}
+        {historyLoading ? <Typography.Text type="secondary">正在读取历年记录…</Typography.Text> : null}
+        {!historyLoading && historyUnavailable ? (
+          <Typography.Text type="secondary">历年记录暂不可用，可前往完整档案查看。</Typography.Text>
+        ) : null}
+        {!historyLoading && !historyUnavailable && historicalObservations.length === 0 ? (
+          <Typography.Text type="secondary">暂无同构件、同类病害的往年记录。</Typography.Text>
+        ) : null}
+        {historicalObservations.length > 0 ? (
+          <Typography.Text type="warning"><span aria-hidden="true">⚠ </span>{scaleTrend}</Typography.Text>
+        ) : null}
+      </Flex>
+    </Card>
+  );
+
   return (
-    <section className="defect-detail-editor" aria-label="病害详情维护">
-      {/* 维护栏与照片栏是并排的两栏，各自从内容区顶端起排。照片栏原先嵌在
-          .defect-detail-body 里，被上面的标题区整块压低了一截——那是「照片与证据」
-          比另外两栏的栏名低一大截的原因，所以提出来做同级列。 */}
-      <div className="defect-detail-main">
-        <div className="defect-detail-heading">
-          <div className="defect-detail-identity">
-            {/* 面板名是恒定的，每次打开都一样；真正要一眼确认的是"这是哪条病害"。
-                所以标题给病害编号，面板名降成上方的小字说明。 */}
-            <p className="defect-detail-kicker">精细维护病害档案</p>
-            <h3>
-              {defect.component_number ?? defect.component_name}
-              {displayDefectLocation(defect.defect_location) ? (
-                <span className="defect-detail-location">{displayDefectLocation(defect.defect_location)}</span>
-              ) : null}
-            </h3>
-          </div>
-        </div>
-      <div className="defect-detail-body">
-        <div className="defect-detail-primary">
-          {row.problems.length > 0 ? (
-            <div className="defect-detail-problems">
-              {row.problems.map((problem) => <span key={problem.code}>{problem.message}</span>)}
-            </div>
-          ) : null}
-          <div className={`defect-rating-tree-result ${row.resolution.ratingTreeNodeId ? "resolved" : ""}`} aria-label="病害类型">
-            <div className="defect-rating-tree-result-head">
-              <span>病害类型</span>
-              {row.resolution.ratingTreeNodeId ? null : <strong>尚未确定规范病害</strong>}
-            </div>
-            {/* 已经确定的病害只显示结果；匹配来源与命中证据对日常校对没有帮助。
-                只有尚未决策时，依据才是选择候选所必需的信息。 */}
-            {!row.resolution.ratingTreeNodeId && evidence && row.matchState !== "composite" ? (
-              <p className="defect-match-evidence">{evidence}</p>
+    <Flex role="group" aria-label="病害详情维护" wrap style={{ minHeight: 0 }}>
+      {/* 维护栏：头部 → 表单 → 历年演变 → 固定操作条。 */}
+      <Flex vertical style={{ flex: "1 1 420px", minWidth: 0 }}>
+        <Flex
+          align="center"
+          gap={12}
+          wrap
+          style={{ paddingBottom: 12, borderBottom: `1px solid ${token.colorSplit}` }}
+        >
+          {/* 面板名是恒定的，每次打开都一样；真正要一眼确认的是"这是哪条病害"。 */}
+          <Flex vertical style={{ minWidth: 0 }}>
+            <Flex align="baseline" gap={8} wrap>
+              <Typography.Title level={5} style={{ margin: 0 }}>
+                {defect.component_number ?? defect.component_name}
+              </Typography.Title>
+              {location ? <Typography.Text type="secondary">{location}</Typography.Text> : null}
+              <Tag color={statusColor} variant="filled">{statusLabel}</Tag>
+            </Flex>
+            {sourceLabel ? (
+              <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>来源 {sourceLabel}</Typography.Text>
             ) : null}
-            {row.matchState === "composite" ? (
-              <p className="warning-text">
-                这条记录同时命中多个规范病害。请改写描述拆成单一病害，或在下方候选中确认为其中一个。
-              </p>
-            ) : null}
-            {row.matchCandidates.length > 0 ? (
-              <ul className="defect-match-candidates">
-                {row.matchCandidates.map((candidate) => (
-                  <li key={candidate.rating_tree_node_id}>
-                    <div className="defect-match-candidate-text">
-                      <strong>{candidate.display_name}</strong>
-                      <small>
-                        {matchMethodLabel(candidate.match_method)}
-                        {displayMatchEvidence(candidate.evidence, candidate.match_method)
-                          ? ` · ${displayMatchEvidence(candidate.evidence, candidate.match_method)}`
-                          : ""}
-                      </small>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={disabled || !ratingTreeVersionId}
-                      onClick={() => selectNode(candidate.rating_tree_node_id)}
-                    >
-                      采用
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            {/* 下拉本身就是当前值的显示，同时也是唯一的赋值入口
-                （无匹配的病害没有候选可点），所以常驻，不藏在折叠或按钮后面。 */}
-            <select
-              aria-label="评定树病害"
-              /* 窄栏里长标签会省略成 …，完整文案交给悬停。 */
-              title={resolvedNodeLabel || undefined}
-              disabled={disabled || !ratingTreeVersionId}
-              value={row.resolution.ratingTreeNodeId ?? ""}
-              onChange={(event) => selectNode(event.target.value)}
-            >
-              <option value="">请选择评定树病害</option>
-              {orderedApplicableNodes.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {ratingTreeOptionLabel(item, orderedApplicableNodes)}{item.is_scoring ? "" : "（暂不计分）"}
-                </option>
+          </Flex>
+
+          <Flex align="center" gap={6} style={{ marginInlineStart: "auto" }}>
+            {/* 三项检查回答「这条现在能不能确认」：缩成三枚标签贴在标题行，悬停看全称。 */}
+            <Flex gap={4} role="group" aria-label={`校对完整度 ${completeness}%`}>
+              {completenessItems.map((item) => (
+                <Tooltip key={item.label} title={item.label}>
+                  <Tag
+                    color={item.complete ? "success" : "warning"}
+                    variant="filled"
+                    icon={item.complete ? <CheckCircleFilled /> : <ExclamationCircleFilled />}
+                    style={{ marginInlineEnd: 0 }}
+                  >
+                    {item.label.slice(0, 2)}
+                  </Tag>
+                </Tooltip>
               ))}
-            </select>
-          </div>
-          {treeNodeError ? <p className="form-error" role="alert">{treeNodeError}</p> : null}
+            </Flex>
+            <Divider orientation="vertical" />
+            <Tooltip title="上一条">
+              <Button aria-label="上一条" icon={<UpOutlined />} disabled={!onPrevious} onClick={onPrevious} />
+            </Tooltip>
+            <Tooltip title="下一条">
+              <Button aria-label="下一条" icon={<DownOutlined />} disabled={!onNext} onClick={onNext} />
+            </Tooltip>
+            {/* 关闭挂在维护区的外边界上，放在照片栏旁会被误当成「关掉照片」。 */}
+            <Tooltip title="收起精细维护">
+              <Button type="text" aria-label="关闭精细维护" icon={<CloseOutlined />} onClick={onClose} />
+            </Tooltip>
+          </Flex>
+        </Flex>
+
+        <Flex vertical gap={14} style={{ paddingBlock: 14, flex: 1, minHeight: 0 }}>
+          {row.problems.length > 0 ? (
+            <Alert
+              type="warning"
+              showIcon
+              role="note"
+              title={row.problems.length === 1 ? row.problems[0].message : `还有 ${row.problems.length} 项待处理`}
+              description={row.problems.length > 1 ? (
+                <Flex vertical gap={2}>
+                  {row.problems.map((problem) => <span key={problem.code}>{problem.message}</span>)}
+                </Flex>
+              ) : undefined}
+            />
+          ) : null}
+          {treeNodeError ? <Alert type="error" showIcon role="alert" title={treeNodeError} /> : null}
           {/* 节点没存进解析表时必须说出来：界面显示成选上了、刷新后却没有，比直接报错更难查。 */}
-          {ratingError ? <p className="form-error" role="alert">{ratingError}</p> : null}
-          {/* 两列各自成栏，不走 grid 自动流：左列录入链路（位置 → 类型 → 描述 → 尺寸），
-              右列判定链路（幅度 → 判据 → 完整度）。两列条目数和行高都不等，交给自动流
-              会让「病害描述」和「标度判定依据」错位。 */}
-          <div className="defect-detail-fields">
-            <div className="defect-detail-field-col">
-              <label>病害位置<input disabled={disabled} value={defect.defect_location} onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_location", value: event.target.value })} onBlur={() => onDefectTextCommitted?.(defect.candidate_id)} /></label>
-              <label>病害类型<input readOnly title={resolvedNodeLabel || undefined} value={resolvedNodeLabel || "尚未确定规范病害"} /></label>
-              <label>
-                病害描述
-                <input
-                  disabled={disabled}
+          {ratingError ? <Alert type="error" showIcon role="alert" title={ratingError} /> : null}
+
+          {disabled ? (
+            // 只读时不摆一屏灰掉的输入框：看的是结果，用描述列表。
+            <Descriptions
+              size="small"
+              bordered
+              column={2}
+              styles={{ label: { width: 96, whiteSpace: "nowrap" } }}
+              items={[
+                { key: "node", label: "评定树病害", span: 2, children: resolvedNodeLabel || "尚未确定规范病害" },
+                { key: "location", label: "病害位置", children: defect.defect_location || "—" },
+                {
+                  key: "scale",
+                  label: "幅度",
+                  children: (
+                    <Flex vertical>
+                      <span>{currentScale !== null ? `${currentScale} 级` : "—"}</span>
+                      {scaleDescription ? (
+                        <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>{scaleDescription}</Typography.Text>
+                      ) : null}
+                    </Flex>
+                  ),
+                },
+                { key: "description", label: "病害描述", span: 2, children: defect.defect_description || "—" },
+                { key: "measurements", label: "尺寸与数量", span: 2, children: measurementText },
+              ]}
+            />
+          ) : (
+            <Form layout="vertical" style={{ marginBottom: 0 }}>
+              <Form.Item
+                label="评定树病害"
+                htmlFor="defect-rating-node"
+                style={{ marginBottom: 12 }}
+                extra={
+                  // 已经定下来的只给原文；还没定时依据才是选择所必需的信息。
+                  !row.resolution.ratingTreeNodeId && evidence && row.matchState !== "composite"
+                    ? evidence
+                    : defect.defect_type ? `原文：${defect.defect_type}` : undefined
+                }
+              >
+                {/* 下拉本身就是当前值的显示，也是唯一的赋值入口（无匹配的病害没有候选可点），所以常驻。 */}
+                <Select
+                  id="defect-rating-node"
+                  aria-label="评定树病害"
+                  title={resolvedNodeLabel || undefined}
+                  disabled={!ratingTreeVersionId}
+                  value={row.resolution.ratingTreeNodeId ?? ""}
+                  onChange={(value: string) => selectNode(value)}
+                  options={[
+                    { value: "", label: "请选择评定树病害" },
+                    ...orderedApplicableNodes.map((item) => ({
+                      value: item.id,
+                      label: `${ratingTreeOptionLabel(item, orderedApplicableNodes)}${item.is_scoring ? "" : "（暂不计分）"}`,
+                    })),
+                  ]}
+                />
+              </Form.Item>
+
+              {row.matchState === "composite" ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  role="note"
+                  style={{ marginBottom: 12 }}
+                  title="这条记录同时命中多个规范病害。请改写描述拆成单一病害，或在下方候选中确认为其中一个。"
+                />
+              ) : null}
+              {row.matchCandidates.length > 0 ? (
+                <Flex vertical gap={6} style={{ marginBottom: 12 }}>
+                  {row.matchCandidates.map((candidate) => (
+                    <Flex
+                      key={candidate.rating_tree_node_id}
+                      align="center"
+                      justify="space-between"
+                      gap={10}
+                      style={{ padding: "6px 10px", borderRadius: token.borderRadius, background: token.colorFillQuaternary }}
+                    >
+                      <Flex vertical style={{ minWidth: 0 }}>
+                        <Typography.Text strong>{candidate.display_name}</Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+                          {matchMethodLabel(candidate.match_method)}
+                          {displayMatchEvidence(candidate.evidence, candidate.match_method)
+                            ? ` · ${displayMatchEvidence(candidate.evidence, candidate.match_method)}`
+                            : ""}
+                        </Typography.Text>
+                      </Flex>
+                      <Button size="small" disabled={!ratingTreeVersionId} onClick={() => selectNode(candidate.rating_tree_node_id)}>
+                        采用
+                      </Button>
+                    </Flex>
+                  ))}
+                </Flex>
+              ) : null}
+
+              <Flex gap={16} wrap>
+                <Form.Item label="病害位置" htmlFor="defect-location" style={{ flex: "1 1 220px", marginBottom: 12 }}>
+                  <Input
+                    id="defect-location"
+                    value={defect.defect_location}
+                    onChange={(event) => dispatch({
+                      type: "edit_defect_field",
+                      candidateId: defect.candidate_id,
+                      field: "defect_location",
+                      value: event.target.value,
+                    })}
+                    onBlur={() => onDefectTextCommitted?.(defect.candidate_id)}
+                  />
+                </Form.Item>
+                {/* 只列出该节点允许的取值；规范判定文字写在下方，不按描述反推。 */}
+                <Form.Item
+                  label="幅度"
+                  htmlFor="defect-scale"
+                  style={{ flex: "1 1 220px", marginBottom: 12 }}
+                  extra={scaleDescription}
+                >
+                  <Select
+                    id="defect-scale"
+                    aria-label="幅度"
+                    disabled={!selectedNodeIsScoring}
+                    value={defect.defect_scale ?? ""}
+                    onChange={(value: string | number) => dispatch({
+                      type: "edit_defect_field",
+                      candidateId: defect.candidate_id,
+                      field: "defect_scale",
+                      value: value === "" ? null : Number(value),
+                    })}
+                    options={[
+                      {
+                        value: "",
+                        label: row.resolution.ratingTreeNodeId
+                          ? (selectedNodeIsScoring ? "请选择幅度" : "该节点暂不计分")
+                          : "请先确定规范病害",
+                      },
+                      ...selectedNodeAllowedScales.map((scale) => ({
+                        value: scale,
+                        label: `${scale} · ${selectedNodeScaleDescriptions[String(scale)] ?? ""}`,
+                      })),
+                    ]}
+                  />
+                </Form.Item>
+              </Flex>
+
+              <Form.Item label="病害描述" htmlFor="defect-description" style={{ marginBottom: 12 }}>
+                <Input.TextArea
+                  id="defect-description"
+                  autoSize={{ minRows: 2, maxRows: 4 }}
                   value={defect.defect_description}
                   onChange={(event) => dispatch({
                     type: "edit_defect_field",
@@ -395,107 +605,60 @@ export function DefectDetailEditor({
                   })}
                   onBlur={() => onDefectTextCommitted?.(defect.candidate_id)}
                 />
-              </label>
-              <label>
-                尺寸与数量
-                {/* 尺寸原文只喂解析器，展示的是解析结果；解析不出来时原文才是唯一记录。 */}
-                <input
-                  readOnly
-                  value={measurementSummary
-                    ? `${measurementSummary}${defect.measurements.length === 0 ? "（未能解析，按原文入库）" : ""}`
-                    : "—"}
-                />
-              </label>
-            </div>
-            <div className="defect-detail-field-col">
-              <label>
-                幅度
-                {/* 只列出该节点允许的取值并附完整规范判定文字；不按描述反推。 */}
-                <select
-                  disabled={disabled || !selectedNodeIsScoring}
-                  value={defect.defect_scale ?? ""}
-                  onChange={(event) => dispatch({ type: "edit_defect_field", candidateId: defect.candidate_id, field: "defect_scale", value: event.target.value === "" ? null : Number(event.target.value) })}
-                >
-                  <option value="">{row.resolution.ratingTreeNodeId ? (selectedNodeIsScoring ? "请选择幅度" : "该节点暂不计分") : "请先确定规范病害"}</option>
-                  {selectedNodeAllowedScales.map((scale) => (
-                    <option key={scale} value={scale}>
-                      {scale} · {selectedNodeScaleDescriptions[String(scale)] ?? ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {/* 三项检查紧跟幅度：判定链路走到这里就该回答「这条现在能不能确认」。 */}
-              <section className="defect-completeness" aria-label={`校对完整度 ${completeness}%`}>
-                <div className="defect-completeness-head">
-                  <strong>校对完整度</strong>
-                  <span>{completeness}%</span>
-                </div>
-                <ul className="defect-detail-checks">
-                  {completenessItems.map((item) => (
-                    <li key={item.label} className={item.complete ? "complete" : "pending"}>
-                      <span aria-hidden="true">{item.complete ? "✓" : "!"}</span>{item.label}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* 历年演变落在字段区与操作栏之间那片空白上：它是通栏的参考信息，不参与
-          左右两条录入 / 判定链路，占满整幅比挤在右列窄栏里更好读。 */}
-      <section className="defect-history-card" aria-label="历年病害演变">
-        <div className="defect-history-heading">
-          <span>历年病害演变</span>
-        </div>
-        <ol className="defect-history-list">
-          <li className="current">
-            <span className="defect-history-dot" aria-hidden="true" />
-            <time>{draft.inspection.inspection_year}</time>
-            <strong>当前</strong>
-            <small>{currentScale !== null ? `标度 ${currentScale}` : "标度待确认"}{measurementSummary ? ` · ${measurementSummary}` : ""}</small>
-          </li>
-          {historicalObservations.map((observation, index) => (
-            <li key={observation.id}>
-              <span className="defect-history-dot" aria-hidden="true" />
-              <time>{observation.inspection_year}</time>
-              {/* 最近的一次叫「上次检测」，再往前只能说是历史记录——它跟"上一次"隔着年份。 */}
-              <strong>{index === 0 ? "上次检测" : "历史记录"}</strong>
-              <small>{observation.scale ? `标度 ${observation.scale}` : "无标度"}{observation.measurements.length > 0 ? ` · ${observation.measurements.map((measurement) => measurement.raw_text).filter(Boolean).join("、")}` : ""}</small>
-            </li>
-          ))}
-        </ol>
-        {historyLoading ? <p className="defect-history-empty">正在读取历年记录…</p> : null}
-        {!historyLoading && historyUnavailable ? <p className="defect-history-empty">历年记录暂不可用，可前往完整档案查看。</p> : null}
-        {!historyLoading && !historyUnavailable && historicalObservations.length === 0 ? (
-          <p className="defect-history-empty">暂无同构件、同类病害的往年记录。</p>
-        ) : null}
-        {historicalObservations.length > 0 ? (
-          <p className="defect-history-trend"><span aria-hidden="true">⚠</span>{scaleTrend}</p>
-        ) : null}
-        {archiveHref ? (
-          <a className="defect-history-archive-link" href={archiveHref} target="_blank" rel="noreferrer">查看构件完整病害档案 ›</a>
-        ) : null}
-      </section>
-      <div className="defect-detail-actions">
-        {/* 三个按钮成组，整组一起换行，不会出现「两个在上、确认按钮独占一行」。 */}
-        <div className="defect-detail-action-buttons">
-          <button type="button" disabled={disabled || !onSave} onClick={onSave}>保存修改</button>
-          {defect.review_status === "已忽略" ? (
-            <button type="button" disabled={disabled} onClick={() => dispatch({ type: "restore_ignored_defect", candidateId: defect.candidate_id })}>恢复病害</button>
-          ) : (
-            <button type="button" disabled={disabled} onClick={() => {
-              if (window.confirm("确定忽略这条病害？")) dispatch({ type: "ignore_defect", candidateId: defect.candidate_id });
-            }}>忽略此条</button>
+              </Form.Item>
+
+              {/* 尺寸原文只喂解析器，展示的是解析结果；解析不出来时原文才是唯一记录。 */}
+              <Form.Item label="尺寸与数量" extra="由病害描述自动解析，改描述后重新解析" style={{ marginBottom: 0 }}>
+                <Typography.Text aria-label="尺寸与数量">{measurementText}</Typography.Text>
+              </Form.Item>
+            </Form>
           )}
-          <button type="button" className="review-action-primary" disabled={disabled || !row.confirmEligible} onClick={onConfirm}>确认</button>
-        </div>
-      </div>
-      </div>
-      <div className="defect-detail-photo-column">
-        {/* 关闭整个维护区的入口挂在最右一栏的右上角——那是这块区域的外边界，
-            放在中栏标题旁会被误当成「关掉照片」。 */}
-        <button type="button" className="defect-detail-close" aria-label="关闭精细维护" onClick={onClose}>×</button>
+
+          {history}
+        </Flex>
+
+        {disabled ? null : (
+          <Flex
+            align="center"
+            gap={8}
+            wrap
+            style={{ paddingTop: 12, borderTop: `1px solid ${token.colorSplit}` }}
+          >
+            {ignored ? (
+              <Button
+                type="text"
+                aria-label="恢复病害"
+                icon={<UndoOutlined />}
+                onClick={() => dispatch({ type: "restore_ignored_defect", candidateId: defect.candidate_id })}
+              >
+                恢复病害
+              </Button>
+            ) : (
+              <Button
+                type="text"
+                danger
+                aria-label="忽略此条"
+                icon={<StopOutlined />}
+                onClick={() => {
+                  if (window.confirm("确定忽略这条病害？")) {
+                    dispatch({ type: "ignore_defect", candidateId: defect.candidate_id });
+                  }
+                }}
+              >
+                忽略此条
+              </Button>
+            )}
+            <Flex gap={8} style={{ marginInlineStart: "auto" }}>
+              <Button disabled={!onSave} onClick={onSave}>保存修改</Button>
+              {/* 确认后停在原地，不自动跳下一条：要看下一条由人自己点上面的箭头。 */}
+              <Button type="primary" disabled={!row.confirmEligible} onClick={onConfirm}>确认</Button>
+            </Flex>
+          </Flex>
+        )}
+      </Flex>
+
+      {/* 照片栏定宽；维护区被拖窄到放不下时整栏换到下方。 */}
+      <div style={{ flex: "0 0 360px", maxWidth: "100%", paddingInlineStart: 16, borderInlineStart: `1px solid ${token.colorSplit}` }}>
         <DefectPhotoPanel
           draft={draft}
           defect={defect}
@@ -509,6 +672,6 @@ export function DefectDetailEditor({
           allowUpload={allowDelete}
         />
       </div>
-    </section>
+    </Flex>
   );
 }

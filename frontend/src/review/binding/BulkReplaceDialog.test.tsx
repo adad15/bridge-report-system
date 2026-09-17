@@ -106,7 +106,7 @@ describe("BulkReplaceDialog", () => {
     // 空查找串不该发请求：那等于让后端把整个分区都算一遍。
     await waitFor(() => expect(onClearPlan).toHaveBeenCalled());
     expect(onPreview).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "应用" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^应\s?用$/ })).toBeEnabled();
 
     // 填了又清空，同样要把上一份计划丢掉。
     onClearPlan.mockClear();
@@ -117,12 +117,12 @@ describe("BulkReplaceDialog", () => {
 
   it("disables applying when the plan would bind nothing", () => {
     renderDialog({ plan: plan({ will_apply_count: 0 }) });
-    expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^应\s?用$/ })).toBeDisabled();
   });
 
   it("applies by plan token, not by a locally computed target list", async () => {
     const { onApply } = renderDialog({ plan: plan() });
-    await userEvent.click(screen.getByRole("button", { name: "应用" }));
+    await userEvent.click(screen.getByRole("button", { name: /^应\s?用$/ }));
 
     expect(onApply).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
   });
@@ -130,6 +130,6 @@ describe("BulkReplaceDialog", () => {
   it("surfaces a backend error without pretending the plan is usable", () => {
     renderDialog({ error: "替换内容里的 * 比查找内容多（2 > 1），多出的无从取值。" });
     expect(screen.getByRole("alert")).toHaveTextContent(/比查找内容多/);
-    expect(screen.getByRole("button", { name: "应用" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^应\s?用$/ })).toBeDisabled();
   });
 });

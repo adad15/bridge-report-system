@@ -20,7 +20,7 @@ import {
   type StandardCatalog,
 } from "../api/standardsApi";
 import { backendBaseUrl } from "../config";
-import { PageHeader } from "../design-system";
+import { PageHeader, useShellMetrics } from "../design-system";
 import { RatingTreeNavigator } from "../rating-tree/RatingTreeNavigator";
 import { RatingTreeNodeDetailView } from "./RatingTreeNodeDetailView";
 import {
@@ -30,17 +30,17 @@ import {
   writeRatingTreeViewState,
 } from "../rating-tree/ratingTreeViewState";
 
-/*
- * 宽屏上两栏吃满顶栏以下的视口，目录和详情各自滚动，页面本身不滚。
- * 196px = 顶栏 68 + 内容区上下留白 30 与 44 + 页头 40 + 页头下间距 14，改外壳尺寸时一起核对。
- */
-const kPanelHeight = "max(520px, calc(100dvh - 196px))";
+/** 页头（标题行 + 下方间距）在外壳之外另占的高度。 */
+const PAGE_HEADER_CHROME = 54;
 
 export function RatingTreePage() {
   const { versionId } = useParams<{ versionId: string }>();
   // 窄屏两栏上下叠放，交还给整页滚动。
   const stacked = Grid.useBreakpoint().lg === false;
-  const panelRowStyle = stacked ? undefined : { height: kPanelHeight };
+  const { pageOffset } = useShellMetrics();
+  const panelRowStyle = stacked
+    ? undefined
+    : { height: `max(480px, calc(100dvh - ${pageOffset + PAGE_HEADER_CHROME}px))` };
   const panelColStyle = stacked ? undefined : { height: "100%" };
   const [searchParams] = useSearchParams();
   const linkedNodeId = searchParams.get("node");

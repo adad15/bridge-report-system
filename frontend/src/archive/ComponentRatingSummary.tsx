@@ -1,4 +1,5 @@
 import { Line } from "@ant-design/charts";
+import { Typography } from "antd";
 
 import type { ComponentYearRating } from "../api/componentArchiveApi";
 
@@ -14,7 +15,7 @@ interface RatingPoint {
 // 构件年度评分：年份—评分折线图，只读展示系统评定投影。
 export function ComponentRatingSummary({ ratings }: { ratings: ComponentYearRating[] }) {
   if (ratings.length === 0) {
-    return <p className="archive-empty-hint">该构件暂无年度评分记录。</p>;
+    return <Typography.Text type="secondary">该构件暂无年度评分记录。</Typography.Text>;
   }
 
   const points: RatingPoint[] = [...ratings]
@@ -26,7 +27,7 @@ export function ComponentRatingSummary({ ratings }: { ratings: ComponentYearRati
     }));
 
   if (points.length === 0) {
-    return <p className="archive-empty-hint">该构件的年度评分尚未计算。</p>;
+    return <Typography.Text type="secondary">该构件的年度评分尚未计算。</Typography.Text>;
   }
 
   // 各年评分往往只差几分，直接用 0-100 会把折线压成一条平线；
@@ -39,7 +40,7 @@ export function ComponentRatingSummary({ ratings }: { ratings: ComponentYearRati
   const domainMax = Math.min(100, Math.ceil(maximum + margin));
 
   return (
-    <div className="archive-rating-chart" aria-label="构件年度评分趋势">
+    <div aria-label="构件年度评分趋势">
       <Line
         data={points}
         xField="year"

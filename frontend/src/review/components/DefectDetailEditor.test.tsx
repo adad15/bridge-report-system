@@ -18,6 +18,7 @@ import type { RatingTreeNode, RatingTreeNodeSummary } from "../../api/ratingTree
 import { buildDefectPhotoReviewModel } from "../defectPhotoReviewModel";
 import { UNRESOLVED, type ResolutionIndex } from "../resolutionIndex";
 import { data } from "../testFixtures";
+import { chooseOption, optionLabels, selectedLabel } from "../../test/antd";
 import { DefectDetailEditor } from "./DefectDetailEditor";
 
 // 5.0：构件与评分树结果不在草稿里，由工作区读模型交给 buildDefectPhotoReviewModel。
@@ -107,13 +108,13 @@ it("lets a range-split defect without photos be confirmed individually", () => {
   expect(screen.getByLabelText("历年病害演变")).toBeInTheDocument();
   expect(screen.queryByText("评定树路径")).not.toBeInTheDocument();
   expect(screen.queryByText("评分规则")).not.toBeInTheDocument();
-  const confirm = screen.getByRole("button", { name: "确认" });
+  const confirm = screen.getByRole("button", { name: /^确\s?认$/ });
   expect(confirm).toBeEnabled();
   fireEvent.click(confirm);
   expect(onConfirm).toHaveBeenCalledTimes(1);
 });
 
-it("uses summary scale rules before the full node detail has loaded", () => {
+it("uses summary scale rules before the full node detail has loaded", async () => {
   const node: RatingTreeNodeSummary = {
     id: "tree-node-drainage",
     node_key: "org.bridge.defect.drainage",
@@ -158,12 +159,13 @@ it("uses summary scale rules before the full node detail has loaded", () => {
     />,
   );
 
-  const scale = screen.getByRole("combobox", { name: "幅度" });
+  const scale = screen.getByLabelText("幅度");
   expect(scale).toBeEnabled();
-  expect(scale).toHaveValue("1");
-  expect(screen.getByRole("option", { name: "1 · 完好" })).toBeInTheDocument();
-  expect(screen.getByRole("option", { name: "2 · 排水不畅" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "确认" })).toBeEnabled();
+  expect(selectedLabel(scale)).toBe("1 · 完好");
+  const scaleLabels = await optionLabels(scale);
+  expect(scaleLabels).toContain("1 · 完好");
+  expect(scaleLabels).toContain("2 · 排水不畅");
+  expect(screen.getByRole("button", { name: /^确\s?认$/ })).toBeEnabled();
 });
 
 it("shows real prior observations from the bound component archive", async () => {
@@ -320,7 +322,7 @@ it("persists a manual node choice to the rating resolution", async () => {
     />,
   );
 
-  fireEvent.change(screen.getByRole("combobox", { name: "评定树病害" }), { target: { value: node.id } });
+  await chooseOption(screen.getByLabelText("评定树病害"), new RegExp(node.display_name));
 
   // 一次请求写完两条实例：逐条发的话后端每次都要取草稿、装评定树、开事务，
   // 区间展开的病害那是 25 遍。命令按**来源病害**编址，不是按实例。
@@ -397,7 +399,7 @@ it("does not touch the draft when the rating write fails", async () => {
     />,
   );
 
-  fireEvent.change(screen.getByRole("combobox", { name: "评定树病害" }), { target: { value: node.id } });
+  await chooseOption(screen.getByLabelText("评定树病害"), new RegExp(node.display_name));
 
   // 后端拒绝时草稿一个字不能动：错误提示看得见，脏草稿看不见，而用户还能把它保存进去。
   await waitFor(() => expect(applySourceRatingResolution).toHaveBeenCalled());

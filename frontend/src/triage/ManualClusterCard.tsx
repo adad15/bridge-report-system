@@ -1,9 +1,10 @@
-import { Image } from "antd";
+import { Button, Card, Checkbox, Flex, Image, Input, Radio, Select, Table, Tag, Typography, theme, type TableColumnsType } from "antd";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import type {
   TriageManualCluster,
+  TriageManualGroup,
   TriageManualObservation,
   TriageResolvePayload,
 } from "../api/threadTriageApi";
@@ -103,6 +104,7 @@ function wordingBreakdown(
 export function ManualClusterCard({
   cluster, bridgeId, busy, onResolve, onSkip,
 }: ManualClusterCardProps) {
+  const { token } = theme.useToken();
   const allObservations = cluster.groups.flatMap((group) => group.observations);
   // 簇是**按位置**聚的：同一年同一位置有多条时，类型不同的病害会被顺带卷进来。
   // 跨位置写法合并正是这张卡的用途（"梁底"和"梁底部"多半是同一道裂缝）；跨病害类型
@@ -210,173 +212,165 @@ export function ManualClusterCard({
     });
   }
 
-  return (
-    <section
-      className="triage-cluster-card"
-      aria-label={`异常簇 ${cluster.groups[0]?.business_component_code ?? cluster.cluster_id}`}
-    >
-      <header className="triage-cluster-head">
-        <strong>{cluster.groups[0]?.business_component_code ?? "未知构件"}</strong>
-        <span className="triage-cluster-reasons">
-          {cluster.reason_codes.map(reasonLabel).join(" · ")}
-        </span>
-      </header>
-
-      {/* 组、观测两个口径分开说：10 组不等于 10 条，混着写会让人以为工作量小一半。 */}
-      <p className="triage-cluster-scale">
-        {cluster.group_count} 组 · {cluster.observation_count} 条观测
-      </p>
-
-      {/* 笼统说一句"可能指同一处"帮不了判断，要说清是哪几种写法、哪一年挤了多条。 */}
-      {whyParts.length > 0 ? (
-        <p className="triage-cluster-why">{whyParts.join("；")}</p>
-      ) : null}
-
-      {/* 放大后左右翻页在**同一屏幕位置**切换年度：闪切比并排更容易看出是不是同一道裂缝。
-          说明条保留年度/标度/尺寸/编号，否则放大了反而丢掉比对基准。 */}
-      <Image.PreviewGroup
-        preview={{
-          imageRender: (originalNode, info) => {
-            const item = previewItems[info.current];
-            if (!item) return originalNode;
-            const measurements = item.observation.measurements ?? [];
-            return (
-              <div className="triage-preview-frame">
-                {originalNode}
-                <div className="triage-preview-caption">
-                  <strong>{item.observation.inspection_year} 年</strong>
-                  <span>{item.observation.defect_type}</span>
-                  <span>{item.location}</span>
-                  <span>标度 {item.observation.scale ?? "-"}</span>
-                  <span>{measurements.length > 0 ? measurements.join("；") : "无尺寸"}</span>
-                  <span className="triage-preview-number">
-                    {item.observation.system_number ?? ""}｜照片 {item.photo.photo_number}
-                  </span>
-                </div>
-              </div>
-            );
-          },
-        }}
-      >
-      {/* 证据块比原来的 chip 宽，窄窗口下让表格自己横向滚动，不把整页撑出横条。 */}
-      <div className="triage-cluster-table-scroll">
-        <table className="data-table triage-cluster-table" aria-label="簇内各位置历年观测">
-        <thead>
-          <tr>
-            <th scope="col">位置写法</th>
-            {years.map((year) => <th key={year} scope="col">{year}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {cluster.groups.map((group) => (
-            <tr key={group.group_id}>
-              <th scope="row" className="triage-cluster-location">
-                {locationText(group.defect_location)}
-                <span className="triage-cluster-type">{group.defect_type ?? ""}</span>
-              </th>
-              {years.map((year) => {
-                // 同一年可能有多条——并排放，让人直接比着判断是重复记录还是两处病害。
-                const inYear = group.observations.filter(
-                  (observation) => observation.inspection_year === year);
-                return (
-                  <td key={year}>
-                    {inYear.length === 0 ? (
-                      <span className="triage-cell-empty">—</span>
-                    ) : (
-                      <div className="triage-cluster-year-cell">
-                        {inYear.map((observation, index) => (
-                          <ObservationTile
-                            key={observation.id}
-                            observation={observation}
-                            checked={selectedIds.has(observation.id)}
-                            label={`${locationText(group.defect_location)} ${year} 第 ${index + 1} 条`}
-                            onToggle={() => toggle(observation.id)}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-          </tbody>
-        </table>
-      </div>
-      </Image.PreviewGroup>
-
-      {cluster.related_threads.length > 0 ? (
-        <div className="triage-cluster-threads">
-          <h4>该构件上已有的线索</h4>
-          <ul>
-            {cluster.related_threads.map((thread) => (
-              <li key={thread.id}>
-                {/* 编号是人在报告里引用线索的唯一凭据，必须显示。 */}
-                <span className="triage-thread-number">{thread.system_number}</span>
-                <span className="triage-thread-name">{thread.thread_name}</span>
-              </li>
+  const columns: TableColumnsType<TriageManualGroup> = [
+    {
+      title: "位置写法",
+      key: "location",
+      width: 180,
+      render: (_value, group) => (
+        <Flex vertical gap={2}>
+          <Typography.Text strong>{locationText(group.defect_location)}</Typography.Text>
+          <Typography.Text type="secondary">{group.defect_type ?? ""}</Typography.Text>
+        </Flex>
+      ),
+    },
+    ...years.map((year) => ({
+      title: String(year),
+      key: `year-${year}`,
+      width: 220,
+      render: (_value: unknown, group: TriageManualGroup) => {
+        // 同一年可能有多条——并排放，让人直接比着判断是重复记录还是两处病害。
+        const inYear = group.observations.filter((observation) => observation.inspection_year === year);
+        if (inYear.length === 0) return <Typography.Text type="secondary">—</Typography.Text>;
+        return (
+          <Flex gap={8} wrap>
+            {inYear.map((observation, index) => (
+              <ObservationTile
+                key={observation.id}
+                observation={observation}
+                checked={selectedIds.has(observation.id)}
+                label={`${locationText(group.defect_location)} ${year} 第 ${index + 1} 条`}
+                onToggle={() => toggle(observation.id)}
+              />
             ))}
-          </ul>
-        </div>
-      ) : null}
+          </Flex>
+        );
+      },
+    })),
+  ];
 
-      <div className="triage-cluster-form">
-        <fieldset>
-          <legend>把勾选的 {selected.length} 条观测</legend>
-          <label>
-            <input
-              type="radio"
-              name={`mode-${cluster.cluster_id}`}
-              checked={mode === "create"}
-              onChange={() => setMode("create")}
-            />
-            合并为一条新线索
-          </label>
-          <label>
-            <input
-              type="radio"
-              name={`mode-${cluster.cluster_id}`}
-              checked={mode === "bind"}
-              disabled={cluster.related_threads.length === 0}
-              onChange={() => setMode("bind")}
-            />
-            绑定到已有线索
-          </label>
-        </fieldset>
+  return (
+    <Card
+      role="region"
+      aria-label={`异常簇 ${cluster.groups[0]?.business_component_code ?? cluster.cluster_id}`}
+      title={
+        <Flex align="center" gap={10} wrap>
+          <Typography.Text strong>{cluster.groups[0]?.business_component_code ?? "未知构件"}</Typography.Text>
+          {/* 组、观测两个口径分开说：10 组不等于 10 条，混着写会让人以为工作量小一半。 */}
+          <Typography.Text type="secondary" style={{ fontWeight: "normal" }}>
+            {cluster.group_count} 组 · {cluster.observation_count} 条观测
+          </Typography.Text>
+        </Flex>
+      }
+      extra={
+        <Flex gap={6} wrap>
+          {cluster.reason_codes.map((code) => (
+            <Tag key={code} color="warning" variant="filled">{reasonLabel(code)}</Tag>
+          ))}
+        </Flex>
+      }
+    >
+      <Flex vertical gap={14}>
+        {/* 笼统说一句"可能指同一处"帮不了判断，要说清是哪几种写法、哪一年挤了多条。 */}
+        {whyParts.length > 0 ? <Typography.Text type="secondary">{whyParts.join("；")}</Typography.Text> : null}
 
-        {mode === "create" ? (
-          <div className="triage-cluster-fields">
-            <label>
-              病害类型
-              <input
-                type="text"
-                value={defectType}
-                onChange={(event) => setTypeDraft(event.target.value)}
-              />
-            </label>
-            <label>
-              位置（可留空）
-              <input
-                type="text"
-                value={defectLocation}
-                onChange={(event) => setLocationDraft(event.target.value)}
-              />
-            </label>
-            {typeDraft === null && locationDraft === null && selected.length > 0 ? (
-              <span className="triage-cluster-prefill">
-                按 {typeMajority.count}/{selected.length} 条多数预填
-              </span>
-            ) : null}
-            {inexact ? (
-              // 勾选的写法不止一种，这一步就是人在替系统担下"它们是同一处"的判断。
-              // 讲清差在哪：只说"写法不一致"，人还得自己回表里数一遍。
-              <label className="triage-cluster-confirm">
-                <input
-                  type="checkbox"
-                  checked={confirmInexact}
-                  onChange={(event) => setConfirmInexact(event.target.checked)}
-                />
-                <span>
+        {/* 放大后左右翻页在**同一屏幕位置**切换年度：闪切比并排更容易看出是不是同一道裂缝。
+            说明条保留年度/标度/尺寸/编号，否则放大了反而丢掉比对基准。 */}
+        <Image.PreviewGroup
+          preview={{
+            imageRender: (originalNode, info) => {
+              const item = previewItems[info.current];
+              if (!item) return originalNode;
+              const measurements = item.observation.measurements ?? [];
+              return (
+                <Flex vertical align="center" gap={12}>
+                  {originalNode}
+                  <Flex
+                    align="center"
+                    gap={12}
+                    wrap
+                    justify="center"
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: token.borderRadiusLG,
+                      background: "rgba(0, 0, 0, 0.55)",
+                      color: "#ffffff",
+                    }}
+                  >
+                    <strong>{item.observation.inspection_year} 年</strong>
+                    <span>{item.observation.defect_type}</span>
+                    <span>{item.location}</span>
+                    <span>标度 {item.observation.scale ?? "-"}</span>
+                    <span>{measurements.length > 0 ? measurements.join("；") : "无尺寸"}</span>
+                    <span>{item.observation.system_number ?? ""}｜照片 {item.photo.photo_number}</span>
+                  </Flex>
+                </Flex>
+              );
+            },
+          }}
+        >
+          {/* 证据块比原来的 chip 宽，窄窗口下让表格自己横向滚动，不把整页撑出横条。 */}
+          <Table<TriageManualGroup>
+            rowKey="group_id"
+            size="small"
+            bordered
+            aria-label="簇内各位置历年观测"
+            columns={columns}
+            dataSource={cluster.groups}
+            pagination={false}
+            scroll={{ x: 180 + years.length * 220 }}
+          />
+        </Image.PreviewGroup>
+
+        {cluster.related_threads.length > 0 ? (
+          <Flex vertical gap={6}>
+            <Typography.Text strong>该构件上已有的线索</Typography.Text>
+            {cluster.related_threads.map((thread) => (
+              <Flex key={thread.id} align="center" gap={8} wrap>
+                {/* 编号是人在报告里引用线索的唯一凭据，必须显示。 */}
+                <Typography.Text type="secondary">{thread.system_number}</Typography.Text>
+                <Typography.Text>{thread.thread_name}</Typography.Text>
+              </Flex>
+            ))}
+          </Flex>
+        ) : null}
+
+        <Flex vertical gap={10}>
+          <Typography.Text strong>把勾选的 {selected.length} 条观测</Typography.Text>
+          <Radio.Group value={mode} onChange={(event) => setMode(event.target.value)}>
+            <Radio value="create">合并为一条新线索</Radio>
+            <Radio value="bind" disabled={cluster.related_threads.length === 0}>绑定到已有线索</Radio>
+          </Radio.Group>
+
+          {mode === "create" ? (
+            <Flex vertical gap={10}>
+              <Flex gap={12} wrap>
+                <Flex vertical gap={4} style={{ minWidth: 220 }}>
+                  <Typography.Text type="secondary">病害类型</Typography.Text>
+                  <Input
+                    aria-label="病害类型"
+                    value={defectType}
+                    onChange={(event) => setTypeDraft(event.target.value)}
+                  />
+                </Flex>
+                <Flex vertical gap={4} style={{ minWidth: 220 }}>
+                  <Typography.Text type="secondary">位置（可留空）</Typography.Text>
+                  <Input
+                    aria-label="位置（可留空）"
+                    value={defectLocation}
+                    onChange={(event) => setLocationDraft(event.target.value)}
+                  />
+                </Flex>
+              </Flex>
+              {typeDraft === null && locationDraft === null && selected.length > 0 ? (
+                <Typography.Text type="secondary">
+                  按 {typeMajority.count}/{selected.length} 条多数预填
+                </Typography.Text>
+              ) : null}
+              {inexact ? (
+                // 勾选的写法不止一种，这一步就是人在替系统担下"它们是同一处"的判断。
+                // 讲清差在哪：只说"写法不一致"，人还得自己回表里数一遍。
+                <Checkbox checked={confirmInexact} onChange={(event) => setConfirmInexact(event.target.checked)}>
                   勾选的 {selected.length} 条
                   {locationSpread.length > 1
                     ? `跨 ${locationSpread.length} 种位置写法：${locationSpread.map(
@@ -388,57 +382,52 @@ export function ManualClusterCard({
                         (item) => `${item.value}（${item.count}）`).join(" · ")}`
                     : ""}
                   。我确认它们是同一处病害
-                </span>
-              </label>
-            ) : null}
-          </div>
-        ) : (
-          <label className="triage-cluster-target">
-            目标线索
-            <select
-              value={targetThreadId}
-              onChange={(event) => setTargetThreadId(event.target.value)}
-            >
-              {cluster.related_threads.map((thread) => (
-                <option key={thread.id} value={thread.id}>
-                  {thread.system_number}｜{thread.thread_name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-      </div>
+                </Checkbox>
+              ) : null}
+            </Flex>
+          ) : (
+            <Flex vertical gap={4} style={{ maxWidth: 420 }}>
+              <Typography.Text type="secondary">目标线索</Typography.Text>
+              <Select
+                aria-label="目标线索"
+                value={targetThreadId || undefined}
+                onChange={setTargetThreadId}
+                options={cluster.related_threads.map((thread) => ({
+                  value: thread.id,
+                  label: `${thread.system_number}｜${thread.thread_name}`,
+                }))}
+              />
+            </Flex>
+          )}
+        </Flex>
 
-      <div className="triage-cluster-actions">
-        <button type="button" className="primary-button" disabled={busy || blocked} onClick={submit}>
-          {mode === "create" ? "建为一条线索" : "绑定到该线索"}
-        </button>
-        <button type="button" disabled={busy} onClick={onSkip}>暂不处理</button>
-        {bridgeComponentId ? (
-          <Link
-            className="triage-cluster-archive-link"
-            to={`/bridges/${bridgeId}/components/${bridgeComponentId}`}
-          >
-            打开构件档案
-          </Link>
+        <Flex align="center" gap={8} wrap>
+          <Button type="primary" disabled={busy || blocked} onClick={submit}>
+            {mode === "create" ? "建为一条线索" : "绑定到该线索"}
+          </Button>
+          <Button disabled={busy} onClick={onSkip}>暂不处理</Button>
+          {bridgeComponentId ? (
+            <Link to={`/bridges/${bridgeId}/components/${bridgeComponentId}`}>打开构件档案</Link>
+          ) : null}
+        </Flex>
+
+        {selected.length === 0 ? (
+          <Typography.Text type="secondary">先勾选属于同一处病害的观测。</Typography.Text>
         ) : null}
-      </div>
-      {selected.length === 0 ? (
-        <p className="triage-cluster-hint">先勾选属于同一处病害的观测。</p>
-      ) : null}
-      {unselected.length > 0 ? (
-        // 落选的是哪几条要点名，并说清为什么没勾——默认按类型分开时尤其不能让人以为是漏了。
-        <p className="triage-cluster-hint">
-          余下 {unselected.length} 条这次不处理：
-          {unselected.map((observation) => `${observation.inspection_year} 年 ${observation.defect_type}`
-            + `${observation.system_number ? `（${observation.system_number}）` : ""}`).join("、")}
-          。
-          {unselected.every((observation) => observation.defect_type !== dominantType)
-            ? "病害类型与上面那组不同，默认不并入；确属同一处病害可自行勾选。"
-            : "可在本次落库后再来一轮。"}
-        </p>
-      ) : null}
-    </section>
+        {unselected.length > 0 ? (
+          // 落选的是哪几条要点名，并说清为什么没勾——默认按类型分开时尤其不能让人以为是漏了。
+          <Typography.Text type="secondary">
+            余下 {unselected.length} 条这次不处理：
+            {unselected.map((observation) => `${observation.inspection_year} 年 ${observation.defect_type}`
+              + `${observation.system_number ? `（${observation.system_number}）` : ""}`).join("、")}
+            。
+            {unselected.every((observation) => observation.defect_type !== dominantType)
+              ? "病害类型与上面那组不同，默认不并入；确属同一处病害可自行勾选。"
+              : "可在本次落库后再来一轮。"}
+          </Typography.Text>
+        ) : null}
+      </Flex>
+    </Card>
   );
 }
 
@@ -451,25 +440,35 @@ interface ObservationTileProps {
 
 /** 一条年度观测的证据块：勾选框 + 类型 + 照片 + 标度 + 尺寸 + 观测编号。 */
 function ObservationTile({ observation, checked, label, onToggle }: ObservationTileProps) {
+  const { token } = theme.useToken();
   const photos = observation.photos ?? [];
   const measurements = observation.measurements ?? [];
   return (
-    <div className={checked ? "triage-cluster-chip is-checked" : "triage-cluster-chip"}>
-      {/* label 只包勾选框和类型：点照片是放大，不该顺手改变勾选。 */}
-      <label className="triage-chip-head">
-        <input type="checkbox" checked={checked} aria-label={label} onChange={onToggle} />
-        <span className="triage-chip-type">{observation.defect_type}</span>
-      </label>
-      <div className="triage-chip-body">
+    <Flex
+      vertical
+      gap={6}
+      style={{
+        padding: 8,
+        borderRadius: token.borderRadiusLG,
+        border: `1px solid ${checked ? token.colorPrimary : token.colorBorderSecondary}`,
+        background: checked ? token.colorPrimaryBg : token.colorBgContainer,
+      }}
+    >
+      {/* 勾选框只管勾选：点照片是放大，不该顺手改变勾选。 */}
+      <Checkbox checked={checked} aria-label={label} onChange={onToggle}>
+        <Typography.Text>{observation.defect_type}</Typography.Text>
+      </Checkbox>
+      <Flex align="center" gap={8}>
         {photos.length > 0 ? (
-          <span className="triage-chip-photo">
+          <Flex align="center" gap={4}>
             <Image
               src={defectPhotoContentUrl(backendBaseUrl, photos[0].id)}
               alt={`${observation.inspection_year} 年 ${observation.defect_type} 照片 ${photos[0].photo_number}`}
               width={64}
               height={48}
+              style={{ objectFit: "cover", borderRadius: token.borderRadius }}
             />
-            {photos.length > 1 ? <em>+{photos.length - 1}</em> : null}
+            {photos.length > 1 ? <Typography.Text type="secondary">+{photos.length - 1}</Typography.Text> : null}
             {/* 其余照片不占位置，但要留在预览组里，放大后翻得到。 */}
             {photos.slice(1).map((photo) => (
               <Image
@@ -479,18 +478,18 @@ function ObservationTile({ observation, checked, label, onToggle }: ObservationT
                 style={{ display: "none" }}
               />
             ))}
-          </span>
+          </Flex>
         ) : null}
-        <span className="triage-chip-facts">
-          <span>标度 {observation.scale ?? "-"}</span>
-          <span title={measurements.join("；")}>
+        <Flex vertical>
+          <Typography.Text type="secondary">标度 {observation.scale ?? "-"}</Typography.Text>
+          <Typography.Text type="secondary" ellipsis title={measurements.join("；")} style={{ maxWidth: 120 }}>
             {measurements.length > 0 ? measurements.join("；") : "无尺寸"}
-          </span>
-        </span>
-      </div>
+          </Typography.Text>
+        </Flex>
+      </Flex>
       {observation.system_number ? (
-        <span className="triage-chip-number">{observation.system_number}</span>
+        <Typography.Text type="secondary">{observation.system_number}</Typography.Text>
       ) : null}
-    </div>
+    </Flex>
   );
 }

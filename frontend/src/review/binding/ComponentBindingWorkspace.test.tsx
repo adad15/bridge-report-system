@@ -15,6 +15,7 @@ import {
 } from "../../api/resolutionApi";
 import { ApiError } from "../../api/apiClient";
 import { fetchRatingTreeVersions } from "../../api/ratingTreeApi";
+import { chooseOption, optionLabels, selectedLabel } from "../../test/antd";
 import { ComponentBindingWorkspace } from "./ComponentBindingWorkspace";
 
 vi.mock("../../api/inspectionRatingTreeApi", async (importOriginal) => {
@@ -233,7 +234,7 @@ describe("ComponentBindingWorkspace", () => {
     // 评定树版本列表是独立于构件行的另一个请求（故意不阻塞首屏），按钮出现时
     // 默认选中值可能还没回来，必须等它落定再断言，否则整套并行跑时会偶发失败。
     await waitFor(() =>
-      expect(screen.getByLabelText("选择年度评定树")).toHaveValue("tree-1")
+      expect(selectedLabel(screen.getByLabelText("选择年度评定树"))).toContain("1.0.2")
     );
     await userEvent.click(button);
 
@@ -278,8 +279,7 @@ describe("ComponentBindingWorkspace", () => {
       .mockResolvedValue(overview("bound"));
     render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
 
-    await userEvent.selectOptions(
-      await screen.findByLabelText("为 1-1#梁 选择实际构件"), "c1");
+    await chooseOption(await screen.findByLabelText("为 1-1#梁 选择实际构件"), /1-1#梁/);
 
     await waitFor(() => expect(applyComponentResolution).toHaveBeenCalledWith(
       "http://127.0.0.1:18080", "i1", "g1",
@@ -374,9 +374,8 @@ describe("ComponentBindingWorkspace", () => {
     vi.mocked(fetchResolutionWorkspace).mockResolvedValue(railingOverview());
     render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
 
-    const select = await screen.findByLabelText("为 两侧护栏 选择实际构件");
-    const options = within(select).getAllByRole("option").map((o) => o.textContent);
-    expect(options[1]).toBe("两侧 · 左侧栏杆 + 右侧栏杆");
+    const labels = await optionLabels(await screen.findByLabelText("为 两侧护栏 选择实际构件"));
+    expect(labels[1]).toBe("两侧 · 左侧栏杆 + 右侧栏杆");
   });
 
   it("binds both components at once and refreshes the review draft", async () => {
@@ -396,8 +395,7 @@ describe("ComponentBindingWorkspace", () => {
       />,
     );
 
-    const select = await screen.findByLabelText("为 两侧护栏 选择实际构件");
-    await userEvent.selectOptions(select, "__side_pair__");
+    await chooseOption(await screen.findByLabelText("为 两侧护栏 选择实际构件"), /两侧/);
 
     await waitFor(() => expect(applyComponentResolution).toHaveBeenCalledTimes(1));
     // 两侧整体绑定：一次请求两个目标，靠 target_role 区分左右。
@@ -444,9 +442,9 @@ describe("ComponentBindingWorkspace", () => {
   // 概览自带候选的展示信息，搜索之前就该看得见。
   it("shows overview candidates before any search", async () => {
     render(<ComponentBindingWorkspace importId="i1" bridgeId="bridge-1" lockToken="lock-1" />);
-    const select = await screen.findByLabelText("为 1-1#梁 选择实际构件");
+    const labels = await optionLabels(await screen.findByLabelText("为 1-1#梁 选择实际构件"));
 
-    expect(within(select).getByRole("option", { name: /候选 · 1-1#梁/ })).toBeInTheDocument();
+    expect(labels.some((label) => label.includes("候选 · 1-1#梁"))).toBe(true);
     expect(searchInventoryEntries).not.toHaveBeenCalled();
   });
 
@@ -472,12 +470,12 @@ describe("ComponentBindingWorkspace", () => {
     expect(bindingEligible).toBe(true);
 
     const select = screen.getByLabelText("为 1-1#梁 选择实际构件");
-    await waitFor(() =>
-      expect(within(select).getByRole("option", { name: /9-9#梁/ })).toBeInTheDocument());
     // 候选在前，搜索结果追加在后，且候选不占用 limit 名额。
-    const options = within(select).getAllByRole("option").map((o) => o.textContent ?? "");
-    expect(options[1]).toContain("候选 · ");
-    expect(options[2]).toContain("9-9#梁");
+    await waitFor(async () => {
+      const labels = await optionLabels(select);
+      expect(labels[1]).toContain("候选 · ");
+      expect(labels[2]).toContain("9-9#梁");
+    });
   });
 
   // 搜索失败不该把概览带来的候选也一起清掉。
@@ -487,8 +485,8 @@ describe("ComponentBindingWorkspace", () => {
     await userEvent.type(await screen.findByLabelText("搜索实际构件 1-1#梁"), "9-9");
 
     await waitFor(() => expect(searchInventoryEntries).toHaveBeenCalled());
-    const select = screen.getByLabelText("为 1-1#梁 选择实际构件");
-    expect(within(select).getByRole("option", { name: /候选 · 1-1#梁/ })).toBeInTheDocument();
+    const labels = await optionLabels(screen.getByLabelText("为 1-1#梁 选择实际构件"));
+    expect(labels.some((label) => label.includes("候选 · 1-1#梁"))).toBe(true);
   });
 
   // 写操作要声明依据哪个台账版本；漏传的话后端会自己挑一个，用户看到的候选就和
@@ -553,10 +551,10 @@ describe("ComponentBindingWorkspace", () => {
     await userEvent.click(await screen.findByLabelText("选择拆分 1-1#梁~1-25#梁"));
     await userEvent.click(screen.getByRole("button", { name: /拆分构件/ }));
 
-    expect(screen.getByRole("dialog", { name: "拆分构件范围" })).toBeInTheDocument();
+    expect(await screen.findByText("拆分构件范围")).toBeInTheDocument();
     expect(screen.getByText("正在计算展开影响…")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "取消" }));
-    expect(screen.queryByRole("dialog", { name: "拆分构件范围" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /^取\s?消$/ }));
+    expect(screen.queryByText("拆分构件范围")).not.toBeInTheDocument();
 
     resolvePreview({
       plan_token: "late-plan", operation_type: "range_expand",
@@ -566,7 +564,7 @@ describe("ComponentBindingWorkspace", () => {
       inventory_revision_id: "rev-1", rating_tree_version_id: null, rows: [],
     });
     await Promise.resolve();
-    expect(screen.queryByRole("dialog", { name: "拆分构件范围" })).not.toBeInTheDocument();
+    expect(screen.queryByText("拆分构件范围")).not.toBeInTheDocument();
   });
 
   it("selects and clears every split-eligible row in one component group", async () => {

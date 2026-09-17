@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { Alert, Button, Divider, Flex, Input, Select, Space, Tooltip, theme } from "antd";
+import { PlusOutlined, SearchOutlined, SyncOutlined } from "@ant-design/icons";
 
-import type { DefectMatchSummary } from "../../api/defectMatchingApi";
 import { UNBOUND_PART_FILTER } from "../defectPhotoReviewModel";
 import type {
   DefectPhotoReviewSummary,
@@ -13,10 +13,6 @@ interface DefectReviewToolbarProps {
   filter: DefectReviewFilter;
   issueFilter: DefectReviewIssueFilter | null;
   search: string;
-  selectedCount: number;
-  selectableCount: number;
-  allSelectableSelected: boolean;
-  someSelectableSelected: boolean;
   viewMode: "records" | "groups";
   issueGroupCount: number;
   disabled?: boolean;
@@ -45,9 +41,7 @@ interface DefectReviewToolbarProps {
   onFilterChange: (filter: DefectReviewFilter) => void;
   onIssueFilterChange: (issueFilter: DefectReviewIssueFilter | null) => void;
   onSearchChange: (search: string) => void;
-  onToggleSelectAll: () => void;
   onViewModeChange: (mode: "records" | "groups") => void;
-  onBatchConfirm: () => void;
   onRematch: () => void;
 }
 
@@ -89,19 +83,12 @@ const QUALITY_ISSUE_LABELS: Partial<Record<DefectReviewIssueFilter, string>> = {
 
 // 算不出来的计数一律显示它，而不是 0——"还不知道"和"确定是 0"必须看得出区别。
 const UNKNOWN_COUNT = "—";
-const PENDING_COUNT_HINT = "正在加载评定树规则，这项统计稍后给出。";
-const PENDING_MATCH_HINT = "正在匹配评定树病害，这项统计稍后给出。";
-
 
 export function DefectReviewToolbar({
   summary,
   filter,
   issueFilter,
   search,
-  selectedCount,
-  selectableCount,
-  allSelectableSelected,
-  someSelectableSelected,
   viewMode,
   issueGroupCount,
   disabled = false,
@@ -120,19 +107,10 @@ export function DefectReviewToolbar({
   onFilterChange,
   onIssueFilterChange,
   onSearchChange,
-  onToggleSelectAll,
   onViewModeChange,
-  onBatchConfirm,
   onRematch,
 }: DefectReviewToolbarProps) {
-  const selectAllRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (selectAllRef.current) {
-      selectAllRef.current.indeterminate = someSelectableSelected;
-    }
-  }, [someSelectableSelected]);
-
+  const { token } = theme.useToken();
   const clearFilters = () => {
     onFilterChange("all");
     onIssueFilterChange(null);
@@ -153,133 +131,130 @@ export function DefectReviewToolbar({
     onFilterChange(value.slice("status:".length) as DefectReviewFilter);
   };
 
+  const filterOptions = [
+    {
+      label: "处理状态",
+      options: STATUS_FILTERS.map((item) => {
+        const unknown = Boolean(item.needsTreeRules && countsPending);
+        return {
+          value: `status:${item.value}`,
+          disabled: unknown,
+          label: `${item.value === "all" ? "全部状态" : item.label}（${unknown ? UNKNOWN_COUNT : summary[item.count]}）`,
+        };
+      }),
+    },
+    {
+      label: "匹配问题",
+      options: ISSUE_FILTERS.map((item) => ({
+        value: `issue:${item.value}`,
+        disabled: matchCountsPending,
+        label: `${item.label}（${matchCountsPending ? UNKNOWN_COUNT : summary[item.count]}）`,
+      })),
+    },
+    ...(activeQualityIssueLabel ? [{
+      label: "当前校对问题",
+      options: [{ value: `issue:${issueFilter}`, label: activeQualityIssueLabel }],
+    }] : []),
+  ];
+
   return (
-    <div className="defect-review-toolbar">
+    <Flex vertical gap={10}>
       {matchError ? (
-        <p className="form-error" role="alert">
-          {matchError}
-          <button type="button" onClick={onRematch} disabled={rematching}>重试</button>
-        </p>
+        <Alert
+          type="error"
+          showIcon
+          role="alert"
+          title={matchError}
+          action={<Button size="small" disabled={rematching} onClick={onRematch}>重试</Button>}
+        />
       ) : null}
-      <div className="defect-review-filters">
-        <div className="defect-review-mode" role="group" aria-label="病害查看方式">
-          <button
-            type="button"
+      {/* 一行排完：左边查看方式，中间搜索与三个筛选，右边两个全局动作。
+          全选与批量确认挪到了列表表头——它们操作的是那张列表的勾选状态。 */}
+      <Flex align="center" gap={10} wrap>
+        <Space.Compact role="group" aria-label="病害查看方式">
+          <Button
             aria-pressed={viewMode === "records"}
+            type={viewMode === "records" ? "primary" : "default"}
             onClick={() => onViewModeChange("records")}
           >
             逐条查看
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             aria-pressed={viewMode === "groups"}
+            type={viewMode === "groups" ? "primary" : "default"}
             onClick={() => onViewModeChange("groups")}
           >
-            问题分组 <span>{issueGroupCount}</span>
-          </button>
-        </div>
-        <label
-          className="defect-review-select-all"
-          title={`选择当前筛选结果中可批量确认的 ${selectableCount} 条病害`}
-        >
-          <input
-            ref={selectAllRef}
-            type="checkbox"
-            checked={allSelectableSelected}
-            disabled={disabled || selectableCount === 0}
-            onChange={onToggleSelectAll}
-          />
-          <span>全选可确认项（{selectableCount}）</span>
-        </label>
-        <button
-          type="button"
-          className="defect-batch-confirm-button"
-          disabled={disabled || selectedCount === 0}
-          onClick={onBatchConfirm}
-        >
-          批量确认{selectedCount > 0 ? `（${selectedCount}）` : ""}
-        </button>
-        {/* 空白区域中的病害类型筛选：放在批量操作与搜索之间，保留右侧原有控件宽度。 */}
-        <select
-          className="defect-review-type-filter"
-          aria-label="按病害类型筛选"
-          value={defectTypeFilter ?? ""}
-          onChange={(event) => onDefectTypeFilterChange(event.target.value || null)}
-        >
-          <option value="">全部病害类型（{summary.all}）</option>
-          {summary.defectTypes.map((item) => (
-            <option key={item.name} value={item.name}>
-              {item.name}（{item.count}）
-            </option>
-          ))}
-        </select>
-        <input
-          className="defect-review-search"
+            问题分组 {issueGroupCount}
+          </Button>
+        </Space.Compact>
+
+        <Divider orientation="vertical" style={{ marginInline: 2 }} />
+
+        <Input
           aria-label="搜索病害"
           placeholder="搜索构件、位置、病害或照片编号"
+          allowClear
+          prefix={<SearchOutlined style={{ color: token.colorTextTertiary }} />}
+          style={{ flex: "1 1 220px", maxWidth: 320 }}
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
         />
-        {/* 按部件筛选。与上面那排统计筹码正交：筹码筛"问题类型"，这里筛"部件"，
+
+        {/* 按部件筛选。与状态筛选正交：那边筛"问题类型"，这里筛"部件"，
             两者可以叠加（"只看铰缝里无匹配的"）。选项按走查顺序排、与列表顺序一致，
             只列这份草稿里真的出现过的部件。 */}
-        <select
+        <Select
           aria-label="按部件筛选"
+          style={{ width: 150 }}
           value={partFilter ?? ""}
-          onChange={(event) => onPartFilterChange(event.target.value || null)}
-        >
-          <option value="">全部部件</option>
-          {summary.parts.map((part) => (
-            <option key={part.name} value={part.name}>
-              {part.name === UNBOUND_PART_FILTER ? "未绑定构件" : part.name}（{part.count}）
-            </option>
-          ))}
-        </select>
-        <select
+          onChange={(value: string) => onPartFilterChange(value || null)}
+          options={[
+            { value: "", label: "全部部件" },
+            ...summary.parts.map((part) => ({
+              value: part.name,
+              label: `${part.name === UNBOUND_PART_FILTER ? "未绑定构件" : part.name}（${part.count}）`,
+            })),
+          ]}
+        />
+
+        <Select
+          aria-label="按病害类型筛选"
+          style={{ width: 170 }}
+          value={defectTypeFilter ?? ""}
+          onChange={(value: string) => onDefectTypeFilterChange(value || null)}
+          options={[
+            { value: "", label: `全部病害类型（${summary.all}）` },
+            ...summary.defectTypes.map((item) => ({ value: item.name, label: `${item.name}（${item.count}）` })),
+          ]}
+        />
+
+        <Select
           aria-label="按状态筛选"
+          style={{ width: 170 }}
           value={activeFilterValue}
-          onChange={(event) => handleCombinedFilterChange(event.target.value)}
-        >
-          <optgroup label="处理状态">
-            {STATUS_FILTERS.map((item) => {
-              const unknown = Boolean(item.needsTreeRules && countsPending);
-              return (
-                <option key={item.value} value={`status:${item.value}`} disabled={unknown}>
-                  {item.value === "all" ? "全部状态" : item.label}（{unknown ? UNKNOWN_COUNT : summary[item.count]}）
-                </option>
-              );
-            })}
-          </optgroup>
-          <optgroup label="匹配问题">
-            {ISSUE_FILTERS.map((item) => (
-              <option key={item.value} value={`issue:${item.value}`} disabled={matchCountsPending}>
-                {item.label}（{matchCountsPending ? UNKNOWN_COUNT : summary[item.count]}）
-              </option>
-            ))}
-          </optgroup>
-          {activeQualityIssueLabel ? (
-            <optgroup label="当前校对问题">
-              <option value={`issue:${issueFilter}`}>{activeQualityIssueLabel}</option>
-            </optgroup>
-          ) : null}
-        </select>
+          onChange={handleCombinedFilterChange}
+          options={filterOptions}
+        />
+
         {filter !== "all" || issueFilter || search || partFilter || defectTypeFilter ? (
-          <button type="button" onClick={clearFilters}>清除筛选</button>
+          <Button type="link" style={{ paddingInline: 4 }} onClick={clearFilters}>清除筛选</Button>
         ) : null}
-        <div className="defect-review-toolbar-actions">
+
+        <Flex align="center" gap={8} style={{ marginInlineStart: "auto" }}>
           {onAddDefect ? (
-            <button type="button" disabled={addDefectDisabled} onClick={onAddDefect}>新增病害</button>
+            <Button icon={<PlusOutlined />} aria-label="新增病害" disabled={addDefectDisabled} onClick={onAddDefect}>新增病害</Button>
           ) : null}
-          <button
-            type="button"
-            aria-label="重新匹配"
-            className="defect-rematch-button"
-            disabled={disabled || rematching}
-            title={`将对${rematchScopeLabel}的 ${rematchCount} 条未确认病害重新匹配`}
-            onClick={onRematch}
-          >{rematching ? "匹配中…" : "重新匹配"}</button>
-        </div>
-      </div>
-    </div>
+          {/* 重新匹配是低频的兜底动作，收成图标按钮；作用范围写在悬停提示里。 */}
+          <Tooltip title={rematching ? "匹配中…" : `重新匹配${rematchScopeLabel}的 ${rematchCount} 条未确认病害`}>
+            <Button
+              aria-label="重新匹配"
+              icon={<SyncOutlined spin={rematching} />}
+              disabled={disabled || rematching}
+              onClick={onRematch}
+            />
+          </Tooltip>
+        </Flex>
+      </Flex>
+    </Flex>
   );
 }

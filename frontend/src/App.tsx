@@ -18,8 +18,6 @@ import { BridgeWorkspaceShell } from "./workspace/BridgeWorkspaceShell";
 import { InspectionWorkspacePage } from "./pages/InspectionWorkspacePage";
 import { AppLayout } from "./layouts/AppLayout";
 import "./styles.css";
-import "./pages/BridgeWorkspacePages.css";
-import "./review/components/DefectReviewApprovedLayout.css";
 
 export function App() {
   return (

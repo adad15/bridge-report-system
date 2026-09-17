@@ -1,5 +1,5 @@
-import { DownOutlined, RightOutlined, SearchOutlined } from "@ant-design/icons";
-import { Input, Select } from "antd";
+import { SearchOutlined } from "@ant-design/icons";
+import { Button, Collapse, Empty, Flex, Input, Select, Tag, Typography, theme } from "antd";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import type { ComponentSummary } from "../api/componentArchiveApi";
@@ -104,6 +104,7 @@ function compareBy(sort: SortMode) {
 // 这一屏的密度全靠"不印常量"：结构分部进分组标题，0 条待整理不渲染，
 // 年度跨度整个去掉（要看跨度点进档案页就是）。剩下编号和评分两样，一行放两个。
 export function ComponentListPanel({ components, selectedComponentId, onSelect }: ComponentListPanelProps) {
+  const { token } = theme.useToken();
   const [keyword, setKeyword] = useState("");
   const [structurePart, setStructurePart] = useState<(typeof STRUCTURE_PART_FILTERS)[number]>("全部");
   const [sort, setSort] = useState<SortMode>("score");
@@ -140,103 +141,122 @@ export function ComponentListPanel({ components, selectedComponentId, onSelect }
     list.scrollTop = top < list.scrollTop ? top : bottom - list.clientHeight;
   }, [selectedComponentId, filtered.length]);
 
-  function toggleGroup(key: string): void {
-    setCollapsedKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
   return (
-    <div className="archive-list-panel">
-      <div className="archive-list-filters">
-        <Input
-          aria-label="搜索构件"
-          placeholder="搜索构件编号或名称"
-          value={keyword}
-          suffix={<SearchOutlined className="archive-list-search-icon" />}
-          onChange={(event) => setKeyword(event.target.value)}
+    <Flex vertical gap={12} style={{ height: "100%", minHeight: 0 }}>
+      <Input
+        aria-label="搜索构件"
+        placeholder="搜索构件编号或名称"
+        allowClear
+        value={keyword}
+        suffix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
+        onChange={(event) => setKeyword(event.target.value)}
+      />
+      <Flex gap={8}>
+        <Select
+          aria-label="结构分部筛选"
+          value={structurePart}
+          style={{ flex: 1, minWidth: 0 }}
+          onChange={setStructurePart}
+          options={STRUCTURE_PART_FILTERS.map((part) => ({
+            value: part,
+            label: part === "全部" ? "全部结构" : part,
+          }))}
         />
-        <div className="archive-list-filter-row">
-          <Select
-            aria-label="结构分部筛选"
-            value={structurePart}
-            onChange={setStructurePart}
-            options={STRUCTURE_PART_FILTERS.map((part) => ({
-              value: part,
-              label: part === "全部" ? "全部结构" : part,
+        <Select
+          aria-label="排序方式"
+          value={sort}
+          style={{ flex: 1, minWidth: 0 }}
+          onChange={setSort}
+          options={Object.entries(SORT_MODES).map(([value, label]) => ({ value: value as SortMode, label }))}
+        />
+      </Flex>
+      {groups.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的构件" />
+      ) : (
+        <div
+          ref={listRef}
+          role="group"
+          aria-label="构件列表"
+          style={{ flex: 1, minHeight: 0, overflowY: "auto" }}
+        >
+          <Collapse
+            ghost
+            size="small"
+            destroyOnHidden
+            activeKey={groups.filter((group) => !collapsedKeys.has(group.key)).map((group) => group.key)}
+            onChange={(keys) => {
+              const open = new Set(Array.isArray(keys) ? keys : [keys]);
+              setCollapsedKeys(new Set(groups.filter((group) => !open.has(group.key)).map((group) => group.key)));
+            }}
+            items={groups.map((group) => ({
+              key: group.key,
+              styles: { body: { padding: 0 } },
+              label: (
+                <Flex align="center" gap={8} wrap>
+                  <Typography.Text strong>{group.key}</Typography.Text>
+                  <Typography.Text type="secondary">{group.items.length}</Typography.Text>
+                  {group.unboundTotal > 0 ? <Tag color="warning" variant="filled">{group.unboundTotal} 待整理</Tag> : null}
+                  {group.worstScore !== null ? (
+                    <Typography.Text type="secondary">最低 {roundScoreToTwoDecimals(group.worstScore)}</Typography.Text>
+                  ) : null}
+                </Flex>
+              ),
+              children: (
+                // 单行 + 自适应分栏：窄栏一列，宽一点就自动两列，把右边的空白用起来。
+                <ul style={{
+                  listStyle: "none",
+                  margin: 0,
+                  padding: 0,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+                  gap: 4,
+                }}>
+                  {group.items.map((component) => {
+                    const selected = component.id === selectedComponentId;
+                    return (
+                      <li key={component.id} ref={selected ? selectedItemRef : null}>
+                        <Button
+                          type="text"
+                          block
+                          aria-current={selected ? "true" : undefined}
+                          onClick={() => onSelect(component.id)}
+                          style={{
+                            paddingInline: 8,
+                            background: selected ? token.colorPrimaryBg : undefined,
+                            color: selected ? token.colorPrimary : undefined,
+                          }}
+                        >
+                          <Flex align="center" justify="space-between" gap={6} style={{ width: "100%" }}>
+                            <Typography.Text
+                              ellipsis
+                              strong={selected}
+                              style={selected ? { color: token.colorPrimary } : undefined}
+                            >
+                              {component.business_component_code}
+                            </Typography.Text>
+                            <Flex align="center" gap={6} style={{ flex: "none" }}>
+                              {/* 0 条待整理是这屏的常态，逐行印一遍只会淹掉真正有待整理的那几个。 */}
+                              {component.unbound_count > 0 ? (
+                                <Tag color="warning" variant="filled" style={{ marginInlineEnd: 0 }}>
+                                  {component.unbound_count}
+                                </Tag>
+                              ) : null}
+                              <Typography.Text type={component.latest_score === 100 ? "secondary" : undefined}>
+                                {component.latest_score !== null
+                                  ? roundScoreToTwoDecimals(component.latest_score) : "—"}
+                              </Typography.Text>
+                            </Flex>
+                          </Flex>
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ),
             }))}
           />
-          <Select
-            aria-label="排序方式"
-            value={sort}
-            onChange={setSort}
-            options={Object.entries(SORT_MODES).map(([value, label]) => ({ value: value as SortMode, label }))}
-          />
-        </div>
-      </div>
-      {groups.length === 0 ? (
-        <p className="archive-empty-hint">没有符合条件的构件。</p>
-      ) : (
-        <div ref={listRef} className="archive-component-list">
-          {groups.map((group) => {
-            const collapsed = collapsedKeys.has(group.key);
-            return (
-              <section key={group.key} className="archive-component-group">
-                <button
-                  type="button"
-                  className="archive-group-head"
-                  aria-expanded={!collapsed}
-                  onClick={() => toggleGroup(group.key)}
-                >
-                  {collapsed ? <RightOutlined /> : <DownOutlined />}
-                  <span className="archive-group-name">{group.key}</span>
-                  <span className="archive-group-count">{group.items.length}</span>
-                  {group.unboundTotal > 0 ? (
-                    <span className="archive-group-unbound">{group.unboundTotal} 待整理</span>
-                  ) : null}
-                  {group.worstScore !== null ? (
-                    <span className="archive-group-worst">最低 {roundScoreToTwoDecimals(group.worstScore)}</span>
-                  ) : null}
-                </button>
-                {collapsed ? null : (
-                  // 单行 + 自适应分栏：窄栏一列，宽一点就自动两列，把右边的空白用起来。
-                  <ul className="archive-group-items">
-                    {group.items.map((component) => (
-                        <li
-                          key={component.id}
-                          ref={component.id === selectedComponentId ? selectedItemRef : null}
-                        >
-                          <button
-                            type="button"
-                            className={component.id === selectedComponentId
-                              ? "archive-component-item active" : "archive-component-item"}
-                            onClick={() => onSelect(component.id)}
-                          >
-                            <strong className="archive-component-code">
-                              {component.business_component_code}
-                            </strong>
-                            {/* 0 条待整理是这屏的常态，逐行印一遍只会淹掉真正有待整理的那几个。 */}
-                            {component.unbound_count > 0 ? (
-                              <span className="archive-component-unbound">{component.unbound_count}</span>
-                            ) : null}
-                            <span className={component.latest_score === 100
-                              ? "archive-component-score is-full" : "archive-component-score"}>
-                              {component.latest_score !== null
-                                ? roundScoreToTwoDecimals(component.latest_score) : "—"}
-                            </span>
-                          </button>
-                        </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            );
-          })}
         </div>
       )}
-    </div>
+    </Flex>
   );
 }

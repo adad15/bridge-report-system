@@ -93,8 +93,9 @@ describe("AssessmentSection", () => {
     expect(within(bearingRow).getByText("2 类")).toBeInTheDocument();
     expect(within(rowOf("桥面系")).getByText("3 类")).toBeInTheDocument();
     // 得分条按分数取宽度，等级决定填色档位。
-    expect(bearingRow.querySelector(".assessment-score-bar-fill")).toHaveStyle({ width: "81.54%" });
-    expect(bearingRow.querySelector(".assessment-score-bar-fill")).toHaveClass("assessment-score-bar-fill-2");
+    // 得分条换成了 antd 进度条：实际分数写在 aria 属性上，颜色跟着等级走。
+    const bar = within(bearingRow).getByRole("progressbar");
+    expect(bar).toHaveAttribute("aria-valuenow", "81");
     fireEvent.click(screen.getByRole("button", { name: "上部结构" }));
     expect(screen.getByText("上部承重构件")).toBeInTheDocument();
     expect(screen.queryByText("桥面铺装")).not.toBeInTheDocument();

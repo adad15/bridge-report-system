@@ -26,8 +26,8 @@ describe("UnlinkedPhotosPanel", () => {
     expect(screen.queryByRole("button", { name: "关联到病害" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "重置校对状态" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "目标病害" })).not.toBeInTheDocument();
-    // 只剩缩略图这一类只读按钮。
-    expect(screen.getAllByRole("button")).toHaveLength(1);
+    // 只剩缩略图这一类只读按钮（antd 图片自带的放大遮罩不算）。
+    expect(screen.getAllByRole("button", { name: /查看未归属照片/ })).toHaveLength(1);
   });
 
   it("shows the photo caption without obsolete review state", () => {

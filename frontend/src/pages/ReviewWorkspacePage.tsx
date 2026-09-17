@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Alert, Button, Card, Checkbox, Flex, Input, Modal, Tag, Typography, theme } from "antd";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { ApiError } from "../api/apiClient";
@@ -65,16 +66,25 @@ function ReviewWorkspacePanel({
   group,
   activeGroup,
   visitedGroups,
+  fillHeight = false,
   children,
 }: {
   group: GroupKey;
   activeGroup: GroupKey;
   visitedGroups: ReadonlySet<GroupKey>;
+  /** 至少占满主区的可视高度，让里面的分区能把剩余高度吃掉。 */
+  fillHeight?: boolean;
   children: ReactNode;
 }) {
   if (!visitedGroups.has(group)) return null;
+  const hidden = activeGroup !== group;
   return (
-    <div data-review-group={group} hidden={activeGroup !== group}>
+    <div
+      data-review-group={group}
+      hidden={hidden}
+      // 行内 display 会压过 hidden 的 display:none，隐藏时不能带。
+      style={fillHeight && !hidden ? { display: "flex", flexDirection: "column", minHeight: "100%" } : undefined}
+    >
       {children}
     </div>
   );
@@ -114,26 +124,22 @@ export function ReviewWorkspacePage() {
 
   if (!importRecordId) {
     return (
-      <section className="status-panel">
-        <p className="error-text">缺少导入记录编号。</p>
-      </section>
+      <Card>
+        <Alert type="error" showIcon title="缺少导入记录编号。" />
+      </Card>
     );
   }
 
   if (error) {
     return (
-      <section className="status-panel">
-        <p className="error-text">{error}</p>
-      </section>
+      <Card>
+        <Alert type="error" showIcon title={error} />
+      </Card>
     );
   }
 
   if (!response) {
-    return (
-      <section className="status-panel">
-        <p>加载中…</p>
-      </section>
-    );
+    return <Card loading />;
   }
 
   // response 到位之后再挂载持有 useReducer 的子组件：这样 useReducer 的初始 state
@@ -206,6 +212,7 @@ function ReviewWorkspaceLoaded({
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { token } = theme.useToken();
   const [draft, rawDispatch] = useReducer(reviewDraftReducer, response.parsed_result);
   const [expandedDefectId, setExpandedDefectId] = useState<string | null>(null);
   const [activePhotoCandidateId, setActivePhotoCandidateId] = useState<string | null>(null);
@@ -251,6 +258,8 @@ function ReviewWorkspaceLoaded({
   }, [importRecordId]);
   const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
   const navigationHighlightTimer = useRef<number | null>(null);
+  /** 当前被高亮的那个元素，两秒后按它把行内样式撤回去。 */
+  const highlightedTarget = useRef<HTMLElement | null>(null);
 
   const [saveMessage, setSaveMessage] = useState<SaveMessageState | null>(null);
   const [preflight, setPreflight] = useState<PreflightResponse | null>(null);
@@ -541,6 +550,15 @@ function ReviewWorkspaceLoaded({
     activateGroup("defect_photos");
   }
 
+  function clearNavigationHighlight(): void {
+    const previous = highlightedTarget.current;
+    if (!previous) return;
+    previous.style.outline = "";
+    previous.style.outlineOffset = "";
+    previous.style.backgroundColor = "";
+    highlightedTarget.current = null;
+  }
+
   useEffect(() => {
     if (pendingNavigation === null) return;
     const timer = window.setTimeout(() => {
@@ -551,13 +569,17 @@ function ReviewWorkspaceLoaded({
         return;
       }
       if (navigationHighlightTimer.current !== null) window.clearTimeout(navigationHighlightTimer.current);
-      document.querySelectorAll(".review-target-highlight").forEach((element) => element.classList.remove("review-target-highlight"));
+      clearNavigationHighlight();
       const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
       target.scrollIntoView?.({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
-      target.classList.add("review-target-highlight");
+      // 高亮是"跳过去之后闪一下"，只活两秒；直接写行内样式，省掉一条全局 CSS 规则。
+      highlightedTarget.current = target;
+      target.style.outline = `3px solid ${token.colorWarning}`;
+      target.style.outlineOffset = "3px";
+      target.style.backgroundColor = token.colorWarningBg;
       target.focus({ preventScroll: true });
       navigationHighlightTimer.current = window.setTimeout(() => {
-        target.classList.remove("review-target-highlight");
+        clearNavigationHighlight();
         navigationHighlightTimer.current = null;
       }, 2000);
       setPendingNavigation(null);
@@ -913,39 +935,64 @@ function ReviewWorkspaceLoaded({
     : undefined;
 
   return (
-    <div className="review-workspace">
+    /* 校对工作台吃满外壳给的高度：页眉、提示条、底部操作栏各占一行，中间两栏自己滚。 */
+    <Flex vertical style={{ height: "100%", minHeight: 0, background: token.colorBgContainer }}>
       <OverviewHeader
         response={response}
         draft={draft}
         counts={counts}
         statusNotice={lockNotice ? (
-          <div className={`review-edit-lock-banner review-edit-lock-${lockPhase}`}>
-            <span>{lockNotice}</span>
-            {lockSummary ? <span className="review-reopen-meta">开始时间：{lockSummary.acquired_at}</span> : null}
-            {isAdmin && lockSummary !== null && lockPhase === "blocked" ? (
-              <button type="button" disabled={busy} onClick={() => void handleForceRelease()}>管理员强制解锁</button>
+          <Flex align="center" gap={8} wrap>
+            <Tag
+              color={lockPhase === "lost" ? "error" : lockPhase === "held" ? "processing" : "warning"}
+              variant="filled"
+            >
+              {lockNotice}
+            </Tag>
+            {lockSummary ? (
+              <Typography.Text type="secondary">开始时间：{lockSummary.acquired_at}</Typography.Text>
             ) : null}
-          </div>
+            {isAdmin && lockSummary !== null && lockPhase !== "held" ? (
+              <Button size="small" disabled={busy} onClick={() => void handleForceRelease()}>管理员强制解锁</Button>
+            ) : null}
+          </Flex>
         ) : null}
       />
-      <div className="review-workspace-notices">
-        {/* 重开校对态横幅：可编辑态下 bannerText 非空即重开中，提示范围与后续流程。 */}
-        {!readOnly && reviewSession.bannerText ? (
-          <div className="review-reopen-banner">
-            <span>{reviewSession.bannerText}</span>
-            {reopenState ? <span className="review-reopen-meta">重开人：{reopenState.reopened_by_username}</span> : null}
-          </div>
-        ) : null}
-      </div>
-      <div className="review-body">
+      {/* 重开校对态横幅：可编辑态下 bannerText 非空即重开中，提示范围与后续流程。 */}
+      {!readOnly && reviewSession.bannerText ? (
+        <Alert
+          type="warning"
+          showIcon
+          role="status"
+          style={{ margin: "10px 16px 0" }}
+          title={reviewSession.bannerText}
+          description={reopenState ? `重开人：${reopenState.reopened_by_username}` : undefined}
+        />
+      ) : null}
+      <Flex style={{ flex: 1, minHeight: 0 }}>
+        <div style={{
+          flex: "none",
+          width: 208,
+          overflowY: "auto",
+          borderInlineEnd: `1px solid ${token.colorSplit}`,
+        }}>
         <ReviewSidebar
           counts={displayedCounts}
           bindingPendingCount={bindingPending}
           active={activeGroup}
           onSelect={activateGroup}
         />
-        <div className={activeGroup === "component_binding" ? "review-main review-main-component-binding" : "review-main"}>
-          {navigationMessage ? <p className="warning-text review-navigation-message">{navigationMessage}</p> : null}
+        </div>
+        <div style={{
+          flex: 1,
+          minWidth: 0,
+          overflowY: "auto",
+          padding: 16,
+          background: token.colorBgLayout,
+        }}>
+          {navigationMessage ? (
+            <Alert type="warning" showIcon role="status" title={navigationMessage} style={{ marginBottom: 12 }} />
+          ) : null}
           {/* 不传 onEnterReview：这里已经在校对页内，绑定完直接切到别的分区即可。 */}
           <ReviewWorkspacePanel
             group="component_binding"
@@ -971,6 +1018,7 @@ function ReviewWorkspaceLoaded({
             group="defect_photos"
             activeGroup={activeGroup}
             visitedGroups={visitedGroups}
+            fillHeight
           >
             <DefectsSection
               draft={draft}
@@ -1023,8 +1071,8 @@ function ReviewWorkspaceLoaded({
             <RawJsonSection draft={draft} />
           </ReviewWorkspacePanel>
         </div>
-      </div>
-      <div className="review-footer">
+      </Flex>
+      <Flex vertical>
         <ReviewMessageDock
           saveMessage={saveMessage}
           onDismissSaveMessage={() => setSaveMessage(null)}
@@ -1044,43 +1092,42 @@ function ReviewWorkspaceLoaded({
           onReopenWarnings={canReopen && hasWarningDefects ? () => void handleReopen("warnings_only") : undefined}
           onReopenFull={canReopen && isAdmin ? () => void handleReopen("full") : undefined}
         />
-      </div>
-      {confirmDialogOpen ? (
-        // 修订确认是关键决策弹窗：点击遮罩不关闭（避免误触丢失已填写的修订说明），只有"取消"按钮关闭。
-        <div className="review-modal-backdrop" role="presentation">
-          <section className="status-panel review-confirm-dialog" role="dialog" aria-modal="true" aria-label="确认修订版入库">
-            <h2>确认修订版入库</h2>
-            <p>同桥同年已有当前有效事实，需显式确认为修订版才能继续入库；确认后旧版本会标记为已被修订。</p>
-            {revisionHint ? <p className="warning-text">{revisionHint}</p> : null}
-            <label className="review-confirm-dialog-checkbox">
-              <input
-                type="checkbox"
-                disabled={busy}
-                checked={revisionChecked}
-                onChange={(event) => setRevisionChecked(event.target.checked)}
-              />
-              作为修订版确认
-            </label>
-            <textarea
-              disabled={busy}
-              className="review-confirm-dialog-note"
-              value={revisionNote}
-              onChange={(event) => setRevisionNote(event.target.value)}
-              placeholder="请填写修订说明"
-              rows={3}
-            />
-            {revisionError ? <p className="error-text">{revisionError}</p> : null}
-            <div className="review-confirm-dialog-actions">
-              <button type="button" onClick={() => setConfirmDialogOpen(false)} disabled={busy}>
-                取消
-              </button>
-              <button type="button" className="review-action-primary" onClick={handleConfirmDialogSubmit} disabled={busy}>
-                确认修订版入库
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
-    </div>
+      </Flex>
+      {/* 修订确认是关键决策弹窗：点击遮罩不关闭（避免误触丢失已填写的修订说明），只有"取消"按钮关闭。 */}
+      <Modal
+        open={confirmDialogOpen}
+        title="确认修订版入库"
+        okText="确认修订版入库"
+        cancelText="取消"
+        confirmLoading={busy}
+        cancelButtonProps={{ disabled: busy }}
+        mask={{ closable: false }}
+        onOk={handleConfirmDialogSubmit}
+        onCancel={() => setConfirmDialogOpen(false)}
+      >
+        <Flex vertical gap={10}>
+          <Typography.Text>
+            同桥同年已有当前有效事实，需显式确认为修订版才能继续入库；确认后旧版本会标记为已被修订。
+          </Typography.Text>
+          {revisionHint ? <Alert type="warning" showIcon title={revisionHint} /> : null}
+          <Checkbox
+            disabled={busy}
+            checked={revisionChecked}
+            onChange={(event) => setRevisionChecked(event.target.checked)}
+          >
+            作为修订版确认
+          </Checkbox>
+          <Input.TextArea
+            aria-label="修订说明"
+            disabled={busy}
+            value={revisionNote}
+            onChange={(event) => setRevisionNote(event.target.value)}
+            placeholder="请填写修订说明"
+            rows={3}
+          />
+          {revisionError ? <Alert type="error" showIcon role="alert" title={revisionError} /> : null}
+        </Flex>
+      </Modal>
+    </Flex>
   );
 }

@@ -6,6 +6,7 @@ import type { RatingTreeNodeSummary } from "../../api/ratingTreeApi";
 import type { DefectReviewRow } from "../defectPhotoReviewModel";
 import { buildDefectIssueGroups } from "../defectIssueGroups";
 import { data } from "../testFixtures";
+import { chooseOption, optionLabels } from "../../test/antd";
 import { DefectIssueGroupList } from "./DefectIssueGroupList";
 
 function row(candidateId: string, componentId: string): DefectReviewRow {
@@ -62,7 +63,7 @@ const node: RatingTreeNodeSummary = {
   is_scoring: false,
 };
 
-it("assigns a common applicable node to every defect in an exact source group", () => {
+it("assigns a common applicable node to every defect in an exact source group", async () => {
   const groups = buildDefectIssueGroups([
     row("1-1#板", "component-1"),
     row("1-2#板", "component-2"),
@@ -82,9 +83,7 @@ it("assigns a common applicable node to every defect in an exact source group", 
   );
 
   expect(screen.getByText("1 个问题组")).toBeInTheDocument();
-  fireEvent.change(screen.getByRole("combobox", { name: "为 存在黑点痕迹 选择评定树病害" }), {
-    target: { value: node.id },
-  });
+  await chooseOption(screen.getByLabelText("为 存在黑点痕迹 选择评定树病害"), new RegExp(node.display_name));
   fireEvent.click(screen.getByRole("button", { name: "应用到本组 2 条" }));
 
   expect(onApplyNode).toHaveBeenCalledWith(groups[0], node);
@@ -132,7 +131,7 @@ it("offers one group confirmation for range-split defects without requiring phot
 // 区间展开的行：绑了 3 件构件，单一 bridgeComponentId 按约定为 null。此前问题组按那个
 // 单一 id 取共同适用节点，于是整组候选凭空清空，"应用到本组"下拉一个选项都没有——
 // 而这些病害恰恰最需要整组套用。
-it("still offers nodes when a row is a range-expanded defect", () => {
+it("still offers nodes when a row is a range-expanded defect", async () => {
   const expanded = row("2-1#板~2-3#板", "component-1");
   expanded.resolution = {
     ...expanded.resolution,
@@ -160,6 +159,6 @@ it("still offers nodes when a row is a range-expanded defect", () => {
     />,
   );
 
-  const select = screen.getByRole("combobox", { name: "为 存在黑点痕迹 选择评定树病害" });
-  expect(select).toContainHTML(node.display_name);
+  const labels = await optionLabels(screen.getByLabelText("为 存在黑点痕迹 选择评定树病害"));
+  expect(labels.some((label) => label.includes(node.display_name))).toBe(true);
 });

@@ -1,4 +1,4 @@
-import { Button, Modal, Table } from "antd";
+import { Button, Descriptions, Flex, Image, Modal, Skeleton, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useState } from "react";
 
@@ -72,7 +72,6 @@ export function ObservationTable({ observations, onRebind }: ObservationTablePro
         <Button
           type="link"
           size="small"
-          className="archive-observation-evidence-link"
           onClick={(event) => {
             // 行点击用于展开详情，证据入口不应顺带触发展开。
             event.stopPropagation();
@@ -88,7 +87,6 @@ export function ObservationTable({ observations, onRebind }: ObservationTablePro
   return (
     <>
       <Table<ArchiveObservation>
-        className="archive-observation-table"
         rowKey={(observation) => observation.id}
         columns={columns}
         dataSource={observations}
@@ -99,7 +97,6 @@ export function ObservationTable({ observations, onRebind }: ObservationTablePro
           // 渲染稿的表格只有 6 列，展开由整行点击承担，不额外占一列。
           showExpandColumn: false,
           expandRowByClick: true,
-          expandedRowClassName: () => "archive-observation-detail-row",
           expandedRowRender: (observation) => (
             <ObservationDetail observation={observation} onRebind={onRebind} />
           ),
@@ -121,51 +118,60 @@ interface ObservationDetailProps {
 // 展开后的年度观测明细：位置原文、病害描述、结构化尺寸、照片与重绑入口。
 function ObservationDetail({ observation, onRebind }: ObservationDetailProps) {
   return (
-    <div className="archive-observation-detail">
-      <p>
-        <strong>年度实际位置：</strong>
-        {observation.defect_location || "未记录"}
-      </p>
-      <p>
-        <strong>病害描述：</strong>
-        {observation.defect_description}
-      </p>
-      {observation.measurements.length > 0 ? (
-        <ul className="archive-measurement-list">
-          {observation.measurements.map((item, index) => (
-            <li key={`${item.raw_text}-${index}`}>
-              {item.measurement_type}：{item.raw_text}
-              {formatArchiveMeasurementValue(item)}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="archive-empty-hint">该年度没有结构化尺寸。</p>
-      )}
+    <Flex vertical gap={12}>
+      <Descriptions
+        size="small"
+        column={1}
+        styles={{ label: { width: 96, whiteSpace: "nowrap" } }}
+        items={[
+          { key: "location", label: "年度实际位置", children: observation.defect_location || "未记录" },
+          { key: "description", label: "病害描述", children: observation.defect_description },
+          {
+            key: "measurements",
+            label: "结构化尺寸",
+            children: observation.measurements.length > 0 ? (
+              <Flex vertical gap={2}>
+                {observation.measurements.map((item, index) => (
+                  <Typography.Text key={`${item.raw_text}-${index}`}>
+                    {item.measurement_type}：{item.raw_text}
+                    {formatArchiveMeasurementValue(item)}
+                  </Typography.Text>
+                ))}
+              </Flex>
+            ) : <Typography.Text type="secondary">该年度没有结构化尺寸。</Typography.Text>,
+          },
+        ]}
+      />
+
       {observation.photos.length > 0 ? (
-        <div className="archive-photo-strip">
-          {observation.photos.map((photo) => (
-            <figure key={photo.id}>
-              <img src={defectPhotoContentUrl(backendBaseUrl, photo.id)} alt={`照片 ${photo.photo_number}`} />
-              <figcaption>
-                {photo.photo_number}
-                {photo.photo_title ? `｜${photo.photo_title}` : ""}
-              </figcaption>
-            </figure>
-          ))}
-        </div>
+        <Image.PreviewGroup>
+          <Flex gap={12} wrap>
+            {observation.photos.map((photo) => (
+              <Flex key={photo.id} vertical gap={4} style={{ maxWidth: 160 }}>
+                <Image
+                  src={defectPhotoContentUrl(backendBaseUrl, photo.id)}
+                  alt={`照片 ${photo.photo_number}`}
+                  width={160}
+                  height={112}
+                  style={{ objectFit: "cover" }}
+                />
+                <Typography.Text type="secondary" ellipsis>
+                  {photo.photo_number}
+                  {photo.photo_title ? `｜${photo.photo_title}` : ""}
+                </Typography.Text>
+              </Flex>
+            ))}
+          </Flex>
+        </Image.PreviewGroup>
       ) : (
-        <p className="archive-empty-hint">该年度病害没有照片。</p>
+        <Typography.Text type="secondary">该年度病害没有照片。</Typography.Text>
       )}
-      <div className="archive-observation-actions">
-        {onRebind ? (
-          <Button size="small" onClick={() => onRebind(observation)}>
-            重新绑定
-          </Button>
-        ) : null}
-        <span className="archive-observation-number">{observation.system_number}</span>
-      </div>
-    </div>
+
+      <Flex align="center" justify="space-between" gap={12} wrap>
+        <Typography.Text type="secondary">{observation.system_number}</Typography.Text>
+        {onRebind ? <Button size="small" onClick={() => onRebind(observation)}>重新绑定</Button> : null}
+      </Flex>
+    </Flex>
   );
 }
 
@@ -212,43 +218,44 @@ function ObservationEvidenceModal({ observation, onClose }: ObservationEvidenceM
       onCancel={onClose}
       footer={<Button onClick={onClose}>关闭</Button>}
     >
-      {evidenceError ? <p className="archive-empty-hint">{evidenceError}</p> : null}
+      {evidenceError ? <Typography.Text type="danger">{evidenceError}</Typography.Text> : null}
       {evidence ? (
-        <dl className="archive-evidence-list">
-          <dt>来源表</dt>
-          <dd>
-            {evidence.source_table_title ?? "-"}
-            {evidence.source_row_number !== null ? `（第 ${evidence.source_row_number} 行）` : ""}
-          </dd>
-          <dt>导入记录</dt>
-          <dd>{evidence.import_record_system_number ?? "-"}</dd>
-          <dt>来源文件</dt>
-          <dd>
-            {evidence.source_file_system_number ?? "-"}
-            {evidence.source_file_name ? `｜${evidence.source_file_name}` : ""}
-          </dd>
-          {!evidence.original_word_retained ? (
-            <>
-              <dt>原始 Word</dt>
-              <dd>已按临时文件策略清理，当前证据来自解析快照。</dd>
-            </>
-          ) : null}
-          {splitSourceNumber ? (
-            <>
-              <dt>拆分来源</dt>
-              <dd>
-                由 {splitSourceNumber} 拆分
-                {splitOperatedAt ? `（${new Date(splitOperatedAt).toLocaleString()}）` : ""}
-              </dd>
-            </>
-          ) : null}
-          <dt>原始行</dt>
-          <dd>
-            <code>{JSON.stringify(evidence.source_raw_cells)}</code>
-          </dd>
-        </dl>
+        <Descriptions
+          size="small"
+          column={1}
+          bordered
+          styles={{ label: { width: 96, whiteSpace: "nowrap" } }}
+          items={[
+            {
+              key: "table",
+              label: "来源表",
+              children: `${evidence.source_table_title ?? "-"}${evidence.source_row_number !== null ? `（第 ${evidence.source_row_number} 行）` : ""}`,
+            },
+            { key: "import", label: "导入记录", children: evidence.import_record_system_number ?? "-" },
+            {
+              key: "file",
+              label: "来源文件",
+              children: `${evidence.source_file_system_number ?? "-"}${evidence.source_file_name ? `｜${evidence.source_file_name}` : ""}`,
+            },
+            ...(evidence.original_word_retained ? [] : [{
+              key: "word",
+              label: "原始 Word",
+              children: "已按临时文件策略清理，当前证据来自解析快照。",
+            }]),
+            ...(splitSourceNumber ? [{
+              key: "split",
+              label: "拆分来源",
+              children: `由 ${splitSourceNumber} 拆分${splitOperatedAt ? `（${new Date(splitOperatedAt).toLocaleString()}）` : ""}`,
+            }] : []),
+            {
+              key: "raw",
+              label: "原始行",
+              children: <Typography.Text code copyable>{JSON.stringify(evidence.source_raw_cells)}</Typography.Text>,
+            },
+          ]}
+        />
       ) : evidenceError === null ? (
-        <p>正在加载来源证据…</p>
+        <Skeleton active paragraph={{ rows: 4 }} />
       ) : null}
     </Modal>
   );

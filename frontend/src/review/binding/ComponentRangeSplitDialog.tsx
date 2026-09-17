@@ -1,3 +1,5 @@
+import { Alert, Button, Flex, Modal, Table, Typography, theme, type TableColumnsType } from "antd";
+
 import type { ResolutionPlanPreview } from "../../api/resolutionApi";
 
 // 区间展开的确认对话框。
@@ -8,6 +10,8 @@ import type { ResolutionPlanPreview } from "../../api/resolutionApi";
 // 展示口径也跟着换了。旧预览逐行给"病害数 / 照片数"，那是把展开当成复制病害来算的；
 // 新模型里展开只是给同一条来源病害多挂几个解析实例，所以逐行给的是"会绑到几件构件"，
 // 总量给的是实例数变化。
+
+type PreviewRow = ResolutionPlanPreview["rows"][number];
 
 const OUTCOME_LABELS: Record<string, string> = {
   will_bind: "将展开绑定",
@@ -24,7 +28,7 @@ const REASON_LABELS: Record<string, string> = {
   group_already_resolved: "已绑定或已标记缺失，不参与",
 };
 
-function outcomeLabel(row: ResolutionPlanPreview["rows"][number]): string {
+function outcomeLabel(row: PreviewRow): string {
   if (row.outcome === "will_bind") return OUTCOME_LABELS.will_bind;
   return REASON_LABELS[row.reason_code] ?? row.reason_message ??
     OUTCOME_LABELS[row.outcome] ?? row.outcome;
@@ -48,55 +52,75 @@ export function ComponentRangeSplitDialog({
   onRetry: () => void;
   onApply: (planToken: string) => void;
 }) {
+  const { token } = theme.useToken();
   const canApply = preview !== null && preview.will_apply_count > 0 && !busy && !loading;
 
+  const columns: TableColumnsType<PreviewRow> = [
+    { title: "原构件范围", dataIndex: "source_component_number", key: "number", width: 160 },
+    { title: "部件", dataIndex: "source_component_name", key: "name", width: 140, ellipsis: true },
+    { title: "病害", dataIndex: "member_count", key: "members", width: 80, align: "center" },
+    {
+      title: "展开到",
+      key: "targets",
+      width: 90,
+      align: "center",
+      render: (_value, row) => row.target_component_ids.length || "—",
+    },
+    {
+      title: "结果",
+      key: "outcome",
+      render: (_value, row) => (
+        <Typography.Text style={{ color: row.outcome === "will_bind" ? token.colorSuccess : token.colorTextSecondary }}>
+          {outcomeLabel(row)}
+        </Typography.Text>
+      ),
+    },
+  ];
+
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <section
-        className="workspace-dialog range-split-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="range-split-title"
-      >
-        <h2 id="range-split-title">拆分构件范围</h2>
-        <p className="dialog-hint">
+    <Modal
+      open
+      title="拆分构件范围"
+      width={720}
+      onCancel={onClose}
+      footer={
+        <Flex justify="end" gap={8}>
+          <Button disabled={busy} onClick={onClose}>{error ? "关闭" : "取消"}</Button>
+          {error ? (
+            <Button type="primary" disabled={busy} onClick={onRetry}>重新计算</Button>
+          ) : (
+            <Button
+              type="primary"
+              loading={busy}
+              disabled={!canApply}
+              onClick={() => preview && onApply(preview.plan_token)}
+            >
+              {busy ? "正在应用…" : "确认拆分"}
+            </Button>
+          )}
+        </Flex>
+      }
+    >
+      <Flex vertical gap={12}>
+        <Typography.Text type="secondary">
           展开后每个实际构件分别参与评分，病害数量增加可能使总扣分增加。
           照片整份留在编号最小的那条实例上，其余不带照片——同一个照片编号出现在多条
           观测上，报告里的编号交叉引用就作废了；该配哪张图只有人能判断，请展开后人工挪。
-        </p>
-        {loading ? <p className="dialog-loading" role="status">正在计算展开影响…</p> : null}
-        {error ? <p className="error-text" role="alert">{error}</p> : null}
+        </Typography.Text>
+        {loading ? <Typography.Text type="secondary" role="status">正在计算展开影响…</Typography.Text> : null}
+        {error ? <Alert type="error" showIcon role="alert" title={error} /> : null}
         {preview ? (
           <>
-            <div className="range-split-table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>原构件范围</th><th>部件</th><th>病害</th><th>展开到</th><th>结果</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.rows.map((row) => (
-                    <tr key={row.group_id}>
-                      <td>{row.source_component_number}</td>
-                      <td>{row.source_component_name}</td>
-                      <td>{row.member_count}</td>
-                      <td>{row.target_component_ids.length || "—"}</td>
-                      <td
-                        className={
-                          row.outcome === "will_bind"
-                            ? "range-split-ok"
-                            : "range-split-skip"
-                        }
-                      >
-                        {outcomeLabel(row)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="range-split-totals">
+            <Table<PreviewRow>
+              rowKey="group_id"
+              size="small"
+              bordered
+              columns={columns}
+              dataSource={preview.rows}
+              pagination={false}
+              scroll={{ x: 600, y: 320 }}
+            />
+            <Typography.Text>
               将展开 {preview.will_apply_count} 个范围
               {preview.skipped_count > 0 ? ` · 跳过 ${preview.skipped_count} 个` : ""}
               {preview.blocked_count > 0 ? ` · 阻断 ${preview.blocked_count} 个` : ""}
@@ -105,27 +129,10 @@ export function ComponentRangeSplitDialog({
                 ? `，重算评分树 ${preview.rating_recomputed_count} 条`
                 : ""}
               。
-            </p>
+            </Typography.Text>
           </>
         ) : null}
-        <div className="dialog-actions">
-          <button type="button" disabled={busy} onClick={onClose}>{error ? "关闭" : "取消"}</button>
-          {error ? (
-            <button type="button" className="primary-button" disabled={busy} onClick={onRetry}>
-              重新计算
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="primary-button"
-              disabled={!canApply}
-              onClick={() => preview && onApply(preview.plan_token)}
-            >
-              {busy ? "正在应用…" : "确认拆分"}
-            </button>
-          )}
-        </div>
-      </section>
-    </div>
+      </Flex>
+    </Modal>
   );
 }

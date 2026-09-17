@@ -198,7 +198,8 @@ describe("RatingTreePage", () => {
     expect(await screen.findByTitle("5 梁式桥上部结构")).toBeInTheDocument();
     expect(screen.queryByTitle("桥梁有效评定树")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "单位说明" })).not.toBeInTheDocument();
-    expect(screen.getByTitle("5.1 混凝土梁式桥")).toBeInTheDocument();
+    // 子节点是展开根节点后另取一次的，机器忙时会晚于上面那次断言到达，所以这里要等。
+    expect(await screen.findByTitle("5.1 混凝土梁式桥")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "5.1 混凝土梁式桥" })).toBeInTheDocument();
     fireEvent.click(screen.getByTitle("5.1 混凝土梁式桥"));
     expect(await screen.findByRole("heading", { name: "5.1 混凝土梁式桥" })).toBeInTheDocument();
