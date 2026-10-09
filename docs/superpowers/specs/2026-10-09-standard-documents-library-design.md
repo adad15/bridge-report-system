@@ -234,15 +234,15 @@
 
 | 方法与路径 | 请求体 | 成功返回 |
 | --- | --- | --- |
-| `POST /api/standard-documents` | multipart：`metadata`（JSON `{document, version}`）+ `file` | 201，该规范 |
-| `PATCH /api/standard-documents/{id}` | JSON：`name`、`english_name`、`category` | 200，该规范 |
-| `DELETE /api/standard-documents/{id}` | — | 204；连同全部版本和文件 |
-| `POST /api/standard-documents/{id}/versions` | multipart：`metadata`（版本 JSON）+ `file` | 201，该规范 |
-| `PATCH /api/standard-document-versions/{id}` | JSON：版本字段 | 200，所属规范 |
-| `PUT /api/standard-document-versions/{id}/file` | multipart：`file` | 200，所属规范 |
-| `DELETE /api/standard-document-versions/{id}` | — | 200，所属规范；删到没有版本时规范保留 |
+| `POST /api/standard-documents` | multipart：`metadata`（JSON `{document, version}`）+ `file` | 201，`{"document": 该规范}` |
+| `PATCH /api/standard-documents/{id}` | JSON：`name`、`english_name`、`category` | 200，`{"document": 该规范}` |
+| `DELETE /api/standard-documents/{id}` | — | 200，`{"deleted": true}`；连同全部版本和文件 |
+| `POST /api/standard-documents/{id}/versions` | multipart：`metadata`（版本 JSON）+ `file` | 201，`{"document": 所属规范}` |
+| `PATCH /api/standard-document-versions/{id}` | JSON：版本字段 | 200，`{"document": 所属规范}` |
+| `PUT /api/standard-document-versions/{id}/file` | multipart：`file` | 200，`{"document": 所属规范}` |
+| `DELETE /api/standard-document-versions/{id}` | — | 200，`{"document": 所属规范}`；删到没有版本时规范保留 |
 
-返回的「规范」与列表接口中的单个元素形状相同，前端直接替换本地数据，不整表重拉。multipart 用一个 `metadata` 字段承载 JSON，沿用报告模板上传的做法。
+`document` 与列表接口中的单个元素形状相同，前端直接替换本地数据，不整表重拉。删除规范不用 204：前端 `request()` 一律按 JSON 解析响应体，和桥梁图件的删除接口一样回 `{"deleted": true}`。multipart 用一个 `metadata` 字段承载 JSON，沿用报告模板上传的做法。
 
 ### 7.3 原文内容（不鉴权）
 
@@ -288,7 +288,7 @@
 | 规则包弹窗 | 标题「规范管理」，关闭按钮「关闭规范管理」 | 「规则管理」「关闭规则管理」；说明文字「历史年度仍保留原规范版本」改为「原规则包版本」 |
 | 深链 | `/bridges?standards=1` | `/bridges?rules=1`，仍只对管理员生效 |
 | 评定树页按钮 | 「查看规范信息」→ `/bridges?standards=1` | 「规则管理」→ `/bridges?rules=1` |
-| `frontend/scripts/check-loading-browser.mjs` | 点「规范管理」按钮、等「规范管理」弹窗 | 改为「规则管理」 |
+| `frontend/scripts/check-loading-browser.mjs` | 点「规范管理」按钮、等「规范管理」弹窗 | 改为「规则管理」。该脚本尚未纳入版本库（他人在制品），只改这两处、不随本功能提交 |
 | `docs/ui-design-system.md` §6.2 | 把规范管理列为管理列表页 | 改为「规则管理」；规范管理页归入 §6.4 那类全高双栏页面 |
 
 `AppLayout` 中针对 `/bridges?standards=1` 的菜单高亮特例删除；`currentPageName` 增加 `/standards` →「规范管理」。
@@ -320,8 +320,10 @@
 | `src/standard-documents/StandardPdfReader.tsx` | iframe 阅读区 |
 | `src/standard-documents/StandardVersionTable.tsx` | 版本记录 |
 | `src/standard-documents/StandardBasicInfo.tsx` | 基本信息 |
+| `src/standard-documents/StandardVersionFields.tsx` | 版本字段、PDF 选择项、表单值与接口入参的转换；两个表单弹窗共用 |
 | `src/standard-documents/StandardDocumentFormModal.tsx` | 新增规范、编辑规范信息 |
 | `src/standard-documents/StandardVersionFormModal.tsx` | 上传新版本、编辑版本、替换原文 |
+| `src/standard-documents/DeleteStandardDocumentModal.tsx` | 删除整部规范的确认弹窗 |
 | `src/standard-documents/versionStatus.tsx` | 状态文案与标签颜色 |
 
 新目录与规则包所在的 `src/standards/` 分开。只用 antd 组件，不新增 CSS（`docs/ui-design-system.md` §2.5）。`App.tsx`、`AppLayout.tsx`、`BridgesPage.tsx`、`RatingTreePage.tsx`、`StandardsAdminPanel.tsx` 只改 §8 涉及的行；其中 `App.tsx`、`BridgesPage.tsx` 有他人未提交的改动。
