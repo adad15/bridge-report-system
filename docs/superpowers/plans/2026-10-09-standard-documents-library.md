@@ -145,7 +145,8 @@ begin
   begin
     delete from archived_files where id = f1;
     raise exception '038: archived file deleted while a version still uses it';
-  exception when foreign_key_violation then null;
+  -- on delete restrict 抛的是 restrict_violation（23001），不是 foreign_key_violation。
+  exception when restrict_violation then null;
   end;
 
   delete from standard_documents where id = d;
