@@ -134,17 +134,19 @@ inline Json::Value parse_parsed_result_json(const std::string& text) {
 }
 
 /**
- * @brief 下载响应的 Content-Disposition，中文文件名走 RFC 5987 的 filename*。
+ * @brief 文件响应的 Content-Disposition，中文文件名走 RFC 5987 的 filename*。
  *
  * 只写 `filename=` 会被大多数浏览器按 latin-1 解释，`百股大桥定期检测报告.docx`
  * 存下来就是一串乱码；两个都写，老客户端用前者、新客户端用后者。前一个退化成
  * ASCII 占位，真正的名字由 filename* 给出。
  *
+ * kind 为 "attachment"（下载）或 "inline"（在浏览器里直接打开，例如 iframe 里的 PDF）。
+ *
  * 注意跨域时还要把 Content-Disposition 放进 Access-Control-Expose-Headers，
  * 否则前端用 fetch 取 blob 根本读不到这个头（见 Cors.cpp）。
  */
-inline std::string attachment_disposition(
-    const std::string& filename, const std::string& ascii_fallback = "download") {
+inline std::string content_disposition(
+    std::string_view kind, const std::string& filename, const std::string& ascii_fallback = "download") {
     std::ostringstream encoded;
     encoded << std::hex << std::uppercase;
     for (const unsigned char character : filename) {
@@ -159,7 +161,12 @@ inline std::string attachment_disposition(
             encoded << '%' << (character < 0x10 ? "0" : "") << static_cast<int>(character);
         }
     }
-    return "attachment; filename=\"" + ascii_fallback + "\"; filename*=UTF-8''" + encoded.str();
+    return std::string(kind) + "; filename=\"" + ascii_fallback + "\"; filename*=UTF-8''" + encoded.str();
+}
+
+inline std::string attachment_disposition(
+    const std::string& filename, const std::string& ascii_fallback = "download") {
+    return content_disposition("attachment", filename, ascii_fallback);
 }
 
 // OPTIONS 预检处理器：只回 CORS 头，供两个路由文件登记各自路径时共用。
