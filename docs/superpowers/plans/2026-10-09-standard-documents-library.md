@@ -17,11 +17,12 @@
 - **提交。** 开始执行前先问用户是否按任务提交。每次提交前 `git status` 核对，只 `git add --` 本任务新建或独占的文件；上一条所列共享文件的改动统一在任务 12 用外科式暂存提交。提交信息先用 Write 工具写进临时文件，再 `git commit -F <文件>`（Git Bash 的 heredoc 会把中文转乱），结尾加一行 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`。
 - **前端样式。** 只用 antd 组件及其属性，不新增 CSS 规则和 className；尺寸可写 `style`/`styles`，颜色、字号取 `theme.useToken()`。`tsconfig` 开了 `noUnusedLocals`，删掉不用的导入。两个汉字的按钮会被 antd 插空格，测试里写 `/^取\s?消$/`。
 - **后端。** 迁移必须幂等，因为检查脚本会连跑两遍。每个写接口的路径都要 `register_options_handler`，否则路由预检审计会报错。归档路径只用 ASCII。Windows 上删文件前要先关掉读它的句柄。
+- **构建目录。** 仓库从 `D:\vs2022 code` 改名为 `D:\vs2022_code` 之后，`backend-cpp/build/vs-debug` 的 CMake 缓存仍指向旧路径，已经不能用。构建统一使用用户改名后新建的 `backend-cpp/build/after-rename-release`：它是多配置目录，测试编 Debug；用户正在运行的后端是这个目录下的 Release 版。
 - **构建与测试命令**（PowerShell，在仓库根目录执行）：
   - 构建前确认 `Get-Process bridge-report-backend -ErrorAction SilentlyContinue` 为空。进程还在会报 LNK1168，停用户的进程前先问。
-  - 构建测试：`cmake --build backend-cpp/build/vs-debug --config Debug --target bridge_report_backend_tests`
-  - 只跑本功能的纯函数测试：`backend-cpp/build/vs-debug/Debug/bridge_report_backend_tests.exe --gtest_filter=StandardDocument*`。未设数据库变量时，仓储测试会自动跳过。
-  - 全量测试（含数据库，自建并自删隔离 schema）：`powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1`
+  - 构建测试：`cmake --build backend-cpp/build/after-rename-release --config Debug --target bridge_report_backend_tests`
+  - 只跑本功能的纯函数测试：`backend-cpp/build/after-rename-release/Debug/bridge_report_backend_tests.exe --gtest_filter=StandardDocument*`。未设数据库变量时，仓储测试会自动跳过。
+  - 全量测试（含数据库，自建并自删隔离 schema）：`powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1 -BuildDirectory backend-cpp/build/after-rename-release`
   - 前端单测：在 `frontend` 目录下执行 `npx vitest run <文件>`。类型检查：`npx tsc -b`。
 
 ## 文件结构
@@ -554,7 +555,7 @@ TEST(StandardDocumentModelsTest, BuildsASafeDownloadFileName) {
 
 - [ ] **步骤 2：构建，确认失败**
 
-运行：`cmake --build backend-cpp/build/vs-debug --config Debug --target bridge_report_backend_tests`
+运行：`cmake --build backend-cpp/build/after-rename-release --config Debug --target bridge_report_backend_tests`
 预期：编译失败，找不到 `bridge_report/standards/StandardDocumentModels.hpp`。
 
 - [ ] **步骤 3：写头文件**
@@ -1056,9 +1057,9 @@ std::string standard_pdf_file_name(const std::string& code, const std::string& d
 - [ ] **步骤 5：构建并跑测试，确认通过**
 
 运行：
-`cmake --build backend-cpp/build/vs-debug --config Debug --target bridge_report_backend_tests`
-`backend-cpp/build/vs-debug/Debug/bridge_report_backend_tests.exe --gtest_filter=StandardDocumentModelsTest.*`
-预期：16 个用例全部 PASS。
+`cmake --build backend-cpp/build/after-rename-release --config Debug --target bridge_report_backend_tests`
+`backend-cpp/build/after-rename-release/Debug/bridge_report_backend_tests.exe --gtest_filter=StandardDocumentModelsTest.*`
+预期：17 个用例全部 PASS。
 
 - [ ] **步骤 6：提交（只加本任务新建文件；CMakeLists 留到任务 12）**
 
@@ -1174,7 +1175,7 @@ TEST_F(StandardDocumentArchiveTest, RemovesOnlyWhenTheHashMatches) {
 
 - [ ] **步骤 2：构建，确认失败**
 
-运行：`cmake --build backend-cpp/build/vs-debug --config Debug --target bridge_report_backend_tests`
+运行：`cmake --build backend-cpp/build/after-rename-release --config Debug --target bridge_report_backend_tests`
 预期：编译失败，找不到 `bridge_report/archive/StandardDocumentArchive.hpp`。
 
 - [ ] **步骤 3：写头文件**
@@ -1359,8 +1360,8 @@ void remove_archived_standard_pdf(
 - [ ] **步骤 5：构建并跑测试，确认通过**
 
 运行：
-`cmake --build backend-cpp/build/vs-debug --config Debug --target bridge_report_backend_tests`
-`backend-cpp/build/vs-debug/Debug/bridge_report_backend_tests.exe --gtest_filter=StandardDocumentArchiveTest.*`
+`cmake --build backend-cpp/build/after-rename-release --config Debug --target bridge_report_backend_tests`
+`backend-cpp/build/after-rename-release/Debug/bridge_report_backend_tests.exe --gtest_filter=StandardDocumentArchiveTest.*`
 预期：5 个用例全部 PASS。
 
 - [ ] **步骤 6：提交**
@@ -1614,7 +1615,7 @@ TEST_F(StandardDocumentRepositoryTest, FindsTheFileOfAVersionWithItsDocumentName
 
 - [ ] **步骤 2：构建，确认失败**
 
-运行：`cmake --build backend-cpp/build/vs-debug --config Debug --target bridge_report_backend_tests`
+运行：`cmake --build backend-cpp/build/after-rename-release --config Debug --target bridge_report_backend_tests`
 预期：编译失败，找不到 `bridge_report/db/StandardDocumentRepository.hpp`。
 
 - [ ] **步骤 3：写头文件**
@@ -2110,8 +2111,8 @@ StandardDocumentWriteOutcome StandardDocumentRepository::remove_version(const st
 - [ ] **步骤 5：构建并跑全量测试（含数据库），确认通过**
 
 运行：
-`cmake --build backend-cpp/build/vs-debug --config Debug --target bridge_report_backend_tests`
-`powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1`
+`cmake --build backend-cpp/build/after-rename-release --config Debug --target bridge_report_backend_tests`
+`powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1 -BuildDirectory backend-cpp/build/after-rename-release`
 预期：脚本最后打印 `Isolated backend check passed ...`；`StandardDocumentRepositoryTest.*` 的 10 个用例全部 PASS，没有被跳过。
 
 - [ ] **步骤 6：提交**
@@ -2214,7 +2215,7 @@ TEST(StandardDocumentRoutesTest, InlineDispositionEncodesTheChineseName) {
 
 - [ ] **步骤 2：构建，确认失败**
 
-运行：`cmake --build backend-cpp/build/vs-debug --config Debug --target bridge_report_backend_tests`
+运行：`cmake --build backend-cpp/build/after-rename-release --config Debug --target bridge_report_backend_tests`
 预期：编译失败，找不到 `bridge_report/http/StandardDocumentRoutes.hpp`。
 
 - [ ] **步骤 3：把 `attachment_disposition` 扩展出 inline**
@@ -2882,8 +2883,8 @@ void register_standard_document_routes(
 - [ ] **步骤 7：构建并跑测试，确认通过**
 
 运行：
-`cmake --build backend-cpp/build/vs-debug --config Debug --target bridge_report_backend_tests bridge-report-backend`
-`backend-cpp/build/vs-debug/Debug/bridge_report_backend_tests.exe --gtest_filter=StandardDocument*`
+`cmake --build backend-cpp/build/after-rename-release --config Debug --target bridge_report_backend_tests bridge-report-backend`
+`backend-cpp/build/after-rename-release/Debug/bridge_report_backend_tests.exe --gtest_filter=StandardDocument*`
 预期：`StandardDocumentRoutesTest.*` 5 个用例 PASS，前面任务的用例仍全部 PASS；`bridge-report-backend` 能链接成功。全量回归放到任务 11 一起跑。
 
 - [ ] **步骤 8：提交（`main.cpp`、`CMakeLists.txt` 留到任务 12）**
@@ -5382,8 +5383,8 @@ git add -- frontend/src/layouts/AppLayout.tsx frontend/src/layouts/AppLayout.tes
 - [ ] **步骤 1：后端全量回归**
 
 先确认没有正在运行的 `bridge-report-backend.exe`；有的话先问用户再停。然后运行：
-`cmake --build backend-cpp/build/vs-debug --config Debug --target bridge_report_backend_tests bridge-report-backend`
-`powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1`
+`cmake --build backend-cpp/build/after-rename-release --config Debug --target bridge_report_backend_tests bridge-report-backend`
+`powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1 -BuildDirectory backend-cpp/build/after-rename-release`
 预期：`Isolated backend check passed ...`，所有用例通过，路由预检审计不报缺 OPTIONS 的路径。
 
 - [ ] **步骤 2：开发库执行 038（先征得用户同意，只跑这一个文件）**
