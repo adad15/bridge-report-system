@@ -4543,7 +4543,7 @@ export function StandardDocumentFormModal({ mode, onClose, onSaved }: Props) {
       centered
       width={720}
       title={mode.type === "create" ? "新增规范" : "编辑规范信息"}
-      maskClosable={false}
+      mask={{ closable: false }}
       closable={{ "aria-label": "关闭", disabled: busy }}
       onCancel={() => { if (!busy) onClose(); }}
       okText={mode.type === "create" ? "上传" : "保存"}
@@ -4678,7 +4678,7 @@ export function StandardVersionFormModal({ mode, onClose, onSaved }: Props) {
       centered
       width={720}
       title={titleFor(mode)}
-      maskClosable={false}
+      mask={{ closable: false }}
       closable={{ "aria-label": "关闭", disabled: busy }}
       onCancel={() => { if (!busy) onClose(); }}
       okText={mode.type === "edit" ? "保存" : "上传"}
@@ -4737,7 +4737,7 @@ export function DeleteStandardDocumentModal({ document, onClose, onDeleted }: Pr
       centered
       width={480}
       title="删除规范"
-      maskClosable={false}
+      mask={{ closable: false }}
       closable={{ "aria-label": "关闭", disabled: busy }}
       onCancel={() => { if (!busy) onClose(); }}
       okText="删除"
