@@ -1,4 +1,4 @@
-import { SearchOutlined } from "@ant-design/icons";
+import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { Button, Card, Empty, Flex, Input, Typography, theme } from "antd";
 import { useMemo, useState } from "react";
 
@@ -14,7 +14,10 @@ interface Props {
   onCreate: () => void;
 }
 
-/** 左栏规范目录：按分类分组，可按名称或任一版本的编号搜索（设计 §5.2）。 */
+/**
+ * 左栏规范目录：按分类分组，可按名称或任一版本的编号搜索（设计 §5.2）。
+ * 页面不设页头（给阅读区腾高度），管理员的「新增规范」放在这里的标题栏。
+ */
 export function StandardDocumentList({ documents, selectedId, isAdmin, onSelect, onCreate }: Props) {
   const { token } = theme.useToken();
   const [query, setQuery] = useState("");
@@ -34,7 +37,12 @@ export function StandardDocumentList({ documents, selectedId, isAdmin, onSelect,
   return (
     <Card
       title="规范目录"
-      extra={<Typography.Text type="secondary">{documents?.length ?? 0} 部</Typography.Text>}
+      extra={(
+        <Flex align="center" gap={10}>
+          <Typography.Text type="secondary">{documents?.length ?? 0} 部</Typography.Text>
+          {isAdmin ? <Button type="primary" size="small" icon={<PlusOutlined />} onClick={onCreate}>新增规范</Button> : null}
+        </Flex>
+      )}
       style={{ height: "100%" }}
       styles={{
         root: { display: "flex", flexDirection: "column" },
@@ -51,9 +59,7 @@ export function StandardDocumentList({ documents, selectedId, isAdmin, onSelect,
       />
       <Flex vertical gap={16} style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         {documents !== null && documents.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={isAdmin ? "还没有规范" : "暂无规范"}>
-            {isAdmin ? <Button type="primary" onClick={onCreate}>新增规范</Button> : null}
-          </Empty>
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={isAdmin ? "还没有规范，点上方「新增规范」" : "暂无规范"} />
         ) : null}
         {groups.map(([category, items]) => (
           <Flex key={category} vertical gap={2} role="group" aria-label={category}>

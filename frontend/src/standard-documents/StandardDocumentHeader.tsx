@@ -58,80 +58,79 @@ export function StandardDocumentHeader({
   const notice = version ? noticeFor(document, version) : null;
   const toOption = (item: StandardVersion) => ({ value: item.id, label: item.label });
 
+  // 头部压成两行，给阅读区腾高度（设计 §5.3）：规范名、状态和版本切换一行，编号与日期一行。
+  // 分类在左栏的分组标题里已经有了，标准性质在「基本信息」里，这里都不再重复。
   return (
-    <Flex vertical gap={14}>
-      <Flex align="start" justify="space-between" gap={16} wrap>
-        <Flex vertical gap={4} style={{ minWidth: 0 }}>
-          <Typography.Text type="secondary">
-            {[document.category, version?.nature].filter(Boolean).join(" · ")}
-          </Typography.Text>
-          <Flex align="center" gap={10} wrap>
-            <Typography.Title level={3} style={{ margin: 0 }}>{document.name}</Typography.Title>
+    <Flex vertical gap={8}>
+      <Flex vertical gap={2}>
+        <Flex align="center" justify="space-between" gap={16} wrap>
+          <Flex align="center" gap={10} style={{ minWidth: 0 }}>
+            <Typography.Title level={4} style={{ margin: 0 }}>{document.name}</Typography.Title>
             {version ? <VersionStatusTag status={version.status} /> : null}
           </Flex>
-          {facts.length > 0 ? <Typography.Text type="secondary">{facts.join(" · ")}</Typography.Text> : null}
-        </Flex>
-        <Flex align="center" gap={8} wrap>
-          {version ? (
-            <>
-              <Typography.Text type="secondary">版本</Typography.Text>
-              <Select
-                aria-label="版本"
-                value={version.id}
-                onChange={onSelectVersion}
-                style={{ width: 260 }}
-                popupMatchSelectWidth={340}
-                listHeight={360}
-                labelRender={({ value }) => {
-                  const item = document.versions.find((candidate) => candidate.id === value);
-                  return item ? (
-                    <Flex align="center" gap={8}>
-                      <span>{item.label}</span>
-                      <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>{item.code}</Typography.Text>
-                    </Flex>
-                  ) : null;
-                }}
-                optionRender={(option) => {
-                  const item = document.versions.find((candidate) => candidate.id === option.value);
-                  if (!item) return option.label;
-                  return (
-                    <Flex align="center" justify="space-between" gap={12}>
-                      <Flex vertical>
+          <Flex align="center" gap={8} wrap>
+            {version ? (
+              <>
+                <Typography.Text type="secondary">版本</Typography.Text>
+                <Select
+                  aria-label="版本"
+                  value={version.id}
+                  onChange={onSelectVersion}
+                  style={{ width: 260 }}
+                  popupMatchSelectWidth={340}
+                  listHeight={360}
+                  labelRender={({ value }) => {
+                    const item = document.versions.find((candidate) => candidate.id === value);
+                    return item ? (
+                      <Flex align="center" gap={8}>
                         <span>{item.label}</span>
-                        <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
-                          {[item.code, versionDateText(item)].filter(Boolean).join(" · ")}
-                        </Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>{item.code}</Typography.Text>
                       </Flex>
-                      <VersionStatusTag status={item.status} />
-                    </Flex>
-                  );
+                    ) : null;
+                  }}
+                  optionRender={(option) => {
+                    const item = document.versions.find((candidate) => candidate.id === option.value);
+                    if (!item) return option.label;
+                    return (
+                      <Flex align="center" justify="space-between" gap={12}>
+                        <Flex vertical>
+                          <span>{item.label}</span>
+                          <Typography.Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+                            {[item.code, versionDateText(item)].filter(Boolean).join(" · ")}
+                          </Typography.Text>
+                        </Flex>
+                        <VersionStatusTag status={item.status} />
+                      </Flex>
+                    );
+                  }}
+                  options={[
+                    ...(official.length ? [{ label: "正式版本", title: "正式版本", options: official.map(toOption) }] : []),
+                    ...(drafts.length ? [{ label: "修订稿（未发布）", title: "修订稿（未发布）", options: drafts.map(toOption) }] : []),
+                  ]}
+                />
+                <Button icon={<DownloadOutlined />} href={standardVersionContentUrl(backendBaseUrl, version, { download: true })}>
+                  下载原文
+                </Button>
+              </>
+            ) : null}
+            {isAdmin ? <Button icon={<UploadOutlined />} onClick={onUploadVersion}>上传新版本</Button> : null}
+            {isAdmin ? (
+              <Dropdown
+                trigger={["click"]}
+                menu={{
+                  items: [
+                    { key: "edit", label: "编辑规范信息" },
+                    { key: "delete", label: "删除规范", danger: true },
+                  ],
+                  onClick: ({ key }) => (key === "edit" ? onEditDocument() : onDeleteDocument()),
                 }}
-                options={[
-                  ...(official.length ? [{ label: "正式版本", title: "正式版本", options: official.map(toOption) }] : []),
-                  ...(drafts.length ? [{ label: "修订稿（未发布）", title: "修订稿（未发布）", options: drafts.map(toOption) }] : []),
-                ]}
-              />
-              <Button icon={<DownloadOutlined />} href={standardVersionContentUrl(backendBaseUrl, version, { download: true })}>
-                下载原文
-              </Button>
-            </>
-          ) : null}
-          {isAdmin ? <Button icon={<UploadOutlined />} onClick={onUploadVersion}>上传新版本</Button> : null}
-          {isAdmin ? (
-            <Dropdown
-              trigger={["click"]}
-              menu={{
-                items: [
-                  { key: "edit", label: "编辑规范信息" },
-                  { key: "delete", label: "删除规范", danger: true },
-                ],
-                onClick: ({ key }) => (key === "edit" ? onEditDocument() : onDeleteDocument()),
-              }}
-            >
-              <Button icon={<MoreOutlined />} aria-label="更多">更多</Button>
-            </Dropdown>
-          ) : null}
+              >
+                <Button icon={<MoreOutlined />} aria-label="更多">更多</Button>
+              </Dropdown>
+            ) : null}
+          </Flex>
         </Flex>
+        {facts.length > 0 ? <Typography.Text type="secondary">{facts.join(" · ")}</Typography.Text> : null}
       </Flex>
       {notice ? (
         <Alert

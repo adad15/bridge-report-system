@@ -1,5 +1,5 @@
-import { HistoryOutlined, InfoCircleOutlined, PlusOutlined, ReadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Empty, Flex, Grid, Row, Skeleton, Tabs, Typography } from "antd";
+import { FullscreenOutlined, HistoryOutlined, InfoCircleOutlined, ReadOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Col, Empty, Flex, Grid, Row, Skeleton, Tabs, Typography, theme } from "antd";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 
@@ -12,18 +12,18 @@ import {
 } from "../api/standardDocumentsApi";
 import { useAuth } from "../auth/AuthContext";
 import { backendBaseUrl } from "../config";
-import { PageHeader, useShellMetrics } from "../design-system";
+import { useShellMetrics } from "../design-system";
 import { DeleteStandardDocumentModal } from "../standard-documents/DeleteStandardDocumentModal";
 import { StandardBasicInfo } from "../standard-documents/StandardBasicInfo";
 import { StandardDocumentFormModal } from "../standard-documents/StandardDocumentFormModal";
 import { StandardDocumentHeader } from "../standard-documents/StandardDocumentHeader";
 import { StandardDocumentList } from "../standard-documents/StandardDocumentList";
+import { StandardFullscreenBar } from "../standard-documents/StandardFullscreenBar";
 import { StandardPdfReader } from "../standard-documents/StandardPdfReader";
 import { StandardVersionFormModal, type StandardVersionFormMode } from "../standard-documents/StandardVersionFormModal";
 import { StandardVersionTable } from "../standard-documents/StandardVersionTable";
+import { useFullscreen } from "../standard-documents/useFullscreen";
 
-/** 页头（标题行 + 下方间距）在外壳之外另占的高度，与评定树页同值。 */
-const PAGE_HEADER_CHROME = 54;
 const TABS = ["read", "versions", "info"] as const;
 type Tab = (typeof TABS)[number];
 
@@ -44,12 +44,17 @@ function sortDocuments(documents: StandardDocument[]): StandardDocument[] {
  * （设计 docs/superpowers/specs/2026-10-09-standard-documents-library-design.md §5）。
  *
  * 选中的规范、版本、页签、页码都记在查询串里（§5.8），刷新不丢，评定树以后也按这个格式链过来。
+ *
+ * 这一页以读原文为主：不设页头（顶栏已经写着页名），头部压成两行，把高度尽量留给阅读区；
+ * 细读时可以「全屏阅读」，阅读器铺满整个屏幕（§5.4）。
  */
 export function StandardDocumentsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const stacked = Grid.useBreakpoint().lg === false;
   const { pageOffset } = useShellMetrics();
+  const { token } = theme.useToken();
+  const reading = useFullscreen<HTMLDivElement>();
   const [documents, setDocuments] = useState<StandardDocument[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -121,7 +126,7 @@ export function StandardDocumentsPage() {
   }
 
   const categories = useMemo(() => [...new Set((documents ?? []).map((item) => item.category))], [documents]);
-  const panelRowStyle = stacked ? undefined : { height: `max(560px, calc(100dvh - ${pageOffset + PAGE_HEADER_CHROME}px))` };
+  const panelRowStyle = stacked ? undefined : { height: `max(560px, calc(100dvh - ${pageOffset}px))` };
   const panelColStyle = stacked ? undefined : { height: "100%" };
 
   let detail: ReactNode;
@@ -150,6 +155,10 @@ export function StandardDocumentsPage() {
             <Tabs
               activeKey={tab}
               onChange={(key) => show({ tab: key as Tab })}
+              styles={{ header: { marginBottom: 8 } }}
+              tabBarExtraContent={tab === "read" && reading.supported ? (
+                <Button type="text" icon={<FullscreenOutlined />} onClick={reading.enter}>全屏阅读</Button>
+              ) : undefined}
               items={[
                 { key: "read", icon: <ReadOutlined />, label: "原文阅读" },
                 {
@@ -166,7 +175,21 @@ export function StandardDocumentsPage() {
             />
             <div style={{ flex: 1, minHeight: 0, overflow: tab === "read" ? "hidden" : "auto" }}>
               {tab === "read" ? (
-                <StandardPdfReader document={document} version={version} page={page} height={stacked ? "80dvh" : "100%"} />
+                // 全屏的是这一层：上面加一条窄栏，阅读器占满其余高度。窄栏插在前面不会让 iframe 重建、丢掉翻页位置。
+                <div
+                  ref={reading.ref}
+                  style={{ height: "100%", display: "flex", flexDirection: "column", background: token.colorBgContainer }}
+                >
+                  {reading.active ? <StandardFullscreenBar document={document} version={version} onExit={reading.exit} /> : null}
+                  <div style={{ flex: 1, minHeight: 0 }}>
+                    <StandardPdfReader
+                      document={document}
+                      version={version}
+                      page={page}
+                      height={stacked && !reading.active ? "80dvh" : "100%"}
+                    />
+                  </div>
+                </div>
               ) : tab === "versions" ? (
                 <StandardVersionTable
                   document={document}
@@ -195,14 +218,7 @@ export function StandardDocumentsPage() {
 
   return (
     <Flex vertical gap={14}>
-      <PageHeader
-        title="规范管理"
-        description="查阅检测评定依据的规范原文，同一规范的各个版本并列归档"
-        extra={isAdmin ? (
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setModal({ type: "create-document" })}>新增规范</Button>
-        ) : null}
-      />
-      {error ? <Alert type="error" showIcon title={error} action={<Button size="small" onClick={load}>重新加载</Button>} /> : null}
+      {error ?<Alert type="error" showIcon title={error} action={<Button size="small" onClick={load}>重新加载</Button>} /> : null}
       {actionError ? <Alert type="error" showIcon closable title={actionError} onClose={() => setActionError(null)} /> : null}
       <Row gutter={[14, 14]} style={panelRowStyle}>
         <Col xs={24} lg={6} xxl={5} style={panelColStyle}>
@@ -219,7 +235,7 @@ export function StandardDocumentsPage() {
             style={{ height: "100%" }}
             styles={{
               root: { display: "flex", flexDirection: "column" },
-              body: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 4 },
+              body: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 8, padding: "16px 20px" },
             }}
           >
             {detail}

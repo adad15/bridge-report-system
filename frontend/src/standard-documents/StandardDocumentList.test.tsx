@@ -19,11 +19,22 @@ describe("StandardDocumentList", () => {
     expect(onSelect).toHaveBeenCalledWith("maintenance");
   });
 
-  it("invites administrators to add the first standard", async () => {
+  // 规范管理页不设页头，「新增规范」放在目录卡片的标题栏里；目录为空时不再另放一个。
+  it("offers 新增规范 in the catalog header to administrators only", async () => {
     const onCreate = vi.fn();
-    render(<StandardDocumentList documents={[]} selectedId={null} isAdmin onSelect={vi.fn()} onCreate={onCreate} />);
-    await userEvent.click(screen.getByRole("button", { name: "新增规范" }));
+    const filled = render(
+      <StandardDocumentList documents={allStandardDocuments} selectedId="h21" isAdmin onSelect={vi.fn()} onCreate={onCreate} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /新增规范/ }));
     expect(onCreate).toHaveBeenCalledTimes(1);
+    filled.unmount();
+
+    const empty = render(<StandardDocumentList documents={[]} selectedId={null} isAdmin onSelect={vi.fn()} onCreate={vi.fn()} />);
+    expect(screen.getAllByRole("button", { name: /新增规范/ })).toHaveLength(1);
+    empty.unmount();
+
+    render(<StandardDocumentList documents={allStandardDocuments} selectedId="h21" isAdmin={false} onSelect={vi.fn()} onCreate={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /新增规范/ })).not.toBeInTheDocument();
   });
 
   it("marks a standard without versions", () => {

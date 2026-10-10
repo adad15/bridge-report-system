@@ -29,6 +29,41 @@ function LocationProbe() {
   return <output aria-label="当前地址">{location.pathname + location.search}</output>;
 }
 
+/** jsdom 没有 Fullscreen API：按浏览器的行为补一个，进出全屏都发 fullscreenchange。 */
+function stubFullscreen() {
+  let element: Element | null = null;
+  const notify = () => document.dispatchEvent(new Event("fullscreenchange"));
+  const requestFullscreen = vi.fn(function (this: Element) {
+    element = this;
+    notify();
+    return Promise.resolve();
+  });
+  const exitFullscreen = vi.fn(() => {
+    element = null;
+    notify();
+    return Promise.resolve();
+  });
+  const stubs: [object, string, PropertyDescriptor][] = [
+    [document, "fullscreenEnabled", { configurable: true, get: () => true }],
+    [document, "fullscreenElement", { configurable: true, get: () => element }],
+    [document, "exitFullscreen", { configurable: true, writable: true, value: exitFullscreen }],
+    [HTMLElement.prototype, "requestFullscreen", { configurable: true, writable: true, value: requestFullscreen }],
+  ];
+  const saved = stubs.map(([target, key]) => [target, key, Object.getOwnPropertyDescriptor(target, key)] as const);
+  for (const [target, key, descriptor] of stubs) Object.defineProperty(target, key, descriptor);
+  return {
+    requestFullscreen,
+    exitFullscreen,
+    current: () => element,
+    restore() {
+      for (const [target, key, descriptor] of saved) {
+        if (descriptor) Object.defineProperty(target, key, descriptor);
+        else delete (target as Record<string, unknown>)[key];
+      }
+    },
+  };
+}
+
 function renderPage(path = "/standards") {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -92,6 +127,28 @@ describe("StandardDocumentsPage", () => {
     expect(screen.queryByRole("button", { name: /上传新版本/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "更多" })).not.toBeInTheDocument();
     expect(screen.queryByText("替换原文")).not.toBeInTheDocument();
+  });
+
+  // 阅读区再怎么挤也有限，细读时让阅读器铺满整个屏幕；Esc 或「退出全屏」回来。
+  it("reads the standard in fullscreen and comes back", async () => {
+    const fullscreen = stubFullscreen();
+    try {
+      renderPage();
+      await userEvent.click(await screen.findByRole("button", { name: /全屏阅读/ }));
+
+      expect(fullscreen.requestFullscreen).toHaveBeenCalledTimes(1);
+      expect(fullscreen.current()).toContainElement(screen.getByTitle(/规范原文：JTG\/T H21—2011/));
+      expect(await screen.findByText("按 Esc 退出")).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: /退出全屏/ }));
+      expect(fullscreen.exitFullscreen).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(screen.queryByText("按 Esc 退出")).not.toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole("tab", { name: /版本记录/ }));
+      expect(screen.queryByRole("button", { name: /全屏阅读/ })).not.toBeInTheDocument();
+    } finally {
+      fullscreen.restore();
+    }
   });
 
   it("opens the upload dialog from the header on any tab", async () => {
