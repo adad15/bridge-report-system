@@ -8,8 +8,8 @@ import {
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  ReadOutlined,
   SafetyCertificateOutlined,
-  SettingOutlined,
   TeamOutlined,
   UserOutlined,
 } from "@ant-design/icons";
@@ -50,13 +50,11 @@ const navigation = [
   { to: "/workbench", label: "工作台", icon: <DashboardOutlined /> },
   { to: "/bridges", label: "桥梁档案", icon: <DatabaseOutlined /> },
   { to: "/rating-trees", label: "评定树", icon: <ApartmentOutlined /> },
+  { to: "/standards", label: "规范管理", icon: <ReadOutlined /> },
 ];
-
-const STANDARDS_KEY = "/bridges?standards=1";
 
 /** 系统管理里的维护页。只有管理员看得到（设计 §22）。 */
 const systemNavigation = [
-  { to: STANDARDS_KEY, label: "规范管理", icon: <SettingOutlined /> },
   { to: "/settings/report-templates", label: "报告模板", icon: <FileWordOutlined /> },
   { to: "/settings/report-directory", label: "报告人员与设备", icon: <TeamOutlined /> },
 ];
@@ -64,6 +62,7 @@ const systemNavigation = [
 function currentPageName(pathname: string): string {
   if (pathname.startsWith("/settings/report-templates")) return "报告模板";
   if (pathname.startsWith("/settings/report-directory")) return "报告人员与设备";
+  if (pathname.startsWith("/standards")) return "规范管理";
   if (pathname.startsWith("/rating-trees")) return "评定树";
   if (pathname.startsWith("/bridges/")) return "桥梁业务空间";
   if (pathname === "/bridges") return "桥梁档案";
@@ -82,10 +81,9 @@ function bridgeWorkspaceTabs(pathname: string) {
   ];
 }
 
-/** 侧栏里哪一项亮：规范管理挂在桥梁档案页上，靠查询串区分。 */
-function selectedNavigationKey(pathname: string, search: string): string {
-  if (pathname === "/bridges" && search === "?standards=1") return STANDARDS_KEY;
-  const all = [...navigation, ...systemNavigation].filter((item) => item.to !== STANDARDS_KEY);
+/** 侧栏里哪一项亮。 */
+function selectedNavigationKey(pathname: string): string {
+  const all = [...navigation, ...systemNavigation];
   return all.find((item) => pathname === item.to || pathname.startsWith(`${item.to}/`))?.to ?? "";
 }
 
@@ -116,7 +114,7 @@ export function AppLayout({ children, reviewWorkspace = false }: AppLayoutProps)
   const reviewScrollsWithPage = useMediaQuery("(max-width: 1100px)");
   const fixedHeight = reviewWorkspace && !reviewScrollsWithPage;
 
-  const selectedKey = selectedNavigationKey(location.pathname, location.search);
+  const selectedKey = selectedNavigationKey(location.pathname);
   const menuItem = (item: { to: string; label: string; icon: ReactNode }) => ({
     key: item.to,
     icon: item.icon,

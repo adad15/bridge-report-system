@@ -53,14 +53,14 @@ export function StandardsAdminPanel({ onClose }: Props) {
       open
       centered
       width={640}
-      title="规范管理"
-      closable={{ "aria-label": "关闭规范管理", disabled: busyId !== null }}
+      title="规则管理"
+      closable={{ "aria-label": "关闭规则管理", disabled: busyId !== null }}
       onCancel={onClose}
       styles={{ body: { maxHeight: "calc(100vh - 220px)", overflowY: "auto", overflowX: "hidden" } }}
       footer={<Button onClick={onClose} disabled={busyId !== null}>关闭</Button>}
     >
       <Flex vertical gap={12}>
-        <Typography.Text type="secondary">停用只影响新建年度；历史年度仍保留原规范版本。</Typography.Text>
+        <Typography.Text type="secondary">停用只影响新建年度；历史年度仍保留原规则包版本。</Typography.Text>
         {error ? <Alert type="error" showIcon title={error} /> : null}
         {packages === null && !error ? <Typography.Text type="secondary">正在加载规范目录…</Typography.Text> : null}
         {packages?.map((item) => (

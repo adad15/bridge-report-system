@@ -5353,6 +5353,7 @@ function selectedNavigationKey(pathname: string): string {
 - `getByRole("dialog",{name:"规范管理"})` → `getByRole("dialog",{name:"规则管理"})`
 
 `docs/ui-design-system.md`（共享文件）：
+- 迁移第 2 步的完成记录里 `三个删除弹窗、规范管理、重新绑定线索均已改为 \`Modal\`` → `三个删除弹窗、规则管理、重新绑定线索均已改为 \`Modal\``（执行时补充：那里说的是规则包弹窗，不改会让人以为规范管理页是个弹窗）
 - §6.2 里 `用于桥梁档案、规范管理和其他数据管理页。` → `用于桥梁档案和其他数据管理页；规则包的启停是桥梁档案页上的「规则管理」弹窗。`
 - §6.4 的 `- 评定树可以采用同类全高双栏结构，但保留自己的树导航语义。` 之后加一行：`- 规范管理（规范原文库）同样采用全高双栏：左栏规范目录，右栏版本切换与原文阅读；原文用浏览器自带的 PDF 阅读器显示。`
 
@@ -5363,10 +5364,12 @@ function selectedNavigationKey(pathname: string): string {
 `npx tsc -b`
 预期：全部测试 PASS，包括本次改动的 5 处断言；没有用例再引用「规范管理」按钮或 `?standards=1`。类型检查无错误。
 
-- [ ] **步骤 6：提交（`BridgesPage.tsx`、`docs/ui-design-system.md` 留到任务 12；`check-loading-browser.mjs` 不提交）**
+- [ ] **步骤 6：提交（`BridgesPage.tsx`、`BridgesPage.test.tsx`、`docs/ui-design-system.md` 留到任务 12；`check-loading-browser.mjs` 不提交）**
+
+`BridgesPage.test.tsx` 断言的「规则管理」按钮和 `?rules=1` 要等 `BridgesPage.tsx` 在任务 12 提交后才存在，先提交测试会让这个提交点上的测试跑不过，所以两者一起放到任务 12。
 
 ```bash
-git add -- frontend/src/layouts/AppLayout.tsx frontend/src/layouts/AppLayout.test.tsx frontend/src/pages/BridgesPage.test.tsx frontend/src/standards/StandardsAdminPanel.tsx frontend/src/standards/StandardsAdminPanel.test.tsx frontend/src/pages/RatingTreePage.tsx
+git add -- frontend/src/layouts/AppLayout.tsx frontend/src/layouts/AppLayout.test.tsx frontend/src/standards/StandardsAdminPanel.tsx frontend/src/standards/StandardsAdminPanel.test.tsx frontend/src/pages/RatingTreePage.tsx
 ```
 
 提交信息：`feat(frontend): 规范管理移到业务中心，规则包启停改名规则管理`
@@ -5506,6 +5509,7 @@ if __name__ == "__main__":
 
 **文件：**
 - 提交：`backend-cpp/CMakeLists.txt`、`backend-cpp/src/main.cpp`、`frontend/src/App.tsx`、`frontend/src/pages/BridgesPage.tsx`、`docs/ui-design-system.md` 中属于本功能的行。
+- 提交：`frontend/src/pages/BridgesPage.test.tsx`（任务 10 改的，不是共享文件，直接 `git add`；要和 `BridgesPage.tsx` 同一个提交）。
 
 **接口：**
 - 无代码接口。前提：任务 1–11 完成，用户同意提交。
@@ -5517,8 +5521,8 @@ if __name__ == "__main__":
 - `backend-cpp/CMakeLists.txt`：+8 行（4 个源文件、4 个测试）
 - `backend-cpp/src/main.cpp`：+2 行
 - `frontend/src/App.tsx`：+2 行
-- `frontend/src/pages/BridgesPage.tsx`：改 4 行
-- `docs/ui-design-system.md`：改 1 行、加 1 行
+- `frontend/src/pages/BridgesPage.tsx`：改 3 行（`?rules=1` 两处、按钮一处）。任务 10 的第 4 处（懒加载的 `label: "规则管理"`）在同事未提交的懒加载改动里，HEAD 里没有这行，重放不了，随同事的改动一起走
+- `docs/ui-design-system.md`：改 2 行（§6.2 一处、第 2 步迁移记录里的「规范管理」弹窗改称「规则管理」）、加 1 行（§6.4）
 
 - [ ] **步骤 2：逐个文件构造「HEAD + 只有本功能的改动」并写入索引**
 

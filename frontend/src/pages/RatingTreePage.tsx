@@ -387,7 +387,7 @@ export function RatingTreePage() {
         extra={
           <>
             <Tag icon={<InfoCircleOutlined />} color="blue" title={version.tree_content_checksum}>规则版本不可编辑</Tag>
-            <Button icon={<FileTextOutlined />} onClick={() => navigate("/bridges?standards=1")}>查看规范信息</Button>
+            <Button icon={<FileTextOutlined />} onClick={() => navigate("/bridges?rules=1")}>规则管理</Button>
           </>
         }
       />

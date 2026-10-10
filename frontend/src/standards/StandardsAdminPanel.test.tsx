@@ -46,7 +46,7 @@ describe("StandardsAdminPanel", () => {
     );
     render(<StandardsAdminPanel onClose={onClose} />);
 
-    const closeButton = await screen.findByRole("button", { name: "关闭规范管理" });
+    const closeButton = await screen.findByRole("button", { name: "关闭规则管理" });
     await userEvent.click(closeButton);
 
     expect(onClose).toHaveBeenCalledTimes(1);

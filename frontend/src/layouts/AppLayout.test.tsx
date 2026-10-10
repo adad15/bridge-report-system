@@ -77,15 +77,28 @@ describe("AppLayout", () => {
     expect(within(lists[1]).getByRole("link", { name: "桥梁档案" })).toBeInTheDocument();
   });
 
-  // 规范管理挂在桥梁档案页的查询串上，两项不能同时亮。
+  // 规范管理是独立页面，所有登录用户都看得到；规则包启停的深链挂在桥梁档案页上，亮的是桥梁档案。
   it("highlights exactly one navigation entry", () => {
-    renderAt("/bridges?standards=1");
-
+    renderAt("/standards?doc=h21");
     const selected = within(navigation())
       .getAllByRole("menuitem")
       .filter((item) => item.classList.contains("ant-menu-item-selected"));
     expect(selected).toHaveLength(1);
     expect(selected[0]).toHaveTextContent("规范管理");
+  });
+
+  it("keeps the bridge archive highlighted on the rule management link", () => {
+    renderAt("/bridges?rules=1");
+    const selected = within(navigation())
+      .getAllByRole("menuitem")
+      .filter((item) => item.classList.contains("ant-menu-item-selected"));
+    expect(selected.map((item) => item.textContent)).toEqual(["桥梁档案"]);
+  });
+
+  it("shows the standards library to every signed-in user", () => {
+    authState.role = "normal";
+    renderAt("/workbench");
+    expect(within(navigation()).getByRole("link", { name: "规范管理" })).toHaveAttribute("href", "/standards");
   });
 
   it("switches the header to the bridge workspace tabs inside a bridge", () => {
