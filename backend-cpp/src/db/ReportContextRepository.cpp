@@ -301,7 +301,7 @@ void ReportContextRepository::load_weight_table(
 }
 
 std::optional<report::ReportContext> ReportContextRepository::build(
-    const std::string& inspection_year_id) const {
+    const std::string& inspection_year_id, const Json::Value* template_snapshot) const {
     TransactionPtr tx;
     try {
         tx = client_->newTransaction();
@@ -329,7 +329,7 @@ std::optional<report::ReportContext> ReportContextRepository::build(
             "left join report_templates t on t.id=s.template_id "
             "where iy.id=$1::uuid",
             inspection_year_id);
-        if (head.empty() || head[0]["template_id"].isNull()) {
+        if (head.empty() || (!template_snapshot && head[0]["template_id"].isNull())) {
             tx->rollback();
             return std::nullopt;
         }
@@ -351,10 +351,15 @@ std::optional<report::ReportContext> ReportContextRepository::build(
         context.comparison_year = optional_int(head[0], "comparison_year");
         // 数据库里没有报告日期这一项，构造上下文时写定一次，全篇共用（设计 §7.2）。
         context.report_date = head[0]["report_date"].as<std::string>();
-        context.template_id = head[0]["template_id"].as<std::string>();
-        context.template_code = head[0]["template_code"].as<std::string>();
-        context.template_config =
-            parse_json_object(head[0]["contract_config_json"].as<std::string>());
+        if (template_snapshot) {
+            context.template_id=(*template_snapshot)["id"].asString();
+            context.template_code=(*template_snapshot)["code"].asString();
+            context.template_config=(*template_snapshot)["config"];
+        } else {
+            context.template_id = head[0]["template_id"].as<std::string>();
+            context.template_code = head[0]["template_code"].as<std::string>();
+            context.template_config = parse_json_object(head[0]["contract_config_json"].as<std::string>());
+        }
         const auto comparison_id = optional_text(head[0], "comparison_id");
 
         // 桥梁概况只放档案里真有的事实，缺的字段后面就不出这一行（设计 §14 第 5 条）。

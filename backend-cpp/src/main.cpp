@@ -1,3 +1,4 @@
+#include "bridge_report/runtime/BuildInfo.hpp"
 #include <filesystem>
 #include <functional>
 #include <iostream>
@@ -187,6 +188,8 @@ Json::Value make_cpp_health_body(
     body["status"] = "ok";
     body["service"] = "bridge-report-cpp-backend";
     body["version"] = "0.1.0";
+    const auto& identity = bridge_report::runtime::service_identity();
+    for (const auto& key : identity.getMemberNames()) body[key] = identity[key];
     body["host"] = config.host;
     body["port"] = config.port;
     body["python_tools_base_url"] = config.python_tools_base_url;
@@ -352,6 +355,7 @@ void register_health_routes(
 }  // 匿名命名空间
 
 int main(int argc, char* argv[]) {
+    (void)bridge_report::runtime::service_identity();
     const std::string config_path = argc > 1 ? argv[1] : "config/local.json";
     const auto config = bridge_report::config::load_app_config(config_path);
     auto standards = load_standard_registry(config.standards_root);

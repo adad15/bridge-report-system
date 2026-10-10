@@ -318,6 +318,10 @@ export interface ComparisonCandidate {
 export interface InspectionReportSettings {
   inspection_year_id: string;
   inspection_year: number;
+  inspection_date: string | null;
+  report_number: string | null;
+  project_name: string | null;
+  inspection_org: string | null;
   template_id: string | null;
   template_name: string | null;
   template_is_usable: boolean;
@@ -333,6 +337,10 @@ export interface InspectionReportSettings {
 }
 
 export interface InspectionReportSettingsInput {
+  inspection_date: string | null;
+  report_number: string | null;
+  project_name: string | null;
+  inspection_org: string | null;
   template_id: string | null;
   comparison_inspection_id: string | null;
   personnel: { personnel_id: string; role_code: string; sort_order: number }[];

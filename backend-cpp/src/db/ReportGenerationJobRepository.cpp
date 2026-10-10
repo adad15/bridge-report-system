@@ -1,4 +1,5 @@
 #include "bridge_report/db/ReportGenerationJobRepository.hpp"
+#include "bridge_report/report/ReportJobCleanupCoordinator.hpp"
 
 #include <sstream>
 #include <system_error>
@@ -21,7 +22,8 @@ constexpr const char* kJobColumns =
     "template_checksum, temporary_file_path, error_code, error_message, "
     "created_at::text as created_at, finished_at::text as finished_at, "
     "expires_at::text as expires_at, "
-    "download_filename";
+    "download_filename, template_snapshot_json::text as template_snapshot_json, "
+    "(expires_at is not null and expires_at <= now()) as download_expired";
 
 /// 进行中的状态，写在 SQL 里的那一份。与 job_is_running 必须一致。
 constexpr const char* kRunningStatuses =
@@ -57,6 +59,10 @@ report::ReportGenerationJob read_job(const drogon::orm::Row& row) {
     job.requested_by_user_id = row["requested_by_user_id"].as<std::string>();
     job.status = report::job_status_from_text(row["status"].as<std::string>())
                      .value_or(report::JobStatus::Queued);
+    if (job.status == report::JobStatus::Ready && row["download_expired"].as<bool>())
+        job.status = report::JobStatus::Expired;
+    if (!row["template_snapshot_json"].isNull())
+        job.template_snapshot = parse_json_object(row["template_snapshot_json"].as<std::string>());
     job.progress = parse_json_object(row["progress_json"].as<std::string>());
     job.template_id = optional_text(row, "template_id");
     job.template_checksum = optional_text(row, "template_checksum");
@@ -68,25 +74,6 @@ report::ReportGenerationJob read_job(const drogon::orm::Row& row) {
     job.expires_at = optional_text(row, "expires_at");
     job.download_filename = optional_text(row, "download_filename");
     return job;
-}
-
-/// 删掉一次任务留下的整个临时目录。
-///
-/// 只删受控根目录下的东西：路径来自数据库，删之前必须自证它在 job_root 里面。
-/// 拿到什么删什么，一条被改过的路径就能删掉任意目录。
-bool remove_job_files(const fs::path& job_root, const std::string& file_path) {
-    std::error_code error;
-    const auto root = fs::weakly_canonical(job_root, error);
-    if (error) return false;
-    const auto target = fs::weakly_canonical(fs::path(file_path), error);
-    if (error) return false;
-
-    auto directory = target.parent_path();
-    // 成品就在任务目录里，任务目录就在根目录下。别的形状一律不动。
-    if (directory.empty() || directory.parent_path() != root) return false;
-
-    const auto removed = fs::remove_all(directory, error);
-    return !error && removed > 0;
 }
 
 }  // namespace
@@ -122,11 +109,11 @@ JobCreation ReportGenerationJobRepository::create(
     try {
         const auto inserted = client_->execSqlSync(
             std::string(
-                "insert into report_generation_jobs "
+                "with created as (insert into report_generation_jobs "
                 "(inspection_year_id, requested_by_user_id, status, template_id, "
                 " template_checksum) "
                 "values ($1::uuid, $2::uuid, 'queued', nullif($3,'')::uuid, nullif($4,'')) "
-                "returning ") + kJobColumns,
+                "returning *), tracked as (insert into report_job_artifacts(job_id) select id from created returning job_id) select ") + kJobColumns + " from created",
             inspection_year_id, requested_by_user_id,
             template_id.value_or(std::string()),
             template_checksum.value_or(std::string()));
@@ -190,11 +177,13 @@ bool ReportGenerationJobRepository::mark_ready(
     const Json::Value& progress) const {
     const auto rows = client_->execSqlSync(
         std::string(
-            "update report_generation_jobs set status = 'ready', "
+            "with ready as (update report_generation_jobs set status = 'ready', "
             " temporary_file_path = $2, download_filename = $3, progress_json = $4::jsonb, "
             " finished_at = now(), expires_at = now() + make_interval(hours => $5), "
             " error_code = null, error_message = null "
-            "where id = $1::uuid and status in (") + kRunningStatuses + ") returning id",
+            "where id = $1::uuid and status in (") + kRunningStatuses + ") returning id), tracked as ("
+        "update report_job_artifacts a set expected_output_path=$2 from ready r where a.job_id=r.id returning a.job_id) "
+        "select id from ready",
         job_id, output_path.generic_string(), download_filename, compact_json(progress),
         retention_hours > 0 ? retention_hours : 24);
     return !rows.empty();
@@ -214,41 +203,72 @@ bool ReportGenerationJobRepository::mark_failed(
     return !rows.empty();
 }
 
-JobCleanupSummary ReportGenerationJobRepository::cleanup(
-    const fs::path& job_root, int history_days) const {
-    JobCleanupSummary summary;
+int ReportGenerationJobRepository::schedule_cleanup() const {
+    const auto expired = client_->execSqlSync(
+        "update report_generation_jobs set status='expired', temporary_file_path=null, download_filename=null, "
+        "progress_json='{}'::jsonb, error_message=null "
+        "where status='ready' and expires_at<=now() returning id");
+    client_->execSqlSync(
+        "update report_job_artifacts a set cleanup_state='pending', next_attempt_at=now() "
+        "where cleanup_state='active' and ("
+        "exists(select 1 from report_generation_jobs j where j.id=a.job_id and j.status in ('expired','failed')) "
+        "or not exists(select 1 from report_generation_jobs j where j.id=a.job_id))");
+    return static_cast<int>(expired.size());
+}
 
-    // 到期的成品：先删文件，再改行。反过来做，一旦中途崩掉，数据库说没文件而文件
-    // 还在盘上，就再也没人去删它了。
-    const auto due = client_->execSqlSync(
-        "select id::text as id, temporary_file_path from report_generation_jobs "
-        "where expires_at is not null and expires_at <= now() "
-        " and status <> 'expired' and temporary_file_path is not null");
-    for (const auto& row : due) {
-        const auto path = optional_text(row, "temporary_file_path");
-        if (path.has_value() && remove_job_files(job_root, *path)) {
-            summary.files_removed += 1;
-        }
-        // 诊断正文可能含业务内容，到期一并清空（设计 §17.1）。
-        const auto updated = client_->execSqlSync(
-            "update report_generation_jobs set status = 'expired', "
-            " temporary_file_path = null, download_filename = null, "
-            " progress_json = '{}'::jsonb, error_message = null, "
-            " finished_at = coalesce(finished_at, now()) "
-            "where id = $1::uuid returning id",
-            row["id"].as<std::string>());
-        if (!updated.empty()) summary.expired += 1;
-    }
+std::vector<JobCleanupClaim> ReportGenerationJobRepository::claim_cleanup(int limit) const {
+    const auto rows = client_->execSqlSync(
+        "with candidates as (select job_id from report_job_artifacts "
+        "where (cleanup_state='pending' and next_attempt_at<=now()) or "
+        "(cleanup_state='cleaning' and claimed_at<now()-interval '15 minutes') "
+        "order by next_attempt_at,job_id limit $1::integer for update skip locked) "
+        "update report_job_artifacts a set cleanup_state='cleaning', claimed_at=now(), "
+        "claim_token=gen_random_uuid(), attempts=attempts+1 from candidates c where a.job_id=c.job_id "
+        "returning a.job_id::text as id,a.claim_token::text as token,a.expected_output_path", limit);
+    std::vector<JobCleanupClaim> claims;
+    for (const auto& row : rows)
+        claims.push_back({row["id"].as<std::string>(), row["token"].as<std::string>(),
+                          optional_text(row,"expected_output_path")});
+    return claims;
+}
 
-    // 过了保留期的终态行物理删除。运行中的任务不在此列，等它自己走完。
-    const auto purged = client_->execSqlSync(
-        "delete from report_generation_jobs "
-        "where status in ('expired','failed') "
-        " and coalesce(finished_at, created_at) < now() - make_interval(days => $1) "
-        "returning id",
-        history_days > 0 ? history_days : 7);
-    summary.purged = static_cast<int>(purged.size());
-    return summary;
+bool ReportGenerationJobRepository::finish_cleanup(
+    const JobCleanupClaim& claim, bool success, const std::string& error) const {
+    const auto rows = client_->execSqlSync(
+        "with completed as (update report_job_artifacts set "
+        "cleanup_state=case when $3 then 'cleaned' else 'pending' end, "
+        "cleaned_at=case when $3 then now() else null end, last_error=nullif($4,''), "
+        "next_attempt_at=now()+make_interval(secs=>least(3600,30*greatest(1,least(attempts,120)))), "
+        "claim_token=null,claimed_at=null "
+        "where job_id=$1::uuid and claim_token=$2::uuid and cleanup_state='cleaning' returning job_id), "
+        "cleared as (update report_generation_jobs j set temporary_file_path=null,template_snapshot_json=null "
+        "from completed c where j.id=c.job_id and $3 returning j.id) select job_id from completed",
+        claim.job_id,claim.token,success,error.substr(0,1000));
+    return !rows.empty();
+}
+
+void ReportGenerationJobRepository::block_cleanup(
+    const std::string& job_id,const std::string& reason) const {
+    client_->execSqlSync(
+        "update report_job_artifacts set cleanup_state='blocked',last_error=$2 "
+        "where job_id=$1::uuid and cleanup_state='active'",job_id,reason.substr(0,1000));
+}
+
+int ReportGenerationJobRepository::purge_cleaned(int history_days) const {
+    const int days=history_days>0?history_days:7;
+    const auto rows=client_->execSqlSync(
+        "delete from report_generation_jobs j where status in ('expired','failed') "
+        "and coalesce(finished_at,created_at)<now()-make_interval(days=>$1) "
+        "and exists(select 1 from report_job_artifacts a where a.job_id=j.id and a.cleanup_state='cleaned') returning id",days);
+    client_->execSqlSync(
+        "delete from report_job_artifacts a where cleanup_state='cleaned' "
+        "and cleaned_at<now()-make_interval(days=>$1) "
+        "and not exists(select 1 from report_generation_jobs j where j.id=a.job_id)",days);
+    return static_cast<int>(rows.size());
+}
+
+JobCleanupSummary ReportGenerationJobRepository::cleanup(const fs::path& job_root,int history_days) const {
+    return report::ReportJobCleanupCoordinator(client_,job_root).run(history_days);
 }
 
 }  // namespace bridge_report::db

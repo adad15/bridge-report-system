@@ -1,5 +1,13 @@
 # Contracts
 
+Updated: 2026-09-17. See [project context](../PROJECT_CONTEXT.md) and [documentation index](../docs/README.md).
+
+## Candidate identity and report context
+
+Imported candidate IDs originate from the importer. Manually added defect candidates are created by the C++ manual-defects command together with relational resolution state. The frontend applies the returned draft with replace_draft; its reducer no longer has a candidate ID factory, an issued-ID set, or injectable ID-generation parameters.
+
+This cleanup does not change contract 5.0. Candidate IDs remain stable references within a draft and must not be regenerated during local edits. The report module uses a separate [ReportContext model](../tools-python/bridge_report_tools/reports/report_context.py) built from formal data; it is not a new version of the import contract.
+
 This directory contains shared JSON contract artifacts used by the Python tools, C++ backend, and React frontend.
 
 ## BridgeAnnualInspectionData

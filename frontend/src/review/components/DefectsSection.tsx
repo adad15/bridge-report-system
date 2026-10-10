@@ -1,5 +1,5 @@
 import { Alert, Button, Card, Col, Flex, Form, Input, Row, Select, Spin, Typography, theme } from "antd";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   EMPTY_RESOLUTION_INDEX,
   buildResolutionIndex,
@@ -17,7 +17,7 @@ import {
 } from "@ant-design/icons";
 
 import type { AssessmentIssue } from "../../api/assessmentApi";
-import { componentInventoryErrorMessage, fetchComponentReviewOrder, fetchInventorySummary, searchInventoryEntries, type ComponentInventoryEntry, type InventorySummary, type StructurePart as InventoryStructurePart } from "../../api/componentInventoryApi";
+import { componentInventoryErrorMessage, fetchComponentReviewOrder, fetchInventorySummary, searchInventoryEntries, type ComponentInventoryEntry, type InventorySummary } from "../../api/componentInventoryApi";
 import {
   defectMatchErrorMessage,
   matchDefectRatingTreeNodes,
@@ -96,14 +96,6 @@ function readStoredDetailWidth(): number {
   }
   return DEFAULT_DETAIL_WIDTH;
 }
-
-const STRUCTURE_PART_LABELS: Record<InventoryStructurePart, "全桥" | "上部结构" | "下部结构" | "桥面系" | "其他"> = {
-  overall: "全桥",
-  superstructure: "上部结构",
-  substructure: "下部结构",
-  deck_system: "桥面系",
-  other: "其他",
-};
 
 interface ManualDefectFormState {
   componentEntryId: string;
@@ -201,7 +193,6 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const [search, setSearch] = useState("");
   const [matchResults, setMatchResults] = useState<Map<string, DefectMatchResult>>(new Map());
   const [matchSummary, setMatchSummary] = useState<DefectMatchSummary | null>(null);
-  const [matchedAt, setMatchedAt] = useState<Date | null>(null);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [rematching, setRematching] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -446,7 +437,6 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
         return next;
       });
       setMatchSummary(report.summary);
-      setMatchedAt(new Date());
       setMatchError(null);
       // 这个接口只算不写（DefectMatchingRoutes 用可确认视图做只读计算），所以算完不必
       // 重取工作区——关系态不可能因为这次调用而变。此前这里按 auto_bound 触发一次整份
@@ -458,7 +448,6 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
       // 服务失败不能伪装成"这批病害都没有匹配结果"：清掉上一轮结果并显式报错。
       setMatchResults(new Map());
       setMatchSummary(null);
-      setMatchedAt(null);
       setMatchError(defectMatchErrorMessage(error));
     } finally {
       setRematching(false);
@@ -591,7 +580,6 @@ export function DefectsSection({ draft, importRecordId, baseUrl, bridgeId, selec
   const linkedPhotoCount = draft.photos.filter((photo) => photo.linked_defect_candidate_id).length;
   const qualityChecksPending = !resolutionReady || Boolean(ratingTree && !treeRulesReady) || rematching;
   const selectedEntry = inventoryEntries.find((entry) => entry.id === form.componentEntryId);
-  const selectedMapping = selectedEntry?.mappings.find((item) => item.is_active);
   const manualDefectNodes = useMemo(
     () => sortRatingTreeNodes(selectedEntry
       ? treeNodesByComponent.get(selectedEntry.bridge_component_id) ?? []

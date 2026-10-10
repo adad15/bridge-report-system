@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BridgeProfile } from "../api/bridgeProfileApi";
@@ -159,5 +159,43 @@ describe("BridgeLocationCard", () => {
 
     expect(await screen.findByRole("img", { name: "已存的地理位置图" })).toBeInTheDocument();
     expect(screen.getByText(/这里显示的是已经存下的地理位置图/)).toBeInTheDocument();
+  });
+
+  it("retries after failure with the same mounted container and destroys the map on unmount", async () => {
+    const amap = fakeAMap();
+    loadAMap.mockRejectedValueOnce(new Error("map_script_unreachable")).mockResolvedValueOnce(amap.namespace);
+    const view = render(<BridgeLocationCard profile={profile(BAIGU)} />);
+    const container = screen.getByRole("img", { name: "桥位地图" });
+    fireEvent.click(await screen.findByRole("button", { name: "重试地图" }));
+    await waitFor(() => expect(amap.namespace.Map).toHaveBeenCalledTimes(1));
+    expect(amap.namespace.Map.mock.calls[0][0]).toBe(container);
+    expect(container).toBeVisible();
+    view.unmount();
+    expect(amap.map.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores the old bridge's late loader result", async () => {
+    const old = fakeAMap();
+    const current = fakeAMap();
+    let resolveOld!: (value: typeof old.namespace) => void;
+    loadAMap.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }))
+      .mockResolvedValueOnce(current.namespace);
+    const view = render(<BridgeLocationCard profile={profile(BAIGU)} />);
+    view.rerender(<BridgeLocationCard profile={profile({ ...BAIGU, bridge_id: "bridge-2" })} />);
+    await waitFor(() => expect(current.namespace.Map).toHaveBeenCalledTimes(1));
+    await act(async () => resolveOld(old.namespace));
+    expect(old.namespace.Map).not.toHaveBeenCalled();
+    expect(current.map.destroy).not.toHaveBeenCalled();
+  });
+
+  it("cleans up a partially initialized map when marker creation fails", async () => {
+    const amap = fakeAMap();
+    amap.namespace.Marker.mockImplementation(() => { throw new Error("marker failed"); });
+    loadAMap.mockResolvedValue(amap.namespace);
+    const view = render(<BridgeLocationCard profile={profile(BAIGU)} />);
+    await screen.findByRole("button", { name: "重试地图" });
+    expect(amap.map.destroy).toHaveBeenCalledTimes(1);
+    view.unmount();
+    expect(amap.map.destroy).toHaveBeenCalledTimes(1);
   });
 });

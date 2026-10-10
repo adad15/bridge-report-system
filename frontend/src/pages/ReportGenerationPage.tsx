@@ -85,7 +85,23 @@ export function ReportGenerationPage() {
     bridgeId: string;
     inspectionYearId: string;
   }>();
-  const yearId = inspectionYearId ?? "";
+  return <ReportYearPage key={`${bridgeId}/${inspectionYearId}`} bridgeId={bridgeId} yearId={inspectionYearId ?? ""} />;
+}
+
+// Route identity owns all drafts, requests, mutations and polling state.
+function ReportYearPage({ bridgeId, yearId }: { bridgeId?: string; yearId: string }) {
+  const active = useRef(false);
+  const loadSequence = useRef(0);
+  const jobSequence = useRef(0);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+      ++loadSequence.current;
+      ++jobSequence.current;
+    };
+  }, []);
 
   const [preflight, setPreflight] = useState<ReportPreflight | null>(null);
   const [settings, setSettings] = useState<InspectionReportSettings | null>(null);
@@ -100,6 +116,9 @@ export function ReportGenerationPage() {
 
   const load = useCallback(async () => {
     if (!yearId) return;
+    const request = ++loadSequence.current;
+    const jobRequest = ++jobSequence.current;
+    setLoading(true);
     setError(null);
     try {
       const [check, saved, templateList, candidateList, people, gear, currentJob] =
@@ -112,15 +131,22 @@ export function ReportGenerationPage() {
           fetchReportEquipment(true),
           fetchCurrentReportJob(yearId),
         ]);
+      if (!active.current || request !== loadSequence.current) return;
+      if (check.inspection_year_id !== yearId || saved.inspection_year_id !== yearId ||
+          (currentJob && currentJob.inspection_year_id !== yearId)) {
+        throw new Error("报告数据与当前年度不一致，请刷新重试。");
+      }
       setPreflight(check);
       setSettings(saved);
       setTemplates(templateList);
       setCandidates(candidateList);
       setPersonnelPool(people);
       setEquipmentPool(gear);
-      setJob(currentJob);
+      if (jobRequest === jobSequence.current) setJob(currentJob);
     } catch (caught) {
-      setError(reportErrorMessage(caught));
+      if (active.current && request === loadSequence.current) setError(reportErrorMessage(caught));
+    } finally {
+      if (active.current && request === loadSequence.current) setLoading(false);
     }
   }, [yearId]);
 
@@ -136,29 +162,42 @@ export function ReportGenerationPage() {
   useEffect(() => {
     if (!runningJobId) return undefined;
     let cancelled = false;
+    let pending = false;
     const timer = window.setInterval(async () => {
+      if (pending) return;
+      pending = true;
+      const request = ++jobSequence.current;
       try {
         const latest = await fetchReportJob(runningJobId);
-        if (cancelled) return;
+        if (cancelled || !active.current || request !== jobSequence.current ||
+            latest.inspection_year_id !== yearId) return;
         setJob(latest);
         // 跑完了就整页刷一次：配置和内容摘要可能也变了。
         if (!latest.is_running) void reloadRef.current();
       } catch {
         // 轮询失败不打断页面：下一拍再试，真出问题时任务本身也会转 failed。
+      } finally {
+        pending = false;
       }
     }, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [runningJobId]);
+  }, [runningJobId, yearId]);
 
   async function generate() {
+    if (loading || busy || settings?.inspection_year_id !== yearId ||
+        !preflight?.can_generate || settings.blocking_notes.length || job?.is_running) return;
+    ++jobSequence.current;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
       const created = await createReportJob(yearId);
+      if (!active.current) return;
+      if (created.inspection_year_id !== yearId) throw new Error("生成任务与当前年度不一致。");
+      ++jobSequence.current;
       setJob(created);
       setNotice(
         created.status === "queued"
@@ -166,9 +205,9 @@ export function ReportGenerationPage() {
           : "这个年度已有正在执行的任务，继续显示它的进度。",
       );
     } catch (caught) {
-      setError(reportErrorMessage(caught));
+      if (active.current) setError(reportErrorMessage(caught));
     } finally {
-      setBusy(false);
+      if (active.current) setBusy(false);
     }
   }
 
@@ -179,7 +218,8 @@ export function ReportGenerationPage() {
   const blocking = preflight?.findings.filter((item) => item.severity === "blocking") ?? [];
   const warnings = preflight?.findings.filter((item) => item.severity === "warning") ?? [];
   const settingsNotes = settings?.blocking_notes ?? [];
-  const canGenerate = (preflight?.can_generate ?? false) && settingsNotes.length === 0;
+  const canGenerate = !loading && settings?.inspection_year_id === yearId &&
+    (preflight?.can_generate ?? false) && settingsNotes.length === 0;
 
   return (
     <Flex vertical gap={16}>
@@ -206,6 +246,7 @@ export function ReportGenerationPage() {
       <PreflightCard preflight={preflight} blocking={blocking} warnings={warnings} notes={settingsNotes} />
 
       <SettingsCard
+        loading={loading}
         yearId={yearId}
         settings={settings}
         templates={templates}
@@ -213,11 +254,12 @@ export function ReportGenerationPage() {
         personnelPool={personnelPool}
         equipmentPool={equipmentPool}
         onSaved={(saved) => {
+          if (!active.current || saved.inspection_year_id !== yearId) return;
           setSettings(saved);
           setNotice("报告配置已保存。");
           void load();
         }}
-        onError={setError}
+        onError={(message) => { if (active.current) setError(message); }}
       />
 
       <SummaryCard preflight={preflight} settings={settings} />
@@ -312,6 +354,7 @@ interface PersonnelDraft {
 }
 
 function SettingsCard({
+  loading,
   yearId,
   settings,
   templates,
@@ -321,6 +364,7 @@ function SettingsCard({
   onSaved,
   onError,
 }: {
+  loading: boolean;
   yearId: string;
   settings: InspectionReportSettings | null;
   templates: ReportTemplate[];
@@ -330,8 +374,17 @@ function SettingsCard({
   onSaved: (saved: InspectionReportSettings) => void;
   onError: (message: string) => void;
 }) {
+  const active = useRef(false);
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
   const [templateId, setTemplateId] = useState<string | null>(null);
   const [comparisonId, setComparisonId] = useState<string | null>(null);
+  const [inspectionDate, setInspectionDate] = useState("");
+  const [reportNumber, setReportNumber] = useState("");
+  const [projectName, setProjectName] = useState("");
+  const [inspectionOrg, setInspectionOrg] = useState("");
   const [people, setPeople] = useState<PersonnelDraft[]>([]);
   const [gear, setGear] = useState<{ equipment_id: string; purpose: string }[]>([]);
   const [busy, setBusy] = useState(false);
@@ -340,6 +393,10 @@ function SettingsCard({
     if (settings === null) return;
     setTemplateId(settings.template_id);
     setComparisonId(settings.comparison_inspection_id);
+    setInspectionDate(settings.inspection_date ?? "");
+    setReportNumber(settings.report_number ?? "");
+    setProjectName(settings.project_name ?? "");
+    setInspectionOrg(settings.inspection_org ?? "");
     setPeople(
       settings.personnel.map((item) => ({
         personnel_id: item.personnel_id,
@@ -360,9 +417,14 @@ function SettingsCard({
   const missingRoles = requiredRoles.filter((role) => !coveredRoles.has(role));
 
   async function save() {
+    if (loading || busy || settings?.inspection_year_id !== yearId) return;
     setBusy(true);
     try {
       const saved = await saveReportSettings(yearId, {
+        inspection_date: inspectionDate || null,
+        report_number: reportNumber.trim() || null,
+        project_name: projectName.trim() || null,
+        inspection_org: inspectionOrg.trim() || null,
         template_id: templateId,
         comparison_inspection_id: comparisonId,
         personnel: people.map((item, index) => ({ ...item, sort_order: index })),
@@ -372,11 +434,13 @@ function SettingsCard({
           sort_order: index,
         })),
       });
+      if (!active.current) return;
+      if (saved.inspection_year_id !== yearId) throw new Error("保存结果与当前年度不一致。");
       onSaved(saved);
     } catch (caught) {
-      onError(reportErrorMessage(caught));
+      if (active.current) onError(reportErrorMessage(caught));
     } finally {
-      setBusy(false);
+      if (active.current) setBusy(false);
     }
   }
 
@@ -388,7 +452,7 @@ function SettingsCard({
           type="primary"
           icon={<SaveOutlined />}
           loading={busy}
-          disabled={settings === null}
+          disabled={loading || settings?.inspection_year_id !== yearId}
           onClick={() => void save()}
         >
           保存配置
@@ -433,6 +497,35 @@ function SettingsCard({
                       }`,
                     }))}
                   />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Typography.Text type="secondary">
+              封面信息由本年度单独填写，不会从导入资料自动带入。留空的字段在报告中保持空白。
+            </Typography.Text>
+            <Row gutter={16} style={{ marginTop: 12 }}>
+              <Col xs={24} md={12}>
+                <Form.Item label="检测日期" htmlFor="report-settings-inspection-date">
+                  <Input id="report-settings-inspection-date" type="date" value={inspectionDate}
+                    onChange={(event) => setInspectionDate(event.target.value)} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item label="报告编号" htmlFor="report-settings-report-number">
+                  <Input id="report-settings-report-number" value={reportNumber} maxLength={100}
+                    onChange={(event) => setReportNumber(event.target.value)} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item label="项目名称" htmlFor="report-settings-project-name">
+                  <Input id="report-settings-project-name" value={projectName} maxLength={200}
+                    onChange={(event) => setProjectName(event.target.value)} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item label="检测单位" htmlFor="report-settings-inspection-org">
+                  <Input id="report-settings-inspection-org" value={inspectionOrg} maxLength={200}
+                    onChange={(event) => setInspectionOrg(event.target.value)} />
                 </Form.Item>
               </Col>
             </Row>

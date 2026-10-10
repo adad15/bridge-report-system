@@ -1,5 +1,8 @@
 #include "bridge_report/http/InspectionReportSettingsRoutes.hpp"
 
+#include <array>
+#include <chrono>
+#include <cctype>
 #include <optional>
 #include <string>
 
@@ -91,6 +94,19 @@ std::optional<std::string> optional_uuid_member(const Json::Value& body, const c
     return value;
 }
 
+bool valid_iso_date(const std::string& value) {
+    if (value.size() != 10 || value[4] != '-' || value[7] != '-') return false;
+    for (const auto index : {0, 1, 2, 3, 5, 6, 8, 9}) {
+        if (!std::isdigit(static_cast<unsigned char>(value[index]))) return false;
+    }
+    const int year = std::stoi(value.substr(0, 4));
+    if (year < 1) return false;
+    const unsigned month = static_cast<unsigned>(std::stoi(value.substr(5, 2)));
+    const unsigned day = static_cast<unsigned>(std::stoi(value.substr(8, 2)));
+    return std::chrono::year_month_day{
+        std::chrono::year{year}, std::chrono::month{month}, std::chrono::day{day}}.ok();
+}
+
 bool parse_settings_input(
     const Json::Value& body,
     report::InspectionReportSettingsInput& input,
@@ -98,6 +114,44 @@ bool parse_settings_input(
     if (!body.isObject()) {
         message = "请求体必须是 JSON 对象。";
         return false;
+    }
+    constexpr std::array<const char*, 4> cover_keys{
+        "inspection_date", "report_number", "project_name", "inspection_org"};
+    int cover_count = 0;
+    for (const auto* key : cover_keys) cover_count += body.isMember(key) ? 1 : 0;
+    if (cover_count != 0 && cover_count != static_cast<int>(cover_keys.size())) {
+        message = "封面字段须四项同时提交。";
+        return false;
+    }
+    input.cover_fields_provided = cover_count != 0;
+    auto cover_text = [&](const char* key, size_t max_size,
+                          std::optional<std::string>& target) {
+        const auto& value = body[key];
+        if (value.isNull()) return true;
+        if (!value.isString()) {
+            message = std::string(key) + " 必须是文本或 null。";
+            return false;
+        }
+        auto trimmed = value.asString();
+        const auto first = trimmed.find_first_not_of(" \t\r\n");
+        trimmed = first == std::string::npos ? "" :
+            trimmed.substr(first, trimmed.find_last_not_of(" \t\r\n") - first + 1);
+        if (trimmed.size() > max_size || trimmed.find_first_of("\r\n") != std::string::npos) {
+            message = std::string(key) + " 超过长度限制或包含换行。";
+            return false;
+        }
+        if (!trimmed.empty()) target = std::move(trimmed);
+        return true;
+    };
+    if (input.cover_fields_provided) {
+        if (!cover_text("inspection_date", 10, input.inspection_date) ||
+            !cover_text("report_number", 100, input.report_number) ||
+            !cover_text("project_name", 200, input.project_name) ||
+            !cover_text("inspection_org", 200, input.inspection_org)) return false;
+        if (input.inspection_date && !valid_iso_date(*input.inspection_date)) {
+            message = "检测日期必须是有效的 YYYY-MM-DD 日期。";
+            return false;
+        }
     }
     input.template_id = optional_uuid_member(body, "template_id");
     input.comparison_inspection_id = optional_uuid_member(body, "comparison_inspection_id");

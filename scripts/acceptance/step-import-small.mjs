@@ -1,0 +1,24 @@
+import assert from "node:assert/strict";
+import { join } from "node:path";
+import { writeFile } from "node:fs/promises";
+export default async({page,api,state,root,origin,log})=>{
+ await page.goto(origin+"/bridges/"+state.bridge.id+"/inspections/"+state.year.id);
+ await page.getByRole("button",{name:"导入检测资料",exact:true}).first().click();
+ const dialog=page.getByRole("dialog",{name:"导入检测资料"});
+ await dialog.getByLabel("数据来源",{exact:true}).click();
+ await page.getByText("Word 文件",{exact:true}).last().click();
+ await dialog.getByLabel("检查日期",{exact:true}).fill("2026-05-18");
+ await dialog.getByLabel("检查日期",{exact:true}).press("Enter");
+ await dialog.getByLabel("报告编号",{exact:true}).fill("ACCEPT-SMALL-2026");
+ await dialog.getByLabel("项目名称",{exact:true}).fill("集成验收小样");
+ await dialog.locator('input[type="file"]').setInputFiles(join(root,"samples/small.docx"));
+ await dialog.getByRole("button",{name:"上传并解析",exact:true}).click();
+ await page.waitForURL(/\/imports\/[^/]+\/review$/,{timeout:90000});
+ state.importId=new URL(page.url()).pathname.split("/").at(-2);
+ await page.getByText("构件绑定",{exact:true}).first().waitFor();
+ const review=await api("/api/import-records/"+state.importId+"/review");
+ await writeFile(join(log,"small-review-initial.json"),JSON.stringify(review,null,2));
+ state.initialReview=review;
+ assert.equal(review.statistics.defect_count,2);
+ assert.equal(review.statistics.photo_count,2);
+};

@@ -218,3 +218,36 @@ def test_listing_reports_a_missing_database_with_a_coded_error(tmp_path):
 
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "source_db_not_found"
+
+
+@pytest.mark.parametrize("raw,expected_type,expected_warning", [
+    ("3.5~20", "range", None),
+    ("未知", None, "source_measurement_invalid"),
+    ("NaN", None, "source_measurement_invalid"),
+])
+def test_endpoint_preserves_structured_dimension_without_description(
+    request_payload, raw, expected_type, expected_warning,
+):
+    db = sqlite3.connect(request_payload.source_db_path)
+    try:
+        db.execute(
+            'UPDATE outerCheckData SET data=?, "面积一"=NULL, "长度"=?, "长度单位"=?',
+            ("", raw, "m"),
+        )
+        db.commit()
+    finally:
+        db.close()
+    response = TestClient(app).post(
+        "/imports/source/parse", json=json.loads(request_payload.model_dump_json()))
+    assert response.status_code == 200
+    body = response.json()["data"]
+    assert body["contract"]["parser_version"] == "0.1.1"
+    candidate = body["defects"][0]
+    if expected_type:
+        dimension, = candidate["measurements"]
+        assert dimension["value_type"] == expected_type
+        assert dimension["minimum_value"] == 3.5
+        assert dimension["maximum_value"] == 20
+    else:
+        assert candidate["measurements"] == []
+        assert expected_warning in [w["code"] for w in candidate["warnings"]]

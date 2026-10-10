@@ -1,0 +1,6051 @@
+{
+  "groups": {
+    "org.bridge.group.8_7_1": {
+      "number": "8.7.1",
+      "name": "锚垫板异常"
+    },
+    "org.bridge.group.7_4_1": {
+      "number": "7.4.1",
+      "name": "预应力混凝土加劲梁"
+    },
+    "org.bridge.group.6_2_8": {
+      "number": "6.2.8",
+      "name": "桁架拱桥的横向联结系"
+    },
+    "org.bridge.group.5_2_1": {
+      "number": "5.2.1",
+      "name": "钢结构梁桥上部结构构件"
+    },
+    "org.bridge.group.6_2_5": {
+      "number": "6.2.5",
+      "name": "刚架拱桥的刚架拱片以及微弯板"
+    },
+    "org.bridge.group.6_3_2": {
+      "number": "6.3.2",
+      "name": "立柱"
+    },
+    "org.bridge.group.8_4_1": {
+      "number": "8.4.1",
+      "name": "索塔"
+    },
+    "org.bridge.group.5_3_1": {
+      "number": "5.3.1",
+      "name": "橡胶支座"
+    },
+    "org.bridge.group.7_5_1": {
+      "number": "7.5.1",
+      "name": "索塔"
+    },
+    "org.bridge.group.8_5_1": {
+      "number": "8.5.1",
+      "name": "锚具"
+    },
+    "org.bridge.group.7_1_1": {
+      "number": "7.1.1",
+      "name": "主缆"
+    },
+    "org.bridge.group.5_3_2": {
+      "number": "5.3.2",
+      "name": "钢支座"
+    },
+    "org.bridge.group.10_2_1": {
+      "number": "10.2.1",
+      "name": "伸缩缝"
+    },
+    "org.bridge.group.7_4_2": {
+      "number": "7.4.2",
+      "name": "钢桁架加劲梁"
+    },
+    "org.bridge.group.6_1_2": {
+      "number": "6.1.2",
+      "name": "拱上结构"
+    },
+    "org.bridge.group.6_3_5": {
+      "number": "6.3.5",
+      "name": "桥面板"
+    },
+    "org.bridge.group.10_5_1": {
+      "number": "10.5.1",
+      "name": "排水不畅"
+    },
+    "org.bridge.group.6_1_1": {
+      "number": "6.1.1",
+      "name": "主拱圈"
+    },
+    "org.bridge.group.6_2_3": {
+      "number": "6.2.3",
+      "name": "双曲拱桥主拱圈"
+    },
+    "org.bridge.group.5_1_1": {
+      "number": "5.1.1",
+      "name": "上部承重构件、上部一般构件"
+    },
+    "org.bridge.group.10_5_2": {
+      "number": "10.5.2",
+      "name": "泄水管、引水槽缺陷"
+    },
+    "org.bridge.group.10_4_1": {
+      "number": "10.4.1",
+      "name": "栏杆、护栏"
+    },
+    "org.bridge.group.7_4_3": {
+      "number": "7.4.3",
+      "name": "钢箱加劲梁"
+    },
+    "org.bridge.group.6_1_3": {
+      "number": "6.1.3",
+      "name": "桥面板"
+    },
+    "org.bridge.group.5_3_3": {
+      "number": "5.3.3",
+      "name": "混凝土摆式支座"
+    },
+    "org.bridge.group.6_4_1": {
+      "number": "6.4.1",
+      "name": "钢拱桥"
+    },
+    "org.bridge.group.9_3_2": {
+      "number": "9.3.2",
+      "name": "基础（包括水下基础）"
+    },
+    "org.bridge.group.7_6_1": {
+      "number": "7.6.1",
+      "name": "索鞍"
+    },
+    "org.bridge.group.9_1_2": {
+      "number": "9.1.2",
+      "name": "盖梁和系梁"
+    },
+    "org.bridge.group.8_1_1": {
+      "number": "8.1.1",
+      "name": "斜拉索"
+    },
+    "org.bridge.group.6_2_6": {
+      "number": "6.2.6",
+      "name": "刚架拱桥横向联结系"
+    },
+    "org.bridge.group.8_6_1": {
+      "number": "8.6.1",
+      "name": "减震装置"
+    },
+    "org.bridge.group.9_6_1": {
+      "number": "9.6.1",
+      "name": "河床"
+    },
+    "org.bridge.group.9_4_1": {
+      "number": "9.4.1",
+      "name": "翼墙、耳墙"
+    },
+    "org.bridge.group.9_6_2": {
+      "number": "9.6.2",
+      "name": "调治构造物"
+    },
+    "org.bridge.group.10_1_1": {
+      "number": "10.1.1",
+      "name": "沥青混凝土桥面铺装"
+    },
+    "org.bridge.group.10_6_1": {
+      "number": "10.6.1",
+      "name": "照明、标志"
+    },
+    "org.bridge.group.9_5_1": {
+      "number": "9.5.1",
+      "name": "锥坡、护坡"
+    },
+    "org.bridge.group.8_2_1": {
+      "number": "8.2.1",
+      "name": "斜拉索护套"
+    },
+    "org.bridge.group.10_3_1": {
+      "number": "10.3.1",
+      "name": "人行道"
+    },
+    "org.bridge.group.6_3_3": {
+      "number": "6.3.3",
+      "name": "吊杆"
+    },
+    "org.bridge.group.9_2_2": {
+      "number": "9.2.2",
+      "name": "台帽"
+    },
+    "org.bridge.group.9_2_1": {
+      "number": "9.2.1",
+      "name": "台身"
+    },
+    "org.bridge.group.6_2_2": {
+      "number": "6.2.2",
+      "name": "板拱桥、肋拱桥和箱拱桥拱上结构"
+    },
+    "org.bridge.group.6_2_7": {
+      "number": "6.2.7",
+      "name": "桁架拱桥的桁架拱片及微弯板"
+    },
+    "org.bridge.group.7_3_1": {
+      "number": "7.3.1",
+      "name": "吊索"
+    },
+    "org.bridge.group.7_8_1": {
+      "number": "7.8.1",
+      "name": "锚杆"
+    },
+    "org.bridge.group.9_1_1": {
+      "number": "9.1.1",
+      "name": "墩身"
+    },
+    "org.bridge.group.6_4_2": {
+      "number": "6.4.2",
+      "name": "桥面板"
+    },
+    "org.bridge.group.7_7_1": {
+      "number": "7.7.1",
+      "name": "悬索桥锚锭"
+    },
+    "org.bridge.group.7_2_1": {
+      "number": "7.2.1",
+      "name": "索夹"
+    },
+    "org.bridge.group.6_2_9": {
+      "number": "6.2.9",
+      "name": "桥面板"
+    },
+    "org.bridge.group.6_3_4": {
+      "number": "6.3.4",
+      "name": "系杆及防护板"
+    },
+    "org.bridge.group.5_3_4": {
+      "number": "5.3.4",
+      "name": "特殊支座"
+    },
+    "org.bridge.group.10_1_2": {
+      "number": "10.1.2",
+      "name": "水泥混凝土桥面铺装"
+    },
+    "org.bridge.group.6_3_1": {
+      "number": "6.3.1",
+      "name": "拱肋、横向联结系"
+    },
+    "org.bridge.group.6_3": {
+      "number": "6.3",
+      "name": "钢—混凝土组合拱桥"
+    },
+    "org.bridge.group.6_2_1": {
+      "number": "6.2.1",
+      "name": "板拱桥、肋拱桥和箱拱桥主拱圈"
+    }
+  },
+  "defects": [
+    {
+      "sortOrder": 130,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_13",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "水损（参照混凝土碳化执行）",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-13"
+    },
+    {
+      "sortOrder": 140,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_14",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "上部其它病害",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-14"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_1",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_2",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_3",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_4",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "保护层厚度",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_5",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_6",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "混凝土碳化",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_7",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "混凝土强度",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_8",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "跨中挠度",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-8"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_9",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "结构变位",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-9"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_10",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "预应力构件损伤",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-10"
+    },
+    {
+      "sortOrder": 110,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_11",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "简支梁（板）桥、刚架桥裂缝",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-11"
+    },
+    {
+      "sortOrder": 120,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_1_1_12",
+      "parentId": "org.bridge.group.5_1_1",
+      "name": "连续梁桥、连续刚构桥、悬臂梁桥、 T 型刚构桥裂缝",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.1.1-12"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_2_1_9",
+      "parentId": "org.bridge.group.5_2_1",
+      "name": "上部其它病害",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.2.1-9"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_2_1_1",
+      "parentId": "org.bridge.group.5_2_1",
+      "name": "涂层劣化",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.2.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_2_1_2",
+      "parentId": "org.bridge.group.5_2_1",
+      "name": "锈蚀",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.2.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_2_1_3",
+      "parentId": "org.bridge.group.5_2_1",
+      "name": "焊缝开裂",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.2.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_2_1_4",
+      "parentId": "org.bridge.group.5_2_1",
+      "name": "铆钉（螺栓）损失",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.2.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_2_1_5",
+      "parentId": "org.bridge.group.5_2_1",
+      "name": "构件裂缝",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.2.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_2_1_6",
+      "parentId": "org.bridge.group.5_2_1",
+      "name": "跨中挠度",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.2.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_2_1_7",
+      "parentId": "org.bridge.group.5_2_1",
+      "name": "构件变形",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.2.1-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.beam"
+      ],
+      "id": "org.bridge.defect.5_2_1_8",
+      "parentId": "org.bridge.group.5_2_1",
+      "name": "结构变位",
+      "componentCategoryIds": [
+        "h21.component.beam.upper_bearing",
+        "h21.component.beam.upper_general"
+      ],
+      "number": "5.2.1-8"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_1_7",
+      "parentId": "org.bridge.group.5_3_1",
+      "name": "橡胶支座其它病害",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.1-7"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_1_1",
+      "parentId": "org.bridge.group.5_3_1",
+      "name": "板式支座老化变质、开裂",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_1_2",
+      "parentId": "org.bridge.group.5_3_1",
+      "name": "板式支座缺陷",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_1_3",
+      "parentId": "org.bridge.group.5_3_1",
+      "name": "板式支座位置串动、脱空或剪切超限",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_1_4",
+      "parentId": "org.bridge.group.5_3_1",
+      "name": "盆式支座组件损坏",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_1_5",
+      "parentId": "org.bridge.group.5_3_1",
+      "name": "聚四氟乙烯滑板磨损",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_1_6",
+      "parentId": "org.bridge.group.5_3_1",
+      "name": "盆式支座位移、转角超限",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.1-6"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_2_4",
+      "parentId": "org.bridge.group.5_3_2",
+      "name": "钢支座其它病害",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.2-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_2_1",
+      "parentId": "org.bridge.group.5_3_2",
+      "name": "钢支座组件或功能缺陷",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.2-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_2_2",
+      "parentId": "org.bridge.group.5_3_2",
+      "name": "钢支座位移、转角超限",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.2-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_2_3",
+      "parentId": "org.bridge.group.5_3_2",
+      "name": "钢支座部件磨损、裂缝",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.2-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_3_4",
+      "parentId": "org.bridge.group.5_3_3",
+      "name": "摆式支座其它病害",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.3-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_3_1",
+      "parentId": "org.bridge.group.5_3_3",
+      "name": "混凝土缺损",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.3-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_3_2",
+      "parentId": "org.bridge.group.5_3_3",
+      "name": "活动支座滑动面不平整、生锈咬死",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.3-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_3_3",
+      "parentId": "org.bridge.group.5_3_3",
+      "name": "轴承有裂纹、切口或偏移",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.3-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_4_4",
+      "parentId": "org.bridge.group.5_3_4",
+      "name": "特殊支座其它病害",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.4-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_4_1",
+      "parentId": "org.bridge.group.5_3_4",
+      "name": "螺纹、螺帽松动或锚螺杆剪切",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.4-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_4_2",
+      "parentId": "org.bridge.group.5_3_4",
+      "name": "上下座板(盆)锈蚀",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.4-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.5_3_4_3",
+      "parentId": "org.bridge.group.5_3_4",
+      "name": "纵横线扭转",
+      "componentCategoryIds": [
+        "h21.component.bearing"
+      ],
+      "number": "5.3.4-3"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_1_8",
+      "parentId": "org.bridge.group.6_1_1",
+      "name": "主拱圈其它病害",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.1.1-8"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_1_1",
+      "parentId": "org.bridge.group.6_1_1",
+      "name": "主拱圈变形",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_1_2",
+      "parentId": "org.bridge.group.6_1_1",
+      "name": "主拱圈裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_1_3",
+      "parentId": "org.bridge.group.6_1_1",
+      "name": "灰缝松散脱落",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_1_4",
+      "parentId": "org.bridge.group.6_1_1",
+      "name": "渗水",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_1_5",
+      "parentId": "org.bridge.group.6_1_1",
+      "name": "砌块断裂、脱落",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.1.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_1_6",
+      "parentId": "org.bridge.group.6_1_1",
+      "name": "风化",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.1.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_1_7",
+      "parentId": "org.bridge.group.6_1_1",
+      "name": "拱脚位移",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.1.1-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_2_8",
+      "parentId": "org.bridge.group.6_1_2",
+      "name": "拱上结构其它病害",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.1.2-8"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_2_1",
+      "parentId": "org.bridge.group.6_1_2",
+      "name": "实腹拱的侧墙与主拱圈脱裂",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.1.2-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_2_2",
+      "parentId": "org.bridge.group.6_1_2",
+      "name": "实腹拱的侧墙变形、位移",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.1.2-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_2_3",
+      "parentId": "org.bridge.group.6_1_2",
+      "name": "实腹拱的拱上填料沉陷或开裂",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.1.2-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_2_4",
+      "parentId": "org.bridge.group.6_1_2",
+      "name": "空腹拱的腹拱或横向联系变形、错位",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.1.2-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_2_5",
+      "parentId": "org.bridge.group.6_1_2",
+      "name": "立墙或立柱倾斜、开裂或脱落",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.1.2-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_2_6",
+      "parentId": "org.bridge.group.6_1_2",
+      "name": "拱上结构裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.1.2-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_2_7",
+      "parentId": "org.bridge.group.6_1_2",
+      "name": "拱上填料排水不畅",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.1.2-7"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_1",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_2",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_3",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_4",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "保护层厚度",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_5",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_6",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "混凝土碳化",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_7",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "混凝土强度",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_8",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "跨中挠度",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-8"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_9",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "结构变位",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-9"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_10",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "预应力构件损伤",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-10"
+    },
+    {
+      "sortOrder": 110,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_11",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "简支梁（板）桥、刚架桥裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-11"
+    },
+    {
+      "sortOrder": 120,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_12",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "连续梁桥、连续刚构桥、悬臂梁桥、 T 型刚构桥裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-12"
+    },
+    {
+      "sortOrder": 130,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_1_3__5_1_1_13",
+      "parentId": "org.bridge.group.6_1_3",
+      "name": "桥面板其它病害",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-13"
+    },
+    {
+      "sortOrder": 120,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1_6",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "其它病害",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.2.1-6"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1_1",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "主拱圈变形",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.2.1-1"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1_2",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "主拱圈裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.2.1-2"
+    },
+    {
+      "sortOrder": 130,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1__9_2_1_10",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "水损害",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "9.2.1-10"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1_4",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "拱铰功能受损",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.2.1-4"
+    },
+    {
+      "sortOrder": 110,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1_5",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "拱脚位移",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.2.1-5"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1__5_1_1_1",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1__5_1_1_2",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1__5_1_1_3",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1__5_1_1_4",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "保护层厚度",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "5.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1__5_1_1_5",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "5.1.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1__5_1_1_6",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "混凝土碳化",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "5.1.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_1__5_1_1_7",
+      "parentId": "org.bridge.group.6_2_1",
+      "name": "混凝土强度",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "5.1.1-7"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_2_9",
+      "parentId": "org.bridge.group.6_2_2",
+      "name": "其它病害",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.2.2-9"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_2_1",
+      "parentId": "org.bridge.group.6_2_2",
+      "name": "实腹拱的侧墙与主拱圈间脱裂",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.2.2-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_2_2",
+      "parentId": "org.bridge.group.6_2_2",
+      "name": "侧墙变形",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.2.2-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_2_3",
+      "parentId": "org.bridge.group.6_2_2",
+      "name": "实腹拱的拱上填料沉陷或开裂",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.2.2-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_2_4",
+      "parentId": "org.bridge.group.6_2_2",
+      "name": "空腹拱的腹拱或横向联系变形、错位",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.2.2-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_2_5",
+      "parentId": "org.bridge.group.6_2_2",
+      "name": "立墙或立柱倾斜",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.2.2-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_2_6",
+      "parentId": "org.bridge.group.6_2_2",
+      "name": "表面缺陷",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.2.2-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_2_7",
+      "parentId": "org.bridge.group.6_2_2",
+      "name": "拱上结构裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.2.2-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_2_8",
+      "parentId": "org.bridge.group.6_2_2",
+      "name": "拱上填料排水不畅",
+      "componentCategoryIds": [
+        "h21.component.arch.spandrel"
+      ],
+      "number": "6.2.2-8"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_3_4",
+      "parentId": "org.bridge.group.6_2_3",
+      "name": "其它病害",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.2.3-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_3_1",
+      "parentId": "org.bridge.group.6_2_3",
+      "name": "主拱圈、横向联系变形",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.2.3-1"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_3_2",
+      "parentId": "org.bridge.group.6_2_3",
+      "name": "渗水",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.2.3-2"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_3_3",
+      "parentId": "org.bridge.group.6_2_3",
+      "name": "主拱圈裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.2.3-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_3__6_2_1_5",
+      "parentId": "org.bridge.group.6_2_3",
+      "name": "拱脚位移",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "6.2.1-5"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_3__5_1_1_1",
+      "parentId": "org.bridge.group.6_2_3",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_3__5_1_1_2",
+      "parentId": "org.bridge.group.6_2_3",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_3__5_1_1_3",
+      "parentId": "org.bridge.group.6_2_3",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.arch.main_ring"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_5_1",
+      "parentId": "org.bridge.group.6_2_5",
+      "name": "跨中挠度",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "6.2.5-1"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_5_2",
+      "parentId": "org.bridge.group.6_2_5",
+      "name": "横系梁与拱片联结松动、开裂",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "6.2.5-2"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_5_3",
+      "parentId": "org.bridge.group.6_2_5",
+      "name": "微弯板穿孔、塌陷、露筋",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "6.2.5-3"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_5_4",
+      "parentId": "org.bridge.group.6_2_5",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "6.2.5-4"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_5__6_2_1_5",
+      "parentId": "org.bridge.group.6_2_5",
+      "name": "拱脚位移",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "6.2.1-5"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_5__5_1_1_1",
+      "parentId": "org.bridge.group.6_2_5",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_5__5_1_1_2",
+      "parentId": "org.bridge.group.6_2_5",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_5__5_1_1_3",
+      "parentId": "org.bridge.group.6_2_5",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_6_1",
+      "parentId": "org.bridge.group.6_2_6",
+      "name": "混凝土压碎",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "6.2.6-1"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_6_2",
+      "parentId": "org.bridge.group.6_2_6",
+      "name": "连接部钢板锈蚀、断裂",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "6.2.6-2"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_6_3",
+      "parentId": "org.bridge.group.6_2_6",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "6.2.6-3"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_6_4",
+      "parentId": "org.bridge.group.6_2_6",
+      "name": "变形",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "6.2.6-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_6__5_1_1_1",
+      "parentId": "org.bridge.group.6_2_6",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_6__5_1_1_2",
+      "parentId": "org.bridge.group.6_2_6",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_6__5_1_1_3",
+      "parentId": "org.bridge.group.6_2_6",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_7_1",
+      "parentId": "org.bridge.group.6_2_7",
+      "name": "构件变形",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "6.2.7-1"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_7_2",
+      "parentId": "org.bridge.group.6_2_7",
+      "name": "拱片连接处混凝土断裂",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "6.2.7-2"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_7_3",
+      "parentId": "org.bridge.group.6_2_7",
+      "name": "上弦杆缺陷",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "6.2.7-3"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_7_4",
+      "parentId": "org.bridge.group.6_2_7",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "6.2.7-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_7__6_2_5_3",
+      "parentId": "org.bridge.group.6_2_7",
+      "name": "微弯板穿孔、塌陷、露筋",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "6.2.5-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_7__6_2_1_5",
+      "parentId": "org.bridge.group.6_2_7",
+      "name": "拱脚位移",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "6.2.1-5"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_7__5_1_1_1",
+      "parentId": "org.bridge.group.6_2_7",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_7__5_1_1_2",
+      "parentId": "org.bridge.group.6_2_7",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_7__5_1_1_3",
+      "parentId": "org.bridge.group.6_2_7",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab",
+        "h21.component.arch.rigid_or_truss_segment"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_8_1",
+      "parentId": "org.bridge.group.6_2_8",
+      "name": "变形",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "6.2.8-1"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_8_2",
+      "parentId": "org.bridge.group.6_2_8",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "6.2.8-2"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_8__6_2_6_1",
+      "parentId": "org.bridge.group.6_2_8",
+      "name": "混凝土压碎",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "6.2.6-1"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_8__5_1_1_1",
+      "parentId": "org.bridge.group.6_2_8",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_8__5_1_1_2",
+      "parentId": "org.bridge.group.6_2_8",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss"
+      ],
+      "id": "org.bridge.defect.6_2_8__5_1_1_3",
+      "parentId": "org.bridge.group.6_2_8",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.arch.transverse_link"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_1",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_2",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_3",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_4",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "混凝土保护层厚度",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_5",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_6",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "混凝土碳化",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_7",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "混凝土强度",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_8",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "跨中挠度",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-8"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_9",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "结构变位",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-9"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_10",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "预应力构件损伤",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-10"
+    },
+    {
+      "sortOrder": 110,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_11",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "简支梁（板）桥、刚架桥裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-11"
+    },
+    {
+      "sortOrder": 120,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_12",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "连续梁桥、连续刚构桥、悬臂梁桥、 T 型刚构桥裂缝",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-12"
+    },
+    {
+      "sortOrder": 130,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double"
+      ],
+      "id": "org.bridge.defect.6_2_9__5_1_1_13",
+      "parentId": "org.bridge.group.6_2_9",
+      "name": "桥面板其它病害",
+      "componentCategoryIds": [
+        "h21.component.arch.deck_slab"
+      ],
+      "number": "5.1.1-13"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3__10_1_1_5",
+      "parentId": "org.bridge.group.6_3",
+      "name": "桥头搭板（自定义）",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.column",
+        "h21.component.composite_arch.deck_slab_or_beam",
+        "h21.component.composite_arch.hanger",
+        "h21.component.composite_arch.tie_rod",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "10.1.1-5"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3__10_1_2_2",
+      "parentId": "org.bridge.group.6_3",
+      "name": "错台",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.column",
+        "h21.component.composite_arch.deck_slab_or_beam",
+        "h21.component.composite_arch.hanger",
+        "h21.component.composite_arch.tie_rod",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "10.1.2-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3__10_5_1_1",
+      "parentId": "org.bridge.group.6_3",
+      "name": "排水不畅",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.column",
+        "h21.component.composite_arch.deck_slab_or_beam",
+        "h21.component.composite_arch.hanger",
+        "h21.component.composite_arch.tie_rod",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "10.5.1-1"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3__10_5_1_3",
+      "parentId": "org.bridge.group.6_3",
+      "name": "铰缝渗水",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.column",
+        "h21.component.composite_arch.deck_slab_or_beam",
+        "h21.component.composite_arch.hanger",
+        "h21.component.composite_arch.tie_rod",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "10.5.1-3"
+    },
+    {
+      "sortOrder": 150,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1_9",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "拱肋、横向联结系其它病害",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "6.3.1-9"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1_1",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "涂层缺陷",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "6.3.1-1"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1_2",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "焊缝开裂",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "6.3.1-2"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1_3",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "混凝土裂缝",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "6.3.1-3"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1_4",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "构件扭曲变形、局部损伤",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "6.3.1-4"
+    },
+    {
+      "sortOrder": 110,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1_5",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "构件腐蚀、生锈",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "6.3.1-5"
+    },
+    {
+      "sortOrder": 120,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1_6",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "管内混凝土填充不密实或脱空",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "6.3.1-6"
+    },
+    {
+      "sortOrder": 130,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1_7",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "主拱圈挠度",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "6.3.1-7"
+    },
+    {
+      "sortOrder": 140,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1_8",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "拱肋位移",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "6.3.1-8"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1__5_1_1_1",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1__5_1_1_2",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1__5_1_1_3",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1__5_1_1_4",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "保护层厚度",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1__5_1_1_5",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.1.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_1__5_1_1_6",
+      "parentId": "org.bridge.group.6_3_1",
+      "name": "混凝土碳化",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.1.1-6"
+    },
+    {
+      "sortOrder": 110,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_2_2",
+      "parentId": "org.bridge.group.6_3_2",
+      "name": "立柱其它病害",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.column"
+      ],
+      "number": "6.3.2-2"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_2_1",
+      "parentId": "org.bridge.group.6_3_2",
+      "name": "混凝土裂缝",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.column"
+      ],
+      "number": "6.3.2-1"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_2__6_3_1_1",
+      "parentId": "org.bridge.group.6_3_2",
+      "name": "涂层缺陷",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.column"
+      ],
+      "number": "6.3.1-1"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_2__6_3_1_2",
+      "parentId": "org.bridge.group.6_3_2",
+      "name": "焊缝开裂",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.column"
+      ],
+      "number": "6.3.1-2"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_2__6_3_1_4",
+      "parentId": "org.bridge.group.6_3_2",
+      "name": "构件扭曲变形、局部损伤",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.column"
+      ],
+      "number": "6.3.1-4"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_2__6_3_1_5",
+      "parentId": "org.bridge.group.6_3_2",
+      "name": "构件腐蚀、生锈",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.column"
+      ],
+      "number": "6.3.1-5"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_2__6_3_1_6",
+      "parentId": "org.bridge.group.6_3_2",
+      "name": "管内混凝土填充不密实或脱空",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.column"
+      ],
+      "number": "6.3.1-6"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_2__5_1_1_1",
+      "parentId": "org.bridge.group.6_3_2",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.column"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_2__5_1_1_2",
+      "parentId": "org.bridge.group.6_3_2",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.column"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_2__5_1_1_3",
+      "parentId": "org.bridge.group.6_3_2",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.column"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_2__5_1_1_5",
+      "parentId": "org.bridge.group.6_3_2",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.column"
+      ],
+      "number": "5.1.1-5"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_3_8",
+      "parentId": "org.bridge.group.6_3_3",
+      "name": "吊杆其它病害",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.hanger"
+      ],
+      "number": "6.3.3-8"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_3_2",
+      "parentId": "org.bridge.group.6_3_3",
+      "name": "锈蚀(锚头、螺栓、钢管护套等)",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.hanger"
+      ],
+      "number": "6.3.3-2"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_3_3",
+      "parentId": "org.bridge.group.6_3_3",
+      "name": "锚头损坏",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.hanger"
+      ],
+      "number": "6.3.3-3"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_3_4",
+      "parentId": "org.bridge.group.6_3_3",
+      "name": "橡胶老化变质(吊杆端部及减振器)",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.hanger"
+      ],
+      "number": "6.3.3-4"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_3_6",
+      "parentId": "org.bridge.group.6_3_3",
+      "name": "吊杆的防护层破坏",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.hanger"
+      ],
+      "number": "6.3.3-6"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_3_7",
+      "parentId": "org.bridge.group.6_3_3",
+      "name": "断丝",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.hanger"
+      ],
+      "number": "6.3.3-7"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_3__5_1_1_1",
+      "parentId": "org.bridge.group.6_3_3",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.hanger"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_3__5_1_1_2",
+      "parentId": "org.bridge.group.6_3_3",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.hanger"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_3__5_1_1_3",
+      "parentId": "org.bridge.group.6_3_3",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.hanger"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_4_7",
+      "parentId": "org.bridge.group.6_3_4",
+      "name": "系杆及防护板其它病害",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.tie_rod"
+      ],
+      "number": "6.3.4-7"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_4_1",
+      "parentId": "org.bridge.group.6_3_4",
+      "name": "锈蚀(锚头、防护罩、钢箱)",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.tie_rod"
+      ],
+      "number": "6.3.4-1"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_4_2",
+      "parentId": "org.bridge.group.6_3_4",
+      "name": "系杆外部涂层脱落",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.tie_rod"
+      ],
+      "number": "6.3.4-2"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_4_3",
+      "parentId": "org.bridge.group.6_3_4",
+      "name": "系杆连接松动",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.tie_rod"
+      ],
+      "number": "6.3.4-3"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_4_4",
+      "parentId": "org.bridge.group.6_3_4",
+      "name": "锚头、防护套损坏",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.tie_rod"
+      ],
+      "number": "6.3.4-4"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_4_5",
+      "parentId": "org.bridge.group.6_3_4",
+      "name": "断丝",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.tie_rod"
+      ],
+      "number": "6.3.4-5"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_4_6",
+      "parentId": "org.bridge.group.6_3_4",
+      "name": "混凝土裂缝(混凝土防护板、系杆锚固区等)",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.tie_rod"
+      ],
+      "number": "6.3.4-6"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_4__5_1_1_1",
+      "parentId": "org.bridge.group.6_3_4",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.tie_rod"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_4__5_1_1_2",
+      "parentId": "org.bridge.group.6_3_4",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.tie_rod"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_4__5_1_1_3",
+      "parentId": "org.bridge.group.6_3_4",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.tie_rod"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_1",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_2",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_3",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_4",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "保护层厚度",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_5",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_6",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "混凝土碳化",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_7",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "混凝土强度",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_8",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "跨中挠度",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-8"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_9",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "结构变位",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-9"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_10",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "预应力构件损伤",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-10"
+    },
+    {
+      "sortOrder": 110,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_11",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "简支梁（板）桥、刚架桥裂缝",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-11"
+    },
+    {
+      "sortOrder": 120,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_12",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "连续梁桥、连续刚构桥、悬臂梁桥、 T 型刚构桥裂缝",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-12"
+    },
+    {
+      "sortOrder": 130,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_3_5__5_1_1_13",
+      "parentId": "org.bridge.group.6_3_5",
+      "name": "桥面板其它病害",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-13"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_1__5_2_1_9",
+      "parentId": "org.bridge.group.6_4_1",
+      "name": "钢拱桥其它病害",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.2.1-9"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_1__5_2_1_1",
+      "parentId": "org.bridge.group.6_4_1",
+      "name": "涂层劣化",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.2.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_1__5_2_1_2",
+      "parentId": "org.bridge.group.6_4_1",
+      "name": "锈蚀",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.2.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_1__5_2_1_3",
+      "parentId": "org.bridge.group.6_4_1",
+      "name": "焊缝开裂",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.2.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_1__5_2_1_4",
+      "parentId": "org.bridge.group.6_4_1",
+      "name": "铆钉（螺栓）损失",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.2.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_1__5_2_1_5",
+      "parentId": "org.bridge.group.6_4_1",
+      "name": "构件裂缝",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.2.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_1__5_2_1_6",
+      "parentId": "org.bridge.group.6_4_1",
+      "name": "跨中挠度",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.2.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_1__5_2_1_7",
+      "parentId": "org.bridge.group.6_4_1",
+      "name": "构件变形",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.2.1-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_1__5_2_1_8",
+      "parentId": "org.bridge.group.6_4_1",
+      "name": "结构变位",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "5.2.1-8"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_1__6_4_1",
+      "parentId": "org.bridge.group.6_4_1",
+      "name": "拱脚位移",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.arch_rib",
+        "h21.component.composite_arch.transverse_link"
+      ],
+      "number": "6.4-1"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_1",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_2",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_3",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_4",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "保护层厚度",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_5",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_6",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "混凝土碳化",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_7",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "混凝土强度",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_8",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "跨中挠度",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-8"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_9",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "结构变位",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-9"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_10",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "预应力构件损伤",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-10"
+    },
+    {
+      "sortOrder": 110,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_11",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "简支梁（板）桥、刚架桥裂缝",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-11"
+    },
+    {
+      "sortOrder": 120,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_12",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "连续梁桥、连续刚构桥、悬臂梁桥、 T 型刚构桥裂缝",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-12"
+    },
+    {
+      "sortOrder": 130,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_steel_concrete_composite"
+      ],
+      "id": "org.bridge.defect.6_4_2__5_1_1_13",
+      "parentId": "org.bridge.group.6_4_2",
+      "name": "桥面板其它病害",
+      "componentCategoryIds": [
+        "h21.component.composite_arch.deck_slab_or_beam"
+      ],
+      "number": "5.1.1-13"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_1_1_1",
+      "parentId": "org.bridge.group.7_1_1",
+      "name": "主缆防护损坏",
+      "componentCategoryIds": [
+        "h21.component.suspension.main_cable"
+      ],
+      "number": "7.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_1_1_2",
+      "parentId": "org.bridge.group.7_1_1",
+      "name": "主缆线形",
+      "componentCategoryIds": [
+        "h21.component.suspension.main_cable"
+      ],
+      "number": "7.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_1_1_3",
+      "parentId": "org.bridge.group.7_1_1",
+      "name": "扶手绳及栏杆绳损坏",
+      "componentCategoryIds": [
+        "h21.component.suspension.main_cable"
+      ],
+      "number": "7.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_1_1_4",
+      "parentId": "org.bridge.group.7_1_1",
+      "name": "主缆腐蚀或索股损坏（脱皮、锈蚀、伤痕）",
+      "componentCategoryIds": [
+        "h21.component.suspension.main_cable"
+      ],
+      "number": "7.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_1_1_5",
+      "parentId": "org.bridge.group.7_1_1",
+      "name": "涂膜劣化",
+      "componentCategoryIds": [
+        "h21.component.suspension.main_cable"
+      ],
+      "number": "7.1.1-5"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_2_1_1",
+      "parentId": "org.bridge.group.7_2_1",
+      "name": "错位、滑移",
+      "componentCategoryIds": [
+        "h21.component.suspension.cable_clamp"
+      ],
+      "number": "7.2.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_2_1_2",
+      "parentId": "org.bridge.group.7_2_1",
+      "name": "面漆起皮",
+      "componentCategoryIds": [
+        "h21.component.suspension.cable_clamp"
+      ],
+      "number": "7.2.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_2_1_3",
+      "parentId": "org.bridge.group.7_2_1",
+      "name": "索夹密封填料损坏",
+      "componentCategoryIds": [
+        "h21.component.suspension.cable_clamp"
+      ],
+      "number": "7.2.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_2_1_4",
+      "parentId": "org.bridge.group.7_2_1",
+      "name": "裂纹和锈蚀",
+      "componentCategoryIds": [
+        "h21.component.suspension.cable_clamp"
+      ],
+      "number": "7.2.1-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_3_1_1",
+      "parentId": "org.bridge.group.7_3_1",
+      "name": "渗水(吊索两端的锚固部位、冷铸锚头、横梁锚固构造、吊索套管、减振器等)",
+      "componentCategoryIds": [
+        "h21.component.suspension.hanger"
+      ],
+      "number": "7.3.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_3_1_2",
+      "parentId": "org.bridge.group.7_3_1",
+      "name": "锈蚀、腐蚀(钢丝、锚头、螺栓、钢管护套等)",
+      "componentCategoryIds": [
+        "h21.component.suspension.hanger"
+      ],
+      "number": "7.3.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_3_1_3",
+      "parentId": "org.bridge.group.7_3_1",
+      "name": "锚头损坏(松动、裂缝或破损)",
+      "componentCategoryIds": [
+        "h21.component.suspension.hanger"
+      ],
+      "number": "7.3.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_3_1_4",
+      "parentId": "org.bridge.group.7_3_1",
+      "name": "橡胶老化变质(吊索端部及减振器)",
+      "componentCategoryIds": [
+        "h21.component.suspension.hanger"
+      ],
+      "number": "7.3.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_3_1_5",
+      "parentId": "org.bridge.group.7_3_1",
+      "name": "掉漆、起皮",
+      "componentCategoryIds": [
+        "h21.component.suspension.hanger"
+      ],
+      "number": "7.3.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_3_1_6",
+      "parentId": "org.bridge.group.7_3_1",
+      "name": "防护套破坏",
+      "componentCategoryIds": [
+        "h21.component.suspension.hanger"
+      ],
+      "number": "7.3.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_3_1_7",
+      "parentId": "org.bridge.group.7_3_1",
+      "name": "吊索的防护层破坏(裂纹、破损、老化和积水)",
+      "componentCategoryIds": [
+        "h21.component.suspension.hanger"
+      ],
+      "number": "7.3.1-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_3_1_8",
+      "parentId": "org.bridge.group.7_3_1",
+      "name": "钢丝断丝",
+      "componentCategoryIds": [
+        "h21.component.suspension.hanger"
+      ],
+      "number": "7.3.1-8"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_1_1",
+      "parentId": "org.bridge.group.7_4_1",
+      "name": "剥落、露筋",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.1-1"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_1_2",
+      "parentId": "org.bridge.group.7_4_1",
+      "name": "跨中挠度",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.1-2"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_1_3",
+      "parentId": "org.bridge.group.7_4_1",
+      "name": "构件变形",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.1-3"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_1_4",
+      "parentId": "org.bridge.group.7_4_1",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.1-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_1__5_1_1_1",
+      "parentId": "org.bridge.group.7_4_1",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_1__5_1_1_2",
+      "parentId": "org.bridge.group.7_4_1",
+      "name": "剥落、掉角",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_1__5_1_1_3",
+      "parentId": "org.bridge.group.7_4_1",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_1__5_1_1_4",
+      "parentId": "org.bridge.group.7_4_1",
+      "name": "保护层厚度",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_1__5_1_1_5",
+      "parentId": "org.bridge.group.7_4_1",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.1.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_1__5_1_1_6",
+      "parentId": "org.bridge.group.7_4_1",
+      "name": "混凝土碳化",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.1.1-6"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_2_1",
+      "parentId": "org.bridge.group.7_4_2",
+      "name": "构件变形",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.2-1"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_2_2",
+      "parentId": "org.bridge.group.7_4_2",
+      "name": "锈蚀",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.2-2"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_2_3",
+      "parentId": "org.bridge.group.7_4_2",
+      "name": "跨中挠度",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.2-3"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_2_4",
+      "parentId": "org.bridge.group.7_4_2",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.2-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_2__5_2_1_1",
+      "parentId": "org.bridge.group.7_4_2",
+      "name": "涂层劣化",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.2.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_2__5_2_1_3",
+      "parentId": "org.bridge.group.7_4_2",
+      "name": "焊缝开裂",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.2.1-3"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_2__5_2_1_4",
+      "parentId": "org.bridge.group.7_4_2",
+      "name": "铆钉（螺栓）损失",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.2.1-4"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_2__5_2_1_8",
+      "parentId": "org.bridge.group.7_4_2",
+      "name": "结构变位",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.2.1-8"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_3_1",
+      "parentId": "org.bridge.group.7_4_3",
+      "name": "构件变形",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.3-1"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_3_2",
+      "parentId": "org.bridge.group.7_4_3",
+      "name": "锈蚀",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.3-2"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_3_3",
+      "parentId": "org.bridge.group.7_4_3",
+      "name": "跨中挠度",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.3-3"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_3_4",
+      "parentId": "org.bridge.group.7_4_3",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "7.4.3-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_3__5_2_1_1",
+      "parentId": "org.bridge.group.7_4_3",
+      "name": "涂层劣化",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.2.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_3__5_2_1_3",
+      "parentId": "org.bridge.group.7_4_3",
+      "name": "焊缝开裂",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.2.1-3"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_3__5_2_1_4",
+      "parentId": "org.bridge.group.7_4_3",
+      "name": "铆钉（螺栓）损失",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.2.1-4"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_4_3__5_2_1_8",
+      "parentId": "org.bridge.group.7_4_3",
+      "name": "结构变位",
+      "componentCategoryIds": [
+        "h21.component.suspension.stiffening_girder"
+      ],
+      "number": "5.2.1-8"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_5_1_1",
+      "parentId": "org.bridge.group.7_5_1",
+      "name": "倾斜变形",
+      "componentCategoryIds": [
+        "h21.component.suspension.tower"
+      ],
+      "number": "7.5.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_5_1_2",
+      "parentId": "org.bridge.group.7_5_1",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.suspension.tower"
+      ],
+      "number": "7.5.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_5_1_3",
+      "parentId": "org.bridge.group.7_5_1",
+      "name": "剥落、露筋",
+      "componentCategoryIds": [
+        "h21.component.suspension.tower"
+      ],
+      "number": "7.5.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_5_1_4",
+      "parentId": "org.bridge.group.7_5_1",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.suspension.tower"
+      ],
+      "number": "7.5.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_5_1_5",
+      "parentId": "org.bridge.group.7_5_1",
+      "name": "混凝土裂缝",
+      "componentCategoryIds": [
+        "h21.component.suspension.tower"
+      ],
+      "number": "7.5.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_5_1_6",
+      "parentId": "org.bridge.group.7_5_1",
+      "name": "沉降",
+      "componentCategoryIds": [
+        "h21.component.suspension.tower"
+      ],
+      "number": "7.5.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_5_1_7",
+      "parentId": "org.bridge.group.7_5_1",
+      "name": "基础冲刷",
+      "componentCategoryIds": [
+        "h21.component.suspension.tower"
+      ],
+      "number": "7.5.1-7"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_6_1_1",
+      "parentId": "org.bridge.group.7_6_1",
+      "name": "上座板与下座板的相对位移",
+      "componentCategoryIds": [
+        "h21.component.suspension.main_saddle",
+        "h21.component.suspension.splay_saddle"
+      ],
+      "number": "7.6.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_6_1_2",
+      "parentId": "org.bridge.group.7_6_1",
+      "name": "鞍座螺杆、锚栓状况",
+      "componentCategoryIds": [
+        "h21.component.suspension.main_saddle",
+        "h21.component.suspension.splay_saddle"
+      ],
+      "number": "7.6.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_6_1_3",
+      "parentId": "org.bridge.group.7_6_1",
+      "name": "锈蚀",
+      "componentCategoryIds": [
+        "h21.component.suspension.main_saddle",
+        "h21.component.suspension.splay_saddle"
+      ],
+      "number": "7.6.1-3"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_7_1_1",
+      "parentId": "org.bridge.group.7_7_1",
+      "name": "锚坑漏水",
+      "componentCategoryIds": [
+        "h21.component.suspension.anchorage"
+      ],
+      "number": "7.7.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_7_1_2",
+      "parentId": "org.bridge.group.7_7_1",
+      "name": "顶板、侧墙损坏",
+      "componentCategoryIds": [
+        "h21.component.suspension.anchorage"
+      ],
+      "number": "7.7.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_7_1_3",
+      "parentId": "org.bridge.group.7_7_1",
+      "name": "锚碇均匀沉降",
+      "componentCategoryIds": [
+        "h21.component.suspension.anchorage"
+      ],
+      "number": "7.7.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_7_1_4",
+      "parentId": "org.bridge.group.7_7_1",
+      "name": "表观病害",
+      "componentCategoryIds": [
+        "h21.component.suspension.anchorage"
+      ],
+      "number": "7.7.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_7_1_5",
+      "parentId": "org.bridge.group.7_7_1",
+      "name": "水平位移",
+      "componentCategoryIds": [
+        "h21.component.suspension.anchorage"
+      ],
+      "number": "7.7.1-5"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_8_1_1",
+      "parentId": "org.bridge.group.7_8_1",
+      "name": "掉皮",
+      "componentCategoryIds": [
+        "h21.component.suspension.anchorage_rod"
+      ],
+      "number": "7.8.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_8_1_2",
+      "parentId": "org.bridge.group.7_8_1",
+      "name": "锈蚀",
+      "componentCategoryIds": [
+        "h21.component.suspension.anchorage_rod"
+      ],
+      "number": "7.8.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.7_8_1_3",
+      "parentId": "org.bridge.group.7_8_1",
+      "name": "出现裂纹",
+      "componentCategoryIds": [
+        "h21.component.suspension.anchorage_rod"
+      ],
+      "number": "7.8.1-3"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_1_1_1",
+      "parentId": "org.bridge.group.8_1_1",
+      "name": "拉索锈蚀、断丝",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_1_1_2",
+      "parentId": "org.bridge.group.8_1_1",
+      "name": "滑移变位",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_1_1_3",
+      "parentId": "org.bridge.group.8_1_1",
+      "name": "涂层损坏",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_1_1_4",
+      "parentId": "org.bridge.group.8_1_1",
+      "name": "护套内的材料老化变质",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_1_1_5",
+      "parentId": "org.bridge.group.8_1_1",
+      "name": "锚固区损坏",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.1.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_1_1_6",
+      "parentId": "org.bridge.group.8_1_1",
+      "name": "拉索线形异常",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.1.1-6"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_2_1_1",
+      "parentId": "org.bridge.group.8_2_1",
+      "name": "漆膜损坏",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.2.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_2_1_2",
+      "parentId": "org.bridge.group.8_2_1",
+      "name": "护套裂缝",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.2.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_2_1_3",
+      "parentId": "org.bridge.group.8_2_1",
+      "name": "护套锈蚀",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.2.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_2_1_4",
+      "parentId": "org.bridge.group.8_2_1",
+      "name": "防护层破损",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.2.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_2_1_5",
+      "parentId": "org.bridge.group.8_2_1",
+      "name": "护套上端浆液离析",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.2.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_2_1_6",
+      "parentId": "org.bridge.group.8_2_1",
+      "name": "渗水",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.2.1-6"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_4_1_1",
+      "parentId": "org.bridge.group.8_4_1",
+      "name": "倾斜变形",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.tower"
+      ],
+      "number": "8.4.1-1"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_4_1_2",
+      "parentId": "org.bridge.group.8_4_1",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.tower"
+      ],
+      "number": "8.4.1-2"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_4_1_3",
+      "parentId": "org.bridge.group.8_4_1",
+      "name": "沉降",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.tower"
+      ],
+      "number": "8.4.1-3"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_4_1_4",
+      "parentId": "org.bridge.group.8_4_1",
+      "name": "锚固区渗水",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.tower"
+      ],
+      "number": "8.4.1-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_4_1__7_5_1_2",
+      "parentId": "org.bridge.group.8_4_1",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.tower"
+      ],
+      "number": "7.5.1-2"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_4_1__7_5_1_3",
+      "parentId": "org.bridge.group.8_4_1",
+      "name": "剥落、露筋",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.tower"
+      ],
+      "number": "7.5.1-3"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_4_1__7_5_1_4",
+      "parentId": "org.bridge.group.8_4_1",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.tower"
+      ],
+      "number": "7.5.1-4"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_4_1__7_5_1_7",
+      "parentId": "org.bridge.group.8_4_1",
+      "name": "基础冲刷",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.tower"
+      ],
+      "number": "7.5.1-7"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_5_1_1",
+      "parentId": "org.bridge.group.8_5_1",
+      "name": "锚杯积水",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.5.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_5_1_2",
+      "parentId": "org.bridge.group.8_5_1",
+      "name": "锚具内潮湿",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.5.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_5_1_3",
+      "parentId": "org.bridge.group.8_5_1",
+      "name": "防锈油结块",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.5.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_5_1_4",
+      "parentId": "org.bridge.group.8_5_1",
+      "name": "锚具锈蚀",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.5.1-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_6_1",
+      "parentId": "org.bridge.group.8_6_1",
+      "name": "减震装置",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.6.1"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.8_7_1",
+      "parentId": "org.bridge.group.8_7_1",
+      "name": "锚垫板异常",
+      "componentCategoryIds": [
+        "h21.component.cable_stayed.cable_system"
+      ],
+      "number": "8.7.1"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_1_10",
+      "parentId": "org.bridge.group.9_1_1",
+      "name": "水损害",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-10"
+    },
+    {
+      "sortOrder": 110,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_1_11",
+      "parentId": "org.bridge.group.9_1_1",
+      "name": "墩身其它病害",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-11"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_1_1",
+      "parentId": "org.bridge.group.9_1_1",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_1_2",
+      "parentId": "org.bridge.group.9_1_1",
+      "name": "剥落、露筋",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_1_3",
+      "parentId": "org.bridge.group.9_1_1",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_1_4",
+      "parentId": "org.bridge.group.9_1_1",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_1_5",
+      "parentId": "org.bridge.group.9_1_1",
+      "name": "混凝土碳化、腐蚀",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_1_6",
+      "parentId": "org.bridge.group.9_1_1",
+      "name": "磨损",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_1_7",
+      "parentId": "org.bridge.group.9_1_1",
+      "name": "圬工砌体缺陷",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_1_8",
+      "parentId": "org.bridge.group.9_1_1",
+      "name": "位移",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-8"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_1_9",
+      "parentId": "org.bridge.group.9_1_1",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-9"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_2__9_1_1_1",
+      "parentId": "org.bridge.group.9_1_2",
+      "name": "蜂窝、麻面",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_2__9_1_1_2",
+      "parentId": "org.bridge.group.9_1_2",
+      "name": "剥落、露筋",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_2__9_1_1_3",
+      "parentId": "org.bridge.group.9_1_2",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_2__9_1_1_4",
+      "parentId": "org.bridge.group.9_1_2",
+      "name": "钢筋锈蚀",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_2__9_1_1_5",
+      "parentId": "org.bridge.group.9_1_2",
+      "name": "混凝土碳化、腐蚀",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.1-5"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_2_2",
+      "parentId": "org.bridge.group.9_1_2",
+      "name": "盖梁和系梁病害",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.2-2"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_1_2_1",
+      "parentId": "org.bridge.group.9_1_2",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.lower.pier"
+      ],
+      "number": "9.1.2-1"
+    },
+    {
+      "sortOrder": 100,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_1_10",
+      "parentId": "org.bridge.group.9_2_1",
+      "name": "水损害（参照台身混凝土碳化、腐蚀）",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-10"
+    },
+    {
+      "sortOrder": 110,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_1_11",
+      "parentId": "org.bridge.group.9_2_1",
+      "name": "台身其它病害",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-11"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_1_1",
+      "parentId": "org.bridge.group.9_2_1",
+      "name": "剥落",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_1_2",
+      "parentId": "org.bridge.group.9_2_1",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_1_3",
+      "parentId": "org.bridge.group.9_2_1",
+      "name": "磨损",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_1_4",
+      "parentId": "org.bridge.group.9_2_1",
+      "name": "混凝土碳化、腐蚀",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_1_5",
+      "parentId": "org.bridge.group.9_2_1",
+      "name": "圬工砌体缺陷",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_1_6",
+      "parentId": "org.bridge.group.9_2_1",
+      "name": "桥头跳车",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_1_7",
+      "parentId": "org.bridge.group.9_2_1",
+      "name": "台背排水状况",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-7"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_1_8",
+      "parentId": "org.bridge.group.9_2_1",
+      "name": "位移",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-8"
+    },
+    {
+      "sortOrder": 90,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_1_9",
+      "parentId": "org.bridge.group.9_2_1",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-9"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_2_4",
+      "parentId": "org.bridge.group.9_2_2",
+      "name": "台帽其它病害",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.2-4"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_2_1",
+      "parentId": "org.bridge.group.9_2_2",
+      "name": "破损",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.2-1"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_2_2",
+      "parentId": "org.bridge.group.9_2_2",
+      "name": "混凝土碳化、腐蚀",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.2-2"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_2_3",
+      "parentId": "org.bridge.group.9_2_2",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.2-3"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_2_2__9_2_1_2",
+      "parentId": "org.bridge.group.9_2_2",
+      "name": "空洞、孔洞",
+      "componentCategoryIds": [
+        "h21.component.lower.abutment"
+      ],
+      "number": "9.2.1-2"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_3_2_8",
+      "parentId": "org.bridge.group.9_3_2",
+      "name": "基础其它病害",
+      "componentCategoryIds": [
+        "h21.component.lower.foundation"
+      ],
+      "number": "9.3.2-8"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_3_2_1",
+      "parentId": "org.bridge.group.9_3_2",
+      "name": "冲刷、掏空",
+      "componentCategoryIds": [
+        "h21.component.lower.foundation"
+      ],
+      "number": "9.3.2-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_3_2_2",
+      "parentId": "org.bridge.group.9_3_2",
+      "name": "剥落、露筋",
+      "componentCategoryIds": [
+        "h21.component.lower.foundation"
+      ],
+      "number": "9.3.2-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_3_2_3",
+      "parentId": "org.bridge.group.9_3_2",
+      "name": "冲蚀",
+      "componentCategoryIds": [
+        "h21.component.lower.foundation"
+      ],
+      "number": "9.3.2-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_3_2_4",
+      "parentId": "org.bridge.group.9_3_2",
+      "name": "河底铺砌",
+      "componentCategoryIds": [
+        "h21.component.lower.foundation"
+      ],
+      "number": "9.3.2-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_3_2_5",
+      "parentId": "org.bridge.group.9_3_2",
+      "name": "基础沉降",
+      "componentCategoryIds": [
+        "h21.component.lower.foundation"
+      ],
+      "number": "9.3.2-5"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_3_2_6",
+      "parentId": "org.bridge.group.9_3_2",
+      "name": "滑移和倾斜",
+      "componentCategoryIds": [
+        "h21.component.lower.foundation"
+      ],
+      "number": "9.3.2-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_3_2_7",
+      "parentId": "org.bridge.group.9_3_2",
+      "name": "基础裂缝",
+      "componentCategoryIds": [
+        "h21.component.lower.foundation"
+      ],
+      "number": "9.3.2-7"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_4_1_5",
+      "parentId": "org.bridge.group.9_4_1",
+      "name": "翼墙、耳墙其它病害",
+      "componentCategoryIds": [
+        "h21.component.lower.wing_or_ear_wall"
+      ],
+      "number": "9.4.1-5"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_4_1_1",
+      "parentId": "org.bridge.group.9_4_1",
+      "name": "破损",
+      "componentCategoryIds": [
+        "h21.component.lower.wing_or_ear_wall"
+      ],
+      "number": "9.4.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_4_1_2",
+      "parentId": "org.bridge.group.9_4_1",
+      "name": "位移",
+      "componentCategoryIds": [
+        "h21.component.lower.wing_or_ear_wall"
+      ],
+      "number": "9.4.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_4_1_3",
+      "parentId": "org.bridge.group.9_4_1",
+      "name": "鼓肚、砌体松动",
+      "componentCategoryIds": [
+        "h21.component.lower.wing_or_ear_wall"
+      ],
+      "number": "9.4.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_4_1_4",
+      "parentId": "org.bridge.group.9_4_1",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.lower.wing_or_ear_wall"
+      ],
+      "number": "9.4.1-4"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_5_1_3",
+      "parentId": "org.bridge.group.9_5_1",
+      "name": "锥坡、护坡其它病害",
+      "componentCategoryIds": [
+        "h21.component.lower.cone_or_protection_slope"
+      ],
+      "number": "9.5.1-3"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_5_1_1",
+      "parentId": "org.bridge.group.9_5_1",
+      "name": "缺陷",
+      "componentCategoryIds": [
+        "h21.component.lower.cone_or_protection_slope"
+      ],
+      "number": "9.5.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed"
+      ],
+      "id": "org.bridge.defect.9_5_1_2",
+      "parentId": "org.bridge.group.9_5_1",
+      "name": "冲刷",
+      "componentCategoryIds": [
+        "h21.component.lower.cone_or_protection_slope"
+      ],
+      "number": "9.5.1-2"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.9_6_1_4",
+      "parentId": "org.bridge.group.9_6_1",
+      "name": "河床其它病害",
+      "componentCategoryIds": [
+        "h21.component.lower.riverbed"
+      ],
+      "number": "9.6.1-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.9_6_1_1",
+      "parentId": "org.bridge.group.9_6_1",
+      "name": "堵塞",
+      "componentCategoryIds": [
+        "h21.component.lower.riverbed"
+      ],
+      "number": "9.6.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.9_6_1_2",
+      "parentId": "org.bridge.group.9_6_1",
+      "name": "冲刷",
+      "componentCategoryIds": [
+        "h21.component.lower.riverbed"
+      ],
+      "number": "9.6.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.9_6_1_3",
+      "parentId": "org.bridge.group.9_6_1",
+      "name": "河床变迁",
+      "componentCategoryIds": [
+        "h21.component.lower.riverbed"
+      ],
+      "number": "9.6.1-3"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.9_6_2_3",
+      "parentId": "org.bridge.group.9_6_2",
+      "name": "调治构造物其它病害",
+      "componentCategoryIds": [
+        "h21.component.lower.regulation_structure"
+      ],
+      "number": "9.6.2-3"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.9_6_2_1",
+      "parentId": "org.bridge.group.9_6_2",
+      "name": "损坏",
+      "componentCategoryIds": [
+        "h21.component.lower.regulation_structure"
+      ],
+      "number": "9.6.2-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.9_6_2_2",
+      "parentId": "org.bridge.group.9_6_2",
+      "name": "冲刷、变形",
+      "componentCategoryIds": [
+        "h21.component.lower.regulation_structure"
+      ],
+      "number": "9.6.2-2"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_1_1",
+      "parentId": "org.bridge.group.10_1_1",
+      "name": "变形",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_1_2",
+      "parentId": "org.bridge.group.10_1_1",
+      "name": "泛油",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_1_3",
+      "parentId": "org.bridge.group.10_1_1",
+      "name": "破损",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_1_4",
+      "parentId": "org.bridge.group.10_1_1",
+      "name": "裂缝",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.1-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_1_5",
+      "parentId": "org.bridge.group.10_1_1",
+      "name": "其它病害",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.1-5"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_2_1",
+      "parentId": "org.bridge.group.10_1_2",
+      "name": "磨光、脱皮、露骨",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.2-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_2_2",
+      "parentId": "org.bridge.group.10_1_2",
+      "name": "错台",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.2-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_2_3",
+      "parentId": "org.bridge.group.10_1_2",
+      "name": "坑洞",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.2-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_2_4",
+      "parentId": "org.bridge.group.10_1_2",
+      "name": "剥落",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.2-4"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_2_5",
+      "parentId": "org.bridge.group.10_1_2",
+      "name": "拱起",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.2-5"
+    },
+    {
+      "sortOrder": 80,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_2_8",
+      "parentId": "org.bridge.group.10_1_2",
+      "name": "其它病害",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.2-8"
+    },
+    {
+      "sortOrder": 60,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_2_6",
+      "parentId": "org.bridge.group.10_1_2",
+      "name": "接缝料损坏",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.2-6"
+    },
+    {
+      "sortOrder": 70,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_1_2_7",
+      "parentId": "org.bridge.group.10_1_2",
+      "name": "裂缝(板角断裂、破碎板)",
+      "componentCategoryIds": [
+        "h21.component.deck.pavement"
+      ],
+      "number": "10.1.2-7"
+    },
+    {
+      "sortOrder": 50,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_2_1_5",
+      "parentId": "org.bridge.group.10_2_1",
+      "name": "伸缩缝其它病害",
+      "componentCategoryIds": [
+        "h21.component.deck.expansion_joint"
+      ],
+      "number": "10.2.1-5"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_2_1_1",
+      "parentId": "org.bridge.group.10_2_1",
+      "name": "凹凸不平",
+      "componentCategoryIds": [
+        "h21.component.deck.expansion_joint"
+      ],
+      "number": "10.2.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_2_1_2",
+      "parentId": "org.bridge.group.10_2_1",
+      "name": "伸缩缝锚固区缺陷",
+      "componentCategoryIds": [
+        "h21.component.deck.expansion_joint"
+      ],
+      "number": "10.2.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_2_1_3",
+      "parentId": "org.bridge.group.10_2_1",
+      "name": "伸缩缝破损",
+      "componentCategoryIds": [
+        "h21.component.deck.expansion_joint"
+      ],
+      "number": "10.2.1-3"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_2_1_4",
+      "parentId": "org.bridge.group.10_2_1",
+      "name": "伸缩缝失效",
+      "componentCategoryIds": [
+        "h21.component.deck.expansion_joint"
+      ],
+      "number": "10.2.1-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_3_1_1",
+      "parentId": "org.bridge.group.10_3_1",
+      "name": "人行道破损",
+      "componentCategoryIds": [
+        "h21.component.deck.sidewalk"
+      ],
+      "number": "10.3.1-1"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_3_1_3",
+      "parentId": "org.bridge.group.10_3_1",
+      "name": "人行道其它病害",
+      "componentCategoryIds": [
+        "h21.component.deck.sidewalk"
+      ],
+      "number": "10.3.1-3"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_3_1_2",
+      "parentId": "org.bridge.group.10_3_1",
+      "name": "人行道缺失",
+      "componentCategoryIds": [
+        "h21.component.deck.sidewalk"
+      ],
+      "number": "10.3.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_4_1__10_4_2_3",
+      "parentId": "org.bridge.group.10_4_1",
+      "name": "护栏、栏杆其它病害",
+      "componentCategoryIds": [
+        "h21.component.deck.railing"
+      ],
+      "number": "10.4.2-3"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_4_1_1",
+      "parentId": "org.bridge.group.10_4_1",
+      "name": "撞坏、缺失",
+      "componentCategoryIds": [
+        "h21.component.deck.railing"
+      ],
+      "number": "10.4.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_4_1_2",
+      "parentId": "org.bridge.group.10_4_1",
+      "name": "破损",
+      "componentCategoryIds": [
+        "h21.component.deck.railing"
+      ],
+      "number": "10.4.1-2"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_5_1_1",
+      "parentId": "org.bridge.group.10_5_1",
+      "name": "排水不畅",
+      "componentCategoryIds": [
+        "h21.component.deck.drainage"
+      ],
+      "number": "10.5.1-1"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_5_2__10_5_1_2",
+      "parentId": "org.bridge.group.10_5_2",
+      "name": "泄水管、引水槽缺陷",
+      "componentCategoryIds": [
+        "h21.component.deck.drainage"
+      ],
+      "number": "10.5.1-2"
+    },
+    {
+      "sortOrder": 40,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_6_1_4",
+      "parentId": "org.bridge.group.10_6_1",
+      "name": "照明、标志其它病害",
+      "componentCategoryIds": [
+        "h21.component.deck.lighting_signs"
+      ],
+      "number": "10.6.1-4"
+    },
+    {
+      "sortOrder": 10,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_6_1_1",
+      "parentId": "org.bridge.group.10_6_1",
+      "name": "污损或损坏",
+      "componentCategoryIds": [
+        "h21.component.deck.lighting_signs"
+      ],
+      "number": "10.6.1-1"
+    },
+    {
+      "sortOrder": 20,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_6_1_2",
+      "parentId": "org.bridge.group.10_6_1",
+      "name": "照明设施缺失",
+      "componentCategoryIds": [
+        "h21.component.deck.lighting_signs"
+      ],
+      "number": "10.6.1-2"
+    },
+    {
+      "sortOrder": 30,
+      "bridgeTypeIds": [
+        "h21.bridge_type.arch_rigid_frame_truss",
+        "h21.bridge_type.arch_slab_rib_box_double",
+        "h21.bridge_type.arch_steel_concrete_composite",
+        "h21.bridge_type.beam",
+        "h21.bridge_type.cable_stayed",
+        "h21.bridge_type.suspension"
+      ],
+      "id": "org.bridge.defect.10_6_1_3",
+      "parentId": "org.bridge.group.10_6_1",
+      "name": "标志脱落、缺失",
+      "componentCategoryIds": [
+        "h21.component.deck.lighting_signs"
+      ],
+      "number": "10.6.1-3"
+    }
+  ],
+  "source": "standards/rating-tree/organization-bridge/2.0.3/tree.json"
+}

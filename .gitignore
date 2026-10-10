@@ -43,7 +43,7 @@ archive/*
 frontend/src/_*.txt
 
 # 运行期生成物：报告任务与 Word 导入的临时文件，每跑一次就重来一批。
-runtime/
+/runtime/
 
 # 参考报告与项目文书：几十兆的二进制，留在本地，不进版本库。
 /docs/*.docx

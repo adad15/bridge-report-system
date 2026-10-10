@@ -40,7 +40,7 @@ struct ArchivedBridgeMediaFile {
  * @brief 把一张桥梁图件写进归档。
  *
  * 校验全部在写盘之前完成，任何失败路径都不留下半个文件。落点按桥和槽位分目录，
- * 文件名带内容哈希，换图不会覆盖掉还被别处引用的旧文件。
+ * 文件名带内容哈希和每次上传的唯一标识；重复上传相同图片也不会覆盖旧文件。
  *
  * @throws BridgeMediaTooLargeError 内容超过 max_bytes。
  * @throws BridgeMediaArchiveError 内容不是支持的图片，或写盘失败。

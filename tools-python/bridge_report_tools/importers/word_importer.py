@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from zipfile import is_zipfile
 
 from pydantic import ValidationError
 
@@ -57,6 +58,12 @@ def parse_word_import(request: WordImportRequest) -> WordImportResponse:
         raise WordImportError(
             code="docx_open_failed",
             message=f"Word 文件不存在：{request.docx_path}",
+        )
+    if not is_zipfile(request.docx_path):
+        raise WordImportError(
+            code="docx_open_failed",
+            message="文件不是有效的 DOCX 文档，可能是旧版 DOC、加密文档或已损坏。"
+            "请在 Word 或 WPS 中打开并另存为未加密的 .docx 后重新导入；仅修改扩展名无效。",
         )
     if request.temporary_photo_output_dir.exists() and not request.temporary_photo_output_dir.is_dir():
         raise WordImportError(

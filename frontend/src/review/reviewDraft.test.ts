@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createReviewDraftReducer } from "./reviewDraft";
+import { reviewDraftReducer as reducer } from "./reviewDraft";
 import { data } from "./testFixtures";
 
 function matchedData() {
@@ -20,7 +20,6 @@ function matchedData() {
 
 describe("reviewDraftReducer", () => {
   it("deletes a defect and releases its photos for review", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     const next = reducer(state, { type: "delete_defect", candidateId: "defect_0001" });
 
@@ -32,7 +31,6 @@ describe("reviewDraftReducer", () => {
   });
 
   it("re-parses a measurement range and marks the group pending", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     state.defects[0].group_review_status = "已确认";
     const next = reducer(state, {
@@ -51,7 +49,6 @@ describe("reviewDraftReducer", () => {
   });
 
   it("confirms a complete defect-photo group", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     state.defects[0].review_status = "待确认";
     const next = reducer(state, { type: "confirm_defect_groups", candidateIds: ["defect_0001"] });
@@ -59,7 +56,6 @@ describe("reviewDraftReducer", () => {
   });
 
   it("clears only the temporary range-split warning when confirming the group", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     state.defects[0].warnings = [
       { code: "component_range_split_review_required", message: "待核对", severity: "warning", target_candidate_id: "defect_0001" },
@@ -74,13 +70,11 @@ describe("reviewDraftReducer", () => {
   });
 
   it("returns the same state when deleting an unknown defect", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     expect(reducer(state, { type: "delete_defect", candidateId: "missing" })).toBe(state);
   });
 
   it("batch confirms only the requested groups and atomically accepts unique photo matches", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     state.defects[0].review_status = "已修改";
     state.defects[0].photo_references[0] = {
@@ -129,7 +123,6 @@ describe("reviewDraftReducer", () => {
     }
 
     it("links a photo without creating a separate confirmation state", () => {
-      const reducer = createReviewDraftReducer();
       const state = unlinkedPhoto();
 
       const next = reducer(state, {
@@ -146,7 +139,6 @@ describe("reviewDraftReducer", () => {
     });
 
     it("marks the matching Word reference when the numbers line up", () => {
-      const reducer = createReviewDraftReducer();
       const state = unlinkedPhoto();
       state.defects[0] = {
         ...state.defects[0],
@@ -173,7 +165,6 @@ describe("reviewDraftReducer", () => {
     });
 
     it("returns the same state when the photo or defect is unknown", () => {
-      const reducer = createReviewDraftReducer();
       const state = unlinkedPhoto();
 
       expect(reducer(state, {
@@ -189,7 +180,6 @@ describe("reviewDraftReducer", () => {
     });
 
     it("unlinks a Word photo back to the unassigned list and reopens its reference", () => {
-      const reducer = createReviewDraftReducer();
       const state = matchedData();
 
       const next = reducer(state, {
@@ -209,7 +199,6 @@ describe("reviewDraftReducer", () => {
     });
 
     it("acknowledges a missing photo and takes it back", () => {
-      const reducer = createReviewDraftReducer();
       const state = matchedData();
       state.defects[0] = {
         ...state.defects[0],
@@ -243,7 +232,6 @@ describe("reviewDraftReducer", () => {
 
     // 这张图明明在本次导入里，只是没挂上——"原报告缺图"就是假话。
     it("refuses to call a photo missing when the import actually has that number", () => {
-      const reducer = createReviewDraftReducer();
       const state = unlinkedPhoto();
       state.defects[0] = {
         ...state.defects[0],
@@ -304,7 +292,6 @@ describe("reviewDraftReducer", () => {
       }
 
       it("drops the copied reference and reopens the group", () => {
-        const reducer = createReviewDraftReducer();
         const state = splitCopies();
 
         const next = reducer(state, {
@@ -323,7 +310,6 @@ describe("reviewDraftReducer", () => {
       });
 
       it("refuses while that number is still linked to this defect", () => {
-        const reducer = createReviewDraftReducer();
         const state = splitCopies();
 
         // 照片还挂着时摘掉引用，卡片不会消失（照片本身照样成卡），
@@ -337,7 +323,6 @@ describe("reviewDraftReducer", () => {
       });
 
       it("returns the same state for an unknown defect or number", () => {
-        const reducer = createReviewDraftReducer();
         const state = splitCopies();
 
         expect(reducer(state, {
@@ -359,7 +344,6 @@ describe("reviewDraftReducer", () => {
   // 确认就是这些警告要的那次"人工确认"，答复过了就不该继续挂着——留着的话下一次
   // 渲染又会把它算成待处理问题，病害永远确认不完。
   it("clears the warnings that confirmation is the answer to", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     state.defects[0] = {
       ...state.defects[0],
@@ -368,19 +352,19 @@ describe("reviewDraftReducer", () => {
       warnings: [
         { code: "measurement_parse_low_confidence", message: "尺寸表达未能稳定结构化，请人工确认。", severity: "warning", target_candidate_id: "defect_0001" },
         { code: "component_range_split_review_required", message: "该病害由构件范围拆分，请人工核对构件、病害和照片关联。", severity: "warning", target_candidate_id: "defect_0001" },
+        { code: "source_measurement_invalid", message: "来源结构化长度值“未知m”无法解析，请人工复核。", severity: "warning", target_candidate_id: "defect_0001" },
         { code: "photo_archive_missing", message: "照片归档文件缺失。", severity: "warning", target_candidate_id: "defect_0001" },
       ],
     };
 
     const next = reducer(state, { type: "confirm_defect_groups", candidateIds: ["defect_0001"] });
 
-    // 只清"人看一眼就能了结"的那两条；缺归档文件是真的缺东西，必须原样留着。
+    // 只清需要人工确认的警告；缺归档文件是真的缺东西，必须原样留着。
     expect(next.defects[0].warnings.map((warning) => warning.code)).toEqual(["photo_archive_missing"]);
     expect(next.defects[0].group_review_status).toBe("已确认");
   });
 
   it("ignores and restores a defect through explicit actions", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     const ignored = reducer(state, { type: "ignore_defect", candidateId: "defect_0001" });
     const restored = reducer(ignored, { type: "restore_ignored_defect", candidateId: "defect_0001" });
@@ -391,7 +375,6 @@ describe("reviewDraftReducer", () => {
 
   // 换绑不再是原语：先从原病害摘掉，再挂到目标病害。两侧的组都要打回待确认。
   it("relinks a photo across defects in two steps", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     state.defects[0].group_review_status = "已确认";
     state.defects.push({
@@ -421,7 +404,6 @@ describe("reviewDraftReducer", () => {
   });
 
   it("mirrors an uploaded photo into the draft and reopens its defect group", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     state.defects[0].group_review_status = "已确认";
     const uploaded = {
@@ -442,7 +424,6 @@ describe("reviewDraftReducer", () => {
   });
 
   it("refuses an uploaded photo whose defect is not in this import", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     const stray = {
       ...state.photos[0],
@@ -454,7 +435,6 @@ describe("reviewDraftReducer", () => {
   });
 
   it("drops a removed upload without touching the remaining photos", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     state.defects[0].group_review_status = "已确认";
     const uploaded = {
@@ -473,7 +453,6 @@ describe("reviewDraftReducer", () => {
   });
 
   it("assigns one rating tree node to a selected source group without touching other records", () => {
-    const reducer = createReviewDraftReducer();
     const state = matchedData();
     state.defects = [
       {

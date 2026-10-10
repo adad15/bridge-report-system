@@ -1,6 +1,7 @@
 #include "bridge_report/report/BridgeMediaStore.hpp"
 
 #include "bridge_report/db/BridgeMediaRepository.hpp"
+#include <trantor/utils/Logger.h>
 
 namespace bridge_report::report {
 
@@ -10,7 +11,8 @@ StoredBridgeMedia store_bridge_media(
     const std::string& bridge_id,
     const std::string& slot,
     const archive::ArchivedBridgeMediaFile& archived,
-    const std::string& source) {
+    const std::string& source,
+    const std::optional<AutomaticMapCondition>& condition) {
     BridgeMediaInput input;
     input.slot = slot;
     input.original_file_name = archived.original_file_name;
@@ -22,7 +24,12 @@ StoredBridgeMedia store_bridge_media(
 
     db::BridgeMediaSaveOutcome outcome;
     try {
-        outcome = db::BridgeMediaRepository(db_client).save(bridge_id, input);
+        outcome = db::BridgeMediaRepository(db_client).save(bridge_id, input, condition);
+    } catch (const db::BridgeMediaCommitUncertain& error) {
+        // Keep both files. A lost COMMIT acknowledgement is not a rollback.
+        LOG_ERROR << "Bridge media commit requires reconciliation; files retained: "
+                  << error.what();
+        throw;
     } catch (...) {
         archive::remove_archived_bridge_media(archive_root, archived.storage_relative_path, archived.sha256);
         throw;

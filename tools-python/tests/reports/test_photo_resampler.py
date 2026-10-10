@@ -125,3 +125,69 @@ def test_two_photos_with_the_same_name_do_not_collide(tmp_path: Path) -> None:
     assert left != right
     assert size_of(left)[0] > size_of(left)[1]
     assert size_of(right)[1] > size_of(right)[0]
+
+
+@pytest.mark.parametrize("mode", ["RGB", "RGBA"])
+def test_small_webp_is_converted_and_embeddable(tmp_path: Path, mode: str) -> None:
+    from docx import Document
+    source = tmp_path / "small.webp"
+    Image.new(mode, (80, 40), (12, 34, 56, 80) if mode == "RGBA" else (12, 34, 56)).save(source, "WEBP", lossless=True)
+    original = source.read_bytes()
+    result = resample(source, FRAME_WIDTH, FRAME_HEIGHT, tmp_path / "cache")
+    assert result.suffix == (".png" if mode == "RGBA" else ".jpg")
+    assert source.read_bytes() == original
+    assert size_of(result) == (80, 40)
+    document = Document()
+    document.add_picture(str(result))
+    document.save(tmp_path / "out.docx")
+    assert len(Document(tmp_path / "out.docx").inline_shapes) == 1
+    if mode == "RGBA":
+        with Image.open(result) as image:
+            assert image.getpixel((0, 0))[3] == 80
+
+
+def test_palette_transparency_survives_downsampling(tmp_path: Path) -> None:
+    source = tmp_path / "palette.png"
+    image = Image.new("P", (1600, 1200), 0)
+    image.putpalette([255, 0, 0] + [0, 0, 0] * 255)
+    image.save(source, transparency=0)
+    result = resample(source, FRAME_WIDTH, FRAME_HEIGHT, tmp_path / "cache")
+    assert result.suffix == ".png"
+    with Image.open(result) as output:
+        assert output.mode == "RGBA"
+        assert output.getpixel((0, 0))[3] == 0
+
+
+def test_rotated_image_fits_both_frame_dimensions(tmp_path: Path) -> None:
+    source = jpeg(tmp_path / "rotated.jpg", 1600, 1200, orientation=6)
+    result = resample(source, FRAME_WIDTH, FRAME_HEIGHT, tmp_path / "cache")
+    width, height = size_of(result)
+    box_width, box_height = target_pixels(FRAME_WIDTH, FRAME_HEIGHT)
+    assert width <= box_width and height <= box_height
+    assert width / height == pytest.approx(1200 / 1600, rel=0.01)
+
+
+def test_parallel_conversion_never_overwrites_another_result(tmp_path: Path) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    source = tmp_path / "small.webp"
+    Image.new("RGB", (80, 40)).save(source, "WEBP")
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = list(executor.map(lambda _: resample(source, FRAME_WIDTH, FRAME_HEIGHT, tmp_path / "cache"), range(12)))
+    assert len(set(results)) == 12
+    assert all(size_of(path) == (80, 40) for path in results)
+
+
+def test_failed_conversion_does_not_fall_back_to_unsupported_source(tmp_path: Path, monkeypatch) -> None:
+    from bridge_report_tools.reports.errors import ReportBuildError
+    source = tmp_path / "small.webp"
+    Image.new("RGB", (80, 40)).save(source, "WEBP")
+    original = source.read_bytes()
+    def fail(*args, **kwargs):
+        raise OSError("disk full")
+    monkeypatch.setattr(Image.Image, "save", fail)
+    cache = tmp_path / "cache"
+    with pytest.raises(ReportBuildError) as error:
+        resample(source, FRAME_WIDTH, FRAME_HEIGHT, cache)
+    assert error.value.code == "report_photo_unreadable"
+    assert source.read_bytes() == original
+    assert list(cache.iterdir()) == []

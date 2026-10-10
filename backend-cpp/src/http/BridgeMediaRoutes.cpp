@@ -141,6 +141,9 @@ void handle_upload(
         case report::BridgeMediaWriteStatus::UnknownSlot:
             respond_unknown_slot(callback);
             return;
+        case report::BridgeMediaWriteStatus::InputChanged:
+            respond_json(callback,make_error_body("bridge_media_changed","图件已变化，请刷新后重试。"),drogon::k409Conflict);
+            return;
         case report::BridgeMediaWriteStatus::Ok:
             break;
     }
@@ -241,6 +244,13 @@ void register_bridge_media_routes(
                             const std::string& bridge_id, const std::string& slot) {
             try {
                 handle_upload(db_client, config, request, callback, bridge_id, slot);
+            } catch (const db::BridgeMediaCommitUncertain& error) {
+                LOG_ERROR << "Bridge media commit requires reconciliation; files retained: "
+                          << error.what();
+                respond_json(callback,
+                    make_error_body("bridge_media_commit_uncertain",
+                        "数据库提交结果暂时无法确认，相关图片已保留。请刷新核实后再操作。"),
+                    drogon::k503ServiceUnavailable);
             } catch (...) {
                 respond_db_unavailable(callback);
             }
@@ -253,6 +263,13 @@ void register_bridge_media_routes(
                             const std::string& bridge_id, const std::string& slot) {
             try {
                 handle_delete(db_client, config, request, callback, bridge_id, slot);
+            } catch (const db::BridgeMediaCommitUncertain& error) {
+                LOG_ERROR << "Bridge media commit requires reconciliation; files retained: "
+                          << error.what();
+                respond_json(callback,
+                    make_error_body("bridge_media_commit_uncertain",
+                        "数据库提交结果暂时无法确认，相关图片已保留。请刷新核实后再操作。"),
+                    drogon::k503ServiceUnavailable);
             } catch (...) {
                 respond_db_unavailable(callback);
             }

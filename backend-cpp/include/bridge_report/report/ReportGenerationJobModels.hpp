@@ -46,6 +46,7 @@ struct ReportGenerationJob {
     Json::Value progress{Json::objectValue};
     std::optional<std::string> template_id;
     std::optional<std::string> template_checksum;
+    Json::Value template_snapshot{Json::nullValue};
     /// 成品的绝对路径。只有 Ready 才有值。
     std::optional<std::string> temporary_file_path;
     std::optional<std::string> error_code;

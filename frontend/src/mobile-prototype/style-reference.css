@@ -1,0 +1,325 @@
+:root {
+  --field-ink: #221c28;
+  --field-muted: #77717e;
+  --field-accent: #8d31f5;
+  --field-line: #ece9ee;
+  --field-canvas: #fff;
+  --field-soft: #f7f0ff;
+  --field-warm: #fff4e7;
+}
+.prototype-stage { background: #f5f4f6; color: var(--field-ink); }
+.prototype-guide h1 { color: #241c2a; }
+.prototype-guide p { color: #655d6b; }
+.guide-mark { color: #8129db; }
+.guide-steps, .guide-steps span { border-color: #e1dde5; }
+.guide-steps span { color: #514959; }
+.phone-frame { border-color: #251e2b; background: #fff; box-shadow: 0 28px 74px rgba(36,20,42,.18), 0 4px 14px rgba(36,20,42,.09); }
+.phone-status, .phone-header, .save-indicator, .phone-body { background: #fff; }
+.phone-status { color: #241e28; }
+.phone-header { border-bottom: 0; }
+.phone-header strong { color: #261f2b; }
+.phone-header small { color: #8a8390; }
+.phone-header .header-brand { color: #8d31f5; }
+.phone-header .header-more { color: #3b3441; }
+.save-indicator { color: #807988; border-bottom: 1px solid #f0eef2; }
+.save-dot { background: #8d31f5; }
+.network-indicator.online { color: #7d2adb; }
+.network-indicator.offline { color: #8b8290; }
+.section-head h3, .page-intro h2 { color: #251e2a; }
+.section-head span, .page-intro p { color: #89818f; }
+.screen-content { background: #fff; }
+.phone-body { scrollbar-color: #d8d2df transparent; }
+
+.home-greeting { color: #6d6474; }
+.home-greeting span:last-child { color: #99919e; }
+.hero-card {
+  background: #fff; border: 1px solid #ece9ee; border-radius: 14px;
+  box-shadow: none; padding: 21px 19px 18px; color: #251e2a;
+}
+.hero-card::after { display: none; }
+.hero-kicker { color: #8d31f5; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.hero-badge { color: #8d31f5; background: #f8f0ff; border: 1px solid #ebd7ff; }
+.hero-card h2 { color: #211a26; font-size: 29px; margin: 15px 0 3px; }
+.hero-card p:not(.eyebrow) { color: #827b88; }
+.hero-divider { background: #efeaf1; margin: 19px 0 15px; }
+.hero-progress { color: #6b6472; }
+.hero-progress strong { color: #231c28; }
+.hero-progress em { color: #9b94a0; }
+.hero-metrics { color: #78707e; }
+.hero-metrics b { color: #4a4050; }
+.home-primary {
+  background: linear-gradient(98deg,#4c4055,#1c1424);
+  color: #fff; border: 0; border-radius: 12px; min-height: 70px;
+  box-shadow: 0 5px 14px rgba(35,23,41,.13);
+}
+.home-primary-icon { background: rgba(255,255,255,.13); color: #fff; border-radius: 9px; }
+.home-primary small { color: #d5cbd9; }
+.home-primary>svg { color: #fff; }
+.priority-card, .home-shortcuts button { border-color: #ede9ee; border-radius: 12px; box-shadow: none; }
+.priority-top { color: #817984; }
+.priority-top span:last-child { color: #8d31f5; background: #f6eeff; }
+.priority-top span.done { color: #21805e; background: #eaf6ee; }
+.priority-card strong, .home-shortcuts strong { color: #29212e; }
+.priority-card small, .home-shortcuts small { color: #89818d; }
+.priority-action, .shortcut-icon, .shortcut-icon.score { color: #8d31f5; }
+.home-footnote { color: #99929d; }
+
+.group-switch, .list-search-toggle { border-color: #ece9ee; border-radius: 11px; }
+.group-switch small, .group-switch-meta { color: #938b98; }
+.group-switch strong { color: #2a232e; }
+.group-switch-meta svg, .list-search-toggle { color: #8d31f5; }
+.disease-index-heading small, .disease-index-heading>span { color: #938c99; }
+.disease-index-heading h2 { color: #251e2a; }
+.component-disease-card { border: 1px solid #ece9ee; border-radius: 12px; box-shadow: none; padding: 15px; }
+.component-disease-card.has-disease { border-left: 1px solid #ece9ee; padding-left: 15px; }
+.component-disease-card.no-disease { background: #fff; }
+.component-disease-meta { color: #837c88; }
+.component-disease-meta>span:last-child { color: #91602d; background: #fff4e9; }
+.component-disease-meta>span.is-done { color: #237a5d; background: #eaf6ee; }
+.disease-preview-label { color: #8d31f5; }
+.disease-preview-name, .no-disease-name { color: #251e2a; }
+.disease-preview-place, .component-disease-card p, .no-disease-hint, .disease-preview-footer { color: #807985; }
+.disease-preview-footer { border-top-color: #f0edf2; }
+.disease-preview-footer>span:last-child { color: #8d31f5; }
+
+.component-switcher span { color: #958e9b; }
+.component-switcher button { color: #8d31f5; }
+.component-switcher button:disabled { color: #bcb5c0; }
+.disease-detail-head small, .disease-detail-subline { color: #89818e; }
+.disease-detail-head h2 { color: #251e2a; }
+.disease-detail-head h2 b, .disease-detail-subline strong { color: #8d31f5; }
+.disease-card, .disease-card.needs-review { border: 1px solid #ece9ee; border-radius: 12px; box-shadow: none; }
+.disease-first-page .disease-card-top strong { color: #251e2a; }
+.disease-first-page .disease-card>small, .disease-first-page .disease-card p { color: #807985; }
+.disease-badge.pending { color: #8d31f5; background: #f7efff; }
+.disease-badge.done { color: #237a5d; background: #eaf6ee; }
+.disease-badge.new { color: #8d31f5; background: #f7efff; }
+.disease-card-link { color: #8d31f5; }
+.disease-empty { border-color: #e1d9e8; border-radius: 12px; }
+.disease-empty strong { color: #342a39; }
+.confirm-row { border-color: #ebe7ee; border-radius: 11px; }
+.confirm-row.checked { background: #f7efff; border-color: #c99bf9; }
+.confirm-row.checked .confirm-box { background: #8d31f5; border-color: #8d31f5; }
+.readonly-note { background: #f6f3f8; color: #716876; }
+.quiet-hint { color: #928a97; }
+
+.baseline-card { border: 1px solid #ece8ef; border-radius: 11px; box-shadow: none; }
+.baseline-card span { color: #8d31f5; }
+.baseline-card p { color: #4e4553; }
+.field-block>label, .measure-heading strong { color: #2a222f; }
+.choice-grid button { border-color: #ebe8ee; border-radius: 11px; color: #504756; }
+.choice-grid button.selected { border-color: #9a3df5; color: #8027dd; background: #f7efff; }
+.review-page .notice-card { color: #756b7b; background: #f7f5f8; }
+
+.chooser-page { background: #fff; }
+.chooser-top { background: #fff; padding: 14px 18px 0; }
+.chooser-context { display: grid; gap: 3px; margin: 2px 0 12px; }
+.chooser-context>span { color: #918995; font-size: 11px; }
+.chooser-context strong { color: #26202b; font-size: 20px; line-height: 1.35; }
+.chooser-context small { color: #89818f; font-size: 12px; }
+.chooser-tabs { margin: 2px 0 13px; }
+
+.chooser-search { border-color: #ece9ee; border-radius: 11px; min-height: 46px; }
+.applicability { background: none; padding: 0; margin: 11px 0 3px; color: #98909c; font-size: 11px; font-weight: 400; }
+.indicator-list { padding: 1px 18px 25px; }
+.chooser-section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 1px 10px; }
+.chooser-section-head h3 { color: #2c2631; font-size: 15px; margin: 0; }
+.chooser-section-head span { color: #a49caa; font-size: 11px; }
+.indicator-group { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; background: transparent; border: 0; border-radius: 0; overflow: visible; }
+.indicator-row, .indicator-row:last-child {
+  display: grid; place-items: center; min-width: 0; min-height: 70px;
+  padding: 9px 7px; text-align: center; border: 1px solid #e9e6eb;
+  border-radius: 11px; background: #fff; color: #332b38; box-shadow: none;
+}
+.indicator-row.selected { border-color: #9b3df6; background: #f7f0ff; box-shadow: inset 0 0 0 1px #9b3df6; }
+.indicator-label { display: grid; gap: 3px; min-width: 0; width: 100%; }
+.indicator-label strong { color: #322a37; font-size: 13px; font-weight: 650; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
+.indicator-label small { color: #a099a5; font-size: 10px; }
+.indicator-row.selected .indicator-label strong, .indicator-row.selected .indicator-label small { color: #8229df; }
+.form-page { background: #fff; }
+.compact-scope, .scope-card { border-color: #ece8ef; border-radius: 11px; background: #fff; }
+.scope-icon { color: #8d31f5; background: #f7efff; }
+.compact-scope strong, .scope-card strong { color: #302735; }
+.compact-scope small, .scope-card small { color: #8c8490; }
+.selected-indicator { background: #f9f4ff; border: 1px solid #e9d9f7; border-radius: 11px; }
+.selected-indicator>strong { color: #33263e; }
+.selected-indicator>div { color: #807388; }
+.selected-indicator button { color: #8d31f5; }
+.measure-card { border-color: #ece9ee; border-radius: 11px; }
+.measure-heading label { color: #807788; }
+.measure-heading input { accent-color: #8d31f5; }
+.photo-add { color: #8d31f5; background: #faf7fd; border-color: #dbc8ee; }
+.description-preview { background: #faf8fc; border-color: #ede7f2; border-radius: 11px; }
+.description-preview span { color: #8d31f5; }
+.description-preview p { color: #55465c; }
+.description-preview small { color: #93899a; }
+
+.team-progress-card { color: #251e2a; background: #fff; border: 1px solid #ece9ee; border-radius: 12px; box-shadow: none; }
+.team-progress-card>div:first-child { color: #77707d; }
+.team-progress-card strong { color: #261e2b; }
+.team-stage-card { border-color: #ece8ef; background: #faf8fb; border-radius: 11px; }
+.stage-symbol { color: #8d31f5; background: #f3e7ff; }
+.team-stage-card strong { color: #312936; }
+.team-stage-card p { color: #887e8f; }
+.team-stage-action, .sync-action-stack button:first-child {
+  border: 0; background: linear-gradient(98deg,#4c4055,#1c1424);
+  color: #fff; border-radius: 11px; box-shadow: none;
+}
+.team-submit-action, .sync-action-stack button:nth-child(2) { border-color: #b985f3; color: #8d31f5; border-radius: 11px; }
+.sync-meta { color: #918996; }
+.text-link { color: #8d31f5; }
+.team-member { border-color: #ece9ee; border-radius: 11px; }
+.member-avatar { color: #8d31f5; background: #f5edff; }
+.member-main strong { color: #2e2633; }
+.member-main small { color: #958b99; }
+.member-state { color: #93602f; background: #fff3e7; }
+.member-state.staged { color: #237a5d; background: #eaf6ee; }
+.member-components button { color: #615467; border-bottom-color: #f2eff3; }
+.member-components button span { color: #998e9f; }
+.network-banner.offline { color: #8d6332; background: #fff7ee; border-color: #f1e3d1; }
+.network-banner.online { color: #46735a; background: #f0f8f2; border-color: #d9eadb; }
+.demo-control-inline, .demo-controls { background: #faf9fb; border-color: #eeeaf0; border-radius: 11px; }
+.demo-control-inline>span, .demo-controls>span { color: #928996; }
+.demo-control-inline>div button, .demo-controls>div button { border-color: #e7e1eb; color: #695d70; }
+.demo-control-inline>div button.active, .demo-controls>div button.active { color: #8d31f5; border-color: #9b3df6; background: #f7efff; }
+.demo-controls>button.network-on { color: #237a5d; background: #eff8f0; border-color: #d4e9d8; }
+
+.upload-summary { border-color: #ece9ee; border-radius: 11px; }
+.upload-summary strong { color: #8d31f5; }
+.upload-summary span { color: #928996; }
+.check-list-row { border-color: #ece9ee; border-radius: 11px; }
+.check-list-row>span:nth-child(2) { color: #302735; }
+.check-list-row small { color: #958a9a; }
+.check-ok { color: #25825e; background: #eaf6ee; }
+
+.score-wait>svg { color: #8d31f5; }
+.score-wait h2 { color: #2c2431; }
+.score-wait p { color: #88808d; }
+.score-hero { background: linear-gradient(105deg,#4b4055,#1b1323); border-radius: 13px; box-shadow: none; }
+.score-hero span { color: #e0d7e4; }
+.score-hero p { color: #d1c7d4; }
+.score-grade { border-color: rgba(255,255,255,.23); }
+.score-row, .score-subrow { border-color: #ece9ee; border-radius: 11px; }
+.score-row>div:first-child, .score-subrow { color: #514757; }
+.score-row b, .score-subrow strong { color: #8d31f5; }
+
+.sticky-footer { border-top: 1px solid #f0edf2; background: #fff; box-shadow: 0 -6px 17px rgba(30,17,36,.035); padding: 10px 18px 14px; }
+.sticky-footer button:not(:disabled) { border: 0; color: #fff; background: linear-gradient(98deg,#4c4055,#1c1424); border-radius: 10px; box-shadow: none; }
+.sticky-footer button:disabled { background: #f4f2f5; color: #b4acb8; border-color: #e9e5eb; border-radius: 10px; }
+.sticky-footer small { color: #a59ba9; }
+.bottom-nav { border-top-color: #f0edf2; background: #fff; box-shadow: none; }
+.bottom-nav button { color: #a39aa8; }
+.bottom-nav button.active { color: #8d31f5; }
+.bottom-nav button.active svg { background: none; color: #8d31f5; }
+.screen-error { color: #ab3e4a; background: #fff0f2; border-color: #f0d7da; }
+
+.group-picker-heading strong { color: #2c2431; }
+.group-picker-heading span { color: #9c94a1; }
+.group-picker-all { background: #fff; border-color: #ece9ee; color: #342a3a; border-radius: 11px; }
+.group-picker-all.selected { color: #8d31f5; border-color: #9b3df6; background: #f7efff; }
+.group-picker-options.primary { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.group-picker-options.primary button:last-child:nth-child(odd) { grid-column: span 2; }
+.group-picker-options.secondary { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.group-picker-options button { background: #fff; border-color: #ece9ee; border-radius: 11px; color: #514658; text-align: center; justify-items: center; font-size: 13px; }
+.group-picker-options button.selected { color: #8d31f5; border-color: #9b3df6; background: #f7efff; }
+.group-picker-options button small { color: #9b92a0; }
+.demo-panel>p { color: #7f7485; }
+.demo-panel>strong { color: #302735; }
+.demo-option-grid button { color: #5e5365; border-color: #ece9ee; border-radius: 11px; }
+.demo-option-grid button.selected { color: #8d31f5; background: #f7efff; border-color: #9b3df6; }
+.demo-option-grid small { color: #a49aa9; }
+.demo-network { color: #906338; background: #fff8f0; border-color: #f0e3d6; border-radius: 11px; }
+.demo-network.online { color: #397b59; background: #f0f8f2; border-color: #d4e9d8; }
+.demo-panel-actions button:first-child { background: linear-gradient(98deg,#4c4055,#1c1424); border: 0; color: #fff; }
+@media(max-width:850px) {
+  .prototype-stage { background: #fff; }
+  .phone-frame { background: #fff; }
+}
+
+/* Disease list: tools in the top bar, component identity in the cards. */
+.components-header { gap: 4px; }
+.components-header .header-title {
+  flex: 1; min-width: 0; padding-left: 2px; text-align: left;
+}
+.components-header .header-title strong { font-size: 16px; }
+.components-header .header-title small { font-size: 10px; }
+.header-list-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+.header-list-actions button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: auto; height: 42px; min-height: 42px; border: 0; border-radius: 9px;
+  background: transparent; color: #382e40;
+}
+.header-list-actions .header-search-toggle { width: 40px; font-size: 17px; }
+.header-list-actions .header-search-toggle.is-active { color: #8d31f5; background: #f7f0ff; }
+.header-list-actions .header-group-switch {
+  max-width: 126px; min-width: 72px; gap: 5px; padding: 0 4px;
+  color: #5c4b66; font-size: 12px; font-weight: 700;
+}
+.header-group-switch span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-group-switch small { flex: none; color: #9a91a0; font-size: 10px; }
+.header-group-switch svg { flex: none; color: #8d31f5; font-size: 11px; }
+.header-list-actions button:focus-visible { outline: 2px solid #8d31f5; outline-offset: 1px; }
+.phone-header small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.disease-index-page { padding-top: 8px; }
+.disease-index-page .compact-component-search { margin: 0 0 12px; }
+
+.priority-top { align-items: flex-start; }
+.priority-top .priority-identity {
+  display: inline-flex; align-items: baseline; min-width: 0; gap: 7px;
+  padding: 0; color: #251e2a; background: transparent;
+}
+.priority-identity strong {
+  margin: 0; color: #251e2a; font-size: 23px; font-weight: 800;
+  line-height: 1.2; letter-spacing: -.035em;
+}
+.priority-identity em { color: #5e5563; font-size: 14px; font-style: normal; font-weight: 600; }
+.priority-card .priority-context { margin-top: -2px; color: #938b98; font-size: 11px; }
+.priority-card .priority-disease { margin-top: 7px; color: #766d7a; font-size: 12px; font-weight: 400; }
+.priority-card > small:not(.priority-context) { color: #827986; }
+
+.disease-index-page .component-disease-card { padding: 15px; }
+.disease-index-page .component-disease-meta { align-items: flex-start; }
+.component-identity { display: inline-flex; align-items: baseline; min-width: 0; gap: 7px; }
+.component-identity strong {
+  color: #251e2a; font-size: 23px; font-weight: 800;
+  line-height: 1.2; letter-spacing: -.035em;
+}
+.component-identity em { color: #5e5563; font-size: 14px; font-style: normal; font-weight: 600; }
+.component-owner { margin-top: 3px; color: #938b98; font-size: 11px; }
+.priority-card .priority-disease {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; line-height: 1.5;
+}
+.component-disease-section {
+  display: flex; align-items: baseline; gap: 6px; margin-top: 13px;
+  color: #908896; font-size: 11px;
+}
+.component-disease-section strong { color: #8d31f5; font-size: 11px; font-weight: 700; }
+.component-defect-list { display: grid; margin-top: 6px; border-top: 1px solid #f0edf2; }
+.component-defect-preview {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid #f0edf2;
+}
+.component-defect-preview:last-child { border-bottom: 0; }
+.component-defect-order {
+  display: grid; place-items: center; flex: none; width: 22px; height: 22px;
+  border-radius: 6px; color: #8d31f5; background: #f7f0ff;
+  font-size: 10px; font-weight: 700;
+}
+.component-defect-copy { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.component-defect-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 7px; }
+.component-defect-name { min-width: 0; color: #4f4653; font-size: 12px; font-weight: 600; line-height: 1.5; }
+.component-defect-state { flex: none; padding-top: 1px; color: #938b98; font-size: 10px; white-space: nowrap; }
+.component-defect-state.is-pending { color: #a87537; }
+.component-defect-state.is-new { color: #8d31f5; }
+.component-defect-copy small {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; color: #87808c; font-size: 11px; line-height: 1.5;
+}
+.disease-index-page .disease-preview-footer { margin-top: 2px; }
+.disease-index-page .no-disease-name { margin-top: 13px; color: #817985; font-size: 12px; font-weight: 400; }
+.disease-index-page .no-disease-hint { margin-bottom: 10px; }
+
+
+

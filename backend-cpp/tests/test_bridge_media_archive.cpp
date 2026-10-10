@@ -56,6 +56,17 @@ TEST_F(BridgeMediaArchiveTest, WritesUnderAnAsciiPathKeyedBySystemNumberAndSlot)
     EXPECT_TRUE(fs::is_regular_file(root_ / archived.storage_relative_path));
 }
 
+TEST_F(BridgeMediaArchiveTest, RepeatedUploadOwnsADifferentFileEvenWithIdenticalContent) {
+    const auto first = archive_bridge_media(tiny_png(), "first.png", context_);
+    const auto second = archive_bridge_media(tiny_png(), "second.png", context_);
+    EXPECT_EQ(first.sha256, second.sha256);
+    ASSERT_NE(first.storage_relative_path, second.storage_relative_path);
+
+    remove_archived_bridge_media(root_, second.storage_relative_path, second.sha256);
+    EXPECT_TRUE(fs::is_regular_file(root_ / first.storage_relative_path));
+    EXPECT_FALSE(fs::exists(root_ / second.storage_relative_path));
+}
+
 TEST_F(BridgeMediaArchiveTest, RejectsContentThatIsNotAnImage) {
     EXPECT_THROW(archive_bridge_media("not an image", "fake.png", context_), BridgeMediaArchiveError);
 }

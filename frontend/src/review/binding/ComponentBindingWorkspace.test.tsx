@@ -46,43 +46,6 @@ vi.mock("../../api/componentInventoryApi", async (importOriginal) => {
   return { ...original, searchInventoryEntries: vi.fn() };
 });
 
-const inventory = {
-  id: "rev-1",
-  bridge_id: "bridge-1",
-  revision_number: 1,
-  status: "已确认" as const,
-  baseline_revision_id: null,
-  confirmed_at: null,
-  entries: [
-    {
-      id: "entry-1",
-      bridge_component_id: "c1",
-      component_number: "1-1#梁",
-      site_name: "空心板",
-      site_component_type: "空心板",
-      span_or_location: null,
-      is_active: true,
-      deactivated_at: null,
-      deactivation_reason: null,
-      sort_order: 1,
-      remarks: null,
-      is_referenced: false,
-      mappings: [
-        {
-          id: "m1",
-          standard_package_id: "p1",
-          standard_bridge_type_id: "h21.bridge_type.beam",
-          standard_component_category_id: "h21.component.beam.upper_bearing",
-          structure_part: "superstructure" as const,
-          mapping_source: "规范模板",
-          confirmation_status: "已确认",
-          is_active: true,
-        },
-      ],
-    },
-  ],
-};
-
 function summary(id: string, number = "1-1#梁"): WorkspaceComponentSummary {
   return {
     bridge_component_id: id,

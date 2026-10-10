@@ -14,10 +14,15 @@ def test_health_returns_tool_service_identity() -> None:
     response = asyncio.run(get_health_response())
 
     assert response.status_code == 200
-    assert response.json() == {
+    expected = {
         "status": "ok",
         "service": "bridge-report-python-tools",
         "version": "0.1.0",
         "host": "127.0.0.1",
         "port": 18081,
     }
+
+    actual = response.json()
+    assert {key: actual[key] for key in expected} == expected
+    assert len(actual["source_digest"]) == 64
+    assert actual["instance_id"]

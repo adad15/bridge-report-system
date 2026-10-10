@@ -47,6 +47,12 @@ struct JobCleanupSummary {
  *    expired），否则一个迟到的回调能把已经失败的任务改成 ready。
  *  - **到期清空一切可能含业务正文的字段。** 系统不保存报告，过期后连诊断信息一起清。
  */
+struct JobCleanupClaim {
+    std::string job_id;
+    std::string token;
+    std::optional<std::string> expected_output_path;
+};
+
 class ReportGenerationJobRepository {
 public:
     explicit ReportGenerationJobRepository(drogon::orm::DbClientPtr client);
@@ -87,9 +93,15 @@ public:
         const std::string& error_code,
         const std::string& error_message) const;
 
-    /// 到期清理：删文件、转 expired、清空路径与诊断正文，并物理删除过保留期的终态行。
+    int schedule_cleanup() const;
+    std::vector<JobCleanupClaim> claim_cleanup(int limit) const;
+    bool finish_cleanup(const JobCleanupClaim& claim, bool success, const std::string& error) const;
+    int purge_cleaned(int history_days) const;
+    void block_cleanup(const std::string& job_id, const std::string& reason) const;
+
+    /// 到期禁用下载；独立台账重试删除，清理成功后才回收过保留期的终态行。
     ///
-    /// `job_root` 只用来校验待删路径确实落在受控临时根目录内——路径来自数据库，
+    /// `job_root` 与台账 UUID 推导唯一目录，记录路径仅用于核对边界；
     /// 删之前必须自证它在哪，不能拿到什么删什么。
     JobCleanupSummary cleanup(
         const std::filesystem::path& job_root, int history_days) const;

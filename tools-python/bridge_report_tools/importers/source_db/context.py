@@ -36,7 +36,7 @@ from bridge_report_tools.importers.word_context import (
     WordImportResponse,
 )
 
-PARSER_VERSION = "0.1.0"
+PARSER_VERSION = "0.1.1"
 
 
 class SourceImportRequest(BaseModel):

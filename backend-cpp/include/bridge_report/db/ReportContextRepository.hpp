@@ -34,7 +34,8 @@ public:
         std::shared_ptr<const standards::StandardRegistry> registry = nullptr);
 
     /// 年度不存在、或尚未配置模板时返回空。调用方应先跑生成前检查。
-    std::optional<report::ReportContext> build(const std::string& inspection_year_id) const;
+    std::optional<report::ReportContext> build(const std::string& inspection_year_id,
+        const Json::Value* template_snapshot = nullptr) const;
 
 private:
     /// 评定运行锁定的规范包与桥型。报告读评定当时用的那一版，不按今天的规范重推。

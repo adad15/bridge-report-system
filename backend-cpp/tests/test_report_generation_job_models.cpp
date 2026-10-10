@@ -134,3 +134,21 @@ TEST(ReportFilename, APartMadeOnlyOfIllegalCharactersDisappears) {
 }
 
 }  // namespace
+
+#include "bridge_report/report/ReportToolFailure.hpp"
+
+TEST(ReportToolFailure, TimeoutAndUncertainWritersBlockDeletion) {
+    Json::Value payload;
+    payload["detail"]["code"]="REPORT_FIELD_UPDATE_FAILED";
+    payload["detail"]["stage"]="timeout";
+    EXPECT_TRUE(bridge_report::report::report_tool_writer_uncertain(payload));
+    payload["detail"]["stage"]="update";
+    payload["detail"]["writer_uncertain"]=true;
+    EXPECT_TRUE(bridge_report::report::report_tool_writer_uncertain(payload));
+    payload["detail"]["writer_uncertain"]=false;
+    EXPECT_FALSE(bridge_report::report::report_tool_writer_uncertain(payload));
+    payload["detail"]["code"]="REPORT_FIELD_UPDATE_RECOVERY_REQUIRED";
+    EXPECT_TRUE(bridge_report::report::report_tool_writer_uncertain(payload));
+    payload["detail"]["code"]="REPORT_FIELD_UPDATE_QUEUE_TIMEOUT";
+    EXPECT_FALSE(bridge_report::report::report_tool_writer_uncertain(payload));
+}

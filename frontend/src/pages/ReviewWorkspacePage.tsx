@@ -26,7 +26,6 @@ import { fetchResolutionWorkspace } from "../api/resolutionApi";
 import {
   bindingProgress,
   toBindingOverview,
-  type ComponentBindingOverview,
 } from "../review/binding/bindingViewModel";
 import { ComponentBindingWorkspace } from "../review/binding/ComponentBindingWorkspace";
 import { DefectsSection } from "../review/components/DefectsSection";
@@ -236,7 +235,6 @@ function ReviewWorkspaceLoaded({
   // 侧栏要在用户点进绑定分区之前就显示待处理数，故这里先取一次概览；
   // 之后由绑定分区通过 onOverviewChange 上报，保证绑定操作后计数同步。
   const [bindingPending, setBindingPending] = useState<number | null>(null);
-  const [bindingOverview, setBindingOverview] = useState<ComponentBindingOverview | null>(null);
   // 系统评定分区点某条问题时，滚动并高亮对应病害。
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
 
@@ -247,7 +245,6 @@ function ReviewWorkspaceLoaded({
       .then((workspace) => {
         if (cancelled) return;
         const overview = toBindingOverview(workspace);
-        setBindingOverview(overview);
         // 台账未确认时绑定不可用，保持 null 让侧栏显示 "-"。
         setBindingPending(
           overview.inventory_confirmed ? bindingProgress(overview).pending : null
@@ -939,6 +936,7 @@ function ReviewWorkspaceLoaded({
     <Flex vertical style={{ height: "100%", minHeight: 0, background: token.colorBgContainer }}>
       <OverviewHeader
         response={response}
+        importStatus={sessionImportStatus}
         draft={draft}
         counts={counts}
         statusNotice={lockNotice ? (
@@ -1007,7 +1005,6 @@ function ReviewWorkspaceLoaded({
               onRatingTreeChange={onReload}
               onDraftInvalidated={() => setDraftStaleFromBinding(true)}
               onOverviewChange={(overview) => {
-                setBindingOverview(overview);
                 setBindingPending(
                   overview.inventory_confirmed ? bindingProgress(overview).pending : null
                 );

@@ -1,11 +1,12 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "../api/apiClient";
 import {
   createReportJob,
+  saveReportSettings,
   downloadReportJob,
   fetchComparisonCandidates,
   fetchReportEquipment,
@@ -45,6 +46,7 @@ vi.mock("../api/reportApi", async (importOriginal) => {
     fetchCurrentReportJob: vi.fn(),
     fetchReportJob: vi.fn(),
     createReportJob: vi.fn(),
+    saveReportSettings: vi.fn(),
     downloadReportJob: vi.fn(),
   };
 });
@@ -71,6 +73,10 @@ const settings = (
 ): InspectionReportSettings => ({
   inspection_year_id: "y1",
   inspection_year: 2026,
+  inspection_date: null,
+  report_number: null,
+  project_name: null,
+  inspection_org: null,
   template_id: "t1",
   template_name: "定期检测报告标准模板",
   template_is_usable: true,
@@ -109,9 +115,21 @@ const job = (overrides: Partial<ReportJob> = {}): ReportJob => ({
   ...overrides,
 });
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((yes) => { resolve = yes; });
+  return { promise, resolve };
+}
+
+function SwitchYear() {
+  const navigate = useNavigate();
+  return <button onClick={() => navigate("/bridges/b1/inspections/y2/report")}>Switch year</button>;
+}
+
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={["/bridges/b1/inspections/y1/report"]}>
+      <SwitchYear />
       <Routes>
         <Route
           path="/bridges/:bridgeId/inspections/:inspectionYearId/report"
@@ -125,6 +143,8 @@ function renderPage() {
 describe("ReportGenerationPage", () => {
   beforeEach(() => {
     vi.useRealTimers();
+    vi.resetAllMocks();
+    vi.mocked(saveReportSettings).mockResolvedValue(settings());
     vi.mocked(fetchReportPreflight).mockResolvedValue(preflight());
     vi.mocked(fetchReportSettings).mockResolvedValue(settings());
     vi.mocked(fetchReportTemplates).mockResolvedValue([]);
@@ -132,6 +152,117 @@ describe("ReportGenerationPage", () => {
     vi.mocked(fetchReportPersonnel).mockResolvedValue([]);
     vi.mocked(fetchReportEquipment).mockResolvedValue([]);
     vi.mocked(fetchCurrentReportJob).mockResolvedValue(null);
+  });
+
+  it("saves independently entered cover fields with the annual report settings", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByRole("button", { name: /保存配置/ })).toBeEnabled());
+    await userEvent.type(screen.getByLabelText("检测日期"), "2026-03-18");
+    await userEvent.type(screen.getByLabelText("报告编号"), "BG-2026-001");
+    await userEvent.type(screen.getByLabelText("项目名称"), "百股大桥定期检测");
+    await userEvent.type(screen.getByLabelText("检测单位"), "验收检测机构");
+    await userEvent.click(screen.getByRole("button", { name: /保存配置/ }));
+    expect(saveReportSettings).toHaveBeenCalledWith("y1", expect.objectContaining({
+      inspection_date: "2026-03-18", report_number: "BG-2026-001",
+      project_name: "百股大桥定期检测", inspection_org: "验收检测机构",
+    }));
+  });
+
+  it("discards a late response from the previous year before saving", async () => {
+    const first = deferred<ReportPreflight>();
+    vi.mocked(fetchReportPreflight)
+      .mockImplementation((id) => id === "y1" ? first.promise :
+        Promise.resolve(preflight({ inspection_year_id: "y2", inspection_year: 2027 })));
+    vi.mocked(fetchReportSettings).mockImplementation(async (id) =>
+      settings({ inspection_year_id: id, template_id: id === "y1" ? "t1" : "t2" }));
+    renderPage();
+    await userEvent.click(screen.getByRole("button", { name: "Switch year" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /保存配置/ })).toBeEnabled());
+    await act(async () => first.resolve(preflight()));
+    await userEvent.click(screen.getByRole("button", { name: /保存配置/ }));
+    expect(saveReportSettings).toHaveBeenCalledWith("y2", expect.objectContaining({ template_id: "t2" }));
+  });
+
+  it("disables writes immediately while another year loads", async () => {
+    const second = deferred<InspectionReportSettings>();
+    vi.mocked(fetchReportSettings).mockImplementation((id) =>
+      id === "y1" ? Promise.resolve(settings()) : second.promise);
+    renderPage();
+    await waitFor(() => expect(screen.getByRole("button", { name: /保存配置/ })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Switch year" }));
+    expect(screen.getByRole("button", { name: /保存配置/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "生成报告" })).toBeDisabled();
+    expect(saveReportSettings).not.toHaveBeenCalled();
+  });
+
+  it("does not restore an older refresh after a newer refresh completes", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByRole("button", { name: /保存配置/ })).toBeEnabled());
+    const earlier = deferred<InspectionReportSettings>();
+    vi.mocked(fetchReportSettings).mockReturnValueOnce(earlier.promise)
+      .mockResolvedValueOnce(settings({ template_id: "t-new" }));
+    await userEvent.click(screen.getByRole("button", { name: /刷新/ }));
+    await userEvent.click(screen.getByRole("button", { name: /刷新/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /保存配置/ })).toBeEnabled());
+    await act(async () => earlier.resolve(settings({ template_id: "t-old" })));
+    await userEvent.click(screen.getByRole("button", { name: /保存配置/ }));
+    expect(saveReportSettings).toHaveBeenCalledWith("y1", expect.objectContaining({ template_id: "t-new" }));
+  });
+
+  it("ignores a previous year's late generation response", async () => {
+    const generated = deferred<ReportJob>();
+    vi.mocked(createReportJob).mockReturnValueOnce(generated.promise);
+    renderPage();
+    await waitFor(() => expect(screen.getByRole("button", { name: "生成报告" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "生成报告" }));
+    vi.mocked(fetchReportSettings).mockResolvedValue(settings({ inspection_year_id: "y2" }));
+    vi.mocked(fetchReportPreflight).mockResolvedValue(preflight({ inspection_year_id: "y2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Switch year" }));
+    await act(async () => generated.resolve(job({ status: "queued", is_running: true })));
+    expect(screen.queryByText("已创建生成任务，正在后台执行。")).not.toBeInTheDocument();
+  });
+
+  it("ignores a save completed after switching years", async () => {
+    const saved = deferred<InspectionReportSettings>();
+    vi.mocked(saveReportSettings).mockReturnValueOnce(saved.promise);
+    renderPage();
+    await waitFor(() => expect(screen.getByRole("button", { name: /保存配置/ })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: /保存配置/ }));
+    vi.mocked(fetchReportSettings).mockResolvedValue(settings({ inspection_year_id: "y2", template_id: "t2" }));
+    vi.mocked(fetchReportPreflight).mockResolvedValue(preflight({ inspection_year_id: "y2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Switch year" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /保存配置/ })).toBeEnabled());
+    await act(async () => saved.resolve(settings()));
+    expect(screen.queryByText("报告配置已保存。")).not.toBeInTheDocument();
+    expect(fetchReportSettings).toHaveBeenCalledTimes(2);
+    await userEvent.click(screen.getByRole("button", { name: /保存配置/ }));
+    expect(saveReportSettings).toHaveBeenLastCalledWith("y2", expect.objectContaining({ template_id: "t2" }));
+  });
+
+  it("ignores a poll completed after switching years", async () => {
+    let poll!: () => Promise<void>;
+    const timer = vi.spyOn(window, "setInterval").mockImplementation((callback) => {
+      poll = callback as () => Promise<void>;
+      return 123 as unknown as ReturnType<typeof window.setInterval>;
+    });
+    try {
+      const polled = deferred<ReportJob>();
+      vi.mocked(fetchCurrentReportJob).mockResolvedValueOnce(job({ status: "queued", is_running: true }));
+      vi.mocked(fetchReportJob).mockReturnValueOnce(polled.promise);
+      renderPage();
+      await waitFor(() => expect(poll).toBeDefined());
+      let pending!: Promise<void>;
+      act(() => { pending = poll(); });
+      vi.mocked(fetchReportSettings).mockResolvedValue(settings({ inspection_year_id: "y2" }));
+      vi.mocked(fetchReportPreflight).mockResolvedValue(preflight({ inspection_year_id: "y2" }));
+      await userEvent.click(screen.getByRole("button", { name: "Switch year" }));
+      await waitFor(() => expect(screen.getByRole("button", { name: /保存配置/ })).toBeEnabled());
+      await act(async () => { polled.resolve(job()); await pending; });
+      expect(screen.queryByRole("button", { name: /下载报告/ })).not.toBeInTheDocument();
+      expect(fetchReportSettings).toHaveBeenCalledTimes(2);
+    } finally {
+      timer.mockRestore();
+    }
   });
 
   // 只呈现「当前报告」一个状态：系统不保存报告版本，历史文件到期就删了，

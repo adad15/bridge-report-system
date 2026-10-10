@@ -1,5 +1,7 @@
 # 构件台账标准化编号引擎 实施计划
 
+> **2026-09-17 文档状态同步：** 实施计划历史记录。步骤、示例代码和勾选状态对应当时版本，不等于当前待办，也不应直接重放旧实现。 当前能力见 [项目上下文](../../../PROJECT_CONTEXT.md)；本轮修复与待办见 [审查修复状态](../../2026-09-17-review-remediation-status.md)。
+
 > **2026-08-14 后续变更：** 河床以全桥级 `{name}` 模板加入产品目录；生成准入仍严格要求所选 taxonomy `generatable=true`，由 H21 1.0.4 提供。详见 `docs/superpowers/specs/2026-08-14-riverbed-inventory-generation-design.md`。
 
 > **For agentic workers:** 逐任务实施；每步用 `- [ ]` 勾选。先写失败测试 → 跑到失败 → 最小实现 → 跑到通过 → 提交。

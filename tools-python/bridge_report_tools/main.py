@@ -4,6 +4,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from bridge_report_tools import __version__
+from bridge_report_tools.runtime_identity import capture_identity
+
+RUNTIME_IDENTITY = capture_identity()
 from bridge_report_tools.config import get_settings
 from bridge_report_tools.importers.word_context import WordImportRequest, WordImportResponse
 from bridge_report_tools.importers.word_errors import WordImportError
@@ -43,6 +46,11 @@ from bridge_report_tools.reports.service import (
 
 
 class HealthResponse(BaseModel):
+    source_digest: str
+    git_revision: str
+    worktree_dirty: bool
+    launch_id: str
+    instance_id: str
     status: str
     service: str
     version: str
@@ -60,6 +68,7 @@ app = FastAPI(
 def health() -> HealthResponse:
     settings = get_settings()
     return HealthResponse(
+        **RUNTIME_IDENTITY,
         status="ok",
         service="bridge-report-python-tools",
         version=__version__,
@@ -213,6 +222,7 @@ def update_report_fields(request: FieldUpdateRequest) -> FieldUpdateResponse:
                 "message": exc.message,
                 "stage": exc.stage,
                 "updater": exc.updater,
+                "writer_uncertain": exc.writer_uncertain,
             },
         ) from exc
 

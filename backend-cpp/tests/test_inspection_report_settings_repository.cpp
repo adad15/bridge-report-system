@@ -155,6 +155,39 @@ TEST_F(InspectionReportSettingsRepositoryTest, SavesAndReadsBackPersonnelAndEqui
     EXPECT_TRUE(settings->configured_by_display_name.has_value());
 }
 
+TEST_F(InspectionReportSettingsRepositoryTest, CoverFieldsAreIndependentAndLegacySavesPreserveThem) {
+    auto value = input();
+    value.cover_fields_provided = true;
+    value.inspection_date = "2026-03-18";
+    value.report_number = "BG-2026-001";
+    value.project_name = "百股大桥定期检测";
+    value.inspection_org = "验收检测机构";
+    ASSERT_EQ(repository().save(current_year_id_, value), SettingsWriteStatus::Ok);
+
+    const auto first = repository().find(current_year_id_);
+    ASSERT_TRUE(first.has_value());
+    EXPECT_EQ(first->inspection_date, value.inspection_date);
+    EXPECT_EQ(first->report_number, value.report_number);
+    EXPECT_EQ(first->project_name, value.project_name);
+    EXPECT_EQ(first->inspection_org, value.inspection_org);
+
+    ASSERT_EQ(repository().save(current_year_id_, input()), SettingsWriteStatus::Ok);
+    const auto preserved = repository().find(current_year_id_);
+    ASSERT_TRUE(preserved.has_value());
+    EXPECT_EQ(preserved->report_number, value.report_number);
+    EXPECT_EQ(preserved->inspection_date, value.inspection_date);
+
+    auto cleared = input();
+    cleared.cover_fields_provided = true;
+    ASSERT_EQ(repository().save(current_year_id_, cleared), SettingsWriteStatus::Ok);
+    const auto after_clear = repository().find(current_year_id_);
+    ASSERT_TRUE(after_clear.has_value());
+    EXPECT_FALSE(after_clear->inspection_date.has_value());
+    EXPECT_FALSE(after_clear->report_number.has_value());
+    EXPECT_FALSE(after_clear->project_name.has_value());
+    EXPECT_FALSE(after_clear->inspection_org.has_value());
+}
+
 TEST_F(InspectionReportSettingsRepositoryTest, SavingReplacesAssignmentsWholesale) {
     auto first = input();
     first.personnel.push_back({person_id_, "approver", 0});

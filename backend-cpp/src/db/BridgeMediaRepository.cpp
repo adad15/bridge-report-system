@@ -60,7 +60,8 @@ std::optional<report::BridgeMedia> BridgeMediaRepository::find(const std::string
 }
 
 BridgeMediaSaveOutcome BridgeMediaRepository::save(
-    const std::string& bridge_id, const report::BridgeMediaInput& input) const {
+    const std::string& bridge_id, const report::BridgeMediaInput& input,
+    const std::optional<report::AutomaticMapCondition>& condition) const {
     if (!report::is_bridge_media_slot(input.slot)) {
         return {report::BridgeMediaWriteStatus::UnknownSlot, {}, std::nullopt};
     }
@@ -71,7 +72,7 @@ BridgeMediaSaveOutcome BridgeMediaRepository::save(
         tx = client_->newTransaction(latch->callback());
 
         const auto bridge = tx->execSqlSync(
-            "select system_number, bridge_name from bridges where id = $1::uuid", bridge_id);
+            "select system_number, bridge_name,longitude,latitude,location_map_revision from bridges where id = $1::uuid for update", bridge_id);
         if (bridge.empty()) {
             tx->rollback();
             return {report::BridgeMediaWriteStatus::BridgeNotFound, {}, std::nullopt};
@@ -80,7 +81,7 @@ BridgeMediaSaveOutcome BridgeMediaRepository::save(
         // 这个槽位原来那张图：先记下来，事务提交之后调用方才去删文件。
         report::BridgeMediaReplacement replaced;
         const auto previous = tx->execSqlSync(
-            "select m.archived_file_id::text as archived_file_id, f.storage_relative_path, "
+            "select m.archived_file_id::text as archived_file_id, m.source, f.storage_relative_path, "
             "coalesce(f.file_hash, '') as file_hash from bridge_media m "
             "join archived_files f on f.id = m.archived_file_id "
             "where m.bridge_id = $1::uuid and m.slot = $2",
@@ -89,6 +90,18 @@ BridgeMediaSaveOutcome BridgeMediaRepository::save(
             replaced.archived_file_id = previous[0]["archived_file_id"].as<std::string>();
             replaced.storage_relative_path = previous[0]["storage_relative_path"].as<std::string>();
             replaced.file_hash = previous[0]["file_hash"].as<std::string>();
+        }
+
+        if (condition && (
+            input.slot != "LOCATION_MAP" ||
+            bridge[0]["longitude"].isNull() || bridge[0]["latitude"].isNull() ||
+            bridge[0]["longitude"].as<double>() != condition->longitude ||
+            bridge[0]["latitude"].as<double>() != condition->latitude ||
+            bridge[0]["location_map_revision"].as<std::int64_t>() != condition->revision ||
+            replaced.archived_file_id != condition->archived_file_id ||
+            (!previous.empty() && previous[0]["source"].as<std::string>() == "人工上传"))) {
+            tx->rollback();
+            return {report::BridgeMediaWriteStatus::InputChanged,{},std::nullopt};
         }
 
         const auto file = tx->execSqlSync(
@@ -123,9 +136,16 @@ BridgeMediaSaveOutcome BridgeMediaRepository::save(
                 " from bridge_media m join archived_files f on f.id = m.archived_file_id"
                 " where m.bridge_id = $1::uuid and m.slot = $2",
             bridge_id, input.slot);
-        return {report::BridgeMediaWriteStatus::Ok, replaced,
-                saved.empty() ? std::nullopt : std::optional(read_media(saved[0]))};
-    } catch (const drogon::orm::DrogonDbException&) {
+        const auto media = saved.empty() ? std::nullopt : std::optional(read_media(saved[0]));
+        tx.reset();
+        if (!latch->wait()) {
+            throw BridgeMediaCommitUncertain(
+                "bridge=" + bridge_id + " slot=" + input.slot +
+                " new_file=" + input.storage_relative_path +
+                " old_file=" + replaced.storage_relative_path.value_or(""));
+        }
+        return {report::BridgeMediaWriteStatus::Ok, replaced, media};
+    } catch (...) {
         if (tx != nullptr) tx->rollback();
         throw;
     }
@@ -137,6 +157,8 @@ std::optional<report::BridgeMediaReplacement> BridgeMediaRepository::remove(
     const auto latch = std::make_shared<CommitLatch>();
     try {
         tx = client_->newTransaction(latch->callback());
+        // Match save()'s lock order, including when the slot is currently empty.
+        tx->execSqlSync("select id from bridges where id=$1::uuid for update", bridge_id);
         const auto rows = tx->execSqlSync(
             "select m.archived_file_id::text as archived_file_id, f.storage_relative_path, "
             "coalesce(f.file_hash, '') as file_hash from bridge_media m "
@@ -156,8 +178,14 @@ std::optional<report::BridgeMediaReplacement> BridgeMediaRepository::remove(
         tx->execSqlSync("delete from bridge_media where bridge_id = $1::uuid and slot = $2",
                         bridge_id, slot);
         tx->execSqlSync("delete from archived_files where id = $1::uuid", *removed.archived_file_id);
+        tx.reset();
+        if (!latch->wait()) {
+            throw BridgeMediaCommitUncertain(
+                "bridge=" + bridge_id + " slot=" + slot +
+                " old_file=" + removed.storage_relative_path.value_or(""));
+        }
         return removed;
-    } catch (const drogon::orm::DrogonDbException&) {
+    } catch (...) {
         if (tx != nullptr) tx->rollback();
         throw;
     }

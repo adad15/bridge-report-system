@@ -1,5 +1,7 @@
 # 模块 06 验收问题修复实施计划
 
+> **2026-09-17 文档状态同步：** 实施计划历史记录。步骤、示例代码和勾选状态对应当时版本，不等于当前待办，也不应直接重放旧实现。 当前能力见 [项目上下文](../../../PROJECT_CONTEXT.md)；本轮修复与待办见 [审查修复状态](../../2026-09-17-review-remediation-status.md)。
+
 > 日期：2026-07-15
 >
 > 依据：`docs/superpowers/specs/2026-07-15-module06-acceptance-fixes-design.md`

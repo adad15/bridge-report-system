@@ -66,10 +66,18 @@ struct BridgeMediaInput {
     std::string source;
 };
 
+struct AutomaticMapCondition {
+    double longitude;
+    double latitude;
+    std::int64_t revision;
+    std::optional<std::string> archived_file_id;
+};
+
 enum class BridgeMediaWriteStatus {
     Ok,
     BridgeNotFound,
     UnknownSlot,
+    InputChanged,
 };
 
 /// 被替换掉的旧图，交给调用方在事务落定之后删文件。

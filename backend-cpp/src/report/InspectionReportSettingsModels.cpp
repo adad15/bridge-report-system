@@ -50,6 +50,10 @@ Json::Value InspectionReportSettings::to_json() const {
     Json::Value json;
     json["inspection_year_id"] = inspection_year_id;
     json["inspection_year"] = inspection_year;
+    put(json, "inspection_date", inspection_date);
+    put(json, "report_number", report_number);
+    put(json, "project_name", project_name);
+    put(json, "inspection_org", inspection_org);
     put(json, "template_id", template_id);
     put(json, "template_name", template_name);
     json["template_is_usable"] = template_is_usable;

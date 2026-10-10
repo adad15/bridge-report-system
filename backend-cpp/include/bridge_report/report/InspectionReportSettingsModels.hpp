@@ -53,6 +53,12 @@ struct InspectionReportSettings {
     std::string inspection_year_id;
     int inspection_year{0};
 
+    // 年度报告封面信息独立维护，不从导入候选自动覆盖。
+    std::optional<std::string> inspection_date;
+    std::optional<std::string> report_number;
+    std::optional<std::string> project_name;
+    std::optional<std::string> inspection_org;
+
     std::optional<std::string> template_id;
     std::optional<std::string> template_name;
     /// 所选模板是否仍然可用。停用或校验失效的模板要提示重新选择。
@@ -86,6 +92,12 @@ struct EquipmentAssignmentInput {
 };
 
 struct InspectionReportSettingsInput {
+    // 旧客户端未发送这四项时，保存其它配置不得清空既有封面信息。
+    bool cover_fields_provided{false};
+    std::optional<std::string> inspection_date;
+    std::optional<std::string> report_number;
+    std::optional<std::string> project_name;
+    std::optional<std::string> inspection_org;
     std::optional<std::string> template_id;
     std::optional<std::string> comparison_inspection_id;
     std::vector<PersonnelAssignmentInput> personnel;

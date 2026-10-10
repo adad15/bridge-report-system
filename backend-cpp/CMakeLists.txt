@@ -112,6 +112,8 @@ add_library(bridge_report_backend_core
     src/report/ReportContextModels.cpp
     src/report/ReportDirectoryModels.cpp
     src/report/ReportGenerationJobModels.cpp
+    src/report/ReportTemplateSnapshot.cpp
+    src/report/ReportJobCleanupCoordinator.cpp
     src/report/ReportGenerationRunner.cpp
     src/report/ReportPreflightModels.cpp
     src/report/ReportTemplateModels.cpp
@@ -137,6 +139,7 @@ add_library(bridge_report_backend_core
     src/review/ThreadSuggestions.cpp
     src/review/WorkspaceModels.cpp
     src/runtime/RuntimePaths.cpp
+    src/runtime/BuildInfo.cpp
     src/standards/StandardModels.cpp
     src/standards/AssessmentModels.cpp
     src/standards/ComponentWeightTable.cpp
@@ -148,6 +151,22 @@ add_library(bridge_report_backend_core
     src/standards/StandardRegistry.cpp
     src/standards/StandardDocumentModels.cpp
 )
+
+# Inspect current sources on every build, including edits to existing files.
+add_custom_target(bridge_build_metadata
+    COMMAND "${CMAKE_COMMAND}"
+        "-DROOT=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DOUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>"
+        "-DCONFIGURATION=$<CONFIG>"
+        "-DCOMPILER_ID=${CMAKE_CXX_COMPILER_ID}"
+        "-DCOMPILER_VERSION=${CMAKE_CXX_COMPILER_VERSION}"
+        "-DCOMPILER_TARGET=${VCPKG_TARGET_TRIPLET}"
+        "-DTOOLCHAIN=${CMAKE_TOOLCHAIN_FILE}"
+        "-DINSTALLED_DIR=${VCPKG_INSTALLED_DIR}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateBuildInfo.cmake"
+    VERBATIM)
+add_dependencies(bridge_report_backend_core bridge_build_metadata)
+target_include_directories(bridge_report_backend_core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>")
 
 target_include_directories(bridge_report_backend_core
     PUBLIC
@@ -199,6 +218,7 @@ enable_testing()
 add_executable(bridge_report_backend_tests
     tests/test_annual_inspection_contract.cpp
     tests/test_app_config.cpp
+    tests/test_build_info.cpp
     tests/test_archive_file_cleanup_coordinator.cpp
     tests/test_archive_file_deletion_core.cpp
     tests/test_archive_paths.cpp
@@ -329,3 +349,10 @@ endif()
 
 include(GoogleTest)
 gtest_discover_tests(bridge_report_backend_tests)
+
+# Publish the manifest only after a successful executable link.
+add_custom_command(TARGET bridge-report-backend POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>/build-info.json"
+        "$<TARGET_FILE_DIR:bridge-report-backend>/build-info.json"
+    VERBATIM)

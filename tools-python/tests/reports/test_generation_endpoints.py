@@ -201,3 +201,32 @@ def test_field_update_reports_a_missing_input(workspace: dict, tmp_path: Path) -
     detail = response.json()["detail"]
     assert detail["code"] == "REPORT_FIELD_UPDATE_FAILED"
     assert detail["stage"] == "open"
+
+
+@pytest.mark.parametrize("mode", ["RGB", "RGBA"])
+def test_assemble_accepts_small_webp_without_modifying_original(workspace: dict, mode: str) -> None:
+    from PIL import Image
+    from docx import Document
+    archive = Path(workspace["archive_root"])
+    source = next(archive.rglob("*.png"))
+    Image.new(mode, (80, 40), (20, 40, 80, 60) if mode == "RGBA" else (20, 40, 80)).save(source, "WEBP", lossless=True)
+    original = source.read_bytes()
+    response = assemble(workspace)
+    assert response.status_code == 200, response.text
+    assert source.read_bytes() == original
+    assert len(Document(response.json()["output_path"]).inline_shapes) == 1
+
+
+@pytest.mark.parametrize("uncertain", [False, True])
+def test_field_update_error_exposes_writer_state(workspace: dict, monkeypatch, uncertain: bool) -> None:
+    import bridge_report_tools.main as app_module
+    from bridge_report_tools.reports.field_updater import FieldUpdateError
+    def fail(*args, **kwargs):
+        raise FieldUpdateError("REPORT_FIELD_UPDATE_FAILED", "failure", "update", "test", writer_uncertain=uncertain)
+    monkeypatch.setattr(app_module, "update_fields_request", fail)
+    response = client.post("/reports/fields/update", json={
+        "input_path": workspace["template_path"],
+        "output_path": str(workspace["job"] / "final.docx"),
+    })
+    assert response.status_code == 502
+    assert response.json()["detail"]["writer_uncertain"] is uncertain

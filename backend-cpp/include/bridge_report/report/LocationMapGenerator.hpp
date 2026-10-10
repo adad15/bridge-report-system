@@ -14,6 +14,7 @@ namespace bridge_report::report {
 enum class LocationMapStatus {
     /// 按档案坐标重新取了一张。
     Generated,
+    InputChanged,
     /// 管理员自己上传过一张，那张优先，不覆盖。
     KeptManual,
     /// 档案里没有坐标，没有依据就不生成。

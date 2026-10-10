@@ -1,5 +1,7 @@
 # 账号体系 + 已确认记录的重开校对与照片查看
 
+> **2026-09-17 文档状态同步：** 实施计划历史记录。步骤、示例代码和勾选状态对应当时版本，不等于当前待办，也不应直接重放旧实现。 当前能力见 [项目上下文](../../../PROJECT_CONTEXT.md)；本轮修复与待办见 [审查修复状态](../../2026-09-17-review-remediation-status.md)。
+
 ## Context
 
 校对工作台在导入记录「已确认」后整页只读（`reviewSession.ts` 按 `import_status` 一刀切），带来三个问题：
@@ -33,8 +35,8 @@
 - 新增 `src/db/AuthRepository.{hpp,cpp}`：`find_user_by_username`、`create_session`（随机 32 字节 token，库里只存 SHA-256 哈希，12 小时过期）、`find_session_user`、`delete_session`、`seed_default_users`（users 表为空时预置 `admin`/`user`，默认密码 `admin123`/`user123`，日志提示尽快修改）。
 - 新增 `src/http/AuthRoutes.{hpp,cpp}`：`POST /api/auth/login`（返回 token + 用户信息）、`POST /api/auth/logout`、`GET /api/auth/me`；沿用现有 OPTIONS/CORS 惯用法。
 - `RouteHelpers` 增加 `authenticate(req) -> std::optional<AuthUser>`（解析 `Authorization: Bearer`）与 `respond_unauthorized/forbidden`；写类端点（保存草稿、preflight、confirm、cancel、Word 导入、线索创建/绑定/重绑、新增的 reopen/restore）在处理器开头要求登录。
-- [Cors.cpp](backend-cpp/src/http/Cors.cpp)：`Access-Control-Allow-Headers` 加 `Authorization`。
-- [main.cpp](backend-cpp/src/main.cpp)：注册 auth 路由 + 启动时 `seed_default_users`。
+- [Cors.cpp](../../../backend-cpp/src/http/Cors.cpp)：`Access-Control-Allow-Headers` 加 `Authorization`。
+- [main.cpp](../../../backend-cpp/src/main.cpp)：注册 auth 路由 + 启动时 `seed_default_users`。
 
 ### 2. 后端 C++ — 重开校对
 
@@ -43,27 +45,27 @@
   - `restore_reopened_import_record(id)`：翻回「已确认」并清空重开列（仅当 `reopened_at is not null and import_status='待校对'`）。
   - `cancel_import_record` 加谓词 `reopened_at is null`；路由层对已重开记录返回明确错误"请使用「放弃修改」"。
   - `confirm_annual_facts` 收尾更新 import_records 时顺带清空重开列。
-- 新路由（挂 [ReviewRoutes.cpp](backend-cpp/src/http/ReviewRoutes.cpp)）：
+- 新路由（挂 [ReviewRoutes.cpp](../../../backend-cpp/src/http/ReviewRoutes.cpp)）：
   - `POST /api/import-records/{id}/reopen` body `{scope}`：要求登录；`full` 要求 admin；仅接受 `contract_compatibility == native_1_2` 的已确认记录；`warnings_only` 还要求草稿中存在 `warnings` 非空的病害候选（新纯函数，放 `review/` 下便于测试）。
   - `POST /api/import-records/{id}/reopen-restore`：放弃修改，恢复已确认。
-- 保存草稿范围校验（[DraftValidation](backend-cpp/src/review/DraftValidation.cpp) 新增纯函数 + [ReviewRoutes.cpp](backend-cpp/src/http/ReviewRoutes.cpp) 保存处理器接线）：记录处于 warnings_only 重开态时，与库中已存草稿逐条对齐 `candidate_id`，`warnings` 为空的病害候选必须 Json 深度相等，且不允许增删病害候选，违规返回 400 `reopen_scope_violation`；full 重开态的保存要求 admin 角色。
+- 保存草稿范围校验（[DraftValidation](../../../backend-cpp/src/review/DraftValidation.cpp) 新增纯函数 + [ReviewRoutes.cpp](../../../backend-cpp/src/http/ReviewRoutes.cpp) 保存处理器接线）：记录处于 warnings_only 重开态时，与库中已存草稿逐条对齐 `candidate_id`，`warnings` 为空的病害候选必须 Json 深度相等，且不允许增删病害候选，违规返回 400 `reopen_scope_violation`；full 重开态的保存要求 admin 角色。
 - GET review 响应（`ReviewModels::build_review_response`）加 `reopen` 字段（reopened_at / reopen_scope / reopened_by_username）。
 
 ### 3. 前端 — 认证
 
 - 新增 `src/auth/authApi.ts`、`src/auth/AuthContext.tsx`（token 存 localStorage，启动时 `GET /api/auth/me` 恢复会话）、`src/pages/LoginPage.tsx`。
-- [apiClient.ts](frontend/src/api/apiClient.ts)：模块级 token provider，`request()` 自动附 `Authorization` 头；401 时抛 `ApiError(code="auth_required")`，AuthContext 捕获后清 token 回登录页。
-- [App.tsx](frontend/src/App.tsx)：`AuthProvider` 包裹；未登录渲染登录页；顶栏显示"显示名（角色）+ 退出登录"。
+- [apiClient.ts](../../../frontend/src/api/apiClient.ts)：模块级 token provider，`request()` 自动附 `Authorization` 头；401 时抛 `ApiError(code="auth_required")`，AuthContext 捕获后清 token 回登录页。
+- [App.tsx](../../../frontend/src/App.tsx)：`AuthProvider` 包裹；未登录渲染登录页；顶栏显示"显示名（角色）+ 退出登录"。
 
 ### 4. 前端 — 校对页行为
 
-- **照片查看永不禁用**：[DefectsSection.tsx](frontend/src/review/components/DefectsSection.tsx) 去掉 `<fieldset disabled>` 一揽子禁用；[DefectPhotoGroup.tsx](frontend/src/review/components/DefectPhotoGroup.tsx) 与 [UnlinkedPhotosPanel.tsx](frontend/src/review/components/UnlinkedPhotosPanel.tsx) 改为逐控件 `disabled={disabled}`（字段输入、照片操作、确认本组、重新关联、缺图确认），仅"查看照片"toggle、缩略图切换、大图展示不禁用；[styles.css](frontend/src/styles.css) 的 `.controls-disabled` pointer-events 全禁样式改为基于 `:disabled` 的视觉态。
+- **照片查看永不禁用**：[DefectsSection.tsx](../../../frontend/src/review/components/DefectsSection.tsx) 去掉 `<fieldset disabled>` 一揽子禁用；`frontend/src/review/components/DefectPhotoGroup.tsx`（历史路径，现已移除或重组） 与 [UnlinkedPhotosPanel.tsx](../../../frontend/src/review/components/UnlinkedPhotosPanel.tsx) 改为逐控件 `disabled={disabled}`（字段输入、照片操作、确认本组、重新关联、缺图确认），仅"查看照片"toggle、缩略图切换、大图展示不禁用；[styles.css](../../../frontend/src/styles.css) 的 `.controls-disabled` pointer-events 全禁样式改为基于 `:disabled` 的视觉态。
 - **逐病害可编辑**：DefectsSection 接受 `isDefectEditable(defect)` 回调；重开 warnings_only 态下仅 `defect.warnings.length > 0` 的病害可编辑，full/正常待校对态全部可编辑。
-- [reviewSession.ts](frontend/src/review/reviewSession.ts)：`deriveReviewSession` 增加重开态横幅（"已重开校对（仅警告病害可改 / 全部可改），完成后需确认修订版入库"）。
-- [ReviewWorkspacePage.tsx](frontend/src/pages/ReviewWorkspacePage.tsx)：
+- [reviewSession.ts](../../../frontend/src/review/reviewSession.ts)：`deriveReviewSession` 增加重开态横幅（"已重开校对（仅警告病害可改 / 全部可改），完成后需确认修订版入库"）。
+- [ReviewWorkspacePage.tsx](../../../frontend/src/pages/ReviewWorkspacePage.tsx)：
   - 已确认只读态：按角色/警告情况显示「修正警告病害」（任何登录用户）与「解锁全部修改」（仅 admin），调用 reopen 后切回可编辑态。
   - 重开态：「取消导入」替换为「放弃修改」（调 reopen-restore）；warnings_only 态隐藏「批量确认普通候选」；其余保存/检查/确认按钮照旧，确认时走既有修订版弹窗。
-- [reviewApi.ts](frontend/src/api/reviewApi.ts)：`ReviewResponse` 加 reopen 字段；新增 `reopenImport` / `restoreReopenedImport`。
+- [reviewApi.ts](../../../frontend/src/api/reviewApi.ts)：`ReviewResponse` 加 reopen 字段；新增 `reopenImport` / `restoreReopenedImport`。
 
 ### 5. 测试与文档
 

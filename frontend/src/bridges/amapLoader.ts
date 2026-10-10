@@ -45,28 +45,34 @@ let pending: Promise<AMapNamespace> | null = null;
  */
 export function loadAMap(): Promise<AMapNamespace> {
   if (pending) return pending;
-  pending = (async () => {
+  const attempt = (async () => {
     if (window.AMap) return window.AMap;
 
     const config = await fetchMapConfig(backendBaseUrl);
     if (!config.available) throw new Error("map_key_not_configured");
-    if (config.security_js_code) {
-      window._AMapSecurityConfig = { securityJsCode: config.security_js_code };
-    }
+    window._AMapSecurityConfig = { securityJsCode: config.security_js_code ?? "" };
 
     await new Promise<void>((resolve, reject) => {
       const script = document.createElement("script");
       script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(config.js_key)}`;
       script.async = true;
-      const timer = window.setTimeout(() => reject(new Error("map_script_timeout")), LOAD_TIMEOUT_MS);
-      script.onload = () => {
+      let settled = false;
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
         window.clearTimeout(timer);
-        resolve();
+        script.onload = null;
+        script.onerror = null;
+        if (error) {
+          script.remove();
+          reject(error);
+        } else {
+          resolve();
+        }
       };
-      script.onerror = () => {
-        window.clearTimeout(timer);
-        reject(new Error("map_script_unreachable"));
-      };
+      const timer = window.setTimeout(() => finish(new Error("map_script_timeout")), LOAD_TIMEOUT_MS);
+      script.onload = () => finish(window.AMap ? undefined : new Error("map_key_rejected"));
+      script.onerror = () => finish(new Error("map_script_unreachable"));
       document.head.appendChild(script);
     });
 
@@ -77,10 +83,11 @@ export function loadAMap(): Promise<AMapNamespace> {
   })();
 
   // 失败之后允许下次重试：机器可能只是暂时没网。
-  pending.catch(() => {
-    pending = null;
+  pending = attempt;
+  void attempt.catch(() => {
+    if (pending === attempt) pending = null;
   });
-  return pending;
+  return attempt;
 }
 
 /** 测试用：清掉缓存的 promise。 */

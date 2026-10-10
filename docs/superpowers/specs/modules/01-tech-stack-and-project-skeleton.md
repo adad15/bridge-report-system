@@ -1,5 +1,11 @@
 # 01 技术栈与项目骨架
 
+## 2026-09-19 当前适用说明
+
+工程骨架已扩展为 C++ 主服务、Python 导入/地图/报告工具及 React 18 / Ant Design 6 前端。迁移已到 037，报告管理和即时生成主体已实施。TypeScript 开启 noUnusedLocals/noUnusedParameters。Office 依赖 Windows 交互式会话和单进程 FIFO；数据库回归使用隔离 schema。架构边界继续沿用，下文“第一阶段”只描述当时范围。
+
+下文保留模块初始设计及历次修订；冲突时按本说明与 [项目上下文](../../../../PROJECT_CONTEXT.md) 判断当前实现。运行命令见 [运行与验证](../../../../development.md)，待修问题见 [审查修复状态](../../../2026-09-17-review-remediation-status.md)。
+
 日期：2026-07-02
 
 ## 1. 背景与目标

@@ -1,13 +1,15 @@
 # 桥梁检测报告系统 UI 设计规范
 
+当前实现与待办见 [项目上下文](../PROJECT_CONTEXT.md)、[审查修复状态](2026-09-17-review-remediation-status.md)。本轮同步报告页异步状态隔离、未使用声明清理和类型检查要求；未将性能与可访问性目标自动标记为已验收。
+
 > 状态：当前 UI 基线，主要页面已实施
 > 适用范围：`frontend/` 全部用户界面  
 > 技术基线：React 18、TypeScript、Vite、Ant Design 6  
-> 更新日期：2026-09-03
+> 更新日期：2026-09-17
 
 ## 1. 文档目的
 
-本规范是桥梁检测报告系统前端视觉与页面结构的单一事实来源。新增页面和逐步迁移的旧页面都应遵循本规范，避免不同模块各自定义颜色、间距、按钮、状态和页面骨架。
+本规范记录桥梁检测报告系统前端视觉与页面结构的当前约定；具体 Token 和尺寸以共享实现为准，差异需同步修订。新增页面和逐步迁移的旧页面都应遵循本规范，避免不同模块各自定义颜色、间距、按钮、状态和页面骨架。
 
 规范解决以下问题：
 
@@ -72,33 +74,29 @@
 
 ## 3. 前端设计系统结构
 
-推荐逐步建立以下目录：
+当前已实现的共享结构如下；尚不存在的推荐组件不列作可直接复用的入口：
 
 ```text
 frontend/src/
 ├─ design-system/
 │  ├─ theme/
 │  │  ├─ tokens.ts
-│  │  ├─ componentTheme.ts
 │  │  └─ index.ts
 │  ├─ components/
 │  │  ├─ PageHeader.tsx
-│  │  ├─ StatusTag.tsx
 │  │  ├─ MetricCard.tsx
-│  │  ├─ EmptyState.tsx
-│  │  └─ ConfirmActionDialog.tsx
-│  ├─ patterns/
-│  │  ├─ DataPageToolbar.tsx
-│  │  ├─ DetailSection.tsx
-│  │  └─ ErrorState.tsx
+│  │  └─ BridgeMark.tsx
+│  ├─ density.ts
+│  ├─ useMediaQuery.ts
 │  ├─ DesignSystemProvider.tsx
 │  └─ index.ts
-└─ layouts/
-   ├─ AuthLayout.tsx
-   ├─ AppLayout.tsx
-   ├─ ManagementPageLayout.tsx
-   ├─ WorkspaceLayout.tsx
-   └─ FullscreenWorkbenchLayout.tsx
+├─ layouts/
+│  ├─ AuthLayout.tsx
+│  ├─ AppLayout.tsx
+│  └─ HeaderBridgeContext.tsx
+└─ workspace/
+   ├─ BridgeWorkspaceShell.tsx
+   └─ StatusTag.tsx
 ```
 
 普通 `Button`、`Input`、`Card` 等组件直接使用 Ant Design，不为隐藏 Ant Design 而创建无业务价值的薄包装。只有包含稳定业务语义或重复交互规则的模式才封装，例如 `StatusTag`、`PageHeader`、危险操作确认框和数据页工具栏。
@@ -356,7 +354,7 @@ frontend/src/
 | 凭证错误 | 保留用户名；显示明确错误；焦点回到密码输入 |
 | 服务异常 | 显示持久错误提示和可重试语义 |
 | 大写锁定 | 在密码字段附近显示警告，不作为全局错误 |
-| 登录成功 | 直接进入桥梁档案，不额外阻塞式提示 |
+| 登录成功 | 恢复目标路由；根路径转到 /workbench，不额外阻塞式提示 |
 | 恢复会话 | 显示稳定的品牌加载状态，不闪现登录表单 |
 
 ## 10. 数据状态与反馈
@@ -388,13 +386,14 @@ frontend/src/
 
 本系统以桌面端为主，但基础页面应支持较窄视口。
 
-| 视口 | 规则 |
+当前实现以 design-system/density.ts 为准：
+
+| 视口 | 已实现的密度规则 |
 | --- | --- |
-| `>= 1440px` | 完整顶栏、一级栏、二级栏；内容边距 32px |
-| `1200–1439px` | 完整导航；内容边距 24px |
-| `768–1199px` | 二级导航可折叠；表格允许受控横向滚动 |
-| `< 768px` | 单栏内容；侧栏通过抽屉进入；复杂工作台提示使用桌面端 |
-| `< 480px` | 登录页取消外层大面板感，使用全屏单列表单 |
+| 宽度 >1600px 且高度 >900px | 宽松档；顶栏 68px、侧栏 248px、折叠宽度 76px |
+| 宽度 ≤1600px 或高度 ≤900px | 紧凑档；顶栏 52px、侧栏 208px、折叠宽度 64px，叠加 compactAlgorithm |
+
+尺寸统一从 useShellMetrics 获取，页面高度用 pageOffset 扣除外壳。旧设计的 1440/1200/768 分档不作为当前密度实现描述。手机抽屉导航、375px 完整工作流属于需要逐页验证的适配目标，不代表全部已实现。
 
 响应式不能通过缩小到难以阅读的字号解决。表格列应按优先级隐藏或改为详情入口，而不是无限压缩。
 
@@ -418,9 +417,19 @@ frontend/src/
 - 全屏工作台的面板独立滚动，并为 flex/grid 子项正确设置最小尺寸约束。
 - 不为了视觉效果引入大尺寸背景图片；品牌线稿优先使用可控的 SVG 或 CSS 图形。
 
+### 14.1 状态与编译约束（2026-09-17）
+
+- 报告配置按桥梁/年度隔离；加载未完成不得保存或生成。旧年度的加载、保存、生成和轮询响应不能写回当前页面，轮询不能重叠。
+- 本轮删除 14 处未使用声明及相关无效状态更新；保留实际请求、取消和业务派生逻辑。
+- TypeScript 开启 noUnusedLocals/noUnusedParameters。新代码不得通过关闭检查来绕过无效变量、导入和参数。
+- 校对 reducer 只处理状态变换；手工新增病害走后端命令，使用返回草稿，不恢复候选 ID 工厂。
+- C 批次已实施 12 个业务页面、评分图表与重点面板按需加载。边界在模块作用域声明；保持认证、应用壳和桥梁壳稳定，不通过全局 pathname key 重置表单。
+- 加载中保留高度和状态文字；图表提供评分文字兜底，面板可取消。资源失败支持局部重试，只有用户确认后才重载页面；渲染异常单独提示。
+- 入口及独立图表块仍有 Vite 大包提示；检查实际依赖闭包，不用放大阈值掩盖。实施与验证见 [C 批次验收](2026-09-20-framework-batch-c-validation.md)。
+
 ## 15. 迁移顺序
 
-统一采用以下顺序：
+以下为已执行的迁移顺序记录，当前完成范围见 §2.5；新增页面继续按同一规则验收：
 
 1. 安装 Ant Design 6 和匹配版本的图标库。
 2. 建立根级 `DesignSystemProvider` 和主题 Token。

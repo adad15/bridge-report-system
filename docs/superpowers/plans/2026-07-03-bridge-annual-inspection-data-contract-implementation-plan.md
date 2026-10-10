@@ -1,5 +1,7 @@
 # Bridge Annual Inspection Data Contract Implementation Plan
 
+> **2026-09-17 文档状态同步：** 实施计划历史记录。步骤、示例代码和勾选状态对应当时版本，不等于当前待办，也不应直接重放旧实现。 当前能力见 [项目上下文](../../../PROJECT_CONTEXT.md)；本轮修复与待办见 [审查修复状态](../../2026-09-17-review-remediation-status.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 实现模块 03 的 `BridgeAnnualInspectionData` JSON 契约落地物：共享 JSON 样例、Python Pydantic 模型与 JSON Schema 导出、C++ JsonCpp 校验器、前端 TypeScript 类型与运行时校验，并用测试保证三端接受同一份结构。

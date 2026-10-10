@@ -1,24 +1,27 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { AuthProvider, useAuth } from "./auth/AuthContext";
-import { BridgeOverviewPage } from "./pages/BridgeOverviewPage";
-import { BridgesPage } from "./pages/BridgesPage";
 import { LegacyTriageRedirect } from "./pages/LegacyTriageRedirect";
-import { ComponentArchivePage } from "./pages/ComponentArchivePage";
-import { ComponentInventoryPage } from "./pages/ComponentInventoryPage";
-import { ThreadTriagePage } from "./pages/ThreadTriagePage";
 import { LoginPage, LoginRestoringPage } from "./pages/LoginPage";
-import { ReportDirectoryPage } from "./pages/ReportDirectoryPage";
-import { ReportGenerationPage } from "./pages/ReportGenerationPage";
-import { ReportTemplatesPage } from "./pages/ReportTemplatesPage";
-import { ReviewWorkspacePage } from "./pages/ReviewWorkspacePage";
-import { RatingTreePage } from "./pages/RatingTreePage";
-import { StandardDocumentsPage } from "./pages/StandardDocumentsPage";
-import { WorkbenchPage } from "./pages/WorkbenchPage";
 import { BridgeWorkspaceShell } from "./workspace/BridgeWorkspaceShell";
-import { InspectionWorkspacePage } from "./pages/InspectionWorkspacePage";
 import { AppLayout } from "./layouts/AppLayout";
 import "./styles.css";
+
+import { createLazyFeature } from "./loading/createLazyFeature";
+
+const BridgeOverviewPage = createLazyFeature(async () => ({ default: (await import("./pages/BridgeOverviewPage")).BridgeOverviewPage }), { label: "桥梁概览" });
+const BridgesPage = createLazyFeature(async () => ({ default: (await import("./pages/BridgesPage")).BridgesPage }), { label: "桥梁档案" });
+const ComponentArchivePage = createLazyFeature(async () => ({ default: (await import("./pages/ComponentArchivePage")).ComponentArchivePage }), { label: "构件病害档案" });
+const ComponentInventoryPage = createLazyFeature(async () => ({ default: (await import("./pages/ComponentInventoryPage")).ComponentInventoryPage }), { label: "构件台账" });
+const ThreadTriagePage = createLazyFeature(async () => ({ default: (await import("./pages/ThreadTriagePage")).ThreadTriagePage }), { label: "病害线索整理" });
+const ReportDirectoryPage = createLazyFeature(async () => ({ default: (await import("./pages/ReportDirectoryPage")).ReportDirectoryPage }), { label: "报告人员与设备" });
+const ReportGenerationPage = createLazyFeature(async () => ({ default: (await import("./pages/ReportGenerationPage")).ReportGenerationPage }), { label: "报告生成" });
+const ReportTemplatesPage = createLazyFeature(async () => ({ default: (await import("./pages/ReportTemplatesPage")).ReportTemplatesPage }), { label: "报告模板" });
+const ReviewWorkspacePage = createLazyFeature(async () => ({ default: (await import("./pages/ReviewWorkspacePage")).ReviewWorkspacePage }), { label: "校对工作台" });
+const RatingTreePage = createLazyFeature(async () => ({ default: (await import("./pages/RatingTreePage")).RatingTreePage }), { label: "评定树" });
+const StandardDocumentsPage = createLazyFeature(async () => ({ default: (await import("./pages/StandardDocumentsPage")).StandardDocumentsPage }), { label: "规范管理" });
+const WorkbenchPage = createLazyFeature(async () => ({ default: (await import("./pages/WorkbenchPage")).WorkbenchPage }), { label: "工作台" });
+const InspectionWorkspacePage = createLazyFeature(async () => ({ default: (await import("./pages/InspectionWorkspacePage")).InspectionWorkspacePage }), { label: "年度检测" });
 
 export function App() {
   return (

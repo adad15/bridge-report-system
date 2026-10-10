@@ -1,5 +1,11 @@
 # 模块 06.5：以桥梁档案为中心的交互与界面重组
 
+## 2026-09-17 当前适用说明
+
+当前导航还包括 /settings/report-templates、/settings/report-directory 及 /bridges/:bridgeId/inspections/:inspectionYearId/report。桥梁总览包含概况、坐标和图件。报告页按桥梁/年度隔离异步状态，旧年度响应不得更新新年度；配置加载完成前不允许保存或生成。
+
+下文保留模块初始设计及历次修订；冲突时按本说明与 [项目上下文](../../../../PROJECT_CONTEXT.md) 判断当前实现。运行命令见 [运行与验证](../../../../development.md)，待修问题见 [审查修复状态](../../../2026-09-17-review-remediation-status.md)。
+
 > 日期：2026-07-15
 >
 > 状态：已实施并通过回归验收

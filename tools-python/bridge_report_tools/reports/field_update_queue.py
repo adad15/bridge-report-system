@@ -1,13 +1,7 @@
 """字段更新的全局 FIFO 队列，并发上限固定为 1（设计 §17.3）。
 
-同一台机器上不能同时跑两个 Word/WPS 字段更新，原因有三个，最要命的是第二个：
-
-1. Office 在系统层面有共享状态（临时文件、normal.dotm、注册表），多实例并发是
-   出名的挂起来源。
-2. **field_updater 的超时清理会杀错进程。** 它靠"动手前后的 WINWORD.EXE 进程差集"
-   认领自己起的实例；两次更新的时间窗一旦重叠，A 的差集里就会混进 B 刚起的 Word，
-   A 超时就把 B 正在干活的进程一起杀了。串行化能从根上消除这个可能。
-3. 120 页、470 张图片的文档在 Word 里很吃内存，几份同时开机器撑不住。
+Office 共享临时文件和配置，多份大型文档并行排版容易挂起并消耗大量内存。
+若上一次任务无法确认进程归属或退出状态，队列会阻断后续任务，直到核实并重启服务。
 
 排队的只是最后进 Word 那一步。Docx Builder 装配文档的阶段可以并行（设计 §17.3）。
 
@@ -73,8 +67,27 @@ class FieldUpdateQueue:
         self._tickets: dict[int, _Ticket] = {}
         #: 等不下去自行离开的票号。轮到它们时要跳过，否则后面的人永远等不到。
         self._abandoned: set[int] = set()
+        self._blocked_reason: str | None = None
 
     # ---- 状态 --------------------------------------------------------------
+
+    def block(self, reason: str) -> None:
+        with self._condition:
+            self._blocked_reason = reason
+            self._condition.notify_all()
+
+    def _check_blocked_locked(self) -> None:
+        if self._blocked_reason:
+            raise FieldUpdateQueueTimeout(
+                code="REPORT_FIELD_UPDATE_RECOVERY_REQUIRED",
+                message=self._blocked_reason,
+                waited_seconds=0.0,
+            )
+
+    @property
+    def blocked(self) -> bool:
+        with self._condition:
+            return self._blocked_reason is not None
 
     def snapshot(self) -> QueueSnapshot:
         with self._condition:
@@ -101,6 +114,7 @@ class FieldUpdateQueue:
         """占用唯一的执行位。前面有人时阻塞，并通过 on_wait 告知排在第几位。"""
         started = time.monotonic()
         with self._condition:
+            self._check_blocked_locked()
             number = self._next_number
             self._next_number += 1
             self._tickets[number] = _Ticket(number, label)
@@ -112,9 +126,13 @@ class FieldUpdateQueue:
 
             if ahead > 0:
                 acquired = self._condition.wait_for(
-                    lambda: self._now_serving == number,
+                    lambda: self._now_serving == number or self._blocked_reason is not None,
                     timeout=self._wait_timeout_seconds,
                 )
+                if self._blocked_reason:
+                    self._tickets.pop(number, None)
+                    self._abandoned.add(number)
+                    self._check_blocked_locked()
                 if not acquired:
                     self._tickets.pop(number, None)
                     self._abandoned.add(number)

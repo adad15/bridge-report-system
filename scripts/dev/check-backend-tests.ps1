@@ -1,4 +1,6 @@
-﻿$ErrorActionPreference = "Stop"
+﻿param([ValidateSet('Debug','Release')][string]$Configuration='Debug',[string]$BuildDirectory='backend-cpp/build/vs-debug')
+. (Join-Path $PSScriptRoot 'common.ps1')
+$ErrorActionPreference = "Stop"
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $databaseUrl = $env:BRIDGE_REPORT_TEST_DATABASE_URL
@@ -31,14 +33,9 @@ if ([string]::IsNullOrWhiteSpace($psqlExe)) {
   throw "psql was not found; set PSQL_EXE to the PostgreSQL client path"
 }
 
-$testExeCandidates = @(
-  (Join-Path $repositoryRoot "build\vs-debug\Debug\bridge_report_backend_tests.exe"),
-  (Join-Path $repositoryRoot "backend-cpp\build\vs-debug\Debug\bridge_report_backend_tests.exe")
-)
-$testExe = $testExeCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-if ([string]::IsNullOrWhiteSpace($testExe)) {
-  throw "bridge_report_backend_tests.exe was not found; build the C++ Debug target first"
-}
+$testExe = Get-BackendArtifact $BuildDirectory $Configuration 'bridge_report_backend_tests.exe'
+if (-not (Test-Path -LiteralPath $testExe)) { throw "Build the selected test target first: $testExe" }
+Write-Host "Test executable: $testExe"
 
 function Invoke-PsqlFile([string]$path) {
   & $psqlExe $databaseUrl -v ON_ERROR_STOP=1 -f $path

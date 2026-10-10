@@ -1,5 +1,7 @@
 # 版本化桥梁规范模块与系统自主评定实施计划
 
+> **2026-09-17 文档状态同步：** 实施计划历史记录。步骤、示例代码和勾选状态对应当时版本，不等于当前待办，也不应直接重放旧实现。 当前能力见 [项目上下文](../../../PROJECT_CONTEXT.md)；本轮修复与待办见 [审查修复状态](../../2026-09-17-review-remediation-status.md)。
+
 > 实施状态：已实施；当前运行时已完成版本化规范、评定树和系统自主评定，本文保留为历史计划
 >
 > 日期：2026-07-17
@@ -644,7 +646,7 @@ cmake --build --preset vs2022-x64-debug
 
 **新增动作**：
 
-- `add_defect`：使用 `manual_defect_<uuid>` 生成不复用 ID；
+- 历史 add_defect：曾在前端使用 manual_defect_<uuid> 生成 ID；当前改为 C++ 专用命令创建并返回草稿，不再使用本步骤的前端生成方案；
 - `delete_defect`：删除病害并把关联照片改为未关联；
 - `link_defect_component`：选择实际构件并填入内部映射字段。
 
@@ -662,7 +664,7 @@ cmake --build --preset vs2022-x64-debug
 10. 后端拒绝重复候选 ID、伪造内部结构部位和 warnings_only 结构变化；
 11. 手工新增和删除写入草稿审计摘要。
 
-**实现要点**：候选 ID 工厂在测试中可注入；`resolved_structure_part` 只能由所选构件映射产生，前端不提供自由编辑入口。
+**历史实现要点（2026-09-17 已退役）**：候选 ID 工厂曾在测试中可注入；`resolved_structure_part` 只能由所选构件映射产生，前端不提供自由编辑入口。
 
 **建议提交**：`feat(review): let editors add and remove defects`
 

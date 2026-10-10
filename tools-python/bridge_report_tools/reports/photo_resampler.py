@@ -16,8 +16,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import tempfile
 
 from PIL import ExifTags, Image, ImageOps
+
+from bridge_report_tools.reports.errors import ReportBuildError
 
 
 #: 嵌入照片的目标印刷分辨率。
@@ -52,34 +55,33 @@ def resample(
     文件会在 add_picture 那里以 report_photo_unreadable 中止。
     """
     try:
-        with Image.open(source) as image:
-            orientation = image.getexif().get(ExifTags.Base.Orientation, 0)
-            width, height = image.size
-            box_width, box_height = target_pixels(frame_width_emu, frame_height_emu)
-            scale = min(box_width / width, box_height / height, 1.0)
-
-            if scale >= 1.0 and orientation in UPRIGHT_ORIENTATIONS:
-                return source
-
-            upright = ImageOps.exif_transpose(image)
-            size = (
-                max(1, round(upright.width * scale)),
-                max(1, round(upright.height * scale)),
-            )
-            resized = (
-                upright.resize(size, Image.LANCZOS) if size != upright.size else upright
-            )
-            if resized.mode not in ("RGB", "L"):
-                resized = resized.convert("RGB")
-
-            cache_dir.mkdir(parents=True, exist_ok=True)
-            # 文件名带上源文件名，出问题时能直接对回归档。
-            destination = cache_dir / f"{source.stem}.jpg"
-            index = 1
-            while destination.exists():
-                destination = cache_dir / f"{source.stem}-{index}.jpg"
-                index += 1
-            resized.save(destination, "JPEG", quality=JPEG_QUALITY, optimize=True)
-            return destination
+        image = Image.open(source)
     except OSError:
+        # Preserve the existing unreadable-input contract; add_picture reports the error.
         return source
+    destination: Path | None = None
+    try:
+        with image:
+            orientation = image.getexif().get(ExifTags.Base.Orientation, 0)
+            compatible = image.format in {"JPEG", "PNG", "GIF", "TIFF", "BMP"}
+            upright = ImageOps.exif_transpose(image)
+            box_width, box_height = target_pixels(frame_width_emu, frame_height_emu)
+            scale = min(box_width / upright.width, box_height / upright.height, 1.0)
+            if compatible and scale >= 1.0 and orientation in UPRIGHT_ORIENTATIONS:
+                return source
+            size = (max(1, round(upright.width * scale)), max(1, round(upright.height * scale)))
+            resized = upright.resize(size, Image.Resampling.LANCZOS) if size != upright.size else upright
+            transparent = "A" in upright.getbands() or "transparency" in upright.info
+            image_format = "PNG" if transparent else "JPEG"
+            suffix = ".png" if transparent else ".jpg"
+            converted = resized.convert("RGBA" if transparent else "RGB")
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(prefix=f"{source.stem}-", suffix=suffix, dir=cache_dir, delete=False) as output:
+                destination = Path(output.name)
+                options = {} if transparent else {"quality": JPEG_QUALITY, "optimize": True}
+                converted.save(output, format=image_format, **options)
+            return destination
+    except (OSError, ValueError, Image.DecompressionBombError) as exc:
+        if destination is not None:
+            destination.unlink(missing_ok=True)
+        raise ReportBuildError("report_photo_unreadable", f"照片转换失败：{source.name}") from exc

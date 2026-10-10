@@ -3,6 +3,7 @@ from __future__ import annotations
 import posixpath
 import zipfile
 from pathlib import Path
+from typing import Iterator
 from xml.etree import ElementTree as ET
 
 from bridge_report_tools.contracts.annual_inspection import DefectCandidate, ExtractedPhotoFile, PhotoCandidate, SourceRef, WarningItem
@@ -16,10 +17,42 @@ IMAGE_RELATIONSHIP_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006
 RELATIONSHIP_NAMESPACE = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 RELATIONSHIP_EMBED_ATTRIBUTE = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
 A_BLIP_TAG = "{http://schemas.openxmlformats.org/drawingml/2006/main}blip"
+VML_IMAGE_TAG = "{urn:schemas-microsoft-com:vml}imagedata"
+RELATIONSHIP_ID_ATTRIBUTE = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+MC_ALTERNATE_TAG = "{http://schemas.openxmlformats.org/markup-compatibility/2006}AlternateContent"
+MC_CHOICE_TAG = "{http://schemas.openxmlformats.org/markup-compatibility/2006}Choice"
+MC_FALLBACK_TAG = "{http://schemas.openxmlformats.org/markup-compatibility/2006}Fallback"
 WORD_CELL_TAG = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tc"
 WORD_PARAGRAPH_TAG = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p"
 WORD_TABLE_TAG = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tbl"
 WORD_TEXT_TAG = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t"
+
+
+def image_relationship_id(element: ET.Element) -> str | None:
+    if element.tag == A_BLIP_TAG:
+        return element.attrib.get(RELATIONSHIP_EMBED_ATTRIBUTE)
+    if element.tag == VML_IMAGE_TAG:
+        return element.attrib.get(RELATIONSHIP_ID_ATTRIBUTE)
+    return None
+
+
+def image_occurrences(element: ET.Element) -> Iterator[ET.Element]:
+    """Walk embedded DrawingML/VML images in display order, selecting one alternative."""
+    if image_relationship_id(element):
+        yield element
+        return
+    if element.tag == MC_ALTERNATE_TAG:
+        # A compatibility fallback represents the same picture, not a second photo.
+        branches = [child for child in element if child.tag == MC_CHOICE_TAG]
+        branches += [child for child in element if child.tag == MC_FALLBACK_TAG]
+        for branch in branches:
+            images = list(image_occurrences(branch))
+            if images:
+                yield from images
+                break
+        return
+    for child in element:
+        yield from image_occurrences(child)
 
 
 def find_photo_captions(document: DocxBlocks, rule_set: WordRuleSet) -> list[PhotoCaption]:
@@ -51,9 +84,7 @@ def find_captions_for_image_occurrences(docx_path: Path, rule_set: WordRuleSet) 
         document_root = ET.fromstring(archive.read(DOCUMENT_XML_PATH))
         parents = {child: parent for parent in document_root.iter() for child in parent}
         captions: list[PhotoCaption | None] = []
-        for blip in document_root.iter(A_BLIP_TAG):
-            if not blip.attrib.get(RELATIONSHIP_EMBED_ATTRIBUTE):
-                continue
+        for blip in image_occurrences(document_root):
             captions.append(caption_for_image_blip(blip, parents, rule_set))
         return captions
 
@@ -97,8 +128,8 @@ def nearest_ancestor(
 def image_relationship_ids(element: ET.Element) -> list[str]:
     return [
         relationship_id
-        for blip in element.iter(A_BLIP_TAG)
-        if (relationship_id := blip.attrib.get(RELATIONSHIP_EMBED_ATTRIBUTE))
+        for blip in image_occurrences(element)
+        if (relationship_id := image_relationship_id(blip))
     ]
 
 
@@ -122,8 +153,8 @@ def media_members(docx_path: Path) -> list[str]:
         relationships = document_image_relationships(archive)
         document_root = ET.fromstring(archive.read(DOCUMENT_XML_PATH))
         members: list[str] = []
-        for element in document_root.iter():
-            relationship_id = element.attrib.get(RELATIONSHIP_EMBED_ATTRIBUTE)
+        for element in image_occurrences(document_root):
+            relationship_id = image_relationship_id(element)
             if not relationship_id:
                 continue
             member = relationships.get(relationship_id)

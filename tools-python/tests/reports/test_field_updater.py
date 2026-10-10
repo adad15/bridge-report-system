@@ -179,8 +179,7 @@ def test_missing_input_fails_with_stage(tmp_path: Path) -> None:
 def test_concurrent_updates_never_run_in_word_at_the_same_time(tmp_path: Path) -> None:
     """设计 §25.3：两个并发请求必须串行进 Word，且等待状态可见。
 
-    这条同时守着超时清理的正确性——`_run_isolated` 靠"动手前后的进程差集"认领自己
-    起的 Word，时间窗一旦重叠就会杀错人。队列被拿掉时这个用例会开始间歇失败。
+    进程归属由 COM 窗口和进程句柄独立核实；这里验证共享 Office 环境仍然串行使用。
     """
     updater = _updater_or_skip(microsoft_word_updater)
     source = build_multipage_document(tmp_path / "input.docx")

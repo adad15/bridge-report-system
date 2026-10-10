@@ -6,13 +6,12 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
     "build": "tsc -b && vite build",
-    "test": "vitest"
+    "test": "vitest",
+    "build:analyze": "tsc -b && node scripts/analyze-build.mjs --check"
   },
   "dependencies": {
     "@ant-design/charts": "^2.6.7",
     "@ant-design/icons": "^6.3.2",
-    "@ant-design/pro-components": "^3.1.14-7",
-    "@vitejs/plugin-react": "^4.3.0",
     "antd": "^6.6.1",
     "dayjs": "^1.11.23",
     "react": "^18.3.0",
@@ -30,6 +29,7 @@
     "@types/react-dom": "^18.3.0",
     "jsdom": "^25.0.1",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "vitest": "^2.0.0",
+    "@vitejs/plugin-react": "^4.3.0"
   }
 }

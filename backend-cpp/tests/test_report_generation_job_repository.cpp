@@ -1,9 +1,11 @@
 #include <chrono>
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <utility>
+
 
 #include <gtest/gtest.h>
 #include <json/json.h>
@@ -11,6 +13,13 @@
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
 #include "bridge_report/db/ReportGenerationJobRepository.hpp"
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#endif
+
 
 namespace {
 
@@ -65,6 +74,7 @@ protected:
 
     void TearDown() override {
         if (client_ == nullptr) return;
+        client_->execSqlSync("delete from report_job_artifacts where job_id in (select id from report_generation_jobs where inspection_year_id=$1::uuid)",year_id_);
         client_->execSqlSync(
             "delete from report_generation_jobs where inspection_year_id=$1::uuid", year_id_);
         client_->execSqlSync("delete from inspection_years where id=$1::uuid", year_id_);
@@ -322,5 +332,105 @@ TEST_F(ReportGenerationJobRepositoryTest, CurrentJobIsTheMostRecentOne) {
 TEST_F(ReportGenerationJobRepositoryTest, AYearThatNeverGeneratedHasNoCurrentJob) {
     EXPECT_FALSE(repository().find_current(year_id_).has_value());
 }
+
+
+TEST_F(ReportGenerationJobRepositoryTest, ExpiryImmediatelyDisablesDownloadBeforeCleanup) {
+    auto repo=repository();
+    const auto job=repo.create(year_id_,user_id_,std::nullopt,std::nullopt).job.value();
+    ASSERT_TRUE(repo.mark_ready(job.id,make_output(job.id),"report.docx",24,Json::Value(Json::objectValue)));
+    expire_now(job.id);
+    EXPECT_FALSE(repo.find(job.id)->can_download());
+}
+TEST_F(ReportGenerationJobRepositoryTest, MissingDirectoryCountsAsCompletedCleanup) {
+    auto repo=repository();
+    const auto job=repo.create(year_id_,user_id_,std::nullopt,std::nullopt).job.value();
+    ASSERT_TRUE(repo.mark_failed(job.id,"test","test"));
+    repo.cleanup(job_root_,7);
+    const auto rows=client_->execSqlSync("select cleanup_state from report_job_artifacts where job_id=$1::uuid",job.id);
+    EXPECT_EQ(rows[0]["cleanup_state"].as<std::string>(),"cleaned");
+}
+TEST_F(ReportGenerationJobRepositoryTest, FailedDeletionRetainsPathAndCanRetry) {
+    auto repo=repository();
+    const auto job=repo.create(year_id_,user_id_,std::nullopt,std::nullopt).job.value();
+    const auto output=make_output(job.id);
+    ASSERT_TRUE(repo.mark_ready(job.id,output,"report.docx",24,Json::Value(Json::objectValue)));
+    expire_now(job.id);
+    // Wrong root is a real filesystem boundary failure; it must retain the actual target.
+    repo.cleanup(job_root_/"wrong-root",7);
+    ASSERT_TRUE(fs::exists(output));
+    EXPECT_FALSE(repo.find(job.id)->temporary_file_path.has_value());
+    EXPECT_EQ(client_->execSqlSync("select expected_output_path from report_job_artifacts where job_id=$1::uuid",
+        job.id)[0]["expected_output_path"].as<std::string>(),output.generic_string());
+    auto rows=client_->execSqlSync("select cleanup_state,attempts,last_error from report_job_artifacts where job_id=$1::uuid",job.id);
+    EXPECT_EQ(rows[0]["cleanup_state"].as<std::string>(),"pending");
+    EXPECT_EQ(rows[0]["attempts"].as<int>(),1);
+    EXPECT_FALSE(rows[0]["last_error"].isNull());
+    client_->execSqlSync("update report_job_artifacts set next_attempt_at=now() where job_id=$1::uuid",job.id);
+    repo.cleanup(job_root_,7);
+    EXPECT_FALSE(fs::exists(output));
+    EXPECT_FALSE(repo.find(job.id)->temporary_file_path.has_value());
+}
+TEST_F(ReportGenerationJobRepositoryTest, BlockedWriterIsNeverCleanedOrPurged) {
+    auto repo=repository();
+    const auto job=repo.create(year_id_,user_id_,std::nullopt,std::nullopt).job.value();
+    const auto output=make_output(job.id);
+    repo.block_cleanup(job.id,"writer still running");
+    ASSERT_TRUE(repo.mark_failed(job.id,"report_tools_unavailable","test"));
+    client_->execSqlSync("update report_generation_jobs set finished_at=now()-interval '30 days' where id=$1::uuid",job.id);
+    repo.cleanup(job_root_,7);
+    EXPECT_TRUE(fs::exists(output));
+    EXPECT_TRUE(repo.find(job.id).has_value());
+}
+TEST_F(ReportGenerationJobRepositoryTest, CleanupJournalSurvivesJobDeletion) {
+    auto repo=repository();
+    const auto job=repo.create(year_id_,user_id_,std::nullopt,std::nullopt).job.value();
+    const auto output=make_output(job.id);
+    ASSERT_TRUE(repo.mark_failed(job.id,"test","test"));
+    client_->execSqlSync("delete from report_generation_jobs where id=$1::uuid",job.id);
+    repo.cleanup(job_root_,7);
+    EXPECT_FALSE(fs::exists(output));
+    const auto rows=client_->execSqlSync("select cleanup_state from report_job_artifacts where job_id=$1::uuid",job.id);
+    EXPECT_EQ(rows[0]["cleanup_state"].as<std::string>(),"cleaned");
+    client_->execSqlSync("delete from report_job_artifacts where job_id=$1::uuid",job.id);
+}
+TEST_F(ReportGenerationJobRepositoryTest, OldClaimCannotAcknowledgeReclaimedDeletion) {
+    auto repo=repository();
+    const auto job=repo.create(year_id_,user_id_,std::nullopt,std::nullopt).job.value();
+    ASSERT_TRUE(repo.mark_failed(job.id,"test","test"));
+    repo.schedule_cleanup();
+    const auto first=repo.claim_cleanup(100);
+    auto old=std::find_if(first.begin(),first.end(),[&](const auto& x){return x.job_id==job.id;});
+    ASSERT_NE(old,first.end());
+    client_->execSqlSync("update report_job_artifacts set claimed_at=now()-interval '20 minutes' where job_id=$1::uuid",job.id);
+    const auto next=repo.claim_cleanup(100);
+    EXPECT_FALSE(repo.finish_cleanup(*old,true,""));
+    auto fresh=std::find_if(next.begin(),next.end(),[&](const auto& x){return x.job_id==job.id;});
+    ASSERT_NE(fresh,next.end());
+    EXPECT_TRUE(repo.finish_cleanup(*fresh,true,""));
+}
+
+
+#ifdef _WIN32
+TEST_F(ReportGenerationJobRepositoryTest, LockedFileRetriesAfterPartialDirectoryDeletion) {
+    auto repo=repository();
+    const auto job=repo.create(year_id_,user_id_,std::nullopt,std::nullopt).job.value();
+    const auto output=make_output(job.id);
+    std::ofstream(output.parent_path()/"context.json") << "{}";
+    ASSERT_TRUE(repo.mark_ready(job.id,output,"report.docx",24,Json::Value(Json::objectValue)));
+    expire_now(job.id);
+    const auto handle=CreateFileW(output.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,0,nullptr);
+    ASSERT_NE(handle,INVALID_HANDLE_VALUE);
+    // A previous pass has already deleted one intermediate file.
+    fs::remove(output.parent_path()/"context.json");
+    repo.cleanup(job_root_,7);
+    CloseHandle(handle);
+    ASSERT_TRUE(fs::exists(output));
+    EXPECT_EQ(client_->execSqlSync("select cleanup_state from report_job_artifacts where job_id=$1::uuid",
+        job.id)[0]["cleanup_state"].as<std::string>(),"pending");
+    client_->execSqlSync("update report_job_artifacts set next_attempt_at=now() where job_id=$1::uuid",job.id);
+    repo.cleanup(job_root_,7);
+    EXPECT_FALSE(fs::exists(output.parent_path()));
+}
+#endif
 
 }  // namespace

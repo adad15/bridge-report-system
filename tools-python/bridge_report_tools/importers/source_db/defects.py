@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -102,33 +104,73 @@ def _dimension_key(dimension_type: str) -> str:
     return "面积" if dimension_type == "总面积" else dimension_type
 
 
+_SOURCE_RANGE = re.compile(
+    r"\s*(\d+(?:\.\d+)?|\.\d+)\s*(?:~|～|至)\s*"
+    r"(\d+(?:\.\d+)?|\.\d+)\s*"
+)
+
+
+def _source_measurement(
+    raw: str, unit: str, dimension_type: str,
+) -> dict[str, Any] | None:
+    """解析来源列自身的值；范围不能依赖可能缺失或冲突的描述。"""
+    measurement: dict[str, Any] = {
+        "dimension_type": dimension_type,
+        "value_type": "single",
+        "value": None,
+        "minimum_value": None,
+        "maximum_value": None,
+        "unit": unit,
+        "is_approximate": False,
+        "source_text": f"{raw}{unit}",
+    }
+    bounds = _SOURCE_RANGE.fullmatch(raw)
+    if bounds:
+        minimum, maximum = map(float, bounds.groups())
+        if not all(math.isfinite(value) for value in (minimum, maximum)):
+            return None
+        if minimum > maximum:
+            return None
+        measurement.update(
+            value_type="range", minimum_value=minimum, maximum_value=maximum)
+    else:
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+        if not math.isfinite(value) or value < 0:
+            return None
+        measurement["value"] = value
+    return measurement
+
+
 def _measurements(
     defect: SourceDefect, candidate_id: str,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """优先搬来源结构化列，再用病害描述补齐缺失的尺寸维度。"""
     measurements: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
     for column, dimension_type in DIMENSION_TYPES.items():
         if column not in defect.dimensions:
             continue
         raw, unit = defect.dimensions[column]
-        try:
-            value = float(raw)
-        except ValueError:
-            continue
-        measurements.append({
-            "dimension_type": dimension_type,
-            "value_type": "single",
-            "value": value,
-            "minimum_value": None,
-            "maximum_value": None,
-            "unit": unit,
-            "is_approximate": False,
-            "source_text": f"{raw}{unit}",
-        })
+        measurement = _source_measurement(raw, unit, dimension_type)
+        if measurement is None:
+            warnings.append({
+                "code": "source_measurement_invalid",
+                "message": (
+                    f"来源结构化{dimension_type}值“{raw}{unit}”无法解析为有效的"
+                    "非负单值或范围，请人工复核。"
+                ),
+                "severity": "warning",
+                "target_candidate_id": candidate_id,
+            })
+        else:
+            measurements.append(measurement)
 
     parsed_measurements, parse_warnings = parse_measurements(
         defect.description or None, candidate_id)
-    warnings = [warning.model_dump() for warning in parse_warnings]
+    warnings.extend(warning.model_dump() for warning in parse_warnings)
 
     source_by_dimension = {
         _dimension_key(measurement["dimension_type"]): measurement

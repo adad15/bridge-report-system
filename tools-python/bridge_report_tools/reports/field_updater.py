@@ -14,14 +14,15 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from concurrent.futures import Future, TimeoutError as FutureTimeoutError
+from threading import Thread
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Protocol
 
 from bridge_report_tools.reports.errors import ReportTemplateError
+from bridge_report_tools.reports.office_process import CLEANUP_SECONDS, OfficeInvocation, OfficeProcess
 from bridge_report_tools.reports.field_update_queue import (
     FIELD_UPDATE_QUEUE,
     FieldUpdateQueue,
@@ -39,7 +40,6 @@ WD_DO_NOT_SAVE_CHANGES = 0
 #: wdHeaderFooterPrimary / FirstPage / EvenPages。
 HEADER_FOOTER_KINDS = (1, 2, 3)
 
-CREATE_NO_WINDOW = 0x08000000
 DEFAULT_TIMEOUT_SECONDS = 300.0
 
 UPDATER_MICROSOFT_WORD = "MicrosoftWordUpdater"
@@ -54,6 +54,7 @@ class FieldUpdateError(Exception):
     message: str
     stage: str
     updater: str
+    writer_uncertain: bool = False
 
     def __str__(self) -> str:
         return f"{self.code}[{self.updater}/{self.stage}]: {self.message}"
@@ -91,47 +92,6 @@ class OfficeFieldUpdater(Protocol):
     ) -> UpdateOutcome: ...
 
 
-#: 可能被 COM 起来的办公软件映像名。
-#:
-#: 两个都要看，不能只看自己那一个：WPS 会把 `Word.Application` 这个 ProgID 抢注到
-#: 自己名下，于是"Word 更新器"实际起的是 wps.exe。只按 WINWORD.EXE 找 PID 会一个
-#: 都找不到，超时清理什么也杀不掉，更新线程就永远挂在那儿（本机实测：900 秒超时
-#: 抛了异常，进程却卡了半小时，直到手工杀掉那个 wps.exe）。
-#:
-#: 误伤用户自己开着的实例由 PID 差集拦住，与映像名无关——只有本次启动之后才出现的
-#: PID 才允许被杀。
-OFFICE_IMAGE_NAMES: tuple[str, ...] = ("WINWORD.EXE", "wps.exe")
-
-
-def _running_pids(image_names: Iterable[str] = OFFICE_IMAGE_NAMES) -> set[int]:
-    """当前这些映像名下的进程集合。
-
-    用来把"我们起的实例"和"用户自己开着的"区分开：只有差集里的 PID 才允许被强杀。
-    """
-    pids: set[int] = set()
-    for image_name in image_names:
-        try:
-            completed = subprocess.run(
-                ["tasklist", "/FI", f"IMAGENAME eq {image_name}", "/NH", "/FO", "CSV"],
-                capture_output=True,
-                text=True,
-                timeout=15,
-                creationflags=CREATE_NO_WINDOW,
-            )
-        except (OSError, subprocess.SubprocessError):
-            continue
-
-        for line in completed.stdout.splitlines():
-            fields = [part.strip('"') for part in line.strip().split('","')]
-            if len(fields) < 2:
-                continue
-            try:
-                pids.add(int(fields[1]))
-            except ValueError:
-                continue
-    return pids
-
-
 def _field_stories(document):
     """要刷域的全部范围：各顶层故事区，加上每一节的页眉页脚。
 
@@ -155,18 +115,6 @@ def _field_stories(document):
                     continue
 
 
-def _kill(pid: int) -> None:
-    try:
-        subprocess.run(
-            ["taskkill", "/PID", str(pid), "/F", "/T"],
-            capture_output=True,
-            timeout=20,
-            creationflags=CREATE_NO_WINDOW,
-        )
-    except (OSError, subprocess.SubprocessError):
-        pass
-
-
 class ComWordUpdater:
     """基于 Word 对象模型的更新器。Word 与 WPS Writer 共用这套实现，只换 ProgID。"""
 
@@ -180,61 +128,86 @@ class ComWordUpdater:
         self.name = name
         self.prog_id = prog_id
         self.timeout_seconds = timeout_seconds
-        # 队列在这一层而不是调用方：超时清理靠进程差集认领自己起的 Word，
-        # 并发时会杀错人（见 field_update_queue 的模块说明）。防护必须和被防护的
-        # 代码待在一起，否则谁直接调 update_fields 谁就把 bug 带回来了。
+        # 探测和实际更新共享 FIFO，无法确认清理结果时阻断后续任务。
         self._queue = queue if queue is not None else FIELD_UPDATE_QUEUE
 
     # ---- COM 生命周期 ------------------------------------------------------
 
-    def _run_isolated(self, work: Callable[[], object], stage: str) -> object:
-        """在独立线程里跑 COM 工作，超时后只强杀本次新起的进程。
+    def _run_isolated(self, work: Callable[[OfficeInvocation], object], stage: str) -> object:
+        """Run COM in its own apartment and clean only the verified process handle."""
+        invocation = OfficeInvocation(self._queue)
+        future: Future = Future()
 
-        COM 调用是同步阻塞的，没法从外面打断；唯一可靠的解除办法是干掉那个进程，
-        因此必须先记下它的 PID，否则超时清理会误伤用户的 Word。
-        """
-        before = _running_pids()
-        owned: set[int] = set()
-
-        def wrapped() -> object:
-            import pythoncom
-
-            pythoncom.CoInitialize()
+        def wrapped() -> None:
             try:
-                return work()
-            finally:
-                pythoncom.CoUninitialize()
+                import pythoncom
 
-        pool = ThreadPoolExecutor(max_workers=1)
+                pythoncom.CoInitialize()
+                try:
+                    result = work(invocation)
+                finally:
+                    try:
+                        pythoncom.CoUninitialize()
+                    finally:
+                        if not invocation.finish():
+                            raise RuntimeError("Office 实例未能安全清理，后续字段更新已暂停")
+                future.set_result(result)
+            except BaseException as exc:
+                future.set_exception(exc)
+
+        # A stuck COM call must not keep the Python service alive during shutdown.
+        Thread(target=wrapped, name=f"office-{stage}", daemon=True).start()
         try:
-            future = pool.submit(wrapped)
+            return future.result(timeout=self.timeout_seconds)
+        except FutureTimeoutError:
+            invocation.cancel()
             try:
-                return future.result(timeout=self.timeout_seconds)
+                future.result(timeout=CLEANUP_SECONDS)
             except FutureTimeoutError:
-                owned = _running_pids() - before
-                for pid in owned:
-                    _kill(pid)
-                raise FieldUpdateError(
-                    code="REPORT_FIELD_UPDATE_FAILED",
-                    message=(
-                        f"{self.name} 在 {self.timeout_seconds:.0f} 秒内没有完成域更新，"
-                        f"已强制结束本次启动的 {len(owned)} 个进程。"
-                    ),
-                    stage="timeout",
-                    updater=self.name,
-                ) from None
-        finally:
-            # 不能用 with：它退出时会 shutdown(wait=True)，等那个已经超时的 COM 调用
-            # 返回。杀进程通常能让它返回，但没杀到时（比如 PID 差集是空的）就永远等
-            # 下去——超时抛了异常，调用方却收不到，整个进程挂死。宁可让线程漏着。
-            pool.shutdown(wait=False)
+                invocation.block()
+            except BaseException:
+                pass
+            raise FieldUpdateError(
+                code="REPORT_FIELD_UPDATE_FAILED",
+                message=(
+                    f"{self.name} 在 {self.timeout_seconds:.0f} 秒内没有完成域更新。"
+                    "仅清理已确认归属的自动化进程；无法确认清理结果时暂停后续任务。"
+                ),
+                stage="timeout",
+                updater=self.name,
+                writer_uncertain=True,
+            ) from None
 
-    def _new_app(self):
+    def _new_app(self, invocation: OfficeInvocation):
         import win32com.client
 
         # DispatchEx 必须用：Dispatch 会 attach 到用户已经开着的实例，之后的 Quit
         # 会连人家没存的文档一起关掉。
         app = win32com.client.DispatchEx(self.prog_id)
+        invocation.app_created()
+        # DispatchEx may still be redirected by an Office-compatible COM server.
+        # Do not change settings or Quit an instance which already has documents.
+        if app.Documents.Count:
+            raise RuntimeError("COM 返回了已有文档的 Office 实例，拒绝接管")
+        marker = None
+        try:
+            try:
+                hwnd = int(app.Hwnd)
+            except Exception:
+                # Word exposes Hwnd on Window, not Application.
+                marker = app.Documents.Add(Visible=False)
+                hwnd = int(marker.Windows(1).Hwnd)
+            invocation.claim(OfficeProcess.from_window(hwnd, invocation.started_at))
+        except BaseException:
+            if marker is not None:
+                # Only this temporary, empty document belongs to this call.
+                try:
+                    marker.Close(WD_DO_NOT_SAVE_CHANGES)
+                except Exception:
+                    pass
+            raise
+        # Keep the marker alive until Quit: some WPS versions exit when their last
+        # document closes, invalidating the Application proxy before work starts.
         app.Visible = False
         app.DisplayAlerts = WD_ALERTS_NONE
         try:
@@ -261,16 +234,15 @@ class ComWordUpdater:
     def probe(self, on_wait: WaitCallback | None = None) -> ProbeResult:
         """探测更新器是否可用。同样要排队。
 
-        探测也会 DispatchEx 起一个 Word，超时清理也走进程差集——探测与更新并发时，
-        探测超时照样会杀掉别人正在跑的更新。凡是起 Word 的动作都必须串行。
+        探测也会创建并核实 Office 实例，和更新共用队列及进程清理规则。
 
         代价是：另一份报告正在更新域时，生成前检查（设计 §16 第 9 条）会等在队列里。
         这是可接受的——那时本来也轮不到你用 Word。
         """
 
-        def work() -> ProbeResult:
+        def work(invocation: OfficeInvocation) -> ProbeResult:
             try:
-                app = self._new_app()
+                app = self._new_app(invocation)
             except Exception as exc:
                 return ProbeResult(self.name, False, detail=f"无法创建 COM 实例：{exc}")
             try:
@@ -322,8 +294,8 @@ class ComWordUpdater:
         target = str(output_docx.resolve())
         started = time.monotonic()
 
-        def work() -> int | None:
-            app = self._new_app()
+        def work(invocation: OfficeInvocation) -> int | None:
+            app = self._new_app(invocation)
             document = None
             try:
                 document = app.Documents.Open(
@@ -365,15 +337,22 @@ class ComWordUpdater:
         try:
             pages = self._run_isolated(work, stage="update")
         except FieldUpdateError:
-            output_docx.unlink(missing_ok=True)
+            try:
+                output_docx.unlink(missing_ok=True)
+            except OSError:
+                pass  # A still-locked output must not mask the original failure.
             raise
         except Exception as exc:
-            output_docx.unlink(missing_ok=True)
+            try:
+                output_docx.unlink(missing_ok=True)
+            except OSError:
+                pass  # A still-locked output must not mask the original failure.
             raise FieldUpdateError(
                 code="REPORT_FIELD_UPDATE_FAILED",
                 message=f"{self.name} 更新域失败：{exc}",
                 stage="update",
                 updater=self.name,
+                writer_uncertain=self._queue.blocked,
             ) from exc
 
         return UpdateOutcome(

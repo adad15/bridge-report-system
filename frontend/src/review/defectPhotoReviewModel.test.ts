@@ -5,7 +5,7 @@ import type { DefectMatchCandidate, DefectMatchOutcome, DefectMatchResult } from
 import type { RatingTreeNode } from "../api/ratingTreeApi";
 import { data as completeData } from "./testFixtures";
 import { buildDefectPhotoReviewModel } from "./defectPhotoReviewModel";
-import { createReviewDraftReducer } from "./reviewDraft";
+import { reviewDraftReducer } from "./reviewDraft";
 
 function matchResult(
   outcome: DefectMatchOutcome,
@@ -486,10 +486,11 @@ describe("buildDefectPhotoReviewModel", () => {
 
   // 来源软件的结构化尺寸与描述原文对不上时报的。来源值已经保留，没有任何数据可补，
   // 除了人工确认无从了结。
-  it("lets a human confirm past a source measurement conflict", () => {
+  it.each(["source_measurement_conflict", "source_measurement_invalid"])(
+    "requires individual review for %s", (code) => {
     const draft = safeDraft();
     draft.defects[0].warnings = [{
-      code: "source_measurement_conflict",
+      code,
       message: "来源结构化长度与病害描述中的尺寸表达不一致，已保留来源结构化值，请人工复核。",
       severity: "warning",
       target_candidate_id: "defect_0001",
@@ -501,8 +502,9 @@ describe("buildDefectPhotoReviewModel", () => {
       assessmentIssues: [],
     }).rows[0];
 
-    expect(row.problems.map((problem) => problem.code)).toEqual(["source_measurement_conflict"]);
+    expect(row.problems.map((problem) => problem.code)).toEqual([code]);
     expect(row.confirmEligible).toBe(true);
+    expect(row.batchEligible).toBe(false);
   });
 
   // 标度这条要成对地看：警告本身放行，但缺口由实时的 scale_not_allowed 兜着——
@@ -987,7 +989,7 @@ describe("buildDefectPhotoReviewModel", () => {
 
       expect(hasProblem(conflictModel(draft), "photo_number_conflict")).toBe(true);
 
-      const cleaned = createReviewDraftReducer()(draft, {
+      const cleaned = reviewDraftReducer(draft, {
         type: "remove_photo_reference",
         defectCandidateId: "defect_0002",
         photoNumber: "2.1-1",

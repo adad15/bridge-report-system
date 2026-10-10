@@ -267,3 +267,62 @@ def test_returns_a_link_keyed_by_the_source_defect_id() -> None:
     assert "src-9" in links
     assert links["src-9"].candidate_id == "source_defect_0001"
     assert links["src-9"].tree_id == "t-a"
+
+
+@pytest.mark.parametrize("raw", ["3.5~20", "3.5～20", " 3.5 至 20 "])
+def test_source_range_survives_without_description(raw) -> None:
+    candidate = build([defect(dimensions={"长度": (raw, "m")}, description="")])[0]
+    assert candidate["measurements"] == [{
+        "dimension_type": "长度", "value_type": "range", "value": None,
+        "minimum_value": 3.5, "maximum_value": 20.0, "unit": "m",
+        "is_approximate": False, "source_text": f"{raw}m",
+    }]
+    assert not candidate["warnings"]
+
+
+def test_source_range_wins_over_conflicting_description() -> None:
+    candidate = build([defect(
+        dimensions={"长度": ("3.5~20", "m")}, description="长度：2~4m",
+    )])[0]
+    assert len(candidate["measurements"]) == 1
+    assert candidate["measurements"][0]["minimum_value"] == 3.5
+    assert candidate["measurements"][0]["maximum_value"] == 20
+    assert [w["code"] for w in candidate["warnings"]] == ["source_measurement_conflict"]
+
+
+def test_source_range_deduplicates_area_unit_alias() -> None:
+    candidate = build([defect(
+        dimensions={"面积一": ("2~4", "㎡")}, description="面积：2~4m²",
+    )])[0]
+    assert len(candidate["measurements"]) == 1
+    assert candidate["measurements"][0]["source_text"] == "2~4㎡"
+    assert candidate["measurements"][0]["unit"] == "㎡"
+    assert not candidate["warnings"]
+
+
+@pytest.mark.parametrize("raw", ["unknown", "20~3.5", "NaN", "Infinity", "1e309", "-2", "约3", "2~4~6"])
+def test_invalid_source_dimension_keeps_raw_value_in_warning(raw) -> None:
+    candidate = build([defect(dimensions={"长度": (raw, "m")}, description="")])[0]
+    assert candidate["measurements"] == []
+    warning, = candidate["warnings"]
+    assert warning["code"] == "source_measurement_invalid"
+    assert warning["target_candidate_id"] == candidate["candidate_id"]
+    assert raw in warning["message"]
+    assert "m" in warning["message"]
+
+
+def test_invalid_source_dimension_allows_description_but_keeps_warning() -> None:
+    candidate = build([defect(
+        dimensions={"长度": ("未知", "m")}, description="长度：3m",
+    )])[0]
+    assert candidate["measurements"][0]["value"] == 3
+    assert [w["code"] for w in candidate["warnings"]] == ["source_measurement_invalid"]
+
+
+def test_different_units_do_not_silently_override_source_range() -> None:
+    candidate = build([defect(
+        dimensions={"长度": ("2~4", "m")}, description="长度：2~4cm",
+    )])[0]
+    assert candidate["measurements"][0]["unit"] == "m"
+    assert len(candidate["measurements"]) == 1
+    assert [w["code"] for w in candidate["warnings"]] == ["source_measurement_conflict"]

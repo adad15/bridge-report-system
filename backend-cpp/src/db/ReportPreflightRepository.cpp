@@ -71,7 +71,7 @@ ReportPreflightRepository::ReportPreflightRepository(drogon::orm::DbClientPtr cl
     : client_(std::move(client)) {}
 
 std::optional<ReportPreflightResult> ReportPreflightRepository::evaluate(
-    const std::string& inspection_year_id) const {
+    const std::string& inspection_year_id, const Json::Value* template_snapshot) const {
     const auto year_rows = client_->execSqlSync(
         "select iy.id::text as id, iy.inspection_year, iy.status, iy.is_current, "
         " iy.overall_grade, iy.bridge_id::text as bridge_id, "
@@ -204,31 +204,29 @@ std::optional<ReportPreflightResult> ReportPreflightRepository::evaluate(
     }
 
     // ---- §16.4 模板已选、已启用、校验有效 -------------------------------
-    const auto template_rows = client_->execSqlSync(
-        "select t.id::text as id, t.template_name, t.is_enabled, t.validation_status, "
-        " t.contract_config_json::text as contract_config_json, "
-        " t.validation_result_json::text as validation_result_json "
-        "from inspection_report_settings s join report_templates t on t.id=s.template_id "
-        "where s.inspection_year_id=$1::uuid",
-        inspection_year_id);
     Json::Value contract_config(Json::objectValue);
     std::set<std::string> template_parts;
-    if (template_rows.empty()) {
-        block(result, "REPORT_TEMPLATE_INVALID", "尚未为本年度选择报告模板。");
+    if (template_snapshot) {
+        contract_config=(*template_snapshot)["config"];
+        template_parts=covered_parts((*template_snapshot)["validation"]);
     } else {
-        contract_config = parse_json(template_rows[0]["contract_config_json"].as<std::string>());
-        const auto validation =
-            parse_json(template_rows[0]["validation_result_json"].as<std::string>());
-        template_parts = covered_parts(validation);
-        result.template_covered_parts.assign(template_parts.begin(), template_parts.end());
-
-        if (!template_rows[0]["is_enabled"].as<bool>() ||
-            template_rows[0]["validation_status"].as<std::string>() != "valid") {
-            block(result, "REPORT_TEMPLATE_INVALID",
-                  "所选模板「" + template_rows[0]["template_name"].as<std::string>() +
-                      "」已停用或未通过契约校验，请重新选择。");
+        const auto template_rows = client_->execSqlSync(
+            "select t.template_name,t.is_enabled,t.validation_status,"
+            "t.contract_config_json::text as config,t.validation_result_json::text as validation "
+            "from inspection_report_settings s join report_templates t on t.id=s.template_id "
+            "where s.inspection_year_id=$1::uuid",inspection_year_id);
+        if (template_rows.empty()) {
+            block(result,"REPORT_TEMPLATE_INVALID","尚未为本年度选择报告模板。");
+        } else {
+            contract_config=parse_json(template_rows[0]["config"].as<std::string>());
+            template_parts=covered_parts(parse_json(template_rows[0]["validation"].as<std::string>()));
+            if (!template_rows[0]["is_enabled"].as<bool>() ||
+                template_rows[0]["validation_status"].as<std::string>()!="valid") {
+                block(result,"REPORT_TEMPLATE_INVALID","所选模板已停用或未通过契约校验，请重新选择。");
+            }
         }
     }
+    result.template_covered_parts.assign(template_parts.begin(),template_parts.end());
 
     // ---- §16.10 数据涉及的每个结构部位，模板都要有对应锚点 --------------
     if (!template_parts.empty()) {

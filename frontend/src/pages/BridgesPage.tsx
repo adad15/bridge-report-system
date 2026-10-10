@@ -14,11 +14,19 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/apiClient";
 import { type BridgeSummary, fetchBridges } from "../api/navigationApi";
 import { useAuth } from "../auth/AuthContext";
-import { CreateBridgeDialog } from "../bridges/CreateBridgeDialog";
 import { DeleteBridgesDialog } from "../bridges/DeleteBridgesDialog";
 import { backendBaseUrl } from "../config";
 import { BridgeMark, MetricCard, PageHeader } from "../design-system";
-import { StandardsAdminPanel } from "../standards/StandardsAdminPanel";
+import { createLazyFeature } from "../loading/createLazyFeature";
+
+const StandardsAdminPanel = createLazyFeature(
+  async () => ({ default: (await import("../standards/StandardsAdminPanel")).StandardsAdminPanel }),
+  { label: "规则管理", cancel: (props) => props.onClose() },
+);
+const CreateBridgeDialog = createLazyFeature(
+  async () => ({ default: (await import("../bridges/CreateBridgeDialog")).CreateBridgeDialog }),
+  { label: "添加桥梁", cancel: (props) => props.onClose() },
+);
 
 const currentYear = new Date().getFullYear();
 

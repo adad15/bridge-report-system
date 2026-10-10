@@ -1,4 +1,12 @@
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <future>
+#include <chrono>
+#include "bridge_report/auth/PasswordHash.hpp"
+#include "bridge_report/db/ReportGenerationJobRepository.hpp"
+#include "bridge_report/db/ReportPreflightRepository.hpp"
+#include "bridge_report/report/ReportTemplateSnapshot.hpp"
 #include <optional>
 #include <string>
 #include <utility>
@@ -56,6 +64,10 @@ protected:
         client_->execSqlSync(
             "delete from inspection_report_settings where inspection_year_id=$1::uuid",
             inspection_year_id_);
+        client_->execSqlSync("delete from report_job_artifacts where job_id in (select id from report_generation_jobs where inspection_year_id=$1::uuid)",inspection_year_id_);
+        client_->execSqlSync("delete from report_generation_jobs where inspection_year_id=$1::uuid",inspection_year_id_);
+        std::error_code ignored;
+        std::filesystem::remove_all(std::filesystem::temp_directory_path()/("snapshot-"+bridge_id_),ignored);
         // 先摘引用再删文件：外键是 RESTRICT。
         client_->execSqlSync(
             "delete from report_templates where template_code like $1", "T_" + suffix_ + "%");
@@ -148,6 +160,26 @@ protected:
             "insert into inspection_report_settings (inspection_year_id, template_id) "
             "values ($1::uuid, $2::uuid)",
             inspection_year_id_, template_id);
+    }
+
+    bridge_report::config::AppConfig snapshot_config() {
+        bridge_report::config::AppConfig config;
+        const auto root=std::filesystem::temp_directory_path()/("snapshot-"+bridge_id_);
+        config.archive_root=root/"archive";
+        config.temporary_report_root=root/"jobs";
+        return config;
+    }
+    bridge_report::report::ReportTemplate real_template() {
+        auto item=enabled_template("snapshot");
+        const auto config=snapshot_config();
+        const auto relative=repository().find_file_relative_path(item.id).value();
+        const auto path=config.archive_root/relative;
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream(path,std::ios::binary) << "original template bytes";
+        client_->execSqlSync("update report_templates set file_checksum=$2 where id=$1::uuid",
+            item.id,"sha256:"+bridge_report::auth::sha256_hex("original template bytes"));
+        use_template_in_a_year(item.id);
+        return reload(item.id);
     }
 
     drogon::orm::DbClientPtr client_;
@@ -351,6 +383,79 @@ TEST_F(ReportTemplateRepositoryTest, OnlyEnabledTemplatesAppearInTheUserFacingLi
     EXPECT_TRUE(contains(repo.list(true), visible.id));
     EXPECT_FALSE(contains(repo.list(true), hidden->id));
     EXPECT_TRUE(contains(repo.list(false), hidden->id));
+}
+
+
+TEST_F(ReportTemplateRepositoryTest, JobSnapshotSurvivesTemplateFileConfigAndEnabledChanges) {
+    const auto item=real_template();
+    const auto config=snapshot_config();
+    bridge_report::db::ReportGenerationJobRepository jobs(client_);
+    const auto job=jobs.create(inspection_year_id_,user_id_,item.id,item.file_checksum).job.value();
+    bridge_report::report::prepare_report_template_snapshot(client_,config,job.id);
+    const auto frozen=jobs.find(job.id)->template_snapshot;
+    auto replacement=file("replacement");
+    replacement.checksum="sha256:"+bridge_report::auth::sha256_hex("replacement");
+    ASSERT_EQ(repository().replace_file(item.id,replacement,validation(true),user_id_).status,TemplateWriteStatus::Ok);
+    client_->execSqlSync("update report_templates set contract_config_json='{\"changed\":true}',is_enabled=false where id=$1::uuid",item.id);
+    const auto after=jobs.find(job.id).value();
+    EXPECT_EQ(after.template_snapshot,frozen);
+    EXPECT_EQ(after.template_checksum.value(),item.file_checksum);
+    std::ifstream input(config.temporary_report_root/job.id/"template.docx",std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(input)),{});
+    EXPECT_EQ(bytes,"original template bytes");
+    const auto result=bridge_report::db::ReportPreflightRepository(client_).evaluate(inspection_year_id_,&frozen);
+    ASSERT_TRUE(result.has_value());
+    for (const auto& issue:result->findings) EXPECT_NE(issue.code,"REPORT_TEMPLATE_INVALID");
+}
+TEST_F(ReportTemplateRepositoryTest, SnapshotRejectsChangedBytesWithoutChangingItsRecordedHash) {
+    const auto item=real_template();
+    const auto config=snapshot_config();
+    const auto path=config.archive_root/repository().find_file_relative_path(item.id).value();
+    std::ofstream(path,std::ios::binary|std::ios::trunc) << "tampered";
+    bridge_report::db::ReportGenerationJobRepository jobs(client_);
+    const auto job=jobs.create(inspection_year_id_,user_id_,item.id,item.file_checksum).job.value();
+    EXPECT_THROW(bridge_report::report::prepare_report_template_snapshot(client_,config,job.id),std::runtime_error);
+    EXPECT_TRUE(jobs.find(job.id)->template_snapshot.isNull());
+    EXPECT_FALSE(std::filesystem::exists(config.temporary_report_root/job.id/"template.docx"));
+}
+TEST_F(ReportTemplateRepositoryTest, SnapshotWaitsForTheTemplateUpdateLock) {
+    const auto item=real_template();
+    const auto config=snapshot_config();
+    bridge_report::db::ReportGenerationJobRepository jobs(client_);
+    const auto job=jobs.create(inspection_year_id_,user_id_,item.id,item.file_checksum).job.value();
+    auto other=bridge_report::db::create_db_client(bridge_report::config::PostgresConfig{},1);
+    auto tx=client_->newTransaction();
+    tx->execSqlSync("select id from report_templates where id=$1::uuid for update",item.id);
+    auto future=std::async(std::launch::async,[&] {
+        bridge_report::report::prepare_report_template_snapshot(other,config,job.id);
+    });
+    EXPECT_EQ(future.wait_for(std::chrono::milliseconds(150)),std::future_status::timeout);
+    tx->execSqlSync("update report_templates set contract_config_json='{\"marker\":\"new\"}' where id=$1::uuid",item.id);
+    tx.reset();
+    ASSERT_EQ(future.wait_for(std::chrono::seconds(10)),std::future_status::ready);
+    EXPECT_NO_THROW(future.get());
+    EXPECT_EQ(jobs.find(job.id)->template_snapshot["config"]["marker"].asString(),"new");
+}
+
+
+TEST_F(ReportTemplateRepositoryTest, CopyFailureKeepsOwnershipForCleanup) {
+    const auto item=real_template();
+    const auto config=snapshot_config();
+    bridge_report::db::ReportGenerationJobRepository jobs(client_);
+    const auto job=jobs.create(inspection_year_id_,user_id_,item.id,item.file_checksum).job.value();
+    const auto directory=config.temporary_report_root/job.id;
+    std::filesystem::create_directories(directory/"template.part");
+    EXPECT_THROW(bridge_report::report::prepare_report_template_snapshot(client_,config,job.id),std::runtime_error);
+    EXPECT_TRUE(jobs.find(job.id)->template_snapshot.isNull());
+    EXPECT_EQ(client_->execSqlSync("select expected_output_path from report_job_artifacts where job_id=$1::uuid",
+        job.id)[0]["expected_output_path"].as<std::string>(),
+        (std::filesystem::weakly_canonical(directory)/"report.docx").generic_string());
+    ASSERT_TRUE(jobs.mark_failed(job.id,"snapshot_failed","copy failed"));
+    jobs.cleanup(config.temporary_report_root/"wrong-root",7);
+    EXPECT_TRUE(std::filesystem::exists(directory));
+    client_->execSqlSync("update report_job_artifacts set next_attempt_at=now() where job_id=$1::uuid",job.id);
+    jobs.cleanup(config.temporary_report_root,7);
+    EXPECT_FALSE(std::filesystem::exists(directory));
 }
 
 }  // namespace

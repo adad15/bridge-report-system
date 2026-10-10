@@ -9,6 +9,10 @@ from __future__ import annotations
 import posixpath
 import re
 import zipfile
+from collections import Counter
+from urllib.parse import unquote, urlsplit
+from xml.etree.ElementTree import Element, TreeBuilder
+from xml.parsers import expat
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,16 +27,17 @@ MACRO_ENTRY_PATTERN = re.compile(r"^word/vbaProject\.bin$|^word/vbaData\.xml$", 
 MACRO_CONTENT_TYPE = "macroenabled"
 EMBEDDINGS_PREFIX = "word/embeddings/"
 
-EXTERNAL_TARGET_MODE = re.compile(r'TargetMode\s*=\s*"External"', re.IGNORECASE)
-RELATIONSHIP_PATTERN = re.compile(r"<Relationship\b[^>]*>", re.IGNORECASE)
-RELATIONSHIP_TYPE_PATTERN = re.compile(r'Type\s*=\s*"([^"]*)"', re.IGNORECASE)
-RELATIONSHIP_TARGET_PATTERN = re.compile(r'Target\s*=\s*"([^"]*)"', re.IGNORECASE)
-
-#: 外部关系里唯一放行的类型。外部图片、OLE 对象、附加模板都会让模板在生成时去读
-#: 服务器之外的文件，必须拒绝。
-HYPERLINK_RELATIONSHIP = "hyperlink"
-#: 即使指向包内也拒绝：附加模板会改变文档的样式来源，使生成结果不可复现。
-ALWAYS_REJECTED_RELATIONSHIPS = frozenset({"attachedTemplate", "frame", "subDocument"})
+RELATIONSHIP_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+CONTENT_TYPES_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
+OFFICE_RELATIONSHIP_BASES = (
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/",
+    "http://purl.oclc.org/ooxml/officeDocument/relationships/",
+)
+HYPERLINK_RELATIONSHIPS = {base + "hyperlink" for base in OFFICE_RELATIONSHIP_BASES}
+REJECTED_RELATIONSHIPS = {
+    base + name for base in OFFICE_RELATIONSHIP_BASES
+    for name in ("attachedTemplate", "frame", "subDocument")
+}
 
 
 @dataclass(frozen=True)
@@ -69,49 +74,80 @@ def _is_unsafe_entry_name(name: str) -> bool:
     return normalized.startswith("../") or normalized == ".."
 
 
-def _inspect_relationships(archive: zipfile.ZipFile, entry: str) -> list[TemplateIssue]:
+def _read_xml(archive: zipfile.ZipFile, entry: str, limit: int) -> Element:
+    with archive.open(entry) as stream:
+        content = stream.read(limit + 1)
+    if len(content) > limit:
+        raise ValueError("XML exceeds the entry limit")
+    builder = TreeBuilder()
+    parser = expat.ParserCreate(namespace_separator="}")
+    depth = 0
+    count = 0
+
+    def tag(name: str) -> str:
+        return "{" + name if "}" in name else name
+
+    def start(name: str, attributes: dict[str, str]) -> None:
+        nonlocal depth, count
+        depth += 1
+        count += 1
+        if depth > 64 or count > 50000:
+            raise ValueError("XML structure exceeds limits")
+        builder.start(tag(name), {tag(k): v for k, v in attributes.items()})
+
+    def end(name: str) -> None:
+        nonlocal depth
+        builder.end(tag(name))
+        depth -= 1
+
+    def reject(*_args):
+        raise ValueError("DTD and entities are forbidden")
+
+    parser.StartElementHandler = start
+    parser.EndElementHandler = end
+    parser.CharacterDataHandler = builder.data
+    parser.StartDoctypeDeclHandler = reject
+    parser.EntityDeclHandler = reject
+    parser.ExternalEntityRefHandler = reject
+    parser.Parse(content, True)
+    return builder.close()
+
+
+def _inspect_relationships(archive: zipfile.ZipFile, entry: str, limit: int) -> list[TemplateIssue]:
     issues: list[TemplateIssue] = []
     try:
-        content = archive.read(entry).decode("utf-8", errors="replace")
-    except (KeyError, zipfile.BadZipFile) as exc:
-        return [error("template_rels_unreadable", f"关系文件无法读取：{entry}（{exc}）", entry)]
-
-    for raw in RELATIONSHIP_PATTERN.findall(content):
-        type_match = RELATIONSHIP_TYPE_PATTERN.search(raw)
-        relationship_type = type_match.group(1).rsplit("/", 1)[-1] if type_match else ""
-        target_match = RELATIONSHIP_TARGET_PATTERN.search(raw)
-        target = target_match.group(1) if target_match else ""
-
-        if relationship_type in ALWAYS_REJECTED_RELATIONSHIPS:
-            issues.append(
-                error(
-                    "template_relationship_rejected",
-                    f"模板包含被禁止的关系类型 {relationship_type}（目标 {target}）；"
-                    "它会让生成结果依赖模板之外的文档。",
-                    entry,
-                )
-            )
-            continue
-
-        if not EXTERNAL_TARGET_MODE.search(raw):
-            continue
-        if relationship_type == HYPERLINK_RELATIONSHIP:
-            issues.append(
-                warning(
-                    "template_external_hyperlink",
-                    f"模板含指向外部的超链接：{target}。生成结果会保留该链接，请确认是有意为之。",
-                    entry,
-                )
-            )
-            continue
-        issues.append(
-            error(
-                "template_external_relationship",
-                f"模板含外部文件关系 {relationship_type}（目标 {target}）；"
-                "生成时不允许读取模板包之外的文件。",
-                entry,
-            )
-        )
+        root = _read_xml(archive, entry, limit)
+        if root.tag != f"{{{RELATIONSHIP_NS}}}Relationships":
+            raise ValueError("Invalid relationships namespace/root")
+        ids: set[str] = set()
+        for relationship in root:
+            if relationship.tag != f"{{{RELATIONSHIP_NS}}}Relationship" or len(relationship):
+                raise ValueError("Invalid relationship element")
+            attributes = relationship.attrib
+            if set(attributes) - {"Id", "Type", "Target", "TargetMode"}:
+                raise ValueError("Invalid relationship attributes")
+            rid, kind, target = (attributes.get(k, "") for k in ("Id", "Type", "Target"))
+            mode = attributes.get("TargetMode", "Internal")
+            if not rid or rid in ids or not kind or not target or mode not in {"Internal", "External"}:
+                raise ValueError("Invalid or duplicate relationship")
+            if not urlsplit(kind).scheme:
+                raise ValueError("Relationship type must be an absolute URI")
+            ids.add(rid)
+            if kind in REJECTED_RELATIONSHIPS:
+                issues.append(error("template_relationship_rejected", "模板包含附加模板或外部文档依赖。", entry))
+            elif mode == "External":
+                if kind in HYPERLINK_RELATIONSHIPS:
+                    issues.append(warning("template_external_hyperlink", "模板包含外部超链接，请确认是有意为之。", entry))
+                else:
+                    issues.append(error("template_external_relationship", "模板含不允许的外部文件关系。", entry))
+            else:
+                decoded = unquote(target).replace("\\\\", "/").replace("\\", "/")
+                base = posixpath.dirname(posixpath.dirname(entry)) if "/_rels/" in entry else ""
+                resolved = posixpath.normpath(posixpath.join(base, decoded.split("#", 1)[0]))
+                if urlsplit(decoded).scheme or decoded.startswith(("/", "\\")) or resolved == ".." or resolved.startswith("../"):
+                    issues.append(error("template_relationship_rejected", "包内关系目标越过文档边界。", entry))
+    except (KeyError, OSError, RuntimeError, zipfile.BadZipFile, expat.ExpatError, ValueError):
+        issues.append(error("template_rels_unreadable", f"关系文件不合法或不安全：{entry}", entry))
     return issues
 
 
@@ -139,6 +175,9 @@ def inspect_package(path: Path, limits: PackageLimits = DEFAULT_LIMITS) -> Packa
     with archive:
         entries = archive.infolist()
         names = {info.filename for info in entries}
+        canonical_names = Counter(posixpath.normpath(info.filename.replace("\\", "/")).casefold() for info in entries)
+        if any(count > 1 for count in canonical_names.values()):
+            issues.append(error("template_duplicate_entry", "模板包含重复或冲突的 ZIP 条目。"))
 
         if CONTENT_TYPES_ENTRY not in names or DOCUMENT_ENTRY not in names:
             raise ReportTemplateError(
@@ -204,19 +243,26 @@ def inspect_package(path: Path, limits: PackageLimits = DEFAULT_LIMITS) -> Packa
                 )
             )
 
-        content_types = archive.read(CONTENT_TYPES_ENTRY).decode("utf-8", errors="replace")
-        if MACRO_CONTENT_TYPE in content_types.lower():
-            issues.append(
-                error(
-                    "template_macro_rejected",
-                    "模板声明为启用宏的文档类型（.docm）；只接受标准 .docx。",
-                    CONTENT_TYPES_ENTRY,
-                )
-            )
-
-        for info in entries:
-            if info.filename.lower().endswith(".rels"):
-                issues.extend(_inspect_relationships(archive, info.filename))
+        # Do not read payloads after directory-level rejection.
+        if not any(issue.severity == "error" for issue in issues):
+            try:
+                root = _read_xml(archive, CONTENT_TYPES_ENTRY, limits.max_entry_uncompressed_bytes)
+                if root.tag != f"{{{CONTENT_TYPES_NS}}}Types":
+                    raise ValueError("Invalid content types root")
+                for item in root:
+                    if item.tag not in {f"{{{CONTENT_TYPES_NS}}}Default", f"{{{CONTENT_TYPES_NS}}}Override"}:
+                        raise ValueError("Invalid content type entry")
+                    content_type = item.get("ContentType", "")
+                    if not content_type:
+                        raise ValueError("Missing content type")
+                    if MACRO_CONTENT_TYPE in content_type.lower():
+                        issues.append(error("template_macro_rejected", "模板声明为启用宏的文档类型。", CONTENT_TYPES_ENTRY))
+            except (KeyError, OSError, RuntimeError, zipfile.BadZipFile, expat.ExpatError, ValueError):
+                issues.append(error("template_content_types_invalid", "文档类型 XML 不合法或不安全。", CONTENT_TYPES_ENTRY))
+            if not any(issue.severity == "error" for issue in issues):
+                for info in entries:
+                    if info.filename.lower().endswith(".rels"):
+                        issues.extend(_inspect_relationships(archive, info.filename, limits.max_entry_uncompressed_bytes))
 
     return PackageInspection(
         issues=issues,

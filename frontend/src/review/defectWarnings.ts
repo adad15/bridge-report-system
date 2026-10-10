@@ -33,6 +33,9 @@ export const HUMAN_ACKNOWLEDGEABLE_DEFECT_WARNINGS: ReadonlySet<string> = new Se
   // 来源软件的结构化尺寸与描述原文对不上。数据没缺——来源值已经保留下来了，报这条
   // 只是要人确认该信哪个。没什么可"补"的，除了确认也无从了结。
   "source_measurement_conflict",
+  // 来源尺寸表达无法解析，原值在提示中供逐条复核。尺寸允许缺省；人工补正或确认
+  // 无可用量值后可结束复核，批量确认仍由问题列表阻断。
+  "source_measurement_invalid",
   // Word 表格里的标度不是正整数，于是没写进 defect_scale。缺口本身由实时的
   // scale_not_allowed 挡着：人不选出一个合法标度就仍然确认不了，这条只是提醒来源有问题。
   "defect_scale_invalid",

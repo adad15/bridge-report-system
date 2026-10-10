@@ -56,6 +56,7 @@ public:
     void stop();
 
     /// 排入一个任务。同一个任务重复排入是安全的：状态机只让处理中的任务往前走。
+    void prepare(const std::string& job_id);
     void enqueue(std::string job_id);
 
     /// 把还停在处理中状态的任务判失败。
@@ -79,6 +80,7 @@ private:
     struct JobFailure {
         std::string code;
         std::string message;
+        bool writer_uncertain{false};
     };
 
     void worker();

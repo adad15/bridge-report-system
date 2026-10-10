@@ -28,7 +28,8 @@ public:
 
     /// 年度不存在时返回空；其余情况一律返回结论（可能带若干阻断项）。
     std::optional<report::ReportPreflightResult> evaluate(
-        const std::string& inspection_year_id) const;
+        const std::string& inspection_year_id,
+        const Json::Value* template_snapshot = nullptr) const;
 
 private:
     drogon::orm::DbClientPtr client_;

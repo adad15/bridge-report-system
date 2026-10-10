@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -10,6 +11,13 @@
 #include "bridge_report/report/BridgeMediaModels.hpp"
 
 namespace bridge_report::db {
+
+// No file may be deleted on this outcome: the server may have committed even
+// when the client did not receive the acknowledgement.
+class BridgeMediaCommitUncertain : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
 
 /// 写入一张图件的结果：状态，外加被它顶掉的那张旧图（如果有）。
 struct BridgeMediaSaveOutcome {
@@ -36,7 +44,8 @@ public:
     std::optional<report::BridgeMedia> find(const std::string& media_id) const;
 
     BridgeMediaSaveOutcome save(
-        const std::string& bridge_id, const report::BridgeMediaInput& input) const;
+        const std::string& bridge_id, const report::BridgeMediaInput& input,
+        const std::optional<report::AutomaticMapCondition>& condition = std::nullopt) const;
 
     /// 删掉一个槽位的图；没有就返回空。返回值里是要从磁盘删的那个文件。
     std::optional<report::BridgeMediaReplacement> remove(

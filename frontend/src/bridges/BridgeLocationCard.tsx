@@ -1,4 +1,4 @@
-import { Card, Flex, Typography, theme } from "antd";
+import { Button, Card, Flex, Typography, theme } from "antd";
 import { useEffect, useRef, useState } from "react";
 
 import { bridgeMediaContentUrl, type BridgeMedia } from "../api/bridgeMediaApi";
@@ -35,17 +35,22 @@ export function BridgeLocationCard({
 }) {
   const { token } = theme.useToken();
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<AMapInstance | null>(null);
-  const [unavailable, setUnavailable] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [loadState, setLoadState] = useState<{ key: string; phase: "ready" | "failed"; message?: string } | null>(null);
 
   const longitude = profile?.longitude ?? null;
   const latitude = profile?.latitude ?? null;
   const hasPoint =
     longitude !== null && latitude !== null && validCoordinates({ lng: longitude, lat: latitude });
 
+  const loadKey = [profile?.bridge_id, profile?.bridge_name, longitude, latitude, retry].join(":");
+  const phase = loadState?.key === loadKey ? loadState.phase : "loading";
+  const unavailable = phase === "failed" ? loadState?.message ?? "地图服务暂不可用。" : null;
+
   useEffect(() => {
     if (!hasPoint || longitude === null || latitude === null) return undefined;
     let cancelled = false;
+    let ownedMap: AMapInstance | null = null;
 
     // 库里存的是 WGS-84，高德底图是 GCJ-02，不转这一下图钉会偏出一两百米。
     const center = wgs84ToGcj02({ lng: longitude, lat: latitude });
@@ -58,6 +63,7 @@ export function BridgeLocationCard({
           center: [center.lng, center.lat],
           resizeEnable: true,
         });
+        ownedMap = map;
         map.add(
           new AMap.Marker({
             position: [center.lng, center.lat],
@@ -65,25 +71,26 @@ export function BridgeLocationCard({
             label: { content: profile?.bridge_name ?? "", direction: "right" },
           })
         );
-        mapRef.current = map;
-        setUnavailable(null);
+        setLoadState({ key: loadKey, phase: "ready" });
       })
       .catch((caught: unknown) => {
         if (cancelled) return;
+        ownedMap?.destroy();
+        ownedMap = null;
         const code = caught instanceof Error ? caught.message : "";
         const messages: Record<string, string> = {
           map_key_not_configured: "本机未配置地图服务，暂不显示地图。",
           map_key_rejected: "地图服务拒绝了这个 key，请检查 Web 端 key 与安全密钥。",
         };
-        setUnavailable(messages[code] ?? "地图服务连不上，暂不显示地图。");
+        setLoadState({ key: loadKey, phase: "failed", message: messages[code] ?? "地图服务连不上，暂不显示地图。" });
       });
 
     return () => {
       cancelled = true;
-      mapRef.current?.destroy();
-      mapRef.current = null;
+      ownedMap?.destroy();
+      ownedMap = null;
     };
-  }, [hasPoint, longitude, latitude, profile?.bridge_name]);
+  }, [hasPoint, longitude, latitude, profile?.bridge_name, loadKey]);
 
   const station = [profile?.route_number, profile?.station_mark].filter(Boolean).join(" · ");
   // 地图出不来的时候，已经存下的那张图就是这张卡片能给的最好的东西。
@@ -133,8 +140,15 @@ export function BridgeLocationCard({
         </Flex>
       ) : null}
 
-      {hasPoint && !unavailable ? (
-        <div ref={containerRef} role="img" aria-label="桥位地图" style={frame} />
+      {hasPoint && unavailable ? (
+        <Button size="small" onClick={() => setRetry((value) => value + 1)} style={{ alignSelf: "flex-start", marginTop: token.marginXS }}>
+          重试地图
+        </Button>
+      ) : null}
+      {hasPoint && phase === "loading" ? <Typography.Text type="secondary">地图加载中…</Typography.Text> : null}
+      {hasPoint ? (
+        <div ref={containerRef} role="img" aria-label="桥位地图" aria-busy={phase === "loading"}
+          style={{ ...frame, display: unavailable ? "none" : undefined }} />
       ) : null}
     </Card>
   );

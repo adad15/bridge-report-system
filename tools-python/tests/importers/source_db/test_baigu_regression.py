@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections import defaultdict
+from collections import Counter
 from datetime import date
 from pathlib import Path
 
@@ -94,17 +94,22 @@ def test_component_name_is_never_blank(imports, year):
 
 
 @pytest.mark.parametrize("year", [year for _, year, _, _, _ in YEARS])
-def test_photo_numbers_run_without_gaps_inside_each_section(imports, year):
-    response, _, _ = imports[year]
-
-    sections: dict[str, list[int]] = defaultdict(list)
-    for photo in response.data.photos:
-        match = re.fullmatch(r"(\d+\.\d+)-(\d+)", photo.photo_number)
-        assert match, f"照片编号不合规范：{photo.photo_number}"
-        sections[match.group(1)].append(int(match.group(2)))
-
-    for section, numbers in sections.items():
-        assert sorted(numbers) == list(range(1, len(numbers) + 1)), f"{section} 段有断号"
+def test_photos_use_candidate_links_without_inventing_source_numbers(imports, year):
+    """来源库无照片编号；真实快照应保留完整的一对一候选引用。"""
+    response, _, expected_photos = imports[year]
+    photos = {photo.candidate_id: photo for photo in response.data.photos}
+    assert len(photos) == expected_photos
+    references = Counter()
+    for defect in response.data.defects:
+        for reference in defect.photo_references:
+            assert reference.photo_number is None
+            assert reference.resolution == "matched"
+            assert reference.resolved_defect_candidate_id == defect.candidate_id
+            photo = photos[reference.photo_candidate_id]
+            assert photo.photo_number is None
+            assert photo.linked_defect_candidate_id == defect.candidate_id
+            references[photo.candidate_id] += 1
+    assert references == Counter({candidate_id: 1 for candidate_id in photos})
 
 
 @pytest.mark.parametrize("year", [year for _, year, _, _, _ in YEARS])

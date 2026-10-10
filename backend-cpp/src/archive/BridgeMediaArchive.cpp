@@ -1,6 +1,7 @@
 #include "bridge_report/archive/BridgeMediaArchive.hpp"
 
 #include <fstream>
+#include <drogon/utils/Utilities.h>
 
 #include "bridge_report/archive/ArchivePaths.hpp"
 #include "bridge_report/archive/ImageContent.hpp"
@@ -22,8 +23,10 @@ ArchivedBridgeMediaFile archive_bridge_media(
     const auto hash = sha256_hex(content);
     if (hash.empty()) throw BridgeMediaArchiveError("unable to hash bridge media");
 
-    // 文件名带内容哈希：同一槽位换图时新旧文件不同名，删旧的不会碰到新的。
-    const auto file_name = context.slot + "-" + hash.substr(0, 12) + extension;
+    // Each upload owns its file, including repeated uploads of identical bytes.
+    // The hash verifies contents; it must not make rollback cleanup share a path.
+    const auto file_name = context.slot + "-" + hash.substr(0, 12) + "-" +
+                           drogon::utils::getUuid() + extension;
     const auto relative = build_bridge_media_relative_path(
         context.bridge_system_number, context.slot, file_name);
     const auto absolute = resolve_path_under_root(context.archive_root, relative);
@@ -32,13 +35,21 @@ ArchivedBridgeMediaFile archive_bridge_media(
     std::filesystem::create_directories(absolute.parent_path(), code);
     if (code) throw BridgeMediaArchiveError("unable to create the bridge media directory");
 
-    std::ofstream output(absolute, std::ios::binary | std::ios::trunc);
+    auto staging = absolute;
+    staging += ".uploading";
+    std::ofstream output(staging, std::ios::binary | std::ios::trunc);
     if (!output) throw BridgeMediaArchiveError("unable to open the bridge media file for writing");
     output.write(content.data(), static_cast<std::streamsize>(content.size()));
     output.close();
     if (!output) {
-        std::filesystem::remove(absolute, code);
+        std::filesystem::remove(staging, code);
         throw BridgeMediaArchiveError("unable to write the bridge media file");
+    }
+    std::filesystem::rename(staging, absolute, code);
+    if (code) {
+        std::error_code ignored;
+        std::filesystem::remove(staging, ignored);
+        throw BridgeMediaArchiveError("unable to publish the bridge media file");
     }
 
     ArchivedBridgeMediaFile archived;

@@ -12,6 +12,9 @@
 #include "bridge_report/archive/ArchivePaths.hpp"
 #include "bridge_report/db/ReportContextRepository.hpp"
 #include "bridge_report/report/LocationMapGenerator.hpp"
+#include "bridge_report/report/ReportTemplateSnapshot.hpp"
+#include "bridge_report/report/ReportToolFailure.hpp"
+#include "bridge_report/auth/PasswordHash.hpp"
 #include "bridge_report/db/ReportPreflightRepository.hpp"
 #include "bridge_report/db/ReportTemplateRepository.hpp"
 
@@ -77,6 +80,15 @@ void ReportGenerationRunner::stop() {
     if (worker_.joinable()) worker_.join();
 }
 
+void ReportGenerationRunner::prepare(const std::string& job_id) {
+    prepare_report_template_snapshot(client_,config_,job_id);
+    const auto job=db::ReportGenerationJobRepository(client_).find(job_id);
+    if (!job || !job->template_snapshot.isObject())
+        throw std::runtime_error("任务模板快照不存在。");
+    const auto checked=db::ReportPreflightRepository(client_).evaluate(job->inspection_year_id,&job->template_snapshot);
+    if (!checked || !checked->can_generate()) throw std::runtime_error("快照模板的生成前检查未通过。");
+}
+
 void ReportGenerationRunner::enqueue(std::string job_id) {
     {
         std::lock_guard<std::mutex> guard(mutex_);
@@ -116,18 +128,19 @@ Json::Value ReportGenerationRunner::call_python(
     const auto [result, response] = client->sendRequest(request, timeout_seconds);
     if (result != drogon::ReqResult::Ok || !response) {
         throw JobFailure{kJobErrorToolsUnavailable,
-                         "Python 工具服务没有响应，报告未生成。请确认它已启动。"};
+                         "Python 工具服务没有响应，报告未生成。请确认它已启动。", true};
     }
     const auto payload = response->getJsonObject();
     if (!payload) {
         throw JobFailure{kJobErrorToolsUnavailable,
-                         "Python 工具服务返回了无法解析的内容，报告未生成。"};
+                         "Python 工具服务返回了无法解析的内容，报告未生成。", true};
     }
     if (response->statusCode() != drogon::k200OK) {
         const auto code = detail_text(*payload, "code");
         const auto message = detail_text(*payload, "message");
         throw JobFailure{code.empty() ? failure_code : code,
-                         message.empty() ? "Python 工具服务返回了失败。" : message};
+                         message.empty() ? "Python 工具服务返回了失败。" : message,
+                         report_tool_writer_uncertain(*payload)};
     }
     return *payload;
 }
@@ -139,13 +152,25 @@ void ReportGenerationRunner::run(const std::string& job_id) {
 
     const auto directory = job_root_ / job_id;
     Json::Value progress(Json::objectValue);
+    bool in_tool_call=false;
 
     try {
+        if (!job->template_snapshot.isObject())
+            throw JobFailure{kJobErrorTemplateMissing,"任务缺少模板快照，请重新生成。"};
+        const auto template_path=archive::resolve_path_under_root(directory,"template.docx");
+        std::ifstream template_input(template_path,std::ios::binary);
+        if (!template_input) throw JobFailure{kJobErrorTemplateFileMissing,"任务模板副本不存在。"};
+        if (fs::file_size(template_path)>config_.template_upload_max_bytes)
+            throw JobFailure{kJobErrorTemplateFileMissing,"任务模板副本超过大小限制。"};
+        const std::string template_bytes((std::istreambuf_iterator<char>(template_input)),{});
+        if ("sha256:"+auth::sha256_hex(template_bytes)!=job->template_snapshot["checksum"].asString())
+            throw JobFailure{kJobErrorTemplateFileMissing,"任务模板副本摘要不匹配。"};
+
         // ---- 1. 数据校验（设计 §16） --------------------------------------
         jobs.advance(job_id, JobStatus::ValidatingData, progress);
 
         db::ReportPreflightRepository preflight(client_);
-        const auto checked = preflight.evaluate(job->inspection_year_id);
+        const auto checked = preflight.evaluate(job->inspection_year_id,&job->template_snapshot);
         if (!checked.has_value()) {
             throw JobFailure{kJobErrorContextUnavailable, "年度检查不存在。"};
         }
@@ -176,28 +201,12 @@ void ReportGenerationRunner::run(const std::string& job_id) {
                      << location_map.detail;
         }
 
-        db::ReportTemplateRepository templates(client_);
         db::ReportContextRepository contexts(client_, registry_);
-        const auto context = contexts.build(job->inspection_year_id);
+        const auto context = contexts.build(job->inspection_year_id,&job->template_snapshot);
         if (!context.has_value()) {
             throw JobFailure{kJobErrorContextUnavailable,
                              "组装报告上下文失败：年度检查不存在或尚未配置模板。"};
         }
-        const auto relative = templates.find_file_relative_path(context->template_id);
-        if (!relative.has_value()) {
-            throw JobFailure{kJobErrorTemplateMissing, "所选模板已不存在。"};
-        }
-        fs::path template_path;
-        try {
-            template_path = archive::resolve_path_under_root(config_.archive_root, *relative);
-        } catch (const std::exception&) {
-            throw JobFailure{kJobErrorTemplateFileMissing, "模板文件路径不合法。"};
-        }
-        if (!fs::is_regular_file(template_path)) {
-            throw JobFailure{kJobErrorTemplateFileMissing,
-                             "模板文件在归档里找不到，请重新上传模板。"};
-        }
-
         // ---- 2. 落盘上下文 ------------------------------------------------
         std::error_code error;
         fs::create_directories(directory, error);
@@ -224,8 +233,10 @@ void ReportGenerationRunner::run(const std::string& job_id) {
         assemble_body["archive_root"] =
             fs::weakly_canonical(config_.archive_root, error).generic_string();
         assemble_body["output_path"] = assembled_path.generic_string();
+        in_tool_call=true;
         const auto assembled = call_python(
             kAssemblePath, assemble_body, kAssembleTimeoutSeconds, kJobErrorAssembleFailed);
+        in_tool_call=false;
 
         progress["blocks_rendered"] = assembled["blocks_rendered"];
         progress["assemble_seconds"] = assembled["elapsed_seconds"];
@@ -242,10 +253,12 @@ void ReportGenerationRunner::run(const std::string& job_id) {
         update_body["input_path"] = assembled_path.generic_string();
         update_body["output_path"] = final_path.generic_string();
         update_body["timeout_seconds"] = config_.report_field_update_timeout_seconds;
+        in_tool_call=true;
         const auto updated = call_python(
             kFieldUpdatePath, update_body,
             config_.report_field_update_timeout_seconds + kFieldUpdateSlackSeconds,
             kJobErrorFieldUpdateFailed);
+        in_tool_call=false;
 
         progress["updater"] = updated["updater"];
         progress["page_count"] = updated["page_count"];
@@ -259,9 +272,11 @@ void ReportGenerationRunner::run(const std::string& job_id) {
         validate_body["docx_path"] = final_path.generic_string();
         validate_body["job_directory"] = directory.generic_string();
         validate_body["blocks_rendered"] = assembled["blocks_rendered"];
+        in_tool_call=true;
         const auto validated = call_python(
             kValidateOutputPath, validate_body, kValidateTimeoutSeconds,
             kJobErrorOutputInvalid);
+        in_tool_call=false;
         if (validated["status"].asString() != "valid") {
             std::string summary;
             for (const auto& issue : validated["issues"]) {
@@ -293,29 +308,27 @@ void ReportGenerationRunner::run(const std::string& job_id) {
                         config_.report_retention_hours, progress);
         LOG_INFO << "报告生成任务 " << job_id << " 完成：" << final_path.generic_string();
     } catch (const JobFailure& failure) {
-        // 失败不留文件：半成品既不能下载，也不该在盘上放着（设计 §17.1）。
-        remove_quietly(directory);
+        // 失败后禁用下载，交由台账重试清理；写入存活不确定时先阻断删除。
+        if (failure.writer_uncertain) jobs.block_cleanup(job_id,"工具写入状态不确定，确认写入停止后解除阻断。");
         jobs.mark_failed(job_id, failure.code, failure.message);
         LOG_WARN << "报告生成任务 " << job_id << " 失败 [" << failure.code << "]: "
                  << failure.message;
     } catch (const std::exception& error) {
-        remove_quietly(directory);
+        if (in_tool_call) jobs.block_cleanup(job_id,"工具调用异常，写入状态待核实。");
         jobs.mark_failed(job_id, kJobErrorUnexpected, error.what());
         LOG_ERROR << "报告生成任务 " << job_id << " 未预期失败: " << error.what();
     }
 }
 
 int ReportGenerationRunner::fail_interrupted_jobs() const {
-    const auto rows = client_->execSqlSync(
-        "update report_generation_jobs set status = 'failed', error_code = $1, "
-        " error_message = $2, finished_at = now(), temporary_file_path = null "
-        "where status in ('queued','validating_data','assembling_docx',"
-        " 'updating_fields','validating_docx') returning id::text as id",
-        std::string(kJobErrorInterrupted),
-        std::string("服务重启时这个任务还没跑完，已作废。请重新生成。"));
-    for (const auto& row : rows) {
-        remove_quietly(job_root_ / row["id"].as<std::string>());
-    }
+    client_->execSqlSync(
+        "update report_job_artifacts a set cleanup_state='blocked', last_error='服务重启，需确认工具写入已停止' "
+        "from report_generation_jobs j where a.job_id=j.id and a.cleanup_state='active' "
+        "and j.status in ('assembling_docx','updating_fields','validating_docx')");
+    const auto rows=client_->execSqlSync(
+        "update report_generation_jobs set status='failed',error_code=$1,error_message=$2,finished_at=now() "
+        "where status in ('queued','validating_data','assembling_docx','updating_fields','validating_docx') returning id",
+        std::string(kJobErrorInterrupted),std::string("服务重启时任务尚未完成，请重新生成。"));
     return static_cast<int>(rows.size());
 }
 

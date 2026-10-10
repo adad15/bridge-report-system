@@ -50,7 +50,7 @@ void register_report_generation_routes(
         register_options_handler(path);
     }
 
-    // 创建任务。立刻返回 queued，真正的生成在 runner 自己的线程里跑（设计 §17.3）。
+    // 创建任务并准备模板快照后入队；报告生成在 runner 自己的线程里跑（设计 §17.3）。
     drogon::app().registerHandler(
         jobs_path,
         [db_client, runner](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
@@ -102,8 +102,14 @@ void register_report_generation_routes(
                     return;
                 }
                 if (created.outcome == db::JobCreation::Outcome::Created) {
+                    try { runner->prepare(created.job->id); }
+                    catch (const std::exception& error) {
+                        jobs.mark_failed(created.job->id,"report_template_snapshot_failed",error.what());
+                        respond_json(callback,make_error_body("report_template_snapshot_failed",error.what()),drogon::k409Conflict);
+                        return;
+                    }
                     runner->enqueue(created.job->id);
-                    respond_json(callback, created.job->to_json(), drogon::k201Created);
+                    respond_json(callback, jobs.find(created.job->id)->to_json(), drogon::k201Created);
                     return;
                 }
                 // 已有进行中的任务：返回它而不是再起一个（设计 §17.3）。前端据此

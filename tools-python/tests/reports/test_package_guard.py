@@ -204,3 +204,83 @@ def test_uncompressed_size_limit_is_enforced(tmp_path: Path) -> None:
     assert "template_uncompressed_size_exceeded" in _codes(
         source, PackageLimits(max_total_uncompressed_bytes=16)
     )
+
+
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-16"])
+def test_prefixed_single_quoted_relationships_cannot_hide_external_images(tmp_path: Path, encoding: str) -> None:
+    source = build_template(tmp_path / "t.docx")
+    xml = f"""<?xml version='1.0' encoding='{encoding}'?>
+    <r:Relationships xmlns:r='http://schemas.openxmlformats.org/package/2006/relationships'>
+    <r:Relationship Id='r1' Type='{OFFICE_RELS}/image'
+       Target='https://example.invalid/a.png' TargetMode='External'/></r:Relationships>"""
+    hostile = _rewrite(source, tmp_path / "hostile.docx", replace={DOCUMENT_RELS_ENTRY: xml.encode(encoding)})
+    assert "template_external_relationship" in _codes(hostile)
+
+
+@pytest.mark.parametrize("payload", [
+    b"<!DOCTYPE Relationships [<!ENTITY x 'expanded'>]><Relationships>&x;</Relationships>",
+    b"<!DOCTYPE Relationships SYSTEM 'file:///not-read'><Relationships/>",
+    b"<Relationships",
+    b"<Relationships xmlns='wrong'/>",
+])
+def test_unsafe_or_malformed_relationship_xml_is_rejected(tmp_path: Path, payload: bytes) -> None:
+    source = build_template(tmp_path / "t.docx")
+    hostile = _rewrite(source, tmp_path / "hostile.docx", replace={DOCUMENT_RELS_ENTRY: payload})
+    assert "template_rels_unreadable" in _codes(hostile)
+
+
+def test_hyperlink_suffix_does_not_allow_unknown_relationship_uri(tmp_path: Path) -> None:
+    source = build_template(tmp_path / "t.docx")
+    hostile = _rewrite(source, tmp_path / "hostile.docx", replace={
+        DOCUMENT_RELS_ENTRY: _rels("<Relationship Id='r1' Type='https://unknown.invalid/hyperlink' Target='https://outside.invalid' TargetMode='External'/>")
+    })
+    assert "template_external_relationship" in _codes(hostile)
+
+
+@pytest.mark.parametrize("target", ["../../outside.xml", "%2e%2e/%2e%2e/outside.xml", "file:///outside.xml"])
+def test_internal_relationship_cannot_escape_package(tmp_path: Path, target: str) -> None:
+    source = build_template(tmp_path / "t.docx")
+    hostile = _rewrite(source, tmp_path / "hostile.docx", replace={
+        DOCUMENT_RELS_ENTRY: _rels(f"<Relationship Id='r1' Type='{OFFICE_RELS}/image' Target='{target}'/>")
+    })
+    assert "template_relationship_rejected" in _codes(hostile)
+
+
+def test_duplicate_zip_entries_are_rejected_before_read(tmp_path: Path, monkeypatch) -> None:
+    source = build_template(tmp_path / "t.docx")
+    with pytest.warns(UserWarning, match="Duplicate name"):
+        with zipfile.ZipFile(source, "a") as archive:
+            archive.writestr(DOCUMENT_RELS_ENTRY, b"<bad/>")
+    monkeypatch.setattr(zipfile.ZipFile, "open", lambda *args, **kwargs: pytest.fail("rejected ZIP payload was read"))
+    assert "template_duplicate_entry" in _codes(source)
+
+
+@pytest.mark.parametrize("limits", [
+    PackageLimits(max_entry_count=1),
+    PackageLimits(max_entry_uncompressed_bytes=16),
+    PackageLimits(max_total_uncompressed_bytes=16),
+])
+def test_directory_limits_reject_before_payload_reads(tmp_path: Path, monkeypatch, limits: PackageLimits) -> None:
+    source = build_template(tmp_path / "t.docx")
+    monkeypatch.setattr(zipfile.ZipFile, "open", lambda *args, **kwargs: pytest.fail("rejected ZIP payload was read"))
+    assert not inspect_package(source, limits).is_safe
+
+
+def test_content_types_dtd_is_rejected(tmp_path: Path) -> None:
+    source = build_template(tmp_path / "t.docx")
+    hostile = _rewrite(source, tmp_path / "hostile.docx", replace={
+        "[Content_Types].xml": b"<!DOCTYPE Types [<!ENTITY x 'macroEnabled'>]><Types>&x;</Types>"
+    })
+    assert "template_content_types_invalid" in _codes(hostile)
+
+
+def test_legitimate_prefixed_utf16_hyperlink_is_supported(tmp_path: Path) -> None:
+    source = build_template(tmp_path / "t.docx")
+    xml = f"""<?xml version='1.0' encoding='utf-16'?>
+    <p:Relationships xmlns:p='http://schemas.openxmlformats.org/package/2006/relationships'>
+    <p:Relationship Id='r1' Type='{OFFICE_RELS}/hyperlink'
+       Target='https://example.invalid/' TargetMode='External'/></p:Relationships>"""
+    linked = _rewrite(source, tmp_path / "linked.docx", replace={DOCUMENT_RELS_ENTRY: xml.encode("utf-16")})
+    inspection = inspect_package(linked)
+    assert inspection.is_safe
+    assert [issue.code for issue in inspection.issues] == ["template_external_hyperlink"]

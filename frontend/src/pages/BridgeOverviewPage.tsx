@@ -130,7 +130,6 @@ export function BridgeOverviewPage() {
   const navigate = useNavigate();
   const { token } = theme.useToken();
   const stacked = Grid.useBreakpoint().xl === false;
-  const { pageOffset } = useShellMetrics();
 
   // 四个档案环节齐了就是 100%。这个比例只在上面的指标行里出一次；
   // 原来还有一张把它展开写一遍的卡片，那块位置现在给了地理位置。

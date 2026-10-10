@@ -40,6 +40,8 @@ InspectionReportSettingsRepository::find(const std::string& inspection_year_id) 
     const auto year_rows = client_->execSqlSync(
         std::string(
             "select iy.id::text as id, iy.inspection_year, "
+            " iy.inspection_date::text as inspection_date, iy.report_number, "
+            " iy.project_name, iy.inspection_org, "
             " iy.report_comparison_inspection_id::text as comparison_id, "
             " cmp.inspection_year as comparison_year, "
             " exists(select 1 from inspection_years mine join inspection_years other on ")
@@ -55,6 +57,10 @@ InspectionReportSettingsRepository::find(const std::string& inspection_year_id) 
     report::InspectionReportSettings settings;
     settings.inspection_year_id = year_rows[0]["id"].as<std::string>();
     settings.inspection_year = year_rows[0]["inspection_year"].as<int>();
+    settings.inspection_date = optional_text(year_rows[0], "inspection_date");
+    settings.report_number = optional_text(year_rows[0], "report_number");
+    settings.project_name = optional_text(year_rows[0], "project_name");
+    settings.inspection_org = optional_text(year_rows[0], "inspection_org");
     settings.comparison_inspection_id = optional_text(year_rows[0], "comparison_id");
     if (!year_rows[0]["comparison_year"].isNull()) {
         settings.comparison_year = year_rows[0]["comparison_year"].as<int>();
@@ -230,6 +236,17 @@ report::SettingsWriteStatus InspectionReportSettingsRepository::save(
             "update inspection_years set report_comparison_inspection_id=nullif($2,'')::uuid, "
             " updated_at=now() where id=$1::uuid",
             inspection_year_id, input.comparison_inspection_id.value_or(""));
+
+        // 封面字段与年度绑定；旧客户端不发送这些字段时保持原值。
+        if (input.cover_fields_provided) {
+            tx->execSqlSync(
+                "update inspection_years set inspection_date=nullif($2,'')::date, "
+                " report_number=nullif($3,''), project_name=nullif($4,''), "
+                " inspection_org=nullif($5,''), updated_at=now() where id=$1::uuid",
+                inspection_year_id, input.inspection_date.value_or(""),
+                input.report_number.value_or(""), input.project_name.value_or(""),
+                input.inspection_org.value_or(""));
+        }
 
         // 人员和设备是全量覆盖：增量合并会让"取消某个角色"变得没法表达。
         tx->execSqlSync(

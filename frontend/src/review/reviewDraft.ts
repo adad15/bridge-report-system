@@ -4,36 +4,13 @@ import type {
   PhotoCandidate,
   PhotoReference,
   ReviewStatus,
-  StructurePart,
 } from "../contracts/annualInspection";
-import type { RatingTreeMatchMethod } from "../contracts/resolution";
 import { isHumanAcknowledgeableWarning } from "./defectWarnings";
 import { parseMeasurements } from "./measurementParser";
 
 // useReducer 草稿 reducer：所有分支都必须返回新对象/新数组，绝不原地修改传入的 state
 // （测试会断言原 state 引用未被改动）。只读字段 candidate_id/source_ref/confidence/
 // warnings/original_caption（模块 05 §8.1/§8.2）没有对应的 action，本文件不提供修改它们的入口。
-
-export interface DefectComponentSelection {
-  componentName: string;
-  componentNumber: string;
-  bridgeComponentId: string;
-  standardComponentCategoryId: string;
-  resolvedStructurePart: StructurePart;
-  inventoryRevisionId: string;
-}
-
-export interface ManualDefectInput extends DefectComponentSelection {
-  defectLocation: string;
-  defectType: string;
-  ratingTreeVersionId: string;
-  ratingTreeNodeId: string;
-  defectDescription: string;
-  defectScale?: number | null;
-  isScoring: boolean;
-}
-
-export type CandidateIdFactory = () => string;
 
 // 数值字段的 value 一律要求 number，字符串字段一律要求 string——把 field↔value 的合法组合
 // 编译期锁死（模块 05 §8.1/§8.3 可编辑字段白名单）。HTML input 拿到的是字符串，由调用方
@@ -186,26 +163,6 @@ function applyDefectContentEdit(defect: DefectCandidate, action: EditDefectConte
   }
 }
 
-function defaultCandidateIdFactory(): string {
-  return `manual_defect_${crypto.randomUUID()}`;
-}
-
-function nextUnusedCandidateId(
-  state: BridgeAnnualInspectionData,
-  factory: CandidateIdFactory,
-  issuedCandidateIds: Set<string>,
-): string {
-  const existing = new Set(state.defects.map((defect) => defect.candidate_id));
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const candidateId = factory();
-    if (candidateId.startsWith("manual_defect_") && !existing.has(candidateId) && !issuedCandidateIds.has(candidateId)) {
-      issuedCandidateIds.add(candidateId);
-      return candidateId;
-    }
-  }
-  throw new Error("无法生成唯一的人工病害编号");
-}
-
 function applyRatingTreeSelection(
   defect: DefectCandidate,
   selection: {
@@ -239,11 +196,9 @@ function applyRatingTreeSelection(
   };
 }
 
-function reduceReviewDraft(
+export function reviewDraftReducer(
   state: BridgeAnnualInspectionData,
   action: ReviewDraftAction,
-  candidateIdFactory: CandidateIdFactory,
-  issuedCandidateIds: Set<string>,
 ): BridgeAnnualInspectionData {
   switch (action.type) {
     case "replace_draft": {
@@ -556,11 +511,3 @@ function reduceReviewDraft(
     }
   }
 }
-
-export function createReviewDraftReducer(candidateIdFactory: CandidateIdFactory = defaultCandidateIdFactory) {
-  const issuedCandidateIds = new Set<string>();
-  return (state: BridgeAnnualInspectionData, action: ReviewDraftAction): BridgeAnnualInspectionData =>
-    reduceReviewDraft(state, action, candidateIdFactory, issuedCandidateIds);
-}
-
-export const reviewDraftReducer = createReviewDraftReducer();

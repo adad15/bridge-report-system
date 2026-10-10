@@ -747,3 +747,61 @@ def test_parse_word_import_ignores_rating_and_deduction_columns(tmp_path: Path) 
     assert all("defect_deduction" not in defect for defect in dumped["defects"])
     assert [defect.component_number for defect in response.data.defects] == ["2-1#板", "2-1#板"]
     assert [defect.defect_scale for defect in response.data.defects] == [2, 2]
+
+
+@pytest.mark.parametrize("content", [bytes.fromhex("d0cf11e0a1b11ae1"), b"", b"not a document"])
+def test_parse_word_endpoint_rejects_non_docx_with_actionable_error(tmp_path: Path, content: bytes) -> None:
+    request = valid_request(tmp_path)
+    request.docx_path.write_bytes(content)
+
+    async def post_parse():
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            return await client.post("/imports/word/parse", json=request.model_dump(mode="json"))
+
+    response = asyncio.run(post_parse())
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "docx_open_failed"
+    assert "另存为" in response.json()["detail"]["message"]
+    assert request.docx_path.read_bytes() == content
+    assert list(request.temporary_photo_output_dir.iterdir()) == []
+
+
+@pytest.mark.parametrize("legacy_mode", ["vml", "drawingml_with_vml_fallback"])
+def test_legacy_photos_keep_caption_order_without_duplicate_fallback(tmp_path: Path, legacy_mode: str) -> None:
+    from xml.etree import ElementTree as ET
+
+    image_path = tmp_path / "photo.png"
+    write_png(image_path)
+    request = valid_request(tmp_path)
+    create_sample_docx(request.docx_path, image_path)
+    baseline = parse_word_import(request)
+    with zipfile.ZipFile(request.docx_path) as archive:
+        members = {name: archive.read(name) for name in archive.namelist()}
+    root = ET.fromstring(members["word/document.xml"])
+    parents = {child: parent for parent in root.iter() for child in parent}
+    a = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+    r = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+    mc = "{http://schemas.openxmlformats.org/markup-compatibility/2006}"
+    for blip in list(root.iter(a + "blip")):
+        parent = parents[blip]
+        index = list(parent).index(blip)
+        legacy = ET.Element("{urn:schemas-microsoft-com:vml}imagedata", {r + "id": blip.attrib[r + "embed"]})
+        parent.remove(blip)
+        if legacy_mode == "vml":
+            replacement = legacy
+        else:
+            replacement = ET.Element(mc + "AlternateContent")
+            ET.SubElement(replacement, mc + "Choice", {"Requires": "a"}).append(blip)
+            ET.SubElement(replacement, mc + "Fallback").append(legacy)
+        parent.insert(index, replacement)
+    members["word/document.xml"] = ET.tostring(root)
+    with zipfile.ZipFile(request.docx_path, "w") as archive:
+        for name, content in members.items():
+            archive.writestr(name, content)
+    result = parse_word_import(request)
+    assert result.temporary_photo_files == baseline.temporary_photo_files
+    assert [(p.photo_number, p.linked_defect_candidate_id) for p in result.data.photos] == [
+        (p.photo_number, p.linked_defect_candidate_id) for p in baseline.data.photos
+    ]
+    assert result.data.photos

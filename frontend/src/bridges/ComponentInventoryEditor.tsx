@@ -166,7 +166,6 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
   const [groupEntries, setGroupEntries] = useState<InventoryGroupEntriesResponse | null>(null);
   const [groupEntriesLoading, setGroupEntriesLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<InventorySearchResponse | null>(null);
-  const [searchLoading, setSearchLoading] = useState(false);
   // 写操作成功后自增，触发当前分组页与搜索结果重取。
   const [refreshToken, setRefreshToken] = useState(0);
   const revision = summary?.revision ?? null;
@@ -286,14 +285,12 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
     if (!revision || !term) { setSearchResults(null); return; }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      setSearchLoading(true);
       searchInventoryEntries(
         backendBaseUrl, revision.id, term, kMaxSearchResults, controller.signal)
         .then((next) => { if (!controller.signal.aborted) setSearchResults(next); })
         .catch((caught) => {
           if (!controller.signal.aborted) setError(componentInventoryErrorMessage(caught));
-        })
-        .finally(() => { if (!controller.signal.aborted) setSearchLoading(false); });
+        });
     }, kSearchDebounceMs);
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [revision?.id, search, refreshToken]);

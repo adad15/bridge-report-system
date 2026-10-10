@@ -1,4 +1,7 @@
 #include <cstdlib>
+#include <chrono>
+#include <filesystem>
+#include <drogon/utils/Utilities.h>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -6,6 +9,7 @@
 #include "bridge_report/config/AppConfig.hpp"
 #include "bridge_report/db/BridgeMediaRepository.hpp"
 #include "bridge_report/db/DbClientFactory.hpp"
+#include "bridge_report/report/BridgeMediaStore.hpp"
 
 namespace {
 
@@ -32,6 +36,8 @@ protected:
             GTEST_SKIP() << "BRIDGE_REPORT_TEST_DATABASE_URL 未设置，跳过需要真实数据库的集成测试";
         }
         client_ = shared_test_client();
+        archive_root_ = std::filesystem::temp_directory_path() /
+            ("bridge-media-store-" + drogon::utils::getUuid());
         bridge_id_ = client_->execSqlSync(
             "insert into bridges (bridge_name) values ('桥梁图件测试桥') returning id::text as id")
             [0]["id"].as<std::string>();
@@ -39,6 +45,14 @@ protected:
 
     void TearDown() override {
         if (client_ == nullptr) return;
+        if (has_trigger_) {
+            client_->execSqlSync("drop trigger p1_media_commit on bridge_media");
+            client_->execSqlSync("drop function p1_media_commit()");
+        }
+        if (archive_root_.parent_path() == std::filesystem::temp_directory_path()
+            && archive_root_.filename().string().rfind("bridge-media-store-", 0) == 0) {
+            std::filesystem::remove_all(archive_root_);
+        }
         client_->execSqlSync("delete from bridge_media where bridge_id=$1::uuid", bridge_id_);
         client_->execSqlSync("delete from archived_files where bridge_id=$1::uuid", bridge_id_);
         client_->execSqlSync("delete from bridges where id=$1::uuid", bridge_id_);
@@ -60,9 +74,98 @@ protected:
         return value;
     }
 
+    void commit_trigger(bool fail) {
+        client_->execSqlSync(
+            std::string("create function p1_media_commit() returns trigger language plpgsql as $$ begin ") +
+            (fail ? "raise exception 'simulated deferred commit failure'; "
+                  : "perform pg_sleep(0.2); ") +
+            "return null; end $$");
+        client_->execSqlSync(
+            "create constraint trigger p1_media_commit after insert or update or delete on bridge_media "
+            "deferrable initially deferred for each row execute function p1_media_commit()");
+        has_trigger_ = true;
+    }
+
+    bridge_report::archive::ArchivedBridgeMediaFile archive() {
+        // The archive only needs the PNG signature; these tests do not decode images.
+        const std::string bytes("\x89PNG\r\n\x1a\n", 8);
+        return bridge_report::archive::archive_bridge_media(bytes, "test.png",
+            {archive_root_, "P1-TEST", "LOCATION_MAP", 0});
+    }
+
+    bridge_report::report::StoredBridgeMedia store(
+        const bridge_report::archive::ArchivedBridgeMediaFile& file,
+        const std::string& source = "人工上传") {
+        return bridge_report::report::store_bridge_media(
+            client_, archive_root_, bridge_id_, "LOCATION_MAP", file, source);
+    }
+
+    std::filesystem::path archive_root_;
+    bool has_trigger_{false};
     drogon::orm::DbClientPtr client_;
     std::string bridge_id_;
 };
+
+TEST_F(BridgeMediaRepositoryTest, SaveWaitsForDeferredCommitBeforeReturning) {
+    commit_trigger(false);
+    const auto started = std::chrono::steady_clock::now();
+    const auto saved = repository().save(bridge_id_, input("LOCATION_MAP", "map.png"));
+    EXPECT_EQ(saved.status, BridgeMediaWriteStatus::Ok);
+    EXPECT_GE(std::chrono::steady_clock::now() - started, std::chrono::milliseconds(180));
+}
+
+TEST_F(BridgeMediaRepositoryTest, RemoveWaitsForDeferredCommitBeforeReturning) {
+    repository().save(bridge_id_, input("LOCATION_MAP", "map.png"));
+    commit_trigger(false);
+    const auto started = std::chrono::steady_clock::now();
+    EXPECT_TRUE(repository().remove(bridge_id_, "LOCATION_MAP").has_value());
+    EXPECT_GE(std::chrono::steady_clock::now() - started, std::chrono::milliseconds(180));
+}
+
+TEST_F(BridgeMediaRepositoryTest, CommitFailureRetainsOldAndNewPhysicalFiles) {
+    const auto old = archive();
+    ASSERT_EQ(store(old).status, BridgeMediaWriteStatus::Ok);
+    commit_trigger(true);
+    const auto next = archive();
+    EXPECT_THROW(store(next), bridge_report::db::BridgeMediaCommitUncertain);
+    EXPECT_TRUE(std::filesystem::exists(archive_root_ / old.storage_relative_path));
+    EXPECT_TRUE(std::filesystem::exists(archive_root_ / next.storage_relative_path));
+    const auto rows = repository().list(bridge_id_);
+    ASSERT_EQ(rows.size(), 1u);
+    EXPECT_EQ(rows[0].storage_relative_path, old.storage_relative_path);
+}
+
+TEST_F(BridgeMediaRepositoryTest, RemoveCommitFailureDoesNotReportSuccess) {
+    const auto old = archive();
+    ASSERT_EQ(store(old).status, BridgeMediaWriteStatus::Ok);
+    commit_trigger(true);
+    EXPECT_THROW(repository().remove(bridge_id_, "LOCATION_MAP"),
+                 bridge_report::db::BridgeMediaCommitUncertain);
+    ASSERT_EQ(repository().list(bridge_id_).size(), 1u);
+    EXPECT_TRUE(std::filesystem::exists(archive_root_ / old.storage_relative_path));
+}
+
+TEST_F(BridgeMediaRepositoryTest, SameContentRollbackRemovesOnlyNewFile) {
+    const auto old = archive();
+    ASSERT_EQ(store(old).status, BridgeMediaWriteStatus::Ok);
+    const auto next = archive();
+    ASSERT_NE(old.storage_relative_path, next.storage_relative_path);
+    EXPECT_ANY_THROW(store(next, "invalid-source"));
+    EXPECT_TRUE(std::filesystem::exists(archive_root_ / old.storage_relative_path));
+    EXPECT_FALSE(std::filesystem::exists(archive_root_ / next.storage_relative_path));
+    const auto rows = repository().list(bridge_id_);
+    ASSERT_EQ(rows.size(), 1u);
+    EXPECT_EQ(rows[0].storage_relative_path, old.storage_relative_path);
+}
+
+TEST_F(BridgeMediaRepositoryTest, SameContentSuccessfulReplacementRemovesOldFile) {
+    const auto old = archive();
+    ASSERT_EQ(store(old).status, BridgeMediaWriteStatus::Ok);
+    const auto next = archive();
+    ASSERT_EQ(store(next).status, BridgeMediaWriteStatus::Ok);
+    EXPECT_FALSE(std::filesystem::exists(archive_root_ / old.storage_relative_path));
+    EXPECT_TRUE(std::filesystem::exists(archive_root_ / next.storage_relative_path));
+}
 
 TEST_F(BridgeMediaRepositoryTest, SavesAFileAndListsIt) {
     const auto outcome = repository().save(bridge_id_, input("LOCATION_MAP", "location.png"));

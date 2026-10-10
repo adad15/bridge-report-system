@@ -280,6 +280,37 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
     expect(details.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("shows modified records in the header without losing their distinct review status", async () => {
+    const response = reviewResponse();
+    response.parsed_result.defects[0].review_status = "已修改";
+    response.parsed_result.defects[0].group_review_status = "已确认";
+    vi.mocked(fetchReview).mockResolvedValue(response);
+    await renderEditableReview();
+    expect(screen.getByRole("banner")).toHaveTextContent(/已修改\s*1/);
+  });
+
+  it("updates the header immediately after confirmation without reloading", async () => {
+    vi.mocked(fetchConfirmedAssessment).mockResolvedValue(confirmedAssessmentResponse());
+    vi.mocked(runPreflight).mockResolvedValue({
+      can_confirm: true, requires_revision_confirmation: false, blocking_errors: [], warnings: [],
+    });
+    vi.mocked(confirmImport).mockResolvedValue({
+      confirmed: true, inspection_year_id: "year-1", version_number: 1, assessment_run_id: "assessment-1",
+      written: { defect_observations: 1, defect_measurements: 0, defect_photos: 1,
+        condition_ratings: 0, assessment_component_results: 0, assessment_part_results: 0,
+        assessment_control_results: 0 },
+    });
+    await renderEditableReview();
+    expect(within(screen.getByRole("banner")).getByText("待校对", { exact: true })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "入库前检查" }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    fireEvent.click(screen.getByRole("button", { name: "确认年度事实入库" }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(within(screen.getByRole("banner")).queryByText("待校对", { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole("banner")).toHaveTextContent("已确认");
+    expect(fetchReview).toHaveBeenCalledTimes(1);
+  });
+
   it("clears a stale successful preflight message when confirmation fails", async () => {
     const passedPreflight: PreflightResponse = {
       can_confirm: true,

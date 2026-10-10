@@ -26,12 +26,15 @@ struct BridgeLocation {
     std::optional<double> latitude;
     /// 当前地理位置图的来源；没有图时为空。
     std::optional<std::string> existing_source;
+    std::optional<std::string> existing_file;
+    std::int64_t revision{0};
 };
 
 std::optional<BridgeLocation> find_location(
     const drogon::orm::DbClientPtr& db_client, const std::string& inspection_year_id) {
     const auto rows = db_client->execSqlSync(
-        "select b.id::text as bridge_id, b.system_number, b.bridge_name, b.longitude, b.latitude, "
+        "select b.id::text as bridge_id, b.system_number, b.bridge_name, b.longitude, b.latitude,b.location_map_revision, "
+        "(select m.archived_file_id::text from bridge_media m where m.bridge_id=b.id and m.slot=$2) as file_id, "
         "  (select m.source from bridge_media m where m.bridge_id = b.id and m.slot = $2) as source "
         "from inspection_years iy join bridges b on b.id = iy.bridge_id "
         "where iy.id = $1::uuid",
@@ -45,6 +48,8 @@ std::optional<BridgeLocation> find_location(
     if (!row["longitude"].isNull()) location.longitude = row["longitude"].as<double>();
     if (!row["latitude"].isNull()) location.latitude = row["latitude"].as<double>();
     if (!row["source"].isNull()) location.existing_source = row["source"].as<std::string>();
+    if (!row["file_id"].isNull()) location.existing_file=row["file_id"].as<std::string>();
+    location.revision=row["location_map_revision"].as<std::int64_t>();
     return location;
 }
 
@@ -83,6 +88,7 @@ StaticMapFetcher python_static_map_fetcher(const config::AppConfig& config) {
 
 std::string location_map_status_text(LocationMapStatus status) {
     switch (status) {
+        case LocationMapStatus::InputChanged: return "input_changed";
         case LocationMapStatus::Generated: return "generated";
         case LocationMapStatus::KeptManual: return "kept_manual";
         case LocationMapStatus::NoCoordinates: return "no_coordinates";
@@ -135,7 +141,10 @@ LocationMapOutcome refresh_location_map(
         const auto archived = archive::archive_bridge_media(
             image, location->bridge_name + "-地理位置图", context);
         const auto stored = store_bridge_media(db_client, config.archive_root, location->bridge_id,
-                                               kLocationMapSlot, archived, kGeneratedSource);
+                                               kLocationMapSlot, archived, kGeneratedSource,
+                                               AutomaticMapCondition{*location->longitude,*location->latitude,location->revision,location->existing_file});
+        if (stored.status==BridgeMediaWriteStatus::InputChanged)
+            return {LocationMapStatus::InputChanged,"取图期间坐标或图件已变化，保留当前档案内容。"};
         if (stored.status != BridgeMediaWriteStatus::Ok) {
             return failed(*location, "地理位置图没能存进档案。");
         }

@@ -1,0 +1,12 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "local-vs2022",
+      "inherits": "vs2022-x64-debug",
+      "cacheVariables": {
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/build/local-dependencies"
+      }
+    }
+  ]
+}

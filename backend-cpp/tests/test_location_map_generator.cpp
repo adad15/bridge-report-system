@@ -181,4 +181,35 @@ TEST_F(LocationMapGeneratorTest, RejectsAResponseThatIsNotAnImage) {
               LocationMapStatus::FailedNone);
 }
 
+
+TEST_F(LocationMapGeneratorTest, ManualUploadDuringFetchIsNeverOverwritten) {
+    const auto outcome=refresh_location_map(client_,config_,year_id_,[this](const Json::Value&) {
+        insert_location_map("人工上传");
+        return tiny_png();
+    });
+    EXPECT_EQ(outcome.status,LocationMapStatus::InputChanged);
+    EXPECT_EQ(stored_source(),"人工上传");
+    size_t files=0;
+    for (const auto& entry:fs::recursive_directory_iterator(archive_root_))
+        if (entry.is_regular_file()) ++files;
+    EXPECT_EQ(files,0u) << "Only the new uncommitted generated file must be removed";
+}
+TEST_F(LocationMapGeneratorTest, CoordinateChangeDuringFetchDiscardsStaleImage) {
+    const auto outcome=refresh_location_map(client_,config_,year_id_,[this](const Json::Value&) {
+        client_->execSqlSync("update bridges set longitude=122 where id=$1::uuid",bridge_id_);
+        return tiny_png();
+    });
+    EXPECT_EQ(outcome.status,LocationMapStatus::InputChanged);
+    EXPECT_TRUE(stored_source().empty());
+}
+TEST_F(LocationMapGeneratorTest, UploadThenDeleteDuringFetchStillInvalidatesTheRequest) {
+    const auto outcome=refresh_location_map(client_,config_,year_id_,[this](const Json::Value&) {
+        insert_location_map("人工上传");
+        client_->execSqlSync("delete from bridge_media where bridge_id=$1::uuid",bridge_id_);
+        return tiny_png();
+    });
+    EXPECT_EQ(outcome.status,LocationMapStatus::InputChanged);
+    EXPECT_TRUE(stored_source().empty());
+}
+
 }  // namespace

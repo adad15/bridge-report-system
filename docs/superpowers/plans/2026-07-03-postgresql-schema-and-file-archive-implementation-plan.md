@@ -1,5 +1,7 @@
 # PostgreSQL Schema and File Archive Implementation Plan
 
+> **2026-09-17 文档状态同步：** 实施计划历史记录。步骤、示例代码和勾选状态对应当时版本，不等于当前待办，也不应直接重放旧实现。 当前能力见 [项目上下文](../../../PROJECT_CONTEXT.md)；本轮修复与待办见 [审查修复状态](../../2026-09-17-review-remediation-status.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. This project currently uses Inline Execution, not Subagent-Driven execution.
 
 **Goal:** Build module 02: the PostgreSQL core schema, file archive path rules, system number helpers, PostgreSQL config parsing, and a repeatable database smoke test for bridge yearly inspection facts.
