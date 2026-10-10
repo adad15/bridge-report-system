@@ -1,4 +1,4 @@
-import { Alert, AutoComplete, Divider, Form, Input, Modal } from "antd";
+import { Alert, AutoComplete, Button, Divider, Form, Input, Modal } from "antd";
 import { useState } from "react";
 
 import { type StandardDocument, createStandardDocument, standardDocumentsError, updateStandardDocument } from "../api/standardDocumentsApi";
@@ -24,18 +24,35 @@ interface DocumentFormValues extends Partial<VersionFormValues> {
 
 interface Props {
   mode: StandardDocumentFormMode;
+  /** 库里已有的规范，用来查重名。 */
+  documents?: StandardDocument[];
   onClose: () => void;
   onSaved: (document: StandardDocument) => void;
+  /** 新增时撞上已有规范：转去给它上传新版本，带上已填的版本信息和 PDF。 */
+  onSwitchToAddVersion?: (document: StandardDocument, values: Partial<VersionFormValues>) => void;
 }
 
 /** 新增规范（连同首个版本和 PDF 一次提交）与编辑规范信息（设计 §5.7）。 */
-export function StandardDocumentFormModal({ mode, onClose, onSaved }: Props) {
+export function StandardDocumentFormModal({ mode, documents = [], onClose, onSaved, onSwitchToAddVersion }: Props) {
   const [form] = Form.useForm<DocumentFormValues>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initialValues: Partial<DocumentFormValues> = mode.type === "create"
     ? { kind: "official", issuer: DEFAULT_ISSUER }
     : { name: mode.document.name, english_name: mode.document.english_name ?? undefined, category: mode.document.category };
+  // 前端先查重名：撞了就不提交，免得把几十 MB 的 PDF 传上去才被退回来。
+  const sameNameAs = (name: string | undefined) => {
+    const trimmed = name?.trim();
+    if (!trimmed) return undefined;
+    return documents.find((item) => item.name === trimmed && (mode.type === "create" || item.id !== mode.document.id));
+  };
+  const typedName = Form.useWatch("name", form);
+  const existing = mode.type === "create" ? sameNameAs(typedName) : undefined;
+
+  function switchToAddVersion(target: StandardDocument) {
+    const { name, english_name, category, ...version } = form.getFieldsValue(true) as DocumentFormValues;
+    onSwitchToAddVersion?.(target, version);
+  }
 
   async function submit() {
     let values: DocumentFormValues;
@@ -84,10 +101,24 @@ export function StandardDocumentFormModal({ mode, onClose, onSaved }: Props) {
         <Form.Item
           label="规范名称"
           name="name"
-          rules={[{ required: true, whitespace: true, message: "请填写规范名称" }, { max: 100, message: "不超过 100 个字" }]}
+          rules={[
+            { required: true, whitespace: true, message: "请填写规范名称" },
+            { max: 100, message: "不超过 100 个字" },
+            { validator: async (_, value: string | undefined) => { if (sameNameAs(value)) throw new Error("已有同名规范"); } },
+          ]}
         >
           <Input placeholder="如：公路桥梁技术状况评定标准" />
         </Form.Item>
+        {existing && onSwitchToAddVersion ? (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={`「${existing.name}」已在库里。`}
+            description="新版本请上传到这部规范下，已填的版本信息和选好的 PDF 会一并带过去。"
+            action={<Button size="small" type="primary" onClick={() => switchToAddVersion(existing)}>改为上传新版本</Button>}
+          />
+        ) : null}
         <Form.Item label="英文名称" name="english_name" rules={[{ max: 200, message: "不超过 200 个字" }]}>
           <Input />
         </Form.Item>

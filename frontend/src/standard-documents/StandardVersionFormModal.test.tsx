@@ -32,6 +32,26 @@ describe("StandardVersionFormModal", () => {
     expect(screen.queryByLabelText("实施日期")).not.toBeInTheDocument();
   });
 
+  // 从「新增规范」转过来：已填的照搬，没填的仍按上一版补。
+  it("keeps what was typed when switched over from adding a standard", () => {
+    render(
+      <StandardVersionFormModal
+        mode={{
+          type: "add",
+          document: h21Document,
+          initialValues: { label: "2026 版", code: "JTG/T 5230—2026", kind: "official", nature: "", issuer: undefined },
+        }}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("版本名称")).toHaveValue("2026 版");
+    expect(screen.getByLabelText("标准编号")).toHaveValue("JTG/T 5230—2026");
+    expect(screen.getByLabelText("标准性质")).toHaveValue("推荐性行业标准");
+    expect(screen.getByLabelText("发布部门")).toHaveValue("中华人民共和国交通运输部");
+  });
+
   it("keeps a replacement-derived withdrawal date out of the edit form", async () => {
     vi.mocked(updateStandardVersion).mockResolvedValue(maintenanceDocument);
     const onSaved = vi.fn();

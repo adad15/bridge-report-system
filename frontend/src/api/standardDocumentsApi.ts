@@ -192,7 +192,7 @@ export function standardDocumentsError(error: unknown): string {
     forbidden: "只有管理员可以维护规范。",
     standard_file_not_pdf: "只能上传 PDF 文件。",
     standard_file_required: "请选择要上传的 PDF 文件。",
-    standard_document_name_taken: "已有同名规范。",
+    standard_document_name_taken: "已有同名规范。要给它加版本，请选中这部规范后点「上传新版本」。",
     standard_version_label_taken: "这部规范里已有同名版本。",
     standard_version_effective_date_taken: "这部规范里已有同一实施日期的正式版本。",
     standard_document_not_found: "规范不存在或已被删除，请刷新。",

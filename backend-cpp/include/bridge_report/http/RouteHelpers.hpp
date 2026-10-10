@@ -1,5 +1,8 @@
 #pragma once
 
+#include <algorithm>
+#include <charconv>
+#include <cstdint>
 #include <functional>
 #include <regex>
 #include <sstream>
@@ -167,6 +170,72 @@ inline std::string content_disposition(
 inline std::string attachment_disposition(
     const std::string& filename, const std::string& ascii_fallback = "download") {
     return content_disposition("attachment", filename, ascii_fallback);
+}
+
+/// 单段 Range 请求的解析结论（RFC 9110 §14）。
+struct ByteRange {
+    enum class Kind {
+        Whole,          ///< 没带 Range、写法不认识或一次要多段：回整份文件（200），RFC 允许服务器这样做。
+        Partial,        ///< 回 [offset, offset + length) 这一段（206）。
+        Unsatisfiable,  ///< 起点在文件末尾之后：回 416，带 `Content-Range: bytes */<size>`。
+    };
+    Kind kind{Kind::Whole};
+    std::uint64_t offset{0};
+    std::uint64_t length{0};
+};
+
+/**
+ * @brief 解析 `Range: bytes=a-b`、`bytes=a-`、`bytes=-n`，只认单段。
+ *
+ * 浏览器的 PDF 阅读器靠它边下边看：先取文件尾的交叉引用表，再按页取。
+ * drogon 的 newFileResponse 不会替我们看这个头，得自己解析后把 offset / length 传进去。
+ */
+inline ByteRange parse_byte_range(std::string_view header, std::uint64_t size) {
+    const auto trim = [](std::string_view text) {
+        while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) text.remove_prefix(1);
+        while (!text.empty() && (text.back() == ' ' || text.back() == '\t')) text.remove_suffix(1);
+        return text;
+    };
+    const auto parse_number = [](std::string_view text) -> std::optional<std::uint64_t> {
+        if (text.empty()) return std::nullopt;
+        std::uint64_t value = 0;
+        const auto* end = text.data() + text.size();
+        const auto [stop, error] = std::from_chars(text.data(), end, value);
+        if (error != std::errc{} || stop != end) return std::nullopt;
+        return value;
+    };
+
+    header = trim(header);
+    const auto equals = header.find('=');
+    if (equals == std::string_view::npos) return {};
+    std::string unit(trim(header.substr(0, equals)));
+    std::transform(unit.begin(), unit.end(), unit.begin(),
+                   [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+    const auto spec = trim(header.substr(equals + 1));
+    if (unit != "bytes" || spec.find(',') != std::string_view::npos) return {};
+    const auto dash = spec.find('-');
+    if (dash == std::string_view::npos) return {};
+    const auto first_text = trim(spec.substr(0, dash));
+    const auto last_text = trim(spec.substr(dash + 1));
+    const ByteRange unsatisfiable{ByteRange::Kind::Unsatisfiable};
+
+    if (first_text.empty()) {  // bytes=-n：最后 n 个字节
+        const auto suffix = parse_number(last_text);
+        if (!suffix) return {};
+        if (*suffix == 0 || size == 0) return unsatisfiable;
+        const auto length = (std::min)(*suffix, size);
+        return {ByteRange::Kind::Partial, size - length, length};
+    }
+    const auto first = parse_number(first_text);
+    if (!first) return {};
+    std::uint64_t last = size == 0 ? 0 : size - 1;
+    if (!last_text.empty()) {
+        const auto requested = parse_number(last_text);
+        if (!requested || *requested < *first) return {};
+        last = (std::min)(*requested, last);
+    }
+    if (*first >= size) return unsatisfiable;
+    return {ByteRange::Kind::Partial, *first, last - *first + 1};
 }
 
 // OPTIONS 预检处理器：只回 CORS 头，供两个路由文件登记各自路径时共用。

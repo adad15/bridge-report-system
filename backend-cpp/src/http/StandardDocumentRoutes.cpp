@@ -380,9 +380,35 @@ void handle_content(const drogon::orm::DbClientPtr& db_client, const config::App
         respond_missing();
         return;
     }
-    // 传入 request：drogon 据此处理 Range，大文件可以边下边看。
-    auto response = drogon::HttpResponse::newFileResponse(
-        absolute.string(), "", drogon::CT_CUSTOM, "application/pdf", request);
+    std::error_code size_error;
+    const auto size = std::filesystem::file_size(absolute, size_error);
+    if (size_error) {
+        respond_missing();
+        return;
+    }
+    // Range 自己解析：drogon 不看这个头，不解析的话阅读器得等整份 PDF 下完才显示。
+    const auto range = parse_byte_range(request->getHeader("range"), size);
+    if (range.kind == ByteRange::Kind::Unsatisfiable) {
+        auto refused = drogon::HttpResponse::newHttpResponse();
+        refused->setStatusCode(drogon::k416RequestedRangeNotSatisfiable);
+        refused->addHeader("Content-Range", "bytes */" + std::to_string(size));
+        refused->addHeader("Accept-Ranges", "bytes");
+        apply_local_dev_cors_headers(refused);
+        callback(refused);
+        return;
+    }
+    const bool partial = range.kind == ByteRange::Kind::Partial;
+    auto response = partial
+        ? drogon::HttpResponse::newFileResponse(
+              absolute.string(), range.offset, range.length, false, "", drogon::CT_CUSTOM, "application/pdf")
+        : drogon::HttpResponse::newFileResponse(absolute.string(), "", drogon::CT_CUSTOM, "application/pdf");
+    if (partial) {
+        response->setStatusCode(drogon::k206PartialContent);
+        response->addHeader("Content-Range", "bytes " + std::to_string(range.offset) + "-" +
+                                                 std::to_string(range.offset + range.length - 1) + "/" +
+                                                 std::to_string(size));
+    }
+    response->addHeader("Accept-Ranges", "bytes");
     const bool download = request->getParameter("download") == "1";
     response->addHeader("Content-Disposition",
         content_disposition(download ? "attachment" : "inline",
@@ -420,7 +446,9 @@ std::optional<StandardWriteError> standard_write_error(db::StandardDocumentWrite
         case StandardDocumentWriteStatus::VersionNotFound:
             return StandardWriteError{"standard_version_not_found", "版本不存在或已被删除。", drogon::k404NotFound};
         case StandardDocumentWriteStatus::NameTaken:
-            return StandardWriteError{"standard_document_name_taken", "已有同名规范。", drogon::k409Conflict};
+            return StandardWriteError{"standard_document_name_taken",
+                                      "已有同名规范。要给它加版本，请选中这部规范后点「上传新版本」。",
+                                      drogon::k409Conflict};
         case StandardDocumentWriteStatus::LabelTaken:
             return StandardWriteError{"standard_version_label_taken", "这部规范里已有同名版本。", drogon::k409Conflict};
         case StandardDocumentWriteStatus::EffectiveDateTaken:

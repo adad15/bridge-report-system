@@ -21,7 +21,8 @@ import {
 } from "./StandardVersionFields";
 
 export type StandardVersionFormMode =
-  | { type: "add"; document: StandardDocument }
+  /** initialValues：从「新增规范」转过来时，管理员已经填好的版本信息和 PDF。 */
+  | { type: "add"; document: StandardDocument; initialValues?: Partial<VersionFormValues> }
   | { type: "edit"; document: StandardDocument; version: StandardVersion }
   | { type: "replace"; document: StandardDocument; version: StandardVersion };
 
@@ -34,13 +35,17 @@ interface Props {
 function initialValuesFor(mode: StandardVersionFormMode): Partial<VersionFormValues> {
   if (mode.type === "edit") return versionFormValues(mode.version);
   if (mode.type === "replace") return {};
-  // 新版本多半和上一版同一个发布部门、同一种性质，先替管理员填上。
+  // 新版本多半和上一版同一个发布部门、同一种性质，先替管理员填上；已经填了的以填的为准。
   const latest = mode.document.versions[0];
+  const typed = Object.fromEntries(
+    Object.entries(mode.initialValues ?? {}).filter(([, value]) => value !== undefined && value !== null && value !== ""),
+  ) as Partial<VersionFormValues>;
   return {
     kind: "official",
     nature: latest?.nature ?? undefined,
     issuer: latest?.issuer ?? DEFAULT_ISSUER,
     editor: latest?.editor ?? undefined,
+    ...typed,
   };
 }
 

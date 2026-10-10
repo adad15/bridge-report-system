@@ -137,6 +137,7 @@ export function StandardDocumentsPage() {
           version={version}
           isAdmin={isAdmin}
           onSelectVersion={(id) => show({ version: id })}
+          onUploadVersion={() => setModal({ type: "add", document })}
           onEditDocument={() => setModal({ type: "edit-document", document })}
           onDeleteDocument={() => setModal({ type: "delete-document", document })}
         />
@@ -178,7 +179,6 @@ export function StandardDocumentsPage() {
                     next.delete("page");
                     setSearchParams(next);
                   }}
-                  onUpload={() => setModal({ type: "add", document })}
                   onEdit={(target) => setModal({ type: "edit", document, version: target })}
                   onReplace={(target) => setModal({ type: "replace", document, version: target })}
                   onDelete={deleteVersion}
@@ -232,7 +232,9 @@ export function StandardDocumentsPage() {
           mode={modal.type === "create-document"
             ? { type: "create", categories }
             : { type: "edit", document: modal.document, categories }}
+          documents={documents ?? []}
           onClose={() => setModal(null)}
+          onSwitchToAddVersion={(target, values) => setModal({ type: "add", document: target, initialValues: values })}
           onSaved={(saved) => {
             const created = modal.type === "create-document";
             upsert(saved);
@@ -260,6 +262,8 @@ export function StandardDocumentsPage() {
           onSaved={(saved) => {
             upsert(saved);
             setModal(null);
+            // 从「新增规范」转过来时，右边可能还开着另一部规范。
+            if (saved.id !== document?.id) show({ doc: saved.id });
           }}
         />
       ) : null}

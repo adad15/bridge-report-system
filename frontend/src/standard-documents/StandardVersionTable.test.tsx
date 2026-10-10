@@ -2,12 +2,12 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { h21Document, maintenanceDocument } from "../test/standardDocumentFixtures";
+import { h21Document, maintenanceDocument, standardVersion } from "../test/standardDocumentFixtures";
 import { StandardVersionTable } from "./StandardVersionTable";
 
 function renderTable(isAdmin: boolean, document = maintenanceDocument) {
   const handlers = {
-    onRead: vi.fn(), onUpload: vi.fn(), onEdit: vi.fn(), onReplace: vi.fn(),
+    onRead: vi.fn(), onEdit: vi.fn(), onReplace: vi.fn(),
     onDelete: vi.fn().mockResolvedValue(undefined),
   };
   render(<StandardVersionTable document={document} viewingId={document.versions[0].id} isAdmin={isAdmin} {...handlers} />);
@@ -24,6 +24,22 @@ describe("StandardVersionTable", () => {
     expect(screen.getByText("正在查看")).toBeInTheDocument();
     expect(screen.queryByText("替换原文")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /上传新版本/ })).not.toBeInTheDocument();
+  });
+
+  // 现行版本已有接替者：接替关系现在就写出来，不等它真的废止；没填发布日期的就不写「— 发布」。
+  it("names the coming replacement and skips a missing publish date", () => {
+    const next = standardVersion({
+      id: "next", label: "2027 版", code: "JTG 5120—2027", status: "upcoming", effective_date: "2027-03-01", replaces_version_id: "jtg-5120",
+    });
+    const current = {
+      ...maintenanceDocument.versions[0], withdrawn_date: "2027-03-01", withdrawn_date_source: "replacement" as const, replaced_by_version_id: "next",
+    };
+    renderTable(false, { ...maintenanceDocument, versions: [next, current, maintenanceDocument.versions[1]] });
+
+    expect(screen.getByText("替代 JTG H11—2004；2027-03-01 起由 JTG 5120—2027 替代")).toBeInTheDocument();
+    expect(screen.getByText("替代 JTG 5120—2021")).toBeInTheDocument();
+    expect(screen.getByText("2027-03-01 实施")).toBeInTheDocument();
+    expect(screen.queryByText(/— 发布/)).not.toBeInTheDocument();
   });
 
   it("shows the draft date for drafts", () => {

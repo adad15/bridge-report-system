@@ -1,4 +1,4 @@
-import { DownloadOutlined, MoreOutlined } from "@ant-design/icons";
+import { DownloadOutlined, MoreOutlined, UploadOutlined } from "@ant-design/icons";
 import { Alert, Button, Dropdown, Flex, Select, Typography, theme } from "antd";
 
 import { type StandardDocument, type StandardVersion, standardVersionContentUrl } from "../api/standardDocumentsApi";
@@ -11,6 +11,8 @@ interface Props {
   version: StandardVersion | null;
   isAdmin: boolean;
   onSelectVersion: (versionId: string) => void;
+  /** 给这部规范加版本。放在头部而不是版本记录页签里：实测时管理员找不到入口，转身去点了「新增规范」。 */
+  onUploadVersion: () => void;
   onEditDocument: () => void;
   onDeleteDocument: () => void;
 }
@@ -33,7 +35,9 @@ function noticeFor(document: StandardDocument, version: StandardVersion): string
   return null;
 }
 
-export function StandardDocumentHeader({ document, version, isAdmin, onSelectVersion, onEditDocument, onDeleteDocument }: Props) {
+export function StandardDocumentHeader({
+  document, version, isAdmin, onSelectVersion, onUploadVersion, onEditDocument, onDeleteDocument,
+}: Props) {
   const { token } = theme.useToken();
   const current = document.versions.find((item) => item.status === "current");
   const official = document.versions.filter((item) => !isDraft(item));
@@ -44,7 +48,10 @@ export function StandardDocumentHeader({ document, version, isAdmin, onSelectVer
         version.code,
         isDraft(version) ? "尚未发布" : issuer ? `${issuer}发布` : null,
         versionDateText(version),
-        !isDraft(version) && version.withdrawn_date ? `${version.withdrawn_date} 废止` : null,
+        // 现行版本已有接替者时，废止日期还在将来。
+        !isDraft(version) && version.withdrawn_date
+          ? version.status === "withdrawn" ? `${version.withdrawn_date} 废止` : `将于 ${version.withdrawn_date} 废止`
+          : null,
         version.announcement,
       ].filter((item): item is string => Boolean(item))
     : [];
@@ -109,6 +116,7 @@ export function StandardDocumentHeader({ document, version, isAdmin, onSelectVer
               </Button>
             </>
           ) : null}
+          {isAdmin ? <Button icon={<UploadOutlined />} onClick={onUploadVersion}>上传新版本</Button> : null}
           {isAdmin ? (
             <Dropdown
               trigger={["click"]}

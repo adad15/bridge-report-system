@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createStandardDocument, updateStandardDocument } from "../api/standardDocumentsApi";
-import { h21Document } from "../test/standardDocumentFixtures";
+import { h21Document, maintenanceDocument } from "../test/standardDocumentFixtures";
 import { StandardDocumentFormModal } from "./StandardDocumentFormModal";
 
 vi.mock("../api/standardDocumentsApi", async (importOriginal) => {
@@ -60,6 +60,53 @@ describe("StandardDocumentFormModal", () => {
     await user.upload(fileInput(), new File(["hello"], "notes.txt", { type: "text/plain" }));
     await user.click(screen.getByRole("button", { name: /^上\s?传$/ }));
     expect(await screen.findByText("只能上传 PDF 文件")).toBeInTheDocument();
+  });
+
+  // 实测时管理员想给已有规范加版本，第一反应就是「新增规范」：名字一撞就指路，已填的内容带过去。
+  it("points to uploading a new version when the standard is already in the library", async () => {
+    const onSwitchToAddVersion = vi.fn();
+    render(
+      <StandardDocumentFormModal
+        mode={{ type: "create", categories: ["技术状况评定"] }}
+        documents={[h21Document]}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+        onSwitchToAddVersion={onSwitchToAddVersion}
+      />,
+    );
+
+    await userEvent.type(screen.getByLabelText("规范名称"), "公路桥梁技术状况评定标准");
+    expect(await screen.findByText("「公路桥梁技术状况评定标准」已在库里。")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("版本名称"), "2026 版");
+    await userEvent.click(screen.getByRole("button", { name: /^上\s?传$/ }));
+    expect(await screen.findByText("已有同名规范")).toBeInTheDocument();
+    expect(createStandardDocument).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "改为上传新版本" }));
+    expect(onSwitchToAddVersion).toHaveBeenCalledWith(
+      h21Document,
+      expect.objectContaining({ label: "2026 版", kind: "official", issuer: "中华人民共和国交通运输部" }),
+    );
+    expect(onSwitchToAddVersion.mock.calls[0][1]).not.toHaveProperty("name");
+  });
+
+  it("refuses to rename a standard to another standard's name", async () => {
+    render(
+      <StandardDocumentFormModal
+        mode={{ type: "edit", document: h21Document, categories: [] }}
+        documents={[h21Document, maintenanceDocument]}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    );
+    const name = screen.getByLabelText("规范名称");
+    await userEvent.clear(name);
+    await userEvent.type(name, "公路桥涵养护规范");
+    await userEvent.click(screen.getByRole("button", { name: /^保\s?存$/ }));
+
+    expect(await screen.findByText("已有同名规范")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "改为上传新版本" })).not.toBeInTheDocument();
+    expect(updateStandardDocument).not.toHaveBeenCalled();
   });
 
   it("edits only the standard information", async () => {

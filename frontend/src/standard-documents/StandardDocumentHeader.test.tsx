@@ -6,7 +6,7 @@ import { h21Document, maintenanceDocument, standardVersion } from "../test/stand
 import { StandardDocumentHeader } from "./StandardDocumentHeader";
 
 function renderHeader(props: Partial<Parameters<typeof StandardDocumentHeader>[0]> = {}) {
-  const handlers = { onSelectVersion: vi.fn(), onEditDocument: vi.fn(), onDeleteDocument: vi.fn() };
+  const handlers = { onSelectVersion: vi.fn(), onUploadVersion: vi.fn(), onEditDocument: vi.fn(), onDeleteDocument: vi.fn() };
   render(
     <StandardDocumentHeader
       document={maintenanceDocument}
@@ -45,10 +45,29 @@ describe("StandardDocumentHeader", () => {
     expect(screen.getByText("JTG 5120—2027 将于 2027-03-01 实施。在此之前现行版本仍是 JTG 5120—2021。")).toBeInTheDocument();
   });
 
-  it("shows no notice and no maintenance menu for a reader on the current version", () => {
+  // 现行版本已有接替者时，废止日期还在将来，不能写成已经废止。
+  it("says when the current version will be replaced", () => {
+    const next = standardVersion({
+      id: "next", label: "2027 版", code: "JTG 5120—2027", status: "upcoming", effective_date: "2027-03-01", replaces_version_id: "jtg-5120",
+    });
+    const current = {
+      ...maintenanceDocument.versions[0], withdrawn_date: "2027-03-01", withdrawn_date_source: "replacement" as const, replaced_by_version_id: "next",
+    };
+    renderHeader({ document: { ...maintenanceDocument, versions: [next, current, maintenanceDocument.versions[1]] }, version: current });
+    expect(screen.getByText("JTG 5120—2021 · 交通运输部发布 · 2021-11-01 实施 · 将于 2027-03-01 废止")).toBeInTheDocument();
+  });
+
+  it("shows no notice and no maintenance actions for a reader on the current version", () => {
     renderHeader({ version: maintenanceDocument.versions[0] });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "更多" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /上传新版本/ })).not.toBeInTheDocument();
+  });
+
+  it("lets administrators upload a new version from the header", async () => {
+    const { onUploadVersion } = renderHeader({ isAdmin: true, version: maintenanceDocument.versions[0] });
+    await userEvent.click(screen.getByRole("button", { name: /上传新版本/ }));
+    expect(onUploadVersion).toHaveBeenCalledTimes(1);
   });
 
   it("gives administrators edit and delete in the more menu", async () => {

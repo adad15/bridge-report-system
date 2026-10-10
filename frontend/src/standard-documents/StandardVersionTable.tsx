@@ -1,5 +1,4 @@
-import { UploadOutlined } from "@ant-design/icons";
-import { Button, Flex, Popconfirm, Table, Typography, theme } from "antd";
+import { Flex, Popconfirm, Table, Typography, theme } from "antd";
 
 import { type StandardDocument, type StandardVersion, standardVersionContentUrl } from "../api/standardDocumentsApi";
 import { backendBaseUrl } from "../config";
@@ -10,36 +9,40 @@ interface Props {
   viewingId: string | null;
   isAdmin: boolean;
   onRead: (versionId: string) => void;
-  onUpload: () => void;
   onEdit: (version: StandardVersion) => void;
   onReplace: (version: StandardVersion) => void;
   /** 返回 Promise：确认框在删除完成前保持加载状态。 */
   onDelete: (version: StandardVersion) => Promise<void>;
 }
 
-/** 说明栏：替代关系、公告文号、备注，取第一个有值的（设计 §5.5）。 */
+/**
+ * 说明栏（设计 §5.5）：先写替代关系——替代了谁、哪天起由谁替代（接替者还没实施也写）；
+ * 没有替代关系时写公告文号或备注。
+ */
 function noteText(document: StandardDocument, version: StandardVersion): string {
-  const codeOf = (id: string | null) => document.versions.find((item) => item.id === id)?.code;
-  const replacedBy = codeOf(version.replaced_by_version_id);
-  if (version.status === "withdrawn" && replacedBy) return `${version.withdrawn_date} 起由 ${replacedBy} 替代`;
-  const replaces = codeOf(version.replaces_version_id);
-  if (replaces) return `替代 ${replaces}`;
+  const find = (id: string | null) => document.versions.find((item) => item.id === id);
+  const replaces = find(version.replaces_version_id);
+  const replacement = find(version.replaced_by_version_id);
+  const relations = [
+    replaces ? `替代 ${replaces.code}` : null,
+    replacement ? `${replacement.effective_date} 起由 ${replacement.code} 替代` : null,
+  ].filter((item): item is string => item !== null);
+  if (relations.length > 0) return relations.join("；");
   return version.announcement ?? version.note ?? "—";
 }
 
-export function StandardVersionTable({ document, viewingId, isAdmin, onRead, onUpload, onEdit, onReplace, onDelete }: Props) {
+export function StandardVersionTable({ document, viewingId, isAdmin, onRead, onEdit, onReplace, onDelete }: Props) {
   const { token } = theme.useToken();
   return (
     <Flex vertical gap={12}>
-      <Flex align="center" justify="space-between" gap={12} wrap>
-        <Typography.Text type="secondary">
-          共 {document.versions.length} 个版本。征求意见稿、报批稿仅供对照查阅，不作为评定依据。
-        </Typography.Text>
-        {isAdmin ? <Button icon={<UploadOutlined />} onClick={onUpload}>上传新版本</Button> : null}
-      </Flex>
+      <Typography.Text type="secondary">
+        共 {document.versions.length} 个版本。征求意见稿、报批稿仅供对照查阅，不作为评定依据。
+      </Typography.Text>
       <Table<StandardVersion>
         rowKey="id"
         pagination={false}
+        // 窄屏时整表横向滚动，不让「说明」被挤成一个字一行。
+        scroll={{ x: isAdmin ? 1100 : 960 }}
         dataSource={document.versions}
         columns={[
           {
@@ -67,8 +70,10 @@ export function StandardVersionTable({ document, viewingId, isAdmin, onRead, onU
               }
               return (
                 <Flex vertical>
-                  <span>{version.publish_date ?? "—"} 发布</span>
-                  <Typography.Text type="secondary">{version.effective_date ?? "—"} 实施</Typography.Text>
+                  {version.publish_date ? <span>{version.publish_date} 发布</span> : null}
+                  <Typography.Text type={version.publish_date ? "secondary" : undefined}>
+                    {version.effective_date ?? "—"} 实施
+                  </Typography.Text>
                 </Flex>
               );
             },

@@ -54,4 +54,45 @@ TEST(StandardDocumentRoutesTest, InlineDispositionEncodesTheChineseName) {
     EXPECT_EQ(http::attachment_disposition("a.pdf").rfind("attachment; filename=\"download\"", 0), 0u);
 }
 
+// 浏览器的 PDF 阅读器先要文件尾，再按页取；三种单段写法都得认。
+TEST(StandardDocumentRoutesTest, ParsesSingleByteRanges) {
+    using Kind = http::ByteRange::Kind;
+    const auto head = http::parse_byte_range("bytes=0-1023", 5000);
+    EXPECT_EQ(head.kind, Kind::Partial);
+    EXPECT_EQ(head.offset, 0u);
+    EXPECT_EQ(head.length, 1024u);
+
+    const auto open_ended = http::parse_byte_range("bytes=4000-", 5000);
+    EXPECT_EQ(open_ended.kind, Kind::Partial);
+    EXPECT_EQ(open_ended.offset, 4000u);
+    EXPECT_EQ(open_ended.length, 1000u);
+
+    const auto tail = http::parse_byte_range("Bytes=-500", 5000);
+    EXPECT_EQ(tail.kind, Kind::Partial);
+    EXPECT_EQ(tail.offset, 4500u);
+    EXPECT_EQ(tail.length, 500u);
+
+    // 终点越过文件末尾时截到末尾。
+    const auto clipped = http::parse_byte_range("bytes=4990-9999", 5000);
+    EXPECT_EQ(clipped.offset, 4990u);
+    EXPECT_EQ(clipped.length, 10u);
+}
+
+// 没带、看不懂、要多段：RFC 允许服务器忽略 Range，回整份文件。
+TEST(StandardDocumentRoutesTest, ServesTheWholeFileForRangesItDoesNotHandle) {
+    using Kind = http::ByteRange::Kind;
+    EXPECT_EQ(http::parse_byte_range("", 5000).kind, Kind::Whole);
+    EXPECT_EQ(http::parse_byte_range("bytes=0-99,200-299", 5000).kind, Kind::Whole);
+    EXPECT_EQ(http::parse_byte_range("items=0-99", 5000).kind, Kind::Whole);
+    EXPECT_EQ(http::parse_byte_range("bytes=abc-", 5000).kind, Kind::Whole);
+    EXPECT_EQ(http::parse_byte_range("bytes=500-100", 5000).kind, Kind::Whole);
+}
+
+TEST(StandardDocumentRoutesTest, RefusesRangesThatStartPastTheEnd) {
+    using Kind = http::ByteRange::Kind;
+    EXPECT_EQ(http::parse_byte_range("bytes=5000-", 5000).kind, Kind::Unsatisfiable);
+    EXPECT_EQ(http::parse_byte_range("bytes=6000-7000", 5000).kind, Kind::Unsatisfiable);
+    EXPECT_EQ(http::parse_byte_range("bytes=-0", 5000).kind, Kind::Unsatisfiable);
+}
+
 }  // namespace

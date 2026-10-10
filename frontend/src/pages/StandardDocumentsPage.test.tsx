@@ -89,8 +89,27 @@ describe("StandardDocumentsPage", () => {
 
     expect(await screen.findByRole("table")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /新增规范/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /上传新版本/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "更多" })).not.toBeInTheDocument();
     expect(screen.queryByText("替换原文")).not.toBeInTheDocument();
+  });
+
+  it("opens the upload dialog from the header on any tab", async () => {
+    renderPage("/standards?tab=info");
+    await userEvent.click(await screen.findByRole("button", { name: /上传新版本/ }));
+    expect(await screen.findByText("上传新版本 · 公路桥梁技术状况评定标准")).toBeInTheDocument();
+  });
+
+  it("turns adding an existing standard into uploading a version of it", async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /新增规范/ }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("规范名称"), "公路桥涵养护规范");
+    await userEvent.type(within(dialog).getByLabelText("版本名称"), "2027 版");
+    await userEvent.click(await within(dialog).findByRole("button", { name: "改为上传新版本" }));
+
+    expect(await screen.findByText("上传新版本 · 公路桥涵养护规范")).toBeInTheDocument();
+    expect(screen.getByLabelText("版本名称")).toHaveValue("2027 版");
   });
 
   it("deletes a version after confirmation and refreshes the table", async () => {
