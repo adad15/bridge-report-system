@@ -4779,6 +4779,7 @@ git add -- frontend/src/standard-documents/StandardVersionFields.tsx frontend/sr
 
 **文件：**
 - 新建：`frontend/src/pages/StandardDocumentsPage.tsx`、`StandardDocumentsPage.test.tsx`
+- 新建：`frontend/src/standard-documents/DeleteStandardDocumentModal.test.tsx`（执行时补充的 2 个用例：确认后删除；删除失败时显示错误、弹窗不关。原计划里这个弹窗只有任务 11 的实测覆盖）
 - 修改（共享）：`frontend/src/App.tsx`
 
 **接口：**
@@ -5225,7 +5226,7 @@ export function StandardDocumentsPage() {
 - [ ] **步骤 6：提交（`App.tsx` 留到任务 12）**
 
 ```bash
-git add -- frontend/src/pages/StandardDocumentsPage.tsx frontend/src/pages/StandardDocumentsPage.test.tsx
+git add -- frontend/src/pages/StandardDocumentsPage.tsx frontend/src/pages/StandardDocumentsPage.test.tsx frontend/src/standard-documents/DeleteStandardDocumentModal.test.tsx
 ```
 
 提交信息：`feat(frontend): 规范管理页面`
