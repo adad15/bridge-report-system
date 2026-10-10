@@ -56,6 +56,7 @@ ArchivedStandardPdf archive_standard_pdf(
     std::string_view document_id);
 
 /// 删除已归档的原文；SHA-256 对不上就原样留着，宁可留垃圾也不误删。
+/// 删掉的是这部规范目录里的最后一个文件时，空目录一并删除。
 void remove_archived_standard_pdf(
     const std::filesystem::path& archive_root,
     const std::filesystem::path& storage_relative_path,

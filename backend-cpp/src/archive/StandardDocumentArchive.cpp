@@ -92,7 +92,16 @@ void remove_archived_standard_pdf(
         if (!sha256.empty() && sha256_hex(content) != sha256) return;
 
         std::error_code code;
-        std::filesystem::remove(absolute, code);
+        if (!std::filesystem::remove(absolute, code) || code) return;
+
+        // 这部规范的最后一个文件删掉后，`standards/<规范 id>` 就空了：顺手删掉，不然删除规范、
+        // 新增撞名被退回都会留下空目录。只删这一层；目录里还有别的东西时 remove 本身就会失败。
+        const auto folder = storage_relative_path.parent_path();
+        if (folder.parent_path() != "standards") return;
+        const auto absolute_folder = resolve_path_under_root(archive_root, folder);
+        if (std::filesystem::is_empty(absolute_folder, code) && !code) {
+            std::filesystem::remove(absolute_folder, code);
+        }
     } catch (...) {
         // 清理失败不该影响业务结果：数据库那一侧已经改完了。
     }

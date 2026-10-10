@@ -70,4 +70,28 @@ TEST_F(StandardDocumentArchiveTest, RemovesOnlyWhenTheHashMatches) {
     EXPECT_FALSE(fs::exists(absolute));
 }
 
+// 删除规范、新增时撞名被退回，都会删掉这部规范目录里的最后一个文件：目录跟着走，不留空壳。
+TEST_F(StandardDocumentArchiveTest, RemovesTheDocumentFolderWithItsLastFile) {
+    const auto first = archive_standard_pdf(kPdf, "a.pdf", root_, "doc-1");
+    const auto second = archive_standard_pdf(kPdf, "b.pdf", root_, "doc-1");
+    const auto folder = root_ / "standards" / "doc-1";
+
+    remove_archived_standard_pdf(root_, first.storage_relative_path, first.sha256);
+    EXPECT_TRUE(fs::exists(folder));
+
+    remove_archived_standard_pdf(root_, second.storage_relative_path, second.sha256);
+    EXPECT_FALSE(fs::exists(folder));
+    EXPECT_TRUE(fs::exists(root_ / "standards"));
+}
+
+TEST_F(StandardDocumentArchiveTest, KeepsTheFolderWhileAnythingElseIsInIt) {
+    const auto archived = archive_standard_pdf(kPdf, "a.pdf", root_, "doc-1");
+    const auto folder = root_ / "standards" / "doc-1";
+    std::ofstream(folder / "note.txt") << "not ours";
+
+    remove_archived_standard_pdf(root_, archived.storage_relative_path, archived.sha256);
+    EXPECT_FALSE(fs::exists(root_ / archived.storage_relative_path));
+    EXPECT_TRUE(fs::exists(folder / "note.txt"));
+}
+
 }  // namespace
