@@ -60,7 +60,7 @@ export function BridgesPage() {
 
   useEffect(() => { void reload(); }, [reload]);
   useEffect(() => {
-    if (isAdmin && searchParams.get("standards") === "1") setStandardsOpen(true);
+    if (isAdmin && searchParams.get("rules") === "1") setStandardsOpen(true);
   }, [isAdmin, searchParams]);
 
   const visible = useMemo(() => {
@@ -85,7 +85,7 @@ export function BridgesPage() {
   }
   function closeStandards() {
     setStandardsOpen(false);
-    if (searchParams.has("standards")) setSearchParams({}, { replace: true });
+    if (searchParams.has("rules")) setSearchParams({}, { replace: true });
   }
   const selectionChanged = useCallback(() => { setSelected(new Set()); setDeleteOpen(false); void reload(); }, [reload]);
 
@@ -144,7 +144,7 @@ export function BridgesPage() {
         description="统一管理桥梁基础信息、年度检测与跨年病害档案。"
         extra={isAdmin ? (
           <>
-            <Button aria-label="规范管理" icon={<SafetyCertificateOutlined />} onClick={() => setStandardsOpen(true)}>规范管理</Button>
+            <Button aria-label="规则管理" icon={<SafetyCertificateOutlined />} onClick={() => setStandardsOpen(true)}>规则管理</Button>
             <Button aria-label="添加桥梁" type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>添加桥梁</Button>
           </>
         ) : null}

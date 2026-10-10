@@ -41,6 +41,7 @@
 #include "bridge_report/http/ReportTemplateRoutes.hpp"
 #include "bridge_report/http/ReviewRoutes.hpp"
 #include "bridge_report/http/StandardRoutes.hpp"
+#include "bridge_report/http/StandardDocumentRoutes.hpp"
 #include "bridge_report/http/WordImportRoutes.hpp"
 #include "bridge_report/http/WorkspaceRoutes.hpp"
 #include "bridge_report/runtime/RuntimePaths.hpp"
@@ -538,6 +539,7 @@ int main(int argc, char* argv[]) {
     bridge_report::http::register_import_record_deletion_routes(db_client, cleanup_coordinator);
     bridge_report::http::register_word_import_routes(db_client, config);
     bridge_report::http::register_standard_routes(db_client, standards.registry);
+    bridge_report::http::register_standard_document_routes(db_client, config);
     bridge_report::http::register_assessment_routes(db_client, standards.registry);
     bridge_report::http::register_workspace_routes(db_client, config);
     bridge_report::http::register_component_archive_routes(db_client, config.archive_root);

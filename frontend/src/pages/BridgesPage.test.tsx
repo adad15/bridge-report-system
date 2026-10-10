@@ -43,15 +43,20 @@ describe("BridgesPage", () => {
     ]);
   });
 
-  it("shows standards management only to administrators", async () => {
+  it("shows rule management only to administrators", async () => {
     const { unmount } = render(<MemoryRouter><BridgesPage /></MemoryRouter>);
-    expect(await screen.findByRole("button", { name: "规范管理" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "规则管理" })).toBeInTheDocument();
     unmount();
 
     vi.mocked(useAuth).mockReturnValue({ user: { username: "normal", display_name: "普通用户", role: "normal" } } as never);
     render(<MemoryRouter><BridgesPage /></MemoryRouter>);
     await screen.findByText("绕阳河二号桥");
-    expect(screen.queryByRole("button", { name: "规范管理" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "规则管理" })).not.toBeInTheDocument();
+  });
+
+  it("opens rule management from the ?rules=1 link for administrators", async () => {
+    render(<MemoryRouter initialEntries={["/bridges?rules=1"]}><BridgesPage /></MemoryRouter>);
+    expect(await screen.findByRole("button", { name: "关闭规则管理" })).toBeInTheDocument();
   });
 
   it("shows archive summaries and filters by bridge name, number, or route", async () => {

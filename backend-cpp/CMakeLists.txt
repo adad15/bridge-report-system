@@ -16,6 +16,7 @@ add_library(bridge_report_backend_core
     src/archive/ArchivePaths.cpp
     src/archive/ExtractedPhotoArchive.cpp
     src/archive/BridgeMediaArchive.cpp
+    src/archive/StandardDocumentArchive.cpp
     src/archive/ImageContent.cpp
     src/archive/SourceDbReference.cpp
     src/archive/TemporaryWordStorage.cpp
@@ -45,6 +46,7 @@ add_library(bridge_report_backend_core
     src/db/ReviewRepository.cpp
     src/db/RatingTreeRepository.cpp
     src/db/StandardRepository.cpp
+    src/db/StandardDocumentRepository.cpp
     src/db/ThreadResolutionRepository.cpp
     src/db/TriageQueryRepository.cpp
     src/db/WorkspaceRepository.cpp
@@ -84,6 +86,7 @@ add_library(bridge_report_backend_core
     src/http/RatingTreeRoutes.cpp
     src/http/ReviewRoutes.cpp
     src/http/StandardRoutes.cpp
+    src/http/StandardDocumentRoutes.cpp
     src/http/WordImportRoutes.cpp
     src/http/WorkspaceRoutes.cpp
     src/identity/SystemNumber.cpp
@@ -143,6 +146,7 @@ add_library(bridge_report_backend_core
     src/standards/StandardCatalogModels.cpp
     src/standards/StandardPackageLoader.cpp
     src/standards/StandardRegistry.cpp
+    src/standards/StandardDocumentModels.cpp
 )
 
 target_include_directories(bridge_report_backend_core
@@ -285,6 +289,10 @@ add_executable(bridge_report_backend_tests
     tests/test_standard_repository.cpp
     tests/test_standard_routes.cpp
     tests/test_standard_registry.cpp
+    tests/test_standard_document_models.cpp
+    tests/test_standard_document_archive.cpp
+    tests/test_standard_document_repository.cpp
+    tests/test_standard_document_routes.cpp
     tests/test_thread_canonical_key.cpp
     tests/test_thread_triage_grouping.cpp
     tests/test_thread_triage_fixture.cpp

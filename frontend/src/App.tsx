@@ -13,6 +13,7 @@ import { ReportGenerationPage } from "./pages/ReportGenerationPage";
 import { ReportTemplatesPage } from "./pages/ReportTemplatesPage";
 import { ReviewWorkspacePage } from "./pages/ReviewWorkspacePage";
 import { RatingTreePage } from "./pages/RatingTreePage";
+import { StandardDocumentsPage } from "./pages/StandardDocumentsPage";
 import { WorkbenchPage } from "./pages/WorkbenchPage";
 import { BridgeWorkspaceShell } from "./workspace/BridgeWorkspaceShell";
 import { InspectionWorkspacePage } from "./pages/InspectionWorkspacePage";
@@ -51,6 +52,7 @@ function AppShell() {
         <Route path="/workbench" element={<WorkbenchPage />} />
         <Route path="/bridges" element={<BridgesPage />} />
         <Route path="/rating-trees" element={<RatingTreePage />} />
+        <Route path="/standards" element={<StandardDocumentsPage />} />
         <Route path="/settings/report-templates" element={<ReportTemplatesPage />} />
         <Route path="/settings/report-directory" element={<ReportDirectoryPage />} />
         <Route path="/rating-trees/:versionId" element={<RatingTreePage />} />
