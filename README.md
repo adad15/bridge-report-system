@@ -33,6 +33,7 @@
 - 生成前检查、临时报告任务、Word/WPS 字段更新和下载。
 - 桥梁概况、坐标与六槽位图件，报告中的概况文字和配图。
 - 管理员桥梁、年度和导入记录删除，以及归档文件清理。
+- 规范原文库（规范管理）：查阅规范原文 PDF，同一规范的正式版、征求意见稿、报批稿并列，状态与替代关系按日期推导，可全屏阅读；规则包启停改称「规则管理」，入口在桥梁档案页。
 
 报告历史对比采用 `source_defect_count_delta_v1`，按来源病害去重统计记录条数变化；桥梁概览的年度对比仍统计正式观测条数，两者口径不同。跨年新增、持续、消失、修复等病害语义对比、维修记录、电子签名及 AI/Milvus 尚未实现。
 
@@ -63,7 +64,7 @@ powershell -ExecutionPolicy Bypass -File scripts/dev/start-frontend.ps1
 
 ## 数据库与文件
 
-当前迁移为 [database/migrations](database/migrations) 中的 `001`～`037`。迁移 030～036 包含报告对比年度字段改名、照片编号规则、报告管理及任务、交付文件名、桥梁概况、坐标和图件表。迁移 037 增加任务模板快照、独立清理台账与位置图修订号。
+当前迁移为 [database/migrations](database/migrations) 中的 `001`～`038`。迁移 030～036 包含报告对比年度字段改名、照片编号规则、报告管理及任务、交付文件名、桥梁概况、坐标和图件表。迁移 037 增加任务模板快照、独立清理台账与位置图修订号。迁移 038 新增规范原文库的规范与版本两张表，原文 PDF 走既有归档文件。
 
 归档存储模板、正式照片和桥梁图件等受控输入；生成结果存放在 `temporary_storage.report_root`，不建立永久报告版本。默认可下载保留时间为 24 小时、任务终态记录保留配置为 7 天。任务固定模板副本与配置；清理失败保留台账并重试，写入状态不明时阻断删除。B 批次结果及升级要求见 [验证记录](docs/2026-09-19-framework-batch-b-validation.md) 和 [运行指南](development.md)。
 
@@ -89,6 +90,7 @@ Word 解析入口为 Python 内部 `POST /imports/word/parse`，由 C++ 调用�
 /workbench
 /bridges
 /rating-trees
+/standards
 /settings/report-templates
 /settings/report-directory
 /bridges/:bridgeId
