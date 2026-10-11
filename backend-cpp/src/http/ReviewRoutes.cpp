@@ -67,12 +67,16 @@ void register_bridge_scoped_route(
             HttpCallback&& callback,
             const std::string& bridge_id
         ) {
-            if (!is_valid_uuid(bridge_id)) {
-                respond_bridge_not_found(callback);
-                return;
-            }
-
             try {
+                // 先验登录：未登录一律 401，不因 id 写错先回 404。鉴权要查库，故放在 try 内。
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                if (!is_valid_uuid(bridge_id)) {
+                    respond_bridge_not_found(callback);
+                    return;
+                }
                 if (!bridge_exists(db_client, bridge_id)) {
                     respond_bridge_not_found(callback);
                     return;
@@ -102,12 +106,18 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
             HttpCallback&& callback,
             const std::string& import_record_id
         ) {
-            if (!is_valid_uuid(import_record_id)) {
-                respond_import_record_not_found(callback);
-                return;
-            }
-
             try {
+                // 原先只拿登录用户判断编辑锁归属，没登录也照样返回整份解析结果。
+                const auto current_user = authenticate_request(db_client, request);
+                if (!current_user.has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                if (!is_valid_uuid(import_record_id)) {
+                    respond_import_record_not_found(callback);
+                    return;
+                }
+
                 db::ReviewRepository repository(db_client);
                 const auto detail = repository.get_import_record_detail(import_record_id);
                 if (!detail.has_value()) {
@@ -141,9 +151,8 @@ void register_import_record_review_route(const drogon::orm::DbClientPtr& db_clie
 
                 db::EditLockRepository lock_repository(db_client);
                 const auto active_lock = lock_repository.get_active(import_record_id);
-                const auto current_user = authenticate_request(db_client, request);
                 body["edit_lock"] = active_lock.has_value()
-                    ? edit_lock_info_to_json(*active_lock, current_user.has_value() ? current_user->id : std::string())
+                    ? edit_lock_info_to_json(*active_lock, current_user->id)
                     : Json::Value(Json::nullValue);
 
                 respond_json(callback, body);
@@ -657,8 +666,12 @@ void register_review_routes(const drogon::orm::DbClientPtr& db_client, const std
 
     drogon::app().registerHandler(
         "/api/bridges",
-        [db_client](const drogon::HttpRequestPtr&, HttpCallback&& callback) {
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback) {
             try {
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
                 db::ReviewRepository repository(db_client);
                 const auto bridges = repository.list_bridges();
 

@@ -12,6 +12,7 @@
 
 #include "bridge_report/db/ComponentArchiveRepository.hpp"
 #include "bridge_report/db/TriageQueryRepository.hpp"
+#include "bridge_report/http/AuthRoutes.hpp"
 #include "bridge_report/http/ReviewRoutes.hpp"
 #include "bridge_report/http/RouteHelpers.hpp"
 #include "bridge_report/review/ThreadSuggestions.hpp"
@@ -28,6 +29,15 @@ void respond_component_not_found(const HttpCallback& callback) {
     respond_json(callback, make_error_body("bridge_component_not_found", "指定的桥梁构件不存在"), drogon::k404NotFound);
 }
 
+// 这一组都是只读接口，但和其他模块的读接口一样要求登录；原先一个都不验。
+// 鉴权要查库，调用方须在 try 内调用，数据库故障才能照常回 503。
+bool require_login(const drogon::orm::DbClientPtr& db_client, const drogon::HttpRequestPtr& request,
+                   const HttpCallback& callback) {
+    if (authenticate_request(db_client, request).has_value()) return true;
+    respond_unauthorized(callback);
+    return false;
+}
+
 bool bridge_exists(const drogon::orm::DbClientPtr& db_client, const std::string& bridge_id) {
     const auto result = db_client->execSqlSync("select 1 from bridges where id = $1::uuid", bridge_id);
     return !result.empty();
@@ -42,13 +52,14 @@ void register_bridge_scoped_route(
     drogon::app().registerHandler(
         path,
         [db_client, build_body = std::move(build_body)](
-            const drogon::HttpRequestPtr&, HttpCallback&& callback, const std::string& bridge_id
+            const drogon::HttpRequestPtr& request, HttpCallback&& callback, const std::string& bridge_id
         ) {
-            if (!is_valid_uuid(bridge_id)) {
-                respond_bridge_not_found(callback);
-                return;
-            }
             try {
+                if (!require_login(db_client, request, callback)) return;
+                if (!is_valid_uuid(bridge_id)) {
+                    respond_bridge_not_found(callback);
+                    return;
+                }
                 if (!bridge_exists(db_client, bridge_id)) {
                     respond_bridge_not_found(callback);
                     return;
@@ -74,13 +85,14 @@ void register_component_scoped_route(
     drogon::app().registerHandler(
         path,
         [db_client, build_body = std::move(build_body)](
-            const drogon::HttpRequestPtr&, HttpCallback&& callback, const std::string& component_id
+            const drogon::HttpRequestPtr& request, HttpCallback&& callback, const std::string& component_id
         ) {
-            if (!is_valid_uuid(component_id)) {
-                respond_component_not_found(callback);
-                return;
-            }
             try {
+                if (!require_login(db_client, request, callback)) return;
+                if (!is_valid_uuid(component_id)) {
+                    respond_component_not_found(callback);
+                    return;
+                }
                 db::ComponentArchiveRepository repository(db_client);
                 const auto component = repository.get_component(component_id);
                 if (!component.has_value()) {
@@ -102,13 +114,14 @@ void register_component_scoped_route(
 void register_thread_suggestions_route(const drogon::orm::DbClientPtr& db_client) {
     drogon::app().registerHandler(
         "/api/defect-observations/{observation_id}/thread-suggestions",
-        [db_client](const drogon::HttpRequestPtr&, HttpCallback&& callback, const std::string& observation_id) {
-            if (!is_valid_uuid(observation_id)) {
-                respond_json(callback, make_error_body("defect_observation_not_found", "指定的病害观测不存在"),
-                             drogon::k404NotFound);
-                return;
-            }
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback, const std::string& observation_id) {
             try {
+                if (!require_login(db_client, request, callback)) return;
+                if (!is_valid_uuid(observation_id)) {
+                    respond_json(callback, make_error_body("defect_observation_not_found", "指定的病害观测不存在"),
+                                 drogon::k404NotFound);
+                    return;
+                }
                 db::ComponentArchiveRepository repository(db_client);
                 const auto summary = repository.get_observation_summary(observation_id);
                 if (!summary.has_value()) {
@@ -141,13 +154,14 @@ void register_thread_suggestions_route(const drogon::orm::DbClientPtr& db_client
 void register_observation_evidence_route(const drogon::orm::DbClientPtr& db_client) {
     drogon::app().registerHandler(
         "/api/defect-observations/{observation_id}/evidence",
-        [db_client](const drogon::HttpRequestPtr&, HttpCallback&& callback, const std::string& observation_id) {
-            if (!is_valid_uuid(observation_id)) {
-                respond_json(callback, make_error_body("defect_observation_not_found", "指定的病害观测不存在"),
-                             drogon::k404NotFound);
-                return;
-            }
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback, const std::string& observation_id) {
             try {
+                if (!require_login(db_client, request, callback)) return;
+                if (!is_valid_uuid(observation_id)) {
+                    respond_json(callback, make_error_body("defect_observation_not_found", "指定的病害观测不存在"),
+                                 drogon::k404NotFound);
+                    return;
+                }
                 db::ComponentArchiveRepository repository(db_client);
                 const auto evidence = repository.get_observation_evidence(observation_id);
                 if (!evidence.has_value()) {
@@ -258,12 +272,13 @@ void register_component_archive_routes(
     drogon::app().registerHandler(
         "/api/bridges/{bridge_id}/thread-triage",
         [db_client](
-            const drogon::HttpRequestPtr&, HttpCallback&& callback, const std::string& bridge_id) {
-            if (!is_valid_uuid(bridge_id)) {
-                respond_bridge_not_found(callback);
-                return;
-            }
+            const drogon::HttpRequestPtr& request, HttpCallback&& callback, const std::string& bridge_id) {
             try {
+                if (!require_login(db_client, request, callback)) return;
+                if (!is_valid_uuid(bridge_id)) {
+                    respond_bridge_not_found(callback);
+                    return;
+                }
                 if (!bridge_exists(db_client, bridge_id)) {
                     respond_bridge_not_found(callback);
                     return;
@@ -282,13 +297,14 @@ void register_component_archive_routes(
     drogon::app().registerHandler(
         "/api/bridges/{bridge_id}/thread-triage/batches/{batch_id}",
         [db_client](
-            const drogon::HttpRequestPtr&, HttpCallback&& callback,
+            const drogon::HttpRequestPtr& request, HttpCallback&& callback,
             const std::string& bridge_id, const std::string& batch_id) {
-            if (!is_valid_uuid(bridge_id)) {
-                respond_bridge_not_found(callback);
-                return;
-            }
             try {
+                if (!require_login(db_client, request, callback)) return;
+                if (!is_valid_uuid(bridge_id)) {
+                    respond_bridge_not_found(callback);
+                    return;
+                }
                 if (!bridge_exists(db_client, bridge_id)) {
                     respond_bridge_not_found(callback);
                     return;

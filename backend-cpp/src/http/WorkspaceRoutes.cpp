@@ -110,12 +110,17 @@ void register_workspace_routes(
 
     drogon::app().registerHandler(
         bridge_path,
-        [db_client](const drogon::HttpRequestPtr&, HttpCallback&& callback, const std::string& bridge_id) {
-            if (!is_valid_uuid(bridge_id)) {
-                respond_workspace_not_found(callback, WorkspaceResource::Bridge);
-                return;
-            }
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback, const std::string& bridge_id) {
             try {
+                // 先验登录：未登录一律 401，不因 id 写错先回 404。鉴权要查库，故放在 try 内。
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                if (!is_valid_uuid(bridge_id)) {
+                    respond_workspace_not_found(callback, WorkspaceResource::Bridge);
+                    return;
+                }
                 db::WorkspaceRepository repository(db_client);
                 const auto overview = repository.get_bridge_overview(bridge_id);
                 if (!overview.has_value()) {
@@ -138,13 +143,17 @@ void register_workspace_routes(
 
     drogon::app().registerHandler(
         inspection_path,
-        [db_client](const drogon::HttpRequestPtr&, HttpCallback&& callback,
+        [db_client](const drogon::HttpRequestPtr& request, HttpCallback&& callback,
                     const std::string& inspection_year_id) {
-            if (!is_valid_uuid(inspection_year_id)) {
-                respond_workspace_not_found(callback, WorkspaceResource::InspectionYear);
-                return;
-            }
             try {
+                if (!authenticate_request(db_client, request).has_value()) {
+                    respond_unauthorized(callback);
+                    return;
+                }
+                if (!is_valid_uuid(inspection_year_id)) {
+                    respond_workspace_not_found(callback, WorkspaceResource::InspectionYear);
+                    return;
+                }
                 db::WorkspaceRepository repository(db_client);
                 const auto workspace = repository.get_inspection_workspace(inspection_year_id);
                 if (!workspace.has_value()) {
