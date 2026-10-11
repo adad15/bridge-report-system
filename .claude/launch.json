@@ -4,7 +4,7 @@
     {
       "name": "c++-backend",
       "runtimeExecutable": "powershell",
-      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "scripts/dev/start-cpp-backend.ps1"],
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "scripts/dev/start-cpp-backend.ps1", "-BuildDirectory", "backend-cpp/build/after-rename-release", "-Configuration", "Release"],
       "port": 18080
     },
     {
