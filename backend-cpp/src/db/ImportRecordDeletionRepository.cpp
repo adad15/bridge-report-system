@@ -6,6 +6,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/CommitLatch.hpp"
+#include "bridge_report/db/DeadlockRetry.hpp"
 
 namespace bridge_report::db {
 namespace {
@@ -167,6 +168,23 @@ deletion::DeleteImportRecordOutcome ImportRecordDeletionRepository::delete_impor
     const std::string& reason,
     const deletion::DeletionActorSnapshot& actor
 ) {
+    // 删除要锁导入记录、源文件、归档文件一批行，与草稿保存、确认等写路径会有交叉；
+    // 万一撞上死锁，整段事务重来，见 DeadlockRetry.hpp。
+    try {
+        return run_with_deadlock_retry("import record deletion record=" + import_record_id, [&] {
+            return delete_import_record_once(import_record_id, expected_impact_token, reason, actor);
+        });
+    } catch (...) {
+        return {deletion::DeleteImportRecordStatus::Failed};
+    }
+}
+
+deletion::DeleteImportRecordOutcome ImportRecordDeletionRepository::delete_import_record_once(
+    const std::string& import_record_id,
+    const std::string& expected_impact_token,
+    const std::string& reason,
+    const deletion::DeletionActorSnapshot& actor
+) {
     TransactionPtr tx;
     const auto latch = std::make_shared<CommitLatch>();
     const auto rollback = [&]() { if (tx) { try { tx->rollback(); } catch (...) {} } };
@@ -241,7 +259,7 @@ deletion::DeleteImportRecordOutcome ImportRecordDeletionRepository::delete_impor
         return outcome;
     } catch (...) {
         rollback();
-        return {deletion::DeleteImportRecordStatus::Failed};
+        throw;
     }
 }
 

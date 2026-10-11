@@ -12,6 +12,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/CommitLatch.hpp"
+#include "bridge_report/db/DeadlockRetry.hpp"
 
 namespace bridge_report::db {
 namespace {
@@ -378,6 +379,29 @@ deletion::DeleteInspectionYearOutcome InspectionYearDeletionRepository::delete_y
     const std::string& reason,
     const deletion::DeletionActorSnapshot& actor
 ) {
+    // 年度删除要锁导入记录、年度、归档文件等一批行，与保存、确认等写路径会有交叉；
+    // 万一撞上死锁，整段事务重来，见 DeadlockRetry.hpp。
+    try {
+        return run_with_deadlock_retry("inspection year deletion year=" + inspection_year_id, [&] {
+            return delete_year_once(inspection_year_id, expected_impact_token, confirmation_text, reason, actor);
+        });
+    } catch (const std::exception& error) {
+        // 同 BridgeDeletionRepository：异常吞掉之后排查只能靠手工重放删除序列。
+        LOG_ERROR << "inspection year deletion failed year=" << inspection_year_id
+                  << " detail=" << error.what();
+        deletion::DeleteInspectionYearOutcome outcome;
+        outcome.status = deletion::DeleteInspectionYearStatus::Failed;
+        return outcome;
+    }
+}
+
+deletion::DeleteInspectionYearOutcome InspectionYearDeletionRepository::delete_year_once(
+    const std::string& inspection_year_id,
+    const std::string& expected_impact_token,
+    const std::string& confirmation_text,
+    const std::string& reason,
+    const deletion::DeletionActorSnapshot& actor
+) {
     TransactionPtr tx;
     const auto latch = std::make_shared<CommitLatch>();
     const auto rollback = [&]() {
@@ -499,14 +523,9 @@ deletion::DeleteInspectionYearOutcome InspectionYearDeletionRepository::delete_y
         outcome.status = deletion::DeleteInspectionYearStatus::Deleted;
         outcome.deletion_audit_id = audit_id;
         return outcome;
-    } catch (const std::exception& error) {
-        // 同 BridgeDeletionRepository：异常吞掉之后排查只能靠手工重放删除序列。
+    } catch (...) {
         rollback();
-        LOG_ERROR << "inspection year deletion failed year=" << inspection_year_id
-                  << " detail=" << error.what();
-        deletion::DeleteInspectionYearOutcome outcome;
-        outcome.status = deletion::DeleteInspectionYearStatus::Failed;
-        return outcome;
+        throw;
     }
 }
 

@@ -33,6 +33,7 @@ add_library(bridge_report_backend_core
     src/db/ComponentInventoryRepository.cpp
     src/db/DbClientFactory.cpp
     src/db/CommitLatch.cpp
+    src/db/DeadlockRetry.cpp
     src/db/DefectThreadRepository.cpp
     src/db/EditLockRepository.cpp
     src/db/InspectionReportSettingsRepository.cpp
@@ -248,6 +249,7 @@ add_executable(bridge_report_backend_tests
     tests/test_h21_part_evaluation.cpp
     tests/test_confirm_plan.cpp
     tests/test_commit_latch.cpp
+    tests/test_deadlock_retry.cpp
     tests/test_defect_matching_routes.cpp
     tests/test_defect_photo_routes.cpp
     tests/test_defect_rating_tree_matching.cpp

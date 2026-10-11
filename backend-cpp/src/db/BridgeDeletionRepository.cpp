@@ -8,6 +8,7 @@
 #include <json/json.h>
 
 #include "bridge_report/db/CommitLatch.hpp"
+#include "bridge_report/db/DeadlockRetry.hpp"
 
 namespace bridge_report::db {
 namespace {
@@ -281,6 +282,30 @@ deletion::DeleteBridgeOutcome BridgeDeletionRepository::delete_bridge(
     const deletion::DeletionActorSnapshot& actor,
     const std::string& batch_id
 ) {
+    // 整桥删除要锁年度、导入记录、归档文件等一大批行，与保存、确认等写路径会有交叉；
+    // 万一撞上死锁，整段事务重来，见 DeadlockRetry.hpp。
+    try {
+        return run_with_deadlock_retry("bridge deletion bridge=" + bridge_id, [&] {
+            return delete_bridge_once(bridge_id, expected_impact_token, reason, actor, batch_id);
+        });
+    } catch (const std::exception& error) {
+        // 原来是 catch (...) 且一个字都不记，用户只看到"删除失败，数据库已回滚"，
+        // 排查只能靠在库里手工重放整条删除序列。真实异常必须留下来。
+        LOG_ERROR << "bridge deletion failed bridge=" << bridge_id << " detail=" << error.what();
+        return {deletion::DeleteBridgeStatus::Failed};
+    } catch (...) {
+        LOG_ERROR << "bridge deletion failed bridge=" << bridge_id << " detail=<non-standard exception>";
+        return {deletion::DeleteBridgeStatus::Failed};
+    }
+}
+
+deletion::DeleteBridgeOutcome BridgeDeletionRepository::delete_bridge_once(
+    const std::string& bridge_id,
+    const std::string& expected_impact_token,
+    const std::string& reason,
+    const deletion::DeletionActorSnapshot& actor,
+    const std::string& batch_id
+) {
     TransactionPtr tx;
     const auto latch = std::make_shared<CommitLatch>();
     const auto rollback = [&]() { if (tx) { try { tx->rollback(); } catch (...) {} } };
@@ -361,16 +386,9 @@ deletion::DeleteBridgeOutcome BridgeDeletionRepository::delete_bridge(
         outcome.status = deletion::DeleteBridgeStatus::Deleted;
         outcome.deletion_audit_id = audit_id;
         return outcome;
-    } catch (const std::exception& error) {
-        // 原来是 catch (...) 且一个字都不记，用户只看到"删除失败，数据库已回滚"，
-        // 排查只能靠在库里手工重放整条删除序列。真实异常必须留下来。
-        rollback();
-        LOG_ERROR << "bridge deletion failed bridge=" << bridge_id << " detail=" << error.what();
-        return {deletion::DeleteBridgeStatus::Failed};
     } catch (...) {
         rollback();
-        LOG_ERROR << "bridge deletion failed bridge=" << bridge_id << " detail=<non-standard exception>";
-        return {deletion::DeleteBridgeStatus::Failed};
+        throw;
     }
 }
 
