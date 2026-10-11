@@ -116,7 +116,7 @@ powershell -ExecutionPolicy Bypass -File scripts/dev/check-backend-tests.ps1 -Bu
 Remove-Item Env:BRIDGE_REPORT_TEST_SCHEMA
 ```
 
-脚本读取 `BRIDGE_REPORT_TEST_DATABASE_URL`（未设置时使用脚本中的本地开发连接），要求 schema 名匹配 `bridge_report_test[a-z0-9_]*`。它会重建指定测试 schema，顺序应用全部 37 个迁移两遍、运行 18 个 SQL smoke 文件和 C++ 测试，成功后删除测试 schema；失败时保留现场。仅给它指定可丢弃的测试 schema。
+脚本读取 `BRIDGE_REPORT_TEST_DATABASE_URL`（未设置时使用脚本中的本地开发连接），要求 schema 名匹配 `bridge_report_test[a-z0-9_]*`。它会重建指定测试 schema，顺序应用全部 38 个迁移两遍、运行 19 个 SQL smoke 文件和 C++ 测试，成功后删除测试 schema；失败时保留现场。仅给它指定可丢弃的测试 schema。
 
 测试中的 legacy fixture 放行选项仅限测试进程；迁移 smoke 在默认严格模式运行，不应复制这些开关到业务后端。
 

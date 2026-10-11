@@ -21,7 +21,7 @@ node frontend/scripts/analyze-build.mjs --outDir "$($acceptanceRun.run_directory
 & tools-python/.venv/Scripts/python.exe scripts/acceptance/make_small_sample.py $acceptanceManifest
 ~~~
 
-prepare 创建私有 PostgreSQL 集群、随机数据库密码、数据库和 001～037 迁移。每次新建运行目录，失败时保留环境记录并使用收尾脚本停止本轮集群。静态服务器将 /api 同源转发到本轮 C++，不伪造业务响应。
+prepare 创建私有 PostgreSQL 集群、随机数据库密码、数据库和 001～038 迁移。每次新建运行目录，失败时保留环境记录并使用收尾脚本停止本轮集群。静态服务器将 /api 同源转发到本轮 C++，不伪造业务响应。
 
 ## 逐步执行
 
