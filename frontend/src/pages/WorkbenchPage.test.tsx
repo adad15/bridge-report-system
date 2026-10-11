@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import { fetchBridges, type BridgeSummary } from "../api/navigationApi";
 import { chooseOption } from "../test/antd";
 import { WorkbenchPage } from "./WorkbenchPage";
@@ -44,7 +45,7 @@ function LocationProbe() {
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={["/workbench"]}>
+    <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/workbench"]}>
       <Routes>
         <Route path="/workbench" element={<WorkbenchPage />} />
         <Route path="*" element={<LocationProbe />} />

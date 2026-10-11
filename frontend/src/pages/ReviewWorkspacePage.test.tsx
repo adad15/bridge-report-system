@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import {
   acquireEditLock,
   confirmImport,
@@ -224,7 +225,7 @@ function missingBindingOverview(): ResolutionWorkspace {
 
 async function renderEditableReview(): Promise<HTMLInputElement> {
   render(
-    <MemoryRouter initialEntries={["/imports/import-1/review"]}>
+    <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/imports/import-1/review"]}>
       <Routes>
         <Route path="/imports/:importRecordId/review" element={<ReviewWorkspacePage />} />
       </Routes>
@@ -358,7 +359,7 @@ describe("ReviewWorkspacePage edit-lock heartbeat", () => {
       });
 
     render(
-      <MemoryRouter initialEntries={["/imports/import-1/review"]}>
+      <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/imports/import-1/review"]}>
         <Routes>
           <Route path="/imports/:importRecordId/review" element={<ReviewWorkspacePage />} />
         </Routes>
@@ -683,7 +684,7 @@ function confirmedAssessmentResponse(): ConfirmedAssessmentResponse {
 
 async function renderConfirmedReview(): Promise<void> {
   render(
-    <MemoryRouter initialEntries={["/imports/import-1/review"]}>
+    <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/imports/import-1/review"]}>
       <Routes>
         <Route path="/imports/:importRecordId/review" element={<ReviewWorkspacePage />} />
       </Routes>

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import type {
   ComponentDefectArchive,
   ComponentSummary,
@@ -77,7 +78,7 @@ function archive(): ComponentDefectArchive {
 
 function renderPage(path = "/bridges/bridge-1/components/c-1") {
   render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter future={ROUTER_FUTURE} initialEntries={[path]}>
       <Routes>
         <Route path="/bridges/:bridgeId/components" element={<ComponentArchivePage />} />
         <Route

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import { emulateViewport } from "../test/antd";
 import { AppLayout } from "./AppLayout";
 import { useHeaderBridge } from "./HeaderBridgeContext";
@@ -18,7 +19,7 @@ vi.mock("../auth/AuthContext", () => ({
 
 function renderAt(path: string) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter future={ROUTER_FUTURE} initialEntries={[path]}>
       <AppLayout>
         <p>页面内容</p>
       </AppLayout>
@@ -115,7 +116,7 @@ describe("AppLayout", () => {
   // 桥名、状态、编号挂在顶栏的桥梁页签前面，页面里不再单占一张卡片。
   it("shows the current bridge in the header with a way back to the list", async () => {
     render(
-      <MemoryRouter initialEntries={["/bridges/bridge-1"]}>
+      <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/bridges/bridge-1"]}>
         <AppLayout>
           <BridgePage />
         </AppLayout>
@@ -133,7 +134,7 @@ describe("AppLayout", () => {
   it("drops the bridge number on a narrower screen", async () => {
     emulateViewport(1280);
     render(
-      <MemoryRouter initialEntries={["/bridges/bridge-1"]}>
+      <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/bridges/bridge-1"]}>
         <AppLayout>
           <BridgePage />
         </AppLayout>

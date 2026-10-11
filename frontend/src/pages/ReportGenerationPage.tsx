@@ -240,8 +240,8 @@ function ReportYearPage({ bridgeId, yearId }: { bridgeId?: string; yearId: strin
         }
       />
 
-      {error ? <Alert type="error" showIcon title={error} closable onClose={() => setError(null)} /> : null}
-      {notice ? <Alert type="success" showIcon title={notice} closable onClose={() => setNotice(null)} /> : null}
+      {error ? <Alert type="error" showIcon title={error} closable={{ onClose: () => setError(null) }} /> : null}
+      {notice ? <Alert type="success" showIcon title={notice} closable={{ onClose: () => setNotice(null) }} /> : null}
 
       <PreflightCard preflight={preflight} blocking={blocking} warnings={warnings} notes={settingsNotes} />
 

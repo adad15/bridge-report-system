@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import { createStandardDocument, deleteStandardVersion, fetchStandardDocuments } from "../api/standardDocumentsApi";
 import { chooseOption, emulateViewport } from "../test/antd";
 import { allStandardDocuments, h21Document, standardVersion } from "../test/standardDocumentFixtures";
@@ -66,7 +67,7 @@ function stubFullscreen() {
 
 function renderPage(path = "/standards") {
   return render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter future={ROUTER_FUTURE} initialEntries={[path]}>
       <StandardDocumentsPage />
       <LocationProbe />
     </MemoryRouter>,
@@ -207,6 +208,7 @@ describe("StandardDocumentsPage", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: /^上\s?传$/ }));
 
     expect(await screen.findByRole("heading", { name: created.name })).toBeInTheDocument();
-    expect(screen.getByLabelText("当前地址")).toHaveTextContent("doc=j21");
+    // v7_startTransition 下跳转是非阻塞的；新规范按名称排在最前，标题可能先于地址出现。
+    await waitFor(() => expect(screen.getByLabelText("当前地址")).toHaveTextContent("doc=j21"));
   });
 });

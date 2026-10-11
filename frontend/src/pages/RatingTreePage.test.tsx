@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import * as ratingTreeApi from "../api/ratingTreeApi";
 import * as standardsApi from "../api/standardsApi";
 import { clearRatingTreeViewStateForTests } from "../rating-tree/ratingTreeViewState";
@@ -140,7 +141,7 @@ const details = new Map<string, ratingTreeApi.RatingTreeNode>([
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={["/rating-trees/version-1"]}>
+    <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/rating-trees/version-1"]}>
       <Routes>
         <Route path="/rating-trees/:versionId" element={<RatingTreePage />} />
       </Routes>
@@ -151,7 +152,7 @@ function renderPage() {
 // 顶栏的"评定树"链接不带版本号，来回切页走的是这条路径。
 function renderIndex() {
   return render(
-    <MemoryRouter initialEntries={["/rating-trees"]}>
+    <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/rating-trees"]}>
       <Routes>
         <Route path="/rating-trees" element={<RatingTreePage />} />
         <Route path="/rating-trees/:versionId" element={<RatingTreePage />} />

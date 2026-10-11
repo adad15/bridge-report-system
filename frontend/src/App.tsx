@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
+import { ROUTER_FUTURE } from "./routerFuture";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LegacyTriageRedirect } from "./pages/LegacyTriageRedirect";
 import { LoginPage, LoginRestoringPage } from "./pages/LoginPage";
@@ -26,7 +27,7 @@ const InspectionWorkspacePage = createLazyFeature(async () => ({ default: (await
 export function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter future={ROUTER_FUTURE}>
         <AppShell />
       </BrowserRouter>
     </AuthProvider>

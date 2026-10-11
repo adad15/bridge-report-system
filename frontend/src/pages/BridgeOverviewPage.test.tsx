@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import { BridgeOverviewPage } from "./BridgeOverviewPage";
 
 vi.mock("../workspace/BridgeWorkspaceShell", () => ({
@@ -60,12 +61,12 @@ describe("BridgeOverviewPage", () => {
   // 台账构件可达数千条，挂在总览页会让每次进桥、每次切回都先等它整份加载完。
   // 台账在 /bridges/:id/inventory，入口由工作区标签导航提供，总览页不碰它。
   it("does not load the inventory", () => {
-    render(<MemoryRouter><BridgeOverviewPage /></MemoryRouter>);
+    render(<MemoryRouter future={ROUTER_FUTURE}><BridgeOverviewPage /></MemoryRouter>);
     expect(screen.queryByText("台账桥梁：bridge-1")).not.toBeInTheDocument();
   });
   // 步骤条读的是"有没有正式结论"，结论一出就永远停在已完成；这块位置换成年度间的实际变化。
   it("describes each component type in prose: previous year first, then the latest", async () => {
-    render(<MemoryRouter><BridgeOverviewPage /></MemoryRouter>);
+    render(<MemoryRouter future={ROUTER_FUTURE}><BridgeOverviewPage /></MemoryRouter>);
 
     // findByText 命中的是 <strong>，整句在它的父段落上。
     const line = (await screen.findByText(/桥面系·桥面铺装/)).parentElement;
@@ -77,7 +78,7 @@ describe("BridgeOverviewPage", () => {
 
   // 增与减分开报，净值单列：一边多 5、一边少 5 不该说成"没变化"。
   it("summarises the added and removed counts separately", async () => {
-    render(<MemoryRouter><BridgeOverviewPage /></MemoryRouter>);
+    render(<MemoryRouter future={ROUTER_FUTURE}><BridgeOverviewPage /></MemoryRouter>);
 
     const summary = await screen.findByText(/^合计：/);
     expect(summary).toHaveTextContent("2025 年记录病害 4 条，2026 年 7 条");
@@ -89,7 +90,7 @@ describe("BridgeOverviewPage", () => {
 
   // 条数统计不等于病害身份匹配，口径必须写在界面上。
   it("states that the figures are counts rather than matched defects", async () => {
-    render(<MemoryRouter><BridgeOverviewPage /></MemoryRouter>);
+    render(<MemoryRouter future={ROUTER_FUTURE}><BridgeOverviewPage /></MemoryRouter>);
 
     expect(await screen.findByText(/不代表逐条病害的对应关系/)).toBeInTheDocument();
   });

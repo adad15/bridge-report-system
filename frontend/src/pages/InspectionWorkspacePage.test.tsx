@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import { fetchInspectionYears } from "../api/navigationApi";
 import { clearCachedForTests } from "../api/resourceCache";
 import { fetchInspectionWorkspace } from "../api/workspaceApi";
@@ -74,7 +75,7 @@ describe("InspectionWorkspacePage", () => {
 
   it("shows the locked standard identities and package versions", async () => {
     render(
-      <MemoryRouter initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
+      <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
         <Routes><Route path="/bridges/:bridgeId/inspections/:inspectionYearId" element={<InspectionWorkspacePage />} /></Routes>
       </MemoryRouter>
     );
@@ -84,7 +85,7 @@ describe("InspectionWorkspacePage", () => {
 
   it("keeps the import dialog mounted while refreshing the annual workspace", async () => {
     render(
-      <MemoryRouter initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
+      <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
         <Routes>
           <Route path="/bridges/:bridgeId/inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
         </Routes>
@@ -119,7 +120,7 @@ describe("InspectionWorkspacePage", () => {
     });
 
     render(
-      <MemoryRouter initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
+      <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
         <Routes>
           <Route path="/bridges/:bridgeId/inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
         </Routes>
@@ -145,7 +146,7 @@ describe("InspectionWorkspacePage", () => {
       pending: { import_count: 1, unbound_observation_count: 0, total_count: 1 },
     });
     render(
-      <MemoryRouter initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
+      <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
         <Routes>
           <Route path="/bridges/:bridgeId/inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
         </Routes>
@@ -174,7 +175,7 @@ describe("InspectionWorkspacePage", () => {
       pending: { import_count: 1, unbound_observation_count: 0, total_count: 1 },
     });
     render(
-      <MemoryRouter initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
+      <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
         <Routes>
           <Route path="/bridges/:bridgeId/inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
           <Route path="*" element={<p>校对页</p>} />
@@ -206,7 +207,7 @@ describe("InspectionWorkspacePage", () => {
       pending: { import_count: 1, unbound_observation_count: 0, total_count: 1 },
     });
     render(
-      <MemoryRouter initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
+      <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/bridges/bridge-1/inspections/year-1"]}>
         <Routes>
           <Route path="/bridges/:bridgeId/inspections/:inspectionYearId" element={<InspectionWorkspacePage />} />
         </Routes>

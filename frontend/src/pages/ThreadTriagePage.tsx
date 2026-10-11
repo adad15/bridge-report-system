@@ -169,7 +169,7 @@ export function ThreadTriagePage() {
       />
 
       {error ? <Alert type="error" showIcon title={error} /> : null}
-      {notice ? <Alert type="success" showIcon role="status" title={notice} closable onClose={() => setNotice(null)} /> : null}
+      {notice ? <Alert type="success" showIcon role="status" title={notice} closable={{ onClose: () => setNotice(null) }} /> : null}
       {summary === null && !error ? <Card loading /> : null}
 
       {summary && summary.batches.length === 0 ? (

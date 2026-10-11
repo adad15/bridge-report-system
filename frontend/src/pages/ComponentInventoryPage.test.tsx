@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import { ComponentInventoryPage } from "./ComponentInventoryPage";
 
 vi.mock("../workspace/BridgeWorkspaceShell", () => ({
@@ -17,7 +18,7 @@ vi.mock("../bridges/ComponentInventoryEditor", () => ({
 
 describe("ComponentInventoryPage", () => {
   it("renders the inventory for the current workspace bridge", () => {
-    render(<MemoryRouter><ComponentInventoryPage /></MemoryRouter>);
+    render(<MemoryRouter future={ROUTER_FUTURE}><ComponentInventoryPage /></MemoryRouter>);
     expect(screen.getByText("台账桥梁：bridge-1")).toBeInTheDocument();
   });
 });

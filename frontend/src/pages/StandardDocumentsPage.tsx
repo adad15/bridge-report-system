@@ -219,7 +219,7 @@ export function StandardDocumentsPage() {
   return (
     <Flex vertical gap={14}>
       {error ?<Alert type="error" showIcon title={error} action={<Button size="small" onClick={load}>重新加载</Button>} /> : null}
-      {actionError ? <Alert type="error" showIcon closable title={actionError} onClose={() => setActionError(null)} /> : null}
+      {actionError ? <Alert type="error" showIcon closable={{ onClose: () => setActionError(null) }} title={actionError} /> : null}
       <Row gutter={[14, 14]} style={panelRowStyle}>
         <Col xs={24} lg={6} xxl={5} style={panelColStyle}>
           <StandardDocumentList

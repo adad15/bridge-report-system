@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import { ApiError } from "../api/apiClient";
 import {
   createReportJob,
@@ -128,7 +129,7 @@ function SwitchYear() {
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={["/bridges/b1/inspections/y1/report"]}>
+    <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/bridges/b1/inspections/y1/report"]}>
       <SwitchYear />
       <Routes>
         <Route

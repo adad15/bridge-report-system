@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import { fetchBridges } from "../api/navigationApi";
 import { fetchStandardPackages } from "../api/standardsApi";
 import { useAuth } from "../auth/AuthContext";
@@ -44,23 +45,23 @@ describe("BridgesPage", () => {
   });
 
   it("shows rule management only to administrators", async () => {
-    const { unmount } = render(<MemoryRouter><BridgesPage /></MemoryRouter>);
+    const { unmount } = render(<MemoryRouter future={ROUTER_FUTURE}><BridgesPage /></MemoryRouter>);
     expect(await screen.findByRole("button", { name: "规则管理" })).toBeInTheDocument();
     unmount();
 
     vi.mocked(useAuth).mockReturnValue({ user: { username: "normal", display_name: "普通用户", role: "normal" } } as never);
-    render(<MemoryRouter><BridgesPage /></MemoryRouter>);
+    render(<MemoryRouter future={ROUTER_FUTURE}><BridgesPage /></MemoryRouter>);
     await screen.findByText("绕阳河二号桥");
     expect(screen.queryByRole("button", { name: "规则管理" })).not.toBeInTheDocument();
   });
 
   it("opens rule management from the ?rules=1 link for administrators", async () => {
-    render(<MemoryRouter initialEntries={["/bridges?rules=1"]}><BridgesPage /></MemoryRouter>);
+    render(<MemoryRouter future={ROUTER_FUTURE} initialEntries={["/bridges?rules=1"]}><BridgesPage /></MemoryRouter>);
     expect(await screen.findByRole("button", { name: "关闭规则管理" })).toBeInTheDocument();
   });
 
   it("shows archive summaries and filters by bridge name, number, or route", async () => {
-    render(<MemoryRouter><BridgesPage /></MemoryRouter>);
+    render(<MemoryRouter future={ROUTER_FUTURE}><BridgesPage /></MemoryRouter>);
     expect(await screen.findByText("绕阳河二号桥")).toBeInTheDocument();
     expect(screen.getByText("2026 · 2类")).toBeInTheDocument();
     const search = screen.getByRole("searchbox", { name: /搜索桥名/ });
@@ -70,7 +71,7 @@ describe("BridgesPage", () => {
   });
 
   it("selects bridges without navigating and clears selection when search changes", async () => {
-    render(<MemoryRouter><BridgesPage /></MemoryRouter>);
+    render(<MemoryRouter future={ROUTER_FUTURE}><BridgesPage /></MemoryRouter>);
     await screen.findByText("绕阳河二号桥");
     const remove = screen.getByRole("button", { name: "删除选中桥梁（0）" });
     expect(remove).toBeDisabled();

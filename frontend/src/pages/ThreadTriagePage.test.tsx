@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ROUTER_FUTURE } from "../routerFuture";
 import { ApiError } from "../api/apiClient";
 import { chooseOption } from "../test/antd";
 import {
@@ -306,7 +307,7 @@ function withClusters(clusters: TriageManualCluster[]): TriageSummary {
 
 function renderPage() {
   render(
-    <MemoryRouter initialEntries={["/bridges/bridge-1/defect-threads/triage"]}>
+    <MemoryRouter future={ROUTER_FUTURE} initialEntries={["/bridges/bridge-1/defect-threads/triage"]}>
       <Routes>
         <Route path="/bridges/:bridgeId/defect-threads/triage" element={<ThreadTriagePage />} />
       </Routes>

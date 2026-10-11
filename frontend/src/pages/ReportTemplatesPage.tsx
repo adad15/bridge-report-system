@@ -259,7 +259,7 @@ export function ReportTemplatesPage() {
       />
 
       {error ? (
-        <Alert type="error" showIcon title={error} closable onClose={() => setError(null)} />
+        <Alert type="error" showIcon title={error} closable={{ onClose: () => setError(null) }} />
       ) : null}
 
       <Card title={`模板列表（${templates?.length ?? 0}）`}>

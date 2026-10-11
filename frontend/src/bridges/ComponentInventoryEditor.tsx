@@ -892,7 +892,7 @@ export function ComponentInventoryEditor({ bridgeId }: { bridgeId: string }) {
       {catalogError ? (
         <Alert type="warning" showIcon role="status" title={`规范映射名称暂时取不到（${catalogError}）；构件与编号不受影响，可稍后重试。`} />
       ) : null}
-      {error ? <Alert type="error" showIcon title={error} closable onClose={() => setError(null)} /> : null}
+      {error ? <Alert type="error" showIcon title={error} closable={{ onClose: () => setError(null) }} /> : null}
 
       <Row gutter={[14, 14]} style={stacked ? undefined : { flex: 1, minHeight: 0 }}>
         <Col xs={24} lg={6} style={stacked ? undefined : { height: "100%" }}>

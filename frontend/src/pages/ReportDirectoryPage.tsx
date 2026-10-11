@@ -158,7 +158,7 @@ function PersonnelTab({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <>
-      {error ? <Alert type="error" showIcon title={error} closable onClose={() => setError(null)} /> : null}
+      {error ? <Alert type="error" showIcon title={error} closable={{ onClose: () => setError(null) }} /> : null}
       <Card
         title={`人员（${items?.length ?? 0}）`}
         extra={
@@ -365,7 +365,7 @@ function EquipmentTab({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <>
-      {error ? <Alert type="error" showIcon title={error} closable onClose={() => setError(null)} /> : null}
+      {error ? <Alert type="error" showIcon title={error} closable={{ onClose: () => setError(null) }} /> : null}
       <Card
         title={`设备（${items?.length ?? 0}）`}
         extra={
