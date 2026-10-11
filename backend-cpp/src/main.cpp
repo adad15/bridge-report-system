@@ -362,7 +362,8 @@ int main(int argc, char* argv[]) {
     auto rating_trees =
         load_effective_rating_trees(config.standards_root, standards.issues);
 
-    const auto db_client = bridge_report::db::create_db_client(config.postgres);
+    const auto db_client = bridge_report::db::create_db_client(
+        config.postgres, static_cast<std::size_t>(config.postgres.connections));
 
     // 规则包文件是运行时真源；数据库只同步不可变身份与项目引用所需元数据。
     // 同身份同版本摘要冲突或数据库暂不可用时不覆盖旧记录，也不阻断 HTTP 启动。
@@ -582,14 +583,17 @@ int main(int argc, char* argv[]) {
                      "后端未启动。\n";
         return 1;
     }
+    // 显式 flush：stdout 重定向到文件时是全缓冲的，不 flush 这行要等进程退出才落盘。
     std::cout << "Bridge Report C++ backend listening on "
-              << config.host << ":" << config.port << "\n";
+              << config.host << ":" << config.port << " (threads=" << config.threads
+              << ", db connections=" << config.postgres.connections << ")" << std::endl;
 
     const std::string log_path = "logs";
     bridge_report::runtime::ensure_log_directory(log_path);
 
     drogon::app()
         .addListener(config.host, config.port)
+        .setThreadNum(static_cast<std::size_t>(config.threads))
         .setClientMaxBodySize(bridge_report::config::word_upload_request_max_bytes(config))
         .setLogPath(log_path)
         .setLogLevel(trantor::Logger::kInfo)

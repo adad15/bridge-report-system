@@ -67,6 +67,8 @@ AppConfig load_app_config(const std::filesystem::path& path) {
     const auto& cpp_server = root["cpp_server"];
     config.host = get_string_or_default(cpp_server, "host", config.host);
     config.port = get_int_or_default(cpp_server, "port", config.port);
+    // 0 在 drogon 里表示按 CPU 核数开线程；这里不接这个约定，非正数一律用默认值。
+    config.threads = get_positive_int_or_default(cpp_server, "threads", config.threads);
 
     const auto& python_tools = root["python_tools"];
     config.python_tools_base_url = get_string_or_default(
@@ -159,6 +161,8 @@ AppConfig load_app_config(const std::filesystem::path& path) {
     );
     config.postgres.user = get_string_or_default(postgres, "user", config.postgres.user);
     config.postgres.password = get_string_or_default(postgres, "password", config.postgres.password);
+    config.postgres.connections =
+        get_positive_int_or_default(postgres, "connections", config.postgres.connections);
 
     const auto& map = root["map"];
     config.map.js_key = get_string_or_default(map, "js_key", config.map.js_key);

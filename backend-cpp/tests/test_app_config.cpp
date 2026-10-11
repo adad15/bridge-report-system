@@ -52,7 +52,8 @@ std::filesystem::path write_config_file() {
     out << R"json({
   "cpp_server": {
     "host": "127.0.0.1",
-    "port": 19080
+    "port": 19080,
+    "threads": 6
   },
   "python_tools": {
     "base_url": "http://127.0.0.1:19081"
@@ -62,7 +63,8 @@ std::filesystem::path write_config_file() {
     "port": 15432,
     "database": "bridge_report_test",
     "user": "bridge_report_tester",
-    "password": "secret"
+    "password": "secret",
+    "connections": 9
   },
   "archive": {
     "root": "test-archive",
@@ -93,6 +95,7 @@ TEST(AppConfigTest, LoadsConfiguredPortsAndArchiveRoot) {
 
     EXPECT_EQ(config.host, "127.0.0.1");
     EXPECT_EQ(config.port, 19080);
+    EXPECT_EQ(config.threads, 6);
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:19081");
     EXPECT_EQ(config.archive_root.generic_string(), "test-archive");
     EXPECT_EQ(config.standards_root.generic_string(), "test-standards");
@@ -109,6 +112,7 @@ TEST(AppConfigTest, LoadsConfiguredPortsAndArchiveRoot) {
     EXPECT_EQ(config.postgres.database, "bridge_report_test");
     EXPECT_EQ(config.postgres.user, "bridge_report_tester");
     EXPECT_EQ(config.postgres.password, "secret");
+    EXPECT_EQ(config.postgres.connections, 9);
 }
 
 TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
@@ -116,6 +120,7 @@ TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
 
     EXPECT_EQ(config.host, "127.0.0.1");
     EXPECT_EQ(config.port, 18080);
+    EXPECT_EQ(config.threads, 4);
     EXPECT_EQ(config.python_tools_base_url, "http://127.0.0.1:18081");
     EXPECT_EQ(config.archive_root.generic_string(), "archive");
     EXPECT_EQ(config.standards_root.generic_string(), "standards");
@@ -132,6 +137,25 @@ TEST(AppConfigTest, UsesDefaultsWhenConfigFileDoesNotExist) {
     EXPECT_EQ(config.postgres.database, "bridge_report_system");
     EXPECT_EQ(config.postgres.user, "bridge_report");
     EXPECT_EQ(config.postgres.password, "bridge_report_dev");
+    EXPECT_EQ(config.postgres.connections, 6);
+}
+
+TEST(AppConfigTest, FallsBackToDefaultConcurrencyWhenValuesAreNotPositive) {
+    // 0 在 drogon 里表示“按 CPU 核数开线程”，负数没有意义；这里一律回到默认值，
+    // 免得手滑写个 0 就悄悄换了一种线程模型。
+    const auto path = std::filesystem::temp_directory_path() / "bridge_report_test_concurrency_config.json";
+    {
+        std::ofstream out(path);
+        out << R"json({
+  "cpp_server": { "threads": 0 },
+  "postgres": { "connections": -2 }
+})json";
+    }
+
+    const auto config = bridge_report::config::load_app_config(path);
+
+    EXPECT_EQ(config.threads, 4);
+    EXPECT_EQ(config.postgres.connections, 6);
 }
 
 TEST(AppConfigTest, EnvironmentOverridesStandardsRoot) {

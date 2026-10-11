@@ -1,7 +1,8 @@
 {
   "cpp_server": {
     "host": "127.0.0.1",
-    "port": 18080
+    "port": 18080,
+    "threads": 4
   },
   "python_tools": {
     "base_url": "http://127.0.0.1:18081",
@@ -18,7 +19,8 @@
     "port": 5432,
     "database": "bridge_report_system",
     "user": "bridge_report",
-    "password": "bridge_report_dev"
+    "password": "bridge_report_dev",
+    "connections": 6
   },
   "archive": {
     "root": "archive",

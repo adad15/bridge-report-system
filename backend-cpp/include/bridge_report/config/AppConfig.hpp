@@ -15,6 +15,10 @@ struct PostgresConfig {
     std::string database{"bridge_report_system"};
     std::string user{"bridge_report"};
     std::string password{"bridge_report_dev"};
+    // 连接池条数。处理器全程同步查库（execSqlSync），会同时查库的执行者是：
+    // cpp_server.threads 个 IO 线程 + 主循环上的定时清理 + 报告任务线程。
+    // 默认 6 = 4 + 1 + 1，每个执行者一条；调大线程数时这里要跟着调大。
+    int connections{6};
 };
 
 /**
@@ -44,6 +48,9 @@ struct MapConfig {
 struct AppConfig {
     std::string host{"127.0.0.1"};
     int port{18080};
+    // drogon 的 IO 线程数。处理器同步查库会占住所在线程，只开 1 个时一条慢请求
+    // （导入解析、大台账）会让其余请求全部排队。
+    int threads{4};
     std::string python_tools_base_url{"http://127.0.0.1:18081"};
     std::filesystem::path archive_root{"archive"};
     std::filesystem::path standards_root{"standards"};
