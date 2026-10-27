@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include "bridge_report/standards/Jtg5230Evaluator.hpp"
+#include "bridge_report/standards/Jtg5230Parameters.hpp"
 #include "support/jtg5230_fixtures.hpp"
 
 namespace {
@@ -538,6 +539,27 @@ TEST(Jtg5230EvaluatorTest, TraceRecordsEachLayer) {
         }
         if (entry.step == "unit") {
             EXPECT_EQ(entry.source_reference, "3.4.3");
+        }
+    }
+}
+
+TEST(Jtg5230EvaluatorTest, EveryEvaluationTypeScoresIntactBridgeAtHundred) {
+    const auto parameters =
+        *bridge_report::standards::parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+    ASSERT_EQ(parameters.evaluation_types.size(), 21u);
+
+    for (const auto& [type_id, type] : parameters.evaluation_types) {
+        for (const auto& weight_set : parameters.parameter_tables.at(type.parameter_table_id).weight_sets) {
+            SCOPED_TRACE(type_id + " / " + weight_set.id);
+            LayeredAssessmentInput input;
+            input.units.push_back(jtg5230::unit("U1", type_id, weight_set.id, {"S1"}));
+
+            const auto result = evaluate(input);
+
+            const auto& span = span_result(result, "S1");
+            EXPECT_DOUBLE_EQ(span.index, 100.0);
+            EXPECT_EQ(span.grade, 1);
+            EXPECT_EQ(span.parts.size(), weight_set.weights.size());
         }
     }
 }

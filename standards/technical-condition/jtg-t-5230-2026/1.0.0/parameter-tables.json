@@ -33,6 +33,39 @@
       "notes": ["含整体式实心板桥和整体式空心板桥", "每跨板梁 1 个构件"]
     },
     {
+      "id": "jtg5230.parameter_table.b_2_3",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.2.3",
+      "pdf_pages": [99, 100],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.15},
+        {"structure": "superstructure", "gamma": 0.40},
+        {"structure": "substructure", "gamma": 0.40},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.slab", "name": "实心板/空心板", "omega": 60},
+            {"j": 6, "part_id": "jtg5230.part.super.hinge_joint", "name": "铰缝", "omega": 25},
+            {"j": 7, "part_id": "jtg5230.part.super.bearing", "name": "支座", "omega": 15},
+            {"j": 8, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 9, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["含装配式实心板桥和装配式空心板桥", "每片板梁 1 个构件"]
+    },
+    {
       "id": "jtg5230.parameter_table.b_2_4",
       "references": ["jtg5230.source.official_pdf"],
       "source_table": "B.2.4",
@@ -64,6 +97,135 @@
         }
       ],
       "notes": ["装配式组合箱梁桥与装配式肋梁桥共用本表", "肋梁含 T 形、I 形、Π 形、矩形等肋板式梁", "每片梁 1 个构件；设横隔板时每道横隔板 1 个构件"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_2_5",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.2.5",
+      "pdf_pages": [100, 101],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.10},
+        {"structure": "superstructure", "gamma": 0.45},
+        {"structure": "substructure", "gamma": 0.40},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.box_girder", "name": "箱梁", "omega": 70},
+            {"j": 6, "part_id": "jtg5230.part.super.bearing", "name": "支座", "omega": 30},
+            {"j": 7, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 8, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 9, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["每跨箱梁 1 个构件"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_2_6",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.2.6",
+      "pdf_pages": [101],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.10},
+        {"structure": "superstructure", "gamma": 0.45},
+        {"structure": "substructure", "gamma": 0.40},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.box_girder", "name": "箱梁", "omega": 70},
+            {"j": 6, "part_id": "jtg5230.part.super.bearing", "name": "支座", "omega": 30},
+            {"j": 7, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 8, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 9, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["主梁每个施工节段 1 个构件", "节段连接处的缺损计入靠桥墩一侧的节段"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_2_7",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.2.7",
+      "pdf_pages": [101, 102],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.10},
+        {"structure": "superstructure", "gamma": 0.50},
+        {"structure": "substructure", "gamma": 0.35},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.main_girder", "name": "主梁", "omega": 45},
+            {"j": 6, "part_id": "jtg5230.part.super.deck_slab", "name": "桥面板", "omega": 25},
+            {"j": 7, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 10},
+            {"j": 8, "part_id": "jtg5230.part.super.bearing", "name": "支座", "omega": 20},
+            {"j": 9, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 10, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 13, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["适用于钢箱梁、钢桁梁、钢板梁和钢-混凝土组合梁桥", "主梁、桥面板每跨 1 个构件；横向联系每道 1 个构件"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_3_2",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.3.2",
+      "pdf_pages": [102],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.10},
+        {"structure": "superstructure", "gamma": 0.45},
+        {"structure": "substructure", "gamma": 0.40},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 50},
+            {"j": 2, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 30},
+            {"j": 3, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.super.main_arch_ring", "name": "主拱圈", "omega": 70},
+            {"j": 5, "part_id": "jtg5230.part.super.spandrel_wall", "name": "侧墙", "omega": 30},
+            {"j": 6, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 7, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 8, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 9, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["主拱圈每跨 1 个构件"]
     },
     {
       "id": "jtg5230.parameter_table.b_3_3",
@@ -114,6 +276,506 @@
         }
       ],
       "notes": ["主拱圈每跨 1 个构件"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_3_4",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.3.4",
+      "pdf_pages": [103],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.15},
+        {"structure": "superstructure", "gamma": 0.48},
+        {"structure": "substructure", "gamma": 0.32},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "with_expansion_joint",
+          "label": "设伸缩装置",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.arch_rib", "name": "拱肋", "omega": 50},
+            {"j": 6, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 10},
+            {"j": 7, "part_id": "jtg5230.part.super.spandrel_pier_and_wall", "name": "腹拱墩和侧墙", "omega": 20},
+            {"j": 8, "part_id": "jtg5230.part.super.spandrel_arch_or_deck_slab", "name": "腹拱圈或桥面板", "omega": 20},
+            {"j": 9, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 10, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 13, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        },
+        {
+          "id": "without_expansion_joint",
+          "label": "不设伸缩装置",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 50},
+            {"j": 2, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 30},
+            {"j": 3, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.super.arch_rib", "name": "拱肋", "omega": 50},
+            {"j": 5, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 10},
+            {"j": 6, "part_id": "jtg5230.part.super.spandrel_pier_and_wall", "name": "腹拱墩和侧墙", "omega": 20},
+            {"j": 7, "part_id": "jtg5230.part.super.spandrel_arch_or_deck_slab", "name": "腹拱圈或桥面板", "omega": 20},
+            {"j": 8, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 9, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["含矩形、工字形、箱形等截面肋拱桥", "每道拱肋 1 个构件"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_3_5",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.3.5",
+      "pdf_pages": [104],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.15},
+        {"structure": "superstructure", "gamma": 0.42},
+        {"structure": "substructure", "gamma": 0.38},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "with_expansion_joint",
+          "label": "设伸缩装置",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.arch_box", "name": "拱箱", "omega": 55},
+            {"j": 6, "part_id": "jtg5230.part.super.spandrel_pier_and_wall", "name": "腹拱墩和侧墙", "omega": 20},
+            {"j": 7, "part_id": "jtg5230.part.super.spandrel_arch_or_deck_slab", "name": "腹拱圈或桥面板", "omega": 25},
+            {"j": 8, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 9, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        },
+        {
+          "id": "without_expansion_joint",
+          "label": "不设伸缩装置",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 50},
+            {"j": 2, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 30},
+            {"j": 3, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.super.arch_box", "name": "拱箱", "omega": 55},
+            {"j": 5, "part_id": "jtg5230.part.super.spandrel_pier_and_wall", "name": "腹拱墩和侧墙", "omega": 20},
+            {"j": 6, "part_id": "jtg5230.part.super.spandrel_arch_or_deck_slab", "name": "腹拱圈或桥面板", "omega": 25},
+            {"j": 7, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 8, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 9, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["主拱圈每跨 1 个构件", "原表把桥面系分两行印刷、各标 0.15，属同一结构，只计一次"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_3_6",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.3.6",
+      "pdf_pages": [104],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.15},
+        {"structure": "superstructure", "gamma": 0.48},
+        {"structure": "substructure", "gamma": 0.32},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "with_expansion_joint",
+          "label": "设伸缩装置",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.main_arch_ring", "name": "主拱圈", "omega": 50},
+            {"j": 6, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 10},
+            {"j": 7, "part_id": "jtg5230.part.super.spandrel_pier_and_wall", "name": "腹拱墩和侧墙", "omega": 20},
+            {"j": 8, "part_id": "jtg5230.part.super.spandrel_arch_or_deck_slab", "name": "腹拱圈或桥面板", "omega": 20},
+            {"j": 9, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 10, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 13, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        },
+        {
+          "id": "without_expansion_joint",
+          "label": "不设伸缩装置",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 50},
+            {"j": 2, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 30},
+            {"j": 3, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.super.main_arch_ring", "name": "主拱圈", "omega": 50},
+            {"j": 5, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 10},
+            {"j": 6, "part_id": "jtg5230.part.super.spandrel_pier_and_wall", "name": "腹拱墩和侧墙", "omega": 20},
+            {"j": 7, "part_id": "jtg5230.part.super.spandrel_arch_or_deck_slab", "name": "腹拱圈或桥面板", "omega": 20},
+            {"j": 8, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 9, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["主拱圈每跨 1 个构件"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_3_7",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.3.7",
+      "pdf_pages": [105],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.15},
+        {"structure": "superstructure", "gamma": 0.45},
+        {"structure": "substructure", "gamma": 0.35},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "with_expansion_joint",
+          "label": "设伸缩装置",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.truss_arch_piece", "name": "桁架拱片", "omega": 50},
+            {"j": 6, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 20},
+            {"j": 7, "part_id": "jtg5230.part.super.deck_slab", "name": "桥面板", "omega": 30},
+            {"j": 8, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 9, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        },
+        {
+          "id": "without_expansion_joint",
+          "label": "不设伸缩装置",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 50},
+            {"j": 2, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 30},
+            {"j": 3, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.super.truss_arch_piece", "name": "桁架拱片", "omega": 50},
+            {"j": 5, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 20},
+            {"j": 6, "part_id": "jtg5230.part.super.deck_slab", "name": "桥面板", "omega": 30},
+            {"j": 7, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 8, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 9, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["每个桁架拱片 1 个构件", "原表把桥面系分两行印刷、各标 0.15，属同一结构，只计一次"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_3_8",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.3.8",
+      "pdf_pages": [105],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.15},
+        {"structure": "superstructure", "gamma": 0.45},
+        {"structure": "substructure", "gamma": 0.35},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "with_expansion_joint",
+          "label": "设伸缩装置",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.rigid_frame_arch_piece", "name": "刚架拱片", "omega": 50},
+            {"j": 6, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 20},
+            {"j": 7, "part_id": "jtg5230.part.super.deck_slab", "name": "桥面板", "omega": 30},
+            {"j": 8, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 9, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        },
+        {
+          "id": "without_expansion_joint",
+          "label": "不设伸缩装置",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 50},
+            {"j": 2, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 30},
+            {"j": 3, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.super.rigid_frame_arch_piece", "name": "刚架拱片", "omega": 50},
+            {"j": 5, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 20},
+            {"j": 6, "part_id": "jtg5230.part.super.deck_slab", "name": "桥面板", "omega": 30},
+            {"j": 7, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 8, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 9, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 10, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["每组刚架拱片 1 个构件"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_4_2",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.4.2",
+      "pdf_pages": [106],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.12},
+        {"structure": "superstructure", "gamma": 0.53},
+        {"structure": "substructure", "gamma": 0.30},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.arch_rib", "name": "拱肋", "omega": 35},
+            {"j": 6, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 10},
+            {"j": 7, "part_id": "jtg5230.part.super.hanger_or_column", "name": "吊索或立柱", "omega": 30},
+            {"j": 8, "part_id": "jtg5230.part.super.floor_system", "name": "横梁、纵梁及桥面板", "omega": 25},
+            {"j": 9, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 10, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 13, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["每道拱肋、每道纵梁各 1 个构件；桥面板每跨 1 个构件"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_4_3",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.4.3",
+      "pdf_pages": [107],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.12},
+        {"structure": "superstructure", "gamma": 0.55},
+        {"structure": "substructure", "gamma": 0.28},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.arch_rib", "name": "拱肋", "omega": 20},
+            {"j": 6, "part_id": "jtg5230.part.super.tie_cable", "name": "系杆索", "omega": 20},
+            {"j": 7, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 10},
+            {"j": 8, "part_id": "jtg5230.part.super.hanger_or_column", "name": "吊索或立柱", "omega": 30},
+            {"j": 9, "part_id": "jtg5230.part.super.floor_system", "name": "横梁、纵梁及桥面板", "omega": 15},
+            {"j": 10, "part_id": "jtg5230.part.super.bearing", "name": "支座", "omega": 5},
+            {"j": 11, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 12, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 13, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 14, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 15, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["每道拱肋、每组系杆索、每道纵梁各 1 个构件；桥面板每跨 1 个构件"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_4_4",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.4.4",
+      "pdf_pages": [107],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.12},
+        {"structure": "superstructure", "gamma": 0.53},
+        {"structure": "substructure", "gamma": 0.30},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.arch_rib", "name": "拱肋", "omega": 25},
+            {"j": 6, "part_id": "jtg5230.part.super.tie_beam", "name": "系杆", "omega": 10},
+            {"j": 7, "part_id": "jtg5230.part.super.lateral_bracing", "name": "横向联系", "omega": 10},
+            {"j": 8, "part_id": "jtg5230.part.super.hanger_or_column", "name": "吊索或立柱", "omega": 35},
+            {"j": 9, "part_id": "jtg5230.part.super.floor_system", "name": "横梁、纵梁及桥面板", "omega": 15},
+            {"j": 10, "part_id": "jtg5230.part.super.bearing", "name": "支座", "omega": 5},
+            {"j": 11, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 12, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 13, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 35},
+            {"j": 14, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 35},
+            {"j": 15, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 30}
+          ]
+        }
+      ],
+      "notes": ["每道拱肋、每道系杆、每道纵梁各 1 个构件；桥面板每跨 1 个构件"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_5_2",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.5.2",
+      "pdf_pages": [108],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.10},
+        {"structure": "superstructure", "gamma": 0.55},
+        {"structure": "substructure", "gamma": 0.30},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.stiffening_girder", "name": "加劲梁", "omega": 20},
+            {"j": 6, "part_id": "jtg5230.part.super.hanger_and_clamp", "name": "吊索及索夹", "omega": 20},
+            {"j": 7, "part_id": "jtg5230.part.super.main_cable", "name": "主缆", "omega": 20},
+            {"j": 8, "part_id": "jtg5230.part.super.tower_and_saddle", "name": "索塔及索鞍", "omega": 20},
+            {"j": 9, "part_id": "jtg5230.part.super.anchorage_system", "name": "锚固系统", "omega": 10},
+            {"j": 10, "part_id": "jtg5230.part.super.bearing_and_restraint", "name": "支座及约束体系", "omega": 10},
+            {"j": 11, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 12, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 13, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 25},
+            {"j": 14, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 25},
+            {"j": 15, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 50}
+          ]
+        }
+      ],
+      "notes": ["加劲梁每两个吊点之间 1 个构件", "桥墩指过渡墩或辅助墩；基础含墩台基础和索塔基础"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_5_3",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.5.3",
+      "pdf_pages": [108, 109],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.10},
+        {"structure": "superstructure", "gamma": 0.50},
+        {"structure": "substructure", "gamma": 0.35},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.stiffening_girder", "name": "加劲梁", "omega": 20},
+            {"j": 6, "part_id": "jtg5230.part.super.hanger_and_clamp", "name": "吊索及索夹", "omega": 25},
+            {"j": 7, "part_id": "jtg5230.part.super.main_cable", "name": "主缆", "omega": 25},
+            {"j": 8, "part_id": "jtg5230.part.super.tower_and_saddle", "name": "索塔及索鞍", "omega": 20},
+            {"j": 9, "part_id": "jtg5230.part.super.bearing_and_restraint", "name": "支座及约束体系", "omega": 10},
+            {"j": 10, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 36},
+            {"j": 11, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 24},
+            {"j": 12, "part_id": "jtg5230.part.sub.anchorage", "name": "锚碇及锚固系统", "omega": 40},
+            {"j": 13, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 25},
+            {"j": 14, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 25},
+            {"j": 15, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 50}
+          ]
+        }
+      ],
+      "notes": ["加劲梁每两个吊点之间 1 个构件", "桥墩指过渡墩或辅助墩；基础含墩台基础和索塔基础"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_6_2",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.6.2",
+      "pdf_pages": [109],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.10},
+        {"structure": "superstructure", "gamma": 0.55},
+        {"structure": "substructure", "gamma": 0.30},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.main_girder", "name": "主梁", "omega": 30},
+            {"j": 6, "part_id": "jtg5230.part.super.stay_cable", "name": "斜拉索", "omega": 35},
+            {"j": 7, "part_id": "jtg5230.part.super.tower", "name": "索塔", "omega": 25},
+            {"j": 8, "part_id": "jtg5230.part.super.bearing_and_restraint", "name": "支座及约束体系", "omega": 10},
+            {"j": 9, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 10, "part_id": "jtg5230.part.sub.foundation", "name": "基础", "omega": 40},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 25},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 25},
+            {"j": 13, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 50}
+          ]
+        }
+      ],
+      "notes": ["主梁每两个吊点之间 1 个构件", "桥墩指过渡墩或辅助墩；基础含墩台基础和索塔基础"]
+    },
+    {
+      "id": "jtg5230.parameter_table.b_6_3",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "B.6.3",
+      "pdf_pages": [110],
+      "structures": [
+        {"structure": "deck_system", "gamma": 0.10},
+        {"structure": "superstructure", "gamma": 0.55},
+        {"structure": "substructure", "gamma": 0.30},
+        {"structure": "ancillary", "gamma": 0.05}
+      ],
+      "weight_sets": [
+        {
+          "id": "standard",
+          "label": "表列权重",
+          "weights": [
+            {"j": 1, "part_id": "jtg5230.part.deck.pavement", "name": "桥面铺装", "omega": 40},
+            {"j": 2, "part_id": "jtg5230.part.deck.expansion_joint", "name": "伸缩装置", "omega": 25},
+            {"j": 3, "part_id": "jtg5230.part.deck.railing_and_sidewalk", "name": "护栏及人行道", "omega": 20},
+            {"j": 4, "part_id": "jtg5230.part.deck.drainage", "name": "排水系统", "omega": 15},
+            {"j": 5, "part_id": "jtg5230.part.super.main_girder", "name": "主梁", "omega": 35},
+            {"j": 6, "part_id": "jtg5230.part.super.stay_cable", "name": "斜拉索", "omega": 30},
+            {"j": 7, "part_id": "jtg5230.part.super.tower", "name": "索塔", "omega": 25},
+            {"j": 8, "part_id": "jtg5230.part.super.bearing_and_restraint", "name": "支座及约束体系", "omega": 10},
+            {"j": 9, "part_id": "jtg5230.part.sub.pier_or_abutment", "name": "桥墩或桥台", "omega": 60},
+            {"j": 10, "part_id": "jtg5230.part.sub.foundation", "name": "墩台基础", "omega": 40},
+            {"j": 11, "part_id": "jtg5230.part.ancillary.riverbed", "name": "河床及调治构造物", "omega": 25},
+            {"j": 12, "part_id": "jtg5230.part.ancillary.wing_wall_and_slope", "name": "翼墙、锥坡、护坡", "omega": 25},
+            {"j": 13, "part_id": "jtg5230.part.ancillary.other_facilities", "name": "其他附属设施", "omega": 50}
+          ]
+        }
+      ],
+      "notes": ["主梁每两个吊点之间 1 个构件", "桥墩指过渡墩或辅助墩；基础含墩台基础和索塔基础"]
     }
   ]
 }

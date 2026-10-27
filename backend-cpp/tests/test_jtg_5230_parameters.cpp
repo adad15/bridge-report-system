@@ -1,5 +1,6 @@
 #include <array>
 #include <map>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -198,6 +199,148 @@ TEST(Jtg5230ParametersTest, SampleTablesMatchPrintedValues) {
     EXPECT_EQ(
         parameters.evaluation_types.at("jtg5230.evaluation_type.beam.precast_ribbed").parameter_table_id,
         "jtg5230.parameter_table.b_2_4");
+}
+
+TEST(Jtg5230ParametersTest, CoversAllTwentyOneEvaluationTypes) {
+    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+
+    EXPECT_EQ(parameters.evaluation_types.size(), 21u);
+    EXPECT_EQ(parameters.parameter_tables.size(), 20u);
+    std::map<std::string, int> families;
+    std::map<std::string, int> table_usage;
+    for (const auto& [id, type] : parameters.evaluation_types) {
+        (void)id;
+        ++families[type.family];
+        ++table_usage[type.parameter_table_id];
+    }
+    EXPECT_EQ(
+        families,
+        (std::map<std::string, int>{
+            {"beam", 7}, {"arch", 7}, {"combined_arch", 3}, {"suspension", 2}, {"cable_stayed", 2}}));
+    for (const auto& [table_id, usage] : table_usage) {
+        SCOPED_TRACE(table_id);
+        EXPECT_EQ(usage, table_id == "jtg5230.parameter_table.b_2_4" ? 2 : 1);
+    }
+}
+
+TEST(Jtg5230ParametersTest, EveryPartIsUsedBySomeTable) {
+    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+    std::set<std::string> used;
+    for (const auto& [id, table] : parameters.parameter_tables) {
+        (void)id;
+        for (const auto& weight_set : table.weight_sets) {
+            for (const auto& weight : weight_set.weights) {
+                used.insert(weight.part_id);
+            }
+        }
+    }
+
+    for (const auto& [part_id, part] : parameters.parts) {
+        (void)part;
+        EXPECT_TRUE(used.contains(part_id)) << part_id;
+    }
+}
+
+TEST(Jtg5230ParametersTest, MainComponentPartsAppearInTheirFamilyTables) {
+    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+    std::map<std::string, std::set<std::string>> family_parts;
+    for (const auto& [id, type] : parameters.evaluation_types) {
+        (void)id;
+        for (const auto& weight_set : parameters.parameter_tables.at(type.parameter_table_id).weight_sets) {
+            for (const auto& weight : weight_set.weights) {
+                family_parts[type.family].insert(weight.part_id);
+            }
+        }
+    }
+
+    for (const auto& [family, components] : parameters.main_components) {
+        for (const auto& part_id : components.main_part_ids) {
+            EXPECT_TRUE(family_parts[family].contains(part_id)) << family << " / " << part_id;
+        }
+        for (const auto& [part_id, members] : components.mixed_parts) {
+            (void)members;
+            EXPECT_TRUE(family_parts[family].contains(part_id)) << family << " / " << part_id;
+        }
+    }
+}
+
+TEST(Jtg5230ParametersTest, EveryTableMatchesPrintedSpotValues) {
+    struct SpotValue {
+        std::string table;
+        std::vector<int> pdf_pages;
+        std::array<int, 4> gammas;  // 桥面系、上部结构、下部结构、附属构造（百分数）
+        std::string weight_set;
+        std::string part;
+        int omega;
+    };
+    const std::vector<SpotValue> spots{
+        {"b_2_2", {99}, {15, 40, 40, 5}, "standard", "super.slab", 75},
+        {"b_2_3", {99, 100}, {15, 40, 40, 5}, "standard", "super.hinge_joint", 25},
+        {"b_2_4", {100}, {15, 42, 38, 5}, "standard", "super.main_girder", 55},
+        {"b_2_5", {100, 101}, {10, 45, 40, 5}, "standard", "super.box_girder", 70},
+        {"b_2_6", {101}, {10, 45, 40, 5}, "standard", "super.bearing", 30},
+        {"b_2_7", {101, 102}, {10, 50, 35, 5}, "standard", "super.deck_slab", 25},
+        {"b_3_2", {102}, {10, 45, 40, 5}, "standard", "super.spandrel_wall", 30},
+        {"b_3_3", {102, 103}, {15, 45, 35, 5}, "with_expansion_joint", "super.spandrel_arch_or_deck_slab", 25},
+        {"b_3_4", {103}, {15, 48, 32, 5}, "with_expansion_joint", "super.arch_rib", 50},
+        {"b_3_5", {104}, {15, 42, 38, 5}, "with_expansion_joint", "super.arch_box", 55},
+        {"b_3_6", {104}, {15, 48, 32, 5}, "with_expansion_joint", "super.lateral_bracing", 10},
+        {"b_3_7", {105}, {15, 45, 35, 5}, "with_expansion_joint", "super.deck_slab", 30},
+        {"b_3_8", {105}, {15, 45, 35, 5}, "with_expansion_joint", "super.rigid_frame_arch_piece", 50},
+        {"b_4_2", {106}, {12, 53, 30, 5}, "standard", "super.hanger_or_column", 30},
+        {"b_4_3", {107}, {12, 55, 28, 5}, "standard", "super.tie_cable", 20},
+        {"b_4_4", {107}, {12, 53, 30, 5}, "standard", "super.hanger_or_column", 35},
+        {"b_5_2", {108}, {10, 55, 30, 5}, "standard", "super.anchorage_system", 10},
+        {"b_5_3", {108, 109}, {10, 50, 35, 5}, "standard", "sub.anchorage", 40},
+        {"b_6_2", {109}, {10, 55, 30, 5}, "standard", "super.stay_cable", 35},
+        {"b_6_3", {110}, {10, 55, 30, 5}, "standard", "super.main_girder", 35},
+    };
+    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+
+    for (const auto& spot : spots) {
+        SCOPED_TRACE(spot.table);
+        const auto found = parameters.parameter_tables.find("jtg5230.parameter_table." + spot.table);
+        ASSERT_NE(found, parameters.parameter_tables.end());
+        EXPECT_EQ(found->second.pdf_pages, spot.pdf_pages);
+        EXPECT_EQ(gammas(found->second), spot.gammas);
+        EXPECT_EQ(omega_of(found->second, spot.weight_set, spot.part), spot.omega);
+    }
+}
+
+TEST(Jtg5230ParametersTest, ArchTablesOfferExplicitSecondWeightSet) {
+    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+
+    for (const auto* table_suffix : {"b_3_3", "b_3_4", "b_3_5", "b_3_6", "b_3_7", "b_3_8"}) {
+        SCOPED_TRACE(table_suffix);
+        const auto& table = parameters.parameter_tables.at(std::string("jtg5230.parameter_table.") + table_suffix);
+        ASSERT_EQ(table.weight_sets.size(), 2u);
+        EXPECT_EQ(table.weight_sets[0].id, "with_expansion_joint");
+        EXPECT_EQ(table.weight_sets[1].id, "without_expansion_joint");
+        EXPECT_EQ(omega_of(table, "without_expansion_joint", "deck.pavement"), 50);
+        EXPECT_EQ(omega_of(table, "without_expansion_joint", "deck.railing_and_sidewalk"), 30);
+        EXPECT_EQ(omega_of(table, "without_expansion_joint", "deck.drainage"), 20);
+        EXPECT_EQ(weight_of(table, "without_expansion_joint", "deck.expansion_joint"), nullptr);
+    }
+    const auto& solid = parameters.parameter_tables.at("jtg5230.parameter_table.b_3_2");
+    ASSERT_EQ(solid.weight_sets.size(), 1u);
+    EXPECT_EQ(solid.weight_sets[0].id, "standard");
+    EXPECT_EQ(weight_of(solid, "standard", "deck.expansion_joint"), nullptr);
+}
+
+TEST(Jtg5230ParametersTest, CableSupportedAncillaryAndAnchorageWeights) {
+    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+
+    for (const auto* table_suffix : {"b_5_2", "b_5_3", "b_6_2", "b_6_3"}) {
+        SCOPED_TRACE(table_suffix);
+        const auto& table = parameters.parameter_tables.at(std::string("jtg5230.parameter_table.") + table_suffix);
+        EXPECT_EQ(omega_of(table, "standard", "ancillary.riverbed"), 25);
+        EXPECT_EQ(omega_of(table, "standard", "ancillary.wing_wall_and_slope"), 25);
+        EXPECT_EQ(omega_of(table, "standard", "ancillary.other_facilities"), 50);
+    }
+    const auto& earth_anchored = parameters.parameter_tables.at("jtg5230.parameter_table.b_5_3");
+    EXPECT_EQ(omega_of(earth_anchored, "standard", "sub.pier_or_abutment"), 36);
+    EXPECT_EQ(omega_of(earth_anchored, "standard", "sub.foundation"), 24);
+    EXPECT_EQ(omega_of(earth_anchored, "standard", "sub.anchorage"), 40);
 }
 
 TEST(Jtg5230ParametersTest, RejectsGammaNotSummingToOne) {
