@@ -3,6 +3,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <json/json.h>
@@ -76,14 +77,53 @@ void seal_package(const std::filesystem::path& package_path) {
     write_json(package_path / "manifest.json", manifest);
 }
 
-bool has_issue(const bridge_report::standards::StandardLoadResult& result, const std::string& code) {
-    for (const auto& issue : result.issues) {
+bool has_issue(
+    const std::vector<bridge_report::standards::StandardIssue>& issues,
+    const std::string& code) {
+    for (const auto& issue : issues) {
         if (issue.code == code) {
             return true;
         }
     }
     return false;
 }
+
+bool has_issue(const bridge_report::standards::StandardLoadResult& result, const std::string& code) {
+    return has_issue(result.issues, code);
+}
+
+// 在临时目录里拼一个规范根，把夹具包复制到指定的相对位置。
+class TemporaryStandardsRoot {
+public:
+    TemporaryStandardsRoot() {
+        static std::atomic<unsigned long long> sequence{0};
+        path_ = std::filesystem::temp_directory_path() /
+                ("bridge-report-standards-root-" +
+                 std::to_string(sequence.fetch_add(1, std::memory_order_relaxed)));
+        std::filesystem::remove_all(path_);
+        std::filesystem::create_directories(path_);
+    }
+
+    ~TemporaryStandardsRoot() { std::filesystem::remove_all(path_); }
+
+    std::filesystem::path copy_fixture(
+        const std::string& fixture_name,
+        const std::filesystem::path& relative_target) const {
+        const auto target = path_ / relative_target;
+        std::filesystem::create_directories(target);
+        std::filesystem::copy(
+            fixture_root() / fixture_name,
+            target,
+            std::filesystem::copy_options::recursive |
+                std::filesystem::copy_options::overwrite_existing);
+        return target;
+    }
+
+    const std::filesystem::path& path() const { return path_; }
+
+private:
+    std::filesystem::path path_;
+};
 
 TEST(StandardPackageLoaderTest, LoadsTechnicalAndMaintenancePackages) {
     StandardPackageLoader loader;
@@ -159,13 +199,52 @@ TEST(StandardPackageLoaderTest, RejectsUnknownPackageStatus) {
     StandardPackageLoader loader;
     TemporaryPackage package("valid-technical");
     auto manifest = read_json(package.path() / "manifest.json");
-    manifest["status"] = "draft";
+    manifest["status"] = "retired";
     write_json(package.path() / "manifest.json", manifest);
 
     const auto result = loader.load(package.path());
 
     EXPECT_FALSE(result.ok());
     EXPECT_TRUE(has_issue(result, "package_status_unsupported"));
+}
+
+TEST(StandardPackageLoaderTest, LoadsDraftPackageWhenAskedExplicitly) {
+    StandardPackageLoader loader;
+    TemporaryPackage package("valid-technical");
+    auto manifest = read_json(package.path() / "manifest.json");
+    manifest["status"] = "draft";
+    write_json(package.path() / "manifest.json", manifest);
+    seal_package(package.path());
+
+    const auto result = loader.load(package.path());
+
+    ASSERT_TRUE(result.ok());
+    EXPECT_EQ(result.package->manifest.status, "draft");
+}
+
+TEST(StandardPackageLoaderTest, RuntimeScanSkipsDraftsAndRatingTreeDirectories) {
+    StandardPackageLoader loader;
+    TemporaryStandardsRoot root;
+    root.copy_fixture("valid-technical", "technical-condition/active");
+    const auto draft = root.copy_fixture("valid-technical", "technical-condition/draft");
+    auto draft_manifest = read_json(draft / "manifest.json");
+    draft_manifest["status"] = "draft";
+    draft_manifest["package_version"] = "2.0.0";
+    write_json(draft / "manifest.json", draft_manifest);
+    seal_package(draft);
+    // 这个包本身能加载，放在评定树目录下，用来证明运行时扫描跳过了这类目录。
+    root.copy_fixture("valid-maintenance", "rating-tree/tree");
+    root.copy_fixture("invalid-checksum", "maintenance/broken");
+
+    const auto result = loader.load_runtime_packages(root.path());
+
+    ASSERT_EQ(result.packages.size(), 1u);
+    EXPECT_EQ(result.packages[0].manifest.standard_id, "TEST-TECH-2026");
+    EXPECT_EQ(result.packages[0].manifest.package_version, "1.0.0");
+    ASSERT_EQ(result.skipped_drafts.size(), 1u);
+    EXPECT_EQ(result.skipped_drafts[0].standard_id, "TEST-TECH-2026");
+    EXPECT_EQ(result.skipped_drafts[0].package_version, "2.0.0");
+    EXPECT_TRUE(has_issue(result.issues, "content_checksum_mismatch"));
 }
 
 TEST(StandardPackageLoaderTest, RejectsChecksumMismatch) {

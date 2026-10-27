@@ -136,7 +136,7 @@ bool parse_manifest(
     valid &= require_non_empty_string(document, "content_checksum", manifest.content_checksum, result);
     valid &= require_non_empty_string(document, "status", manifest.status, result);
 
-    if (!manifest.status.empty() && manifest.status != "active") {
+    if (!manifest.status.empty() && manifest.status != "active" && manifest.status != "draft") {
         result.issues.push_back(issue(
             "package_status_unsupported", "规则包清单状态不受当前程序支持。"));
         valid = false;
@@ -441,6 +441,30 @@ std::vector<std::filesystem::path> StandardPackageLoader::discover(
     }
     std::sort(packages.begin(), packages.end());
     return packages;
+}
+
+StandardRuntimeLoadResult StandardPackageLoader::load_runtime_packages(
+    const std::filesystem::path& standards_root) const {
+    StandardRuntimeLoadResult result;
+    for (const auto& package_root : discover(standards_root)) {
+        if (package_root.lexically_normal().generic_string().find("/rating-tree/") !=
+            std::string::npos) {
+            continue;
+        }
+        auto loaded = load(package_root);
+        if (!loaded.ok()) {
+            for (auto& load_issue : loaded.issues) {
+                result.issues.push_back(std::move(load_issue));
+            }
+            continue;
+        }
+        if (loaded.package->manifest.status == "draft") {
+            result.skipped_drafts.push_back(loaded.package->manifest);
+            continue;
+        }
+        result.packages.push_back(std::move(*loaded.package));
+    }
+    return result;
 }
 
 }  // namespace bridge_report::standards
