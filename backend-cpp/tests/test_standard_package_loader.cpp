@@ -247,6 +247,40 @@ TEST(StandardPackageLoaderTest, RuntimeScanSkipsDraftsAndRatingTreeDirectories) 
     EXPECT_TRUE(has_issue(result.issues, "content_checksum_mismatch"));
 }
 
+TEST(StandardPackageLoaderTest, RuntimeScanSkipsDraftEvenWhenItsChecksumIsStale) {
+    // 草稿期间改了内容还没重算摘要，运行时也只该跳过，不能算加载失败（设计 3.3）。
+    StandardPackageLoader loader;
+    TemporaryStandardsRoot root;
+    root.copy_fixture("valid-technical", "technical-condition/active");
+    const auto draft = root.copy_fixture("valid-technical", "technical-condition/draft");
+    auto draft_manifest = read_json(draft / "manifest.json");
+    draft_manifest["status"] = "draft";
+    draft_manifest["package_version"] = "2.0.0";
+    write_json(draft / "manifest.json", draft_manifest);
+
+    const auto result = loader.load_runtime_packages(root.path());
+
+    EXPECT_TRUE(result.issues.empty());
+    ASSERT_EQ(result.skipped_drafts.size(), 1u);
+    EXPECT_EQ(result.skipped_drafts[0].standard_id, "TEST-TECH-2026");
+    EXPECT_EQ(result.skipped_drafts[0].package_version, "2.0.0");
+    EXPECT_EQ(result.packages.size(), 1u);
+}
+
+TEST(StandardPackageLoaderTest, RuntimeScanJudgesRatingTreeDirectoryRelativeToRoot) {
+    // 规范根本身放在名叫 rating-tree 的目录下时，只能跳过根下面的 rating-tree 子目录。
+    StandardPackageLoader loader;
+    TemporaryStandardsRoot outer;
+    outer.copy_fixture("valid-technical", "rating-tree/standards/technical-condition/active");
+    outer.copy_fixture("valid-maintenance", "rating-tree/standards/rating-tree/tree");
+
+    const auto result = loader.load_runtime_packages(outer.path() / "rating-tree" / "standards");
+
+    ASSERT_EQ(result.packages.size(), 1u);
+    EXPECT_EQ(result.packages[0].manifest.standard_id, "TEST-TECH-2026");
+    EXPECT_TRUE(result.issues.empty());
+}
+
 TEST(StandardPackageLoaderTest, RejectsChecksumMismatch) {
     StandardPackageLoader loader;
     TemporaryPackage package("invalid-checksum");

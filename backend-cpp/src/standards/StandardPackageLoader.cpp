@@ -175,6 +175,34 @@ bool parse_manifest(
     return valid;
 }
 
+// 清单 status 为 draft 时返回身份字段（只供日志），否则返回空。不校验其他字段和摘要。
+std::optional<StandardManifest> read_draft_manifest(const std::filesystem::path& package_root) {
+    Json::Value document;
+    StandardIssue read_issue;
+    if (!read_json_document(
+            package_root / "manifest.json",
+            document,
+            read_issue,
+            "manifest_missing",
+            "manifest_invalid_json") ||
+        !document["status"].isString() || document["status"].asString() != "draft") {
+        return std::nullopt;
+    }
+    const auto text = [&](const char* field) {
+        return document[field].isString() ? document[field].asString() : std::string{};
+    };
+    StandardManifest manifest;
+    manifest.family = parse_standard_family(text("standard_family"))
+                          .value_or(StandardFamily::technical_condition);
+    manifest.standard_id = text("standard_id");
+    manifest.standard_code = text("standard_code");
+    manifest.standard_name = text("standard_name");
+    manifest.package_version = text("package_version");
+    manifest.algorithm_id = text("algorithm_id");
+    manifest.status = "draft";
+    return manifest;
+}
+
 bool is_cross_package_reference(const std::string_view reference) {
     return reference.find("::") != std::string_view::npos ||
            reference.starts_with("package://") || reference.starts_with("standard://");
@@ -445,10 +473,20 @@ std::vector<std::filesystem::path> StandardPackageLoader::discover(
 
 StandardRuntimeLoadResult StandardPackageLoader::load_runtime_packages(
     const std::filesystem::path& standards_root) const {
+    auto root = standards_root.lexically_normal();
+    if (!root.has_filename()) {
+        root = root.parent_path();  // "standards/" 与 "standards" 一样处理
+    }
     StandardRuntimeLoadResult result;
     for (const auto& package_root : discover(standards_root)) {
-        if (package_root.lexically_normal().generic_string().find("/rating-tree/") !=
-            std::string::npos) {
+        // 评定树扩展包另有加载器；只看相对规范根的第一段，规范根自身所在的路径不算。
+        const auto relative = package_root.lexically_normal().lexically_relative(root);
+        if (!relative.empty() && *relative.begin() == std::filesystem::path("rating-tree")) {
+            continue;
+        }
+        // 草稿只看清单状态就跳过、不校验摘要：草稿期间改了内容还没重算摘要，不应算加载失败。
+        if (auto draft = read_draft_manifest(package_root)) {
+            result.skipped_drafts.push_back(std::move(*draft));
             continue;
         }
         auto loaded = load(package_root);
@@ -456,10 +494,6 @@ StandardRuntimeLoadResult StandardPackageLoader::load_runtime_packages(
             for (auto& load_issue : loaded.issues) {
                 result.issues.push_back(std::move(load_issue));
             }
-            continue;
-        }
-        if (loaded.package->manifest.status == "draft") {
-            result.skipped_drafts.push_back(loaded.package->manifest);
             continue;
         }
         result.packages.push_back(std::move(*loaded.package));
