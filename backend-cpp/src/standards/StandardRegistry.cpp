@@ -4,6 +4,7 @@
 
 #include "bridge_report/standards/H21Evaluator.hpp"
 #include "bridge_report/standards/Jtg5120MaintenanceStandard.hpp"
+#include "bridge_report/standards/Jtg5230Evaluator.hpp"
 
 namespace bridge_report::standards {
 
@@ -17,6 +18,12 @@ StandardRegistry::StandardRegistry() {
         "jtg-5120-2021-maintenance-query",
         [](const StandardPackage& package) {
             return std::make_unique<Jtg5120MaintenanceStandard>(package);
+        });
+    // 参数没通过一致性校验时 create 返回空指针，create_algorithm 随之返回空。
+    register_algorithm(
+        "jtg-t-5230-2026",
+        [](const StandardPackage& package) {
+            return Jtg5230Evaluator::create(package).evaluator;
         });
 }
 

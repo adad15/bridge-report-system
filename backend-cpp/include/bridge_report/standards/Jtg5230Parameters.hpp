@@ -23,6 +23,8 @@ enum class LayeredStructure {
 
 std::string to_string(LayeredStructure structure);
 std::optional<LayeredStructure> parse_layered_structure(std::string_view value);
+// 中文名：桥面系、上部结构、下部结构、附属构造。
+std::string display_name(LayeredStructure structure);
 
 // 表 3.3.3 按构件列主要构件，附录 B 按部件分权重；有的部件只有一部分构件是主要构件（mixed）。
 enum class MainComponentDesignation {

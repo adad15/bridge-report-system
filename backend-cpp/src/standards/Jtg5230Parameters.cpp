@@ -29,20 +29,6 @@ constexpr std::array kStructures{
     LayeredStructure::ancillary,
 };
 
-std::string structure_label(LayeredStructure structure) {
-    switch (structure) {
-        case LayeredStructure::deck_system:
-            return "桥面系";
-        case LayeredStructure::superstructure:
-            return "上部结构";
-        case LayeredStructure::substructure:
-            return "下部结构";
-        case LayeredStructure::ancillary:
-            return "附属构造";
-    }
-    return {};
-}
-
 // 百分数写回小数给人看：115 → "1.15"。
 std::string hundredths_text(int value) {
     std::ostringstream text;
@@ -293,7 +279,7 @@ private:
                 const auto scaled = entry["gamma"].asDouble() * 100.0;
                 const auto hundredths = static_cast<int>(std::llround(scaled));
                 if (std::abs(scaled - hundredths) >= 1e-6 || hundredths <= 0 || hundredths >= 100) {
-                    add(kFieldInvalid, where + " 的" + structure_label(*structure) +
+                    add(kFieldInvalid, where + " 的" + display_name(*structure) +
                                            "影响系数必须是 0～1 之间的两位小数。");
                     values_valid = false;
                 }
@@ -361,9 +347,9 @@ private:
         for (const auto structure : kStructures) {
             const auto total = totals.find(structure);
             if (total == totals.end()) {
-                add(kFieldInvalid, where + " 缺少" + structure_label(structure) + "的部件。");
+                add(kFieldInvalid, where + " 缺少" + display_name(structure) + "的部件。");
             } else if (values_valid && total->second != 100) {
-                add(kSumInvalid, where + structure_label(structure) + "权重合计 " +
+                add(kSumInvalid, where + display_name(structure) + "权重合计 " +
                                      std::to_string(total->second) + "，应为 100。");
             }
         }
@@ -674,6 +660,20 @@ std::optional<LayeredStructure> parse_layered_structure(std::string_view value) 
         }
     }
     return std::nullopt;
+}
+
+std::string display_name(LayeredStructure structure) {
+    switch (structure) {
+        case LayeredStructure::deck_system:
+            return "桥面系";
+        case LayeredStructure::superstructure:
+            return "上部结构";
+        case LayeredStructure::substructure:
+            return "下部结构";
+        case LayeredStructure::ancillary:
+            return "附属构造";
+    }
+    return {};
 }
 
 const Jtg5230WeightSet* Jtg5230ParameterTable::find_weight_set(const std::string& id) const {
