@@ -535,6 +535,29 @@ TEST(Jtg5230EvaluatorTest, ComponentSharedAcrossUnitsCountsInEach) {
     EXPECT_DOUBLE_EQ(span_result(result, "S2").index, 90.4);
 }
 
+TEST(Jtg5230EvaluatorTest, JunctionPierCountsInBothBridgeFamilies) {
+    // 整体式板桥引桥（表 B.2.2，下部结构 γ 0.40）与空腹式板拱主跨（表 B.3.3，γ 0.35）共用交界墩。
+    LayeredAssessmentInput input;
+    input.units.push_back(jtg5230::unit("引桥", jtg5230::kCastInPlaceSlab, "standard", {"S1"}));
+    input.units.push_back(jtg5230::unit("主桥", jtg5230::kOpenSpandrelSlabArch, "with_expansion_joint", {"A1"}));
+    input.components = {jtg5230::component_with_eci("墩1", "sub.pier_or_abutment", {"S1", "A1"}, 2)};
+
+    const auto result = evaluate(input);
+
+    EXPECT_DOUBLE_EQ(span_result(result, "S1").index, 90.4);
+    EXPECT_DOUBLE_EQ(span_result(result, "A1").index, 91.6);
+    EXPECT_EQ(result.components.size(), 1u);
+}
+
+TEST(Jtg5230EvaluatorTest, ExplainUsesTheResultsPackageVersion) {
+    auto result = evaluate(worked_example());
+    result.package_version = "0.9.0";
+
+    const auto text = shared_evaluator().explain(result);
+
+    EXPECT_NE(text.find("规则包 0.9.0"), std::string::npos) << text;
+}
+
 TEST(Jtg5230EvaluatorTest, SingleItemControlForcesGradeFiveAndKeepsLayeredResult) {
     auto input = worked_example();
     input.triggered_control_ids = {

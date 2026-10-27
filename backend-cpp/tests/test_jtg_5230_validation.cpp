@@ -170,10 +170,14 @@ TEST(Jtg5230ValidationTest, ReportsEachInputProblem) {
         {"构件的桥跨不存在",
          [](LayeredAssessmentInput& input) { input.components[0].span_ids = {"S9"}; },
          "component_span_unknown"},
-        {"构件所在单元分属不同桥型族",
+        {"跨桥型族共用但主要构件判定不一致",
          [](LayeredAssessmentInput& input) {
-             input.units.push_back(arch_unit());
-             input.components[1].span_ids = {"S1", "A1"};
+             // 横向联系：肋拱（拱桥族）里不是主要构件，无系杆组合体系拱里是。
+             input.units.push_back(
+                 jtg5230::unit("U2", "jtg5230.evaluation_type.arch.rib", "with_expansion_joint", {"A1"}));
+             input.units.push_back(
+                 jtg5230::unit("U3", "jtg5230.evaluation_type.combined_arch.untied", "standard", {"K1"}));
+             input.components.push_back(jtg5230::component("C5", "super.lateral_bracing", {"A1", "K1"}));
          },
          "component_spans_cross_families"},
         {"部件不在单元的权重套里",
@@ -207,6 +211,18 @@ TEST(Jtg5230ValidationTest, ReportsEachInputProblem) {
         const auto issues = evaluator->validate(input);
         EXPECT_TRUE(has_code(issues, item.code)) << describe(issues);
     }
+}
+
+TEST(Jtg5230ValidationTest, AllowsJunctionPierSharedAcrossBridgeFamilies) {
+    // 梁式引桥与拱桥主跨的交界墩：桥墩在两个桥型族里都是主要构件，判定一致，可以共用。
+    const auto evaluator = jtg5230::evaluator();
+    auto input = base_input();
+    input.units.push_back(arch_unit());
+    input.components[1].span_ids = {"S2", "A1"};
+
+    const auto issues = evaluator->validate(input);
+
+    EXPECT_TRUE(issues.empty()) << describe(issues);
 }
 
 TEST(Jtg5230ValidationTest, ExplicitWeightSetMessageNamesTheSetToUse) {

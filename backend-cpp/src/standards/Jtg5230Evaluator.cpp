@@ -445,16 +445,6 @@ std::vector<AssessmentIssue> Jtg5230Evaluator::validate(const LayeredAssessmentI
             })) {
             continue;
         }
-        std::set<std::string> families;
-        for (const auto* unit : touched) {
-            families.insert(unit->type->family);
-        }
-        if (families.size() > 1) {
-            issues.push_back(issue(
-                "component_spans_cross_families", "构件 " + component_id + " 所在的评定单元分属不同桥型族。", component_id));
-            continue;
-        }
-
         bool part_valid = true;
         for (const auto* unit : touched) {
             if (!weight_set_contains(*unit->weight_set, component.part_id)) {
@@ -477,8 +467,24 @@ std::vector<AssessmentIssue> Jtg5230Evaluator::validate(const LayeredAssessmentI
             continue;
         }
 
-        const auto& family = *families.begin();
-        const auto designation = parameters_.designation(family, component.part_id);
+        // 所在单元可以分属不同桥型族（如梁式引桥与拱桥主跨的交界墩），但该部件在这些族里
+        // 是否主要构件的判定必须一致，否则 EAI 计不计、能不能改判都说不清。
+        std::set<MainComponentDesignation> designations;
+        for (const auto* unit : touched) {
+            designations.insert(parameters_.designation(unit->type->family, component.part_id));
+        }
+        if (designations.size() > 1) {
+            issues.push_back(issue(
+                "component_spans_cross_families",
+                "构件 " + component_id + " 所在的评定单元分属不同桥型族，部件“" +
+                    parameters_.parts.at(component.part_id).name +
+                    "”在这些桥型族里是否主要构件的判定不一致，无法共用；请按单元拆成两条记录。",
+                component_id));
+            continue;
+        }
+
+        const auto& family = touched.front()->type->family;
+        const auto designation = *designations.begin();
         if (designation == MainComponentDesignation::mixed && !component.is_main.has_value()) {
             issues.push_back(issue(
                 "main_component_flag_required",
@@ -620,7 +626,7 @@ LayeredAssessmentOutcome Jtg5230Evaluator::evaluate(const LayeredAssessmentInput
 std::string Jtg5230Evaluator::explain(const LayeredAssessmentResult& result) const {
     std::ostringstream text;
     text << std::fixed << std::setprecision(1);
-    text << "依据 " << manifest_.standard_code << "（规则包 " << manifest_.package_version
+    text << "依据 " << manifest_.standard_code << "（规则包 " << result.package_version
          << "）分层综合评定：全桥技术状况指数 " << result.layered_index << "，" << result.layered_grade << " 类";
     for (const auto& unit : result.units) {
         if (unit.unit_id == result.governing_unit_id) {
