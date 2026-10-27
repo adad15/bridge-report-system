@@ -1,7 +1,9 @@
 #include "bridge_report/standards/Jtg5230Evaluator.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <map>
+#include <numeric>
 #include <optional>
 #include <set>
 #include <utility>
@@ -93,6 +95,164 @@ LayeredComponentResult evaluate_component(
     entry.output["ecl"] = result.ecl;
     trace.push_back(std::move(entry));
     return result;
+}
+
+// 非负有理数，分母 > 0。桥跨和全桥指数都按十进制保留一位小数，用分数算才不会被二进制
+// 浮点误差带偏（99.65 用 double 算是 99.6499…）。
+struct Fraction {
+    std::int64_t numerator{0};
+    std::int64_t denominator{1};
+};
+
+Fraction add(Fraction left, Fraction right) {
+    Fraction sum{
+        left.numerator * right.denominator + right.numerator * left.denominator,
+        left.denominator * right.denominator,
+    };
+    const auto divisor = std::gcd(sum.numerator, sum.denominator);
+    if (divisor > 1) {
+        sum.numerator /= divisor;
+        sum.denominator /= divisor;
+    }
+    return sum;
+}
+
+// 四舍五入到整数：floor((2n + d) / (2d))，全程整数运算。
+int round_half_up(Fraction value) {
+    return static_cast<int>((2 * value.numerator + value.denominator) / (2 * value.denominator));
+}
+
+// 单元所选权重套里参与计算的一行。B.1.3：全桥无须设置的部件不参与，其权重按比例分给同结构
+// 其他部件，即有效 ω = ω × 100 / 该结构剩余部件 ω 之和（structure_total）。
+struct EffectiveWeight {
+    const Jtg5230Weight* weight{nullptr};
+    LayeredStructure structure{LayeredStructure::superstructure};
+    int structure_total{100};
+    int gamma_hundredths{0};
+};
+
+std::vector<EffectiveWeight> effective_weights(const UnitView& unit, const Jtg5230Parameters& parameters) {
+    std::map<LayeredStructure, int> totals;
+    for (const auto& weight : unit.weight_set->weights) {
+        if (!unit.not_required.contains(weight.part_id)) {
+            totals[parameters.parts.at(weight.part_id).structure] += weight.omega;
+        }
+    }
+    std::vector<EffectiveWeight> weights;
+    for (const auto& weight : unit.weight_set->weights) {
+        if (unit.not_required.contains(weight.part_id)) {
+            continue;
+        }
+        const auto structure = parameters.parts.at(weight.part_id).structure;
+        weights.push_back({&weight, structure, totals.at(structure), unit.table->gamma_hundredths.at(structure)});
+    }
+    return weights;
+}
+
+struct SpanEvaluation {
+    LayeredSpanResult result;
+    int index_tenths{0};  // 改判后的指数×10，单元合成用
+};
+
+// 桥跨层（3.3）：式 3.3.1 → 表 3.3.2 → 3.3.3 主要构件改判。
+SpanEvaluation evaluate_span(
+    const std::string& span_id,
+    const UnitView& unit,
+    const std::vector<EffectiveWeight>& weights,
+    const std::vector<LayeredComponentInput>& components,
+    const std::vector<LayeredComponentResult>& component_results,
+    const Jtg5230Parameters& parameters,
+    std::vector<AssessmentTraceEntry>& trace) {
+    const auto in_span = [&](std::size_t index) {
+        const auto& span_ids = components[index].span_ids;
+        return std::find(span_ids.begin(), span_ids.end(), span_id) != span_ids.end();
+    };
+
+    SpanEvaluation evaluation;
+    auto& span = evaluation.result;
+    span.span_id = span_id;
+    AssessmentTraceEntry entry;
+    entry.step = "span";
+    entry.rule_id = unit.table->id;
+    entry.entity_id = span_id;
+    entry.source_reference = "3.3.1、表 3.3.2";
+    entry.inputs["unit_id"] = unit.input->unit_id;
+    entry.inputs["parts"] = Json::Value(Json::arrayValue);
+
+    Fraction deduction;  // 单位：十分位
+    for (const auto& item : weights) {
+        LayeredPartResult part;
+        part.part_id = item.weight->part_id;
+        part.table_name = item.weight->table_name;
+        part.structure = to_string(item.structure);
+        for (std::size_t index = 0; index < components.size(); ++index) {
+            if (components[index].part_id != part.part_id || !in_span(index)) {
+                continue;
+            }
+            if (part.worst_component_id.empty() || component_results[index].eci > part.ci) {
+                part.ci = component_results[index].eci;
+                part.worst_component_id = components[index].component_id;
+            }
+        }
+        // CI·ω·γ/5 换成十分位：2 × γ百分数 × CI × ω / 结构剩余 ω 之和。
+        deduction = add(
+            deduction,
+            {2LL * item.gamma_hundredths * part.ci * item.weight->omega, item.structure_total});
+        part.effective_omega = item.weight->omega * 100.0 / item.structure_total;
+        part.gamma = item.gamma_hundredths / 100.0;
+        part.contribution = part.ci * part.effective_omega * part.gamma / 5.0;
+
+        Json::Value part_trace;
+        part_trace["part_id"] = part.part_id;
+        part_trace["ci"] = part.ci;
+        part_trace["effective_omega"] = part.effective_omega;
+        part_trace["gamma"] = part.gamma;
+        entry.inputs["parts"].append(std::move(part_trace));
+        span.parts.push_back(std::move(part));
+    }
+
+    evaluation.index_tenths =
+        round_half_up({1000 * deduction.denominator - deduction.numerator, deduction.denominator});
+    span.calculated_index = evaluation.index_tenths / 10.0;
+    span.calculated_grade = parameters.classify_span(evaluation.index_tenths);
+    span.index = span.calculated_index;
+    span.grade = span.calculated_grade;
+    entry.output["index"] = span.calculated_index;
+    entry.output["grade"] = span.calculated_grade;
+    trace.push_back(std::move(entry));
+
+    // 主要构件 4、5 类且影响桥梁安全，并且比算出的等级更差时才改判；指数取该等级上限。
+    std::optional<std::size_t> governing;
+    for (std::size_t index = 0; index < components.size(); ++index) {
+        const auto& candidate = component_results[index];
+        if (!in_span(index) || !candidate.is_main || candidate.ecl < 4 ||
+            !components[index].affects_bridge_safety) {
+            continue;
+        }
+        if (!governing.has_value() || candidate.ecl > component_results[*governing].ecl) {
+            governing = index;
+        }
+    }
+    if (governing.has_value() && component_results[*governing].ecl > span.calculated_grade) {
+        const auto& component = component_results[*governing];
+        span.grade = component.ecl;
+        evaluation.index_tenths = parameters.index_limit_tenths.at(component.ecl);
+        span.index = evaluation.index_tenths / 10.0;
+        span.override_component_id = component.component_id;
+
+        AssessmentTraceEntry override_entry;
+        override_entry.step = "main_component_override";
+        override_entry.rule_id = "jtg5230.classification.index_limit";
+        override_entry.entity_id = span_id;
+        override_entry.source_reference = "3.3.3";
+        override_entry.inputs["component_id"] = component.component_id;
+        override_entry.inputs["ecl"] = component.ecl;
+        override_entry.inputs["calculated_grade"] = span.calculated_grade;
+        override_entry.output["grade"] = span.grade;
+        override_entry.output["index"] = span.index;
+        trace.push_back(std::move(override_entry));
+    }
+    return evaluation;
 }
 
 void check_scale(
@@ -326,6 +486,23 @@ LayeredAssessmentOutcome Jtg5230Evaluator::evaluate(const LayeredAssessmentInput
     for (const auto& component : input.components) {
         const auto& unit = index.units[index.span_unit.at(component.span_ids.front())];
         result.components.push_back(evaluate_component(component, unit, parameters_, result.trace));
+    }
+
+    std::vector<std::vector<int>> span_tenths(index.units.size());  // 各单元各跨的指数×10
+    for (std::size_t unit_index = 0; unit_index < index.units.size(); ++unit_index) {
+        const auto& unit = index.units[unit_index];
+        LayeredUnitResult unit_result;
+        unit_result.unit_id = unit.input->unit_id;
+        unit_result.evaluation_type_id = unit.input->evaluation_type_id;
+        unit_result.weight_set_id = unit.input->weight_set_id;
+        const auto weights = effective_weights(unit, parameters_);
+        for (const auto& span_id : unit.input->span_ids) {
+            auto span = evaluate_span(
+                span_id, unit, weights, input.components, result.components, parameters_, result.trace);
+            span_tenths[unit_index].push_back(span.index_tenths);
+            unit_result.spans.push_back(std::move(span.result));
+        }
+        result.units.push_back(std::move(unit_result));
     }
 
     outcome.result = std::move(result);
