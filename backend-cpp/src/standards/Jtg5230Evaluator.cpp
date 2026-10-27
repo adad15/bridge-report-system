@@ -57,6 +57,44 @@ InputIndex index_input(const LayeredAssessmentInput& input, const Jtg5230Paramet
     return index;
 }
 
+// 构件层（3.2）：主要构件判定 → EDI → ECI → ECL、状态词、养护对策。
+LayeredComponentResult evaluate_component(
+    const LayeredComponentInput& component,
+    const UnitView& unit,
+    const Jtg5230Parameters& parameters,
+    std::vector<AssessmentTraceEntry>& trace) {
+    LayeredComponentResult result;
+    result.component_id = component.component_id;
+    result.part_id = component.part_id;
+    const auto designation = parameters.designation(unit.type->family, component.part_id);
+    result.is_main = designation == MainComponentDesignation::main ||
+                     (designation == MainComponentDesignation::mixed && component.is_main.value_or(false));
+    result.edi = component.missing ? 3 : (std::max)(component.eddi.value_or(0), component.esdi.value_or(0));
+    const int efi = component.efi.value_or(0);
+    // 影响状况只评主要构件（第 15 章）；下限 0 见设计第 7 节第 1 条。
+    const int eai = result.is_main ? component.eai.value_or(0) : 0;
+    result.eai_ignored = !result.is_main && component.eai.has_value();
+    result.eci = std::clamp(result.edi + efi + eai, 0, 5);
+    const auto& grade = parameters.component_grades[static_cast<std::size_t>(result.eci)];
+    result.ecl = grade.grade;
+    result.state = grade.state;
+    result.maintenance_strategies = parameters.maintenance_strategies.at(result.ecl);
+
+    AssessmentTraceEntry entry;
+    entry.step = "component";
+    entry.rule_id = "jtg5230.classification.component";
+    entry.entity_id = result.component_id;
+    entry.source_reference = "3.2.5、表 3.2.6";
+    entry.inputs["edi"] = result.edi;
+    entry.inputs["efi"] = efi;
+    entry.inputs["eai"] = eai;
+    entry.inputs["missing"] = component.missing;
+    entry.output["eci"] = result.eci;
+    entry.output["ecl"] = result.ecl;
+    trace.push_back(std::move(entry));
+    return result;
+}
+
 void check_scale(
     const std::optional<int>& value,
     const char* name,
@@ -282,6 +320,14 @@ LayeredAssessmentOutcome Jtg5230Evaluator::evaluate(const LayeredAssessmentInput
     LayeredAssessmentResult result;
     result.standard_id = manifest_.standard_id;
     result.package_version = manifest_.package_version;
+
+    // 校验已通过：类型、权重套、桥跨都存在，构件所在单元同属一个桥型族。
+    const auto index = index_input(input, parameters_);
+    for (const auto& component : input.components) {
+        const auto& unit = index.units[index.span_unit.at(component.span_ids.front())];
+        result.components.push_back(evaluate_component(component, unit, parameters_, result.trace));
+    }
+
     outcome.result = std::move(result);
     return outcome;
 }

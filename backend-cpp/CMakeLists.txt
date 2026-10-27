@@ -293,6 +293,7 @@ add_executable(bridge_report_backend_tests
     tests/test_jtg_5230_package.cpp
     tests/test_jtg_5230_parameters.cpp
     tests/test_jtg_5230_validation.cpp
+    tests/test_jtg_5230_evaluator.cpp
     tests/test_password_hash.cpp
     tests/test_preflight_report.cpp
     tests/test_photo_content.cpp
