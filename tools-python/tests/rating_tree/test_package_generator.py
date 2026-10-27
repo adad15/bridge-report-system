@@ -13,7 +13,7 @@ H21 = REPOSITORY / "standards/technical-condition/jtg-t-h21-2011/1.0.4"
 
 
 def test_checksum_matches_the_existing_cpp_verified_package():
-    package = REPOSITORY / "standards/rating-tree/organization-bridge/1.0.3"
+    package = REPOSITORY / "standards/rating-tree/organization-bridge/2.0.3"
     manifest = json.loads((package / "manifest.json").read_text(encoding="utf-8"))
 
     assert calculate_package_checksum(package) == manifest["content_checksum"]

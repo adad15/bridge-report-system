@@ -11,17 +11,17 @@ namespace {
 
 std::filesystem::path organization_package_root() {
     return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-        "standards/rating-tree/organization-bridge/1.0.1";
+        "backend-cpp/tests/fixtures/standards-history/rating-tree/organization-bridge/1.0.1";
 }
 
 std::filesystem::path organization_package_root_v102() {
     return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-        "standards/rating-tree/organization-bridge/1.0.2";
+        "backend-cpp/tests/fixtures/standards-history/rating-tree/organization-bridge/1.0.2";
 }
 
 std::filesystem::path organization_package_root_v103() {
     return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-        "standards/rating-tree/organization-bridge/1.0.3";
+        "backend-cpp/tests/fixtures/standards-history/rating-tree/organization-bridge/1.0.3";
 }
 
 std::filesystem::path organization_package_root_v203() {
@@ -538,9 +538,10 @@ TEST(RatingTreePackageLoaderIntegrationTest, Version102LocksTheCorrectedH21Packa
     bool references_corrected_h21 = false;
     for (const auto& [_, source] : result.package->sources) {
         if (source.source_type == "technical_condition") {
+            // 比的是包里记录的来源，不是现在的文件位置：该版本已移进测试夹具，
+            // 但包内容受校验和保护，仍记着当年的仓库路径。
             references_corrected_h21 =
-                source.reference ==
-                "standards/technical-condition/jtg-t-h21-2011/1.0.3";
+                source.reference == "standards/technical-condition/jtg-t-h21-2011/1.0.3";
         }
     }
     EXPECT_TRUE(references_corrected_h21);

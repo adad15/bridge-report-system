@@ -18,17 +18,17 @@ using bridge_report::standards::StandardPackageLoader;
 
 std::filesystem::path h21_package_root() {
     return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-           "standards/technical-condition/jtg-t-h21-2011/1.0.0";
+           "backend-cpp/tests/fixtures/standards-history/technical-condition/jtg-t-h21-2011/1.0.0";
 }
 
 std::filesystem::path h21_package_root_v101() {
     return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-           "standards/technical-condition/jtg-t-h21-2011/1.0.2";
+           "backend-cpp/tests/fixtures/standards-history/technical-condition/jtg-t-h21-2011/1.0.2";
 }
 
 std::filesystem::path h21_package_root_v103() {
     return std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT) /
-           "standards/technical-condition/jtg-t-h21-2011/1.0.3";
+           "backend-cpp/tests/fixtures/standards-history/technical-condition/jtg-t-h21-2011/1.0.3";
 }
 
 std::filesystem::path h21_package_root_v104() {

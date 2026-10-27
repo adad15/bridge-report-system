@@ -35,12 +35,12 @@ protected:
         const auto root = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT);
         bridge_report::standards::StandardPackageLoader standard_loader;
         auto h21 = standard_loader.load(
-            root / "standards/technical-condition/jtg-t-h21-2011/1.0.2");
+            root / "backend-cpp/tests/fixtures/standards-history/technical-condition/jtg-t-h21-2011/1.0.2");
         auto maintenance = standard_loader.load(
             root / "standards/maintenance/jtg-5120-2021/1.0.0");
         bridge_report::rating_tree::RatingTreePackageLoader extension_loader;
         auto extension = extension_loader.load(
-            root / "standards/rating-tree/organization-bridge/1.0.1");
+            root / "backend-cpp/tests/fixtures/standards-history/rating-tree/organization-bridge/1.0.1");
         EXPECT_TRUE(h21.ok());
         EXPECT_TRUE(maintenance.ok());
         EXPECT_TRUE(extension.ok());
@@ -65,12 +65,12 @@ protected:
         const auto root = std::filesystem::path(BRIDGE_REPORT_REPOSITORY_ROOT);
         bridge_report::standards::StandardPackageLoader standard_loader;
         auto h21 = standard_loader.load(
-            root / "standards/technical-condition/jtg-t-h21-2011/1.0.3");
+            root / "backend-cpp/tests/fixtures/standards-history/technical-condition/jtg-t-h21-2011/1.0.3");
         auto maintenance = standard_loader.load(
             root / "standards/maintenance/jtg-5120-2021/1.0.0");
         bridge_report::rating_tree::RatingTreePackageLoader extension_loader;
         auto extension = extension_loader.load(
-            root / "standards/rating-tree/organization-bridge/1.0.3");
+            root / "backend-cpp/tests/fixtures/standards-history/rating-tree/organization-bridge/1.0.3");
         EXPECT_TRUE(h21.ok());
         EXPECT_TRUE(maintenance.ok());
         EXPECT_TRUE(extension.ok());
