@@ -1,5 +1,6 @@
 #include "bridge_report/standards/Jtg5230Parameters.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -103,6 +104,15 @@ private:
         return nullptr;
     }
 
+    // 从磁盘加载的包由加载器保证 id 唯一；这里再查一遍，内存里改出来的包也能发现。
+    bool first_occurrence(std::set<std::string>& seen, const std::string& id, const char* file) {
+        if (seen.insert(id).second) {
+            return true;
+        }
+        add(kFieldInvalid, std::string(file) + " 中 id 重复：" + id + "。");
+        return false;
+    }
+
     bool object(const Json::Value& item, const std::string& where) {
         if (item.isObject()) {
             return true;
@@ -180,11 +190,15 @@ private:
         if (items == nullptr) {
             return;
         }
+        std::set<std::string> seen;
         for (const auto& item : *items) {
             if (!object(item, "parts.json")) {
                 continue;
             }
             const auto id = item["id"].asString();
+            if (!first_occurrence(seen, id, "parts.json")) {
+                continue;
+            }
             const auto where = "部件 " + id;
             const auto name = text(item, "name", where);
             const auto structure =
@@ -231,7 +245,9 @@ private:
                     if (!parameters_.parts.contains(part_id.asString())) {
                         add(kReferenceUnknown, where + " 引用了不存在的部件 " + part_id.asString() + "。");
                     }
-                    components.main_part_ids.insert(part_id.asString());
+                    if (!components.main_part_ids.insert(part_id.asString()).second) {
+                        add(kFieldInvalid, where + " 的 main_part_ids 中部件 " + part_id.asString() + " 重复。");
+                    }
                 }
             }
 
@@ -255,7 +271,9 @@ private:
                         add(kFieldInvalid,
                             where + " 的部件 " + *part_id + " 不能既是主要构件、又是部分为主要构件。");
                     }
-                    components.mixed_parts.emplace(*part_id, *members);
+                    if (!components.mixed_parts.emplace(*part_id, *members).second) {
+                        add(kFieldInvalid, where + " 的 mixed_parts 中部件 " + *part_id + " 重复。");
+                    }
                 }
             }
             parameters_.main_components.emplace(*family, std::move(components));
@@ -388,12 +406,16 @@ private:
         if (items == nullptr) {
             return;
         }
+        std::set<std::string> seen;
         for (const auto& item : *items) {
             if (!object(item, "parameter-tables.json")) {
                 continue;
             }
             Jtg5230ParameterTable table;
             table.id = item["id"].asString();
+            if (!first_occurrence(seen, table.id, "parameter-tables.json")) {
+                continue;
+            }
             table.source_table = text(item, "source_table", "参数表 " + table.id).value_or(table.id);
             const auto where = "表 " + table.source_table;
             table.pdf_pages = pdf_pages(item, where);
@@ -416,12 +438,16 @@ private:
         if (items == nullptr) {
             return;
         }
+        std::set<std::string> seen;
         for (const auto& item : *items) {
             if (!object(item, "evaluation-types.json")) {
                 continue;
             }
             Jtg5230EvaluationType type;
             type.id = item["id"].asString();
+            if (!first_occurrence(seen, type.id, "evaluation-types.json")) {
+                continue;
+            }
             const auto where = "评定类型 " + type.id;
             const auto family = text(item, "family", where);
             const auto name = text(item, "name", where);
@@ -509,18 +535,29 @@ private:
         if (!values_valid) {
             return;
         }
-        // 指数总是一位小数，逐个十分位检查：每个值必须恰好落在一档里。
+        // 指数总是一位小数，逐个十分位检查：每个值恰好落在一档里，且指数越高等级越好（数字不增大）。
+        int previous_grade = 0;
         for (int index_tenths = 0; index_tenths <= 1000; ++index_tenths) {
             int matches = 0;
+            int grade = 0;
             for (const auto& band : parameters_.span_grades) {
-                matches += band_contains(band, index_tenths) ? 1 : 0;
+                if (band_contains(band, index_tenths)) {
+                    ++matches;
+                    grade = band.grade;
+                }
             }
             if (matches != 1) {
                 add(kCoverageInvalid, where + " 的分档在 " + tenths_text(index_tenths) +
                                           (matches == 0 ? " 处有缺口。" : " 处重叠。"));
                 return;
             }
+            if (index_tenths > 0 && grade > previous_grade) {
+                add(kCoverageInvalid, where + " 的分档等级没有随指数单调变化（" + tenths_text(index_tenths) + " 处）。");
+                return;
+            }
+            previous_grade = grade;
         }
+        span_grades_valid_ = true;
     }
 
     void parse_index_limits(const Json::Value& definition) {
@@ -548,6 +585,20 @@ private:
                 add(kCoverageInvalid, where + " 缺少 " + std::to_string(grade) + " 类的上限。");
             }
         }
+        // 评分器依赖这一点：改判后的指数落在本档区间内，等级不同的两跨指数就不会相同，
+        // 式 3.4.3 的分母（max − min）不会为 0。
+        if (!span_grades_valid_) {
+            return;
+        }
+        for (const auto& [grade, value] : parameters_.index_limit_tenths) {
+            const auto band = std::find_if(
+                parameters_.span_grades.begin(), parameters_.span_grades.end(),
+                [&](const Jtg5230SpanGradeBand& candidate) { return band_contains(candidate, value); });
+            if (band->grade != grade) {
+                add(kCoverageInvalid, where + " 中 " + std::to_string(grade) + " 类的上限 " + tenths_text(value) +
+                                          " 不在 " + std::to_string(grade) + " 类的区间内。");
+            }
+        }
     }
 
     void parse_classification() {
@@ -568,12 +619,16 @@ private:
         if (items == nullptr) {
             return;
         }
+        std::set<std::string> seen;
         for (const auto& item : *items) {
             if (!object(item, "single-item-controls.json")) {
                 continue;
             }
             Jtg5230Control control;
             control.id = item["id"].asString();
+            if (!first_occurrence(seen, control.id, "single-item-controls.json")) {
+                continue;
+            }
             const auto where = "单项控制 " + control.id;
             const auto clause = text(item, "source_clause", where);
             const auto label = text(item, "label", where);
@@ -635,6 +690,7 @@ private:
     const StandardPackage& package_;
     Jtg5230Parameters parameters_;
     std::vector<StandardIssue> issues_;
+    bool span_grades_valid_{false};  // 桥跨分档已通过覆盖与单调检查
 };
 
 }  // namespace

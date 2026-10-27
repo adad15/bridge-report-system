@@ -420,6 +420,43 @@ TEST(Jtg5230ParametersTest, RejectsOverlappingSpanBands) {
     expect_issue(package, "parameters_coverage_invalid", {"3.3.2"});
 }
 
+TEST(Jtg5230ParametersTest, RejectsIndexLimitOutsideItsBand) {
+    auto package = jtg5230::load_package();
+    // 4 类上限误录成 75，落进 3 类区间：两跨等级不同而指数相同时，式 3.4.3 的分母会是 0。
+    definition(package, "classification.json", "jtg5230.classification.index_limit")["limits"][2]["value"] = 75;
+
+    expect_issue(package, "parameters_coverage_invalid", {"3.4.3", "4 类"});
+}
+
+TEST(Jtg5230ParametersTest, RejectsSpanBandsNotOrderedByGrade) {
+    auto package = jtg5230::load_package();
+    auto& grades = definition(package, "classification.json", "jtg5230.classification.span")["grades"];
+    grades[0]["grade"] = 2;
+    grades[1]["grade"] = 1;
+
+    expect_issue(package, "parameters_coverage_invalid", {"3.3.2"});
+}
+
+TEST(Jtg5230ParametersTest, RejectsDuplicateIds) {
+    for (const auto* file : {"parts.json", "parameter-tables.json", "evaluation-types.json", "single-item-controls.json"}) {
+        SCOPED_TRACE(file);
+        auto package = jtg5230::load_package();
+        auto& items = package.documents.at(file)["definitions"];
+        const auto duplicated_id = items[0]["id"].asString();
+        items.append(items[0]);
+
+        expect_issue(package, "parameters_field_invalid", {duplicated_id});
+    }
+}
+
+TEST(Jtg5230ParametersTest, RejectsDuplicateMixedPart) {
+    auto package = jtg5230::load_package();
+    auto& mixed = definition(package, "main-components.json", "jtg5230.main_components.arch")["mixed_parts"];
+    mixed.append(mixed[0]);
+
+    expect_issue(package, "parameters_field_invalid", {jtg5230::part("super.spandrel_pier_and_wall")});
+}
+
 TEST(Jtg5230ParametersTest, RejectsMissingMaintenanceGrade) {
     auto package = jtg5230::load_package();
     auto& strategies = definition(package, "maintenance-strategies.json", "jtg5230.maintenance.component")["strategies"];
