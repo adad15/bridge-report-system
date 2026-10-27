@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -17,6 +18,7 @@ using bridge_report::standards::LayeredComponentInput;
 using bridge_report::standards::LayeredComponentResult;
 using bridge_report::standards::LayeredPartResult;
 using bridge_report::standards::LayeredSpanResult;
+using bridge_report::standards::LayeredUnitResult;
 namespace jtg5230 = bridge_report::tests::jtg5230;
 
 const Jtg5230Evaluator& shared_evaluator() {
@@ -91,6 +93,42 @@ LayeredComponentInput with_eci(std::string id, std::string_view part_suffix, int
 LayeredComponentInput affecting_safety(LayeredComponentInput component) {
     component.affects_bridge_safety = true;
     return component;
+}
+
+// 两个单元，各一跨：U1 有 S1，U2 有 S2，都是整体式板桥。
+LayeredAssessmentInput two_slab_units(std::vector<LayeredComponentInput> components) {
+    LayeredAssessmentInput input;
+    input.units.push_back(jtg5230::unit("U1", jtg5230::kCastInPlaceSlab, "standard", {"S1"}));
+    input.units.push_back(jtg5230::unit("U2", jtg5230::kCastInPlaceSlab, "standard", {"S2"}));
+    input.components = std::move(components);
+    return input;
+}
+
+// 设计文档第 5 节的手算算例：两跨整体式板桥。
+LayeredAssessmentInput worked_example() {
+    return slab_bridge(
+        {
+            jtg5230::component_with_eci("S1-板", "super.slab", {"S1"}, 2),
+            jtg5230::component_with_eci("S1-支座", "super.bearing", {"S1"}, 1),
+            jtg5230::component_with_eci("S1-铺装", "deck.pavement", {"S1"}, 2),
+            jtg5230::component_with_eci("S2-板", "super.slab", {"S2"}, 1),
+            jtg5230::component_with_eci("S2-铺装", "deck.pavement", {"S2"}, 1),
+        },
+        {"S1", "S2"});
+}
+
+const LayeredUnitResult& unit_result(const LayeredAssessmentResult& result, const std::string& unit_id) {
+    for (const auto& unit : result.units) {
+        if (unit.unit_id == unit_id) {
+            return unit;
+        }
+    }
+    throw std::runtime_error("unit result not found: " + unit_id);
+}
+
+std::size_t count_steps(const LayeredAssessmentResult& result, const std::string& step) {
+    return static_cast<std::size_t>(std::count_if(
+        result.trace.begin(), result.trace.end(), [&](const auto& entry) { return entry.step == step; }));
 }
 
 TEST(Jtg5230EvaluatorTest, CombinesDefectFunctionAndImpactScales) {
@@ -367,6 +405,141 @@ TEST(Jtg5230EvaluatorTest, MixedPartOverridesOnlyWhenMarkedMain) {
     EXPECT_EQ(span_result(as_other, "A1").grade, 1);
     EXPECT_DOUBLE_EQ(span_result(as_other, "A1").index, 92.8);
     EXPECT_TRUE(span_result(as_other, "A1").override_component_id.empty());
+}
+
+TEST(Jtg5230EvaluatorTest, SingleSpanBridgeTakesSpanResult) {
+    const auto result = evaluate(slab_bridge({with_eci("C1", "super.slab", 2)}));
+
+    const auto& unit = unit_result(result, "U1");
+    EXPECT_DOUBLE_EQ(unit.index, 88.0);
+    EXPECT_EQ(unit.grade, 2);
+    EXPECT_EQ(unit.rule_clause, "3.4.1");
+    EXPECT_EQ(result.governing_unit_id, "U1");
+    EXPECT_DOUBLE_EQ(result.layered_index, 88.0);
+    EXPECT_EQ(result.layered_grade, 2);
+    EXPECT_EQ(result.final_grade, 2);
+}
+
+TEST(Jtg5230EvaluatorTest, UniformGradesAverageRoundedSpanIndices) {
+    // S1 精确值 99.65 → 99.7，S2 精确值 99.55 → 99.6；按设计第 7 节第 3 条先舍入再平均得 99.7，
+    // 用未舍入的值平均会得到 99.6。
+    const auto result = evaluate(slab_bridge(
+        {
+            jtg5230::component_with_eci("C1", "ancillary.riverbed", {"S1"}, 1),
+            jtg5230::component_with_eci("C2", "deck.drainage", {"S2"}, 1),
+        },
+        {"S1", "S2"}));
+
+    EXPECT_DOUBLE_EQ(span_result(result, "S2").index, 99.6);
+    const auto& unit = unit_result(result, "U1");
+    EXPECT_DOUBLE_EQ(unit.index, 99.7);
+    EXPECT_EQ(unit.grade, 1);
+    EXPECT_EQ(unit.rule_clause, "3.4.2");
+}
+
+TEST(Jtg5230EvaluatorTest, WorkedExampleTwoSpanSlabBridge) {
+    const auto result = evaluate(worked_example());
+
+    const auto& first = span_result(result, "S1");
+    EXPECT_DOUBLE_EQ(first.index, 83.6);
+    EXPECT_EQ(first.grade, 2);
+    EXPECT_NEAR(part_result(first, "super.slab")->contribution, 12.0, 1e-9);
+    EXPECT_NEAR(part_result(first, "super.bearing")->contribution, 2.0, 1e-9);
+    EXPECT_NEAR(part_result(first, "deck.pavement")->contribution, 2.4, 1e-9);
+    const auto& second = span_result(result, "S2");
+    EXPECT_DOUBLE_EQ(second.index, 92.8);
+    EXPECT_EQ(second.grade, 1);
+    const auto& unit = unit_result(result, "U1");
+    EXPECT_DOUBLE_EQ(unit.index, 86.8);
+    EXPECT_EQ(unit.grade, 2);
+    EXPECT_EQ(unit.rule_clause, "3.4.3");
+    EXPECT_DOUBLE_EQ(result.layered_index, 86.8);
+    EXPECT_EQ(result.final_grade, 2);
+    EXPECT_NE(result.explanation.find("86.8"), std::string::npos) << result.explanation;
+    EXPECT_NE(result.explanation.find("2 类"), std::string::npos) << result.explanation;
+}
+
+TEST(Jtg5230EvaluatorTest, OverriddenSpanUsesGradeLimitInBridgeIndex) {
+    const auto result = evaluate(slab_bridge(
+        {
+            affecting_safety(jtg5230::component_with_eci("C1", "super.slab", {"S1"}, 4)),
+            jtg5230::component_with_eci("C2", "deck.pavement", {"S2"}, 1),
+        },
+        {"S1", "S2"}));
+
+    EXPECT_DOUBLE_EQ(span_result(result, "S2").index, 98.8);
+    const auto& unit = unit_result(result, "U1");
+    EXPECT_DOUBLE_EQ(unit.index, 60.0);
+    EXPECT_EQ(unit.grade, 4);
+    EXPECT_EQ(unit.rule_clause, "3.4.3");
+}
+
+TEST(Jtg5230EvaluatorTest, WorstUnitGovernsBridge) {
+    const auto worse_grade = evaluate(two_slab_units({
+        jtg5230::component_with_eci("U1-板", "super.slab", {"S1"}, 2),
+        jtg5230::component_with_eci("U2-板", "super.slab", {"S2"}, 3),
+        jtg5230::component_with_eci("U2-支座", "super.bearing", {"S2"}, 2),
+        jtg5230::component_with_eci("U2-铺装", "deck.pavement", {"S2"}, 2),
+        jtg5230::component_with_eci("U2-护栏", "deck.railing_and_sidewalk", {"S2"}, 1),
+    }));
+    const auto lower_index = evaluate(two_slab_units({
+        jtg5230::component_with_eci("U1-板", "super.slab", {"S1"}, 2),
+        jtg5230::component_with_eci("U2-板", "super.slab", {"S2"}, 2),
+        jtg5230::component_with_eci("U2-支座", "super.bearing", {"S2"}, 1),
+        jtg5230::component_with_eci("U2-铺装", "deck.pavement", {"S2"}, 2),
+    }));
+
+    EXPECT_EQ(worse_grade.governing_unit_id, "U2");
+    EXPECT_DOUBLE_EQ(worse_grade.layered_index, 75.0);
+    EXPECT_EQ(worse_grade.layered_grade, 3);
+    EXPECT_EQ(lower_index.governing_unit_id, "U2");
+    EXPECT_DOUBLE_EQ(lower_index.layered_index, 83.6);
+    EXPECT_EQ(lower_index.layered_grade, 2);
+}
+
+TEST(Jtg5230EvaluatorTest, ComponentSharedAcrossUnitsCountsInEach) {
+    const auto result = evaluate(two_slab_units({
+        jtg5230::component_with_eci("P1", "sub.pier_or_abutment", {"S1", "S2"}, 2),
+    }));
+
+    EXPECT_DOUBLE_EQ(span_result(result, "S1").index, 90.4);
+    EXPECT_DOUBLE_EQ(span_result(result, "S2").index, 90.4);
+}
+
+TEST(Jtg5230EvaluatorTest, SingleItemControlForcesGradeFiveAndKeepsLayeredResult) {
+    auto input = worked_example();
+    input.triggered_control_ids = {
+        "jtg5230.control.girder_fall_or_fracture",
+        "jtg5230.control.girder_fall_or_fracture",
+    };
+
+    const auto result = evaluate(input);
+
+    ASSERT_EQ(result.triggered_controls.size(), 1u);
+    EXPECT_EQ(result.triggered_controls[0].source_clause, "3.4.5-1");
+    EXPECT_FALSE(result.triggered_controls[0].label.empty());
+    EXPECT_EQ(result.final_grade, 5);
+    EXPECT_DOUBLE_EQ(result.layered_index, 86.8);
+    EXPECT_EQ(result.layered_grade, 2);
+    EXPECT_NE(result.explanation.find("86.8"), std::string::npos) << result.explanation;
+    EXPECT_NE(result.explanation.find("评为 5 类"), std::string::npos) << result.explanation;
+}
+
+TEST(Jtg5230EvaluatorTest, TraceRecordsEachLayer) {
+    const auto result = evaluate(worked_example());
+
+    EXPECT_EQ(count_steps(result, "component"), 5u);
+    EXPECT_EQ(count_steps(result, "span"), 2u);
+    EXPECT_EQ(count_steps(result, "unit"), 1u);
+    EXPECT_EQ(count_steps(result, "bridge"), 1u);
+    for (const auto& entry : result.trace) {
+        if (entry.step == "span") {
+            EXPECT_EQ(entry.source_reference, "3.3.1、表 3.3.2");
+        }
+        if (entry.step == "unit") {
+            EXPECT_EQ(entry.source_reference, "3.4.3");
+        }
+    }
 }
 
 }  // namespace

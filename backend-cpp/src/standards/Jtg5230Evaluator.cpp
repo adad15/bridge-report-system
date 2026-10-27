@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <iomanip>
 #include <map>
 #include <numeric>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <utility>
 
 namespace bridge_report::standards {
@@ -255,6 +257,36 @@ SpanEvaluation evaluate_span(
     return evaluation;
 }
 
+struct UnitAggregate {
+    int index_tenths{0};
+    int grade{0};
+    std::string rule_clause;
+};
+
+// 评定单元（3.4.1～3.4.3）。指数一律用已保留一位小数的桥跨指数（十分位整数）代入，
+// 见设计第 7 节第 3 条。
+UnitAggregate aggregate_unit(
+    const std::vector<int>& index_tenths,
+    const std::vector<int>& grades,
+    const Jtg5230Parameters& parameters) {
+    if (index_tenths.size() == 1) {
+        return {index_tenths.front(), grades.front(), "3.4.1"};
+    }
+    const auto count = static_cast<std::int64_t>(index_tenths.size());
+    const auto sum = std::accumulate(index_tenths.begin(), index_tenths.end(), std::int64_t{0});
+    const auto worst = *std::max_element(grades.begin(), grades.end());
+    if (worst == *std::min_element(grades.begin(), grades.end())) {
+        return {round_half_up({sum, count}), worst, "3.4.2"};
+    }
+    // 式 3.4.3：BCI = min + (lim − min)·(平均 − min)/(max − min)。等级不一致时 max > min 必然成立：
+    // 各档区间不相交，改判后的指数也落在本档区间内。
+    const std::int64_t minimum = *std::min_element(index_tenths.begin(), index_tenths.end());
+    const std::int64_t maximum = *std::max_element(index_tenths.begin(), index_tenths.end());
+    const std::int64_t limit = parameters.index_limit_tenths.at(worst);
+    const Fraction offset{(limit - minimum) * (sum - count * minimum), count * (maximum - minimum)};
+    return {static_cast<int>(minimum) + round_half_up(offset), worst, "3.4.3"};
+}
+
 void check_scale(
     const std::optional<int>& value,
     const char* name,
@@ -488,30 +520,123 @@ LayeredAssessmentOutcome Jtg5230Evaluator::evaluate(const LayeredAssessmentInput
         result.components.push_back(evaluate_component(component, unit, parameters_, result.trace));
     }
 
-    std::vector<std::vector<int>> span_tenths(index.units.size());  // 各单元各跨的指数×10
-    for (std::size_t unit_index = 0; unit_index < index.units.size(); ++unit_index) {
-        const auto& unit = index.units[unit_index];
+    std::vector<int> unit_tenths;  // 各单元指数×10，与 result.units 对应
+    for (const auto& unit : index.units) {
         LayeredUnitResult unit_result;
         unit_result.unit_id = unit.input->unit_id;
         unit_result.evaluation_type_id = unit.input->evaluation_type_id;
         unit_result.weight_set_id = unit.input->weight_set_id;
         const auto weights = effective_weights(unit, parameters_);
+        std::vector<int> span_tenths;
+        std::vector<int> span_grades;
         for (const auto& span_id : unit.input->span_ids) {
             auto span = evaluate_span(
                 span_id, unit, weights, input.components, result.components, parameters_, result.trace);
-            span_tenths[unit_index].push_back(span.index_tenths);
+            span_tenths.push_back(span.index_tenths);
+            span_grades.push_back(span.result.grade);
             unit_result.spans.push_back(std::move(span.result));
         }
+
+        const auto aggregate = aggregate_unit(span_tenths, span_grades, parameters_);
+        unit_result.index = aggregate.index_tenths / 10.0;
+        unit_result.grade = aggregate.grade;
+        unit_result.rule_clause = aggregate.rule_clause;
+        unit_tenths.push_back(aggregate.index_tenths);
+
+        AssessmentTraceEntry entry;
+        entry.step = "unit";
+        entry.rule_id = "jtg5230.classification.index_limit";
+        entry.entity_id = unit_result.unit_id;
+        entry.source_reference = unit_result.rule_clause;
+        entry.inputs["spans"] = Json::Value(Json::arrayValue);
+        for (const auto& span : unit_result.spans) {
+            Json::Value span_trace;
+            span_trace["span_id"] = span.span_id;
+            span_trace["index"] = span.index;
+            span_trace["grade"] = span.grade;
+            entry.inputs["spans"].append(std::move(span_trace));
+        }
+        entry.output["index"] = unit_result.index;
+        entry.output["grade"] = unit_result.grade;
+        result.trace.push_back(std::move(entry));
         result.units.push_back(std::move(unit_result));
     }
 
+    // 3.4.4：取最差单元——等级最差，同等级取指数较低者，再相同取输入顺序在前的。
+    std::size_t governing = 0;
+    for (std::size_t unit_index = 1; unit_index < result.units.size(); ++unit_index) {
+        const auto& candidate = result.units[unit_index];
+        const auto& current = result.units[governing];
+        if (candidate.grade > current.grade ||
+            (candidate.grade == current.grade && unit_tenths[unit_index] < unit_tenths[governing])) {
+            governing = unit_index;
+        }
+    }
+    result.governing_unit_id = result.units[governing].unit_id;
+    result.layered_index = result.units[governing].index;
+    result.layered_grade = result.units[governing].grade;
+    result.final_grade = result.layered_grade;
+
+    AssessmentTraceEntry bridge_entry;
+    bridge_entry.step = "bridge";
+    bridge_entry.entity_id = result.governing_unit_id;
+    bridge_entry.source_reference = "3.4.4";
+    bridge_entry.inputs["units"] = Json::Value(Json::arrayValue);
+    for (const auto& unit : result.units) {
+        Json::Value unit_trace;
+        unit_trace["unit_id"] = unit.unit_id;
+        unit_trace["index"] = unit.index;
+        unit_trace["grade"] = unit.grade;
+        bridge_entry.inputs["units"].append(std::move(unit_trace));
+    }
+    bridge_entry.output["index"] = result.layered_index;
+    bridge_entry.output["grade"] = result.layered_grade;
+    result.trace.push_back(std::move(bridge_entry));
+
+    // 3.4.5：出现任一单项控制指标，全桥评为 5 类；分层评定结果原样保留，重复的 id 只计一次。
+    std::set<std::string> seen_controls;
+    for (const auto& control_id : input.triggered_control_ids) {
+        if (!seen_controls.insert(control_id).second) {
+            continue;
+        }
+        const auto& control = parameters_.controls.at(control_id);
+        result.triggered_controls.push_back({control.id, control.source_clause, control.label});
+        result.final_grade = (std::max)(result.final_grade, control.result_grade);
+
+        AssessmentTraceEntry control_entry;
+        control_entry.step = "single_item_control";
+        control_entry.rule_id = control.id;
+        control_entry.entity_id = control.id;
+        control_entry.source_reference = control.source_clause;
+        control_entry.output["final_grade"] = result.final_grade;
+        result.trace.push_back(std::move(control_entry));
+    }
+
+    result.explanation = explain(result);
     outcome.result = std::move(result);
     return outcome;
 }
 
 std::string Jtg5230Evaluator::explain(const LayeredAssessmentResult& result) const {
-    (void)result;
-    return {};
+    std::ostringstream text;
+    text << std::fixed << std::setprecision(1);
+    text << "依据 " << manifest_.standard_code << "（规则包 " << manifest_.package_version
+         << "）分层综合评定：全桥技术状况指数 " << result.layered_index << "，" << result.layered_grade << " 类";
+    for (const auto& unit : result.units) {
+        if (unit.unit_id == result.governing_unit_id) {
+            text << "（" << unit.unit_id << " 单元，按 " << unit.rule_clause << "）";
+            break;
+        }
+    }
+    text << "。";
+    if (!result.triggered_controls.empty()) {
+        text << "出现单项控制指标 " << result.triggered_controls.size() << " 项（";
+        for (std::size_t index = 0; index < result.triggered_controls.size(); ++index) {
+            text << (index == 0 ? "" : "、") << result.triggered_controls[index].label;
+        }
+        text << "），全桥技术状况等级评为 " << result.final_grade << " 类。";
+    }
+    return text.str();
 }
 
 }  // namespace bridge_report::standards
