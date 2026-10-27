@@ -1,0 +1,16 @@
+{
+  "definitions": [
+    {
+      "id": "jtg5230.maintenance.component",
+      "references": ["jtg5230.source.official_pdf"],
+      "source_table": "3.5.2", "pdf_pages": [18],
+      "strategies": [
+        {"grade": 1, "items": ["日常养护"]},
+        {"grade": 2, "items": ["日常养护", "预防养护"]},
+        {"grade": 3, "items": ["预防养护", "修复养护"]},
+        {"grade": 4, "items": ["修复养护"]},
+        {"grade": 5, "items": ["修复养护"]}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "definitions": [
+    {
+      "id": "jtg5230.evaluation_type.beam.cast_in_place_slab",
+      "references": ["jtg5230.source.official_pdf", "jtg5230.parameter_table.b_2_2"],
+      "family": "beam", "name": "整体式实心/空心板", "source_table": "B.1.1", "pdf_pages": [98],
+      "parameter_table_id": "jtg5230.parameter_table.b_2_2"
+    },
+    {
+      "id": "jtg5230.evaluation_type.beam.precast_composite_box",
+      "references": ["jtg5230.source.official_pdf", "jtg5230.parameter_table.b_2_4"],
+      "family": "beam", "name": "装配式组合箱梁", "source_table": "B.1.1", "pdf_pages": [98],
+      "parameter_table_id": "jtg5230.parameter_table.b_2_4"
+    },
+    {
+      "id": "jtg5230.evaluation_type.beam.precast_ribbed",
+      "references": ["jtg5230.source.official_pdf", "jtg5230.parameter_table.b_2_4"],
+      "family": "beam", "name": "装配式肋梁", "source_table": "B.1.1", "pdf_pages": [98],
+      "parameter_table_id": "jtg5230.parameter_table.b_2_4"
+    },
+    {
+      "id": "jtg5230.evaluation_type.arch.open_spandrel_slab",
+      "references": ["jtg5230.source.official_pdf", "jtg5230.parameter_table.b_3_3"],
+      "family": "arch", "name": "空腹式板拱", "source_table": "B.1.1", "pdf_pages": [98],
+      "parameter_table_id": "jtg5230.parameter_table.b_3_3"
+    }
+  ]
+}

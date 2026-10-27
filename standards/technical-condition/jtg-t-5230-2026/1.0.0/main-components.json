@@ -1,0 +1,95 @@
+{
+  "definitions": [
+    {
+      "id": "jtg5230.main_components.beam",
+      "references": ["jtg5230.source.official_pdf"],
+      "family": "beam", "source_table": "3.3.3", "pdf_pages": [16],
+      "listed_components": ["主梁", "支座", "桥墩", "桥台", "基础"],
+      "main_part_ids": [
+        "jtg5230.part.super.slab",
+        "jtg5230.part.super.main_girder",
+        "jtg5230.part.super.box_girder",
+        "jtg5230.part.super.bearing",
+        "jtg5230.part.sub.pier_or_abutment",
+        "jtg5230.part.sub.foundation"
+      ],
+      "mixed_parts": [],
+      "note": "实心板/空心板、箱梁按主梁计"
+    },
+    {
+      "id": "jtg5230.main_components.arch",
+      "references": ["jtg5230.source.official_pdf"],
+      "family": "arch", "source_table": "3.3.3", "pdf_pages": [16],
+      "listed_components": ["主拱圈（拱板、拱肋、拱箱、拱片）", "腹拱墩或立柱", "腹拱圈", "桥面板", "桥墩", "桥台", "基础"],
+      "main_part_ids": [
+        "jtg5230.part.super.main_arch_ring",
+        "jtg5230.part.super.arch_rib",
+        "jtg5230.part.super.arch_box",
+        "jtg5230.part.super.truss_arch_piece",
+        "jtg5230.part.super.rigid_frame_arch_piece",
+        "jtg5230.part.super.spandrel_arch_or_deck_slab",
+        "jtg5230.part.super.deck_slab",
+        "jtg5230.part.sub.pier_or_abutment",
+        "jtg5230.part.sub.foundation"
+      ],
+      "mixed_parts": [
+        {"part_id": "jtg5230.part.super.spandrel_pier_and_wall", "main_members": "腹拱墩（立柱）"}
+      ]
+    },
+    {
+      "id": "jtg5230.main_components.combined_arch",
+      "references": ["jtg5230.source.official_pdf"],
+      "family": "combined_arch", "source_table": "3.3.3", "pdf_pages": [16],
+      "listed_components": ["拱肋及横撑", "立柱", "桥面板", "支座", "吊杆", "系杆", "桥墩", "桥台", "基础"],
+      "main_part_ids": [
+        "jtg5230.part.super.arch_rib",
+        "jtg5230.part.super.lateral_bracing",
+        "jtg5230.part.super.hanger_or_column",
+        "jtg5230.part.super.tie_cable",
+        "jtg5230.part.super.tie_beam",
+        "jtg5230.part.super.bearing",
+        "jtg5230.part.sub.pier_or_abutment",
+        "jtg5230.part.sub.foundation"
+      ],
+      "mixed_parts": [
+        {"part_id": "jtg5230.part.super.floor_system", "main_members": "桥面板"}
+      ],
+      "note": "表中的“横撑”即部件“横向联系”"
+    },
+    {
+      "id": "jtg5230.main_components.suspension",
+      "references": ["jtg5230.source.official_pdf"],
+      "family": "suspension", "source_table": "3.3.3", "pdf_pages": [16],
+      "listed_components": ["加劲梁", "支座", "吊索及索夹", "主缆", "索塔及索鞍", "锚碇及锚固系统", "桥墩", "桥台", "基础"],
+      "main_part_ids": [
+        "jtg5230.part.super.stiffening_girder",
+        "jtg5230.part.super.hanger_and_clamp",
+        "jtg5230.part.super.main_cable",
+        "jtg5230.part.super.tower_and_saddle",
+        "jtg5230.part.super.anchorage_system",
+        "jtg5230.part.sub.anchorage",
+        "jtg5230.part.sub.pier_or_abutment",
+        "jtg5230.part.sub.foundation"
+      ],
+      "mixed_parts": [
+        {"part_id": "jtg5230.part.super.bearing_and_restraint", "main_members": "支座"}
+      ]
+    },
+    {
+      "id": "jtg5230.main_components.cable_stayed",
+      "references": ["jtg5230.source.official_pdf"],
+      "family": "cable_stayed", "source_table": "3.3.3", "pdf_pages": [16],
+      "listed_components": ["斜拉索（拉索、锚固系统）", "主梁", "支座", "索塔", "桥墩", "桥台", "基础"],
+      "main_part_ids": [
+        "jtg5230.part.super.main_girder",
+        "jtg5230.part.super.stay_cable",
+        "jtg5230.part.super.tower",
+        "jtg5230.part.sub.pier_or_abutment",
+        "jtg5230.part.sub.foundation"
+      ],
+      "mixed_parts": [
+        {"part_id": "jtg5230.part.super.bearing_and_restraint", "main_members": "支座"}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "standard_family": "technical_condition",
+  "standard_id": "JTG_T_5230_2026",
+  "standard_code": "JTG/T 5230—2026",
+  "standard_name": "公路桥梁技术状况评定标准",
+  "official_edition": "2026",
+  "package_version": "1.0.0",
+  "contract_version": 1,
+  "algorithm_id": "jtg-t-5230-2026",
+  "effective_date": "2026-11-01",
+  "content_checksum": "sha256:39e9382e39fd93fb5e4c5ccff00799143dea973ea48bde8734de6c4169f7639e",
+  "status": "draft",
+  "entry_files": [
+    "sources.json",
+    "parts.json",
+    "parameter-tables.json",
+    "evaluation-types.json",
+    "main-components.json",
+    "classification.json",
+    "single-item-controls.json",
+    "maintenance-strategies.json"
+  ]
+}

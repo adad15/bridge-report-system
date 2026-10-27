@@ -1,0 +1,20 @@
+{
+  "definitions": [
+    {"id": "jtg5230.control.girder_fall_or_fracture", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-1", "pdf_pages": [17], "label": "落梁或梁板断裂", "result_grade": 5},
+    {"id": "jtg5230.control.girder_full_section_crack", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-2", "pdf_pages": [17], "label": "主梁控制截面全截面开裂", "result_grade": 5},
+    {"id": "jtg5230.control.composite_interface_failure", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-3", "pdf_pages": [17], "label": "组合梁结合面贯通开裂失效", "result_grade": 5},
+    {"id": "jtg5230.control.girder_permanent_deformation", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-4", "pdf_pages": [17], "label": "主梁永久变形超限且严重开裂", "result_grade": 5},
+    {"id": "jtg5230.control.main_arch_severe_deformation", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-5", "pdf_pages": [17], "label": "主拱圈严重变形", "result_grade": 5},
+    {"id": "jtg5230.control.masonry_arch_ring_fracture", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-6", "pdf_pages": [17], "label": "圬工主拱圈大范围断裂脱落", "result_grade": 5},
+    {"id": "jtg5230.control.arch_springing_failure", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-7", "pdf_pages": [17], "label": "拱脚固结失效或明显变位", "result_grade": 5},
+    {"id": "jtg5230.control.spandrel_arch_or_deck_collapse", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-8", "pdf_pages": [17], "label": "腹拱圈或桥面板塌陷断裂", "result_grade": 5},
+    {"id": "jtg5230.control.main_member_crushing_or_buckling", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-9", "pdf_pages": [17], "label": "主要构件压溃或趋于失稳", "result_grade": 5},
+    {"id": "jtg5230.control.superstructure_abnormal_displacement", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-10", "pdf_pages": [17], "label": "上部主要构件严重异常位移", "result_grade": 5},
+    {"id": "jtg5230.control.cable_corrosion_or_fracture", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-11", "pdf_pages": [17], "label": "缆索类构件严重锈蚀或断裂", "result_grade": 5},
+    {"id": "jtg5230.control.pier_abutment_severe_tilt", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-12", "pdf_pages": [17], "label": "桥墩桥台严重倾斜", "result_grade": 5},
+    {"id": "jtg5230.control.spread_footing_scour", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-13", "pdf_pages": [17], "label": "扩大基础冲空超过 20%", "result_grade": 5},
+    {"id": "jtg5230.control.pile_column_connection_failure", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-14", "pdf_pages": [17], "label": "桩柱连接失效或严重错位", "result_grade": 5},
+    {"id": "jtg5230.control.pile_core_concrete_loss", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-15", "pdf_pages": [17], "label": "桩基核心混凝土大范围缺失", "result_grade": 5},
+    {"id": "jtg5230.control.foundation_or_anchorage_movement", "references": ["jtg5230.source.official_pdf"], "source_clause": "3.4.5-16", "pdf_pages": [17], "label": "基础或锚碇明显位移沉降倾斜", "result_grade": 5}
+  ]
+}
