@@ -15,6 +15,7 @@
 namespace {
 
 using bridge_report::standards::Jtg5230ParameterTable;
+using bridge_report::standards::Jtg5230Parameters;
 using bridge_report::standards::Jtg5230Weight;
 using bridge_report::standards::LayeredStructure;
 using bridge_report::standards::MainComponentDesignation;
@@ -100,6 +101,16 @@ int omega_of(const Jtg5230ParameterTable& table, const std::string& set_id, cons
     return weight == nullptr ? -1 : weight->omega;
 }
 
+int j_of(const Jtg5230ParameterTable& table, const std::string& set_id, const std::string& part_suffix) {
+    const auto* weight = weight_of(table, set_id, part_suffix);
+    return weight == nullptr ? -1 : weight->j;
+}
+
+// 包坏了就抛异常：gtest 只记本用例失败，不会因为解引用空值让整个测试进程崩溃。
+Jtg5230Parameters repository_parameters() {
+    return parse_jtg5230_parameters(jtg5230::load_package()).parameters.value();
+}
+
 TEST(Jtg5230ParametersTest, ParsesRepositoryPackage) {
     const auto result = parse_jtg5230_parameters(jtg5230::load_package());
 
@@ -139,7 +150,7 @@ TEST(Jtg5230ParametersTest, ParsesRepositoryPackage) {
 }
 
 TEST(Jtg5230ParametersTest, ClassifiesSpanIndexAtBandEdges) {
-    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+    const auto parameters = repository_parameters();
     const std::vector<std::pair<int, int>> cases{
         {1000, 1}, {901, 1}, {900, 2}, {751, 2}, {750, 3}, {600, 4}, {401, 4}, {400, 5}, {0, 5},
     };
@@ -151,7 +162,7 @@ TEST(Jtg5230ParametersTest, ClassifiesSpanIndexAtBandEdges) {
 }
 
 TEST(Jtg5230ParametersTest, SampleTablesMatchPrintedValues) {
-    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+    const auto parameters = repository_parameters();
     const auto& tables = parameters.parameter_tables;
 
     // 表 B.2.2，PDF 第 99 页
@@ -183,11 +194,11 @@ TEST(Jtg5230ParametersTest, SampleTablesMatchPrintedValues) {
     EXPECT_EQ(omega_of(b33, "with_expansion_joint", "deck.railing_and_sidewalk"), 20);
     EXPECT_EQ(omega_of(b33, "with_expansion_joint", "deck.drainage"), 15);
     EXPECT_EQ(omega_of(b33, "without_expansion_joint", "deck.pavement"), 50);
-    EXPECT_EQ(weight_of(b33, "without_expansion_joint", "deck.pavement")->j, 1);
+    EXPECT_EQ(j_of(b33, "without_expansion_joint", "deck.pavement"), 1);
     EXPECT_EQ(omega_of(b33, "without_expansion_joint", "deck.railing_and_sidewalk"), 30);
-    EXPECT_EQ(weight_of(b33, "without_expansion_joint", "deck.railing_and_sidewalk")->j, 2);
+    EXPECT_EQ(j_of(b33, "without_expansion_joint", "deck.railing_and_sidewalk"), 2);
     EXPECT_EQ(omega_of(b33, "without_expansion_joint", "deck.drainage"), 20);
-    EXPECT_EQ(weight_of(b33, "without_expansion_joint", "deck.drainage")->j, 3);
+    EXPECT_EQ(j_of(b33, "without_expansion_joint", "deck.drainage"), 3);
     EXPECT_EQ(weight_of(b33, "without_expansion_joint", "deck.expansion_joint"), nullptr);
     for (const auto* set_id : {"with_expansion_joint", "without_expansion_joint"}) {
         SCOPED_TRACE(set_id);
@@ -208,7 +219,7 @@ TEST(Jtg5230ParametersTest, SampleTablesMatchPrintedValues) {
 }
 
 TEST(Jtg5230ParametersTest, CoversAllTwentyOneEvaluationTypes) {
-    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+    const auto parameters = repository_parameters();
 
     EXPECT_EQ(parameters.evaluation_types.size(), 21u);
     EXPECT_EQ(parameters.parameter_tables.size(), 20u);
@@ -230,7 +241,7 @@ TEST(Jtg5230ParametersTest, CoversAllTwentyOneEvaluationTypes) {
 }
 
 TEST(Jtg5230ParametersTest, EveryPartIsUsedBySomeTable) {
-    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+    const auto parameters = repository_parameters();
     std::set<std::string> used;
     for (const auto& [id, table] : parameters.parameter_tables) {
         (void)id;
@@ -248,7 +259,7 @@ TEST(Jtg5230ParametersTest, EveryPartIsUsedBySomeTable) {
 }
 
 TEST(Jtg5230ParametersTest, MainComponentPartsAppearInTheirFamilyTables) {
-    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+    const auto parameters = repository_parameters();
     std::map<std::string, std::set<std::string>> family_parts;
     for (const auto& [id, type] : parameters.evaluation_types) {
         (void)id;
@@ -301,7 +312,7 @@ TEST(Jtg5230ParametersTest, EveryTableMatchesPrintedSpotValues) {
         {"b_6_2", {109}, {10, 55, 30, 5}, "standard", "super.stay_cable", 35},
         {"b_6_3", {110}, {10, 55, 30, 5}, "standard", "super.main_girder", 35},
     };
-    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+    const auto parameters = repository_parameters();
 
     for (const auto& spot : spots) {
         SCOPED_TRACE(spot.table);
@@ -314,7 +325,7 @@ TEST(Jtg5230ParametersTest, EveryTableMatchesPrintedSpotValues) {
 }
 
 TEST(Jtg5230ParametersTest, ArchTablesOfferExplicitSecondWeightSet) {
-    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+    const auto parameters = repository_parameters();
 
     for (const auto* table_suffix : {"b_3_3", "b_3_4", "b_3_5", "b_3_6", "b_3_7", "b_3_8"}) {
         SCOPED_TRACE(table_suffix);
@@ -334,7 +345,7 @@ TEST(Jtg5230ParametersTest, ArchTablesOfferExplicitSecondWeightSet) {
 }
 
 TEST(Jtg5230ParametersTest, CableSupportedAncillaryAndAnchorageWeights) {
-    const auto parameters = *parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+    const auto parameters = repository_parameters();
 
     for (const auto* table_suffix : {"b_5_2", "b_5_3", "b_6_2", "b_6_3"}) {
         SCOPED_TRACE(table_suffix);

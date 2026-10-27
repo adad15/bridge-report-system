@@ -472,6 +472,9 @@ TEST(Jtg5230EvaluatorTest, WorkedExampleTwoSpanSlabBridge) {
     const auto& first = span_result(result, "S1");
     EXPECT_DOUBLE_EQ(first.index, 83.6);
     EXPECT_EQ(first.grade, 2);
+    ASSERT_NE(part_result(first, "super.slab"), nullptr);
+    ASSERT_NE(part_result(first, "super.bearing"), nullptr);
+    ASSERT_NE(part_result(first, "deck.pavement"), nullptr);
     EXPECT_NEAR(part_result(first, "super.slab")->contribution, 12.0, 1e-9);
     EXPECT_NEAR(part_result(first, "super.bearing")->contribution, 2.0, 1e-9);
     EXPECT_NEAR(part_result(first, "deck.pavement")->contribution, 2.4, 1e-9);
@@ -596,7 +599,7 @@ TEST(Jtg5230EvaluatorTest, TraceRecordsEachLayer) {
 
 TEST(Jtg5230EvaluatorTest, EveryEvaluationTypeScoresIntactBridgeAtHundred) {
     const auto parameters =
-        *bridge_report::standards::parse_jtg5230_parameters(jtg5230::load_package()).parameters;
+        bridge_report::standards::parse_jtg5230_parameters(jtg5230::load_package()).parameters.value();
     ASSERT_EQ(parameters.evaluation_types.size(), 21u);
 
     for (const auto& [type_id, type] : parameters.evaluation_types) {
