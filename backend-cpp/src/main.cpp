@@ -78,21 +78,23 @@ StandardStartupState load_standard_registry(const std::filesystem::path& standar
         return state;
     }
 
-    auto runtime = loader.load_runtime_packages(standards_root);
-    for (auto& load_issue : runtime.issues) {
-        std::cerr << "规范包加载失败 [" << load_issue.code << "]："
-                  << load_issue.message << "\n";
-        state.issues.push_back(std::move(load_issue));
-    }
-    for (const auto& draft : runtime.skipped_drafts) {
-        std::cerr << "跳过草稿规则包：" << draft.standard_code << " "
-                  << draft.package_version
-                  << "（只供测试和工具显式加载，运行时不注册、不同步）\n";
-    }
+    for (const auto& package_root : loader.discover(standards_root)) {
+        if (package_root.lexically_normal().generic_string().find(
+                "/rating-tree/") != std::string::npos) {
+            continue;
+        }
+        auto load_result = loader.load(package_root);
+        if (!load_result.ok()) {
+            for (auto& load_issue : load_result.issues) {
+                std::cerr << "规范包加载失败 [" << load_issue.code << "]："
+                          << load_issue.message << "\n";
+                state.issues.push_back(std::move(load_issue));
+            }
+            continue;
+        }
 
-    for (auto& package : runtime.packages) {
-        const auto manifest = package.manifest;
-        auto registration = state.registry->register_package(std::move(package));
+        const auto manifest = load_result.package->manifest;
+        auto registration = state.registry->register_package(std::move(*load_result.package));
         if (!registration.accepted && registration.issue.has_value()) {
             std::cerr << "规范包注册失败 [" << registration.issue->code << "]："
                       << registration.issue->message << "\n";

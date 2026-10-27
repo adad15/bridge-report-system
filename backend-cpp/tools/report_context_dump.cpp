@@ -35,8 +35,9 @@ std::shared_ptr<bridge_report::standards::StandardRegistry> load_registry(
     const std::filesystem::path& standards_root) {
     auto registry = std::make_shared<bridge_report::standards::StandardRegistry>();
     bridge_report::standards::StandardPackageLoader loader;
-    for (auto& package : loader.load_runtime_packages(standards_root).packages) {
-        registry->register_package(std::move(package));
+    for (const auto& package_root : loader.discover(standards_root)) {
+        auto loaded = loader.load(package_root);
+        if (loaded.ok()) registry->register_package(std::move(*loaded.package));
     }
     return registry;
 }

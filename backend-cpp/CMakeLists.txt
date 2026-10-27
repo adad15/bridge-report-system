@@ -147,8 +147,6 @@ add_library(bridge_report_backend_core
     src/standards/DefectIndicatorResolver.cpp
     src/standards/H21Evaluator.cpp
     src/standards/Jtg5120MaintenanceStandard.cpp
-    src/standards/Jtg5230Parameters.cpp
-    src/standards/Jtg5230Evaluator.cpp
     src/standards/StandardCatalogModels.cpp
     src/standards/StandardPackageLoader.cpp
     src/standards/StandardRegistry.cpp
@@ -290,10 +288,6 @@ add_executable(bridge_report_backend_tests
     tests/test_component_category_lexicon.cpp
     tests/test_jtg_5120_maintenance_standard.cpp
     tests/test_jtg_h21_package.cpp
-    tests/test_jtg_5230_package.cpp
-    tests/test_jtg_5230_parameters.cpp
-    tests/test_jtg_5230_validation.cpp
-    tests/test_jtg_5230_evaluator.cpp
     tests/test_password_hash.cpp
     tests/test_preflight_report.cpp
     tests/test_photo_content.cpp
