@@ -130,6 +130,12 @@ TEST(Jtg5230ParametersTest, ParsesRepositoryPackage) {
     EXPECT_EQ(
         parameters.designation("suspension", jtg5230::part("super.bearing_and_restraint")),
         MainComponentDesignation::mixed);
+    EXPECT_EQ(
+        parameters.designation("cable_stayed", jtg5230::part("super.bearing_and_restraint")),
+        MainComponentDesignation::mixed);
+    EXPECT_EQ(
+        parameters.designation("combined_arch", jtg5230::part("super.floor_system")),
+        MainComponentDesignation::mixed);
 }
 
 TEST(Jtg5230ParametersTest, ClassifiesSpanIndexAtBandEdges) {

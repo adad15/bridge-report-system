@@ -315,10 +315,28 @@ TEST(Jtg5230EvaluatorTest, ClassifiesBandEdges) {
 }
 
 TEST(Jtg5230EvaluatorTest, RoundsSpanIndexHalfUpInDecimal) {
-    // 精确值 99.65；直接用 double 算是 99.6499…，会舍成 99.6。
+    // 精确值 99.65，四舍五入为 99.7。
     const auto result = evaluate(slab_bridge({with_eci("C1", "ancillary.riverbed", 1)}));
 
     EXPECT_DOUBLE_EQ(span_result(result, "S1").calculated_index, 99.7);
+}
+
+TEST(Jtg5230EvaluatorTest, RoundsSpanIndexExactlyWhereDoubleArithmeticDrifts) {
+    // 柔性系杆组合体系拱桥（表 B.4.3）：吊索或立柱、横梁纵梁及桥面板 ECI 都是 3。
+    // 精确值 85.15，应进为 85.2；按 100 − Σ CI·ω·γ/5 用 double 计算得 85.149999…，会舍成 85.1。
+    LayeredAssessmentInput input;
+    input.units.push_back(
+        jtg5230::unit("U1", "jtg5230.evaluation_type.combined_arch.flexible_tie", "standard", {"S1"}));
+    auto floor_system = jtg5230::component_with_eci("F1", "super.floor_system", {"S1"}, 3);
+    floor_system.is_main = true;
+    input.components = {
+        jtg5230::component_with_eci("H1", "super.hanger_or_column", {"S1"}, 3),
+        floor_system,
+    };
+
+    const auto result = evaluate(input);
+
+    EXPECT_DOUBLE_EQ(span_result(result, "S1").calculated_index, 85.2);
 }
 
 TEST(Jtg5230EvaluatorTest, RedistributesWeightOfPartsNotRequired) {
@@ -380,6 +398,16 @@ TEST(Jtg5230EvaluatorTest, KeepsWorseCalculatedResult) {
     EXPECT_EQ(span.calculated_grade, 5);
     EXPECT_DOUBLE_EQ(span.index, 34.4);
     EXPECT_EQ(span.grade, 5);
+    EXPECT_TRUE(span.override_component_id.empty());
+}
+
+TEST(Jtg5230EvaluatorTest, KeepsSpanWhenMainComponentIsBelowGradeFour) {
+    // 板 ECI 3（ECL 3）比算出的 2 类差，但 3.3.3 只对 4、5 类主要构件改判。
+    const auto result = evaluate(slab_bridge({affecting_safety(with_eci("C1", "super.slab", 3))}));
+
+    const auto& span = span_result(result, "S1");
+    EXPECT_DOUBLE_EQ(span.index, 82.0);
+    EXPECT_EQ(span.grade, 2);
     EXPECT_TRUE(span.override_component_id.empty());
 }
 

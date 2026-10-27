@@ -209,6 +209,52 @@ TEST(Jtg5230ValidationTest, ReportsEachInputProblem) {
     }
 }
 
+TEST(Jtg5230ValidationTest, ExplicitWeightSetMessageNamesTheSetToUse) {
+    const auto evaluator = jtg5230::evaluator();
+    auto input = base_input();
+    auto arch = arch_unit();
+    arch.not_required_part_ids = {jtg5230::part("deck.expansion_joint")};
+    input.units.push_back(arch);
+
+    const auto issues = evaluator->validate(input);
+
+    const auto found = std::find_if(issues.begin(), issues.end(), [](const AssessmentIssue& issue) {
+        return issue.code == "explicit_weight_set_available";
+    });
+    ASSERT_NE(found, issues.end()) << describe(issues);
+    EXPECT_NE(found->message.find("without_expansion_joint"), std::string::npos) << found->message;
+    EXPECT_EQ(found->entity_id, jtg5230::part("deck.expansion_joint"));
+}
+
+TEST(Jtg5230ValidationTest, EveryPartiallyMainPartRequiresExplicitFlag) {
+    struct FlagCase {
+        std::string evaluation_type_id;
+        std::string part_suffix;
+    };
+    const std::vector<FlagCase> cases{
+        {"jtg5230.evaluation_type.arch.open_spandrel_slab", "super.spandrel_pier_and_wall"},
+        {"jtg5230.evaluation_type.combined_arch.flexible_tie", "super.floor_system"},
+        {"jtg5230.evaluation_type.suspension.self_anchored", "super.bearing_and_restraint"},
+        {"jtg5230.evaluation_type.cable_stayed.full", "super.bearing_and_restraint"},
+    };
+    const auto evaluator = jtg5230::evaluator();
+    const auto weight_set_of = [](const std::string& type_id) {
+        return type_id.find(".arch.") != std::string::npos ? "with_expansion_joint" : "standard";
+    };
+
+    for (const auto& item : cases) {
+        SCOPED_TRACE(item.evaluation_type_id + " / " + item.part_suffix);
+        LayeredAssessmentInput input;
+        input.units.push_back(jtg5230::unit("U1", item.evaluation_type_id, weight_set_of(item.evaluation_type_id), {"S1"}));
+        input.components.push_back(jtg5230::component("C1", item.part_suffix, {"S1"}));
+        EXPECT_TRUE(has_code(evaluator->validate(input), "main_component_flag_required"));
+
+        input.components[0].is_main = false;
+        const auto issues = evaluator->validate(input);
+        EXPECT_TRUE(issues.empty()) << describe(issues);
+    }
+}
+
 TEST(Jtg5230ValidationTest, RejectsEachOutOfRangeScale) {
     const auto evaluator = jtg5230::evaluator();
     using Change = std::function<void(LayeredComponentInput&)>;
